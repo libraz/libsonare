@@ -25,19 +25,24 @@ using namespace sonare_node::project;
 
 namespace {
 
-// Fills `options` from a JS bounce-options object (zero-initialized on entry).
+// Fills `options` from a JS bounce-options object (started from the C init on entry). An absent
+// key keeps the init value; a written 0 reaches the core, which refuses it.
 void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* options) {
-  options->total_frames = Int64Property(obj, "totalFrames", kZeroIsSentinel);
-  options->block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
-  options->num_channels = IntProperty(obj, "numChannels", kZeroIsSentinel);
-  options->sample_rate = IntProperty(obj, "sampleRate", kZeroIsSentinel);
+  options->total_frames =
+      Int64Property(obj, "totalFrames", AbsentIsSentinel<int64_t>{options->total_frames});
+  options->block_size = IntProperty(obj, "blockSize", options->block_size);
+  options->num_channels =
+      IntProperty(obj, "numChannels", AbsentIsSentinel<int>{options->num_channels});
+  options->sample_rate =
+      IntProperty(obj, "sampleRate", AbsentIsSentinel<int>{options->sample_rate});
   options->instrument_latency_samples =
       IntProperty(obj, "instrumentLatencySamples", options->instrument_latency_samples);
 }
 
 // Parses a JS instrument descriptor into a built-in synth binding. Throws a
-// JS exception (and returns false) on an unknown waveform name. A zero-init
-// config is the native default sine patch, so only present fields are set.
+// JS exception (and returns false) on an unknown waveform name. The config is
+// started from sonare_builtin_synth_config_init, so an omitted key keeps the
+// library default and a given value is read literally by the C entry.
 bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
                             SonareBuiltinInstrumentBinding* binding) {
   binding->destination_id =
@@ -48,12 +53,12 @@ bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
   if (!ReadBuiltinWaveform(env, obj.Get("waveform"), &config.waveform)) {
     return false;
   }
-  config.gain = FloatProperty(obj, "gain", 0.0f);
-  config.attack_ms = FloatProperty(obj, "attackMs", 0.0f);
-  config.decay_ms = FloatProperty(obj, "decayMs", 0.0f);
-  config.sustain = FloatProperty(obj, "sustain", 0.0f);
-  config.release_ms = FloatProperty(obj, "releaseMs", 0.0f);
-  config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
+  config.gain = FloatProperty(obj, "gain", config.gain);
+  config.attack_ms = FloatProperty(obj, "attackMs", config.attack_ms);
+  config.decay_ms = FloatProperty(obj, "decayMs", config.decay_ms);
+  config.sustain = FloatProperty(obj, "sustain", config.sustain);
+  config.release_ms = FloatProperty(obj, "releaseMs", config.release_ms);
+  config.polyphony = IntProperty(obj, "polyphony", config.polyphony);
   return true;
 }
 
@@ -446,6 +451,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
   if (info.Length() > 0 && info[0].IsObject()) {
     FillBounceOptions(info[0].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -468,6 +474,7 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   // Argument order is instrument-first to match the WASM and Python bindings:
   //   bounceWithBuiltinInstruments(instruments, options?)
   SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -484,6 +491,7 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
         return env.Undefined();
       }
       SonareBuiltinInstrumentBinding binding{};
+      sonare_builtin_synth_config_init(&binding.config);
       if (!ParseBuiltinInstrument(env, element.As<Napi::Object>(), &binding)) {
         return env.Undefined();  // exception already pending
       }
@@ -513,6 +521,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -603,6 +612,7 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -730,6 +740,7 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
   // Argument order is instrument-first to match bounceWithBuiltinInstruments:
   //   bounceWithSf2Instruments(instruments, options?)
   SonareProjectBounceOptions options{};
+  sonare_project_bounce_options_init(&options);
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -748,23 +759,17 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
       }
       Napi::Object obj = element.As<Napi::Object>();
       SonareSf2InstrumentBinding binding{};
+      sonare_sf2_instrument_config_init(&binding.config);
       binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
-      binding.config.gain = FloatProperty(obj, "gain", 0.0f);
-      binding.config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
-      const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
-      if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
-        binding.config.struct_version = 2;
-        binding.config.prefer_model_for_modeled_families =
-            BoolProperty(obj, "preferModelForModeledFamilies", false) ? 1 : 0;
-      }
-      // Version 3 reads version 2's field as well, so raising it here covers
-      // both whichever of the two the caller passed.
-      const Napi::Value clear_rig = obj.Get("clearBankRig");
-      if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
-        binding.config.struct_version = 3;
-        binding.config.clear_bank_rig = BoolProperty(obj, "clearBankRig", false) ? 1 : 0;
-      }
-      binding.config.struct_version = 4;
+      binding.config.gain = FloatProperty(obj, "gain", binding.config.gain);
+      binding.config.polyphony = IntProperty(obj, "polyphony", binding.config.polyphony);
+      binding.config.prefer_model_for_modeled_families =
+          BoolProperty(obj, "preferModelForModeledFamilies",
+                       binding.config.prefer_model_for_modeled_families != 0)
+              ? 1
+              : 0;
+      binding.config.clear_bank_rig =
+          BoolProperty(obj, "clearBankRig", binding.config.clear_bank_rig != 0) ? 1 : 0;
       binding.config.gs_efx_realization =
           sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
       bindings.push_back(binding);

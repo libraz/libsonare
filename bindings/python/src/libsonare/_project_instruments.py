@@ -52,7 +52,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_PATCH_MOD_ROUTINGS,
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
-from ._narrowing import _narrow_double, _narrow_float, _optional_nonzero
+from ._narrowing import _narrow_double
 from ._project_synth import (
     _BUILTIN_SYNTH_WAVEFORMS,
     _SAMPLE_KEY_TRACKS,
@@ -118,7 +118,6 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
-    _C_INT_MAX,
     SonareBuiltinSynthConfig,
     SonareInstrumentCallbacks,
     SonareInstrumentOnEventCallback,
@@ -132,7 +131,6 @@ from ._runtime import (
     _check,
     _get_lib,
     _joined_names,
-    _optional_positive_int,
     _to_c_int,
     _utf8_arg,
 )
@@ -149,9 +147,10 @@ class BuiltinSynthConfig:
 
     Every numeric field is ``None`` for the library value, so a
     default-constructed config is the default sine patch; override only what
-    you need. An explicit 0 raises :class:`SonareValueError`: the native config
-    still reads 0 as "use the default", so a zero gain or sustain cannot be
-    expressed yet. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
+    you need. A given value is read literally and refused outside its range
+    (``gain`` in (0, 4], ``attack_ms``, ``decay_ms`` and ``release_ms`` in
+    (0, 20000], ``sustain`` in (0, 1], ``polyphony`` in [1, 64]) with
+    :class:`SonareValueError`. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
     ``"square"`` or ``"triangle"``. It is the one field with no "nearest
     sensible value": another string raises :class:`SonareValueError` and a
     number raises :class:`TypeError` rather than falling back to sine.
@@ -164,33 +163,29 @@ class BuiltinSynthConfig:
     waveform: SynthWaveform = "sine"
     """Oscillator waveform, a ``SynthWaveform`` token."""
     gain: float | None = None
-    """Master output gain (linear); None selects the library value."""
+    """Master output gain (linear), in (0, 4]; None selects the library value (0.2)."""
     attack_ms: float | None = None
-    """ADSR attack in ms; None selects the library value."""
+    """ADSR attack in ms, in (0, 20000]; None selects the library value (5)."""
     decay_ms: float | None = None
-    """ADSR decay in ms; None selects the library value."""
+    """ADSR decay in ms, in (0, 20000]; None selects the library value (60)."""
     sustain: float | None = None
-    """ADSR sustain level in [0, 1]; None selects the library value."""
+    """ADSR sustain level, in (0, 1]; None selects the library value (0.7)."""
     release_ms: float | None = None
-    """ADSR release in ms; None selects the library value."""
+    """ADSR release in ms, in (0, 20000]; None selects the library value (120)."""
     polyphony: int | None = None
-    """Maximum simultaneous voices, clamped to [1, 64]; None selects the library value."""
+    """Maximum simultaneous voices, in [1, 64]; None selects the library value (16)."""
 
     def _to_c(self) -> SonareBuiltinSynthConfig:
-        return SonareBuiltinSynthConfig(
+        # An omitted field keeps the value sonare_builtin_synth_config_init wrote.
+        return SonareBuiltinSynthConfig._given(
             waveform=_synth_waveform_value(self.waveform, "waveform"),
-            gain=_optional_nonzero_float(self.gain, "gain"),
-            attack_ms=_optional_nonzero_float(self.attack_ms, "attack_ms"),
-            decay_ms=_optional_nonzero_float(self.decay_ms, "decay_ms"),
-            sustain=_optional_nonzero_float(self.sustain, "sustain"),
-            release_ms=_optional_nonzero_float(self.release_ms, "release_ms"),
-            polyphony=_optional_positive_int(self.polyphony, "polyphony", _C_INT_MAX),
+            gain=self.gain,
+            attack_ms=self.attack_ms,
+            decay_ms=self.decay_ms,
+            sustain=self.sustain,
+            release_ms=self.release_ms,
+            polyphony=self.polyphony,
         )
-
-
-def _optional_nonzero_float(value: float | None, name: str) -> float:
-    """Narrow an optional ``float`` config field whose C ``0`` means "use the default"."""
-    return _narrow_float(_optional_nonzero(value, name), name)
 
 
 SourceBackend: TypeAlias = Literal["synth", "sf2"]
@@ -204,8 +199,9 @@ class Sf2InstrumentConfig:
     """Patch for the SoundFont (SF2) player (see
     :meth:`Project.bounce_with_sf2_instrument`).
 
-    ``gain`` and ``polyphony`` are ``None`` for the library value; an explicit
-    0 raises :class:`SonareValueError`.
+    ``gain`` and ``polyphony`` are ``None`` for the library value; a given
+    value is read literally and refused outside its range (``gain`` in [0, 4],
+    ``polyphony`` in [1, 64]) with :class:`SonareValueError`.
     ``prefer_model_for_modeled_families`` defaults to false, retaining the
     established SoundFont-first behavior.
 
@@ -221,9 +217,9 @@ class Sf2InstrumentConfig:
     """
 
     gain: float | None = None
-    """Master output gain (linear); None selects the library value."""
+    """Master output gain (linear), in [0, 4]; None selects the library value (0.5)."""
     polyphony: int | None = None
-    """Maximum simultaneous voices, clamped to [1, 64]; None selects the library value."""
+    """Maximum simultaneous voices, in [1, 64]; None selects the library value (48)."""
     prefer_model_for_modeled_families: bool = False
     """True selects the dedicated melodic models; drums stay SF2-first."""
     clear_bank_rig: bool = False
@@ -232,10 +228,9 @@ class Sf2InstrumentConfig:
     """How GS insertion effects are realised, a ``GsEfxRealization`` token."""
 
     def _to_c(self) -> SonareSf2InstrumentConfig:
-        return SonareSf2InstrumentConfig(
-            struct_version=4,
-            gain=_optional_nonzero_float(self.gain, "gain"),
-            polyphony=_optional_positive_int(self.polyphony, "polyphony", _C_INT_MAX),
+        return SonareSf2InstrumentConfig._given(
+            gain=self.gain,
+            polyphony=self.polyphony,
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
             clear_bank_rig=int(self.clear_bank_rig),
             gs_efx_realization=_gs_efx_realization_value(self.gs_efx_realization),

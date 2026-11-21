@@ -170,16 +170,15 @@ describe('setSf2Instrument gain', () => {
     );
   });
 
-  it('treats 0 as the player default rather than a gain of zero', () => {
+  it('reads 0 as a gain of zero, which renders silence', () => {
     const omitted = render(undefined);
-    // A gain of zero applied literally would render silence.
     expect(Math.max(...Array.from(omitted, Math.abs))).toBeGreaterThan(0);
-    expect(maxAbsDiff(render({ gain: 0 }), omitted)).toBe(0);
-    // 0.5 is the documented default the sentinel resolves to.
+    expect(Math.max(...Array.from(render({ gain: 0 }), Math.abs))).toBe(0);
+    // 0.5 is the documented default an omitted gain takes.
     expect(maxAbsDiff(render({ gain: 0.5 }), omitted)).toBe(0);
   });
 
-  it('applies a non-sentinel gain', () => {
+  it('applies a gain other than the default', () => {
     // The control for the equalities above: the field really reaches the player.
     const omitted = render(undefined);
     expect(maxAbsDiff(render({ gain: 1 }), omitted)).toBeGreaterThan(0.1);
@@ -187,9 +186,12 @@ describe('setSf2Instrument gain', () => {
 
   it.each([-1, -0.0001])('refuses a negative gain of %p', (value) => {
     // The player's constructor replaces a negative gain with its own 0.5, so a
-    // value passed through would have been indistinguishable from the sentinel
-    // in the rendered audio -- a successful call at a level nobody chose.
-    expect(() => render({ gain: value })).toThrow(/gain must be .*non-negative/);
+    // value passed through would have been a successful call at a level nobody chose.
+    expect(() => render({ gain: value })).toThrow(/gain must be finite and in \[0, 4\]$/);
+  });
+
+  it('refuses a gain above the player ceiling', () => {
+    expect(() => render({ gain: 4.5 })).toThrow(/gain must be finite and in \[0, 4\]$/);
   });
 
   it.each([-1, -48])('refuses a negative polyphony of %p', (value) => {
@@ -198,11 +200,10 @@ describe('setSf2Instrument gain', () => {
     expect(() => render({ polyphony: value })).toThrow(/polyphony must be /);
   });
 
-  it('still takes 0 and a positive polyphony', () => {
+  it('refuses a polyphony of 0 and takes a positive one', () => {
     // The control: without it the refusals above hold for an entry point that
     // rejects every polyphony.
-    const omitted = render(undefined);
-    expect(maxAbsDiff(render({ polyphony: 0 }), omitted)).toBe(0);
+    expect(() => render({ polyphony: 0 })).toThrow(/polyphony must be an integer in \[1, 64\]$/);
     expect(() => render({ polyphony: 16 })).not.toThrow();
   });
 });
@@ -238,12 +239,16 @@ describe('setBuiltinInstrument optional scalars', () => {
 
   const FIELDS = ['gain', 'attackMs', 'decayMs', 'sustain', 'releaseMs'] as const;
 
-  it.each(FIELDS)('refuses a negative %s instead of resolving it to the default', (field) => {
-    // The core reads a non-positive or non-finite field as "use the built-in
-    // default" and reports nothing, so a value handed through came back as a
-    // successful call at a setting nobody chose.
-    expect(() => chordPeak({ [field]: -1 })).toThrow(/must be .*non-negative/);
-  });
+  it.each(FIELDS)(
+    'refuses a zero or negative %s instead of resolving it to the default',
+    (field) => {
+      // The core reads a non-positive or non-finite field as "use the built-in
+      // default" and reports nothing, so a value handed through came back as a
+      // successful call at a setting nobody chose.
+      expect(() => chordPeak({ [field]: -1 })).toThrow(/must be finite and in \(0, /);
+      expect(() => chordPeak({ [field]: 0 })).toThrow(/must be finite and in \(0, /);
+    },
+  );
 
   it.each(FIELDS)('refuses a non-finite %s', (field) => {
     expect(() => chordPeak({ [field]: Number.NaN })).toThrow();
@@ -251,20 +256,20 @@ describe('setBuiltinInstrument optional scalars', () => {
     expect(() => chordPeak({ [field]: Number.NEGATIVE_INFINITY })).toThrow();
   });
 
-  it('refuses a negative polyphony, which the core would have replaced', () => {
-    for (const bad of [-1, -48]) {
-      expect(() => chordPeak({ polyphony: bad })).toThrow(/polyphony must be /);
+  it('refuses a polyphony outside [1, 64], which the core would have replaced', () => {
+    for (const bad of [-1, -48, 0, 65]) {
+      expect(() => chordPeak({ polyphony: bad })).toThrow(
+        /polyphony must be an integer in \[1, 64\]$/,
+      );
     }
   });
 
-  it('still takes the sentinel and a value that changes the render', () => {
+  it('takes the defaults and a value that changes the render', () => {
     // The controls. Without them every refusal above is satisfied by an entry
     // point that rejects everything, and the equality by one that ignores it.
     const byDefault = chordPeak(undefined);
     expect(byDefault).toBeGreaterThan(0);
-    expect(chordPeak({ gain: 0 })).toBe(byDefault);
-    // The voice count has no zero of its own: the default is spelt by omission.
-    expect(() => chordPeak({ polyphony: 0 })).toThrow(/polyphony must not be 0/);
+    expect(chordPeak({ gain: 0.2 })).toBe(byDefault);
     expect(chordPeak({ gain: 0.8 })).toBeGreaterThan(byDefault);
     // One voice cannot sound four notes. Two against the default's sixteen is
     // not asserted: past the point where every note sounds, more voices move

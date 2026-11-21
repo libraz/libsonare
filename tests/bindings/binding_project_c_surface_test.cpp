@@ -727,7 +727,8 @@ TEST_CASE("deserialized audio sources can be rebound before bouncing through the
   REQUIRE(sonare_project_unresolved_audio_source_count(restored, &unresolved) == SONARE_OK);
   REQUIRE(unresolved == 0);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = 64;
   options.num_channels = 1;
@@ -748,7 +749,8 @@ TEST_CASE("bounce is bit-exact across two renders through the C surface", "[proj
   const std::vector<float> audio = make_stereo_sine(48000);
   BuiltProject built = build_project(audio);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;

@@ -216,6 +216,26 @@ void sonare_engine_midi_clip_schedule_init(SonareEngineMidiClipSchedule* clip) {
   clip->gain = 1.0f;
 }
 
+void sonare_engine_builtin_synth_config_init(SonareEngineBuiltinSynthConfig* config) {
+  if (config == nullptr) return;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  sonare_c_detail::builtin_synth_config_init(config);
+#else
+  *config = SonareEngineBuiltinSynthConfig{};
+  config->struct_size = sizeof(SonareEngineBuiltinSynthConfig);
+#endif
+}
+
+void sonare_engine_sf2_instrument_config_init(SonareEngineSf2InstrumentConfig* config) {
+  if (config == nullptr) return;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  sonare_c_detail::sf2_instrument_config_init(config);
+#else
+  *config = SonareEngineSf2InstrumentConfig{};
+  config->struct_size = sizeof(SonareEngineSf2InstrumentConfig);
+#endif
+}
+
 SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                                          const SonareEngineMidiClipSchedule* clips,
                                          size_t clip_count) {
@@ -307,6 +327,13 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
   set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(config->struct_size, sizeof(SonareEngineBuiltinSynthConfig), "config",
+                            "sonare_engine_builtin_synth_config_init");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   if (!valid_builtin_waveform(config->waveform)) {
     return run_validation([&] {
       util::check::one_of(config->waveform, std::array<int, 4>{0, 1, 2, 3}, "config.waveform");
@@ -314,7 +341,7 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
   }
   SONARE_C_TRY
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(
-      sonare_c_detail::builtin_synth_config_from_c(*config));
+      sonare_c_detail::builtin_synth_config_from_c(*config, "config."));
   return bind_engine_instrument(engine, destination_id, std::move(synth));
   SONARE_C_CATCH
 #endif
@@ -468,17 +495,17 @@ SonareError sonare_engine_set_sf2_instrument(SonareEngine* engine, uint32_t dest
   set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  if (!sonare_c_detail::sf2_config_version_supported(*config)) {
-    return run_validation([&] {
-      util::check::integer_in_range(config->struct_version, 0,
-                                    sonare_c_detail::kSf2InstrumentConfigVersion,
-                                    "config.struct_version");
-    });
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(config->struct_size, sizeof(SonareEngineSf2InstrumentConfig), "config",
+                            "sonare_engine_sf2_instrument_config_init");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
-  auto cfg = sonare_c_detail::sf2_player_config_from_c(*config);
+  auto cfg = sonare_c_detail::sf2_player_config_from_c(*config, "config.");
   // Prepare GS insertion-effect processors on CONTROL; scheduled SysEx selects
   // and updates them at its render frame. An unknown name or an FX-less build
   // yields a null insert that is bypassed.

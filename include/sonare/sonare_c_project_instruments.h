@@ -122,30 +122,32 @@ static_assert(SONARE_SYNTH_WAVEFORM_TRIANGLE + 1 == SONARE_SYNTH_WAVEFORM_COUNT,
               "SonareSynthWaveform count changed");
 #endif
 
-/// @brief Patch for the built-in minimal synth. Zero-initialize then override:
-///        a zero-init config is sanitized into a usable sine patch, so callers
-///        may fill only what they need. This is a deliberately plain electronic
-///        sound source so MIDI arrangements bounce to audio instead of silence;
-///        a richer instrument bank is planned separately.
-/// Every numeric field uses "0 (or non-positive) => default" and is clamped to
-/// an audible range. @c waveform is the exception: it names a member of a small
-/// enum rather than sizing a quantity, so there is no meaningful nearest value
-/// to clamp an unknown ordinal to and it is rejected instead.
+/// @brief Patch for the built-in minimal synth. Start from @ref sonare_builtin_synth_config_init
+///        and override what you need; every field is then read literally and refused outside its
+///        domain with SONARE_ERROR_INVALID_PARAMETER, never clamped or replaced by a default.
+///        This is a deliberately plain electronic sound source so MIDI arrangements bounce to
+///        audio instead of silence; a richer instrument bank is planned separately.
 typedef struct {
-  /// A @ref SonareSynthWaveform selecting the oscillator; 0 = sine, outside the enum rejected.
-  /// A distinct enum from SonareSynthOscWaveform (sonare_c_types_analysis.h), whose 0 means
-  /// "keep base preset", not sine. Do not mix the two.
+  uint32_t struct_size;  ///< sizeof(SonareBuiltinSynthConfig); set by the init function.
+  /// A @ref SonareSynthWaveform selecting the oscillator; outside the enum refused. Default
+  /// SONARE_SYNTH_WAVEFORM_SINE. A distinct enum from SonareSynthOscWaveform
+  /// (sonare_c_types_analysis.h), whose 0 means "keep base preset", not sine. Do not mix the two.
   int waveform;
-  float gain;       ///< Master output gain (linear); 0 => 0.2.
-  float attack_ms;  ///< ADSR attack in ms; 0 => 5. Linear ramp, full level at the set time.
-  float decay_ms;  ///< ADSR decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep.
-  float sustain;   ///< ADSR sustain level [0,1]; 0 => 0.7.
-  float release_ms;  ///< ADSR release in ms; 0 => 120. Linear ramp, as decay.
-  int polyphony;     ///< Max simultaneous voices; 0 => 16, clamped to [1, 64].
-  /* Every field above takes 0 as "use the default". A negative or non-finite
-     value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
-     to the default. */
+  float gain;       ///< Master output gain (linear); in (0, 4]. Default 0.2.
+  float attack_ms;  ///< ADSR attack in ms; in (0, 20000]. Default 5. Linear ramp, full level at the
+                    ///< set time.
+  float decay_ms;   ///< ADSR decay in ms; in (0, 20000]. Default 60. Linear ramp: the set time is a
+                    ///< full 0 to 1 sweep.
+  float sustain;    ///< ADSR sustain level; in (0, 1]. Default 0.7.
+  float release_ms;  ///< ADSR release in ms; in (0, 20000]. Default 120. Linear ramp, as decay.
+  int polyphony;     ///< Max simultaneous voices; in [1, 64]. Default 16.
 } SonareBuiltinSynthConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults: a sine patch with gain 0.2,
+///        attack 5 ms, decay 60 ms, sustain 0.7, release 120 ms and 16 voices. A NULL @p config
+///        is ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+void sonare_builtin_synth_config_init(SonareBuiltinSynthConfig* config);
 
 /// @brief Binds a built-in synth patch to a MIDI destination id (the value set
 ///        by @ref sonare_project_set_track_midi_destination). The default
@@ -160,7 +162,8 @@ typedef struct {
 ///        MIDI-only arrangement bounces to audible output without the caller
 ///        supplying its own instrument callbacks. @p instruments points to
 ///        @p instrument_count bindings (may be NULL / 0 for a silent bounce).
-///        When @p options->total_frames <= 0 the render length is auto-derived
+///        When @p options->total_frames is
+///        @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT the render length is auto-derived
 ///        from the arrangement (musical end + the synth's release tail);
 ///        an instrument reporting an unbounded tail makes that fail with
 ///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
@@ -354,7 +357,8 @@ typedef struct {
 ///        the preset catalog + field overrides; an invalid struct_version or
 ///        unknown preset name or a refused engine param fails with
 ///        SONARE_ERROR_INVALID_PARAMETER.
-///        When @p options->total_frames <= 0 the render length is auto-derived
+///        When @p options->total_frames is
+///        @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT the render length is auto-derived
 ///        from the arrangement (musical end + the patch's release tail; with
 ///        use_gm_programs, the longest tail among the programs and drum notes
 ///        the arrangement plays);
@@ -438,30 +442,32 @@ typedef struct {
 SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
                                               size_t max_entries, size_t* out_count);
 
-/// @brief Versioned SF2 player patch for @ref
-///        sonare_project_bounce_with_sf2_instruments. Zero-initialize then
-///        override: every field uses "0 => default" (struct_version 0 is
-///        treated as version 1; version 2 adds model-first selection; version 3
-///        adds clearing the bank's default rig; version 4 selects how the GS
-///        insertion effects are realised).
+/// @brief SF2 player patch for @ref sonare_project_bounce_with_sf2_instruments. Start from
+///        @ref sonare_sf2_instrument_config_init and override what you need; every field is then
+///        read literally and refused outside its domain with SONARE_ERROR_INVALID_PARAMETER.
 typedef struct {
-  int struct_version;  ///< Struct version: 0 or 1 => version 1; 4 => current version.
-  /// Master output gain (linear); 0 => 0.5. A negative or non-finite gain is rejected with
-  /// SONARE_ERROR_INVALID_PARAMETER, not promoted to the default.
+  uint32_t struct_size;  ///< sizeof(SonareSf2InstrumentConfig); set by the init function.
+  /// Master output gain (linear); finite, in [0, 4]. Default 0.5; 0 is silence.
   float gain;
-  /// Max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is rejected with
-  /// SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48.
+  /// Max simultaneous voices; in [1, 64]. Default 48.
   int polyphony;
-  /// v2: non-zero selects dedicated melodic models; drums remain SF2-first.
+  /// Non-zero selects dedicated melodic models; drums remain SF2-first; negative refused.
+  /// Default 0.
   int prefer_model_for_modeled_families;
-  /// v3: non-zero renders the instrument alone, without the amplifier the bank binds after an
-  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete.
+  /// Non-zero renders the instrument alone, without the amplifier the bank binds after an
+  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete;
+  /// negative refused. Default 0.
   int clear_bank_rig;
-  /// v4: how the GS insertion effects are realised -- 0 modern (the library's own inserts),
-  /// 1 classic (the measured hardware models); any other value is rejected with
-  /// SONARE_ERROR_INVALID_PARAMETER.
+  /// How the GS insertion effects are realised -- 0 modern (the library's own inserts),
+  /// 1 classic (the measured hardware models); any other value is refused. Default 0.
   int gs_efx_realization;
 } SonareSf2InstrumentConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults: gain 0.5, 48 voices, models not
+///        preferred, the bank's rig kept and the modern GS insertion effects. A NULL @p config is
+///        ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config);
 
 /// @brief Binds an SF2 player patch to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination; default 0).

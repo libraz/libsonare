@@ -18,7 +18,7 @@ import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { withRespelled } from './internal/respell.js';
-import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -2205,7 +2205,6 @@ export class RealtimeEngine {
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     refuseBuiltinSynthOrdinals(config);
-    refuseBuiltinPolyphonyZero(config);
     this.native.setBuiltinInstrument(destinationId ?? 0, withoutDestinationId(config));
   }
 

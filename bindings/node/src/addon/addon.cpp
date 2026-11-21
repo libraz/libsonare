@@ -383,17 +383,19 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
     if (!MidiEventFromObject(env, event, &input[i])) return env.Undefined();
   }
 
-  // `-1` filters mean "any" and `thru` defaults to pass-through; an omitted,
-  // null, or explicitly `undefined` field must land on those same defaults.
-  SonareMidiRouteConfig config{-1, -1, -1, 1};
+  // An omitted, null, or explicitly `undefined` field must land on the init defaults (any
+  // group/channel, no remap, pass-through).
+  SonareMidiRouteConfig config;
+  sonare_midi_route_config_init(&config);
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object object = info[1].As<Napi::Object>();
-    config.filter_group = sonare_node::IntInRangeOrAbsentProperty(object, "filterGroup", 0, 15, -1);
-    config.filter_channel =
-        sonare_node::IntInRangeOrAbsentProperty(object, "filterChannel", 0, 15, -1);
-    config.remap_channel =
-        sonare_node::IntInRangeOrAbsentProperty(object, "remapChannel", 0, 15, -1);
-    config.thru = sonare_node::BoolProperty(object, "thru", true) ? 1 : 0;
+    config.filter_group =
+        sonare_node::IntInRangeOrAbsentProperty(object, "filterGroup", 0, 15, config.filter_group);
+    config.filter_channel = sonare_node::IntInRangeOrAbsentProperty(object, "filterChannel", 0, 15,
+                                                                    config.filter_channel);
+    config.remap_channel = sonare_node::IntInRangeOrAbsentProperty(object, "remapChannel", 0, 15,
+                                                                   config.remap_channel);
+    config.thru = sonare_node::BoolProperty(object, "thru", config.thru != 0) ? 1 : 0;
     if (env.IsExceptionPending()) return env.Undefined();
   }
 

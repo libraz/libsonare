@@ -125,7 +125,7 @@ describe('a synth patch field whose zero keeps the base preset', () => {
   });
 });
 
-describe('an instrument polyphony whose zero keeps the library default', () => {
+describe('an instrument polyphony, read literally', () => {
   const bounceBuiltin = (polyphony: number | undefined) => {
     const config: Record<string, unknown> = { gain: 0.5 };
     if (polyphony !== undefined) {
@@ -160,7 +160,7 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
     ['a SoundFont instrument bounce', bounceSf2],
   ])('refuses a fractional polyphony on %s', (_label, bounce) => {
     const omitted = bounce(undefined);
-    expect(bounce(0)).toBe(omitted);
+    expect(() => bounce(0)).toThrow(RangeError);
     expect(bounce(1)).not.toBe(omitted); // positive control
     for (const value of FRACTIONS) {
       expect(() => bounce(value), `polyphony ${value}`).toThrow(RangeError);
@@ -178,7 +178,7 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
       return renderEngine(engine);
     };
     const omitted = render(undefined);
-    expect(render(0)).toBe(omitted);
+    expect(() => render(0)).toThrow(RangeError);
     expect(render(1)).not.toBe(omitted); // positive control
     for (const value of FRACTIONS) {
       const engine = chordEngine();
@@ -202,7 +202,7 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
       return renderEngine(engine);
     };
     const omitted = render(undefined);
-    expect(render(0)).toBe(omitted);
+    expect(() => render(0)).toThrow(RangeError);
     expect(render(1)).not.toBe(omitted); // positive control
     for (const value of FRACTIONS) {
       const engine = chordEngine();
@@ -216,7 +216,7 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
   });
 });
 
-describe('a bounce option whose zero derives the value', () => {
+describe('a bounce option whose omission derives the value', () => {
   const bounce = (key: string, value: number | undefined) => {
     const options: Record<string, unknown> = {};
     if (key !== 'totalFrames') {
@@ -240,7 +240,8 @@ describe('a bounce option whose zero derives the value', () => {
     ['totalFrames', 12000],
   ])('refuses a fractional %s', (key, control) => {
     const omitted = bounce(key, undefined);
-    expect(bounce(key, 0)).toBe(omitted);
+    expect(() => bounce(key, 0), `${key} 0`).toThrow(RangeError);
+    expect(() => bounce(key, -1), `${key} -1`).toThrow(RangeError);
     expect(bounce(key, control)).not.toBe(omitted); // positive control
     for (const value of FRACTIONS) {
       expect(() => bounce(key, value), `${key} ${value}`).toThrow(RangeError);
@@ -254,7 +255,7 @@ describe('a bounce option whose zero derives the value', () => {
     const omitted = bounce('blockSize', undefined);
     expect(bounce('blockSize', 64)).toBe(omitted);
     expect(() => bounce('blockSize', 0.5)).toThrow(RangeError);
-    expect(() => bounce('blockSize', 0.5)).toThrow(/blockSize must be a whole number/);
+    expect(() => bounce('blockSize', 0.5)).toThrow(/blockSize must be an integer/);
   });
 });
 

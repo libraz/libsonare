@@ -37,7 +37,8 @@ SonareProject* make_guitar_project() {
 }
 
 std::vector<float> bounce_gm_synth(SonareProject* project) {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
@@ -111,14 +112,15 @@ TEST_CASE("a synth bounce of GM program 30 sounds through the default rig",
 
 TEST_CASE("a SoundFont-player bounce honours part rigs", "[bindings][part_rig]") {
   SonareProject* project = make_guitar_project();
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
   options.sample_rate = 48000;
   SonareSf2InstrumentBinding binding{};
+  sonare_sf2_instrument_config_init(&binding.config);
   binding.destination_id = kDestination;
-  binding.config.struct_version = 4;
 
   const auto bounce = [&] {
     float* out = nullptr;
@@ -161,9 +163,10 @@ TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the
   synth.use_gm_programs = 1;
   REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);
   SonareEngineSf2InstrumentConfig sf2{};
-  sf2.struct_version = 4;
+  sonare_engine_sf2_instrument_config_init(&sf2);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &sf2) == SONARE_OK);
   SonareEngineBuiltinSynthConfig builtin{};
+  sonare_engine_builtin_synth_config_init(&builtin);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 3, &builtin) == SONARE_OK);
 
   for (const uint32_t destination : {1u, 2u}) {

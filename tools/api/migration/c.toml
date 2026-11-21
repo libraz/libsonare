@@ -1315,10 +1315,10 @@ test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retun
 [[entry]]
 kind = "type"
 old = "SonareProjectBounceOptions"
-changed = "only 0 selects a default for block_size, num_channels and sample_rate, and a negative value is refused; num_channels 0 takes the scene master's layout width (2 with no master) instead of always 2"
+changed = "leads with uint32_t struct_size; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/project_bounce_tail_channel_test.cpp::project bounce reads only zero as the default for block size, width and rate"
+test = "tests/bindings/project_bounce_tail_channel_test.cpp::project bounce reads only the named constants as the default for width and rate"
 
 [[entry]]
 kind = "field"
@@ -1956,6 +1956,13 @@ rule = "options-struct"
 
 [[entry]]
 kind = "field"
+old = "SonarePolyphonicConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_polyphonic_config_init"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
 old = "SonareTranscribeResult.struct_version"
 removed = "the field is gone; read the result's other fields directly"
 domain = "analysis"
@@ -2319,8 +2326,77 @@ test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI clip
 
 [[entry]]
 kind = "type"
+old = "SonareBuiltinSynthConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/bindings/binding_project_bounce_test.cpp::bounce_with_builtin_instruments refuses each synth field by name"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineBuiltinSynthConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine built-in synth refuses each member by name"
+
+[[entry]]
+kind = "type"
+old = "SonareSf2InstrumentConfig"
+changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/bindings/binding_project_bounce_test.cpp::bounce_with_sf2_instruments refuses each player field by name"
+
+[[entry]]
+kind = "field"
+old = "SonareSf2InstrumentConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_sf2_instrument_config_init"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSf2InstrumentConfig"
+changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_engine_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine SF2 player refuses each member by name"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineSf2InstrumentConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_engine_sf2_instrument_config_init"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
 old = "SonareEngineGraphNode"
 changed = "leads with uint32_t struct_size; prepare it with sonare_engine_graph_node_init, after which every field is read literally: num_ports SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC (-1) takes the port count from the graph spec and 0 is refused"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_engine_mixing_refusal_test.cpp::engine graph refuses its spec by name"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_tempo_options_default"
+removed = "call sonare_project_tempo_options_init(&options) on a caller-owned struct instead"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "type"
+old = "SonareProjectTempoOptions"
+changed = "leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/bindings/binding_project_editing_test.cpp::project C surface MIR refusals name the parameter"
+
+[[entry]]
+kind = "type"
+old = "SonareMidiRouteConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/api/c_refusal_subjects_test.cpp::the project MIDI entries name a route field and a bank outside their domains"

@@ -35,7 +35,8 @@ SonareProject* make_midi_project(double start_ppq, uint32_t destination_id, uint
 }
 
 SonareProjectBounceOptions bounce_options(int64_t total_frames) {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = total_frames;
   options.block_size = 128;
   options.num_channels = 2;
@@ -69,7 +70,8 @@ TEST_CASE("project bounce rejects an arrangement event endpoint overflow", "[pro
   const SonareInstrumentBinding binding = callback_binding(&state);
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 1;
-  const SonareProjectBounceOptions options = bounce_options(std::numeric_limits<int64_t>::min());
+  const SonareProjectBounceOptions options =
+      bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels1 = 0;
   REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
                                                  &bounce_channels1) ==
@@ -91,7 +93,8 @@ TEST_CASE("project bounce rejects arrangement plus instrument-tail overflow",
   const SonareInstrumentBinding binding = callback_binding(&state, 0, 1);
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 1;
-  const SonareProjectBounceOptions options = bounce_options(std::numeric_limits<int64_t>::min());
+  const SonareProjectBounceOptions options =
+      bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels2 = 0;
   REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
                                                  &bounce_channels2) == SONARE_ERROR_INVALID_STATE);
@@ -143,14 +146,24 @@ TEST_CASE("project bounce rejects negative host-instrument latency", "[project][
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project bounce keeps the nonpositive total-frames sentinel including INT64_MIN",
+TEST_CASE("project bounce derives the length from the named constant and refuses other lengths",
           "[project][overflow]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  for (const int64_t refused : {int64_t{0}, int64_t{-2}, std::numeric_limits<int64_t>::min()}) {
+    const SonareProjectBounceOptions bad = bounce_options(refused);
+    float* bad_out = nullptr;
+    size_t bad_len = 0;
+    int bad_channels = 0;
+    REQUIRE(sonare_project_bounce(project, &bad, &bad_out, &bad_len, &bad_channels) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bad_out == nullptr);
+  }
 
   float* out = nullptr;
   size_t out_len = 0;
-  const SonareProjectBounceOptions options = bounce_options(std::numeric_limits<int64_t>::min());
+  const SonareProjectBounceOptions options =
+      bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels5 = 0;
   REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels5) == SONARE_OK);
   REQUIRE(out != nullptr);
@@ -165,6 +178,7 @@ TEST_CASE("project bounce keeps the nonpositive total-frames sentinel including 
   const SonareMidiEventPod event{0.0, 0x20903C40u, 0u};
   REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = 7;
   out = nullptr;
   out_len = 0;
@@ -198,6 +212,7 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
   }
 
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 1;
@@ -234,6 +249,7 @@ TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project]
   }
 
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 1;

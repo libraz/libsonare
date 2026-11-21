@@ -43,6 +43,7 @@ std::vector<float> stereo_tone(int64_t frames) {
 
 SonareBuiltinSynthConfig project_synth() {
   SonareBuiltinSynthConfig config{};
+  sonare_builtin_synth_config_init(&config);
   config.waveform = 1;
   config.gain = 0.3f;
   config.attack_ms = 1.0f;
@@ -54,6 +55,7 @@ SonareBuiltinSynthConfig project_synth() {
 SonareEngineBuiltinSynthConfig engine_synth() {
   const SonareBuiltinSynthConfig p = project_synth();
   SonareEngineBuiltinSynthConfig config{};
+  sonare_engine_builtin_synth_config_init(&config);
   config.waveform = p.waveform;
   config.gain = p.gain;
   config.attack_ms = p.attack_ms;
@@ -109,12 +111,14 @@ TestProject build_project(const std::vector<float>& tone, int project_sample_rat
 }
 
 std::vector<float> project_bounce(SonareProject* project) {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
   options.sample_rate = kSampleRate;
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   binding.config = project_synth();
   float* out = nullptr;

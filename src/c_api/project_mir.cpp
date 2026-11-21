@@ -20,8 +20,10 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
 }
 
-SonareProjectTempoOptions sonare_project_tempo_options_default(void) {
+void sonare_project_tempo_options_init(SonareProjectTempoOptions* out) {
+  if (out == nullptr) return;
   SonareProjectTempoOptions options = {};
+  options.struct_size = sizeof(SonareProjectTempoOptions);
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Seeded from the two core configs the bridge runs on, so the defaults cannot
   // drift away from what the fixed-signature entry points do.
@@ -36,7 +38,7 @@ SonareProjectTempoOptions sonare_project_tempo_options_default(void) {
   // and every entry point that would read them reports NOT_SUPPORTED, so the
   // zeroed struct is the honest answer rather than a hand-copied set of values
   // with nothing to keep them in step with the core.
-  return options;
+  *out = options;
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -79,13 +81,15 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(
 
 std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* audio, size_t len,
                                                                  int sample_rate) {
-  return analyze_tempo_candidates(audio, len, sample_rate, sonare_project_tempo_options_default());
+  SonareProjectTempoOptions defaults;
+  sonare_project_tempo_options_init(&defaults);
+  return analyze_tempo_candidates(audio, len, sample_rate, defaults);
 }
 
-// A caller who zeroed the struct instead of seeding it would silently get a
-// whole-take single segment and an interval the local estimate cannot use, so
-// the values are checked rather than clamped.
+// The values are checked rather than clamped.
 void check_tempo_options(const SonareProjectTempoOptions& options) {
+  sonare_c_detail::require_struct_size(options.struct_size, sizeof(SonareProjectTempoOptions),
+                                       "options", "sonare_project_tempo_options_init");
   check::integer_at_least(options.tempo_update_interval_beats, 1,
                           "options.tempo_update_interval_beats");
   check::at_least(options.ramp_threshold, 0.0, "options.ramp_threshold");
@@ -142,8 +146,12 @@ SonareError sonare_project_analyze_tempo_with_options(const SonareProject* proje
   SonareError err =
       validate_audio_params("project_analyze_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
-  const SonareProjectTempoOptions resolved =
-      options ? *options : sonare_project_tempo_options_default();
+  SonareProjectTempoOptions resolved;
+  if (options) {
+    resolved = *options;
+  } else {
+    sonare_project_tempo_options_init(&resolved);
+  }
   if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(candidates, capacity);
   SONARE_C_TRY
@@ -174,8 +182,12 @@ SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const
   SonareError err =
       validate_audio_params("project_auto_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
-  const SonareProjectTempoOptions resolved =
-      options ? *options : sonare_project_tempo_options_default();
+  SonareProjectTempoOptions resolved;
+  if (options) {
+    resolved = *options;
+  } else {
+    sonare_project_tempo_options_init(&resolved);
+  }
   if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =

@@ -160,6 +160,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMfccResult.struct_version` | removed: the field is gone; read the result's other fields directly |
 | `SonareMusicAnalyzeOptions.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_music_analyze_options_init |
 | `SonareNoteSegmenterConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_note_segmenter_config_init |
+| `SonarePolyphonicConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_polyphonic_config_init |
 | `SonareTranscribeConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_transcribe_config_init |
 | `SonareTranscribeResult.struct_version` | removed: the field is gone; read the result's other fields directly |
 | `sonare_analyze_sections(hop_length)` | removed: set SonareSectionOptions.hop_length on the options passed to sonare_analyze_sections |
@@ -519,11 +520,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareEngineBounceOptions` | leads with uint32_t struct_size; prepare it with sonare_engine_bounce_options_init, after which every field is read literally: block_size SONARE_ENGINE_BLOCK_SIZE_AUTO and the rates SONARE_ENGINE_SAMPLE_RATE_PREPARED (-1) take the defaults and 0 is refused; target_lufs NaN is the -14 LUFS default and any finite value is literal; dither_bits must be in range when dither is on; dither_seed is read literally (SONARE_ENGINE_DEFAULT_DITHER_SEED is the default) |
+| `SonareEngineBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_engine_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default |
 | `SonareEngineClip` | leads with uint32_t struct_size; prepare it with sonare_engine_clip_init, after which every field is read literally: length_samples SONARE_ENGINE_CLIP_LENGTH_TO_END (-1) plays to the end of the source and 0 is refused |
 | `SonareEngineFreezeOptions` | leads with uint32_t struct_size; prepare it with sonare_engine_freeze_options_init, after which every field is read literally: block_size SONARE_ENGINE_BLOCK_SIZE_AUTO (-1) takes the default offline block and 0 is refused |
 | `SonareEngineGraphNode` | leads with uint32_t struct_size; prepare it with sonare_engine_graph_node_init, after which every field is read literally: num_ports SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC (-1) takes the port count from the graph spec and 0 is refused |
 | `SonareEngineMetronomeConfig` | leads with uint32_t struct_size; prepare it with sonare_engine_metronome_config_init, after which every field is read literally: click_samples SONARE_ENGINE_METRONOME_CLICK_FROM_SEC (-1) derives the click from click_sec, and a click_samples or click_sec of 0 is refused; sonare_engine_metronome reports the struct the same way |
 | `SonareEngineMidiClipSchedule` | leads with uint32_t struct_size; prepare it with sonare_engine_midi_clip_schedule_init, after which every field is read literally: length_samples SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED (-1) is open-ended and 0 is refused; a looping clip needs loop_length_samples of at least 1, and an open-ended clip refuses a fade-out |
+| `SonareEngineSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_engine_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
 | `sonare_engine_bounce_options_default` | removed: call sonare_engine_bounce_options_init(&options) on a caller-owned struct instead; set num_channels before bouncing (a 0 width is refused) |
 
 #### String values are lowerCamelCase tokens
@@ -533,6 +536,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_synth_enum_names` | lists every NativeSynth enum token in lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...); the moog-ladder input spelling is gone |
 | `sonare_synth_preset_names` | lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...) |
 | `sonare_synth_preset_patch` | accepts only the lowerCamel preset names that sonare_synth_preset_names lists |
+
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareEngineSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_engine_sf2_instrument_config_init |
 
 #### C constructors return SonareError and an out pointer
 
@@ -570,7 +579,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareProjectBounceOptions` | only 0 selects a default for block_size, num_channels and sample_rate, and a negative value is refused; num_channels 0 takes the scene master's layout width (2 with no master) instead of always 2 |
+| `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default |
+| `SonareMidiRouteConfig` | leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults |
+| `SonareProjectBounceOptions` | leads with uint32_t struct_size; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
+| `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused |
+| `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
+| `sonare_project_tempo_options_default` | removed: call sonare_project_tempo_options_init(&options) on a caller-owned struct instead |
 
 #### String values are lowerCamelCase tokens
 
@@ -578,6 +592,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_project_deserialize` | reads only the current document version and refuses a snake_case built-in assist module id naming the lowerCamel one |
 | `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER |
+
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_sf2_instrument_config_init |
 
 #### C constructors return SonareError and an out pointer
 

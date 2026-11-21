@@ -172,10 +172,9 @@ val ProjectWasm::validateMidiNotes(const val& clip_id_val) {
 namespace {
 
 // Seeds the native defaults, then applies whichever the caller supplied.
-// Seeding rather than zeroing matters: a zeroed ramp_threshold folds the whole
-// take into one tempo segment and a zeroed interval is rejected.
 SonareProjectTempoOptions tempoOptionsFrom(val options) {
-  SonareProjectTempoOptions out = sonare_project_tempo_options_default();
+  SonareProjectTempoOptions out;
+  sonare_project_tempo_options_init(&out);
   if (options.isUndefined() || options.isNull()) return out;
   // The presence-checked *Property readers, not a bare object["key"] read: every
   // field here is optional and the seeded default is the value to keep when one
@@ -461,15 +460,19 @@ val js_midi_route_events(val events, val config) {
     input[i].word1 = wordProperty(entry, "word1", input[i].word1);
   }
 
-  SonareMidiRouteConfig route{-1, -1, -1, 1};
+  SonareMidiRouteConfig route;
+  sonare_midi_route_config_init(&route);
   if (!config.isUndefined() && !config.isNull()) {
-    // -1 is the "any group / any channel / no remap" sentinel, so the range
-    // check has to keep it while refusing the values a bare cast turned into a
+    // The init values are the "any group / any channel / no remap" sentinels, so the range
+    // check has to keep them while refusing the values a bare cast turned into a
     // real filter: NaN reads as channel 0 and a fractional value truncates onto
     // a neighbouring channel, both of them silently.
-    route.filter_group = intInRangeOrAbsentProperty(config, "filterGroup", 0, 15, -1);
-    route.filter_channel = intInRangeOrAbsentProperty(config, "filterChannel", 0, 15, -1);
-    route.remap_channel = intInRangeOrAbsentProperty(config, "remapChannel", 0, 15, -1);
+    route.filter_group =
+        intInRangeOrAbsentProperty(config, "filterGroup", 0, 15, route.filter_group);
+    route.filter_channel =
+        intInRangeOrAbsentProperty(config, "filterChannel", 0, 15, route.filter_channel);
+    route.remap_channel =
+        intInRangeOrAbsentProperty(config, "remapChannel", 0, 15, route.remap_channel);
     if (hasProperty(config, "thru")) {
       route.thru = boolProperty(config, "thru", false) ? 1 : 0;
     }

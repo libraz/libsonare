@@ -408,6 +408,7 @@ std::vector<float> render_midi_clip(const SonareEngineMidiClipSchedule& clip) {
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   REQUIRE(sonare_engine_set_builtin_instrument(engine, kMidiDestination, &synth) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);

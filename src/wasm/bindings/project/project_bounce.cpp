@@ -372,21 +372,31 @@ val ProjectWasm::compileTimeline() {
 
 SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
   SonareProjectBounceOptions opts{};
+  sonare_project_bounce_options_init(&opts);
   if (!options.isUndefined() && !options.isNull()) {
+    // A field the caller writes is read literally: only absence selects a default, so a written
+    // sentinel is passed on as 0, which the core refuses in the field's own domain text.
+    const auto writtenInt = [](val value, const char* name, int sentinel) {
+      const int read = checkedIntFromVal(value, name);
+      return read == sentinel ? 0 : read;
+    };
     // requireInt64Property, not a raw static_cast<int64_t> of a double:
     // refuses a fraction and an out-of-int64-range value by name instead of
     // truncating the one and casting the other into undefined behavior.
     if (hasProperty(options, "totalFrames")) {
-      opts.total_frames = requireInt64Property(options, "totalFrames", "options");
+      const int64_t read = requireInt64Property(options, "totalFrames", "options");
+      opts.total_frames = read == SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT ? 0 : read;
     }
     if (hasProperty(options, "blockSize")) {
       opts.block_size = checkedIntFromVal(options["blockSize"], "blockSize");
     }
     if (hasProperty(options, "numChannels")) {
-      opts.num_channels = checkedIntFromVal(options["numChannels"], "numChannels");
+      opts.num_channels = writtenInt(options["numChannels"], "numChannels",
+                                     SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER);
     }
     if (hasProperty(options, "sampleRate")) {
-      opts.sample_rate = checkedIntFromVal(options["sampleRate"], "sampleRate");
+      opts.sample_rate =
+          writtenInt(options["sampleRate"], "sampleRate", SONARE_PROJECT_SAMPLE_RATE_PROJECT);
     }
     if (hasProperty(options, "instrumentLatencySamples")) {
       opts.instrument_latency_samples =
@@ -398,6 +408,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
 
 SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   if (desc.isUndefined() || desc.isNull()) {
     return binding;
   }
@@ -619,6 +630,7 @@ val ProjectWasm::soundFontManifest() {
 
 SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   SonareSf2InstrumentBinding binding{};
+  sonare_sf2_instrument_config_init(&binding.config);
   if (desc.isUndefined() || desc.isNull()) {
     return binding;
   }
@@ -630,19 +642,13 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
     binding.config.polyphony = checkedIntFromVal(desc["polyphony"], "polyphony");
   }
   if (hasProperty(desc, "preferModelForModeledFamilies")) {
-    binding.config.struct_version = 2;
     binding.config.prefer_model_for_modeled_families =
         boolProperty(desc, "preferModelForModeledFamilies", false) ? 1 : 0;
   }
-  // Version 3 reads version 2's field as well, so raising it here covers both
-  // whichever of the two the caller passed.
   if (hasProperty(desc, "clearBankRig")) {
-    binding.config.struct_version = 3;
     binding.config.clear_bank_rig = boolProperty(desc, "clearBankRig", false) ? 1 : 0;
   }
-  // Version 4 reads every earlier field too.
   if (hasProperty(desc, "gsEfxRealization")) {
-    binding.config.struct_version = 4;
     binding.config.gs_efx_realization = gsEfxRealizationProperty(desc, "gsEfxRealization");
   }
   return binding;

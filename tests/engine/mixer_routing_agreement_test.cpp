@@ -247,6 +247,7 @@ const std::vector<float>& audio_plane(int channel) {
 
 SonareEngineBuiltinSynthConfig engine_synth() {
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.waveform = 0;
   synth.gain = 1.0f;
   synth.attack_ms = 1.0f;
@@ -259,6 +260,7 @@ SonareEngineBuiltinSynthConfig engine_synth() {
 
 SonareBuiltinSynthConfig project_synth() {
   SonareBuiltinSynthConfig synth{};
+  sonare_builtin_synth_config_init(&synth);
   synth.waveform = 0;
   synth.gain = 1.0f;
   synth.attack_ms = 1.0f;
@@ -480,12 +482,14 @@ std::vector<float> render_project_bounce(const Row& row) {
   uint32_t audio_clip = 0;
   REQUIRE(sonare_project_add_clip(project, &clip_desc, &audio_clip) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kTotalFrames;
   options.block_size = kBlockSize;
   options.num_channels = output_channels(row);
   options.sample_rate = static_cast<int>(kSampleRate);
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   binding.config = project_synth();
 

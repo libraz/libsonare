@@ -250,7 +250,8 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = bank;
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.sample_rate = 48000;
   options.total_frames = 48000;
   float* out = nullptr;
@@ -298,7 +299,8 @@ TEST_CASE("narrowing one range leaves the other covering everything", "[project]
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = bank;
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.sample_rate = 48000;
   options.total_frames = 48000;
   float* out = nullptr;
@@ -326,7 +328,8 @@ TEST_CASE("a sample patch without a bank renders silence, not an error", "[proje
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = nullptr;
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.sample_rate = 48000;
   options.total_frames = 24000;
   float* out = nullptr;
@@ -362,7 +365,8 @@ TEST_CASE("a struct_version past the newest is refused", "[project][sample_bank]
   SonareSynthInstrumentBinding binding{};
   binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.sample_rate = 48000;
   options.total_frames = 4800;
   float* out = nullptr;

@@ -89,6 +89,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_project_timeline_destroy.restype = None
     lib.sonare_project_timeline_destroy.argtypes = [ctypes.c_void_p]
 
+    lib.sonare_project_bounce_options_init.restype = None
+    lib.sonare_project_bounce_options_init.argtypes = [ctypes.POINTER(SonareProjectBounceOptions)]
     lib.sonare_project_bounce.restype = ctypes.c_int32
     lib.sonare_project_bounce.argtypes = [
         ctypes.c_void_p,
@@ -97,6 +99,12 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
     ]
+
+    lib.sonare_builtin_synth_config_init.restype = None
+    lib.sonare_builtin_synth_config_init.argtypes = [ctypes.POINTER(SonareBuiltinSynthConfig)]
+
+    lib.sonare_sf2_instrument_config_init.restype = None
+    lib.sonare_sf2_instrument_config_init.argtypes = [ctypes.POINTER(SonareSf2InstrumentConfig)]
 
     lib.sonare_project_bounce_with_builtin_instruments.restype = ctypes.c_int32
     lib.sonare_project_bounce_with_builtin_instruments.argtypes = [
@@ -725,8 +733,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
-    lib.sonare_project_tempo_options_default.restype = SonareProjectTempoOptions
-    lib.sonare_project_tempo_options_default.argtypes = []
+    lib.sonare_project_tempo_options_init.restype = None
+    lib.sonare_project_tempo_options_init.argtypes = [ctypes.POINTER(SonareProjectTempoOptions)]
     lib.sonare_project_analyze_tempo_with_options.restype = ctypes.c_int32
     lib.sonare_project_analyze_tempo_with_options.argtypes = [
         ctypes.c_void_p,
@@ -895,6 +903,8 @@ def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    lib.sonare_midi_route_config_init.restype = None
+    lib.sonare_midi_route_config_init.argtypes = [ctypes.POINTER(SonareMidiRouteConfig)]
     lib.sonare_midi_route_events.restype = ctypes.c_int32
     lib.sonare_midi_route_events.argtypes = [
         ctypes.POINTER(SonareMidiEventPod),

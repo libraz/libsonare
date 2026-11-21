@@ -60,12 +60,14 @@ SonareProject* make_shared_strip_project(uint32_t* out_track) {
 }
 
 StereoEnergy bounce_energy(SonareProject* project) {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
   options.sample_rate = kSampleRate;
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   binding.config.polyphony = 8;
   binding.config.gain = 1.0f;
@@ -129,7 +131,8 @@ TEST_CASE("a MIDI track's pan reaches the bounce on a shared channel strip",
 // instrument is covered, because there the controls ride the scene strip.
 TEST_CASE("an opaque callback instrument keeps its strip's controls, not its track's",
           "[arrangement][project]") {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
@@ -209,7 +212,8 @@ TEST_CASE("a callback destination shared by unrouted tracks bounces once",
     return project;
   };
   const auto bounce = [](SonareProject* project, CallbackInstrumentState* state) {
-    SonareProjectBounceOptions options{};
+    SonareProjectBounceOptions options;
+    sonare_project_bounce_options_init(&options);
     options.total_frames = 4096;
     options.block_size = kBlockSize;
     options.num_channels = 2;

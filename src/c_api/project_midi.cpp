@@ -727,6 +727,21 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+static_assert(sonare::midi::MidiRouteConfig{}.thru,
+              "the documented default of SonareMidiRouteConfig.thru");
+#endif
+
+void sonare_midi_route_config_init(SonareMidiRouteConfig* config) {
+  if (config == nullptr) return;
+  *config = SonareMidiRouteConfig{};
+  config->struct_size = sizeof(SonareMidiRouteConfig);
+  config->filter_group = SONARE_MIDI_ROUTE_ANY;
+  config->filter_channel = SONARE_MIDI_ROUTE_ANY;
+  config->remap_channel = SONARE_MIDI_ROUTE_NO_REMAP;
+  config->thru = 1;
+}
+
 SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t count,
                                      const SonareMidiRouteConfig* config,
                                      SonareMidiEventPod* out_events, size_t out_capacity,
@@ -745,12 +760,16 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
       err != SONARE_OK) {
     return err;
   }
-  SonareMidiRouteConfig default_config{-1, -1, -1, 1};
+  SonareMidiRouteConfig default_config;
+  sonare_midi_route_config_init(&default_config);
   const SonareMidiRouteConfig& c = config != nullptr ? *config : default_config;
   if (const SonareError err = run_validation([&] {
-        // -1 leaves the field unfiltered (or the channel unmapped).
+        sonare_c_detail::require_struct_size(c.struct_size, sizeof(SonareMidiRouteConfig), "config",
+                                             "sonare_midi_route_config_init");
+        // SONARE_MIDI_ROUTE_ANY / SONARE_MIDI_ROUTE_NO_REMAP leave the field unfiltered (or the
+        // channel unmapped).
         const auto route_field = [](int value, const char* subject) {
-          if (value != -1 && (value < 0 || value > 15)) {
+          if (value != SONARE_MIDI_ROUTE_ANY && (value < 0 || value > 15)) {
             check::refuse(subject, "must be -1 or an integer in [0, 15]");
           }
         };
@@ -780,12 +799,15 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   }
 
   sonare::midi::MidiRouteConfig route{};
-  route.filter_group =
-      c.filter_group == -1 ? sonare::midi::kRouteAnyGroup : static_cast<uint8_t>(c.filter_group);
-  route.filter_channel = c.filter_channel == -1 ? sonare::midi::kRouteAnyChannel
-                                                : static_cast<uint8_t>(c.filter_channel);
-  route.remap_channel =
-      c.remap_channel == -1 ? sonare::midi::kRouteNoRemap : static_cast<uint8_t>(c.remap_channel);
+  route.filter_group = c.filter_group == SONARE_MIDI_ROUTE_ANY
+                           ? sonare::midi::kRouteAnyGroup
+                           : static_cast<uint8_t>(c.filter_group);
+  route.filter_channel = c.filter_channel == SONARE_MIDI_ROUTE_ANY
+                             ? sonare::midi::kRouteAnyChannel
+                             : static_cast<uint8_t>(c.filter_channel);
+  route.remap_channel = c.remap_channel == SONARE_MIDI_ROUTE_NO_REMAP
+                            ? sonare::midi::kRouteNoRemap
+                            : static_cast<uint8_t>(c.remap_channel);
   route.thru = c.thru != 0;
 
   sonare::midi::MidiRouter router;

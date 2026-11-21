@@ -14,10 +14,10 @@ export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 
 
 /**
  * Built-in synth patch for {@link Project.bounceWithBuiltinInstruments} and
- * {@link RealtimeEngine.setBuiltinInstrument}. Every field is optional; a
- * non-positive (or omitted) numeric field falls back to the C-ABI default
- * (gain 0.2, attack 5ms, decay 60ms, sustain 0.7, release 120ms, 16 voices),
- * so `{}` is a usable default sine patch.
+ * {@link RealtimeEngine.setBuiltinInstrument}. Every field is optional; an
+ * omitted field takes the library default (gain 0.2, attack 5ms, decay 60ms,
+ * sustain 0.7, release 120ms, 16 voices), so `{}` is a usable default sine
+ * patch. A given value is read literally and refused outside its range.
  */
 export interface BuiltinSynthConfig {
   /**
@@ -26,17 +26,17 @@ export interface BuiltinSynthConfig {
    * and a number is a `TypeError`.
    */
   waveform?: BuiltinSynthWaveform;
-  /** Master output gain, linear (0 => 0.2). */
+  /** Master output gain, linear, in (0, 4]; default 0.2. */
   gain?: number;
-  /** ADSR attack in ms (0 => 5); a linear ramp that reaches full level at the set time. */
+  /** ADSR attack in ms, in (0, 20000]; default 5. A linear ramp that reaches full level at the set time. */
   attackMs?: number;
-  /** ADSR decay in ms (0 => 60); a linear ramp, the set time is a full 0 to 1 sweep. */
+  /** ADSR decay in ms, in (0, 20000]; default 60. A linear ramp, the set time is a full 0 to 1 sweep. */
   decayMs?: number;
-  /** ADSR sustain level [0,1] (0 => 0.7). */
+  /** ADSR sustain level, in (0, 1]; default 0.7. */
   sustain?: number;
-  /** ADSR release in ms (0 => 120); a linear ramp, the set time is a full 0 to 1 sweep. */
+  /** ADSR release in ms, in (0, 20000]; default 120. A linear ramp, the set time is a full 0 to 1 sweep. */
   releaseMs?: number;
-  /** Max simultaneous voices (0 => 16, clamped to [1, 64]). */
+  /** Max simultaneous voices, in [1, 64]; default 16. */
   polyphony?: number;
 }
 
@@ -95,14 +95,14 @@ export interface ExternalInstrument {
 }
 
 /**
- * SoundFont (SF2) player patch for {@link Project.bounceWithSf2Instruments}. Every field is optional; a
- * non-positive (or omitted) numeric field falls back to the C-ABI default
- * (gain 0.5, 48 voices), so `{}` is a usable default patch.
+ * SoundFont (SF2) player patch for {@link Project.bounceWithSf2Instruments}. Every field is optional; an
+ * omitted field takes the library default (gain 0.5, 48 voices), so `{}` is a usable default
+ * patch. A given value is read literally and refused outside its range.
  */
 export interface Sf2InstrumentConfig {
-  /** Master output gain, linear (0 => 0.5). */
+  /** Master output gain, linear, in [0, 4]; default 0.5. 0 is silence. */
   gain?: number;
-  /** Max simultaneous voices (0 => 48, clamped to [1, 64]). */
+  /** Max simultaneous voices, in [1, 64]; default 48. */
   polyphony?: number;
   /** Prefer dedicated physical models for covered melodic GM programs. Defaults to false; drums stay SF2-first. */
   preferModelForModeledFamilies?: boolean;

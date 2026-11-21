@@ -179,8 +179,8 @@ void clear_last_bounce_result(SonareProject* project) noexcept {
 
 // Shared bounce core: validates options, compiles, registers any hosted
 // instruments per destination, renders offline, and writes the interleaved
-// result. `instruments` may be empty for a silent MIDI bounce. When
-// opts.total_frames <= 0 the render length is auto-derived from the compiled
+// result. `instruments` may be empty for a silent MIDI bounce. When opts.total_frames is
+// SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT the render length is derived from the compiled
 // timeline (plus the longest hosted-instrument release tail) so a caller can
 // bounce a MIDI-only arrangement without computing a length by hand; an
 // instrument reporting an unbounded (INT_MAX) tail refuses that. When the
@@ -199,15 +199,28 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   clear_last_bounce_result(project);
 
   namespace check = sonare::util::check;
-  SonareProjectBounceOptions opts{};
-  if (options) opts = *options;
-  check::integer_at_least(opts.block_size, 0, "options.block_size");
-  check::integer_at_least(opts.num_channels, 0, "options.num_channels");
-  check::integer_at_least(opts.sample_rate, 0, "options.sample_rate");
+  SonareProjectBounceOptions opts;
+  if (options) {
+    opts = *options;
+    sonare_c_detail::require_struct_size(opts.struct_size, sizeof(SonareProjectBounceOptions),
+                                         "options", "sonare_project_bounce_options_init");
+  } else {
+    sonare_project_bounce_options_init(&opts);
+  }
+  const bool derive_length = opts.total_frames == SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
+  if (!derive_length) {
+    check::integer_at_least<int64_t>(opts.total_frames, 1, "options.total_frames");
+  }
+  check::integer_at_least(opts.block_size, 1, "options.block_size");
+  if (opts.num_channels != SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER) {
+    check::integer_at_least(opts.num_channels, 1, "options.num_channels");
+  }
+  if (opts.sample_rate != SONARE_PROJECT_SAMPLE_RATE_PROJECT) {
+    check::integer_at_least(opts.sample_rate, 1, "options.sample_rate");
+  }
   check::integer_at_least(opts.instrument_latency_samples, 0, "options.instrument_latency_samples");
-  const int block_size =
-      opts.block_size == 0 ? sonare::engine::RealtimeEngine::kDefaultOfflineBlock : opts.block_size;
-  const int num_channels = opts.num_channels == 0
+  const int block_size = opts.block_size;
+  const int num_channels = opts.num_channels == SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER
                                ? master_output_channels(project->history.project().scene())
                                : opts.num_channels;
   // The master is built at the requested width, so only a speaker-layout count
@@ -219,16 +232,16 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     check::refuse("options.num_channels", "must be at most the width of the scene master's layout");
   }
   const double project_sr = project->history.project().sample_rate();
-  const double sample_rate =
-      opts.sample_rate != 0 ? static_cast<double>(opts.sample_rate) : project_sr;
-  if (opts.sample_rate != 0) {
+  const bool project_rate = opts.sample_rate == SONARE_PROJECT_SAMPLE_RATE_PROJECT;
+  const double sample_rate = project_rate ? project_sr : static_cast<double>(opts.sample_rate);
+  if (!project_rate) {
     check::integer_in_range(opts.sample_rate, sonare::kMinAudioSampleRate,
                             sonare::kMaxAudioSampleRate, "options.sample_rate");
   }
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     check::refuse("project", "must have a supported sample rate");
   }
-  if (opts.sample_rate != 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
+  if (!project_rate && std::abs(sample_rate - project_sr) > 1.0e-6) {
     check::refuse("options.sample_rate", "must equal the sample rate of the project");
   }
   size_t block_floats = 0;
@@ -286,7 +299,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       if (!probe.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
         return hosted_instrument_bind_error(probe, i);
       }
-      const bool replay = opts.total_frames <= 0 && hosted.instrument->tail_follows_events();
+      const bool replay = derive_length && hosted.instrument->tail_follows_events();
       int latency = 0;
       int tail = 0;
       if (!probe_hosted_latency_tail(*compiled.timeline, hosted, replay, &latency, &tail)) {
@@ -322,7 +335,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     return SONARE_ERROR_INVALID_STATE;
   }
   int64_t frames = opts.total_frames;
-  if (frames <= 0) {
+  if (derive_length) {
     // An unbounded tail has no auto length; the caller has to name one.
     if (unbounded_tail && arrangement_frames > 0) {
       check::refuse("options.total_frames",
@@ -360,7 +373,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // tail is guaranteed silent; for an explicit length it would replace a real
   // instrument/stem tail with the mixer's decaying silence. bounce_through_mixer
   // clamps this to the render window, so this only ever lifts the input span.
-  if (opts.total_frames > 0) {
+  if (!derive_length) {
     mixer_input_frames = std::max(mixer_input_frames, frames);
   }
 #endif
@@ -544,6 +557,21 @@ bool probe_hosted_latency_tail(const arr::CompiledTimeline& timeline,
 }  // namespace sonare_c_bounce_detail
 #endif
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+static_assert(sonare::engine::RealtimeEngine::kDefaultOfflineBlock == 128,
+              "the documented default block of SonareProjectBounceOptions");
+#endif
+
+void sonare_project_bounce_options_init(SonareProjectBounceOptions* options) {
+  if (options == nullptr) return;
+  *options = SonareProjectBounceOptions{};
+  options->struct_size = sizeof(SonareProjectBounceOptions);
+  options->total_frames = SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
+  options->block_size = 128;
+  options->num_channels = SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER;
+  options->sample_rate = SONARE_PROJECT_SAMPLE_RATE_PROJECT;
+}
+
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                                   float** out_interleaved, size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
@@ -613,6 +641,26 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
 #endif
 }
 
+void sonare_builtin_synth_config_init(SonareBuiltinSynthConfig* config) {
+  if (config == nullptr) return;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  sonare_c_detail::builtin_synth_config_init(config);
+#else
+  *config = SonareBuiltinSynthConfig{};
+  config->struct_size = sizeof(SonareBuiltinSynthConfig);
+#endif
+}
+
+void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config) {
+  if (config == nullptr) return;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  sonare_c_detail::sf2_instrument_config_init(config);
+#else
+  *config = SonareSf2InstrumentConfig{};
+  config->struct_size = sizeof(SonareSf2InstrumentConfig);
+#endif
+}
+
 SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
@@ -639,13 +687,17 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     // Checked before any instrument is constructed, so a bad ordinal anywhere in
     // the list refuses the whole bounce rather than rendering the earlier
     // bindings and then failing.
+    sonare_c_detail::require_struct_size(
+        instruments[i].config.struct_size, sizeof(SonareBuiltinSynthConfig),
+        "instruments[" + std::to_string(i) + "].config", "sonare_builtin_synth_config_init");
     sonare::util::check::integer_in_range(
         instruments[i].config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
         sonare::util::check::indexed_subject("instruments", i, "config.waveform").c_str());
   }
   for (size_t i = 0; i < instrument_count; ++i) {
-    owned.push_back(std::make_unique<sonare::midi::BuiltinSynth>(
-        sonare_c_detail::builtin_synth_config_from_c(instruments[i].config)));
+    owned.push_back(
+        std::make_unique<sonare::midi::BuiltinSynth>(sonare_c_detail::builtin_synth_config_from_c(
+            instruments[i].config, "instruments[" + std::to_string(i) + "].config.")));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
@@ -746,16 +798,17 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    sonare::util::check::integer_in_range(
-        instruments[i].config.struct_version, 0, sonare_c_detail::kSf2InstrumentConfigVersion,
-        sonare::util::check::indexed_subject("instruments", i, "config.struct_version").c_str());
+    sonare_c_detail::require_struct_size(
+        instruments[i].config.struct_size, sizeof(SonareSf2InstrumentConfig),
+        "instruments[" + std::to_string(i) + "].config", "sonare_sf2_instrument_config_init");
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;
   owned.reserve(instrument_count);
   hosted.reserve(instrument_count);
   for (size_t i = 0; i < instrument_count; ++i) {
-    auto player_config = sonare_c_detail::sf2_player_config_from_c(instruments[i].config);
+    auto player_config = sonare_c_detail::sf2_player_config_from_c(
+        instruments[i].config, "instruments[" + std::to_string(i) + "].config.");
 #if defined(SONARE_WITH_MASTERING)
     // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
     // mastering factory itself, so the host injects it.

@@ -102,7 +102,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
       return project_exit_code(err);
     }
   } else {
-    const SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+    SonareProjectTempoOptions options;
+    sonare_project_tempo_options_init(&options);
     err = sonare_project_auto_tempo_with_options(handle.ptr, audio.data(), audio.size(),
                                                  audio.sample_rate(), &options, 0, 0, &tempo_bpm);
     if (err != SONARE_OK) {

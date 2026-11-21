@@ -1350,22 +1350,29 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                                          size_t clip_count);
 
 /// @brief Built-in realtime synth patch for @ref sonare_engine_set_builtin_instrument.
-/// @details Same zero-init contract as project bounce built-in instruments:
-///          non-positive fields use the default sine patch values.
+/// @details Same contract as the project bounce built-in instruments: start from
+///          @ref sonare_engine_builtin_synth_config_init; every field is then read literally and
+///          refused outside its domain with SONARE_ERROR_INVALID_PARAMETER.
 typedef struct {
-  /// A @ref SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle.
+  uint32_t struct_size;  ///< sizeof(SonareEngineBuiltinSynthConfig); set by the init function.
+  /// A @ref SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle. Default 0.
   /// Anything else fails with SONARE_ERROR_INVALID_PARAMETER.
   int waveform;
-  float gain;        ///< Linear output gain; 0 => 0.2
-  float attack_ms;   ///< Attack in ms; 0 => 5. Linear ramp, full level at the set time
-  float decay_ms;    ///< Decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep
-  float sustain;     ///< Sustain level; 0 => 0.7
-  float release_ms;  ///< Release in ms; 0 => 120. Linear ramp, as decay
-  int polyphony;     ///< Maximum simultaneous voices; 0 => 16, clamped to [1,64]
-  // Every field above takes 0 as "use the default". A negative or non-finite
-  // value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
-  // to the default.
+  float gain;       ///< Linear output gain; in (0, 4]. Default 0.2
+  float attack_ms;  ///< Attack in ms; in (0, 20000]. Default 5. Linear ramp, full level at the set
+                    ///< time
+  float decay_ms;   ///< Decay in ms; in (0, 20000]. Default 60. Linear ramp: the set time is a full
+                    ///< 0 to 1 sweep
+  float sustain;    ///< Sustain level; in (0, 1]. Default 0.7
+  float release_ms;  ///< Release in ms; in (0, 20000]. Default 120. Linear ramp, as decay
+  int polyphony;     ///< Maximum simultaneous voices; in [1, 64]. Default 16
 } SonareEngineBuiltinSynthConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults: a sine patch with gain 0.2,
+///        attack 5 ms, decay 60 ms, sustain 0.7, release 120 ms and 16 voices. A NULL @p config
+///        is ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+void sonare_engine_builtin_synth_config_init(SonareEngineBuiltinSynthConfig* config);
 
 /// @brief Binds/replaces a built-in synth on a realtime MIDI destination.
 /// @details Control-thread API. The engine owns the synth instance. Live MIDI
@@ -1377,7 +1384,8 @@ typedef struct {
 ///          blocks, so a swap during playback does not click; the replacement
 ///          starts from its own default channel state (program, bank and
 ///          controller state are not carried over).
-/// @return SONARE_ERROR_INVALID_PARAMETER if the instrument itself is refused (it
+/// @return SONARE_ERROR_INVALID_PARAMETER if @p config has a struct_size below sizeof or a field
+///         outside its domain, or if the instrument itself is refused (it
 ///         fails to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or
 ///         the instrument cannot prepare a SysEx already scheduled or queued for
 ///         @p destination_id; SONARE_ERROR_OUT_OF_MEMORY if allocation fails.
@@ -1491,31 +1499,33 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
 ///        the previously loaded SoundFont unchanged.
 SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* data, size_t size);
 
-/// @brief Versioned SF2 player patch for @ref sonare_engine_set_sf2_instrument.
-/// @details Same zero-init contract as the project-bounce SF2 instruments:
-///          every field uses "0 => default" (struct_version 0 => version 1).
-///          Version 2 adds @c prefer_model_for_modeled_families; version 3 adds
-///          @c clear_bank_rig; version 4 adds @c gs_efx_realization.
+/// @brief SF2 player patch for @ref sonare_engine_set_sf2_instrument.
+/// @details Same contract as the project-bounce SF2 instruments: start from
+///          @ref sonare_engine_sf2_instrument_config_init; every field is then read literally and
+///          refused outside its domain with SONARE_ERROR_INVALID_PARAMETER.
 typedef struct {
-  /// Layout version: 0 or 1 => version 1; 4 => current version.
-  int struct_version;
-  /// Master output gain (linear); 0 => 0.5. A negative or non-finite gain is
-  /// rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default.
+  uint32_t struct_size;  ///< sizeof(SonareEngineSf2InstrumentConfig); set by the init function.
+  /// Master output gain (linear); finite, in [0, 4]. Default 0.5; 0 is silence.
   float gain;
-  /// Maximum simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
-  /// rejected with SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48.
+  /// Maximum simultaneous voices; in [1, 64]. Default 48.
   int polyphony;
-  /// v2: non-zero selects the dedicated model for covered melodic GM programs; drums stay
-  /// SF2-first.
+  /// Non-zero selects the dedicated model for covered melodic GM programs; drums stay SF2-first;
+  /// negative refused. Default 0.
   int prefer_model_for_modeled_families;
-  /// v3: non-zero renders the instrument alone, without the amplifier the bank binds after an
-  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete.
+  /// Non-zero renders the instrument alone, without the amplifier the bank binds after an
+  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete;
+  /// negative refused. Default 0.
   int clear_bank_rig;
-  /// v4: how the GS insertion effects are realised -- 0 modern (the library's own inserts),
-  /// 1 classic (the measured hardware models); any other value is rejected with
-  /// SONARE_ERROR_INVALID_PARAMETER.
+  /// How the GS insertion effects are realised -- 0 modern (the library's own inserts),
+  /// 1 classic (the measured hardware models); any other value is refused. Default 0.
   int gs_efx_realization;
 } SonareEngineSf2InstrumentConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults: gain 0.5, 48 voices, models not
+///        preferred, the bank's rig kept and the modern GS insertion effects. A NULL @p config is
+///        ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+void sonare_engine_sf2_instrument_config_init(SonareEngineSf2InstrumentConfig* config);
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
 ///        destination, fed by the engine's loaded SoundFont
@@ -1534,7 +1544,8 @@ typedef struct {
 ///        during playback does not click; the replacement starts from its own
 ///        default channel state (program, bank and controller state are not
 ///        carried over).
-/// @return SONARE_ERROR_INVALID_PARAMETER if the player itself is refused (it fails
+/// @return SONARE_ERROR_INVALID_PARAMETER if @p config has a struct_size below sizeof or a field
+///         outside its domain, or if the player itself is refused (it fails
 ///         to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or the
 ///         player cannot prepare a SysEx already scheduled or queued for
 ///         @p destination_id; SONARE_ERROR_OUT_OF_MEMORY if allocation fails.

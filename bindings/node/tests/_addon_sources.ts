@@ -1494,7 +1494,7 @@ export function zeroFallbackSites(sources: AddonSource[] = addonSources()): Zero
 export function evaluateZeroSentinelScope(
   sources: AddonSource[] = addonSources(),
   reasons: ReadonlyMap<string, string> = new Map(),
-  floor = { tagged: 20, sites: 40 },
+  floor = { tagged: 10, sites: 30 },
 ): NarrowingFinding[] {
   const findings: NarrowingFinding[] = [];
   const sites = zeroFallbackSites(sources);

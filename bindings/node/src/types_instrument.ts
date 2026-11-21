@@ -14,9 +14,9 @@ export type SynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 
 /**
  * Patch for the built-in minimal polyphonic oscillator synth used by
- * {@link Project.bounceWithBuiltinInstruments}. Every numeric field uses
- * "0 / omit => sensible default", so an empty object is the default sine patch
- * and callers override only what they need.
+ * {@link Project.bounceWithBuiltinInstruments}. An omitted field takes the library
+ * default, so an empty object is the default sine patch; a given value is read
+ * literally and refused outside its range, never clamped or replaced.
  */
 export interface BuiltinSynthConfig {
   /**
@@ -28,17 +28,17 @@ export interface BuiltinSynthConfig {
    * @throws {TypeError} The value is not a string.
    */
   waveform?: SynthWaveform;
-  /** Master output gain (linear); 0 / omit => 0.2. */
+  /** Master output gain (linear), in (0, 4]; default 0.2. */
   gain?: number;
-  /** ADSR attack in ms; 0 / omit => 5. A linear ramp that reaches full level at the set time. */
+  /** ADSR attack in ms, in (0, 20000]; default 5. A linear ramp that reaches full level at the set time. */
   attackMs?: number;
-  /** ADSR decay in ms; 0 / omit => 60. A linear ramp, the set time is a full 0 to 1 sweep. */
+  /** ADSR decay in ms, in (0, 20000]; default 60. A linear ramp, the set time is a full 0 to 1 sweep. */
   decayMs?: number;
-  /** ADSR sustain level [0, 1]; 0 / omit => 0.7. */
+  /** ADSR sustain level, in (0, 1]; default 0.7. */
   sustain?: number;
-  /** ADSR release in ms; 0 / omit => 120. A linear ramp, the set time is a full 0 to 1 sweep. */
+  /** ADSR release in ms, in (0, 20000]; default 120. A linear ramp, the set time is a full 0 to 1 sweep. */
   releaseMs?: number;
-  /** Max simultaneous voices; 0 / omit => 16, clamped to [1, 64]. */
+  /** Max simultaneous voices, in [1, 64]; default 16. */
   polyphony?: number;
 }
 
@@ -88,13 +88,13 @@ export interface ExternalInstrument {
 /**
  * Patch for the GS-compatible SoundFont player used by
  * {@link Project.bounceWithSf2Instruments} and
- * {@link RealtimeEngine.setSf2Instrument}. Every field uses
- * "0 / omit => sensible default".
+ * {@link RealtimeEngine.setSf2Instrument}. An omitted field takes the library
+ * default; a given value is read literally and refused outside its range.
  */
 export interface Sf2InstrumentConfig {
-  /** Master output gain (linear); 0 / omit => 0.5. */
+  /** Master output gain (linear), in [0, 4]; default 0.5. 0 is silence. */
   gain?: number;
-  /** Max simultaneous voices; 0 / omit => 48, clamped to [1, 64]. */
+  /** Max simultaneous voices, in [1, 64]; default 48. */
   polyphony?: number;
   /** Prefer dedicated physical models for covered melodic GM programs. Defaults to false; drums stay SF2-first. */
   preferModelForModeledFamilies?: boolean;

@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -15,7 +16,7 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
-#include "util/zero_is_default.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -43,33 +44,25 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
 void RealtimeEngineWasm::setBuiltinInstrument(const val& destination_id_val, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  sonare::midi::BuiltinSynthConfig cfg;
+  // The C ABI's patch struct carries the defaults and the domains; an omitted key keeps the
+  // default and a given value is read literally, so this refuses what the C entry refuses.
+  SonareBuiltinSynthConfig patch;
+  sonare_c_detail::builtin_synth_config_init(&patch);
   if (!config.isUndefined() && !config.isNull()) {
     if (hasProperty(config, "waveform")) {
-      cfg.waveform =
-          static_cast<sonare::midi::SynthWaveform>(builtinWaveformFromVal(config["waveform"]));
+      patch.waveform = builtinWaveformFromVal(config["waveform"]);
     }
-    // clamp_synth_config reads a non-positive or non-finite field as "use the
-    // built-in default" (see positive_or_default in midi/builtin_synth.cpp) and
-    // reports nothing, so a value handed through came back as a successful call
-    // at a level nobody chose. 0 stays the way to ask for the default.
-    cfg.gain = sonare::ZeroIsDefault(floatProperty(config, "gain", 0.0f))
-                   .checked_non_negative(0.0f, "gain");
-    cfg.attack_ms = sonare::ZeroIsDefault(floatProperty(config, "attackMs", 0.0f))
-                        .checked_non_negative(0.0f, "attackMs");
-    cfg.decay_ms = sonare::ZeroIsDefault(floatProperty(config, "decayMs", 0.0f))
-                       .checked_non_negative(0.0f, "decayMs");
-    cfg.sustain = sonare::ZeroIsDefault(floatProperty(config, "sustain", 0.0f))
-                      .checked_non_negative(0.0f, "sustain");
-    cfg.release_ms = sonare::ZeroIsDefault(floatProperty(config, "releaseMs", 0.0f))
-                         .checked_non_negative(0.0f, "releaseMs");
-    const int polyphony = intProperty(config, "polyphony", 0);
-    if (polyphony < 0) {
-      throw WasmRangeError("polyphony must be 0 (the library default) or a positive voice count");
-    }
-    cfg.polyphony = polyphony;
+    patch.gain = floatProperty(config, "gain", patch.gain);
+    patch.attack_ms = floatProperty(config, "attackMs", patch.attack_ms);
+    patch.decay_ms = floatProperty(config, "decayMs", patch.decay_ms);
+    patch.sustain = floatProperty(config, "sustain", patch.sustain);
+    patch.release_ms = floatProperty(config, "releaseMs", patch.release_ms);
+    patch.polyphony = intProperty(config, "polyphony", patch.polyphony);
   }
-  auto synth = std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));
+  const sonare::midi::BuiltinSynthConfig cfg = sonare::util::check::with_camel_paths(
+      [&] { return sonare_c_detail::builtin_synth_config_from_c(patch, ""); },
+      std::array<sonare::util::check::MemberKey, 0>{});
+  auto synth = std::make_unique<sonare::midi::BuiltinSynth>(cfg);
   bindInstrument(destination_id, std::move(synth));
 #else
   (void)destination_id_val;
@@ -270,29 +263,27 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
 // Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
 // destination, fed by the engine's loaded SoundFont. Without a loaded
 // SoundFont the player's NativeSynth GM fallback is the data-free floor
-// (live MIDI stays audible). config is { gain?, polyphony? }
-// ("0 / omit => default").
+// (live MIDI stays audible). config keys are all optional; an omitted key keeps
+// the library default.
 void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  sonare::midi::synth::Sf2PlayerConfig cfg;
+  SonareSf2InstrumentConfig patch;
+  sonare_c_detail::sf2_instrument_config_init(&patch);
   if (!config.isUndefined() && !config.isNull()) {
-    // 0 selects the player's own default; a value the player would replace in
-    // silence is refused here instead.
-    cfg.gain = sonare::ZeroIsDefault(floatProperty(config, "gain", 0.0f))
-                   .checked_non_negative(cfg.gain, "gain");
-    const int polyphony = intProperty(config, "polyphony", 0);
-    if (polyphony < 0) {
-      throw WasmRangeError("polyphony must be 0 (the library default) or a positive voice count");
-    }
-    if (polyphony != 0) cfg.polyphony = polyphony;
-    cfg.prefer_model_for_modeled_families = boolProperty(config, "preferModelForModeledFamilies",
-                                                         cfg.prefer_model_for_modeled_families);
-    cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", !cfg.bank_rig_binding);
-    if (gsEfxRealizationProperty(config, "gsEfxRealization") == 1) {
-      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
-    }
+    patch.gain = floatProperty(config, "gain", patch.gain);
+    patch.polyphony = intProperty(config, "polyphony", patch.polyphony);
+    patch.prefer_model_for_modeled_families =
+        boolProperty(config, "preferModelForModeledFamilies",
+                     patch.prefer_model_for_modeled_families != 0)
+            ? 1
+            : 0;
+    patch.clear_bank_rig = boolProperty(config, "clearBankRig", patch.clear_bank_rig != 0) ? 1 : 0;
+    patch.gs_efx_realization = gsEfxRealizationProperty(config, "gsEfxRealization");
   }
+  sonare::midi::synth::Sf2PlayerConfig cfg = sonare::util::check::with_camel_paths(
+      [&] { return sonare_c_detail::sf2_player_config_from_c(patch, ""); },
+      std::array<sonare::util::check::MemberKey, 0>{});
   // Inject the mastering insert factory so live GS insertion effects (EFX)
   // realise their processing chain on the control thread (mirrors the C-ABI
   // path). realize_efx_inline stays false (the live default) so the swap is

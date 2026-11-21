@@ -19,7 +19,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
-import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
@@ -1033,7 +1033,6 @@ export class Project {
   ): ProjectBounceResult {
     const bindings = normalizeInstrumentBindings(instruments, (instrument) => {
       refuseBuiltinSynthOrdinals(instrument);
-      refuseBuiltinPolyphonyZero(instrument);
       return instrument;
     });
     const native = this.bounceRequest(options);

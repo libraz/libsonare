@@ -131,6 +131,15 @@ std::vector<uint8_t> make_project_limit_clip_file(std::size_t event_count) {
   return result.bytes;
 }
 
+SonareMidiRouteConfig make_route_config(int group, int channel, int remap) {
+  SonareMidiRouteConfig config;
+  sonare_midi_route_config_init(&config);
+  config.filter_group = group;
+  config.filter_channel = channel;
+  config.remap_channel = remap;
+  return config;
+}
+
 }  // namespace
 
 TEST_CASE("project MIDI imports reject oversized buffers before reading caller bytes",
@@ -534,7 +543,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(sonare_midi_note_on(0.0, 0, 3, 60, 100, &route_input[0]) == SONARE_OK);
   REQUIRE(sonare_midi_note_off(0.5, 0, 3, 60, 0, &route_input[1]) == SONARE_OK);
   REQUIRE(sonare_midi_note_on(1.0, 0, 2, 61, 100, &route_input[2]) == SONARE_OK);
-  SonareMidiRouteConfig route_config{-1, 3, 7, 1};
+  SonareMidiRouteConfig route_config = make_route_config(-1, 3, 7);
   SonareMidiEventPod routed[2]{};
   size_t routed_count = 0;
   int route_overflowed = 0;
@@ -563,7 +572,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(routed_count == 0);
   REQUIRE(route_overflowed == 0);
 
-  route_config = SonareMidiRouteConfig{-1, -1, -1, 1};
+  route_config = make_route_config(-1, -1, -1);
   REQUIRE(sonare_midi_route_events(route_input, 3, &route_config, routed, 1, &routed_count,
                                    &route_overflowed, &route_overflow_count) == SONARE_OK);
   REQUIRE(routed_count == 1);
@@ -691,7 +700,7 @@ TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
   int overflowed = 0;
   uint32_t overflow_count = 0;
 
-  SonareMidiRouteConfig config{3, -1, -1, 1};
+  SonareMidiRouteConfig config = make_route_config(3, -1, -1);
   REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
                                    &overflow_count) == SONARE_OK);
   REQUIRE(routed_count == 2);
@@ -712,7 +721,7 @@ TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
 
   // A channel remap rewrites the channel nibble only; the group nibble the
   // filter matched on must survive onto the routed output.
-  config = SonareMidiRouteConfig{3, -1, 7, 1};
+  config = make_route_config(3, -1, 7);
   REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
                                    &overflow_count) == SONARE_OK);
   REQUIRE(routed_count == 2);
@@ -1738,7 +1747,8 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   REQUIRE(messages.find("project contains MIDI clips") != std::string::npos);
   sonare_free_project_compile_result(&result);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.sample_rate = 48000;
   options.block_size = 128;
   options.num_channels = 2;

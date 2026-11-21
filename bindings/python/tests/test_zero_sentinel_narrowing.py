@@ -422,10 +422,11 @@ def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
     omitted = rendered(None)
     assert rendered(default_voices) == omitted  # the field's documented default
     assert rendered(1) != omitted  # positive control: the cap steals voices
-    for value in (0, 0.5, 1.5):
+    # 0 reaches the native domain; a fraction is refused by the ctypes conversion first.
+    for value, subject in ((0, r"config\.polyphony"), (0.5, "polyphony"), (1.5, "polyphony")):
         with pytest.raises(
             SonareValueError,
-            match=r"^RealtimeEngine\.set_\w+_instrument: polyphony must be an integer",
+            match=rf"^RealtimeEngine\.set_\w+_instrument: {subject} must be an integer",
         ):
             rendered(value)
     assert rendered(None) == omitted

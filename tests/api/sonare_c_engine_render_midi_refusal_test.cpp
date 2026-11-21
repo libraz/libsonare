@@ -566,6 +566,7 @@ TEST_CASE("engine instrument entries refuse an unknown destination and a bad ord
   CHECK(last_error() == unknown_destination);
 
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   synth.waveform = 9;
   CHECK(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_ERROR_INVALID_PARAMETER);
@@ -582,14 +583,107 @@ TEST_CASE("engine instrument entries refuse an unknown destination and a bad ord
   CHECK(last_error() == unknown_destination);
 
   SonareEngineSf2InstrumentConfig sf2{};
-  sf2.struct_version = 99;
+  sonare_engine_sf2_instrument_config_init(&sf2);
+  sf2.struct_size = 0;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &sf2) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "config.struct_version must be an integer in [0, " +
-                            std::to_string(sonare_c_detail::kSf2InstrumentConfigVersion) + "]");
+  CHECK(last_error() ==
+        "config.struct_size must be set by sonare_engine_sf2_instrument_config_init");
 
   uint8_t data[1] = {0};
   CHECK(sonare_engine_push_midi_sysex(engine, 7, data, 0, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "size must be an integer in [1, 512]");
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine built-in synth refuses each member by name", "[c_api][engine_refusal]") {
+  SonareEngine* engine = prepared_engine();
+  SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
+  CHECK(synth.struct_size == sizeof(SonareEngineBuiltinSynthConfig));
+  const sonare::midi::BuiltinSynthConfig core_defaults{};
+  CHECK(synth.waveform == static_cast<int>(core_defaults.waveform));
+  CHECK(synth.gain == core_defaults.gain);
+  CHECK(synth.attack_ms == core_defaults.attack_ms);
+  CHECK(synth.decay_ms == core_defaults.decay_ms);
+  CHECK(synth.sustain == core_defaults.sustain);
+  CHECK(synth.release_ms == core_defaults.release_ms);
+  CHECK(synth.polyphony == core_defaults.polyphony);
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+
+  const auto refused = [&](const SonareEngineBuiltinSynthConfig& config, const std::string& text) {
+    CHECK(sonare_engine_set_builtin_instrument(engine, 7, &config) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == text);
+  };
+  SonareEngineBuiltinSynthConfig bad = synth;
+  bad.struct_size = static_cast<uint32_t>(sizeof(bad)) - 1;
+  refused(bad, "config.struct_size must be set by sonare_engine_builtin_synth_config_init");
+  bad = synth;
+  bad.gain = 0.0f;
+  refused(bad, "config.gain must be finite and in (0, 4]");
+  bad = synth;
+  bad.attack_ms = 0.0f;
+  refused(bad, "config.attack_ms must be finite and in (0, 20000]");
+  bad = synth;
+  bad.decay_ms = 20001.0f;
+  refused(bad, "config.decay_ms must be finite and in (0, 20000]");
+  bad = synth;
+  bad.sustain = 0.0f;
+  refused(bad, "config.sustain must be finite and in (0, 1]");
+  bad = synth;
+  bad.release_ms = -1.0f;
+  refused(bad, "config.release_ms must be finite and in (0, 20000]");
+  bad = synth;
+  bad.polyphony = 0;
+  refused(bad, "config.polyphony must be an integer in [1, 64]");
+  bad.polyphony = 65;
+  refused(bad, "config.polyphony must be an integer in [1, 64]");
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine SF2 player refuses each member by name", "[c_api][engine_refusal]") {
+  SonareEngine* engine = prepared_engine();
+  SonareEngineSf2InstrumentConfig sf2{};
+  sonare_engine_sf2_instrument_config_init(&sf2);
+  CHECK(sf2.struct_size == sizeof(SonareEngineSf2InstrumentConfig));
+  const sonare::midi::synth::Sf2PlayerConfig core_defaults{};
+  CHECK(sf2.gain == core_defaults.gain);
+  CHECK(sf2.polyphony == core_defaults.polyphony);
+  CHECK(sf2.prefer_model_for_modeled_families == 0);
+  CHECK(sf2.clear_bank_rig == 0);
+  CHECK(sf2.gs_efx_realization == 0);
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &sf2) == SONARE_OK);
+
+  const auto refused = [&](const SonareEngineSf2InstrumentConfig& config, const std::string& text) {
+    CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == text);
+  };
+  SonareEngineSf2InstrumentConfig bad = sf2;
+  bad.struct_size = static_cast<uint32_t>(sizeof(bad)) - 1;
+  refused(bad, "config.struct_size must be set by sonare_engine_sf2_instrument_config_init");
+  bad = sf2;
+  bad.gain = -0.5f;
+  refused(bad, "config.gain must be finite and in [0, 4]");
+  bad.gain = 4.5f;
+  refused(bad, "config.gain must be finite and in [0, 4]");
+  bad = sf2;
+  bad.polyphony = 0;
+  refused(bad, "config.polyphony must be an integer in [1, 64]");
+  bad = sf2;
+  bad.prefer_model_for_modeled_families = -1;
+  refused(bad, "config.prefer_model_for_modeled_families must be an integer in [0, 2147483647]");
+  bad = sf2;
+  bad.clear_bank_rig = -1;
+  refused(bad, "config.clear_bank_rig must be an integer in [0, 2147483647]");
+  bad = sf2;
+  bad.gs_efx_realization = 2;
+  refused(bad, "config.gs_efx_realization must be an integer in [0, 1]");
+
+  // Zero gain is silence, not the default.
+  sf2.gain = 0.0f;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &sf2) == SONARE_OK);
 
   sonare_engine_destroy(engine);
 }

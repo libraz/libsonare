@@ -265,9 +265,7 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
       engine.setGraph(graph({ numChannels: null }, undefined));
       expect(engine.graphNodeCount).toBe(2);
       expect(() => engine.setBuiltinInstrument(0, { polyphony: 0 })).toThrow(
-        new RangeError(
-          'RealtimeEngine.setBuiltinInstrument: polyphony must not be 0; omit it for the default',
-        ),
+        /polyphony must be an integer in \[1, 64\]$/,
       );
     });
   });

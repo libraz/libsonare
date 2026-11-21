@@ -24,7 +24,7 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
-import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type {
@@ -1587,7 +1587,6 @@ export class Project {
       instruments,
       (i) => {
         refuseBuiltinSynthOrdinals(i);
-        refuseBuiltinPolyphonyZero(i);
         return i;
       },
       withDestinationCopy,

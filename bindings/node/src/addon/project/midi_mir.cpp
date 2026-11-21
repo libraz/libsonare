@@ -284,11 +284,10 @@ Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Seeds the native defaults, then applies whichever the caller supplied. Seeding
-// rather than zeroing matters: a zeroed ramp_threshold folds the whole take into
-// one tempo segment and a zeroed interval is rejected.
+// Seeds the native defaults, then applies whichever the caller supplied.
 SonareProjectTempoOptions TempoOptionsFrom(Napi::Value value) {
-  SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+  SonareProjectTempoOptions options;
+  sonare_project_tempo_options_init(&options);
   if (!value.IsObject()) return options;
   Napi::Object object = value.As<Napi::Object>();
   options.adaptive_tempo =

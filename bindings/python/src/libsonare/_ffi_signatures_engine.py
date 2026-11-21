@@ -928,6 +928,14 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.c_int64,
     ]
+    lib.sonare_engine_builtin_synth_config_init.restype = None
+    lib.sonare_engine_builtin_synth_config_init.argtypes = [
+        ctypes.POINTER(SonareBuiltinSynthConfig),
+    ]
+    lib.sonare_engine_sf2_instrument_config_init.restype = None
+    lib.sonare_engine_sf2_instrument_config_init.argtypes = [
+        ctypes.POINTER(SonareSf2InstrumentConfig),
+    ]
     lib.sonare_engine_set_builtin_instrument.restype = ctypes.c_int32
     lib.sonare_engine_set_builtin_instrument.argtypes = [
         ctypes.c_void_p,

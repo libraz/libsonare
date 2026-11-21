@@ -134,7 +134,9 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
     t += 60.0 / (kStartBpm + (kEndBpm - kStartBpm) * (t / kSeconds));
   }
 
-  const SonareProjectTempoOptions defaults = sonare_project_tempo_options_default();
+  SonareProjectTempoOptions defaults;
+  sonare_project_tempo_options_init(&defaults);
+  CHECK(defaults.struct_size == sizeof(SonareProjectTempoOptions));
   CHECK(defaults.adaptive_tempo == 0);
   CHECK(defaults.tempo_update_interval_beats > 0);
   CHECK(defaults.ramp_threshold > 0.0f);
@@ -178,8 +180,8 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
   coarse.ramp_threshold = 0.20f;
   CHECK(segment_count(&coarse) < adaptive_count);
 
-  // A zeroed struct is rejected rather than read as "use the defaults": its
-  // interval is unusable and its threshold would fold the take into one segment.
+  // A zeroed struct is rejected rather than read as "use the defaults": it was not started
+  // from the init function, so its struct_size is unset.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   SonareProjectTempoOptions zeroed{};
@@ -369,19 +371,26 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
                                        &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "candidates must not be NULL when capacity is not 0");
 
-  SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+  SonareProjectTempoOptions options;
+  sonare_project_tempo_options_init(&options);
   options.tempo_update_interval_beats = 0;
   SonareProjectTempoCandidate candidates[4];
   REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
                                                     &options, candidates, 4,
                                                     &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.tempo_update_interval_beats must be an integer in [1, 2147483647]");
-  options = sonare_project_tempo_options_default();
+  sonare_project_tempo_options_init(&options);
   options.ramp_threshold = -0.5f;
   REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
                                                     &options, candidates, 4,
                                                     &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.ramp_threshold must be finite and at least 0");
+  sonare_project_tempo_options_init(&options);
+  options.struct_size = sizeof(options) - 1;
+  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
+                                                    &options, candidates, 4,
+                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_project_tempo_options_init");
 
   SonareProjectKeySegment key{0.0, 4.0, 12u, 1u};
   REQUIRE(sonare_project_annotate_keys(project, &key, 1) == SONARE_ERROR_INVALID_PARAMETER);

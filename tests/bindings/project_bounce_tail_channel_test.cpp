@@ -75,7 +75,8 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   // The arrangement ends near frame 24000; request a window well past it.
   constexpr int64_t kArrangementFrames = 24000;
   constexpr int64_t kTotalFrames = 36000;
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kTotalFrames;
   options.block_size = 128;
   options.num_channels = 2;
@@ -124,7 +125,8 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 128;
   options.block_size = 128;
   options.num_channels = 6;  // 5.1 has a layout for engine-bounce, but the project
@@ -165,7 +167,7 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project bounce reads only zero as the default for block size, width and rate",
+TEST_CASE("project bounce reads only the named constants as the default for width and rate",
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -175,23 +177,28 @@ TEST_CASE("project bounce reads only zero as the default for block size, width a
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 128;
   float* out = nullptr;
   size_t out_len = 0;
 
   int bounce_channels5 = 0;
-  // All-zero options: default block size, the scene's output width, the project's rate.
+  // Init options: default block size, the scene's output width, the project's rate.
   REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels5) == SONARE_OK);
   REQUIRE(out != nullptr);
   CHECK(out_len == 256u);
   sonare_free_floats(out);
 
-  for (int field = 0; field < 3; ++field) {
+  // Zero reads as no default, and a negative other than the constant is out of domain.
+  for (int field = 0; field < 6; ++field) {
     SonareProjectBounceOptions negative = options;
     if (field == 0) negative.block_size = -1;
-    if (field == 1) negative.num_channels = -1;
+    if (field == 1) negative.num_channels = -2;
     if (field == 2) negative.sample_rate = -48000;
+    if (field == 3) negative.block_size = 0;
+    if (field == 4) negative.num_channels = 0;
+    if (field == 5) negative.sample_rate = 0;
     out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
     out_len = 123;
     int bounce_channels6 = 0;
@@ -224,7 +231,8 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     uint32_t clip = 0;
     REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
 
-    SonareProjectBounceOptions options{};
+    SonareProjectBounceOptions options;
+    sonare_project_bounce_options_init(&options);
     options.total_frames = 128;
     float* out = nullptr;
     size_t out_len = 0;
@@ -236,7 +244,7 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     sonare_free_floats(out);
 
     // A refused call still defines the width, as 0.
-    options.block_size = -1;
+    options.block_size = 0;
     bounce_channels = -1;
     CHECK(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels) ==
           SONARE_ERROR_INVALID_PARAMETER);

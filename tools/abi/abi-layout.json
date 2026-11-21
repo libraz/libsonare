@@ -540,58 +540,64 @@
         "kind": "aggregate",
         "name": "config",
         "offset": 4,
-        "size": 28
+        "size": 32
       }
     ],
-    "size": 32
+    "size": 36
   },
   "SonareBuiltinSynthConfig": {
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "waveform",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "gain",
+        "kind": "signed",
+        "name": "waveform",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "attack_ms",
+        "name": "gain",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "decay_ms",
+        "name": "attack_ms",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "sustain",
+        "name": "decay_ms",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "release_ms",
+        "name": "sustain",
         "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "release_ms",
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "polyphony",
-        "offset": 24,
+        "offset": 28,
         "size": 4
       }
     ],
-    "size": 28
+    "size": 32
   },
   "SonareChord": {
     "align": 4,
@@ -2385,49 +2391,55 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "waveform",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "gain",
+        "kind": "signed",
+        "name": "waveform",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "attack_ms",
+        "name": "gain",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "decay_ms",
+        "name": "attack_ms",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "sustain",
+        "name": "decay_ms",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "release_ms",
+        "name": "sustain",
         "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "release_ms",
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "polyphony",
-        "offset": 24,
+        "offset": 28,
         "size": 4
       }
     ],
-    "size": 28
+    "size": 32
   },
   "SonareEngineBus": {
     "align": 8,
@@ -3105,8 +3117,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
@@ -5049,31 +5061,37 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "filter_group",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "filter_channel",
+        "name": "filter_group",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "remap_channel",
+        "name": "filter_channel",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "thru",
+        "name": "remap_channel",
         "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "thru",
+        "offset": 16,
         "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareMixGoniometerPoint": {
     "align": 4,
@@ -6687,37 +6705,43 @@
     "align": 8,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "signed",
         "name": "total_frames",
-        "offset": 0,
+        "offset": 8,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "block_size",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "num_channels",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "sample_rate",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "instrument_latency_samples",
+        "name": "num_channels",
         "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_rate",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "instrument_latency_samples",
+        "offset": 28,
         "size": 4
       }
     ],
-    "size": 24
+    "size": 32
   },
   "SonareProjectChordSymbol": {
     "align": 8,
@@ -7257,31 +7281,37 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "adaptive_tempo",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "tempo_update_interval_beats",
+        "name": "adaptive_tempo",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "tempo_update_interval_beats",
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
         "name": "ramp_threshold",
-        "offset": 8,
+        "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "include_octave_candidates",
-        "offset": 12,
+        "offset": 16,
         "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareProjectTempoSegment": {
     "align": 8,
@@ -9225,8 +9255,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },

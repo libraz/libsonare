@@ -1,4 +1,4 @@
-import { refuse, refuseType } from './entry.js';
+import { refuseType } from './entry.js';
 
 /** SynthPatch fields that hold a closed-set name. */
 const PATCH_TOKEN_FIELDS = [
@@ -56,14 +56,5 @@ export function refuseSampleDescOrdinals(desc: unknown): void {
 export function refuseBuiltinSynthOrdinals(config: unknown): void {
   if (typeof config === 'object' && config !== null) {
     requireName('waveform', (config as Record<string, unknown>).waveform);
-  }
-}
-
-/** Refuse an explicit `polyphony: 0` on a built-in synth config: the default voice count is spelt by leaving it out. */
-export function refuseBuiltinPolyphonyZero(config: unknown): void {
-  if (typeof config === 'object' && config !== null) {
-    if ((config as Record<string, unknown>).polyphony === 0) {
-      throw refuse(`polyphony must not be 0; omit it for the default`);
-    }
   }
 }

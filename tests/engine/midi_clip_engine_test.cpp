@@ -612,13 +612,15 @@ TEST_CASE("sonare_project_set_clip_gain and set_clip_fade change a MIDI clip's b
   constexpr uint32_t kDestination = 5;
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = static_cast<int64_t>(kSampleRate);  // 1 second: well within the note.
   options.block_size = 256;
   options.num_channels = 2;
   options.sample_rate = static_cast<int>(kSampleRate);
 
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   binding.config.waveform = 0;
   binding.config.gain = 1.0f;

@@ -164,6 +164,7 @@ TEST_CASE("articulation keeps its three refusals apart", "[c_api][articulation]"
   REQUIRE(fallbacks == 0);
 
   SonareEngineBuiltinSynthConfig builtin{};
+  sonare_engine_builtin_synth_config_init(&builtin);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);
   // A refusal by the instrument names itself; it is not the build-time text.
   const auto refusal_names_cause = [] {

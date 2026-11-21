@@ -122,28 +122,49 @@ static_assert(sizeof(SonareProjectCompileResult) == 3u * sizeof(void*) + sizeof(
               "SonareProjectCompileResult layout drift");
 #endif
 
-/// @brief Options for @ref sonare_project_bounce. Zero-initialize then override.
+/// The render length derived from the compiled arrangement (its musical end plus the longest
+/// hosted-instrument release tail). Outside the length's real domain (a positive frame count), so
+/// it never reads as a length.
+#define SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1)
+
+/// The output width of the scene master's layout (2 with no master). Outside the channel count's
+/// real domain, so it never reads as a width.
+#define SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1)
+
+/// The project's own sample rate. Outside the rate's real domain, so it never reads as a rate.
+#define SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1)
+
+/// @brief Options for @ref sonare_project_bounce. Start from
+///        @ref sonare_project_bounce_options_init; every field is then read literally and
+///        checked against the range given beside it.
 typedef struct {
-  /// Render length in frames at @p sample_rate; positive is used as-is, <= 0 derives it.
+  uint32_t struct_size;  ///< sizeof(SonareProjectBounceOptions); set by the init function.
+  /// Render length in frames at @p sample_rate; positive. Default
+  /// @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT, which derives it.
   int64_t total_frames;
-  /// Render block size in frames; 0 => 128; negative is refused.
+  /// Render block size in frames; positive. Default 128.
   int block_size;
   /// Output channel count: 1, 2, 6 or 8, at most the width of the scene master's layout
-  /// (mono/stereo/no master allow 2); 0 => the width of the scene master's layout (2 with no
-  /// master); negative is refused. The master is mixed at this width; 1 folds a 2-channel master
-  /// to 0.5(L+R).
+  /// (mono/stereo/no master allow 2). Default @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER,
+  /// the width of the scene master's layout (2 with no master). The master is mixed at this
+  /// width; 1 folds a 2-channel master to 0.5(L+R).
   int num_channels;
-  /// Sample rate in Hz; must match the project sample rate; 0 => the project's; negative is
-  /// refused.
+  /// Sample rate in Hz; must equal the project sample rate. Default
+  /// @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT, the project's.
   int sample_rate;
-  /// Host-instrument latency compensation in samples fed to the compiler; negative is refused.
+  /// Host-instrument latency compensation in samples fed to the compiler; >= 0. Default 0.
   int instrument_latency_samples;
 } SonareProjectBounceOptions;
 
+/// @brief Writes every default into @p options and sets its @c struct_size; NULL is ignored.
+void sonare_project_bounce_options_init(SonareProjectBounceOptions* options);
+
 #ifdef __cplusplus
-static_assert(offsetof(SonareProjectBounceOptions, total_frames) == 0,
+static_assert(offsetof(SonareProjectBounceOptions, struct_size) == 0,
+              "BounceOptions.struct_size offset");
+static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64_t),
               "BounceOptions.total_frames offset");
-static_assert(sizeof(SonareProjectBounceOptions) == sizeof(int64_t) + 4 * sizeof(int),
+static_assert(sizeof(SonareProjectBounceOptions) == 2 * sizeof(int64_t) + 4 * sizeof(int),
               "SonareProjectBounceOptions layout drift");
 #endif
 
@@ -521,18 +542,21 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
 void sonare_free_project_compile_result(SonareProjectCompileResult* result);
 
 /// @brief Compiles + renders the project offline to interleaved float audio.
-/// @param options Render options (zero-init then override). May be NULL for
-///        defaults (project sample rate, the scene master's layout width, block 128).
+/// @param options Render options, started from @ref sonare_project_bounce_options_init. May be
+///        NULL for those defaults (project sample rate, the scene master's layout width, block
+///        128).
 /// @param out_interleaved Receives a heap float array (free with
 ///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
 /// @param out_len Receives the interleaved sample count.
 /// @param out_num_channels Receives the width the render was mixed at: the requested
-///        num_channels, or the resolved default when it was 0. Written 0 first, so it is
+///        num_channels, or the resolved default when it was
+///        @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER. Written 0 first, so it is
 ///        defined on every return.
 /// @details Deterministic: the same project + options yields bit-identical
 ///          output within one build. When options->total_frames is positive,
 ///          that explicit length is used as-is; mixer FX / instrument tails are
-///          auto-extended only when total_frames <= 0.
+///          auto-extended only when total_frames is
+///          @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a refused option;
 ///         SONARE_ERROR_INVALID_STATE when the stored project cannot be
 ///         rendered (its derived length overflows, or the compiled arrangement

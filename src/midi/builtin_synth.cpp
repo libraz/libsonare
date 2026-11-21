@@ -78,11 +78,11 @@ BuiltinSynthConfig clamp_synth_config(const BuiltinSynthConfig& cfg) noexcept {
       c.waveform = SynthWaveform::kSine;
       break;
   }
-  c.gain = positive_or_default(cfg.gain, 0.2f, 4.0f);
-  c.attack_ms = positive_or_default(cfg.attack_ms, 5.0f, 20000.0f);
-  c.decay_ms = positive_or_default(cfg.decay_ms, 60.0f, 20000.0f);
+  c.gain = positive_or_default(cfg.gain, 0.2f, kMaxSynthGain);
+  c.attack_ms = positive_or_default(cfg.attack_ms, 5.0f, kMaxSynthStageMs);
+  c.decay_ms = positive_or_default(cfg.decay_ms, 60.0f, kMaxSynthStageMs);
   c.sustain = positive_or_default(cfg.sustain, 0.7f, 1.0f);
-  c.release_ms = positive_or_default(cfg.release_ms, 120.0f, 20000.0f);
+  c.release_ms = positive_or_default(cfg.release_ms, 120.0f, kMaxSynthStageMs);
   c.polyphony = cfg.polyphony > 0 ? std::min(cfg.polyphony, kMaxSynthVoices) : 16;
   return c;
 }

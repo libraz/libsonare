@@ -532,21 +532,41 @@ TEST_CASE("the effects and metering entries refuse their own members", "[c_api][
   CHECK(last_message() == "samples_per_bucket must be an integer of at least 1");
 }
 
+namespace {
+SonareMidiRouteConfig route_config(int group, int channel, int remap) {
+  SonareMidiRouteConfig config;
+  sonare_midi_route_config_init(&config);
+  config.filter_group = group;
+  config.filter_channel = channel;
+  config.remap_channel = remap;
+  return config;
+}
+}  // namespace
+
 TEST_CASE("the project MIDI entries name a route field and a bank outside their domains",
           "[c_api][project]") {
   size_t count = 0;
   for (const SonareMidiRouteConfig& config :
-       {SonareMidiRouteConfig{16, -1, -1, 1}, SonareMidiRouteConfig{-1, -2, -1, 1},
-        SonareMidiRouteConfig{-1, -1, 16, 1}}) {
+       {route_config(16, SONARE_MIDI_ROUTE_ANY, SONARE_MIDI_ROUTE_NO_REMAP),
+        route_config(SONARE_MIDI_ROUTE_ANY, -2, SONARE_MIDI_ROUTE_NO_REMAP),
+        route_config(SONARE_MIDI_ROUTE_ANY, SONARE_MIDI_ROUTE_ANY, 16)}) {
     CHECK(sonare_midi_route_events(nullptr, 0, &config, nullptr, 0, &count, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_message(),
                Catch::Matchers::ContainsSubstring("must be -1 or an integer in [0, 15]"));
   }
-  const SonareMidiRouteConfig remap{-1, -1, 16, 1};
+  const SonareMidiRouteConfig remap =
+      route_config(SONARE_MIDI_ROUTE_ANY, SONARE_MIDI_ROUTE_ANY, 16);
   CHECK(sonare_midi_route_events(nullptr, 0, &remap, nullptr, 0, &count, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("config.remap_channel must be"));
+  SonareMidiRouteConfig unsized = remap;
+  unsized.struct_size = sizeof(unsized) - 1;
+  CHECK(sonare_midi_route_events(nullptr, 0, &unsized, nullptr, 0, &count, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_THAT(
+      last_message(),
+      Catch::Matchers::Equals("config.struct_size must be set by sonare_midi_route_config_init"));
 
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

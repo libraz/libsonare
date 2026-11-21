@@ -332,7 +332,10 @@ class SonareProjectCompileResult(CStruct):
 class SonareProjectBounceOptions(CStruct):
     """Maps to SonareProjectBounceOptions in sonare_c_project.h."""
 
+    _c_init_ = "sonare_project_bounce_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("total_frames", ctypes.c_int64),
         ("block_size", ctypes.c_int),
         ("num_channels", ctypes.c_int),
@@ -410,9 +413,12 @@ class SonareNotePairValidation(CStruct):
 
 
 class SonareMidiRouteConfig(CStruct):
-    """Maps to SonareMidiRouteConfig in sonare_c_project.h (sizeof 16)."""
+    """Maps to SonareMidiRouteConfig in sonare_c_project.h (sizeof 20)."""
+
+    _c_init_ = "sonare_midi_route_config_init"
 
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("filter_group", ctypes.c_int),
         ("filter_channel", ctypes.c_int),
         ("remap_channel", ctypes.c_int),
@@ -524,9 +530,12 @@ class SonareProjectTimeSignatureSegment(CStruct):
 
 
 class SonareProjectTempoOptions(CStruct):
-    """Maps to SonareProjectTempoOptions in sonare_c_project_annotate.h (sizeof 16)."""
+    """Maps to SonareProjectTempoOptions in sonare_c_project_annotate.h (sizeof 20)."""
+
+    _c_init_ = "sonare_project_tempo_options_init"
 
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("adaptive_tempo", ctypes.c_int),
         ("tempo_update_interval_beats", ctypes.c_int),
         ("ramp_threshold", ctypes.c_float),
@@ -556,8 +565,8 @@ SONARE_SYNTH_WAVEFORM_TRIANGLE = 3
 class SonareBuiltinSynthConfig(CStruct):
     """Maps to SonareBuiltinSynthConfig in sonare_c_project.h.
 
-    Every numeric field uses "0 (or non-positive) => sensible default", so a
-    zero-initialized config is the default sine patch.
+    Seeded through ``sonare_builtin_synth_config_init``; every field is then read literally by
+    the C entry.
     """
 
     # The engine-side typedef is a separate C struct that this mirror is also
@@ -565,8 +574,10 @@ class SonareBuiltinSynthConfig(CStruct):
     # puts it in the layout snapshot: the generator keys on the ctypes class
     # name, so an aliased C struct is invisible to the guard unless listed.
     _c_aliases_ = ("SonareEngineBuiltinSynthConfig",)
+    _c_init_ = "sonare_builtin_synth_config_init"
 
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("waveform", ctypes.c_int),
         ("gain", ctypes.c_float),
         ("attack_ms", ctypes.c_float),
@@ -606,17 +617,17 @@ class SonareSf2ProgramStatus(CStruct):
 class SonareSf2InstrumentConfig(CStruct):
     """Maps to SonareSf2InstrumentConfig in sonare_c_project.h.
 
-    Versioned struct: struct_version 0/1 preserve version 1; version 2 adds
-    ``prefer_model_for_modeled_families``, version 3 ``clear_bank_rig`` and
-    version 4 ``gs_efx_realization``.
+    Seeded through ``sonare_sf2_instrument_config_init``; every field is then read literally by
+    the C entry.
     """
 
     # See SonareBuiltinSynthConfig._c_aliases_: the engine-side typedef this
     # mirror is also passed to (sonare_engine_set_sf2_instrument).
     _c_aliases_ = ("SonareEngineSf2InstrumentConfig",)
+    _c_init_ = "sonare_sf2_instrument_config_init"
 
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("gain", ctypes.c_float),
         ("polyphony", ctypes.c_int),
         ("prefer_model_for_modeled_families", ctypes.c_int),

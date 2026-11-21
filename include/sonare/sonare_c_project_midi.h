@@ -44,26 +44,42 @@ static_assert(offsetof(SonareMidiEventPod, word0) == 8, "MidiEventPod.word0 offs
 static_assert(offsetof(SonareMidiEventPod, word1) == 12, "MidiEventPod.word1 offset");
 #endif
 
-/// @brief MIDI route config for @ref sonare_midi_route_events.
-/// @details `-1` means any group/channel for filters and no remap for
-///          `remap_channel`. Otherwise values must be in [0, 15].
+/// The route accepts any group or channel. Outside the group and channel domain [0, 15].
+#define SONARE_MIDI_ROUTE_ANY (-1)
+
+/// The route leaves the channel unchanged. Outside the channel domain [0, 15].
+#define SONARE_MIDI_ROUTE_NO_REMAP (-1)
+
+/// @brief MIDI route config for @ref sonare_midi_route_events. Start from
+///        @ref sonare_midi_route_config_init; every field is then read literally and checked
+///        against the range given beside it.
 typedef struct {
-  int filter_group;    ///< UMP group 0..15 the route accepts, or -1 for any group.
-  int filter_channel;  ///< MIDI channel 0..15 the route accepts, or -1 for any channel.
-  int remap_channel;   ///< Channel 0..15 matching events are rewritten to, or -1 for no remap.
-  int thru;            ///< Nonzero passes events through the route; 0 consumes them.
+  uint32_t struct_size;  ///< sizeof(SonareMidiRouteConfig); set by the init function.
+  /// UMP group the route accepts, in [0, 15]. Default @ref SONARE_MIDI_ROUTE_ANY.
+  int filter_group;
+  /// MIDI channel the route accepts, in [0, 15]. Default @ref SONARE_MIDI_ROUTE_ANY.
+  int filter_channel;
+  /// Channel matching events are rewritten to, in [0, 15]. Default
+  /// @ref SONARE_MIDI_ROUTE_NO_REMAP.
+  int remap_channel;
+  int thru;  ///< Nonzero passes events through the route; 0 consumes them. Default 1.
 } SonareMidiRouteConfig;
 
+/// @brief Writes every default into @p config and sets its @c struct_size; NULL is ignored.
+void sonare_midi_route_config_init(SonareMidiRouteConfig* config);
+
 #ifdef __cplusplus
-static_assert(offsetof(SonareMidiRouteConfig, filter_group) == 0,
+static_assert(offsetof(SonareMidiRouteConfig, struct_size) == 0,
+              "MidiRouteConfig.struct_size offset");
+static_assert(offsetof(SonareMidiRouteConfig, filter_group) == sizeof(uint32_t),
               "MidiRouteConfig.filter_group offset");
-static_assert(offsetof(SonareMidiRouteConfig, filter_channel) == sizeof(int),
+static_assert(offsetof(SonareMidiRouteConfig, filter_channel) == sizeof(uint32_t) + sizeof(int),
               "MidiRouteConfig.filter_channel offset");
-static_assert(offsetof(SonareMidiRouteConfig, remap_channel) == 2u * sizeof(int),
+static_assert(offsetof(SonareMidiRouteConfig, remap_channel) == sizeof(uint32_t) + 2u * sizeof(int),
               "MidiRouteConfig.remap_channel offset");
-static_assert(offsetof(SonareMidiRouteConfig, thru) == 3u * sizeof(int),
+static_assert(offsetof(SonareMidiRouteConfig, thru) == sizeof(uint32_t) + 3u * sizeof(int),
               "MidiRouteConfig.thru offset");
-static_assert(sizeof(SonareMidiRouteConfig) == 4u * sizeof(int),
+static_assert(sizeof(SonareMidiRouteConfig) == sizeof(uint32_t) + 4u * sizeof(int),
               "SonareMidiRouteConfig layout drift");
 #endif
 
@@ -351,7 +367,8 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
                                      size_t out_capacity, size_t* out_count);
 
 /// @brief Routes MIDI events through the RT MidiRouter filter/remap/thru logic.
-/// @details `out_events` receives at most `out_capacity` events. Overflow due to
+/// @details `config` may be NULL for the @ref sonare_midi_route_config_init defaults.
+///          `out_events` receives at most `out_capacity` events. Overflow due to
 ///          the router fixed capacity or caller capacity is reported through
 ///          `out_overflowed` / `out_overflow_count` when those pointers are not
 ///          NULL. `out_count` is always required.

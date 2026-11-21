@@ -125,6 +125,7 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
   size_t count = 0;
@@ -146,6 +147,7 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   REQUIRE(count == 0);
 #else
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) ==
           SONARE_ERROR_NOT_SUPPORTED);
@@ -161,6 +163,7 @@ TEST_CASE("sonare_engine refuses a built-in waveform outside the enum", "[c_api]
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   // Same domain as the bounce surface: the two entry points share one validator
   // so they cannot answer differently for the same ordinal.
@@ -213,6 +216,7 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 9, &synth) == SONARE_OK);
 
@@ -497,6 +501,7 @@ TEST_CASE("sonare_engine reports a full instrument rack as state", "[c_api][engi
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   for (uint32_t destination = 0; destination < 16; ++destination) {
     REQUIRE(sonare_engine_set_builtin_instrument(engine, destination, &synth) == SONARE_OK);
   }
@@ -673,6 +678,7 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
           SONARE_ERROR_INVALID_STATE);
 
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 3, &synth) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
@@ -727,6 +733,7 @@ TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
     SonareEngineBuiltinSynthConfig synth{};
+    sonare_engine_builtin_synth_config_init(&synth);
     synth.gain = 0.4f;
     REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
     const bool live_input = path == Path::kInputSource;
@@ -992,6 +999,7 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
 
   SonareError err = SONARE_OK;
   SonareEngineBuiltinSynthConfig defaulted{};
+  sonare_engine_builtin_synth_config_init(&defaulted);
   const float by_default = chord_peak(defaulted, &err);
   REQUIRE(err == SONARE_OK);
   REQUIRE(by_default > 0.0f);
@@ -1015,8 +1023,8 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
     CHECK(single < by_default);
   }
 
-  SECTION("a negative voice count is refused rather than resolved to the default") {
-    for (int bad : {-1, -48}) {
+  SECTION("a zero, negative or oversized voice count is refused rather than resolved") {
+    for (int bad : {0, -1, -48, 65}) {
       CAPTURE(bad);
       SonareEngineBuiltinSynthConfig config = defaulted;
       config.polyphony = bad;
@@ -1025,8 +1033,8 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
     }
   }
 
-  SECTION("a negative or non-finite envelope field is refused") {
-    for (float bad : {-1.0f, nan, inf, -inf}) {
+  SECTION("a zero, negative or non-finite envelope field is refused") {
+    for (float bad : {0.0f, -1.0f, nan, inf, -inf}) {
       CAPTURE(bad);
       for (float SonareEngineBuiltinSynthConfig::*field :
            {&SonareEngineBuiltinSynthConfig::gain, &SonareEngineBuiltinSynthConfig::attack_ms,
@@ -1040,7 +1048,7 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
     }
   }
 
-  SECTION("the sentinel and a legal value are both still accepted") {
+  SECTION("the bounds of every domain are accepted") {
     // Without this the refusals above are satisfied by an entry point that
     // rejects every configuration.
     SonareEngineBuiltinSynthConfig louder = defaulted;
@@ -1048,12 +1056,19 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
     const float raised = chord_peak(louder, &err);
     CHECK(err == SONARE_OK);
     CHECK(raised > by_default);
-    SonareEngineBuiltinSynthConfig sentinel = defaulted;
-    sentinel.gain = 0.0f;
-    sentinel.polyphony = 0;
-    const float unchanged = chord_peak(sentinel, &err);
+    SonareEngineBuiltinSynthConfig edge = defaulted;
+    edge.gain = 4.0f;
+    edge.attack_ms = 20000.0f;
+    edge.decay_ms = 20000.0f;
+    edge.sustain = 1.0f;
+    edge.release_ms = 20000.0f;
+    edge.polyphony = 64;
+    chord_peak(edge, &err);
     CHECK(err == SONARE_OK);
-    CHECK(unchanged == by_default);
+    SonareEngineBuiltinSynthConfig above = defaulted;
+    above.gain = 4.5f;
+    chord_peak(above, &err);
+    CHECK(err == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 #endif
@@ -1072,6 +1087,7 @@ TEST_CASE("sonare_engine raw UMP push delivers a MIDI 2.0 note at full velocity 
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
     SonareEngineBuiltinSynthConfig synth{};
+    sonare_engine_builtin_synth_config_init(&synth);
     synth.gain = 0.4f;
     REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
     const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, velocity16);
@@ -1211,7 +1227,7 @@ SonareEngine* make_program_engine() {
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kProgramBlock, 16, 16) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
-  config.struct_version = 4;
+  sonare_engine_sf2_instrument_config_init(&config);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, kProgramDestination, &config) == SONARE_OK);
   return engine;
 }
@@ -1568,37 +1584,43 @@ TEST_CASE("sonare_engine input-source pushes refuse a disabled source as invalid
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("an SF2 instrument config outside its struct_version range is refused",
+TEST_CASE("an SF2 instrument config with a struct_size below sizeof is refused",
           "[c_api][engine][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
-  for (const int version : {-1, -4, 5}) {
-    INFO(version);
-    config.struct_version = version;
+  sonare_engine_sf2_instrument_config_init(&config);
+  REQUIRE(config.struct_size == sizeof(SonareEngineSf2InstrumentConfig));
+  for (const uint32_t size : {0u, 4u, static_cast<uint32_t>(sizeof(config)) - 1u}) {
+    INFO(size);
+    config.struct_size = size;
     REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &config) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_engine_sf2_instrument_config_init");
   }
   size_t count = 0;
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 0);
-  config.struct_version = 0;
+  config.struct_size = sizeof(config);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &config) == SONARE_OK);
   sonare_engine_destroy(engine);
 
   // The project bounce spelling of the same config takes the same refusal.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 64;
   options.block_size = 64;
   options.num_channels = 2;
   options.sample_rate = 48000;
   SonareSf2InstrumentBinding binding{};
+  sonare_sf2_instrument_config_init(&binding.config);
   binding.destination_id = 2;
-  for (const int version : {-1, 5}) {
-    INFO(version);
-    binding.config.struct_version = version;
+  for (const uint32_t size : {0u, static_cast<uint32_t>(sizeof(binding.config)) - 1u}) {
+    INFO(size);
+    binding.config.struct_size = size;
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels = 0;

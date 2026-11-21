@@ -22,78 +22,92 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
 #include "util/number_format.h"
-#include "util/zero_is_default.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
+
+/// Fills either C ABI built-in-synth config spelling with sizeof and the core defaults.
+template <typename C>
+inline void builtin_synth_config_init(C* c) {
+  const sonare::midi::BuiltinSynthConfig defaults{};
+  *c = C{};
+  c->struct_size = sizeof(C);
+  c->waveform = static_cast<int>(defaults.waveform);
+  c->gain = defaults.gain;
+  c->attack_ms = defaults.attack_ms;
+  c->decay_ms = defaults.decay_ms;
+  c->sustain = defaults.sustain;
+  c->release_ms = defaults.release_ms;
+  c->polyphony = defaults.polyphony;
+}
+
+/// Fills either C ABI SF2 config spelling with sizeof and the core defaults.
+template <typename C>
+inline void sf2_instrument_config_init(C* c) {
+  const sonare::midi::synth::Sf2PlayerConfig defaults{};
+  *c = C{};
+  c->struct_size = sizeof(C);
+  c->gain = defaults.gain;
+  c->polyphony = defaults.polyphony;
+}
 
 /// Converts either C ABI built-in-synth config spelling to the core config.
 /// The engine and project surfaces intentionally carry identical fields under
 /// different public names; keeping this conversion templated leaves both ABI
 /// structs independent while making their validation order and diagnostics one
-/// implementation.
+/// implementation. Every field is read literally, over exactly the domain
+/// clamp_synth_config passes through unchanged, so the core never substitutes.
+/// @p subject is the C path of the struct ("config." or "instruments[i].config.").
 template <typename C>
-inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c) {
+inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c,
+                                                                    const std::string& subject) {
+  namespace check = sonare::util::check;
   sonare::midi::BuiltinSynthConfig cfg;
   if (!ordinal_to_enum(c.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1, &cfg.waveform)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "waveform is not a SONARE_SYNTH_WAVEFORM_* value");
   }
-  // clamp_synth_config reads a non-positive or non-finite field as "use the
-  // built-in default" and reports nothing, so a request that reached it came
-  // back as a successful call at a level the caller never chose. Refused here,
-  // where it is still visible; 0 stays the documented way to ask for the default.
-  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(0.0f, "gain");
-  cfg.attack_ms = sonare::ZeroIsDefault(c.attack_ms).checked_non_negative(0.0f, "attack_ms");
-  cfg.decay_ms = sonare::ZeroIsDefault(c.decay_ms).checked_non_negative(0.0f, "decay_ms");
-  cfg.sustain = sonare::ZeroIsDefault(c.sustain).checked_non_negative(0.0f, "sustain");
-  cfg.release_ms = sonare::ZeroIsDefault(c.release_ms).checked_non_negative(0.0f, "release_ms");
-  if (!(c.polyphony >= 0)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "polyphony must be 0 (the library default) or a positive voice count");
-  }
+  check::in_interval(c.gain, 0.0, false, sonare::midi::kMaxSynthGain, true,
+                     (subject + "gain").c_str());
+  check::in_interval(c.attack_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
+                     (subject + "attack_ms").c_str());
+  check::in_interval(c.decay_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
+                     (subject + "decay_ms").c_str());
+  check::in_interval(c.sustain, 0.0, false, 1.0, true, (subject + "sustain").c_str());
+  check::in_interval(c.release_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
+                     (subject + "release_ms").c_str());
+  check::integer_in_range(c.polyphony, 1, sonare::midi::kMaxSynthVoices,
+                          (subject + "polyphony").c_str());
+  cfg.gain = c.gain;
+  cfg.attack_ms = c.attack_ms;
+  cfg.decay_ms = c.decay_ms;
+  cfg.sustain = c.sustain;
+  cfg.release_ms = c.release_ms;
   cfg.polyphony = c.polyphony;
-  return sonare::midi::clamp_synth_config(cfg);
+  return cfg;
 }
 
-/// Highest struct_version either C ABI SF2 config spelling defines.
-inline constexpr int kSf2InstrumentConfigVersion = 4;
-
-/// Whether @p c carries a struct_version its spelling defines (0 and 1 are both
-/// version 1). Shared by every entry that reads either spelling, so a negative or
-/// future version is refused the same way everywhere.
+/// Converts either C ABI SF2 config spelling to the core player config; every field is read
+/// literally over the domain the player takes without substituting. Callers keep any
+/// surface-specific offline options. @p subject is the C path of the struct.
 template <typename C>
-constexpr bool sf2_config_version_supported(const C& c) noexcept {
-  return c.struct_version >= 0 && c.struct_version <= kSf2InstrumentConfigVersion;
-}
-
-/// Converts either C ABI SF2 config spelling to the core player config.
-/// Version gates are kept here so engine and bounce bindings cannot drift;
-/// callers check sf2_config_version_supported first and keep any
-/// surface-specific offline options.
-template <typename C>
-inline sonare::midi::synth::Sf2PlayerConfig sf2_player_config_from_c(const C& c) {
+inline sonare::midi::synth::Sf2PlayerConfig sf2_player_config_from_c(const C& c,
+                                                                     const std::string& subject) {
+  namespace check = sonare::util::check;
   sonare::midi::synth::Sf2PlayerConfig cfg;
-  // Passed through, the player's constructor would substitute for it in silence.
-  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(cfg.gain, "gain");
-  if (!(c.polyphony >= 0)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "polyphony must be 0 (the library default) or a positive voice count");
-  }
-  if (c.polyphony != 0) cfg.polyphony = c.polyphony;
-  if (c.struct_version >= 2) {
-    cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
-  }
-  if (c.struct_version >= 3 && c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
-  if (c.struct_version >= 4) {
-    if (!(c.gs_efx_realization == 0 || c.gs_efx_realization == 1)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "gs_efx_realization must be 0 (modern) or 1 (classic)");
-    }
-    if (c.gs_efx_realization == 1) {
-      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
-    }
+  check::in_range(c.gain, 0.0, sonare::midi::kMaxSynthGain, (subject + "gain").c_str());
+  check::integer_in_range(c.polyphony, 1, sonare::midi::kMaxSynthVoices,
+                          (subject + "polyphony").c_str());
+  check::integer_at_least(c.prefer_model_for_modeled_families, 0,
+                          (subject + "prefer_model_for_modeled_families").c_str());
+  check::integer_at_least(c.clear_bank_rig, 0, (subject + "clear_bank_rig").c_str());
+  check::integer_in_range(c.gs_efx_realization, 0, 1, (subject + "gs_efx_realization").c_str());
+  cfg.gain = c.gain;
+  cfg.polyphony = c.polyphony;
+  cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
+  if (c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
+  if (c.gs_efx_realization == 1) {
+    cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
   }
   return cfg;
 }

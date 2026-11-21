@@ -1239,7 +1239,8 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   const std::string removed = serialize(project);
   REQUIRE(removed.find("\"name\":\"manual warp\"") == std::string::npos);
   REQUIRE(removed.find("\"warpRefId\":0") != std::string::npos);
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 480;
   options.block_size = 64;
   options.num_channels = 2;

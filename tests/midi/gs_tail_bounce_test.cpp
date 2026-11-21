@@ -73,8 +73,9 @@ std::vector<SonareMidiEventPod> note_events(bool release_edit) {
 }
 
 SonareProjectBounceOptions auto_length_options() {
-  SonareProjectBounceOptions options{};
-  options.total_frames = 0;
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
+  options.total_frames = SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
   options.block_size = 128;
   options.num_channels = 2;
   options.sample_rate = static_cast<int>(kRate);
@@ -133,6 +134,7 @@ SonareError bounce_native(SonareProject* project, const SonareProjectBounceOptio
 SonareError bounce_sf2(SonareProject* project, const SonareProjectBounceOptions* options,
                        float** out, size_t* out_len) {
   SonareSf2InstrumentBinding binding{};
+  sonare_sf2_instrument_config_init(&binding.config);
   int bounce_channels3 = 0;
   return sonare_project_bounce_with_sf2_instruments(project, options, &binding, 1, out, out_len,
                                                     &bounce_channels3);

@@ -316,9 +316,10 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
     return project_exit_code(sr_err);
   }
 
-  SonareProjectBounceOptions options{};
-  options.total_frames = static_cast<int64_t>(args.get_int64("frames", 0));
-  options.num_channels = args.get_int("channels", 0);
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
+  options.total_frames = static_cast<int64_t>(args.get_int64("frames", options.total_frames));
+  options.num_channels = args.get_int("channels", options.num_channels);
   options.instrument_latency_samples =
       args.get_int("instrument-latency-samples", options.instrument_latency_samples);
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
@@ -340,8 +341,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
     }
     options.sample_rate = render_sample_rate;
   }
-  // Left at 0 when the caller did not ask for a rate, which is what the C ABI
-  // reads as "the project's own".
+  // Left at the init value when the caller did not ask for a rate, which is the project's own.
 
   float* interleaved = nullptr;
   size_t total = 0;

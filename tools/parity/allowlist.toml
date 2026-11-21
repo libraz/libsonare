@@ -119,9 +119,6 @@ python = [
 #     caller-owned result or request POD and sets its schema version. The facades
 #     build those values as plain objects, so none has a free-function
 #     counterpart.
-#   project_tempo_options_default: all three facades call it internally to seed
-#     SonareProjectTempoOptions before overlaying the caller's fields, so no
-#     facade restates a value.
 #   mixer_strip_at: the handle->index convention the [order] notes already
 #     record for strip_meter. No facade hands out a SonareStrip*; every strip op
 #     takes an index or an id and resolves the borrowed handle internally.
@@ -192,7 +189,6 @@ node = [
   "last_refusal_subject",
   "last_refusal_render",
   "last_refusal_entry",
-  "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
@@ -297,7 +293,6 @@ wasm = [
   "last_refusal_subject",
   "last_refusal_render",
   "last_refusal_entry",
-  "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
@@ -389,7 +384,6 @@ python = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
-  "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).

@@ -92,12 +92,9 @@ class _ProjectInspectionMixin:
         ramp_threshold: float | None,
         include_octave_candidates: bool | None,
     ) -> SonareProjectTempoOptions:
-        """Seed the native defaults, then apply whichever were given.
-
-        Seeding rather than zeroing matters: a zeroed ``ramp_threshold`` folds
-        the whole take into one tempo segment.
-        """
-        options: SonareProjectTempoOptions = _get_lib().sonare_project_tempo_options_default()
+        """Seed the native defaults, then apply whichever were given."""
+        # Constructing the struct runs sonare_project_tempo_options_init.
+        options = SonareProjectTempoOptions()
         if adaptive_tempo is not None:
             options.adaptive_tempo = 1 if adaptive_tempo else 0
         if tempo_update_interval_beats is not None:

@@ -214,29 +214,33 @@ def test_sample_source_rate_is_none_for_the_render_rate_and_zero_is_refused() ->
 
 
 @pytest.mark.parametrize(
-    ("config", "field"),
-    [
-        ("BuiltinSynthConfig", "gain"),
-        ("BuiltinSynthConfig", "attack_ms"),
-        ("BuiltinSynthConfig", "decay_ms"),
-        ("BuiltinSynthConfig", "sustain"),
-        ("BuiltinSynthConfig", "release_ms"),
-        ("Sf2InstrumentConfig", "gain"),
-    ],
+    "field",
+    ["gain", "attack_ms", "decay_ms", "sustain", "release_ms"],
 )
-def test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed(
-    config: str, field: str
-) -> None:
-    cls = getattr(libsonare, config)
-    binder = "set_builtin_instrument" if config == "BuiltinSynthConfig" else "set_sf2_instrument"
+def test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain(field: str) -> None:
     with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
-        getattr(engine, binder)(cls(), 6)
+        engine.set_builtin_instrument(libsonare.BuiltinSynthConfig(), 6)
         with pytest.raises(
             SonareValueError,
-            match=rf"^RealtimeEngine\.{binder}: {field} must not be 0; "
-            "omit it for the library value$",
+            match=(
+                rf"^RealtimeEngine\.set_builtin_instrument: config\.{field} "
+                r"must be finite and in \(0, "
+            ),
         ):
-            getattr(engine, binder)(cls(**{field: 0.0}), 6)
+            engine.set_builtin_instrument(libsonare.BuiltinSynthConfig(**{field: 0.0}), 6)
+
+
+def test_sf2_instrument_zero_gain_is_silence_and_a_negative_gain_is_refused() -> None:
+    with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
+        engine.set_sf2_instrument(libsonare.Sf2InstrumentConfig(gain=0.0), 6)
+        with pytest.raises(
+            SonareValueError,
+            match=(
+                r"^RealtimeEngine\.set_sf2_instrument: config\.gain "
+                r"must be finite and in \[0, 4\]$"
+            ),
+        ):
+            engine.set_sf2_instrument(libsonare.Sf2InstrumentConfig(gain=-0.5), 6)
 
 
 def test_bounce_dither_is_a_token_and_none_renders_undithered() -> None:

@@ -49,7 +49,8 @@ SonareProject* make_synth_project(uint32_t dest, uint8_t note = 60) {
 
 std::vector<float> bounce_synth(SonareProject* project, const SonareSynthPatch& patch,
                                 uint32_t dest = 3) {
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 24000;
   options.block_size = 128;
   options.num_channels = 2;
@@ -352,7 +353,8 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
 TEST_CASE("synth patch engine params are refused through the C ABI with the key named",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 1024;
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 3;
@@ -1081,7 +1083,8 @@ TEST_CASE("synth patch presence-bit gain zero renders silence", "[project][synth
 TEST_CASE("a mod routing naming none on either end is refused",
           "[project][synth_patch][mod_matrix]") {
   SonareProject* project = make_synth_project(3);
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 1024;
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 3;
@@ -1145,7 +1148,8 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
   // Invalid patches are rejected.
   SonareSynthPatch bad_version{};
   bad_version.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 1024;
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 3;
@@ -1390,7 +1394,8 @@ SonareProject* make_census_project(uint8_t note) {
 
 std::vector<float> census_render(const SonareSynthPatch& patch, SonareSampleBank* bank = nullptr) {
   SonareProject* project = make_census_project(60);
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 9600;
   options.block_size = 128;
   options.num_channels = 2;

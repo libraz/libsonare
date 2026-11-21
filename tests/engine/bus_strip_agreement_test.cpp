@@ -122,6 +122,7 @@ std::string project_scene_json(const BusStripCase& c) {
 
 SonareEngineBuiltinSynthConfig test_synth_config() {
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.waveform = 0;  // sine
   synth.gain = 1.0f;
   synth.attack_ms = 1.0f;
@@ -134,6 +135,7 @@ SonareEngineBuiltinSynthConfig test_synth_config() {
 
 SonareBuiltinSynthConfig project_synth_config() {
   SonareBuiltinSynthConfig synth{};
+  sonare_builtin_synth_config_init(&synth);
   synth.waveform = 0;
   synth.gain = 1.0f;
   synth.attack_ms = 1.0f;
@@ -242,12 +244,14 @@ std::vector<float> render_project_bounce(const BusStripCase& c) {
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
   REQUIRE(sonare_project_set_track_route(project, track, "track", "") == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = kTotalFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;
   options.sample_rate = static_cast<int>(kSampleRate);
   SonareBuiltinInstrumentBinding binding{};
+  sonare_builtin_synth_config_init(&binding.config);
   binding.destination_id = kDestination;
   binding.config = project_synth_config();
 
@@ -352,12 +356,14 @@ TEST_CASE("project serialize/deserialize preserves bus and master pan+EQ through
       REQUIRE(sonare_project_deserialize(json, json_len, &reloaded, nullptr) == SONARE_OK);
       sonare_free_string(json);
 
-      SonareProjectBounceOptions options{};
+      SonareProjectBounceOptions options;
+      sonare_project_bounce_options_init(&options);
       options.total_frames = kTotalFrames;
       options.block_size = kBlockSize;
       options.num_channels = 2;
       options.sample_rate = static_cast<int>(kSampleRate);
       SonareBuiltinInstrumentBinding binding{};
+      sonare_builtin_synth_config_init(&binding.config);
       binding.destination_id = kDestination;
       binding.config = project_synth_config();
 

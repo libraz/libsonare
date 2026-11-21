@@ -363,7 +363,8 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
 
     with pytest.raises(
         SonareError,
-        match=r"^\[6\] StreamingMasteringChain: config\.repair\.denoise\.noiseEstimator quantile is not "
+        match=r"^\[6\] StreamingMasteringChain: config\.repair\.denoise\.noiseEstimator "
+        r"quantile is not "
         r"supported for a streaming chain: ",
     ) as refused:
         StreamingMasteringChain(

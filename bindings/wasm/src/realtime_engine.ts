@@ -35,7 +35,7 @@ import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { withRespelled } from './internal/respell.js';
-import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -849,7 +849,6 @@ export class RealtimeEngine {
       throw refuseUnknownKey('config.destinationId', ['the destinationId argument']);
     }
     refuseBuiltinSynthOrdinals(config);
-    refuseBuiltinPolyphonyZero(config);
     this.native.setBuiltinInstrument(destinationId ?? 0, config);
   }
 

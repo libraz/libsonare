@@ -122,7 +122,7 @@ const REMOVED_FILTERS: ReadonlyArray<{
     file: 'src/wasm/bindings/realtime/midi.cpp',
     fields: ['gain', 'polyphony'],
     reason:
-      'The SoundFont player\'s gain and voice count, both documented as "0 or omit => default". The player substitutes its own value for a non-positive gain in silence, so a filter here meant a caller could ask for a gain it never got and read SONARE_OK.',
+      'The built-in synth and SoundFont player patches, seeded by the C ABI init functions and read literally: a 0 or negative gain and a 0 voice count are refused by their domain, so no comparison may read them as "not given".',
   },
   {
     file: 'src/c_api/features_spectrogram_mel.cpp',
@@ -146,13 +146,24 @@ const REMOVED_FILTERS: ReadonlyArray<{
     file: 'src/c_api/sonare_c_engine_midi.cpp',
     fields: ['gain', 'polyphony'],
     reason:
-      'The C ABI door onto the SoundFont player config, same two fields and same contract as the WASM one.',
+      'The C ABI door onto the SoundFont player and built-in synth configs, same fields and same contract as the WASM one.',
   },
   {
     file: 'src/c_api/project_bounce.cpp',
-    fields: ['gain', 'attack_ms', 'decay_ms', 'sustain', 'release_ms', 'polyphony'],
+    fields: [
+      'gain',
+      'attack_ms',
+      'decay_ms',
+      'sustain',
+      'release_ms',
+      'polyphony',
+      'total_frames',
+      'block_size',
+      'num_channels',
+      'sample_rate',
+    ],
     reason:
-      'The built-in synth patch fields and the SF2 player config, every one documented as "0 => default". clamp_synth_config reads a non-positive or non-finite field as the default and reports nothing, so a request that got that far came back as a successful call at a level the caller never chose. Only these fields are asserted absent: block_size, num_channels and sample_rate read only 0 as the default and refuse a negative value.',
+      'The built-in synth patch fields, the SF2 player config and the bounce options, each seeded by its init function and read literally: a 0 is refused by its domain rather than read as "not given", and the bounce defaults are the named -1 constants.',
   },
   {
     file: 'src/c_api/features_spectral_pitch.cpp',

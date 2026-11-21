@@ -297,6 +297,7 @@ TEST_CASE("an instrument without a controller profile refuses with a specific me
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig builtin{};
+  sonare_engine_builtin_synth_config_init(&builtin);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);
 
   const auto names_cause = [] {

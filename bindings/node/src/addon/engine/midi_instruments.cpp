@@ -34,7 +34,7 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   config->decay_ms = FloatProperty(obj, "decayMs", config->decay_ms);
   config->sustain = FloatProperty(obj, "sustain", config->sustain);
   config->release_ms = FloatProperty(obj, "releaseMs", config->release_ms);
-  config->polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
+  config->polyphony = IntProperty(obj, "polyphony", config->polyphony);
   // A wrong-typed field left a pending JS exception; stop before the caller
   // reaches the C ABI with it still set.
   return !env.IsExceptionPending();
@@ -129,6 +129,7 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   SonareEngineBuiltinSynthConfig config{};
+  sonare_engine_builtin_synth_config_init(&config);
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object obj = info[1].As<Napi::Object>();
     if (!ReadEngineBuiltinSynthConfig(env, obj, &config)) return env.Undefined();
@@ -211,27 +212,17 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   SonareEngineSf2InstrumentConfig config{};
+  sonare_engine_sf2_instrument_config_init(&config);
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object obj = info[1].As<Napi::Object>();
     config.gain = FloatProperty(obj, "gain", config.gain);
-    config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
-    const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
-    if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
-      config.struct_version = 2;
-      config.prefer_model_for_modeled_families =
-          BoolProperty(obj, "preferModelForModeledFamilies",
-                       config.prefer_model_for_modeled_families != 0)
-              ? 1
-              : 0;
-    }
-    // Version 3 reads version 2's field as well, so raising it here covers both
-    // whichever of the two the caller passed.
-    const Napi::Value clear_rig = obj.Get("clearBankRig");
-    if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
-      config.struct_version = 3;
-      config.clear_bank_rig = BoolProperty(obj, "clearBankRig", config.clear_bank_rig != 0) ? 1 : 0;
-    }
-    config.struct_version = 4;
+    config.polyphony = IntProperty(obj, "polyphony", config.polyphony);
+    config.prefer_model_for_modeled_families =
+        BoolProperty(obj, "preferModelForModeledFamilies",
+                     config.prefer_model_for_modeled_families != 0)
+            ? 1
+            : 0;
+    config.clear_bank_rig = BoolProperty(obj, "clearBankRig", config.clear_bank_rig != 0) ? 1 : 0;
     config.gs_efx_realization = sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
     if (env.IsExceptionPending()) return env.Undefined();
   }

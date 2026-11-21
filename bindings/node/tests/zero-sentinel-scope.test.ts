@@ -274,8 +274,8 @@ describe('a literal-zero fallback is tagged or reasoned', () => {
 
   it('clears the floor it is sized for, so the sweep swept something', () => {
     const sites = zeroFallbackSites();
-    expect(sites.filter((site) => site.tagged).length).toBeGreaterThan(20);
-    expect(sites.length).toBeGreaterThan(40);
+    expect(sites.filter((site) => site.tagged).length).toBeGreaterThan(10);
+    expect(sites.length).toBeGreaterThan(30);
   });
 
   it('keeps the recorded reasons free of entries that no longer apply', () => {

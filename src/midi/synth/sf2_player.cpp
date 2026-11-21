@@ -98,7 +98,7 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   // An explicit 0 is silence; only a negative or non-finite gain is not a level.
   if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
-  config_.gain = std::min(config_.gain, 4.0f);
+  config_.gain = std::min(config_.gain, kMaxSynthGain);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 48;
   // The stage owns the factory, the realisation and the bank-rig switch from here
   // on. A player with a factory is EFX-capable: its part buses exist so a GS EFX

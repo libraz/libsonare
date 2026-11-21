@@ -228,6 +228,7 @@ TEST_CASE("C MIDI instrument bind maps an allocation failure to OUT_OF_MEMORY",
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
   auto* const original = engine->engine.midi_instrument(7);
   REQUIRE(original != nullptr);
@@ -308,6 +309,7 @@ TEST_CASE("failed MIDI instrument clear retains the C-owned instrument",
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
   auto* const original = engine->engine.midi_instrument(7);

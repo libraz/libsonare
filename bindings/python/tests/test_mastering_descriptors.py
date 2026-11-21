@@ -100,7 +100,10 @@ def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
     libsonare.mastering_apply_processor("eq.parametric", x, 96000, params)
     with pytest.raises(
         SonareValueError,
-        match=r"^mastering_apply_processor: params\.band0\.frequencyHz must be finite and in \(0, 24000\)$",
+        match=(
+            r"^mastering_apply_processor: params\.band0\.frequencyHz "
+            r"must be finite and in \(0, 24000\)$"
+        ),
     ):
         libsonare.mastering_apply_processor("eq.parametric", x, SR, params)
 

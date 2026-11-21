@@ -532,13 +532,15 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
   options.total_frames = 12000;
   options.block_size = 128;
   options.num_channels = 2;
   options.sample_rate = 48000;
 
   SonareSf2InstrumentBinding binding{};
+  sonare_sf2_instrument_config_init(&binding.config);
   binding.destination_id = 5;
 
   // Without a loaded soundfont the bounce still sounds: the NativeSynth GM
@@ -561,19 +563,19 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
 
-  // An unknown struct version is rejected.
-  binding.config.struct_version = 99;
+  // A struct not started from its init is rejected.
+  binding.config.struct_size = 0;
   int bounce_channels2 = 0;
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
                                                      &bounce_channels2) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  binding.config.struct_version = 0;
+  binding.config.struct_size = sizeof(SonareSf2InstrumentConfig);
 
   // A gain the player's constructor would silently replace with its own default
-  // is refused here instead, so it cannot arrive as a successful bounce carrying
-  // a level the caller never chose. The sentinel restored below is the control.
-  for (float bad :
-       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+  // or clamp is refused here instead, so it cannot arrive as a successful bounce
+  // carrying a level the caller never chose. The default restored below is the control.
+  for (float bad : {-1.0f, 4.5f, std::numeric_limits<float>::quiet_NaN(),
+                    std::numeric_limits<float>::infinity()}) {
     CAPTURE(bad);
     binding.config.gain = bad;
     int bounce_channels3 = 0;
@@ -582,8 +584,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
-  binding.config.gain = 0.0f;
-  for (int bad : {-1, -48}) {
+  binding.config.gain = 0.5f;
+  for (int bad : {0, -1, -48, 65}) {
     CAPTURE(bad);
     binding.config.polyphony = bad;
     int bounce_channels4 = 0;
@@ -592,7 +594,7 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
-  binding.config.polyphony = 0;
+  binding.config.polyphony = 48;
 
   int bounce_channels5 = 0;
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
@@ -635,6 +637,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   SonareEngineSf2InstrumentConfig config{};
+  sonare_engine_sf2_instrument_config_init(&config);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Binding before a soundfont is loaded is allowed: live MIDI plays through
@@ -662,16 +665,15 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
               engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
 
-  config.struct_version = 5;
+  config.struct_size = 0;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
-  // Version 3 clears the bank's default rig. Accepted here rather than only in
-  // the bounce, since a host driving live MIDI wants the direct signal on the
+  config.struct_size = sizeof(SonareEngineSf2InstrumentConfig);
+  // clear_bank_rig renders the instrument without the bank's default rig. Accepted here rather
+  // than only in the bounce, since a host driving live MIDI wants the direct signal on the
   // same terms an offline one does.
-  config.struct_version = 3;
   config.clear_bank_rig = 1;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   config.clear_bank_rig = 0;
-  config.struct_version = 2;
   config.prefer_model_for_modeled_families = 1;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   size_t count = 0;
@@ -690,6 +692,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
 
   // Rebinding the same destination with the built-in synth replaces the player.
   SonareEngineBuiltinSynthConfig synth{};
+  sonare_engine_builtin_synth_config_init(&synth);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 1);
@@ -749,31 +752,32 @@ TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_a
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
 
   SonareEngineSf2InstrumentConfig config{};
+  sonare_engine_sf2_instrument_config_init(&config);
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
-  for (float bad : {-1.0f, -0.0001f, nan, inf, -inf}) {
+  for (float bad : {-1.0f, -0.0001f, 4.5f, nan, inf, -inf}) {
     CAPTURE(bad);
     config.gain = bad;
     CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  // The player's constructor substitutes its own default for exactly these
-  // values, so a pass-through would have looked identical to the sentinel from
-  // outside. Both accepted spellings are pinned here: without them the loop
+  // The player's constructor substitutes its own default for a negative gain and
+  // clamps one above 4, so a pass-through would have been a level nobody chose. Both
+  // accepted spellings are pinned here, 0 being silence: without them the loop
   // above is satisfied by an entry point that refuses every gain.
   config.gain = 0.0f;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   config.gain = 0.25f;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
 
-  // polyphony sits one line from gain and its constructor replaces a negative
-  // count with the same silence, so it carries the same contract.
-  for (int bad : {-1, -48}) {
+  // polyphony sits one line from gain and its constructor replaces a non-positive
+  // count and clamps one above 64, so it carries the same contract.
+  for (int bad : {0, -1, -48, 65}) {
     CAPTURE(bad);
     config.polyphony = bad;
     CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
   }
-  config.polyphony = 0;
+  config.polyphony = 1;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   config.polyphony = 16;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
@@ -804,7 +808,7 @@ std::vector<float> render_overdrive(int realization) {
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
-  config.struct_version = 4;
+  sonare_engine_sf2_instrument_config_init(&config);
   config.gs_efx_realization = realization;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   for (const std::vector<uint8_t>& frame :
@@ -833,14 +837,13 @@ TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
-  config.struct_version = 4;
+  sonare_engine_sf2_instrument_config_init(&config);
   for (int bad : {-1, 2, 7}) {
     CAPTURE(bad);
     config.gs_efx_realization = bad;
     CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
   }
-  // A version-3 patch never reads the field, so what it holds is not refused.
-  config.struct_version = 3;
+  config.gs_efx_realization = 1;
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   sonare_engine_destroy(engine);
 

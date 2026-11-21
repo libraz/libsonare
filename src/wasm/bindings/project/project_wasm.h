@@ -270,8 +270,9 @@ struct ProjectWasm {
   // program, backend: 'sf2'|'synth', presetName } objects (matching Node).
   val soundFontManifest();
 
-  // Reads a single { destinationId?, gain?, polyphony? } object into an SF2
-  // instrument binding ("0 / omit => default" per the C ABI).
+  // Reads a single SF2 instrument binding object into a C binding started from
+  // sonare_sf2_instrument_config_init: an omitted key keeps the default and a given value is
+  // read literally by the C entry.
   static SonareSf2InstrumentBinding sf2BindingFromVal(val desc);
 
   // Like bounceWithBuiltinInstrument, but each bound destination renders

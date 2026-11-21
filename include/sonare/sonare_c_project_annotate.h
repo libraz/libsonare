@@ -196,33 +196,33 @@ typedef struct {
 /// call; it is not necessary to make a capacity-0 count query first.
 #define SONARE_PROJECT_MAX_TEMPO_CANDIDATES 3u
 
-/// Scoring options for the beat-analysis -> tempo bridge. Always start from
-/// sonare_project_tempo_options_default() rather than zeroing the struct: a
-/// zeroed ramp_threshold folds the whole take into one segment, and a zeroed
-/// tempo_update_interval_beats is rejected.
+/// Scoring options for the beat-analysis -> tempo bridge. Start from
+/// @ref sonare_project_tempo_options_init; every field is then read literally and checked
+/// against the range given beside it.
 typedef struct {
+  uint32_t struct_size;  ///< sizeof(SonareProjectTempoOptions); set by the init function.
   /// Whether beat tracking may follow a tempo that changes during the take.
-  /// 0 keeps the one-tempo-per-take behaviour of the fixed-signature entry points,
+  /// Default 0, which keeps the one-tempo-per-take behaviour of the fixed-signature entry points,
   /// which is the right answer for material recorded to a click. Turn it on for a
   /// performance that accelerates, slows or breathes: with it off the tracker locks
   /// near the take's average and every tempo segment sits near that same average.
   int adaptive_tempo;
   /// Beats of context the local tempo estimate is read over. Used only when
-  /// adaptive_tempo is 1. Must be positive.
+  /// adaptive_tempo is 1. Must be positive. Default 8.
   int tempo_update_interval_beats;
   /// Relative tempo change (as a fraction) at which the bridge closes one tempo
   /// segment and opens the next. Smaller follows the performance more closely
   /// and emits more segments; larger merges more of it into constant stretches.
-  /// Must be non-negative and finite.
+  /// Must be non-negative and finite. Default 0.02.
   float ramp_threshold;
   /// Whether to emit the half-tempo and double-tempo alternatives alongside the
-  /// primary candidate. 0 emits the primary only.
+  /// primary candidate. Default 1; 0 emits the primary only.
   int include_octave_candidates;
 } SonareProjectTempoOptions;
 
-/// @brief Returns the tempo-bridge defaults, which reproduce the behaviour of
-///        the entry points that take no options.
-SonareProjectTempoOptions sonare_project_tempo_options_default(void);
+/// @brief Writes the tempo-bridge defaults, which reproduce the behaviour of the entry points
+///        that take no options, into @p options and sets its @c struct_size; NULL is ignored.
+void sonare_project_tempo_options_init(SonareProjectTempoOptions* options);
 
 /// @brief Detects tempo from a mono audio buffer and installs the primary
 ///        tempo-segment estimate via an edit command (undoable). Uses the
@@ -258,7 +258,7 @@ SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* au
 ///          fitted with one tempo for the whole take, which is what makes their
 ///          tempo maps flat on a performance whose tempo moves. @p options is
 ///          how a caller asks for something else; passing the defaults from
-///          @ref sonare_project_tempo_options_default reproduces them exactly.
+///          @ref sonare_project_tempo_options_init reproduces them exactly.
 ///          A NULL @p options is the defaults.
 SonareError sonare_project_analyze_tempo_with_options(const SonareProject* project,
                                                       const float* audio, size_t len,

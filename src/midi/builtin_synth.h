@@ -72,6 +72,12 @@ struct BuiltinSynthConfig {
 /// Largest voice pool the synth will allocate, regardless of config.
 inline constexpr int kMaxSynthVoices = 64;
 
+/// Largest master gain (linear) the built-in synth and the SF2 player keep; above it they clamp.
+inline constexpr float kMaxSynthGain = 4.0f;
+
+/// Longest built-in synth envelope stage, in milliseconds; above it the synth clamps.
+inline constexpr float kMaxSynthStageMs = 20000.0f;
+
 /// Returns a copy of @p cfg with every field clamped to a safe, audible range.
 BuiltinSynthConfig clamp_synth_config(const BuiltinSynthConfig& cfg) noexcept;
 

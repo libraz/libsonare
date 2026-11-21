@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
+from ._engine_conversions import _POSITIVE_COUNT, _POSITIVE_INT, _given_positive
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _SOURCE_BACKENDS,
@@ -54,14 +54,16 @@ def _bounce_options(
     sample_rate: int | None,
     instrument_latency_samples: int,
 ) -> SonareProjectBounceOptions:
-    """Build the C bounce options, mapping each omitted size onto the C ABI's 0."""
-    # Passed unconverted so the struct's own narrowing sees each caller value;
-    # int() would truncate a fraction past it.
-    return SonareProjectBounceOptions(
-        total_frames=_resolve_zero_default(total_frames, "total_frames"),
-        block_size=_resolve_zero_default(block_size, "block_size"),
-        num_channels=_resolve_zero_default(num_channels, "num_channels"),
-        sample_rate=_resolve_zero_default(sample_rate, "sample_rate"),
+    """Build the C bounce options, leaving each omitted field at the init value.
+
+    The struct is seeded by ``sonare_project_bounce_options_init``; a given value is written
+    unconverted so the struct's own narrowing sees it, and a 0 is left to the C refusal.
+    """
+    return SonareProjectBounceOptions._given(
+        total_frames=_given_positive(total_frames, "total_frames", _POSITIVE_COUNT),
+        block_size=_given_positive(block_size, "block_size", _POSITIVE_INT),
+        num_channels=_given_positive(num_channels, "num_channels", _POSITIVE_INT),
+        sample_rate=_given_positive(sample_rate, "sample_rate", _POSITIVE_INT),
         instrument_latency_samples=instrument_latency_samples,
     )
 

@@ -102,7 +102,8 @@ def test_insert_timing_rejects_an_unknown_key() -> None:
     with pytest.raises(libsonare.SonareValueError) as caught:
         libsonare.mastering_insert_timing("saturation.softClipper", {"bogus": 1.0}, 48000)
     assert str(caught.value) == (
-        "mastering_insert_timing: unknown key params.bogus (expected aliasing, ceiling, driveDb, mix)"
+        "mastering_insert_timing: unknown key params.bogus "
+        "(expected aliasing, ceiling, driveDb, mix)"
     )
 
 
