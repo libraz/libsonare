@@ -458,3 +458,38 @@ surface = "c"
 name = "sonare_remix_aligned_intervals"
 category = "distinct-operation"
 reason = "Resolves the cut points without cutting; sonare_remix performs the cut."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_split_silence_common"
+category = "distinct-operation"
+reason = "Finds the gaps silent in every one of several takes and returns a diagnosis report; sonare_split_silence is the single-signal librosa.effects.split mirror."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_loop_from_markers"
+category = "distinct-operation"
+reason = "Addresses the loop by two marker ids resolved against the applied project's markers and only enables it; sonare_engine_set_loop takes ppq positions and also disables."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_tempo_segments"
+category = "distinct-operation"
+reason = "Installs a ramped ppq-keyed tempo map that overrides the single tempo sonare_engine_set_tempo writes; the two write different state."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_time_signature_segments"
+category = "distinct-operation"
+reason = "Installs a ppq-keyed meter map that overrides the single signature sonare_engine_set_time_signature writes; the two write different state."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_normalize_rms"
+category = "distinct-operation"
+reason = "Sets the gain from RMS, accepts any target and hard-clips to [-1, 1]; sonare_normalize sets it from the sample peak, refuses a target above 0 dBFS and never clips."
