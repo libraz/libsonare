@@ -49,7 +49,7 @@ try {
     midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
     midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60 }),
   ]);
-  const audio = project.bounceWithSynthInstruments([{ instrument: { preset: 'sawLead' } }], { numChannels: 2 });
+  const audio = project.bounce({ numChannels: 2, synthInstruments: [{ instrument: { preset: 'sawLead' } }] });
 } finally {
   project.destroy();
 }
@@ -67,7 +67,7 @@ try {
 - **Room acoustics** — blind RT60, impulse-response metrics, RIR synthesis, room estimation and morphing (`roomMorphStereo` for stereo). → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime and streaming** — `RealtimeEngine` with MIDI 1.0 / 2.0 input, bus-to-bus routing with sends, sidechain keys (`setBusSidechain`), `StreamingMasteringChain`, `RealtimeVoiceChanger` (also an insert, `voice.changer`; pitch correction, harmony, vocoder and character stages, driven by `noteOn` / `noteOff` / `allNotesOff` and `process*WithCarrier`, with the presets `hardTune`, `robotMonotone`, `choirHarmony`, `vocoderStrings`, `megaphone` and `radioVoice`) and the AudioWorklet bridge, which also bounces offline and hosts a stream analyzer node. → [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine), [Streaming](https://libsonare.libraz.net/docs/wasm-streaming)
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
-- **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compileTimeline` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
+- **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compile({ withTimeline: true })` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
 - **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 
