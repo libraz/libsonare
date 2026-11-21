@@ -105,8 +105,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::EstimateMeter, "estimateMeter"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
   exports.Set("analyzeAsync", Napi::Function::New(env, &SonareWrap::AnalyzeAsync, "analyzeAsync"));
-  exports.Set("analyzeWithProgress",
-              Napi::Function::New(env, &SonareWrap::AnalyzeWithProgress, "analyzeWithProgress"));
   exports.Set("analyzeSections",
               Napi::Function::New(env, &SonareWrap::AnalyzeSections, "analyzeSections"));
   exports.Set("detectBoundaries",
@@ -241,8 +239,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       "renderPercussiveEvents",
       Napi::Function::New(env, &SonareWrap::RenderPercussiveEvents, "renderPercussiveEvents"));
   exports.Set("voiceChange", Napi::Function::New(env, &SonareWrap::VoiceChange, "voiceChange"));
-  exports.Set("voiceChangeRealtime",
-              Napi::Function::New(env, &SonareWrap::VoiceChangeRealtime, "voiceChangeRealtime"));
+  exports.Set("realtimeVoiceChangerRender",
+              Napi::Function::New(env, &SonareWrap::RealtimeVoiceChangerRender,
+                                  "realtimeVoiceChangerRender"));
   exports.Set(
       "voiceCharacterPresetId",
       Napi::Function::New(env, &SonareWrap::VoiceCharacterPresetId, "voiceCharacterPresetId"));
@@ -261,8 +260,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("remix", Napi::Function::New(env, &SonareWrap::Remix, "remix"));
   exports.Set("remixAlignedIntervals", Napi::Function::New(env, &SonareWrap::RemixAlignedIntervals,
                                                            "remixAlignedIntervals"));
-  exports.Set("hpssWithResidual",
-              Napi::Function::New(env, &SonareWrap::HpssWithResidual, "hpssWithResidual"));
   exports.Set("phaseVocoder", Napi::Function::New(env, &SonareWrap::PhaseVocoder, "phaseVocoder"));
   exports.Set("normalize", Napi::Function::New(env, &SonareWrap::Normalize, "normalize"));
   exports.Set("normalizeStereo",
@@ -283,12 +280,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringStreamingLoudnessGainStereo",
               Napi::Function::New(env, &SonareWrap::MasteringStreamingLoudnessGainStereo,
                                   "masteringStreamingLoudnessGainStereo"));
-  exports.Set("masteringChainWithProgress",
-              Napi::Function::New(env, &SonareWrap::MasteringChainWithProgress,
-                                  "masteringChainWithProgress"));
-  exports.Set("masteringChainStereoWithProgress",
-              Napi::Function::New(env, &SonareWrap::MasteringChainStereoWithProgress,
-                                  "masteringChainStereoWithProgress"));
   exports.Set("masteringPresetNames",
               Napi::Function::New(env, &SonareWrap::MasteringPresetNames, "masteringPresetNames"));
   exports.Set(
@@ -317,12 +308,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "masterAudioStereoAsync",
       Napi::Function::New(env, &SonareWrap::MasterAudioStereoAsync, "masterAudioStereoAsync"));
-  exports.Set(
-      "masterAudioWithProgress",
-      Napi::Function::New(env, &SonareWrap::MasterAudioWithProgress, "masterAudioWithProgress"));
-  exports.Set("masterAudioStereoWithProgress",
-              Napi::Function::New(env, &SonareWrap::MasterAudioStereoWithProgress,
-                                  "masterAudioStereoWithProgress"));
   exports.Set(
       "masteringProcessorNames",
       Napi::Function::New(env, &SonareWrap::MasteringProcessorNames, "masteringProcessorNames"));
@@ -602,9 +587,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("splitSilence", Napi::Function::New(env, &SonareWrap::SplitSilence, "splitSilence"));
   exports.Set("splitSilenceCommon",
               Napi::Function::New(env, &SonareWrap::SplitSilenceCommon, "splitSilenceCommon"));
-  exports.Set("splitSilenceCommonWithReport",
-              Napi::Function::New(env, &SonareWrap::SplitSilenceCommonWithReport,
-                                  "splitSilenceCommonWithReport"));
   exports.Set("frameSignal", Napi::Function::New(env, &SonareWrap::FrameSignal, "frameSignal"));
   exports.Set("padCenter", Napi::Function::New(env, &SonareWrap::PadCenter, "padCenter"));
   exports.Set("fixLength", Napi::Function::New(env, &SonareWrap::FixLength, "fixLength"));
@@ -1058,12 +1040,22 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   // (binding-node#1).
   SonareKey key{};
   float tuning_used = 0.0f;
-  SonareError err = sonare_detect_key_with_tuning(
-      sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, chroma_high_pass_hz,
-      modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
-      tuning.measure ? 1 : 0, &key, &tuning_used);
+  SonareDetectKeyOptions key_options;
+  sonare_detect_key_options_init(&key_options);
+  key_options.n_fft = n_fft;
+  key_options.hop_length = hop_length;
+  key_options.use_hpss = use_hpss ? 1 : 0;
+  key_options.loudness_weighted = loudness_weighted ? 1 : 0;
+  key_options.chroma_high_pass_hz = chroma_high_pass_hz;
+  key_options.modes = modes.empty() ? nullptr : modes.data();
+  key_options.mode_count = modes.size();
+  key_options.profile_type = profile;
+  key_options.genre_hint = genre_hint.empty() ? nullptr : genre_hint.c_str();
+  key_options.tuning_cents = tuning.tuning_cents;
+  key_options.tuning_auto = tuning.measure ? 1 : 0;
+  SonareError err =
+      sonare_detect_key(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                        sonare_audio_sample_rate(audio_), &key_options, &key, &tuning_used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1109,12 +1101,22 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   // (binding-node#1).
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_key_candidates_with_tuning(
+  SonareDetectKeyOptions key_options;
+  sonare_detect_key_options_init(&key_options);
+  key_options.n_fft = n_fft;
+  key_options.hop_length = hop_length;
+  key_options.use_hpss = use_hpss ? 1 : 0;
+  key_options.loudness_weighted = loudness_weighted ? 1 : 0;
+  key_options.chroma_high_pass_hz = chroma_high_pass_hz;
+  key_options.modes = modes.empty() ? nullptr : modes.data();
+  key_options.mode_count = modes.size();
+  key_options.profile_type = profile;
+  key_options.genre_hint = genre_hint.empty() ? nullptr : genre_hint.c_str();
+  key_options.tuning_cents = tuning.tuning_cents;
+  key_options.tuning_auto = tuning.measure ? 1 : 0;
+  SonareError err = sonare_detect_key_candidates(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, chroma_high_pass_hz,
-      modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
-      tuning.measure ? 1 : 0, &candidates, &count, nullptr);
+      &key_options, &candidates, &count, nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1204,7 +1206,7 @@ Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
   float* times = nullptr;
   size_t count = 0;
   SonareError err = sonare_detect_onsets(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                                         sonare_audio_sample_rate(audio_), &times, &count);
+                                         sonare_audio_sample_rate(audio_), nullptr, &times, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

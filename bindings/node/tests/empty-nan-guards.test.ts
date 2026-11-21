@@ -12,11 +12,11 @@ import {
   meteringTruePeakDbtp,
   pitchPyin,
   pitchYin,
+  realtimeVoiceChangerRender,
   StreamAnalyzer,
   StreamingEqualizer,
   tempogramRatio,
   voiceChange,
-  voiceChangeRealtime,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index.js';
@@ -94,10 +94,10 @@ describe('empty-sample guards (Node)', () => {
       /voiceChange: samples must not be empty/,
     );
   });
-  it('voiceChangeRealtime rejects empty', () => {
-    expect(() => voiceChangeRealtime({ channels: [new Float32Array(0)], sampleRate: SR })).toThrow(
-      /voiceChangeRealtime: channels\[0\] must not be empty/,
-    );
+  it('realtimeVoiceChangerRender rejects empty', () => {
+    expect(() =>
+      realtimeVoiceChangerRender({ channels: [new Float32Array(0)], sampleRate: SR }),
+    ).toThrow(/realtimeVoiceChangerRender: channels\[0\] must not be empty/);
   });
 });
 

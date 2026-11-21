@@ -324,11 +324,12 @@ nodeFacade.remix({
   intervals: new Int32Array([0, samples.length]),
   alignZeros: false,
 });
-nodeFacade.hpssWithResidual({
+nodeFacade.hpss({
   samples,
   sampleRate: 22050,
   kernelHarmonic: 31,
   kernelPercussive: 31,
+  withResidual: true,
 });
 nodeFacade.spectralBandwidth({ samples, sampleRate: 22050, nFft: 2048, hopLength: 512 });
 nodeFacade.spectralRolloff({

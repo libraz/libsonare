@@ -124,8 +124,6 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel",
                                                             napi_default_method),
           InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx", napi_default_method),
-          InstanceMethod<&ProjectWrap::BakeMidiFxWithSourceIndex>("bakeMidiFxWithSourceIndex",
-                                                                  napi_default_method),
           InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount",
                                                            napi_default_method),
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx", napi_default_method),
@@ -164,7 +162,6 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy", napi_default_method),
           InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson", napi_default_method),
           InstanceMethod<&ProjectWrap::SetMarker>("setMarker", napi_default_method),
-          InstanceMethod<&ProjectWrap::SetMarkerEx>("setMarkerEx", napi_default_method),
           InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex", napi_default_method),
           InstanceMethod<&ProjectWrap::TrackByIndex>("trackByIndex", napi_default_method),
           InstanceMethod<&ProjectWrap::ClipByIndex>("clipByIndex", napi_default_method),
@@ -191,8 +188,6 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount", napi_default_method),
           InstanceMethod<&ProjectWrap::Destroy>("destroy", napi_default_method),
           StaticMethod<&ProjectWrap::FromJson>("fromJson", napi_default_method),
-          StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics",
-                                                              napi_default_method),
       });
   exports.Set("Project", func);
   return exports;
@@ -263,37 +258,9 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const uint32_t abi_version = sonare_project_abi_version();
-  if (abi_version != kExpectedProjectAbiVersion) {
-    sonare_node::ThrowSonareErrorMessage(
-        env, SONARE_ERROR_ABI_MISMATCH,
-        "libsonare project ABI mismatch: native binary reports version " +
-            std::to_string(abi_version) + ", expected " +
-            std::to_string(kExpectedProjectAbiVersion) +
-            " (0 = arrangement support not compiled in).");
-    return env.Undefined();
-  }
-  std::string json = sonare_node::node_narrow_string(env, info[0], "json");
-  SonareProject* handle = nullptr;
-  char* diag = nullptr;
-  SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
-  if (err != SONARE_OK) {
-    std::string detail = diag != nullptr ? diag : "";
-    if (diag != nullptr) sonare_free_string(diag);
-    sonare_node::ThrowSonareErrorMessage(
-        env, err, detail.empty() ? "failed to deserialize project JSON" : detail);
-    return env.Undefined();
-  }
-  if (diag != nullptr) sonare_free_string(diag);
-  return ProjectWrap::Wrap(info, handle);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
+  // A trailing `withDiagnostics` of true returns { project, diagnostics } instead of the project.
+  bool with_diagnostics = false;
+  if (!OptionalBoolArg(env, info, 1, "withDiagnostics", false, &with_diagnostics)) {
     return env.Undefined();
   }
   const uint32_t abi_version = sonare_project_abi_version();
@@ -318,6 +285,7 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
         env, err, diagnostics.empty() ? "failed to deserialize project JSON" : diagnostics);
     return env.Undefined();
   }
+  if (!with_diagnostics) return ProjectWrap::Wrap(info, handle);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("project", ProjectWrap::Wrap(info, handle));
@@ -385,25 +353,6 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  uint32_t marker_id = 0;
-  double ppq = 0.0;
-  if (!OptionalUint32Arg(env, info, 0, "markerId", 0, &marker_id) ||
-      !OptionalDoubleArg(env, info, 1, "ppq", 0.0, &ppq)) {
-    return env.Undefined();
-  }
-  std::string name;
-  if (!OptionalStringArg(env, info, 2, "name", "", &name)) return env.Undefined();
-  uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_set_marker(project_, marker_id, ppq, name.c_str(), &out_id));
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, out_id);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a marker object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -418,8 +367,12 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
   const std::string name = StringProperty(obj, "name", "");
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id));
-  if (env.IsExceptionPending()) return env.Undefined();
+  const SonareError err =
+      sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareErrorFlattening(env, err, "marker");
+    return env.Undefined();
+  }
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
 }
@@ -525,9 +478,7 @@ Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   // The same three fields setTempoSegments accepts, so a segment read back can
-  // be written straight to another project. start_sample is left out on
-  // purpose: the setter ignores it and a project stores 0 in it, so surfacing
-  // it would only offer a number that means nothing.
+  // be written straight to another project.
   out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));
   out.Set("bpm", Napi::Number::New(env, seg.bpm));
   out.Set("endBpm", Napi::Number::New(env, seg.end_bpm));

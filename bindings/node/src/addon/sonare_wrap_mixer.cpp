@@ -52,7 +52,6 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::BusMeter>("busMeter", napi_default_method),
           InstanceMethod<&MixerWrap::ConfigureMeter>("configureMeter", napi_default_method),
           InstanceMethod<&MixerWrap::MeterSnapshot>("meterSnapshot", napi_default_method),
-          InstanceMethod<&MixerWrap::MeterTap>("meterTap", napi_default_method),
           InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest",
                                                            napi_default_method),
           InstanceMethod<&MixerWrap::StripNonFiniteDiscardCount>("stripNonFiniteDiscardCount",

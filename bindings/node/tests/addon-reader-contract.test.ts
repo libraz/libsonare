@@ -216,11 +216,11 @@ describe('marker keyFifths is stored as written or refused, never wrapped', () =
     });
   });
 
-  it('Project.setMarkerEx', () => {
+  it('Project.setMarker', () => {
     withConfiguredProject(({ project }) => {
       const p = project as Loose;
       for (const fifths of [7, -7]) {
-        const id = p.setMarkerEx({ ...keySignature(fifths), id: 0 });
+        const id = p.setMarker({ ...keySignature(fifths), id: 0 });
         let found: number | undefined;
         for (let i = 0; i < p.markerCount(); i++) {
           const marker = p.markerByIndex(i);
@@ -232,12 +232,12 @@ describe('marker keyFifths is stored as written or refused, never wrapped', () =
       }
       const before = project.toJson();
       for (const bad of [256, -129, 200]) {
-        expect(() => p.setMarkerEx({ ...keySignature(bad), id: 0 })).toThrow(RangeError);
-        expect(
-          captureError(() => p.setMarkerEx({ ...keySignature(bad), id: 0 }))?.message,
-        ).toContain('keyFifths');
+        expect(() => p.setMarker({ ...keySignature(bad), id: 0 })).toThrow(RangeError);
+        expect(captureError(() => p.setMarker({ ...keySignature(bad), id: 0 }))?.message).toContain(
+          'keyFifths',
+        );
       }
-      expect(() => p.setMarkerEx({ ...keySignature(0), id: -1 })).toThrow(RangeError);
+      expect(() => p.setMarker({ ...keySignature(0), id: -1 })).toThrow(RangeError);
       expect(project.toJson()).toBe(before);
     });
   });

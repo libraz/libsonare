@@ -651,7 +651,7 @@ export class Project {
    * successful loads, such as dangling source references preserved for repair.
    */
   static fromJsonWithDiagnostics(json: string): { project: Project; diagnostics: string } {
-    const result = addon.Project.fromJsonWithDiagnostics(json);
+    const result = addon.Project.fromJson(json, true);
     return {
       project: adoptProject(result.project),
       diagnostics: result.diagnostics,
@@ -734,7 +734,7 @@ export class Project {
     if (!isAbsent(request.keyMinor)) {
       marker.keyMinor = request.keyMinor;
     }
-    return this.native.setMarkerEx(marker);
+    return this.native.setMarker(marker);
   }
 
   /** Every marker, in stored order. */
@@ -1335,7 +1335,7 @@ export class Project {
       this.native.bakeMidiFx(clipId, configJson);
       return {};
     }
-    return { sourceIndex: this.native.bakeMidiFxWithSourceIndex(clipId, configJson) };
+    return { sourceIndex: this.native.bakeMidiFx(clipId, configJson, true) };
   }
 
   /**

@@ -112,8 +112,8 @@ inline Napi::Object TelemetryToObject(Napi::Env env, const SonareEngineTelemetry
   return out;
 }
 
-inline Napi::Object MeterTelemetryV2ToObject(Napi::Env env,
-                                             const SonareMeterTelemetryRecordV2& record) {
+inline Napi::Object MeterTelemetryToObject(Napi::Env env,
+                                           const SonareMeterTelemetryRecord& record) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("targetId", Napi::Number::New(env, record.target_id));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
@@ -139,8 +139,8 @@ inline Napi::Object MeterTelemetryV2ToObject(Napi::Env env,
   return out;
 }
 
-inline Napi::Object MeterTelemetryWideV2ToObject(Napi::Env env,
-                                                 const SonareMeterTelemetryRecordWideV2& record) {
+inline Napi::Object MeterTelemetryWideToObject(Napi::Env env,
+                                               const SonareMeterTelemetryRecordWide& record) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("targetId", Napi::Number::New(env, record.target_id));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));

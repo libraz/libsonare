@@ -235,10 +235,10 @@ export interface EngineTransportState {
   /** PPQ of the current bar's downbeat (derived from the tempo map). */
   barStartPpq: number;
   /** Zero-based index of the current bar. */
-  barCount: number;
+  barIndex: number;
   /** Time signature in effect at the current PPQ. */
   timeSignature: TimeSignature;
-  /** One-based beat within the current bar (`barCount` is zero-based). */
+  /** One-based beat within the current bar (`barIndex` is zero-based). */
   beat: number;
   /** Fractional position within the current beat, in [0, 1). */
   beatFraction: number;

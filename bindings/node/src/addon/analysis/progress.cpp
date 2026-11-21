@@ -1,5 +1,4 @@
 #include <cstring>
-#include <optional>
 #include <string>
 
 #include "analysis/boundary_detector.h"
@@ -36,119 +35,6 @@ const char* SectionTypeName(SonareSectionType type) {
 }
 
 }  // namespace
-
-Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsFunction()) {
-    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() > 3 && !info[3].IsFunction()) {
-    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  // Lending the TypedArray's pointer across the progress/cancel callbacks is
-  // safe here, and deliberately not defended against a second time: the C ABI
-  // takes its own copy before a callback can ever fire. run_offline
-  // (src/c_api/sonare_c_internal.h:285) builds the Audio with
-  // Audio::from_buffer, which copies, and only the MusicAnalyzer constructed
-  // from that Audio receives the progress callback. Nothing dereferences this
-  // pointer after the call below returns, so a callback that transfers or
-  // detaches the caller's ArrayBuffer cannot reach freed memory. Duplicating
-  // the buffer here would cost a second full copy of a whole recording for a
-  // hazard that the layer underneath already closes. That copy is pinned by the
-  // "copies the input before the first progress callback" section of the
-  // sonare_analyze_json case in tests/api/sonare_c_core_test.cpp.
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  const size_t length = typed.ElementLength();
-  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
-  Napi::Function js_cb = info[2].As<Napi::Function>();
-  // Absent or non-object options read as the defaults, as analyze reads them.
-  SonareMusicAnalyzeOptions options{};
-  ReadMusicAnalyzeOptions(info.Length() > 4 ? info[4] : env.Undefined(), &options);
-  if (env.IsExceptionPending()) return env.Undefined();
-
-  // The C-ABI progress callback cannot hold a Napi reference (it is called
-  // synchronously on the same thread, so the stack is still valid).
-  struct ProgressCtx {
-    Napi::Env env;
-    Napi::Function cb;
-    std::optional<Napi::Function> cancel;
-  } ctx{env, js_cb,
-        info.Length() > 3 ? std::optional<Napi::Function>(info[3].As<Napi::Function>())
-                          : std::nullopt};
-
-  // A JS callback that throws leaves an exception pending; every further N-API
-  // call must be skipped, and the analysis is cancelled so the throw surfaces
-  // promptly instead of after the whole pipeline has run.
-  auto c_progress = [](float progress, const char* stage, void* user_data) {
-    auto* c = static_cast<ProgressCtx*>(user_data);
-    if (c->env.IsExceptionPending()) return;
-    c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
-                Napi::String::New(c->env, stage != nullptr ? stage : "")});
-    sonare_node::MarkPendingForeign(c->env);
-  };
-  auto c_cancel = [](void* user_data) {
-    auto* c = static_cast<ProgressCtx*>(user_data);
-    if (c->env.IsExceptionPending()) return 1;
-    if (!c->cancel) return 0;
-    const Napi::Value result = c->cancel->Call({});
-    sonare_node::MarkPendingForeign(c->env);
-    if (c->env.IsExceptionPending()) return 1;
-    return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
-  };
-
-  char* json_str = nullptr;
-  SonareError err = sonare_analyze_json_ex_with_progress(
-      data, length, sample_rate, &options, c_progress, &ctx, &json_str, c_cancel, &ctx);
-  // The pending-exception check comes first: throwing a SonareError on top of a
-  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
-  if (env.IsExceptionPending()) {
-    sonare_free_string(json_str);
-    return env.Undefined();
-  }
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
-    return env.Undefined();
-  }
-
-  // Parse JSON and add the spelled names on the main thread.
-  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
-  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
-  Napi::Value parsed =
-      json_parse.Call({Napi::String::New(env, json_str != nullptr ? json_str : "")});
-  sonare_free_string(json_str);
-
-  if (env.IsExceptionPending() || !parsed.IsObject()) {
-    if (!env.IsExceptionPending()) {
-      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
-                                           "Failed to parse analysis JSON");
-    }
-    return env.Undefined();
-  }
-
-  Napi::Object result = parsed.As<Napi::Object>();
-  Napi::Error enrich_error;
-  if (!sonare_node::EnrichFullAnalysisObject(env, result, &enrich_error)) {
-    enrich_error.ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  return result;
-  SONARE_NODE_CATCH(env)
-}
 
 Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -324,9 +210,13 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   }
 
   SonareMelodyResult result{};
+  SonareAnalyzeMelodyOptions melody_options;
+  sonare_analyze_melody_options_init(&melody_options);
+  melody_options.use_pyin = use_pyin ? 1 : 0;
+  melody_options.center = center ? 1 : 0;
   SonareError err =
-      sonare_analyze_melody_ex(typed.Data(), typed.ElementLength(), sample_rate, fmin, fmax,
-                               frame_length, hop_length, threshold, use_pyin, center, &result);
+      sonare_analyze_melody(typed.Data(), typed.ElementLength(), sample_rate, fmin, fmax,
+                            frame_length, hop_length, threshold, &melody_options, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

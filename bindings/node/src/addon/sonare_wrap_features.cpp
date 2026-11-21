@@ -362,6 +362,22 @@ namespace {
 using ChromaFn = SonareError (*)(const float*, size_t, int, int, int, SonareChromaResult*);
 using ChromaExFn = SonareError (*)(const float*, size_t, int, int, int, int, SonareChromaResult*);
 
+SonareError ChromaCensWithBins(const float* samples, size_t length, int sample_rate, int hop_length,
+                               int n_chroma, int bins_per_octave, SonareChromaResult* out) {
+  SonareChromaCensOptions options;
+  sonare_chroma_cens_options_init(&options);
+  options.bins_per_octave = bins_per_octave;
+  return sonare_chroma_cens(samples, length, sample_rate, hop_length, n_chroma, &options, out);
+}
+
+SonareError ChromaCqtWithBins(const float* samples, size_t length, int sample_rate, int hop_length,
+                              int n_chroma, int bins_per_octave, SonareChromaResult* out) {
+  SonareChromaCqtOptions options;
+  sonare_chroma_cqt_options_init(&options);
+  options.bins_per_octave = bins_per_octave;
+  return sonare_chroma_cqt(samples, length, sample_rate, hop_length, n_chroma, &options, out);
+}
+
 Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn, ChromaExFn ex_fn = nullptr) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -429,14 +445,14 @@ Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn, ChromaExF
 Napi::Value SonareWrap::ChromaCens(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return ChromaVariant(info, nullptr, sonare_chroma_cens_ex);
+  return ChromaVariant(info, nullptr, ChromaCensWithBins);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ChromaCqt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return ChromaVariant(info, nullptr, sonare_chroma_cqt_ex);
+  return ChromaVariant(info, nullptr, ChromaCqtWithBins);
   SONARE_NODE_CATCH(env)
 }
 

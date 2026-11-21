@@ -23,8 +23,8 @@ import {
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
+  realtimeVoiceChangerRender,
   StreamAnalyzer,
-  voiceChangeRealtime,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index.js';
@@ -98,7 +98,7 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   project_apply_vocal_edit: [new Uint8Array(0), new Uint8Array([1, 2, 3])],
   project_import_clip_file: [new Uint8Array(0), new Uint8Array([1, 2, 3])],
   project_import_smf: [new Uint8Array(0), new Uint8Array([1, 2, 3])],
-  voice_change_realtime: [{}, []],
+  realtime_voice_changer_render: [{}, []],
   mixer_process_stereo: [[new Float32Array(4)], [new Float32Array(0)], [{}]],
   waveform_peak_pyramid: [[], [new Float32Array(0)], [new Float32Array(4), new Float32Array(5)]],
   waveform_peaks: [[], [new Float32Array(0)], [new Float32Array(4), new Float32Array(5)]],
@@ -214,17 +214,13 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     withHandle(new Project(), (project) => project.setOverlapPolicy(v as never)),
   realtime_voice_changer_process_mono: (_s, v) =>
     withChanger((changer) => changer.processMono(v as Float32Array)),
-  realtime_voice_changer_process_mono_with_carrier: (_s, v) =>
-    withChanger((changer) =>
-      changer.processMonoWithCarrier(v as Float32Array, new Float32Array(4)),
-    ),
   stream_analyzer_process_with_offset: (_s, v) =>
     withAnalyzer((analyzer) => analyzer.processWithOffset(TONE.subarray(0, 512), v as number)),
   stream_analyzer_reset: (_s, v) => withAnalyzer((analyzer) => analyzer.reset(v as number)),
   strip_remove_send: (_s, v) => withSendMixer((mixer) => mixer.removeSend('a', v as number)),
   strip_set_send_db: (_s, v) => withSendMixer((mixer) => mixer.setSendDb('a', v as number, 0)),
-  voice_change_realtime: (s, v) =>
-    voiceChangeRealtime(
+  realtime_voice_changer_render: (s, v) =>
+    realtimeVoiceChangerRender(
       given({ channels: [TONE.subarray(0, 512)], sampleRate: 48000 }, s, v) as never,
     ),
   waveform_peak_pyramid: (s, v) => waveformPeakPyramid(given({}, s, v) as never),

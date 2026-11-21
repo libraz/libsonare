@@ -1473,6 +1473,24 @@ inline bool OptionalStringArg(Napi::Env env, const Napi::CallbackInfo& info, siz
   return true;
 }
 
+/// @brief Read an optional function positional argument; not given leaves @p out empty.
+inline bool OptionalFunctionArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                const char* name, std::optional<Napi::Function>* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    out->reset();
+    return true;
+  }
+  if (!value.IsFunction()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a function")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Function>();
+  return true;
+}
+
 /// @brief Read an optional positional argument destined for a uint8_t C-ABI
 ///        field, with the wrap rejection MidiByteProperty applies to keys.
 inline bool OptionalMidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,

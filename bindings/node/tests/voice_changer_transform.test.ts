@@ -232,42 +232,39 @@ describe('RealtimeVoiceChanger external vocoder carrier', () => {
       (changer) => {
         const block = tone(128);
         const carrier = tone(128, 110);
-        expect(changer.processMonoWithCarrier(block, carrier)).toHaveLength(128);
+        expect(changer.processMono(block, carrier)).toHaveLength(128);
         // Run past the reported latency so the written block carries signal.
         const into = new Float32Array(128);
         const blocks = Math.ceil(changer.latencySamples / 128) + 1;
         for (let i = 0; i < blocks; i += 1) {
-          changer.processMonoWithCarrierInto(block, carrier, into);
+          changer.processMonoInto(block, into, carrier);
         }
         expect(into.some((v) => v !== 0)).toBe(true);
         const interleavedOut = new Float32Array(256);
-        changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, interleavedOut);
+        changer.processInterleavedInto(tone(256), 2, interleavedOut, carrier);
         const left = tone(128);
         const right = tone(128);
-        expect(changer.processPlanarWithCarrier([left, right], carrier)).toHaveLength(2);
-        expect(() => changer.processMonoWithCarrier(block, new Float32Array(64))).toThrow(
-          RangeError,
-        );
+        expect(changer.processPlanar([left, right], carrier)).toHaveLength(2);
+        expect(() => changer.processMono(block, new Float32Array(64))).toThrow(RangeError);
         expect(() =>
-          changer.processInterleavedWithCarrierInto(tone(256), tone(256), 2, new Float32Array(256)),
+          changer.processInterleavedInto(tone(256), 2, new Float32Array(256), tone(256)),
         ).toThrow(RangeError);
-        expect(() => changer.processPlanarWithCarrier([left, right], tone(64))).toThrow(RangeError);
+        expect(() => changer.processPlanar([left, right], tone(64))).toThrow(RangeError);
       },
       { numChannels: 2 },
     );
   });
 
-  it('takes the interleaved carrier right after the input, then the channel count and the output', () => {
+  it('takes the interleaved carrier last, after the channel count and the output', () => {
     withChanger(
       external,
       (changer) => {
         const carrier = tone(128, 110);
         const out = new Float32Array(256);
-        changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, out);
+        changer.processInterleavedInto(tone(256), 2, out, carrier);
         expectRefusal(
-          () =>
-            changer.processInterleavedWithCarrierInto(tone(256), 2 as never, carrier as never, out),
-          TypeError,
+          () => changer.processInterleavedInto(tone(256), 2, carrier as never, out as never),
+          RangeError,
         );
       },
       { numChannels: 2 },
@@ -279,7 +276,7 @@ describe('RealtimeVoiceChanger external vocoder carrier', () => {
     expect(internal.vocoderCarrierSource).toBe('internal');
     withChanger(internal, (changer) => {
       const block = tone(128);
-      expect(changer.processMonoWithCarrier(block, tone(128, 330))).toHaveLength(128);
+      expect(changer.processMono(block, tone(128, 330))).toHaveLength(128);
       expect(changer.processMono(block)).toHaveLength(128);
     });
   });

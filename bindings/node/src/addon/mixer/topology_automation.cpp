@@ -37,9 +37,18 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   // Returns the strip pointer rather than a SonareError, so NULL is the whole
   // failure signal and the detail is in the thread-local error slot. The pointer
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
-  if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
-                                true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "");
+  SonareMixerAddStripOptions strip_options;
+  sonare_mixer_add_strip_options_init(&strip_options);
+  strip_options.enable_metering = enabled ? 1 : 0;
+  strip_options.measure_lufs = lufs ? 1 : 0;
+  strip_options.measure_true_peak = true_peak ? 1 : 0;
+  // 0 (omitted) keeps the library's default oversample factor.
+  if (true_peak_oversample != 0) strip_options.true_peak_oversample = true_peak_oversample;
+  if (sonare_mixer_add_strip(mixer_, id.c_str(), &strip_options) == nullptr) {
+    // The metering bag is the C options struct flattened, so a refusal reads in its keys.
+    const SonareError code = sonare_last_error_code();
+    sonare_node::ThrowSonareErrorFlattening(env, code == SONARE_OK ? SONARE_ERROR_UNKNOWN : code,
+                                            "options");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

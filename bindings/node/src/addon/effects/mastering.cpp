@@ -140,6 +140,14 @@ int CancellationRequested(void* user_data) {
   return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
 }
 
+Napi::Object MonoResultToObject(Napi::Env env, const mastering_api::MonoChainResult& result);
+Napi::Object StereoResultToObject(Napi::Env env, const mastering_api::StereoChainResult& result);
+
+// Stands in for onProgress when a caller supplies only cancel.
+Napi::Function NoopProgressCallback(Napi::Env env) {
+  return Napi::Function::New(env, [](const Napi::CallbackInfo&) {});
+}
+
 // Runs a mono or stereo chain with the JS callbacks; a pending JS exception wins over cancellation.
 template <typename Process, typename Emit>
 Napi::Value RunChainWithCallbacks(Napi::Env env, mastering_api::MasteringChain& chain,
@@ -338,8 +346,27 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
-  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   node_narrow_int(env, info[1], "sampleRate"));
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  std::optional<Napi::Function> on_progress;
+  std::optional<Napi::Function> cancel;
+  if (!OptionalFunctionArg(env, info, 3, "onProgress", &on_progress) ||
+      !OptionalFunctionArg(env, info, 4, "cancel", &cancel)) {
+    return env.Undefined();
+  }
+  if (on_progress || cancel) {
+    // The TypedArray's pointer is lent across the progress/cancel callbacks on
+    // purpose: the chain copies the whole input before the first callback
+    // (pinned by "MasteringChain copies its input before the first progress
+    // callback" in tests/mastering/chain_test.cpp).
+    ProgressContext progress{env, on_progress ? *on_progress : NoopProgressCallback(env), cancel};
+    return RunChainWithCallbacks(
+        env, chain, progress,
+        [&] { return chain.process_mono_cancellable(typed.Data(), typed.ElementLength(), sr); },
+        [&](const sonare::mastering::api::MonoChainResult& result) -> Napi::Value {
+          return MonoResultToObject(env, result);
+        });
+  }
+  auto result = chain.process_mono(typed.Data(), typed.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -387,6 +414,25 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
+  std::optional<Napi::Function> on_progress;
+  std::optional<Napi::Function> cancel;
+  if (!OptionalFunctionArg(env, info, 4, "onProgress", &on_progress) ||
+      !OptionalFunctionArg(env, info, 5, "cancel", &cancel)) {
+    return env.Undefined();
+  }
+  if (on_progress || cancel) {
+    // Pointers lent across the callbacks for the same reason as the mono variant.
+    ProgressContext progress{env, on_progress ? *on_progress : NoopProgressCallback(env), cancel};
+    return RunChainWithCallbacks(
+        env, chain, progress,
+        [&] {
+          return chain.process_stereo_cancellable(left.Data(), right.Data(), left.ElementLength(),
+                                                  sr);
+        },
+        [&](const sonare::mastering::api::StereoChainResult& result) -> Napi::Value {
+          return StereoResultToObject(env, result);
+        });
+  }
   auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
@@ -506,8 +552,27 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
-  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   node_narrow_int(env, info[2], "sampleRate"));
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  std::optional<Napi::Function> on_progress;
+  std::optional<Napi::Function> cancel;
+  if (!OptionalFunctionArg(env, info, 4, "onProgress", &on_progress) ||
+      !OptionalFunctionArg(env, info, 5, "cancel", &cancel)) {
+    return env.Undefined();
+  }
+  if (on_progress || cancel) {
+    // The TypedArray's pointer is lent across the progress/cancel callbacks on
+    // purpose: the chain copies the whole input before the first callback
+    // (pinned by "MasteringChain copies its input before the first progress
+    // callback" in tests/mastering/chain_test.cpp).
+    ProgressContext progress{env, on_progress ? *on_progress : NoopProgressCallback(env), cancel};
+    return RunChainWithCallbacks(
+        env, chain, progress,
+        [&] { return chain.process_mono_cancellable(typed.Data(), typed.ElementLength(), sr); },
+        [&](const sonare::mastering::api::MonoChainResult& result) -> Napi::Value {
+          return MonoResultToObject(env, result);
+        });
+  }
+  auto result = chain.process_mono(typed.Data(), typed.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -824,6 +889,25 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
+  std::optional<Napi::Function> on_progress;
+  std::optional<Napi::Function> cancel;
+  if (!OptionalFunctionArg(env, info, 5, "onProgress", &on_progress) ||
+      !OptionalFunctionArg(env, info, 6, "cancel", &cancel)) {
+    return env.Undefined();
+  }
+  if (on_progress || cancel) {
+    // Pointers lent across the callbacks for the same reason as the mono variant.
+    ProgressContext progress{env, on_progress ? *on_progress : NoopProgressCallback(env), cancel};
+    return RunChainWithCallbacks(
+        env, chain, progress,
+        [&] {
+          return chain.process_stereo_cancellable(left.Data(), right.Data(), left.ElementLength(),
+                                                  sr);
+        },
+        [&](const sonare::mastering::api::StereoChainResult& result) -> Napi::Value {
+          return StereoResultToObject(env, result);
+        });
+  }
   auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
@@ -839,211 +923,6 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   out.Set("stages", stages);
   SetChainMetrics(env, out, result);
   return out;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[3].IsFunction()) {
-    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() > 4 && !info[4].IsFunction()) {
-    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  // The TypedArray's pointer is lent across the progress/cancel callbacks on
-  // purpose. MasteringChain::process_mono_impl copies the whole input into its
-  // own vector (src/mastering/api/chain.cpp:263) before the first
-  // progress_callback_ invocation, so a callback that transfers or detaches the
-  // caller's ArrayBuffer cannot reach memory the chain is still reading. An
-  // addon-side copy would only duplicate a whole recording a second time; the
-  // core contract is pinned by "MasteringChain copies its input before the first
-  // progress callback" in tests/mastering/chain_test.cpp.
-  auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sampleRate");
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
-  std::optional<std::string> document;
-  if (!OptionalStringArg(env, info, 2, "configJson", &document)) return env.Undefined();
-  sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
-  ProgressContext progress{env, info[3].As<Napi::Function>(),
-                           info.Length() > 4
-                               ? std::optional<Napi::Function>(info[4].As<Napi::Function>())
-                               : std::nullopt};
-  return RunChainWithCallbacks(
-      env, chain, progress,
-      [&] { return chain.process_mono_cancellable(typed.Data(), typed.ElementLength(), sr); },
-      [&](const sonare::mastering::api::MonoChainResult& result) -> Napi::Value {
-        return MonoResultToObject(env, result);
-      });
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[4].IsFunction()) {
-    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() > 5 && !info[5].IsFunction()) {
-    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  auto left = info[0].As<Napi::Float32Array>();
-  auto right = info[1].As<Napi::Float32Array>();
-  if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right must have the same length")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const int sr = node_narrow_int(env, info[2], "sampleRate");
-  sonare::validate_offline_audio_input("left", left.Data(), left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("right", right.Data(), right.ElementLength(), sr);
-  std::optional<std::string> document;
-  if (!OptionalStringArg(env, info, 3, "configJson", &document)) return env.Undefined();
-  sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
-  // Pointers lent across the callbacks for the same reason as the mono variant:
-  // process_stereo_impl copies both channels before any progress callback runs.
-  ProgressContext progress{env, info[4].As<Napi::Function>(),
-                           info.Length() > 5
-                               ? std::optional<Napi::Function>(info[5].As<Napi::Function>())
-                               : std::nullopt};
-  return RunChainWithCallbacks(
-      env, chain, progress,
-      [&] {
-        return chain.process_stereo_cancellable(left.Data(), right.Data(), left.ElementLength(),
-                                                sr);
-      },
-      [&](const sonare::mastering::api::StereoChainResult& result) -> Napi::Value {
-        return StereoResultToObject(env, result);
-      });
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsDocumentOrAbsent(info[0])) {
-    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[4].IsFunction()) {
-    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() > 5 && !info[5].IsFunction()) {
-    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  std::optional<std::string> preset_name;
-  if (info[0].IsString()) preset_name = node_narrow_string(env, info[0], "presetName");
-  // Pointer lent across the callbacks for the same reason as the chain variants:
-  // the preset path runs the same MasteringChain, which copies first.
-  auto typed = info[1].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[2], "sampleRate");
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
-  std::optional<std::string> overrides;
-  if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) return env.Undefined();
-  sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
-  ProgressContext progress{env, info[4].As<Napi::Function>(),
-                           info.Length() > 5
-                               ? std::optional<Napi::Function>(info[5].As<Napi::Function>())
-                               : std::nullopt};
-  return RunChainWithCallbacks(
-      env, chain, progress,
-      [&] { return chain.process_mono_cancellable(typed.Data(), typed.ElementLength(), sr); },
-      [&](const sonare::mastering::api::MonoChainResult& result) -> Napi::Value {
-        return MonoResultToObject(env, result);
-      });
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsDocumentOrAbsent(info[0])) {
-    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!IsFloat32Array(info[2])) {
-    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[5].IsFunction()) {
-    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() > 6 && !info[6].IsFunction()) {
-    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  std::optional<std::string> preset_name;
-  if (info[0].IsString()) preset_name = node_narrow_string(env, info[0], "presetName");
-  auto left = info[1].As<Napi::Float32Array>();
-  auto right = info[2].As<Napi::Float32Array>();
-  if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right must have the same length")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const int sr = node_narrow_int(env, info[3], "sampleRate");
-  sonare::validate_offline_audio_input("left", left.Data(), left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("right", right.Data(), right.ElementLength(), sr);
-  std::optional<std::string> overrides;
-  if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) return env.Undefined();
-  sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
-  // Pointers lent across the callbacks for the same reason as the chain variants.
-  ProgressContext progress{env, info[5].As<Napi::Function>(),
-                           info.Length() > 6
-                               ? std::optional<Napi::Function>(info[6].As<Napi::Function>())
-                               : std::nullopt};
-  return RunChainWithCallbacks(
-      env, chain, progress,
-      [&] {
-        return chain.process_stereo_cancellable(left.Data(), right.Data(), left.ElementLength(),
-                                                sr);
-      },
-      [&](const sonare::mastering::api::StereoChainResult& result) -> Napi::Value {
-        return StereoResultToObject(env, result);
-      });
   SONARE_NODE_CATCH(env)
 }
 

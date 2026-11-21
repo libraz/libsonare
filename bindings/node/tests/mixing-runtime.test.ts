@@ -426,7 +426,7 @@ describe('Mixer argument validation', () => {
       /: id must not be the id of a strip already in this mixer$/,
     );
     expect(() => mixer.addStrip('over-sampled', { truePeakOversample: 32 })).toThrow(
-      /: truePeakOversample must be one of 0, 4, 8$/,
+      /: truePeakOversample must be one of 4, 8$/,
     );
     // A wrong-typed metering field is refused by name rather than substituted.
     expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(

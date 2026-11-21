@@ -687,59 +687,6 @@ std::vector<SonareMasteringParam> MasteringCParams(
   return out;
 }
 
-Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis) {
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));
-  result.Set("bpmConfidence", Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
-  Napi::Array bpm_candidates = Napi::Array::New(env, analysis.bpm_candidate_count);
-  for (size_t i = 0; i < analysis.bpm_candidate_count; ++i) {
-    Napi::Object candidate = Napi::Object::New(env);
-    candidate.Set("value", Napi::Number::New(env, analysis.bpm_candidates[i].value));
-    candidate.Set("confidence", Napi::Number::New(env, analysis.bpm_candidates[i].confidence));
-    static constexpr const char* kRelations[] = {"primary", "half", "double", "other"};
-    const int relation = analysis.bpm_candidates[i].relation;
-    candidate.Set(
-        "relation",
-        Napi::String::New(env, relation >= 0 && relation < 4 ? kRelations[relation] : "other"));
-    bpm_candidates.Set(static_cast<uint32_t>(i), candidate);
-  }
-  result.Set("bpmCandidates", bpm_candidates);
-  result.Set("key",
-             KeyToObject(env, analysis.key.root, analysis.key.mode, analysis.key.confidence));
-
-  Napi::Object ts = Napi::Object::New(env);
-  ts.Set("numerator", Napi::Number::New(env, analysis.time_signature.numerator));
-  ts.Set("denominator", Napi::Number::New(env, analysis.time_signature.denominator));
-  ts.Set("confidence",
-         Napi::Number::New(env, static_cast<double>(analysis.time_signature.confidence)));
-  result.Set("timeSignature", ts);
-  Napi::Array time_signature_candidates =
-      Napi::Array::New(env, analysis.time_signature_candidate_count);
-  for (size_t i = 0; i < analysis.time_signature_candidate_count; ++i) {
-    const SonareTimeSignature& candidate = analysis.time_signature_candidates[i];
-    Napi::Object value = Napi::Object::New(env);
-    value.Set("numerator", Napi::Number::New(env, candidate.numerator));
-    value.Set("denominator", Napi::Number::New(env, candidate.denominator));
-    value.Set("confidence", Napi::Number::New(env, candidate.confidence));
-    time_signature_candidates.Set(static_cast<uint32_t>(i), value);
-  }
-  result.Set("timeSignatureCandidates", time_signature_candidates);
-
-  auto beat_times = Napi::Float32Array::New(env, analysis.beat_count);
-  Napi::Array beats = Napi::Array::New(env, analysis.beat_count);
-  if (analysis.beat_count > 0 && analysis.beat_times != nullptr) {
-    std::memcpy(beat_times.Data(), analysis.beat_times, analysis.beat_count * sizeof(float));
-    for (size_t i = 0; i < analysis.beat_count; ++i) {
-      Napi::Object beat = Napi::Object::New(env);
-      beat.Set("time", Napi::Number::New(env, static_cast<double>(analysis.beat_times[i])));
-      beats.Set(static_cast<uint32_t>(i), beat);
-    }
-  }
-  result.Set("beatTimes", beat_times);
-  result.Set("beats", beats);
-  return result;
-}
-
 bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* error) {
   // The full-analysis JSON carries chord ordinals only; add the spelled names detectChords
   // reports.
@@ -808,8 +755,7 @@ Napi::Value ParseJsonObjectAndFree(Napi::Env env, char* json, const char* failur
 Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
                                      int sample_rate, const SonareMusicAnalyzeOptions* options) {
   char* json_str = nullptr;
-  SonareError err = options ? sonare_analyze_json_ex(data, length, sample_rate, options, &json_str)
-                            : sonare_analyze_json(data, length, sample_rate, &json_str);
+  SonareError err = sonare_analyze_json(data, length, sample_rate, options, &json_str);
   if (err != SONARE_OK) {
     // Same classification as the async analyze path (RangeError for a refused
     // argument, coded SonareError otherwise).

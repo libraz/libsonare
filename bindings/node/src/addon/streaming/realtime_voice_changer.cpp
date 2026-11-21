@@ -74,16 +74,6 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
               "processInterleavedInto", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereo>("processPlanarStereo",
                                                                          napi_default_method),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoWithCarrier>(
-              "processMonoWithCarrier", napi_default_method),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoWithCarrierInto>(
-              "processMonoWithCarrierInto", napi_default_method),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrier>(
-              "processInterleavedWithCarrier", napi_default_method),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrierInto>(
-              "processInterleavedWithCarrierInto", napi_default_method),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereoWithCarrier>(
-              "processPlanarStereoWithCarrier", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::NoteOn>("noteOn", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::NoteOff>("noteOff", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::AllNotesOff>("allNotesOff",
@@ -340,20 +330,23 @@ constexpr const char* kNoteRefusedMessage =
     "the note was not accepted: the changer is unprepared, uses the grain engine, or its note "
     "queue is full";
 constexpr const char* kCarrierRequiredMessage =
-    "the vocoder reads an external carrier: use the WithCarrier process methods";
+    "the vocoder reads an external carrier: pass a carrier to the process call";
+
+bool IsGiven(const Napi::Value& value) { return !value.IsUndefined() && !value.IsNull(); }
 
 }  // namespace
 
-Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& info,
-                                                      bool with_carrier, bool into) {
+Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& info, bool into) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kNotPreparedMessage);
     return env.Undefined();
   }
-  const size_t carrier_index = 1;
-  const size_t output_index = with_carrier ? 2 : 1;
+  // (samples, carrier?) or (samples, output, carrier?)
+  const size_t output_index = 1;
+  const size_t carrier_index = into ? 2 : 1;
+  const bool with_carrier = IsGiven(info[carrier_index]);
   if (!IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -401,16 +394,18 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::CallbackInfo& info,
-                                                             bool with_carrier, bool into) {
+                                                             bool into) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kNotPreparedMessage);
     return env.Undefined();
   }
-  const size_t carrier_index = 1;
-  const size_t channels_index = with_carrier ? 2 : 1;
-  const size_t output_index = with_carrier ? 3 : 2;
+  // (samples, channels, carrier?) or (samples, channels, output, carrier?)
+  const size_t channels_index = 1;
+  const size_t output_index = 2;
+  const size_t carrier_index = into ? 3 : 2;
+  const bool with_carrier = IsGiven(info[carrier_index]);
   if (!IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -484,9 +479,9 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::CallbackInfo& info,
-                                                              bool with_carrier) {
+Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  const bool with_carrier = IsGiven(info[2]);
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kNotPreparedMessage);
@@ -543,37 +538,19 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::Callba
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessMono(const Napi::CallbackInfo& info) {
-  return ProcessMonoImpl(info, false, false);
+  return ProcessMonoImpl(info, false);
 }
 Napi::Value RealtimeVoiceChangerWrap::ProcessMonoInto(const Napi::CallbackInfo& info) {
-  return ProcessMonoImpl(info, false, true);
-}
-Napi::Value RealtimeVoiceChangerWrap::ProcessMonoWithCarrier(const Napi::CallbackInfo& info) {
-  return ProcessMonoImpl(info, true, false);
-}
-Napi::Value RealtimeVoiceChangerWrap::ProcessMonoWithCarrierInto(const Napi::CallbackInfo& info) {
-  return ProcessMonoImpl(info, true, true);
+  return ProcessMonoImpl(info, true);
 }
 Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInfo& info) {
-  return ProcessInterleavedImpl(info, false, false);
+  return ProcessInterleavedImpl(info, false);
 }
 Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::CallbackInfo& info) {
-  return ProcessInterleavedImpl(info, false, true);
-}
-Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrier(
-    const Napi::CallbackInfo& info) {
-  return ProcessInterleavedImpl(info, true, false);
-}
-Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrierInto(
-    const Napi::CallbackInfo& info) {
-  return ProcessInterleavedImpl(info, true, true);
+  return ProcessInterleavedImpl(info, true);
 }
 Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackInfo& info) {
-  return ProcessPlanarStereoImpl(info, false);
-}
-Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoWithCarrier(
-    const Napi::CallbackInfo& info) {
-  return ProcessPlanarStereoImpl(info, true);
+  return ProcessPlanarStereoImpl(info);
 }
 
 Napi::Value RealtimeVoiceChangerWrap::NoteOn(const Napi::CallbackInfo& info) {

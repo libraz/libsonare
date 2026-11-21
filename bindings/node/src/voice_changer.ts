@@ -197,14 +197,7 @@ function deinterleavePlanes(data: Float32Array, numChannels: number): Float32Arr
 const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numChannels', 'config'];
 
 /** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
-@entryClass('RealtimeVoiceChanger', [
-  'processInterleavedInto',
-  'processInterleavedWithCarrierInto',
-  'processMono',
-  'processMonoInto',
-  'processMonoWithCarrier',
-  'processMonoWithCarrierInto',
-])
+@entryClass('RealtimeVoiceChanger', ['processInterleavedInto', 'processMono', 'processMonoInto'])
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
@@ -307,66 +300,41 @@ export class RealtimeVoiceChanger {
     return this.native.nonFiniteDiscardCount();
   }
 
-  /** Processes a mono block and returns a new array of the same length. */
-  processMono(samples: Float32Array): Float32Array {
-    return this.native.processMono(samples);
-  }
-
   /**
-   * Like {@link processMono}, with the external vocoder carrier (`vocoderCarrierSource:
-   * 'external'`). `carrier` must be as long as `samples`; it is read only while the vocoder is on
-   * with an external carrier and ignored otherwise. The carrier-less process methods throw a
-   * `SonareError` (`InvalidState`) while an external carrier is configured.
+   * Processes a mono block and returns a new array of the same length.
+   *
+   * @param carrier External vocoder carrier (`vocoderCarrierSource: 'external'`), as long as
+   *   `samples`. It is read only while the vocoder is on with an external carrier and ignored
+   *   otherwise; omitting it while an external carrier is configured throws a `SonareError`
+   *   (`InvalidState`).
    */
-  processMonoWithCarrier(samples: Float32Array, carrier: Float32Array): Float32Array {
-    return this.native.processMonoWithCarrier(samples, carrier);
-  }
-
-  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `samples`. */
-  processMonoWithCarrierInto(
-    samples: Float32Array,
-    carrier: Float32Array,
-    output: Float32Array,
-  ): void {
-    this.native.processMonoWithCarrierInto(samples, carrier, output);
+  processMono(samples: Float32Array, carrier?: Float32Array): Float32Array {
+    return this.native.processMono(samples, carrier);
   }
 
   /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `samples`. */
-  processMonoInto(samples: Float32Array, output: Float32Array): void {
-    this.native.processMonoInto(samples, output);
+  processMonoInto(samples: Float32Array, output: Float32Array, carrier?: Float32Array): void {
+    this.native.processMonoInto(samples, output, carrier);
   }
 
   /**
    * Processes planar blocks (one `Float32Array` per channel, 1 or 2, equal lengths) and returns
    * the processed planes without touching the inputs.
    *
+   * @param carrier One mono external vocoder carrier of one sample per frame, shared by every
+   *   channel; see {@link processMono}.
    * @throws TypeError for a wrong-typed argument; RangeError for another channel count or
    *   unequal lengths; SonareError `InvalidState` when two channels are given to a changer
    *   prepared for one.
    */
-  processPlanar(channels: Float32Array[]): Float32Array[] {
-    const planes = assertPlanes(channels);
-    if (planes.length === 1) {
-      return [this.native.processMono(planes[0] as Float32Array)];
-    }
-    const left = Float32Array.from(planes[0] as Float32Array);
-    const right = Float32Array.from(planes[1] as Float32Array);
-    this.native.processPlanarStereo(left, right);
-    return [left, right];
-  }
-
-  /**
-   * {@link processPlanar} with one mono external vocoder `carrier` of one sample per frame,
-   * shared by every channel.
-   */
-  processPlanarWithCarrier(channels: Float32Array[], carrier: Float32Array): Float32Array[] {
+  processPlanar(channels: Float32Array[], carrier?: Float32Array): Float32Array[] {
     const planes = assertPlanes(channels, carrier);
     if (planes.length === 1) {
-      return [this.native.processMonoWithCarrier(planes[0] as Float32Array, carrier)];
+      return [this.native.processMono(planes[0] as Float32Array, carrier)];
     }
     const left = Float32Array.from(planes[0] as Float32Array);
     const right = Float32Array.from(planes[1] as Float32Array);
-    this.native.processPlanarStereoWithCarrier(left, right, carrier);
+    this.native.processPlanarStereo(left, right, carrier);
     return [left, right];
   }
 
@@ -374,30 +342,22 @@ export class RealtimeVoiceChanger {
    * Realtime hot path: processes an interleaved block (L0,R0,L1,R1,...) into `output`, which has
    * the length of `input`.
    *
+   * @param carrier One mono external vocoder carrier of one sample per frame, shared by every
+   *   channel; see {@link processMono}.
    * @throws RangeError unless `numChannels` is 1 or 2.
    */
-  processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void {
+  processInterleavedInto(
+    input: Float32Array,
+    numChannels: 1 | 2,
+    output: Float32Array,
+    carrier?: Float32Array,
+  ): void {
     try {
       assertChannelCount(numChannels);
     } catch (error) {
       throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedInto');
     }
-    this.native.processInterleavedInto(input, numChannels, output);
-  }
-
-  /** {@link processInterleavedInto} with a mono carrier of one sample per frame shared by every channel. */
-  processInterleavedWithCarrierInto(
-    input: Float32Array,
-    carrier: Float32Array,
-    numChannels: 1 | 2,
-    output: Float32Array,
-  ): void {
-    try {
-      assertChannelCount(numChannels);
-    } catch (error) {
-      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedWithCarrierInto');
-    }
-    this.native.processInterleavedWithCarrierInto(input, carrier, numChannels, output);
+    this.native.processInterleavedInto(input, numChannels, output, carrier);
   }
 
   /**
@@ -503,8 +463,8 @@ export function voiceChange(...args: unknown[]): Float32Array {
   });
 }
 
-/** Inputs for the one-shot {@link voiceChangeRealtime} facade. */
-export interface VoiceChangeRealtimeRequest {
+/** Inputs for the one-shot {@link realtimeVoiceChangerRender} facade. */
+export interface RealtimeVoiceChangerRenderRequest {
   /** One (mono) or two (stereo) planar channels of equal length. */
   channels: Float32Array[];
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
@@ -521,19 +481,21 @@ export interface VoiceChangeRealtimeRequest {
  *   RangeError for a channel count other than 1 or 2, unequal channel lengths, out-of-domain
  *   audio or rate, or an unknown preset id or token.
  */
-export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] {
-  return withEntry('voiceChangeRealtime', () => {
-    const fnName = 'voiceChangeRealtime';
-    const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
+export function realtimeVoiceChangerRender(
+  request: RealtimeVoiceChangerRenderRequest,
+): Float32Array[] {
+  return withEntry('realtimeVoiceChangerRender', () => {
+    const fnName = 'realtimeVoiceChangerRender';
+    const req = requestOnly<RealtimeVoiceChangerRenderRequest>(fnName, [request]);
     if (req.sampleRate === undefined || req.sampleRate === null) {
       throw refuseType(`sampleRate must be a number`);
     }
     assertAudioChannels(req.channels, req.sampleRate, req);
     const planes = assertPlanes(req.channels);
-    const native = withEntry('voiceChangeRealtime', () =>
+    const native = withEntry('realtimeVoiceChangerRender', () =>
       nativeVoiceConfig(req.config ?? 'neutralMonitor'),
     );
-    const out = addon.voiceChangeRealtime(
+    const out = addon.realtimeVoiceChangerRender(
       interleavePlanes(planes),
       req.sampleRate,
       typeof native === 'string' ? native : JSON.stringify(native),

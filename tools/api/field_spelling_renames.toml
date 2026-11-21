@@ -8,7 +8,6 @@
 [node]
 reference_sample_rate = "sampleRate"
 frame_offset = "startSample"
-preset = "config"
 bytes = "data"
 mel = "power"
 num_channels = "channels"
@@ -36,7 +35,6 @@ input = "samples"
 [wasm]
 reference_sample_rate = "sampleRate"
 frame_offset = "startSample"
-preset = "config"
 bytes = "data"
 mel = "power"
 num_channels = "channels"
@@ -75,7 +73,6 @@ bytes = "data"
 reference_sample_rate = "sample_rate"
 # Retires when the C argument is renamed num_channels.
 channels = "num_channels"
-preset = "config"
 in_channels = ["num_input_channels", "num_channels"]
 audio_interleaved = "audio"
 id = ["marker_id", "warp_ref_id", "send_id"]

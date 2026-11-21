@@ -66,7 +66,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value EstimateMeter(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeAsync(const Napi::CallbackInfo& info);
-  static Napi::Value AnalyzeWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeSections(const Napi::CallbackInfo& info);
   static Napi::Value DetectBoundaries(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeMelody(const Napi::CallbackInfo& info);
@@ -143,7 +142,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value ExtractPercussiveEvents(const Napi::CallbackInfo& info);
   static Napi::Value RenderPercussiveEvents(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChange(const Napi::CallbackInfo& info);
-  static Napi::Value VoiceChangeRealtime(const Napi::CallbackInfo& info);
+  static Napi::Value RealtimeVoiceChangerRender(const Napi::CallbackInfo& info);
   static Napi::Value VoiceCharacterPresetId(const Napi::CallbackInfo& info);
   static Napi::Value RealtimeVoiceChangerPresetConfig(const Napi::CallbackInfo& info);
   static Napi::Value Decompose(const Napi::CallbackInfo& info);
@@ -152,7 +151,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value NnFilter(const Napi::CallbackInfo& info);
   static Napi::Value Remix(const Napi::CallbackInfo& info);
   static Napi::Value RemixAlignedIntervals(const Napi::CallbackInfo& info);
-  static Napi::Value HpssWithResidual(const Napi::CallbackInfo& info);
   static Napi::Value PhaseVocoder(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
   static Napi::Value NormalizeStereo(const Napi::CallbackInfo& info);
@@ -163,8 +161,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringChainStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingLoudnessGain(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingLoudnessGainStereo(const Napi::CallbackInfo& info);
-  static Napi::Value MasteringChainWithProgress(const Napi::CallbackInfo& info);
-  static Napi::Value MasteringChainStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPlatformNames(const Napi::CallbackInfo& info);
   static Napi::Value MixingScenePresetNames(const Napi::CallbackInfo& info);
@@ -177,8 +173,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasterAudioAsync(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereoAsync(const Napi::CallbackInfo& info);
-  static Napi::Value MasterAudioWithProgress(const Napi::CallbackInfo& info);
-  static Napi::Value MasterAudioStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcessorNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairProcessorNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairAnalysisNames(const Napi::CallbackInfo& info);
@@ -327,7 +321,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Clicks(const Napi::CallbackInfo& info);
   static Napi::Value SplitSilence(const Napi::CallbackInfo& info);
   static Napi::Value SplitSilenceCommon(const Napi::CallbackInfo& info);
-  static Napi::Value SplitSilenceCommonWithReport(const Napi::CallbackInfo& info);
   static Napi::Value FrameSignal(const Napi::CallbackInfo& info);
   static Napi::Value PadCenter(const Napi::CallbackInfo& info);
   static Napi::Value FixLength(const Napi::CallbackInfo& info);

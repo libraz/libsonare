@@ -71,7 +71,7 @@ describe('streamingLoudnessGain', () => {
       numChannels: 1,
       maxBlockSize: 512,
       loudnessStaticGainDb: gain.loudnessStaticGainDb,
-      loudnessStaticGainPeakDb: gain.truePeakDbtp,
+      loudnessStaticGainPeakDbtp: gain.truePeakDbtp,
     });
     expect(chain.processMono(new Float32Array(512)).length).toBe(512);
   });

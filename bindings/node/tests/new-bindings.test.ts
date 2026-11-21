@@ -9,7 +9,7 @@ import {
   detectAcoustic,
   ebur128LoudnessRangeLu,
   estimateTuning,
-  hpssWithResidual,
+  hpss,
   lufsMultichannel,
   lufsSeriesMultichannel,
   momentaryLufs,
@@ -320,10 +320,10 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(out)).toBe(true);
   });
 
-  it('hpssWithResidual splits into three signals', () => {
-    const r = hpssWithResidual(sine(1, 440), SR);
+  it('hpss with withResidual splits into three signals', () => {
+    const r = hpss(sine(1, 440), SR, { withResidual: true });
     expect(r.harmonic.length).toBe(r.percussive.length);
-    expect(r.percussive.length).toBe(r.residual.length);
+    expect(r.percussive.length).toBe(r.residual?.length);
     expect(allFinite(r.harmonic)).toBe(true);
   });
 

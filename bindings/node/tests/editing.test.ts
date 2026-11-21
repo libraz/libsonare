@@ -18,9 +18,9 @@ import {
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
+  realtimeVoiceChangerRender,
   realtimeVoiceChangerValidatePresetJson,
   voiceChange,
-  voiceChangeRealtime,
   voiceCharacterPresetId,
 } from '../src/index.js';
 import { expectRefusal } from './_helpers.js';
@@ -493,7 +493,7 @@ describe('editing effects', () => {
       voiceEngine: 'grain' as const,
     };
     const renderRealtime = (config: RealtimeVoiceChangerConfigInput) =>
-      voiceChangeRealtime({ channels: [tone.subarray(0, 512)], sampleRate: SR, config })[0];
+      realtimeVoiceChangerRender({ channels: [tone.subarray(0, 512)], sampleRate: SR, config })[0];
     const offline = renderRealtime(grainPreset) as Float32Array;
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
@@ -514,7 +514,7 @@ describe('editing effects', () => {
 
     // Planar stereo: two equal-length channels in, two out.
     const left = tone.subarray(0, 512);
-    const stereoOut = voiceChangeRealtime({
+    const stereoOut = realtimeVoiceChangerRender({
       channels: [left, left],
       sampleRate: SR,
       config: 'softWhisper',
@@ -524,7 +524,7 @@ describe('editing effects', () => {
     expect(stereoOut[1]?.length).toBe(512);
     expectRefusal(
       () =>
-        voiceChangeRealtime({
+        realtimeVoiceChangerRender({
           channels: [left, tone.subarray(0, 100)],
           sampleRate: SR,
           config: 'softWhisper',
@@ -533,7 +533,7 @@ describe('editing effects', () => {
     );
     expectRefusal(
       () =>
-        voiceChangeRealtime({
+        realtimeVoiceChangerRender({
           channels: [left, left, left],
           sampleRate: SR,
           config: 'softWhisper',
@@ -862,7 +862,7 @@ describe('editing effects', () => {
 // depending on which spelling the caller reached for. The expected value comes
 // from the shared corpus the Python suite reads, so a change on one surface
 // alone fails on the others.
-describe('voiceChangeRealtime default preset', () => {
+describe('realtimeVoiceChangerRender default preset', () => {
   it('renders what the shared corpus names as the default', () => {
     const expected = (
       JSON.parse(
@@ -871,9 +871,8 @@ describe('voiceChangeRealtime default preset', () => {
           'utf8',
         ),
       ) as { defaults: Record<string, VoicePresetId> }
-    ).defaults['voice_change_realtime.preset'];
-    // The corpus spells ids in kebab case; this surface takes lowerCamel tokens.
-    const token = expected.replace(/-(\w)/g, (_m, c: string) => c.toUpperCase()) as VoicePresetId;
+    ).defaults['realtime_voice_changer_render.config'];
+    const token = expected;
     expect(token).toBe('neutralMonitor');
 
     const sampleRate = 22050;
@@ -883,8 +882,8 @@ describe('voiceChangeRealtime default preset', () => {
     }
     // A TypeScript default parameter is not introspectable, so compare renders:
     // omitting the preset must produce exactly what naming the default produces.
-    expect(voiceChangeRealtime({ channels: [samples], sampleRate })).toEqual(
-      voiceChangeRealtime({ channels: [samples], sampleRate, config: token }),
+    expect(realtimeVoiceChangerRender({ channels: [samples], sampleRate })).toEqual(
+      realtimeVoiceChangerRender({ channels: [samples], sampleRate, config: token }),
     );
   });
 });

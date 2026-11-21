@@ -55,14 +55,14 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   loudnessStaticGainDb?: number;
 
   /**
-   * True peak (dBFS) of the loudness stage's input the static gain was computed
+   * True peak (dBTP) of the loudness stage's input the static gain was computed
    * for (`truePeakDbtp` of {@link streamingLoudnessGain}). When provided, the static gain is clamped to
-   * `(loudness.ceilingDbtp - loudnessStaticGainPeakDb) +
+   * `(loudness.ceilingDbtp - loudnessStaticGainPeakDbtp) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview
    * does not drive the loudness limiter harder than the offline chain. When
    * omitted, the static gain is applied verbatim.
    */
-  loudnessStaticGainPeakDb?: number;
+  loudnessStaticGainPeakDbtp?: number;
 }
 
 /** Construction options for {@link StreamingEqualizer}. */
@@ -147,7 +147,7 @@ export class StreamingMasteringChain {
       maxBlockSize,
       numChannels,
       loudnessStaticGainDb,
-      loudnessStaticGainPeakDb,
+      loudnessStaticGainPeakDbtp,
       ...chainConfig
     } = config;
     assertIntegerValue(sampleRate, 'sampleRate');
@@ -156,8 +156,8 @@ export class StreamingMasteringChain {
     if (loudnessStaticGainDb !== undefined) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;
     }
-    if (loudnessStaticGainPeakDb !== undefined) {
-      options.loudnessStaticGainPeakDb = loudnessStaticGainPeakDb;
+    if (loudnessStaticGainPeakDbtp !== undefined) {
+      options.loudnessStaticGainPeakDbtp = loudnessStaticGainPeakDbtp;
     }
     this.native = new addon.StreamingMasteringChain(
       chainConfigJson('config', chainConfig),

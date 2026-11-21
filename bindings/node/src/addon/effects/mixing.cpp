@@ -215,7 +215,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   std::vector<float> out_left(length, 0.0f);
   std::vector<float> out_right(length, 0.0f);
   for (size_t index = 0; index < count; ++index) {
-    SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
+    SonareStrip* strip =
+        sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str(), nullptr);
     if (strip == nullptr) {
       sonare_node::ThrowLastSonareError(env, "");
       return env.Undefined();
@@ -291,7 +292,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   Napi::Array meters = Napi::Array::New(env, strips.size());
   for (size_t index = 0; index < strips.size(); ++index) {
     SonareMixMeterSnapshot snapshot{};
-    err = sonare_strip_meter(strips[index], &snapshot);
+    err = sonare_strip_meter(strips[index], SONARE_METER_TAP_POST_FADER, &snapshot);
     if (err != SONARE_OK)
       throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     meters.Set(index, MixMeterSnapshotToObject(env, snapshot));

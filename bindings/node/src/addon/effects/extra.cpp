@@ -11,7 +11,6 @@
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/decompose.h"
-#include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
 #include "effects/repair_common.h"
@@ -42,8 +41,8 @@ using namespace sonare_node;
 using namespace sonare_node::repair_detail;
 
 // ============================================================================
-// Effects - librosa.decompose / effects.remix / hpss-with-residual /
-// phase-vocoder, wired through the flat C ABI (sonare_c_effects.h).
+// Effects - librosa.decompose / effects.remix / phase-vocoder,
+// wired through the flat C ABI (sonare_c_effects.h).
 // ============================================================================
 
 namespace {
@@ -173,22 +172,20 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 5, "beta", sonare::kDecomposeDefaultBeta, &beta)) {
     return env.Undefined();
   }
-  // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
-  // route through the with-init variant for the NNDSVD warm-start.
+  // Optional 7th arg selects the initialiser ("random" | "nndsvd"); omitted is the default.
   std::string init;
   if (!OptionalStringArg(env, info, 6, "init", "", &init)) {
     return env.Undefined();
   }
+  SonareDecomposeOptions options;
+  sonare_decompose_options_init(&options);
+  if (!init.empty()) options.init = init.c_str();
   float* out_w = nullptr;
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
-  SonareError err =
-      init.empty()
-          ? sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta, &out_w,
-                             &out_w_length, &out_h, &out_h_length)
-          : sonare_decompose_with_init(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
-                                       init.c_str(), &out_w, &out_w_length, &out_h, &out_h_length);
+  SonareError err = sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
+                                     &options, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) return EffectsCheckCResult(env, err);
   Napi::Object w = Napi::Object::New(env);
   w.Set("rows", Napi::Number::New(env, n_features));
@@ -262,7 +259,7 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
       ReadDecomposeStemsConfig(info.Length() >= 3 ? info[2] : env.Undefined(), &init);
   float* out = nullptr;
   size_t component_count = 0;
-  size_t channel_count = 0;
+  const size_t channel_count = inputs.ptrs.size();
   size_t component_length = 0;
   float* out_w = nullptr;
   size_t out_w_length = 0;
@@ -270,7 +267,7 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   size_t out_h_length = 0;
   SonareError err = sonare_decompose_stems_linked(
       inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_count,
-      &channel_count, &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
+      &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareErrorFlattening(env, err, "config");
     return env.Undefined();
@@ -396,53 +393,6 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
                                      intervals.size() / 2, align_zeros, &out, &out_count);
   if (err != SONARE_OK) return EffectsCheckCResult(env, err);
   return EffectsIntResult(env, out, out_count * 2);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_narrow_int(env, info[1], "sampleRate");
-  // Shared with Hpss, so the defaults and the narrowing agree on both.
-  HpssArguments args;
-  if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
-
-  sonare::validate_offline_audio_input("samples", arr.Data(), arr.ElementLength(), sr);
-  sonare::Audio audio = sonare::Audio::from_buffer(arr.Data(), arr.ElementLength(), sr);
-  sonare::HpssConfig config;
-  config.kernel_size_harmonic = args.kernel_harmonic;
-  config.kernel_size_percussive = args.kernel_percussive;
-  config.use_soft_mask = !args.hard_mask;
-  sonare::StftConfig stft_config;
-  stft_config.n_fft = args.n_fft;
-  stft_config.hop_length = args.hop_length;
-  sonare::HpssAudioResultWithResidual source_result =
-      sonare::hpss_with_residual(audio, config, stft_config);
-
-  const size_t out_length = source_result.harmonic.size();
-  Napi::Float32Array out_harmonic = Napi::Float32Array::New(env, out_length);
-  Napi::Float32Array out_percussive = Napi::Float32Array::New(env, out_length);
-  Napi::Float32Array out_residual = Napi::Float32Array::New(env, out_length);
-  if (out_length > 0) {
-    std::memcpy(out_harmonic.Data(), source_result.harmonic.data(), out_length * sizeof(float));
-    std::memcpy(out_percussive.Data(), source_result.percussive.data(), out_length * sizeof(float));
-    std::memcpy(out_residual.Data(), source_result.residual.data(), out_length * sizeof(float));
-  }
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("harmonic", out_harmonic);
-  result.Set("percussive", out_percussive);
-  result.Set("residual", out_residual);
-  result.Set("sampleRate", Napi::Number::New(env, source_result.harmonic.sample_rate()));
-  return result;
   SONARE_NODE_CATCH(env)
 }
 

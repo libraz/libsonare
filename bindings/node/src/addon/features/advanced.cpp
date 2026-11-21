@@ -191,9 +191,9 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   }
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError error = sonare_cqt_to_audio_checked(
-      magnitude.Data(), magnitude.ElementLength(), n_bins, n_frames, sample_rate, hop_length, fmin,
-      bins_per_octave, n_iter, &output, &output_length);
+  const SonareError error = sonare_cqt_to_audio(magnitude.Data(), magnitude.ElementLength(), n_bins,
+                                                n_frames, sample_rate, hop_length, fmin,
+                                                bins_per_octave, n_iter, &output, &output_length);
   if (error != SONARE_OK) return CheckCResult(env, error);
   std::vector<float> owned(output, output + output_length);
   sonare_free_floats(output);
@@ -228,7 +228,7 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   }
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError error = sonare_vqt_to_audio_checked(
+  const SonareError error = sonare_vqt_to_audio(
       magnitude.Data(), magnitude.ElementLength(), n_bins, n_frames, sample_rate, hop_length, fmin,
       bins_per_octave, gamma, n_iter, &output, &output_length);
   if (error != SONARE_OK) return CheckCResult(env, error);

@@ -810,17 +810,8 @@ export function analyze(...args: unknown[]): AnalysisResult {
     assertProgressCallbacks(request);
     const options = nativeAnalyzeOptions(request);
     const { onProgress, cancel } = request;
-    if (onProgress == null && cancel == null) {
-      return analysisFromNative(addon.analyze(request.samples, request.sampleRate, options));
-    }
     return analysisFromNative(
-      addon.analyzeWithProgress(
-        request.samples,
-        request.sampleRate,
-        onProgress ?? (() => {}),
-        cancel ?? (() => false),
-        options,
-      ),
+      addon.analyze(request.samples, request.sampleRate, options, onProgress, cancel),
     );
   });
 }

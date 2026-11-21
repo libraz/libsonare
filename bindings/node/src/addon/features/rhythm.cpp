@@ -341,9 +341,14 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   if (!RequiredDomainArg(env, info, 5, "hopLength", sonare::kNnlsHopLengthDomain, &hop_length)) {
     return env.Undefined();
   }
-  SonareError err =
-      sonare_nnls_chroma_ex2(arr.Data(), arr.ElementLength(), sr, enable_blend ? 1 : 0,
-                             blend_weight, blend_n_fft, hop_length, &out, &count, &n_frames);
+  SonareNnlsChromaOptions nnls_options;
+  sonare_nnls_chroma_options_init(&nnls_options);
+  nnls_options.enable_stft_blend = enable_blend ? 1 : 0;
+  nnls_options.stft_blend_weight = blend_weight;
+  nnls_options.stft_blend_n_fft = blend_n_fft;
+  nnls_options.hop_length = hop_length;
+  SonareError err = sonare_nnls_chroma(arr.Data(), arr.ElementLength(), sr, &nnls_options, &out,
+                                       &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   int n_chroma = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 12;
   Napi::Object result = Napi::Object::New(env);

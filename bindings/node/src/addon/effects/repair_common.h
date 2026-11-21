@@ -40,6 +40,24 @@ inline void FreeStereoResult(SonareDeclipStereoResult* r) { sonare_free_declip_s
 inline void FreeStereoResult(SonareDecrackleStereoResult* r) {
   sonare_free_decrackle_stereo_result(r);
 }
+inline void FreeLinkedResult(SonareDenoiseLinkedResult* r) { sonare_free_denoise_linked_result(r); }
+inline void FreeLinkedResult(SonareDereverbLinkedResult* r) {
+  sonare_free_dereverb_linked_result(r);
+}
+
+/// @brief Releases a linked result when it leaves scope.
+template <typename Result>
+class LinkedResultGuard {
+ public:
+  explicit LinkedResultGuard(Result* result) : result_(result) {}
+  LinkedResultGuard(const LinkedResultGuard&) = delete;
+  LinkedResultGuard& operator=(const LinkedResultGuard&) = delete;
+  ~LinkedResultGuard() { FreeLinkedResult(result_); }
+
+ private:
+  Result* result_;
+};
+
 inline void FreeStereoResult(SonareDehumStereoResult* r) { sonare_free_dehum_stereo_result(r); }
 inline void FreeStereoResult(SonareDereverbStereoResult* r) {
   sonare_free_dereverb_stereo_result(r);
@@ -141,6 +159,18 @@ inline Napi::Array EmitLinkedChannels(Napi::Env env, const LinkedPlanes& planes)
   Napi::Array out = Napi::Array::New(env, planes.outputs.size());
   for (size_t index = 0; index < planes.outputs.size(); ++index) {
     out.Set(static_cast<uint32_t>(index), planes.outputs[index]);
+  }
+  return out;
+}
+
+/// @brief Packs the planes of a library-allocated linked result into JS arrays, in channel order.
+inline Napi::Array EmitLinkedResultChannels(Napi::Env env, float** channels, size_t num_channels,
+                                            size_t length) {
+  Napi::Array out = Napi::Array::New(env, num_channels);
+  for (size_t index = 0; index < num_channels; ++index) {
+    auto plane = Napi::Float32Array::New(env, length);
+    if (length > 0) std::memcpy(plane.Data(), channels[index], length * sizeof(float));
+    out.Set(static_cast<uint32_t>(index), plane);
   }
   return out;
 }

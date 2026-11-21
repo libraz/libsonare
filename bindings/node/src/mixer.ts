@@ -689,7 +689,7 @@ export class Mixer {
     if (isAbsent(tap)) {
       return this.native.stripMeter(strip);
     }
-    return this.native.meterTap(
+    return this.native.stripMeter(
       strip,
       tokenArg(tap, (token) => meterTapValue(token as MeterTap, 'tap')),
     );

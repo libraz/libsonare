@@ -648,23 +648,6 @@ const ROWS: Row[] = [
     invalid: { nFft: 0 },
   },
   {
-    name: 'hpssWithResidual',
-    fn: sonare.hpssWithResidual,
-    params: 'samples sampleRate ...options?',
-    values: {
-      samples: SIG,
-      sampleRate: ALT_SR,
-      options: {
-        kernelHarmonic: 17,
-        kernelPercussive: 17,
-        nFft: 1024,
-        hopLength: 128,
-        hardMask: true,
-      },
-    },
-    invalid: { nFft: 0 },
-  },
-  {
     name: 'decompose',
     fn: sonare.decompose,
     requestOnly: true,
@@ -2367,8 +2350,8 @@ const ROWS: Row[] = [
     invalid: { sampleRate: 0 },
   },
   {
-    name: 'voiceChangeRealtime',
-    fn: sonare.voiceChangeRealtime,
+    name: 'realtimeVoiceChangerRender',
+    fn: sonare.realtimeVoiceChangerRender,
     requestOnly: true,
     params: 'channels sampleRate config?',
     values: { channels: [SIG, SIG2], sampleRate: ALT_SR, config: 'choirHarmony' },

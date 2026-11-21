@@ -58,7 +58,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['frameSignal', 'samples'],
   ['harmonic', 'samples'],
   ['hpss', 'samples'],
-  ['hpssWithResidual', 'samples'],
   ['hybridCqt', 'samples'],
   ['lufs', 'samples'],
   ['masterAudio', 'samples'],
@@ -246,7 +245,7 @@ const REQUEST_ONLY: string[] = [
   'tone',
   'tonnetz',
   'vectorNormalize',
-  'voiceChangeRealtime',
+  'realtimeVoiceChangerRender',
   'vqtToAudio',
 ];
 
@@ -325,14 +324,14 @@ describe.each([
   ['decompose', { s: 5 }, 'decompose: s must be a Matrix2D'],
   ['nnFilter', { s: 5 }, 'nnFilter: s must be a Matrix2D'],
   [
-    'voiceChangeRealtime',
+    'realtimeVoiceChangerRender',
     { channels: 5, sampleRate: 44100 },
-    'voiceChangeRealtime: channels must be an array of Float32Array',
+    'realtimeVoiceChangerRender: channels must be an array of Float32Array',
   ],
   [
-    'voiceChangeRealtime',
+    'realtimeVoiceChangerRender',
     { channels: [new Float64Array(8)], sampleRate: 44100 },
-    'voiceChangeRealtime: channels[0] must be a Float32Array',
+    'realtimeVoiceChangerRender: channels[0] must be a Float32Array',
   ],
 ])('%s request field', (name, request, message) => {
   it(`refuses ${message}`, () => {

@@ -312,7 +312,7 @@ describe('StreamingMasteringChain', () => {
       maxBlockSize: 512,
       loudness: { targetLufs: -14 },
       loudnessStaticGainDb: 3.0,
-      loudnessStaticGainPeakDb: -1.0,
+      loudnessStaticGainPeakDbtp: -1.0,
     });
     const out = chain.processMono(new Float32Array(512).fill(0.1));
     expect(out.length).toBe(512);

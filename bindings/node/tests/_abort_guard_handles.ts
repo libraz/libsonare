@@ -365,7 +365,7 @@ export interface NativeProject {
   setSampleRate(sampleRate: unknown): void;
   setPartRig(destinationId: unknown, part: unknown, mode: unknown, insertsJson?: unknown): void;
   setOverlapPolicy(policy: unknown): void;
-  setMarker(markerId: unknown, ppq?: unknown, name?: unknown): number;
+  setMarker(marker: unknown): number;
   markerByIndex(index: unknown): unknown;
   trackByIndex(index: unknown): unknown;
   clipByIndex(index: unknown): unknown;
@@ -410,9 +410,8 @@ export interface NativeProject {
     program?: unknown,
     bank?: unknown,
   ): void;
-  bakeMidiFx(clipId: unknown, config?: unknown): void;
+  bakeMidiFx(clipId: unknown, config?: unknown, withSourceIndex?: unknown): Int32Array | undefined;
   setMidiFx(clipId: unknown, config?: unknown): void;
-  bakeMidiFxWithSourceIndex(clipId: unknown, config?: unknown): Int32Array;
   previewMidiFxCount(clipId: unknown, config?: unknown): number;
   validateMidiNotes(clipId: unknown): unknown;
   setAssistSidecar(desc: unknown): void;
@@ -677,7 +676,7 @@ export function withConfiguredProject<T>(body: (fixture: ProjectFixture) => T): 
     project.setClipGain(clipId, 0.6);
     project.setClipLoop(clipId, 1, 2, 0.25);
     project.setOverlapPolicy(1);
-    const markerId = project.setMarker(0, 2, 'verse');
+    const markerId = project.setMarker({ id: 0, ppq: 2, name: 'verse' });
     project.setWarpMap({
       id: 1,
       name: 'w',

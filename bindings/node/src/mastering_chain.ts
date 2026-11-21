@@ -73,7 +73,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  *   sampleRate: 48000,
  *   numChannels: 1,
  *   loudnessStaticGainDb,
- *   loudnessStaticGainPeakDb: truePeakDbtp,
+ *   loudnessStaticGainPeakDbtp: truePeakDbtp,
  * });
  * ```
  */
@@ -204,14 +204,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     const cancel = r.cancel ?? undefined;
     return (
       progress || cancel
-        ? addon.masterAudioWithProgress(
-            preset,
-            r.samples,
-            r.sampleRate,
-            overrides,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
+        ? addon.masterAudio(preset, r.samples, r.sampleRate, overrides, progress, cancel)
         : addon.masterAudio(preset, r.samples, r.sampleRate, overrides)
     ) as MasteringChainResult;
   });
@@ -247,14 +240,14 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     const cancel = r.cancel ?? undefined;
     return (
       progress || cancel
-        ? addon.masterAudioStereoWithProgress(
+        ? addon.masterAudioStereo(
             preset,
             r.left,
             r.right,
             r.sampleRate,
             overrides,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
+            progress,
+            cancel,
           )
         : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
     ) as MasteringChainStereoResult;

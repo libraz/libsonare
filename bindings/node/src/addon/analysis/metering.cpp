@@ -641,8 +641,8 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
   size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
   SonareVectorscopeResult result{};
-  SonareError err = sonare_metering_vectorscope_decimated(
-      left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
+  SonareError err = sonare_metering_vectorscope(left.Data(), right.Data(), left.ElementLength(), sr,
+                                                max_points, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -679,8 +679,8 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
   size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
   SonarePhaseScopeResult result{};
-  SonareError err = sonare_metering_phase_scope_decimated(
-      left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
+  SonareError err = sonare_metering_phase_scope(left.Data(), right.Data(), left.ElementLength(), sr,
+                                                max_points, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

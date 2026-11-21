@@ -278,11 +278,6 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.spectralRolloff', 'sampleRate', () => addon.spectralRolloff(readerTone, 'x')],
   ['addon.splitSilence', 'topDb', () => addon.splitSilence(readerTone, 'x')],
   ['addon.splitSilenceCommon', 'topDb', () => addon.splitSilenceCommon([readerTone], 'x')],
-  [
-    'addon.splitSilenceCommonWithReport',
-    'topDb',
-    () => addon.splitSilenceCommonWithReport([readerTone], 'x'),
-  ],
   ['addon.stft', 'sampleRate', () => addon.stft(readerTone, 'x')],
   ['addon.stftDb', 'sampleRate', () => addon.stftDb(readerTone, 'x')],
   ['addon.tempogram', 'sampleRate', () => addon.tempogram(readerTone, 'x')],
@@ -367,31 +362,11 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     'overridesJson',
     () => addon.masterAudioStereo(null, readerTone, readerTone, 22050, 1),
   ],
-  [
-    'addon.masterAudioStereoWithProgress',
-    'overridesJson',
-    () => addon.masterAudioStereoWithProgress(null, readerTone, readerTone, 22050, 1, () => {}),
-  ],
-  [
-    'addon.masterAudioWithProgress',
-    'overridesJson',
-    () => addon.masterAudioWithProgress(null, readerTone, 22050, 1, () => {}),
-  ],
   ['addon.masteringChain', 'configJson', () => addon.masteringChain(readerTone, 22050, 1)],
   [
     'addon.masteringChainStereo',
     'configJson',
     () => addon.masteringChainStereo(readerTone, readerTone, 22050, 1),
-  ],
-  [
-    'addon.masteringChainStereoWithProgress',
-    'configJson',
-    () => addon.masteringChainStereoWithProgress(readerTone, readerTone, 22050, 1, () => {}),
-  ],
-  [
-    'addon.masteringChainWithProgress',
-    'configJson',
-    () => addon.masteringChainWithProgress(readerTone, 22050, 1, () => {}),
   ],
   [
     'addon.masteringStreamingLoudnessGain',
@@ -1928,9 +1903,7 @@ export const CASES: AbortGuardCase[] = [
     // snapshot; the C-1 half is the whole assertion. Only a MAGNITUDE the
     // narrowing would wrap is a rejection here — a wrong TYPE falls back to the
     // default and is pinned as such further down, because these two are
-    // different contracts over the same argument. The two entry points read the
-    // same arguments through one reader, so between them each of its sites is
-    // driven once.
+    // different contracts over the same argument.
     //
     // Each value is chosen so ToInt32 lands it on something the downstream
     // guards ACCEPT, which is what makes the wrap a silent success rather than a
@@ -1941,6 +1914,16 @@ export const CASES: AbortGuardCase[] = [
     // guard that has nothing to do with the narrowing.
     rejectsArgument: [
       {
+        argument: 'kernelHarmonic past the signed range',
+        call: () => addon.hpss(samples(2048), SR, 2 ** 32 + 1, 31),
+        error: RangeError,
+      },
+      {
+        argument: 'hopLength past the signed range',
+        call: () => addon.hpss(samples(2048), SR, 31, 31, 2048, 2 ** 32 + 512),
+        error: RangeError,
+      },
+      {
         argument: 'kernelPercussive past the signed range',
         call: () => addon.hpss(samples(2048), SR, 31, 2 ** 32 + 1),
         error: RangeError,
@@ -1948,22 +1931,6 @@ export const CASES: AbortGuardCase[] = [
       {
         argument: 'nFft past the signed range',
         call: () => addon.hpss(samples(2048), SR, 31, 31, 2 ** 32 + 2048),
-        error: RangeError,
-      },
-    ],
-  },
-  {
-    name: 'SonareWrap.hpssWithResidual',
-    missingRequired: [],
-    rejectsArgument: [
-      {
-        argument: 'kernelHarmonic past the signed range',
-        call: () => addon.hpssWithResidual(samples(2048), SR, 2 ** 32 + 1, 31),
-        error: RangeError,
-      },
-      {
-        argument: 'hopLength past the signed range',
-        call: () => addon.hpssWithResidual(samples(2048), SR, 31, 31, 2048, 2 ** 32 + 512),
         error: RangeError,
       },
     ],
@@ -2082,7 +2049,18 @@ export const CASES: AbortGuardCase[] = [
     name: 'Project.setMarker',
     missingRequired: [],
     badProjectArguments: [
-      { argument: 'ppq', call: ({ project, markerId }) => project.setMarker(markerId, 'x', 'v') },
+      {
+        argument: 'ppq',
+        call: ({ project, markerId }) => project.setMarker({ id: markerId, ppq: 'x', name: 'v' }),
+      },
+    ],
+  },
+  {
+    name: 'Project.fromJson',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'json', call: () => addon.Project.fromJson(1) },
+      { argument: 'withDiagnostics', call: () => addon.Project.fromJson('{}', 'yes') },
     ],
   },
   {
@@ -2392,13 +2370,6 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badProjectArguments: [
       { argument: 'clipId', call: ({ project }) => project.setMidiFx('2', '{}') },
-    ],
-  },
-  {
-    name: 'Project.bakeMidiFxWithSourceIndex',
-    missingRequired: [],
-    badProjectArguments: [
-      { argument: 'clipId', call: ({ project }) => project.bakeMidiFxWithSourceIndex('2', '{}') },
     ],
   },
   {

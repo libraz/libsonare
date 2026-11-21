@@ -83,19 +83,20 @@ Napi::Object MasteringStereoResultToObject(Napi::Env env,
   return out;
 }
 
-Napi::Object LoudnessMatchStereoToObject(Napi::Env env, const SonareMasteringStereoResult& result,
+Napi::Object LoudnessMatchStereoToObject(Napi::Env env, const float* out_left,
+                                         const float* out_right, size_t length, int sample_rate,
                                          const SonareLoudnessMatch& match) {
   Napi::Object out = Napi::Object::New(env);
-  Napi::Float32Array left = Napi::Float32Array::New(env, result.length);
-  Napi::Float32Array right = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0 && result.left != nullptr && result.right != nullptr) {
-    const size_t bytes = result.length * sizeof(float);
-    std::memcpy(left.Data(), result.left, bytes);
-    std::memcpy(right.Data(), result.right, bytes);
+  Napi::Float32Array left = Napi::Float32Array::New(env, length);
+  Napi::Float32Array right = Napi::Float32Array::New(env, length);
+  if (length > 0 && out_left != nullptr && out_right != nullptr) {
+    const size_t bytes = length * sizeof(float);
+    std::memcpy(left.Data(), out_left, bytes);
+    std::memcpy(right.Data(), out_right, bytes);
   }
   out.Set("left", left);
   out.Set("right", right);
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("sampleRate", Napi::Number::New(env, sample_rate));
   out.Set("referenceLufs", Napi::Number::New(env, match.reference_lufs));
   out.Set("sourceLufs", Napi::Number::New(env, match.source_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, match.applied_gain_db));
@@ -357,7 +358,7 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
   const auto c_params = MasteringCParams(params);
   SonareMasteringStereoResult result{};
   StereoResultGuard result_guard{&result};
-  const SonareError err = sonare_mastering_apply_pair_processor_stereo_ex(
+  const SonareError err = sonare_mastering_apply_pair_processor_stereo(
       processor_name.c_str(), source_left.Data(), source_right.Data(), source_left.ElementLength(),
       reference_left.Data(), reference_right.Data(), reference_left.ElementLength(),
       reference_sample_rate, sample_rate, c_params.empty() ? nullptr : c_params.data(),
@@ -400,18 +401,25 @@ Napi::Value SonareWrap::MasteringAbMatchLoudnessStereo(const Napi::CallbackInfo&
   sonare::validate_offline_audio_input("referenceRight", reference_right.Data(),
                                        reference_right.ElementLength(), reference_sample_rate);
 
-  SonareMasteringStereoResult result{};
-  StereoResultGuard result_guard{&result};
+  float* out_left = nullptr;
+  float* out_right = nullptr;
+  size_t out_length = 0;
   SonareLoudnessMatch match{};
   const SonareError err = sonare_mastering_ab_match_loudness_stereo(
       source_left.Data(), source_right.Data(), source_left.ElementLength(), reference_left.Data(),
       reference_right.Data(), reference_left.ElementLength(), reference_sample_rate, sample_rate,
-      &result, &match);
+      &out_left, &out_right, &out_length, &match);
   if (err != SONARE_OK) {
+    sonare_free_floats(out_left);
+    sonare_free_floats(out_right);
     ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return LoudnessMatchStereoToObject(env, result, match);
+  Napi::Object result =
+      LoudnessMatchStereoToObject(env, out_left, out_right, out_length, sample_rate, match);
+  sonare_free_floats(out_left);
+  sonare_free_floats(out_right);
+  return result;
   SONARE_NODE_CATCH(env)
 }
 

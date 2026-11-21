@@ -84,7 +84,6 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   // sonare_mixer_master_meter), seeded from the C config defaults.
   Napi::Value ConfigureMeter(const Napi::CallbackInfo& info);
   Napi::Value MeterSnapshot(const Napi::CallbackInfo& info);
-  Napi::Value MeterTap(const Napi::CallbackInfo& info);
   Napi::Value ReadGoniometerLatest(const Napi::CallbackInfo& info);
   Napi::Value StripNonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value BusNonFiniteDiscardCount(const Napi::CallbackInfo& info);

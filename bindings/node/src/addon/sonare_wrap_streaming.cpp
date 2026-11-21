@@ -173,8 +173,8 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     Napi::Object options_object = info[1].As<Napi::Object>();
     options.loudness_static_gain_db = static_cast<float>(
         DoubleProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
-    options.loudness_static_gain_peak_db = static_cast<float>(DoubleProperty(
-        options_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
+    options.loudness_static_gain_peak_dbtp = static_cast<float>(DoubleProperty(
+        options_object, "loudnessStaticGainPeakDbtp", options.loudness_static_gain_peak_dbtp));
   }
 
   auto config = sonare::mastering::api::streaming_chain_config_from_json(

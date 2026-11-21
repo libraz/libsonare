@@ -108,8 +108,16 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
+  int tap = SONARE_METER_TAP_POST_FADER;
+  if (!info[1].IsUndefined() && !info[1].IsNull()) {
+    if (!info[1].IsNumber()) {
+      Napi::TypeError::New(env, "tap must be a number").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    tap = sonare_node::node_narrow_int(env, info[1], "tap");
+  }
   SonareMixMeterSnapshot snapshot{};
-  SonareError err = sonare_strip_meter(strip, &snapshot);
+  SonareError err = sonare_strip_meter(strip, tap, &snapshot);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to read strip meter: ");
     return env.Undefined();
@@ -187,7 +195,7 @@ Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   const std::string bus_id = node_narrow_string(env, info[0], "busId");
-  uint32_t count = 0;
+  size_t count = 0;
   // The entry carries SONARE_C_RT_API_ENTRY, so it records no message of its
   // own and the thread-local one would belong to an unrelated earlier call.
   sonare_node::ThrowIfRealtimeError(
@@ -195,30 +203,7 @@ Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) 
   if (env.IsExceptionPending()) {
     return env.Undefined();
   }
-  return Napi::Number::New(env, count);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  SonareStrip* strip = ResolveStrip(info, info[0]);
-  if (strip == nullptr) {
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "tap must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SonareMixMeterSnapshot snapshot{};
-  SonareError err =
-      sonare_strip_meter_tap(strip, sonare_node::node_narrow_int(env, info[1], "tap"), &snapshot);
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to read strip meter tap: ");
-    return env.Undefined();
-  }
-  return MixMeterSnapshotToObject(env, snapshot);
+  return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
 }
 
@@ -261,13 +246,13 @@ Napi::Value MixerWrap::StripNonFiniteDiscardCount(const Napi::CallbackInfo& info
   if (strip == nullptr) {
     return env.Undefined();
   }
-  uint32_t count = 0;
+  size_t count = 0;
   // Same audio-thread entry policy as the bus counterpart above.
   sonare_node::ThrowIfRealtimeError(env, sonare_strip_non_finite_discard_count(strip, &count));
   if (env.IsExceptionPending()) {
     return env.Undefined();
   }
-  return Napi::Number::New(env, count);
+  return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
 }
 

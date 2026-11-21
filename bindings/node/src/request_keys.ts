@@ -454,6 +454,7 @@ const HPSS_REQUEST_KEYS = keySet(
   'nFft',
   'hopLength',
   'hardMask',
+  'withResidual',
   'samples',
   'sampleRate',
 );
@@ -952,7 +953,7 @@ const VOICE_CHANGE_REQUEST_KEYS = keySet(
   'formantFactor',
   'formantMode',
 );
-const VOICE_CHANGE_REALTIME_REQUEST_KEYS = keySet('channels', 'sampleRate', 'config');
+const REALTIME_VOICE_CHANGER_RENDER_REQUEST_KEYS = keySet('channels', 'sampleRate', 'config');
 const DECOMPOSE_REQUEST_KEYS = keySet('s', 'nComponents', 'nIter', 'beta', 'init');
 const DECOMPOSE_STEMS_REQUEST_KEYS = keySet(
   'nComponents',
@@ -978,15 +979,6 @@ const DECOMPOSE_STEMS_LINKED_REQUEST_KEYS = keySet(
 );
 const NN_FILTER_REQUEST_KEYS = keySet('s', 'aggregate', 'k', 'width');
 const REMIX_REQUEST_KEYS = keySet('intervals', 'alignZeros', 'samples', 'sampleRate');
-const HPSS_WITH_RESIDUAL_REQUEST_KEYS = keySet(
-  'kernelHarmonic',
-  'kernelPercussive',
-  'nFft',
-  'hopLength',
-  'hardMask',
-  'samples',
-  'sampleRate',
-);
 const TRIM_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
@@ -1624,7 +1616,7 @@ export const REQUEST_KEYS = {
   masteringRepairDetectTrimRange: MASTERING_REPAIR_DETECT_TRIM_RANGE_REQUEST_KEYS,
   masteringRepairDetectTrimRangeStereo: MASTERING_REPAIR_DETECT_TRIM_RANGE_STEREO_REQUEST_KEYS,
   voiceChange: VOICE_CHANGE_REQUEST_KEYS,
-  voiceChangeRealtime: VOICE_CHANGE_REALTIME_REQUEST_KEYS,
+  realtimeVoiceChangerRender: REALTIME_VOICE_CHANGER_RENDER_REQUEST_KEYS,
   powerToDb: keySet('values', 'ref', 'amin', 'topDb'),
   amplitudeToDb: keySet('values', 'ref', 'amin', 'topDb'),
   stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength'),
@@ -1692,7 +1684,6 @@ export const REQUEST_KEYS = {
   nnFilter: NN_FILTER_REQUEST_KEYS,
   remix: REMIX_REQUEST_KEYS,
   remixAlignedIntervals: REMIX_REQUEST_KEYS,
-  hpssWithResidual: HPSS_WITH_RESIDUAL_REQUEST_KEYS,
   trim: TRIM_REQUEST_KEYS,
   preemphasis: keySet('samples', 'sampleRate', 'coef', 'zi'),
   deemphasis: keySet('samples', 'sampleRate', 'coef', 'zi'),

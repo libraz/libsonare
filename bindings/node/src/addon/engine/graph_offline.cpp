@@ -274,9 +274,12 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
       !OptionalBoolArg(env, info, 2, "finalize", true, &finalize)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_render_offline_ex(engine_, block.pointers.data(),
-                                                    static_cast<int>(block.pointers.size()),
-                                                    block.frames, block_size, finalize ? 1 : 0));
+  SonareEngineRenderOfflineOptions render_options;
+  sonare_engine_render_offline_options_init(&render_options);
+  render_options.finalize = finalize ? 1 : 0;
+  ThrowIfError(env, sonare_engine_render_offline(engine_, block.pointers.data(),
+                                                 static_cast<int>(block.pointers.size()),
+                                                 block.frames, block_size, &render_options));
   if (env.IsExceptionPending()) return env.Undefined();
   return ChannelsToJs(env, block);
   SONARE_NODE_CATCH(env)
@@ -387,8 +390,8 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& in
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  return DrainTelemetryInto<SonareMeterTelemetryRecordV2>(
-      info, engine_, sonare_engine_drain_meter_telemetry_v2, MeterTelemetryV2ToObject);
+  return DrainTelemetryInto<SonareMeterTelemetryRecord>(
+      info, engine_, sonare_engine_drain_meter_telemetry, MeterTelemetryToObject);
   SONARE_NODE_CATCH(env)
 }
 
@@ -396,8 +399,8 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  return DrainTelemetryInto<SonareMeterTelemetryRecordWideV2>(
-      info, engine_, sonare_engine_drain_meter_telemetry_wide_v2, MeterTelemetryWideV2ToObject);
+  return DrainTelemetryInto<SonareMeterTelemetryRecordWide>(
+      info, engine_, sonare_engine_drain_meter_telemetry_wide, MeterTelemetryWideToObject);
   SONARE_NODE_CATCH(env)
 }
 

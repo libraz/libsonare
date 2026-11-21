@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeImpulseResponse,
   hpss,
-  hpssWithResidual,
   nnlsChroma,
   phaseVocoder,
   pitchShift,
@@ -56,15 +55,18 @@ describe('additive effect and feature options', () => {
   });
 
   it('forwards residual, NNLS hop, and impulse-response options', () => {
-    const residual = hpssWithResidual(samples, sampleRate);
-    const changedResidual = hpssWithResidual(samples, sampleRate, {
+    const residual = hpss(samples, sampleRate, { withResidual: true });
+    const changedResidual = hpss(samples, sampleRate, {
+      withResidual: true,
       kernelHarmonic: 31,
       kernelPercussive: 31,
       nFft: 1024,
       hopLength: 256,
       hardMask: true,
     });
-    expect(Array.from(changedResidual.residual)).not.toEqual(Array.from(residual.residual));
+    expect(Array.from(changedResidual.residual as Float32Array)).not.toEqual(
+      Array.from(residual.residual as Float32Array),
+    );
 
     const chroma = nnlsChroma(samples, sampleRate);
     const changedChroma = nnlsChroma(samples, sampleRate, { hopLength: 256 });
@@ -90,7 +92,9 @@ describe('additive effect and feature options', () => {
     // The core validator is the single gate, so every spectral effect that
     // resynthesizes by overlap-add rejects the same geometry.
     expect(() => hpss({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
-    expect(() => hpssWithResidual({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
+    expect(() =>
+      hpss({ samples, sampleRate, nFft: 1024, hopLength: 1024, withResidual: true }),
+    ).toThrow();
     expect(() =>
       timeStretch({ samples, sampleRate, speedRatio: 1.2, nFft: 512, hopLength: 2048 }),
     ).toThrow();
@@ -120,15 +124,13 @@ describe('additive effect and feature options', () => {
 });
 
 // One FFT-size rule, not one per module. `hpss` accepted any even size (the
-// core FFT is mixed-radix) while `hpssWithResidual` went through a second copy
+// core FFT is mixed-radix) while the residual path went through a second copy
 // that demanded a power of two, so reaching for the third stem forced an
 // unrelated change of FFT size — and the message asserted a constraint this
 // project had already written down as untrue.
 describe('STFT entry points share one nFft rule', () => {
   const stftEntryPoints = {
     hpss: (nFft: number) => hpss({ samples, sampleRate, nFft, hopLength: 256 }),
-    hpssWithResidual: (nFft: number) =>
-      hpssWithResidual({ samples, sampleRate, nFft, hopLength: 256 }),
     timeStretch: (nFft: number) => timeStretch({ samples, sampleRate, speedRatio: 1.0, nFft }),
     pitchShift: (nFft: number) => pitchShift({ samples, sampleRate, pitchSemitones: 0, nFft }),
     phaseVocoder: (nFft: number) => phaseVocoder({ samples, sampleRate, speedRatio: 1.0, nFft }),

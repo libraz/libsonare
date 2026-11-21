@@ -281,14 +281,6 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       ),
   },
   {
-    jsName: 'analyzeWithProgress',
-    invoke: (o) =>
-      analyze(sine(8192), SR, {
-        ...facadeKeys(o, { chromaHighpassHz: 'chromaHighPassHz', tuning: 'tuningCents' }),
-        onProgress: () => {},
-      }),
-  },
-  {
     // A glide rather than a tone, and two lengths rather than one: a held pair
     // leaves the alignment path unconstrained, so both runs would agree on
     // anchors that say nothing about the options.
@@ -1345,7 +1337,7 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'setConfig',
         'StreamingRetune instance method; its undefined-equivalence is asserted in streaming-retune.test.ts.',
       ],
-      ['setMarkerEx', 'Project-side marker writer; covered by project.test.ts.'],
+      ['setMarker', 'Project-side marker writer; covered by project.test.ts.'],
       [
         'setNoteEdit',
         'PolyphonicAnalysis instance method; needs an open analysis, and its undefined-equivalence is asserted in polyphonic-analysis.test.ts.',

@@ -405,11 +405,12 @@ export function splitSilenceCommonWithReport(
     );
     assertSilenceSignals(request);
     const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
-    return addon.splitSilenceCommonWithReport(
+    return addon.splitSilenceCommon(
       request.signals,
       request.topDb ?? 60,
       framing.frameLength,
       framing.hopLength,
+      true,
     );
   });
 }

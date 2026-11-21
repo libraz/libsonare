@@ -167,13 +167,10 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-namespace {
-
-// The two split_silence_common entry points take the same arguments and refuse
-// the same inputs; sharing one body is what makes that true rather than claimed.
-// `with_report` picks the `_ex` call and wraps the intervals in an object.
-Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_report) {
+// A trailing `withReport` of true wraps the intervals with the report of why they are the gaps.
+Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsArray()) {
     Napi::TypeError::New(env, "signals must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -217,16 +214,14 @@ Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_rep
                          &hop_length)) {
     return env.Undefined();
   }
+  bool with_report = false;
+  if (!OptionalBoolArg(env, info, 4, "withReport", false, &with_report)) return env.Undefined();
   int* out = nullptr;
   size_t out_count = 0;
   SonareSilenceCommonReport report{};
-  const SonareError err =
-      with_report
-          ? sonare_split_silence_common_ex(signal_ptrs.data(), signal_ptrs.size(), lengths.data(),
-                                           top_db, frame_length, hop_length, &out, &out_count,
-                                           &report)
-          : sonare_split_silence_common(signal_ptrs.data(), signal_ptrs.size(), lengths.data(),
-                                        top_db, frame_length, hop_length, &out, &out_count);
+  const SonareError err = sonare_split_silence_common(
+      signal_ptrs.data(), signal_ptrs.size(), lengths.data(), top_db, frame_length, hop_length,
+      &out, &out_count, with_report ? &report : nullptr);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Value intervals = IntResult(env, out, out_count);
   if (!with_report) return intervals;
@@ -238,21 +233,6 @@ Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_rep
   result.Set("intervals", intervals);
   result.Set("report", report_object);
   return result;
-}
-
-}  // namespace
-
-Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  return SplitSilenceCommonImpl(info, false);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::SplitSilenceCommonWithReport(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  return SplitSilenceCommonImpl(info, true);
   SONARE_NODE_CATCH(env)
 }
 

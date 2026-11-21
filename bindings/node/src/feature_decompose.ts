@@ -1,7 +1,5 @@
-import type { HpssWithResidualResult } from './effects_separation.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
-import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -9,7 +7,6 @@ import {
   assertAudioChannels,
   assertAudioInput,
   assertClosedToken,
-  assertHpssKernels,
   assertInt32,
   requestOnly,
   sampleOneShot,
@@ -19,16 +16,6 @@ import {
 export type NmfInit = 'random' | 'nndsvd';
 
 const NMF_INITS: readonly NmfInit[] = ['random', 'nndsvd'];
-
-function resolveHardMaskOption(value: unknown): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  if (typeof value !== 'boolean') {
-    throw refuseType(`hardMask must be a boolean`);
-  }
-  return value;
-}
 
 /** Request for {@link segmentCrossSimilarity}. */
 export interface SegmentCrossSimilarityRequest {
@@ -181,28 +168,6 @@ export interface NnFilterRequest {
   k?: number;
   /** Frames either side of a frame excluded from its neighbours, a non-negative integer. Default 1. */
   width?: number;
-}
-
-/** Request for {@link hpssWithResidual}. */
-export interface HpssWithResidualRequest {
-  /** Mono audio samples. */
-  samples: Float32Array;
-  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
-  sampleRate: number;
-  /**
-   * Horizontal median filter size, in STFT frames: a positive odd integer at
-   * most 524287. Default 31. The ceiling is 524288 and an even kernel is
-   * refused, so 524287 is the largest legal value.
-   */
-  kernelHarmonic?: number;
-  /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
-  kernelPercussive?: number;
-  /** FFT size in samples. Default 2048. */
-  nFft?: number;
-  /** Hop in samples. Default `nFft / 4`, rounded down. */
-  hopLength?: number;
-  /** Threshold the masks into binary ones instead of the soft split. Default `false`. */
-  hardMask?: boolean;
 }
 
 interface NativeSegmentMatrix {
@@ -594,51 +559,6 @@ export function remixAlignedIntervals(...args: unknown[]): Int32Array {
       toNativeIndexList(request.intervals, 'intervals'),
       request.sampleRate,
       alignZeros,
-    );
-  });
-}
-
-/**
- * HPSS into harmonic / percussive / residual signals.
- *
- * The three outputs always add back up to the input. `residual` is silent under
- * the default soft mask, whose two masks sum to one, so `harmonic` and
- * `percussive` already carry everything; it is returned anyway so the result
- * shape does not change with the mask. Pass `hardMask: true` for a residual that
- * holds signal — its thresholded masks leave the band where neither component
- * dominates, measured at 3 % of the input energy on a voice-plus-kick signal.
- *
- * @example
- * ```ts
- * const soft = hpssWithResidual({ samples, sampleRate });
- * // soft.residual is silence
- * const hard = hpssWithResidual({ samples, sampleRate, hardMask: true });
- * // hard.residual carries what neither component claimed
- * ```
- */
-export function hpssWithResidual(request: HpssWithResidualRequest): HpssWithResidualResult;
-export function hpssWithResidual(
-  samples: Float32Array,
-  sampleRate: number,
-  options?: OptionsOf<HpssWithResidualRequest>,
-): HpssWithResidualResult;
-export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
-  return withEntry('hpssWithResidual', () => {
-    const request = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
-    const fftOptions = resolveEffectFftOptions(request.nFft, request.hopLength);
-    const hardMask = resolveHardMaskOption(request.hardMask);
-    const kernelHarmonic = request.kernelHarmonic ?? 31;
-    const kernelPercussive = request.kernelPercussive ?? 31;
-    assertHpssKernels(kernelHarmonic, kernelPercussive);
-    return addon.hpssWithResidual(
-      request.samples,
-      request.sampleRate,
-      kernelHarmonic,
-      kernelPercussive,
-      fftOptions.nFft,
-      fftOptions.hopLength,
-      hardMask,
     );
   });
 }

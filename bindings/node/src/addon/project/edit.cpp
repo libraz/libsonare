@@ -132,10 +132,10 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
   return true;
 }
 
-// Reads the optional target-kind property while retaining whether it was
-// supplied. The legacy descriptor has no target-kind field, so that distinction
-// selects the legacy C ABI versus its additive `_ex` form.
-bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value, uint32_t* out) {
+// Reads a target kind given by name or ordinal; the edit-only "unchanged" value is never
+// spelled by a caller, so it is refused here like any other ordinal outside the closed set.
+bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value,
+                               SonareAutomationTargetKind* out) {
   if (out == nullptr) return false;
   if (value.IsString()) {
     const std::string name = sonare_node::node_narrow_string(env, value, "targetKind");
@@ -169,18 +169,19 @@ bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value, uint32_t
         .ThrowAsJavaScriptException();
     return false;
   }
-  *out = static_cast<uint32_t>(ordinal);
+  *out = static_cast<SonareAutomationTargetKind>(ordinal);
   return true;
 }
 
-bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj, bool* present,
-                              uint32_t* out) {
-  if (present == nullptr || out == nullptr) return false;
-  *present = false;
+// Reads the optional targetKind property into @p out, leaving @p absent_kind when it is
+// omitted: opaque for a new lane, SONARE_AUTOMATION_TARGET_UNCHANGED for an edit.
+bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj,
+                              SonareAutomationTargetKind absent_kind,
+                              SonareAutomationTargetKind* out) {
+  *out = absent_kind;
   const Napi::Value value = obj.Get("targetKind");
   if (env.IsExceptionPending()) return false;
   if (value.IsUndefined()) return true;
-  *present = true;
   return ParseAutomationTargetKind(env, value, out);
 }
 
@@ -886,24 +887,12 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();  // exception already pending
   }
   if (env.IsExceptionPending()) return env.Undefined();
-  bool has_target_kind = false;
-  uint32_t target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
-  if (!ReadAutomationTargetKind(env, input, &has_target_kind, &target_kind)) {
+  if (!ReadAutomationTargetKind(env, input, SONARE_AUTOMATION_TARGET_OPAQUE, &desc.target_kind)) {
     return env.Undefined();  // exception already pending
   }
   uint32_t out_target_param_id = 0;
-  if (!has_target_kind) {
-    ThrowIfError(
-        env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id));
-  } else {
-    SonareAutomationLaneDescEx desc_ex{};
-    desc_ex.target_param_id = desc.target_param_id;
-    desc_ex.target_kind = static_cast<SonareAutomationTargetKind>(target_kind);
-    desc_ex.points = desc.points;
-    desc_ex.point_count = desc.point_count;
-    ThrowIfError(env, sonare_project_add_automation_lane_ex(project_, track_id, &desc_ex,
-                                                            &out_target_param_id));
-  }
+  ThrowIfError(env,
+               sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out_target_param_id));
   SONARE_NODE_CATCH(env)
@@ -932,23 +921,12 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();  // exception already pending
   }
   if (env.IsExceptionPending()) return env.Undefined();
-  bool has_target_kind = false;
-  uint32_t target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
-  if (!ReadAutomationTargetKind(env, input, &has_target_kind, &target_kind)) {
+  if (!ReadAutomationTargetKind(env, input, SONARE_AUTOMATION_TARGET_UNCHANGED,
+                                &desc.target_kind)) {
     return env.Undefined();  // exception already pending
   }
-  if (!has_target_kind) {
-    ThrowIfError(env,
-                 sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
-  } else {
-    SonareAutomationLaneDescEx desc_ex{};
-    desc_ex.target_param_id = desc.target_param_id;
-    desc_ex.target_kind = static_cast<SonareAutomationTargetKind>(target_kind);
-    desc_ex.points = desc.points;
-    desc_ex.point_count = desc.point_count;
-    ThrowIfError(
-        env, sonare_project_edit_automation_lane_ex(project_, track_id, target_param_id, &desc_ex));
-  }
+  ThrowIfError(env,
+               sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

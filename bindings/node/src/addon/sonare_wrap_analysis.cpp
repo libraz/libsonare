@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -41,6 +42,74 @@ bool ReadMonoAnalysisInput(const Napi::CallbackInfo& info, MonoAnalysisInput* ou
   if (!OptionalIntArg(info.Env(), info, 1, "sampleRate", default_sample_rate, &out->sample_rate))
     return false;
   return true;
+}
+
+struct AnalysisProgressContext {
+  Napi::Env env;
+  Napi::Function on_progress;
+  std::optional<Napi::Function> cancel;
+};
+
+// Runs the full analysis synchronously with JS progress/cancel callbacks.
+//
+// Lending the TypedArray's pointer across the callbacks is safe and deliberately
+// not defended a second time: run_offline (src/c_api/sonare_c_internal.h) builds
+// the Audio with Audio::from_buffer, which copies, before any callback can fire
+// (pinned by "copies the input before the first progress callback" in
+// tests/api/sonare_c_core_test.cpp).
+Napi::Value AnalyzeWithCallbacks(Napi::Env env, const float* data, size_t length, int sample_rate,
+                                 SonareMusicAnalyzeOptions options, Napi::Function on_progress,
+                                 std::optional<Napi::Function> cancel) {
+  // The C-ABI callbacks run synchronously on this thread, so the stack context stays valid.
+  AnalysisProgressContext ctx{env, on_progress, cancel};
+
+  // A JS callback that throws leaves an exception pending; every further N-API
+  // call must be skipped, and the analysis is cancelled so the throw surfaces
+  // promptly instead of after the whole pipeline has run.
+  auto c_progress = [](float progress, const char* stage, void* user_data) {
+    auto* c = static_cast<AnalysisProgressContext*>(user_data);
+    if (c->env.IsExceptionPending()) return;
+    c->on_progress.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
+                         Napi::String::New(c->env, stage != nullptr ? stage : "")});
+    sonare_node::MarkPendingForeign(c->env);
+  };
+  auto c_cancel = [](void* user_data) {
+    auto* c = static_cast<AnalysisProgressContext*>(user_data);
+    if (c->env.IsExceptionPending()) return 1;
+    if (!c->cancel) return 0;
+    const Napi::Value result = c->cancel->Call({});
+    sonare_node::MarkPendingForeign(c->env);
+    if (c->env.IsExceptionPending()) return 1;
+    return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
+  };
+
+  char* json_str = nullptr;
+  options.progress_callback = c_progress;
+  options.progress_user_data = &ctx;
+  options.cancel_callback = c_cancel;
+  options.cancel_user_data = &ctx;
+  SonareError err = sonare_analyze_json(data, length, sample_rate, &options, &json_str);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_string(json_str);
+    return env.Undefined();
+  }
+  if (err != SONARE_OK) {
+    sonare_free_string(json_str);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    return env.Undefined();
+  }
+
+  Napi::Value parsed = ParseJsonObjectAndFree(env, json_str, "Failed to parse analysis JSON");
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object result = parsed.As<Napi::Object>();
+  Napi::Error enrich_error;
+  if (!EnrichFullAnalysisObject(env, result, &enrich_error)) {
+    enrich_error.ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return result;
 }
 
 }  // namespace
@@ -110,11 +179,20 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
 
   SonareKey key{};
   float tuning_used = 0.0f;
-  SonareError err = sonare_detect_key_with_tuning(
-      data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
-      chroma_high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
-      tuning.measure ? 1 : 0, &key, &tuning_used);
+  SonareDetectKeyOptions key_options;
+  sonare_detect_key_options_init(&key_options);
+  key_options.n_fft = n_fft;
+  key_options.hop_length = hop_length;
+  key_options.use_hpss = use_hpss ? 1 : 0;
+  key_options.loudness_weighted = loudness_weighted ? 1 : 0;
+  key_options.chroma_high_pass_hz = chroma_high_pass_hz;
+  key_options.modes = modes.empty() ? nullptr : modes.data();
+  key_options.mode_count = modes.size();
+  key_options.profile_type = profile;
+  key_options.genre_hint = genre_hint.empty() ? nullptr : genre_hint.c_str();
+  key_options.tuning_cents = tuning.tuning_cents;
+  key_options.tuning_auto = tuning.measure ? 1 : 0;
+  SonareError err = sonare_detect_key(data, length, sample_rate, &key_options, &key, &tuning_used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -160,11 +238,21 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
 
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_key_candidates_with_tuning(
-      data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
-      chroma_high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
-      tuning.measure ? 1 : 0, &candidates, &count, nullptr);
+  SonareDetectKeyOptions key_options;
+  sonare_detect_key_options_init(&key_options);
+  key_options.n_fft = n_fft;
+  key_options.hop_length = hop_length;
+  key_options.use_hpss = use_hpss ? 1 : 0;
+  key_options.loudness_weighted = loudness_weighted ? 1 : 0;
+  key_options.chroma_high_pass_hz = chroma_high_pass_hz;
+  key_options.modes = modes.empty() ? nullptr : modes.data();
+  key_options.mode_count = modes.size();
+  key_options.profile_type = profile;
+  key_options.genre_hint = genre_hint.empty() ? nullptr : genre_hint.c_str();
+  key_options.tuning_cents = tuning.tuning_cents;
+  key_options.tuning_auto = tuning.measure ? 1 : 0;
+  SonareError err = sonare_detect_key_candidates(data, length, sample_rate, &key_options,
+                                                 &candidates, &count, nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -342,7 +430,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
 
   float* times = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_onsets_ex(data, length, sample_rate, &config, &times, &count);
+  SonareError err = sonare_detect_onsets(data, length, sample_rate, &config, &times, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -370,6 +458,19 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   SonareMusicAnalyzeOptions options{};
   const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
   if (env.IsExceptionPending()) return env.Undefined();
+  // Trailing onProgress / cancel run the analysis with those callbacks, synchronously.
+  std::optional<Napi::Function> on_progress;
+  std::optional<Napi::Function> cancel;
+  if (!OptionalFunctionArg(env, info, 3, "onProgress", &on_progress) ||
+      !OptionalFunctionArg(env, info, 4, "cancel", &cancel)) {
+    return env.Undefined();
+  }
+  if (on_progress || cancel) {
+    return AnalyzeWithCallbacks(
+        env, data, length, sample_rate, options,
+        on_progress ? *on_progress : Napi::Function::New(env, [](const Napi::CallbackInfo&) {}),
+        cancel);
+  }
   return FullAnalysisJsonToObject(env, data, length, sample_rate, has_options ? &options : nullptr);
   SONARE_NODE_CATCH(env)
 }
@@ -394,10 +495,8 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
   void Execute() override {
     char* json_ptr = nullptr;
-    SonareError err = has_options_ ? sonare_analyze_json_ex(samples_.data(), samples_.size(),
-                                                            sample_rate_, &options_, &json_ptr)
-                                   : sonare_analyze_json(samples_.data(), samples_.size(),
-                                                         sample_rate_, &json_ptr);
+    SonareError err = sonare_analyze_json(samples_.data(), samples_.size(), sample_rate_,
+                                          has_options_ ? &options_ : nullptr, &json_ptr);
     if (err != SONARE_OK) {
       error_code_ = err;
       shape_refusal_ = LastRefusalIsShape();
@@ -603,8 +702,11 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   }
 
   SonareAcousticResult acoustic{};
-  SonareError err = sonare_analyze_impulse_response_ex(data, length, sample_rate, n_octave_bands,
-                                                       min_decay_db, &acoustic);
+  SonareAnalyzeImpulseResponseOptions impulse_options;
+  sonare_analyze_impulse_response_options_init(&impulse_options);
+  impulse_options.min_decay_db = min_decay_db;
+  SonareError err = sonare_analyze_impulse_response(data, length, sample_rate, n_octave_bands,
+                                                    &impulse_options, &acoustic);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1058,7 +1160,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.chroma_method = static_cast<SonareChromaMethod>(chroma_method);
   options.tuning_cents = tuning_cents;
   options.tuning_auto = tuning_auto ? 1 : 0;
-  SonareError err = sonare_detect_chords_ex(data, length, sample_rate, &options, &analysis);
+  SonareError err = sonare_detect_chords(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

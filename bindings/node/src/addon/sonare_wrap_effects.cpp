@@ -55,6 +55,10 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sampleRate");
   HpssArguments args;
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
+  bool with_residual = false;
+  if (!OptionalBoolArg(env, info, 7, "withResidual", false, &with_residual)) {
+    return env.Undefined();
+  }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input("samples", data, length, sr);
@@ -69,20 +73,26 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   stft_config.n_fft = args.n_fft;
   stft_config.hop_length = args.hop_length;
 
-  sonare::HpssAudioResult result = sonare::hpss(audio, config, stft_config);
-
+  const auto copy_out = [&](const sonare::Audio& signal) {
+    Napi::Float32Array array = Napi::Float32Array::New(env, signal.size());
+    if (signal.size() > 0) std::memcpy(array.Data(), signal.data(), signal.size() * sizeof(float));
+    return array;
+  };
   Napi::Object out = Napi::Object::New(env);
-
-  std::vector<float> harmonic_vec(result.harmonic.data(),
-                                  result.harmonic.data() + result.harmonic.size());
-  out.Set("harmonic", VecToFloat32(env, harmonic_vec));
-
-  std::vector<float> percussive_vec(result.percussive.data(),
-                                    result.percussive.data() + result.percussive.size());
-  out.Set("percussive", VecToFloat32(env, percussive_vec));
-
-  out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));
-
+  // The plain split stays on sonare::hpss, as the C entry does, so withResidual never moves it.
+  if (with_residual) {
+    sonare::HpssAudioResultWithResidual result =
+        sonare::hpss_with_residual(audio, config, stft_config);
+    out.Set("harmonic", copy_out(result.harmonic));
+    out.Set("percussive", copy_out(result.percussive));
+    out.Set("residual", copy_out(result.residual));
+    out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));
+  } else {
+    sonare::HpssAudioResult result = sonare::hpss(audio, config, stft_config);
+    out.Set("harmonic", copy_out(result.harmonic));
+    out.Set("percussive", copy_out(result.percussive));
+    out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));
+  }
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -648,7 +658,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
+Napi::Value SonareWrap::RealtimeVoiceChangerRender(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!IsFloat32Array(info[0])) {
@@ -674,9 +684,13 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   const int channels = node_narrow_int(env, info[3], "channels");
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err =
-      sonare_voice_change_realtime(samples.Data(), samples.ElementLength(), sample_rate,
-                                   preset.c_str(), channels, &output, &output_length);
+  SonareRealtimeVoiceChangerConfig config{};
+  sonare_realtime_voice_changer_config_init(&config);
+  SonareError err = sonare_realtime_voice_changer_config_from_json(preset.c_str(), &config);
+  if (err == SONARE_OK) {
+    err = sonare_realtime_voice_changer_render(samples.Data(), samples.ElementLength(), sample_rate,
+                                               &config, channels, &output, &output_length);
+  }
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     ThrowIfError(env, err);

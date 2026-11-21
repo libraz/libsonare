@@ -7560,6 +7560,13 @@ domain = "engine"
 rule = "aliases-removed"
 
 [[entry]]
+kind = "field"
+old = "EngineTransportState.barCount"
+new = "EngineTransportState.barIndex"
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.graphLatencySamplesQ8"
 new = "RealtimeEngine.graphLatencySamples"
@@ -8702,14 +8709,6 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 
 [[entry]]
 kind = "field"
-old = "HpssWithResidualRequest.sampleRate"
-changed = "optional -> required (no default)"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "field"
 old = "NnFilterRequest.aggregate"
 changed = "string -> NnFilterAggregate ('mean'|'median'|'min'|'max'); other strings refused with RangeError"
 domain = "effects"
@@ -9036,10 +9035,9 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "hpssWithResidual"
-changed = "one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult"
+removed = "Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual."
 domain = "effects"
-rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
@@ -9163,10 +9161,9 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "HpssWithResidualRequest"
-changed = "`sampleRate` is now required"
+removed = "Use HpssRequest with withResidual: true."
 domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
@@ -10156,7 +10153,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 kind = "type"
 old = "DenoiseLinkedResult"
 removed = "Use MasteringRepairDenoiseClassicalResult: channels plus reports, whose single entry is the shared report."
-domain = "effects"
+domain = "mastering"
 rule = "type-names"
 
 [[entry]]
@@ -10172,7 +10169,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 kind = "type"
 old = "DereverbLinkedResult"
 removed = "Use MasteringRepairDereverbClassicalResult: channels plus reports, whose single entry is the shared report."
-domain = "effects"
+domain = "mastering"
 rule = "type-names"
 
 [[entry]]
@@ -10499,36 +10496,38 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.channels"
+to = "RealtimeVoiceChangerRenderRequest.channels"
 changed = "the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
 
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.preset"
-to = "VoiceChangeRealtimeRequest.config"
+to = "RealtimeVoiceChangerRenderRequest.config"
 changed = "preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor')"
 domain = "effects"
 rule = "individual"
-test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
 
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.sampleRate"
+to = "RealtimeVoiceChangerRenderRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
 
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.samples"
-to = "VoiceChangeRealtimeRequest.channels"
+to = "RealtimeVoiceChangerRenderRequest.channels"
 changed = "samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`)"
 domain = "effects"
 rule = "num-channels"
-test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
 
 [[entry]]
 kind = "field"
@@ -10574,10 +10573,11 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChange requires 
 [[entry]]
 kind = "function"
 old = "voiceChangeRealtime"
-changed = "request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[]"
+to = "realtimeVoiceChangerRender"
+changed = "request-only: realtimeVoiceChangerRender(request: RealtimeVoiceChangerRenderRequest): Float32Array[]"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
 
 [[entry]]
 kind = "function"
@@ -10685,7 +10685,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "type"
 old = "VoiceChangeRealtimeOptions"
-removed = "Use VoiceChangeRealtimeRequest; the option fields are part of the request object."
+removed = "Use RealtimeVoiceChangerRenderRequest; the option fields are part of the request object."
 domain = "effects"
 rule = "one-positional-form"
 
@@ -13665,7 +13665,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?}"
 domain = "mastering"
 rule = "construction"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChainConfig"
@@ -16329,14 +16329,6 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::derives an omitted hop 
 
 [[entry]]
 kind = "field"
-old = "HpssWithResidualRequest.hopLength"
-changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
-domain = "effects"
-rule = "library-owned-defaults"
-test = "bindings/node/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
-
-[[entry]]
-kind = "field"
 old = "TimeStretchRequest.hopLength"
 changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
 domain = "effects"
@@ -16551,41 +16543,6 @@ rule = "one-positional-form"
 kind = "option"
 old = "hpss(hardMask)"
 removed = "pass hardMask as a field of HpssRequest"
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "hpssWithResidual(kernelHarmonic)"
-removed = "pass kernelHarmonic as a field of HpssWithResidualRequest"
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "hpssWithResidual(kernelPercussive)"
-removed = "pass kernelPercussive as a field of HpssWithResidualRequest"
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "hpssWithResidual(nFft)"
-removed = "pass nFft as a field of HpssWithResidualRequest"
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "hpssWithResidual(hopLength)"
-removed = "pass hopLength as a field of HpssWithResidualRequest"
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "hpssWithResidual(hardMask)"
-removed = "pass hardMask as a field of HpssWithResidualRequest"
 domain = "effects"
 rule = "one-positional-form"
 
@@ -17068,21 +17025,21 @@ rule = "one-positional-form"
 [[entry]]
 kind = "option"
 old = "voiceChangeRealtime(samples)"
-removed = "pass planar channels as channels in VoiceChangeRealtimeRequest"
+removed = "pass planar channels as channels in RealtimeVoiceChangerRenderRequest"
 domain = "effects"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "voiceChangeRealtime(sampleRate)"
-removed = "pass sampleRate as a field of VoiceChangeRealtimeRequest"
+removed = "pass sampleRate as a field of RealtimeVoiceChangerRenderRequest"
 domain = "effects"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "voiceChangeRealtime(preset)"
-removed = "pass it as config in VoiceChangeRealtimeRequest"
+removed = "pass it as config in RealtimeVoiceChangerRenderRequest"
 domain = "effects"
 rule = "one-positional-form"
 
@@ -18975,3 +18932,19 @@ old = "ProjectAutomationCurve='scurve'"
 removed = "spell it 'sCurve', the AutomationCurve token; 'scurve' is refused"
 domain = "project"
 rule = "token-case"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudnessStaticGainPeakDb"
+new = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "type"
+old = "VoiceChangeRealtimeRequest"
+to = "RealtimeVoiceChangerRenderRequest"
+changed = "renamed with realtimeVoiceChangerRender; the fields are unchanged"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"

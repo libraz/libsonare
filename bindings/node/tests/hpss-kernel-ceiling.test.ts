@@ -22,7 +22,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractPercussiveEvents, hpss, hpssWithResidual, isSonareError } from '../src/index.js';
+import { extractPercussiveEvents, hpss, isSonareError } from '../src/index.js';
 
 const sampleRate = 22050;
 
@@ -148,10 +148,15 @@ function expectCeilingRefusal(caught: unknown, direction: Direction, kernel: num
 }
 
 const entries = [
-  { name: 'hpss', run: (options: object) => hpss({ samples: tone, sampleRate, ...options }) },
   {
-    name: 'hpssWithResidual',
-    run: (options: object) => hpssWithResidual({ samples: tone, sampleRate, ...options }),
+    name: 'hpss',
+    label: 'hpss',
+    run: (options: object) => hpss({ samples: tone, sampleRate, ...options }),
+  },
+  {
+    name: 'hpss',
+    label: 'hpss with residual',
+    run: (options: object) => hpss({ samples: tone, sampleRate, withResidual: true, ...options }),
   },
 ];
 
@@ -161,7 +166,7 @@ describe('HPSS kernel ceiling', () => {
       for (const kernel of [INT_MAX, FIRST_ABOVE_CEILING]) {
         // Each filter carries its own copy of the guard, so one direction says
         // nothing about the other, and each entry point reaches both.
-        it(`${entry.name} refuses ${direction} kernel ${kernel} by naming the ceiling`, () => {
+        it(`${entry.label} refuses ${direction} kernel ${kernel} by naming the ceiling`, () => {
           expectCeilingRefusal(
             capture(() => entry.run(kernels(direction, kernel))),
             direction,
@@ -174,7 +179,7 @@ describe('HPSS kernel ceiling', () => {
         // INT_MAX - 1 and the ceiling's own value are both even, so both die on
         // odd-and-positive before magnitude is ever considered. The message must
         // not carry the ceiling, or a test could pass by tripping the wrong guard.
-        it(`${entry.name} refuses even ${direction} kernel ${kernel} for parity`, () => {
+        it(`${entry.label} refuses even ${direction} kernel ${kernel} for parity`, () => {
           const error = expectParameterRefusal(
             capture(() => entry.run(kernels(direction, kernel))),
           );
@@ -183,7 +188,7 @@ describe('HPSS kernel ceiling', () => {
       }
 
       for (const { passed, wrapsTo } of WRAPPING) {
-        it(`${entry.name} refuses a ${direction} kernel of ${passed} by naming the argument`, () => {
+        it(`${entry.label} refuses a ${direction} kernel of ${passed} by naming the argument`, () => {
           const error = expectParameterRefusal(
             capture(() => entry.run(kernels(direction, passed))),
           );
@@ -195,7 +200,7 @@ describe('HPSS kernel ceiling', () => {
           expect(error.message).not.toContain('exceeds the maximum');
         });
 
-        it(`${entry.name} never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
+        it(`${entry.label} never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
           // The assertion the refusal above cannot make: a dropped range check
           // does not throw, it returns one of these two results.
           const outcome = outcomeSignature(() => entry.run(kernels(direction, passed)));
@@ -229,9 +234,9 @@ describe('HPSS kernel ceiling', () => {
     expect(result.harmonic.length).toBe(tone.length);
     expect(result.harmonic.some((value) => value !== 0)).toBe(true);
 
-    const residual = hpssWithResidual({ samples: tone, sampleRate });
+    const residual = hpss({ samples: tone, sampleRate, withResidual: true });
     expect(residual.harmonic.length).toBe(tone.length);
-    expect(residual.residual.length).toBe(tone.length);
+    expect(residual.residual?.length).toBe(tone.length);
   });
 });
 

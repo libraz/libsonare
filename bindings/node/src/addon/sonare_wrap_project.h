@@ -20,14 +20,12 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- serialization --
   Napi::Value ToJson(const Napi::CallbackInfo& info);
   static Napi::Value FromJson(const Napi::CallbackInfo& info);
-  static Napi::Value FromJsonWithDiagnostics(const Napi::CallbackInfo& info);
   Napi::Value SetSampleRate(const Napi::CallbackInfo& info);
   Napi::Value GetSampleRate(const Napi::CallbackInfo& info);
   Napi::Value SetOverlapPolicy(const Napi::CallbackInfo& info);
   Napi::Value GetOverlapPolicy(const Napi::CallbackInfo& info);
   Napi::Value SetMixerSceneJson(const Napi::CallbackInfo& info);
   Napi::Value SetMarker(const Napi::CallbackInfo& info);
-  Napi::Value SetMarkerEx(const Napi::CallbackInfo& info);
   Napi::Value MarkerByIndex(const Napi::CallbackInfo& info);
   Napi::Value TrackByIndex(const Napi::CallbackInfo& info);
   Napi::Value ClipByIndex(const Napi::CallbackInfo& info);
@@ -103,7 +101,6 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetProgram(const Napi::CallbackInfo& info);
   Napi::Value SetProgramOnChannel(const Napi::CallbackInfo& info);
   Napi::Value BakeMidiFx(const Napi::CallbackInfo& info);
-  Napi::Value BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& info);
   Napi::Value PreviewMidiFxCount(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
   Napi::Value ValidateMidiNotes(const Napi::CallbackInfo& info);
@@ -181,7 +178,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 namespace sonare_node {
 
 /// @brief `alignTakeToReference(reference, take, sampleRate, takeSampleRate, config?)` —
-///        the handle-free take alignment (@ref sonare_align_take_to_reference_ex).
+///        the handle-free take alignment (@ref sonare_align_take_to_reference).
 /// @details Positional like the other MIR bridges on this surface; the facade's
 ///   request object is folded and `takeSampleRate` resolved before the call.
 ///   Answers `{ anchors, alignment }`, the anchors in the

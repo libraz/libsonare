@@ -237,13 +237,7 @@ describe('the HPSS positional readers default only an omitted argument', () => {
       })
       .join('|');
 
-  const entries = [
-    { name: 'hpss', run: (...rest: unknown[]) => addon.hpss(tone, SR, ...rest) },
-    {
-      name: 'hpssWithResidual',
-      run: (...rest: unknown[]) => addon.hpssWithResidual(tone, SR, ...rest),
-    },
-  ];
+  const entries = [{ name: 'hpss', run: (...rest: unknown[]) => addon.hpss(tone, SR, ...rest) }];
 
   // The default each argument falls back to, written positionally. A wrong type
   // at one position must produce exactly this run.
@@ -258,6 +252,12 @@ describe('the HPSS positional readers default only an omitted argument', () => {
         expect(captureError(() => entry.run(...args))?.message).toContain(argument);
       });
     }
+
+    it(`${entry.name}: a wrong-typed withResidual is refused by name`, () => {
+      const args: unknown[] = [...DEFAULTS, false, 'yes'];
+      expect(() => entry.run(...args)).toThrow(TypeError);
+      expect(captureError(() => entry.run(...args))?.message).toContain('withResidual');
+    });
 
     it(`${entry.name}: null reads as an omitted argument`, () => {
       expect(digest(entry.run(null, null, null, null))).toBe(digest(entry.run(...DEFAULTS)));
@@ -910,7 +910,7 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.addMidiClip('0', '4'));
         swallow(() => p.setSampleRate('48000'));
         swallow(() => p.setOverlapPolicy('0'));
-        swallow(() => p.setMarker('0', 'x', 'v'));
+        swallow(() => p.setMarker({ id: '0', ppq: 'x', name: 'v' }));
         swallow(() => p.markerByIndex('0'));
         swallow(() => p.trackByIndex('0'));
         swallow(() => p.clipByIndex('0'));
@@ -946,7 +946,7 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.setProgram('1', 'piano', 'x'));
         swallow(() => p.setProgramOnChannel('1', 300, 300, 'piano', 'x'));
         swallow(() => p.bakeMidiFx('1', '{}'));
-        swallow(() => p.bakeMidiFxWithSourceIndex('1', '{}'));
+        swallow(() => p.bakeMidiFx('1', '{}', true));
         swallow(() => p.previewMidiFxCount('1', '{}'));
         swallow(() => p.validateMidiNotes('1'));
         swallow(() => p.addAutomationLane('bad', 'bad2'));

@@ -249,26 +249,44 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
   if (!CheckLinkedArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
-  LinkedPlanes planes;
-  if (!ReadLinkedPlanes(env, info[0], &planes)) {
-    return env.Undefined();
+  Napi::Array channels = info[0].As<Napi::Array>();
+  std::vector<Napi::Float32Array> inputs;
+  std::vector<const float*> in_ptrs;
+  size_t length = 0;
+  for (size_t index = 0; index < channels.Length(); ++index) {
+    Napi::Value channel = channels.Get(index);
+    if (!IsFloat32Array(channel)) {
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    inputs.push_back(channel.As<Napi::Float32Array>());
+    if (index == 0) {
+      length = inputs.back().ElementLength();
+    } else if (inputs.back().ElementLength() != length) {
+      Napi::RangeError::New(env, "every channel must have the same length")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    in_ptrs.push_back(inputs.back().Data());
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareDenoiseClassicalConfig config = DefaultDenoiseConfig();
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_denoise_config(info[2].As<Napi::Object>(), config);
   }
-  SonareDenoiseReport report{};
-  SonareError err = sonare_mastering_repair_denoise_classical_linked(
-      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, &config,
-      planes.out_ptrs.data(), &report);
+  SonareDenoiseLinkedResult result{};
+  SonareError err = sonare_mastering_repair_denoise_classical_linked(in_ptrs.data(), in_ptrs.size(),
+                                                                     length, sr, &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
+  LinkedResultGuard<SonareDenoiseLinkedResult> guard(&result);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("channels", EmitLinkedChannels(env, planes));
-  out.Set("report", EmitDenoiseReport(env, report));
+  out.Set("channels",
+          EmitLinkedResultChannels(env, result.channels, result.num_channels, result.length));
+  out.Set("report", EmitDenoiseReport(env, result.report));
   return out;
   SONARE_NODE_CATCH(env)
 }

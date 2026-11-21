@@ -674,7 +674,6 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
       return env.Undefined();
     }
     if (!RequiredDoubleProperty(env, obj, "bpm", &segment.bpm)) return env.Undefined();
-    segment.start_sample = 0.0;
     segment.end_bpm = DoubleProperty(obj, "endBpm", segment.end_bpm);
     if (env.IsExceptionPending()) return env.Undefined();
     segments.push_back(segment);
@@ -1170,7 +1169,7 @@ Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info
   out.Set("loopEndPpq", Napi::Number::New(env, state.loop_end_ppq));
   out.Set("sampleRate", Napi::Number::New(env, state.sample_rate));
   out.Set("barStartPpq", Napi::Number::New(env, state.bar_start_ppq));
-  out.Set("barCount", Napi::Number::New(env, static_cast<double>(state.bar_count)));
+  out.Set("barIndex", Napi::Number::New(env, static_cast<double>(state.bar_index)));
   Napi::Object time_signature = Napi::Object::New(env);
   time_signature.Set("numerator", Napi::Number::New(env, state.time_signature.numerator));
   time_signature.Set("denominator", Napi::Number::New(env, state.time_signature.denominator));
