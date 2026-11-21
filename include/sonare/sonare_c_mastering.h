@@ -271,6 +271,7 @@ SonareError sonare_mastering_chain_config_from_json(const char* document, char**
 ///        @ref sonare_master_audio_options_init.
 /// @details No callback or user pointer is retained past the call: both callbacks run on the
 ///          calling thread and nothing is stored once it returns.
+/// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   /// Size of this struct in bytes, written by @ref sonare_master_audio_options_init.
   uint32_t struct_size;

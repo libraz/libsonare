@@ -1038,6 +1038,7 @@ SonareError sonare_normalize_stereo(const float* left, const float* right, size_
 ///   figures, not their average. Hard-clips to [-1, 1] as
 ///   @ref sonare_normalize_rms does, and shares @ref sonare_normalize_stereo's
 ///   argument and pair policy.
+/// @note Free @p out_left and @p out_right with @ref sonare_free_floats.
 SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
                                         int sample_rate, float target_db, float** out_left,
                                         float** out_right, size_t* out_length);
@@ -1062,6 +1063,7 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
                         const SonareTrimOptions* options, float** out, size_t* out_length);
 
 /// @brief Options for @ref sonare_decompose. Start from @ref sonare_decompose_options_init.
+/// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   /// Size of this struct in bytes, written by @ref sonare_decompose_options_init.
   uint32_t struct_size;

@@ -164,6 +164,7 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
                               float bpm_max, float* out_bpm);
 /// @brief Options for sonare_detect_key and sonare_detect_key_candidates. Boolean fields are 0/1.
 /// @details Start from sonare_detect_key_options_init; its values are the defaults named below.
+/// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   uint32_t struct_size;  ///< sizeof of this struct; set by sonare_detect_key_options_init.
   /// FFT size in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.
@@ -301,6 +302,7 @@ typedef int (*SonareCancelCallback)(void* user_data);
 /// @details Start from sonare_music_analyze_options_init(): a zeroed
 ///   meter_candidate_numerator_count is rejected, not treated as "use the default set".
 ///   Defaults below are those of that function.
+/// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   uint32_t struct_size;  ///< sizeof of this struct; set by sonare_music_analyze_options_init.
   /// Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.

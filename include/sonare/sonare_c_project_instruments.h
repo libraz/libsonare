@@ -435,6 +435,7 @@ typedef struct {
 ///        @ref sonare_project_bounce_options_init; every field is then read literally and
 ///        checked against the range given beside it. The four instrument lists host the
 ///        instruments MIDI tracks render through; a pointer may be NULL only with its count 0.
+/// @note Pointer members stay the caller's; the call does not transfer ownership.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareProjectBounceOptions); set by the init function.
   /// Render length in frames at @p sample_rate; positive. Default
