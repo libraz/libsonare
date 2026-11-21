@@ -1374,7 +1374,13 @@ def chk_sample_rate_required(ctx):
             )
             continue
         cands += 1
-        if sr is not None and sr["optional"]:
+        # With no audio to read a rate off, an absent rate is its own question
+        # (the rate-less answer), and None is how Python says absent.
+        if (
+            sr is not None
+            and sr["optional"]
+            and (audio or parity_normalize.canonical_default(sr.get("default")) != "none")
+        ):
             bad.append((r, "sample_rate has a default; make it required"))
         elif sr is None and "sr" not in params:
             bad.append((r, "takes audio but has no sample_rate parameter"))

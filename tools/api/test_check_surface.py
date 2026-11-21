@@ -2281,6 +2281,25 @@ class RateFromCEntry(CheckerCase):
             self.rate(), ["python function trim: sample_rate has a default; make it required"]
         )
 
+    def test_an_audio_free_query_may_leave_its_rate_absent(self):
+        self.c_fn("sonare_trim", ("name", "const char*"), ("sample_rate", "int"))
+        self.add(_py_fn("trim", ("name", None), ("sample_rate", "None")))
+        self.assertEqual(self.rate(), [])
+
+    def test_an_audio_free_query_may_not_default_its_rate_to_a_number(self):
+        self.c_fn("sonare_trim", ("name", "const char*"), ("sample_rate", "int"))
+        self.add(_py_fn("trim", ("name", None), ("sample_rate", "48000")))
+        self.assertEqual(
+            self.rate(), ["python function trim: sample_rate has a default; make it required"]
+        )
+
+    def test_audio_in_may_not_leave_its_rate_absent(self):
+        self.c_fn("sonare_trim", ("samples", "const float*"), ("sample_rate", "int"))
+        self.add(_py_fn("trim", ("samples", None), ("sample_rate", "None")))
+        self.assertEqual(
+            self.rate(), ["python function trim: sample_rate has a default; make it required"]
+        )
+
     def test_a_rate_in_the_c_options_struct_counts(self):
         self.c_fn(
             "sonare_trim", ("samples", "const float*"), ("options", "const SonareBpmOptions*")
