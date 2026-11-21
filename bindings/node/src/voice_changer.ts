@@ -308,32 +308,32 @@ export class RealtimeVoiceChanger {
   }
 
   /** Processes a mono block and returns a new array of the same length. */
-  processMono(input: Float32Array): Float32Array {
-    return this.native.processMono(input);
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.processMono(samples);
   }
 
   /**
    * Like {@link processMono}, with the external vocoder carrier (`vocoderCarrierSource:
-   * 'external'`). `carrier` must be as long as `input`; it is read only while the vocoder is on
+   * 'external'`). `carrier` must be as long as `samples`; it is read only while the vocoder is on
    * with an external carrier and ignored otherwise. The carrier-less process methods throw a
    * `SonareError` (`InvalidState`) while an external carrier is configured.
    */
-  processMonoWithCarrier(input: Float32Array, carrier: Float32Array): Float32Array {
-    return this.native.processMonoWithCarrier(input, carrier);
+  processMonoWithCarrier(samples: Float32Array, carrier: Float32Array): Float32Array {
+    return this.native.processMonoWithCarrier(samples, carrier);
   }
 
-  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `input`. */
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `samples`. */
   processMonoWithCarrierInto(
-    input: Float32Array,
+    samples: Float32Array,
     carrier: Float32Array,
     output: Float32Array,
   ): void {
-    this.native.processMonoWithCarrierInto(input, carrier, output);
+    this.native.processMonoWithCarrierInto(samples, carrier, output);
   }
 
-  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `input`. */
-  processMonoInto(input: Float32Array, output: Float32Array): void {
-    this.native.processMonoInto(input, output);
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `samples`. */
+  processMonoInto(samples: Float32Array, output: Float32Array): void {
+    this.native.processMonoInto(samples, output);
   }
 
   /**

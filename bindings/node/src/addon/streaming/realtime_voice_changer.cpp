@@ -355,7 +355,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
   const size_t carrier_index = 1;
   const size_t output_index = with_carrier ? 2 : 1;
   if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "input must be a Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (with_carrier && !IsFloat32Array(info[carrier_index])) {
@@ -370,13 +370,13 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   if (with_carrier &&
       info[carrier_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
-    Napi::RangeError::New(env, "carrier must have the same length as input")
+    Napi::RangeError::New(env, "carrier must have the same length as samples")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (into &&
       info[output_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
-    Napi::RangeError::New(env, "output must have the same length as input")
+    Napi::RangeError::New(env, "output must have the same length as samples")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -412,7 +412,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   const size_t channels_index = with_carrier ? 2 : 1;
   const size_t output_index = with_carrier ? 3 : 2;
   if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "input must be a Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (with_carrier && !IsFloat32Array(info[carrier_index])) {

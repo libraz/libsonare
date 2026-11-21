@@ -32,6 +32,7 @@ sve1 = "vocalState"
 new_track_id = "trackId"
 marker_id = "id"
 index = "sendIndex"
+input = "samples"
 
 [wasm]
 reference_sample_rate = "sampleRate"
