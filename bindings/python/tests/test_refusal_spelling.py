@@ -41,11 +41,20 @@ _REQUIRED: dict[str, Any] = {
     "sample_rate": 48000,
 }
 
-_OUTSIDE: tuple[object, ...] = (0, -1, -1.0, math.nan, 1e30, "nope")
+_OUTSIDE: tuple[object, ...] = (0, -1, -1.5, math.nan, 1e30, "nope")
 
-# Rows whose C subject no facade call can make the library refuse as a parameter.
-_UNREACHABLE = {
-    ("note_targets_from_smf", "bytes"): "unreadable SMF content is InvalidFormat, with no subject",
+# A buffer no entry accepts, tried as well where the spelling takes samples or bytes.
+_MALFORMED = np.ones((2, 2, 2), np.float32)
+_BUFFERS = frozenset({"samples", "audio", "data", "reference", "take"})
+
+# The closed set of reasons a row may go undriven.
+_REASONS = frozenset(
+    {"no value refuses it", "needs live state", "content refusal carries no subject"}
+)
+
+# Rows no facade call can make the library refuse under their subject.
+_UNDRIVEN = {
+    ("note_targets_from_smf", "bytes"): "content refusal carries no subject",
 }
 
 
@@ -166,7 +175,7 @@ def _call(entry: str, spelling: str) -> tuple[Callable[..., Any], dict[str, Any]
 
 def _refusals(entry: str, spelling: str) -> list[str]:
     texts = []
-    for value in _OUTSIDE:
+    for value in (*_OUTSIDE, *((_MALFORMED,) if spelling in _BUFFERS else ())):
         fn, given = _call(entry, spelling)
         try:
             fn(**given, **{spelling: value})
@@ -180,13 +189,29 @@ def _names(text: str, word: str) -> bool:
     return re.search(rf"(^[A-Za-z_.]+: |unknown key |, |\{{){re.escape(word)}\b", text) is not None
 
 
-@pytest.mark.parametrize(("entry", "subject", "spelling"), [(*k, v) for k, v in OVERRIDES.items()])
+_ROWS = [(*k, v) for k, v in OVERRIDES.items()]
+
+
+@pytest.mark.parametrize(
+    ("entry", "subject", "spelling"), [r for r in _ROWS if r[:2] not in _UNDRIVEN]
+)
 def test_a_table_row_is_refused_under_the_callers_spelling(
     entry: str, subject: str, spelling: str
 ) -> None:
     assert spelling in inspect.signature(_call(entry, spelling)[0]).parameters
     texts = _refusals(entry, spelling)
-    leaked = [t for t in texts if _names(t, subject)]
-    assert leaked == []
-    reached = any(_names(t, spelling) for t in texts)
-    assert reached is ((entry, subject) not in _UNREACHABLE), texts
+    assert [t for t in texts if _names(t, subject)] == []
+    assert any(_names(t, spelling) for t in texts), texts
+
+
+@pytest.mark.parametrize(("entry", "subject", "spelling"), [r for r in _ROWS if r[:2] in _UNDRIVEN])
+def test_an_undriven_row_never_leaks_its_subject(entry: str, subject: str, spelling: str) -> None:
+    assert [t for t in _refusals(entry, spelling) if _names(t, subject)] == []
+
+
+def test_every_table_row_is_driven_or_undriven_for_a_closed_reason() -> None:
+    driven = [r for r in _ROWS if r[:2] not in _UNDRIVEN]
+    print(f"refusal spelling sweep: driven={len(driven)} undriven={len(_UNDRIVEN)}")
+    assert driven
+    assert set(_UNDRIVEN) <= set(OVERRIDES), "an undriven key is no longer a table row"
+    assert set(_UNDRIVEN.values()) <= _REASONS
