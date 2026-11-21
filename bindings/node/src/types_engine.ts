@@ -55,59 +55,6 @@ export interface EngineTelemetry {
   value: number;
 }
 
-/** Meter telemetry record drained from {@link RealtimeEngine.drainMeterTelemetry}. */
-export interface EngineMeterTelemetry {
-  /**
-   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
-   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
-   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
-   * `targetId - 1` index into a 32-entry lane array runs past its end.
-   */
-  targetId: number;
-  /** Render-frame timestamp of the snapshot. */
-  renderFrame: number;
-  /** Monotonic sequence number. */
-  seq: number;
-  /** Left-channel peak level in dB. */
-  peakDbL: number;
-  /** Right-channel peak level in dB. */
-  peakDbR: number;
-  /** Left-channel RMS level in dB. */
-  rmsDbL: number;
-  /** Right-channel RMS level in dB. */
-  rmsDbR: number;
-  /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement that runs one
-   * reconstruction-filter group delay (a few samples) behind the block, so every
-   * value has its whole stencil and the reading does not depend on the block
-   * size. `meteringTruePeakDbtp` measures a whole signal at once.
-   */
-  truePeakDbtpL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbtpL}. */
-  truePeakDbtpR: number;
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbtpL}. */
-  maxTruePeakDbtp: number;
-  /** Stereo correlation in `[-1, 1]`. */
-  correlation: number;
-  /** Mono-compatibility width metric. */
-  monoCompatWidth: number;
-  /** Momentary loudness (LUFS). */
-  momentaryLufs: number;
-  /** Short-term loudness (LUFS). */
-  shortTermLufs: number;
-  /** Integrated loudness (LUFS). */
-  integratedLufs: number;
-  /** Gain reduction in dB. */
-  gainReductionDb: number;
-  /** Number of records dropped before this snapshot. */
-  droppedRecords: number;
-  /** Left-channel peak at the engine input tap, in dB. */
-  inputPeakDbL: number;
-  /** Right-channel peak at the engine input tap, in dB. */
-  inputPeakDbR: number;
-}
-
 /**
  * One lowered MIDI 1.0 message drained from
  * {@link RealtimeEngine.drainExternalMidi}. A single queued channel-voice event
@@ -132,11 +79,11 @@ export interface ExternalMidiEvent {
 
 /**
  * Per-plane meter telemetry record drained from
- * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
+ * {@link RealtimeEngine.drainMeterTelemetry}; a stereo target's left and right are planes 0 and 1. The
  * `peakDb`/`rmsDb`/`truePeakDbtp` arrays carry `numChannels` planes in canonical
  * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss).
  */
-export interface EngineMeterTelemetryWide {
+export interface EngineMeterTelemetry {
   /**
    * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
    * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the

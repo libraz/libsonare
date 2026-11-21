@@ -1,7 +1,7 @@
 /**
  * `capabilityCatalog().masteringPresets` matches the tracked
  * `tools/capability-catalog.json`, and `masteringPresetParams` returns the
- * same flat key space `masteringAssistantSuggestChain` does, for every
+ * same key space the `chainConfig` of `masteringAssistantSuggest` does, for every
  * built-in preset.
  */
 
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
   masterAudio,
-  masteringAssistantSuggestChain,
+  masteringAssistantSuggest,
   masteringPresetNames,
   masteringPresetParams,
 } from '../src/index.js';
@@ -68,10 +68,10 @@ describe('capabilityCatalog().masteringPresets', () => {
 });
 
 describe('masteringPresetParams', () => {
-  it('matches masteringAssistantSuggestChain key set for every preset', () => {
+  it('matches masteringAssistantSuggest chainConfig key set for every preset', () => {
     const samples = sine(0.4);
     const referenceKeys = new Set(
-      leafPaths(masteringAssistantSuggestChain({ samples, sampleRate: SR })),
+      leafPaths(masteringAssistantSuggest({ samples, sampleRate: SR }).chainConfig),
     );
     for (const preset of masteringPresetNames()) {
       const params = masteringPresetParams(preset);

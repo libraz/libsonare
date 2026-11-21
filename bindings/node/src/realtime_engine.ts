@@ -6,6 +6,7 @@ import {
   entryClass,
   invalidState,
   mergeRespelled,
+  nameNativeError,
   type Respelled,
   refuse,
   refuseType,
@@ -40,7 +41,6 @@ import type {
   EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
-  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
@@ -551,32 +551,13 @@ function telemetryFromNative(native: Record<string, unknown>): EngineTelemetry {
   } as unknown as EngineTelemetry;
 }
 
-function meterTelemetryWideFromNative(native: Record<string, unknown>): EngineMeterTelemetryWide {
+function meterTelemetryFromNative(native: Record<string, unknown>): EngineMeterTelemetry {
   const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = native;
   return {
     ...rest,
     numChannels: channelCount,
     truePeakDbtp: truePeakDb,
     maxTruePeakDbtp: maxTruePeakDb,
-  } as unknown as EngineMeterTelemetryWide;
-}
-
-/** Level a plane the target does not carry reads as, matching the engine's meter floor. */
-const METER_FLOOR_DB = -120;
-
-/** The stereo view of a per-plane record: planes 0 and 1, the floor where a plane is absent. */
-function meterTelemetryFromWide(wide: EngineMeterTelemetryWide): EngineMeterTelemetry {
-  const { numChannels: _numChannels, peakDb, rmsDb, truePeakDbtp, inputPeakDb, ...rest } = wide;
-  return {
-    ...rest,
-    peakDbL: peakDb[0] ?? METER_FLOOR_DB,
-    peakDbR: peakDb[1] ?? METER_FLOOR_DB,
-    rmsDbL: rmsDb[0] ?? METER_FLOOR_DB,
-    rmsDbR: rmsDb[1] ?? METER_FLOOR_DB,
-    truePeakDbtpL: truePeakDbtp[0] ?? METER_FLOOR_DB,
-    truePeakDbtpR: truePeakDbtp[1] ?? METER_FLOOR_DB,
-    inputPeakDbL: inputPeakDb[0] ?? METER_FLOOR_DB,
-    inputPeakDbR: inputPeakDb[1] ?? METER_FLOOR_DB,
   } as unknown as EngineMeterTelemetry;
 }
 
@@ -680,6 +661,17 @@ function withoutDestinationId<T extends object>(config: T): T {
   return config;
 }
 
+/** One bank-select byte, refused under the key the caller wrote rather than the native name. */
+function bankByte(value: unknown, argName: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  if (!Number.isInteger(value) || value < 0 || value > 127) {
+    throw refuse(`${argName} must be an integer in [0, 127]`);
+  }
+  return value;
+}
+
 /** An optional bank selection as the native `(bankValid, msb, lsb)` triple; absence is "no bank". */
 function bankFields(
   requestName: 'pushMidiProgram' | 'pushMidiInputProgram',
@@ -691,8 +683,8 @@ function bankFields(
   const record = requestObject(requestName, bank, 'bank', true);
   return {
     bankValid: true,
-    msb: requireFiniteInteger(record.msb, 'bank.msb'),
-    lsb: requireFiniteInteger(record.lsb, 'bank.lsb'),
+    msb: bankByte(record.msb, 'bank.msb'),
+    lsb: bankByte(record.lsb, 'bank.lsb'),
   };
 }
 
@@ -1946,10 +1938,15 @@ export class RealtimeEngine {
     if (options === undefined) {
       return this.native.process(channels);
     }
-    const request = requestObject('process', options, 'options', true);
-    const withMonitor = isAbsent(request.withMonitor)
-      ? false
-      : requireBoolean(request.withMonitor, 'withMonitor');
+    let withMonitor: boolean;
+    try {
+      const request = requestObject('process', options, 'options', true);
+      withMonitor = isAbsent(request.withMonitor)
+        ? false
+        : requireBoolean(request.withMonitor, 'withMonitor');
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeEngine.process');
+    }
     return withMonitor ? this.native.process(channels, true) : this.native.process(channels);
   }
 
@@ -2039,22 +2036,12 @@ export class RealtimeEngine {
   }
 
   /**
-   * Drain pending stereo meter telemetry records published by the engine's meter tap.
-   * Compatibility drain over the queue {@link drainMeterTelemetryWide} reads; use that one alone.
+   * Drain pending meter telemetry as per-plane records published by the engine's meter tap.
+   * A stereo target's left and right are planes 0 and 1.
    */
   drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
-    return this.drainMeterTelemetryWide(maxRecords).map(meterTelemetryFromWide);
-  }
-
-  /**
-   * Drain pending meter telemetry as per-plane (wide) records. This is the one
-   * meter drain: a stereo target's left and right are planes 0 and 1. Use it
-   * alone; {@link drainMeterTelemetry} consumes the same queue (every target's
-   * records) and stays for compatibility.
-   */
-  drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
     return (this.native.drainMeterTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
-      meterTelemetryWideFromNative,
+      meterTelemetryFromNative,
     );
   }
 

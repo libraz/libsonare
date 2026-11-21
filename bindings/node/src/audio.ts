@@ -224,7 +224,7 @@ export class Audio {
       return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path));
     }
     if (typeof channelIndex !== 'number') {
-      throw new TypeError('channelIndex must be a number');
+      throw refuseType('channelIndex must be a number');
     }
     return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path, channelIndex));
   }

@@ -1822,13 +1822,6 @@ const ROWS: Row[] = [
     invalid: { sampleRate: 0 },
   },
   {
-    name: 'masteringAssistantSuggestChain',
-    fn: sonare.masteringAssistantSuggestChain,
-    params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { targetLufs: -13 } },
-    invalid: { sampleRate: 0 },
-  },
-  {
     name: 'masteringAudioProfile',
     fn: sonare.masteringAudioProfile,
     params: 'samples sampleRate ...options?',

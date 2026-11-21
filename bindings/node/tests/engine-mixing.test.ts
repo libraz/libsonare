@@ -257,7 +257,7 @@ describe('RealtimeEngine native binding', () => {
       new Float32Array(frames),
       new Float32Array(frames),
     ]);
-    const wide = engine.drainMeterTelemetryWide();
+    const wide = engine.drainMeterTelemetry();
     const busMeter = wide.find((record) => record.targetId === 33);
     expect(busMeter).toBeDefined();
     if (!busMeter) {

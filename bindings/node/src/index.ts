@@ -139,7 +139,6 @@ export type {
   EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
-  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineMidiEvent,

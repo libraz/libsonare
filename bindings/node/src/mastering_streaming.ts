@@ -1,5 +1,11 @@
 import { chainConfigJson } from './internal/chain_config.js';
-import { entryClass, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import {
+  entryClass,
+  nameNativeError,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -637,8 +643,12 @@ export class StreamAnalyzer {
    *   between the two forms require `reset()` first.
    */
   process(samples: Float32Array, startSample?: number): void {
-    if (startSample !== undefined && typeof startSample !== 'number') {
-      throw new TypeError('startSample must be a number');
+    try {
+      if (startSample !== undefined && typeof startSample !== 'number') {
+        throw refuseType('startSample must be a number');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'StreamAnalyzer.process');
     }
     this.native.process(samples, startSample);
   }

@@ -1,7 +1,6 @@
 /**
- * `masteringAssistantSuggestChain(Stereo)` return the same nested chain config
- * `masteringAssistantSuggest(Stereo)` carries as its `chainConfig`, in a shape
- * that plugs straight into `masterAudio(Stereo)`'s `overrides`.
+ * The `chainConfig` of `masteringAssistantSuggest(Stereo)` plugs straight into
+ * `masterAudio(Stereo)`'s `overrides`.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -10,8 +9,6 @@ import {
   masterAudio,
   masterAudioStereo,
   masteringAssistantSuggest,
-  masteringAssistantSuggestChain,
-  masteringAssistantSuggestChainStereo,
   masteringAssistantSuggestStereo,
 } from '../src/index.js';
 
@@ -25,19 +22,10 @@ function sine(seconds: number, freq = 440, amp = 0.2): Float32Array {
   return samples;
 }
 
-describe('masteringAssistantSuggestChain', () => {
-  it('matches the chain config masteringAssistantSuggest carries', () => {
-    const samples = sine(0.4);
-    const document = masteringAssistantSuggest({ samples, sampleRate });
-
-    const chain = masteringAssistantSuggestChain({ samples, sampleRate });
-
-    expect(chain).toEqual(document.chainConfig);
-  });
-
+describe('masteringAssistantSuggest chainConfig', () => {
   it('can be applied as masterAudio overrides', () => {
     const samples = sine(0.4);
-    const chain = masteringAssistantSuggestChain({ samples, sampleRate });
+    const chain = masteringAssistantSuggest({ samples, sampleRate }).chainConfig;
 
     const result = masterAudio({
       samples,
@@ -50,21 +38,11 @@ describe('masteringAssistantSuggestChain', () => {
   });
 });
 
-describe('masteringAssistantSuggestChainStereo', () => {
-  it('matches the chain config masteringAssistantSuggestStereo carries', () => {
-    const left = sine(0.3, 220);
-    const right = sine(0.3, 220, 0.18);
-    const document = masteringAssistantSuggestStereo({ left, right, sampleRate });
-
-    const chain = masteringAssistantSuggestChainStereo({ left, right, sampleRate });
-
-    expect(chain).toEqual(document.chainConfig);
-  });
-
+describe('masteringAssistantSuggestStereo chainConfig', () => {
   it('can be applied as masterAudioStereo overrides', () => {
     const left = sine(0.3, 220);
     const right = sine(0.3, 220, 0.18);
-    const chain = masteringAssistantSuggestChainStereo({ left, right, sampleRate });
+    const chain = masteringAssistantSuggestStereo({ left, right, sampleRate }).chainConfig;
 
     const result = masterAudioStereo({
       left,

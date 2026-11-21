@@ -11,7 +11,6 @@ import {
   capabilityCatalog,
   masterAudio,
   masteringApplyProcessor,
-  masteringAssistantSuggestChainStereo,
   masteringAssistantSuggestStereo,
   masteringAudioProfileStereo,
   masteringInsertParamInfo,
@@ -263,7 +262,6 @@ describe('request-only stereo helpers', () => {
     const helpers = {
       masteringAudioProfileStereo,
       masteringAssistantSuggestStereo,
-      masteringAssistantSuggestChainStereo,
       masteringStreamingPreviewStereo,
     };
     for (const [name, helper] of Object.entries(helpers)) {

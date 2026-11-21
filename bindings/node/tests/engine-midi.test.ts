@@ -360,7 +360,6 @@ describe('RealtimeEngine native binding', () => {
       const drains = [
         (max: unknown) => (engine.drainTelemetry as (m: unknown) => unknown)(max),
         (max: unknown) => (engine.drainMeterTelemetry as (m: unknown) => unknown)(max),
-        (max: unknown) => (engine.drainMeterTelemetryWide as (m: unknown) => unknown)(max),
         (max: unknown) => (engine.drainScopeTelemetry as (m: unknown) => unknown)(max),
         (max: unknown) => (engine.drainExternalMidi as (m: unknown) => unknown)(max),
       ];
@@ -448,7 +447,7 @@ describe('live MIDI push argument and state rule', () => {
     [
       'pushMidiProgram',
       (e) => e.pushMidiProgram(0, 0, 0, 0, { msb: 128, lsb: 0 }),
-      'bank_msb must be an integer in [0, 127]',
+      'bank.msb must be an integer in [0, 127]',
     ],
     [
       'pushMidiUmp',

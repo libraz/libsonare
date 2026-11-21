@@ -1,4 +1,4 @@
-import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
+import { chainConfigFromDocument } from './internal/chain_config.js';
 import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
@@ -8,7 +8,6 @@ import type {
   CapabilityCatalog,
   MasteringAssistantResult,
   MasteringAudioProfile,
-  MasteringChainConfig,
   MasteringPlatform,
   MasteringPreset,
   MasteringStreamingPreviewResult,
@@ -85,7 +84,7 @@ function assistantPresetNames(): MasteringPreset[] {
     .map((entry) => entry.name as MasteringPreset);
 }
 
-/** Request form of {@link masteringAssistantSuggest} and {@link masteringAssistantSuggestChain}. */
+/** Request form of {@link masteringAssistantSuggest}. */
 export interface MasteringAssistantSuggestRequest extends MasteringAssistantSettings {
   /** Mono input samples. */
   samples: Float32Array;
@@ -93,7 +92,7 @@ export interface MasteringAssistantSuggestRequest extends MasteringAssistantSett
   sampleRate: number;
 }
 
-/** Request form of {@link masteringAssistantSuggestStereo} and {@link masteringAssistantSuggestChainStereo}. */
+/** Request form of {@link masteringAssistantSuggestStereo}. */
 export interface MasteringAssistantSuggestStereoRequest extends MasteringAssistantSettings {
   /** Left channel samples. */
   left: Float32Array;
@@ -267,39 +266,6 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
 }
 
 /**
- * Suggest a mastering chain and return it alone, as the nested
- * {@link MasteringChainConfig} {@link masteringAssistantSuggest} carries as
- * `chainConfig`. Pass it as `overrides` to {@link masterAudio} unchanged.
- *
- * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`
- */
-export function masteringAssistantSuggestChain(
-  request: MasteringAssistantSuggestRequest,
-): MasteringChainConfig;
-export function masteringAssistantSuggestChain(
-  samples: Float32Array,
-  sampleRate: number,
-  options?: OptionsOf<MasteringAssistantSuggestRequest>,
-): MasteringChainConfig;
-export function masteringAssistantSuggestChain(...args: unknown[]): MasteringChainConfig {
-  return withEntry('masteringAssistantSuggestChain', () => {
-    const r = sampleOneShot<MasteringAssistantSuggestRequest>(
-      'masteringAssistantSuggestChain',
-      args,
-    );
-    assertAudioInput(r.samples, r.sampleRate, r);
-    return chainConfigFromJson(
-      addon.masteringAssistantSuggestChain(
-        r.samples,
-        r.sampleRate,
-        withEntry('masteringAssistantSuggestChain', () => assistantParams(r)),
-      ),
-    );
-  });
-}
-
-/**
  * Measure the mastering profile of mono audio: loudness, spectral and dynamics
  * groups, and — unless `detectDefects` is false — the repair detectors' readings
  * under `defects`.
@@ -374,32 +340,6 @@ export function masteringAssistantSuggestStereo(
         r.right,
         r.sampleRate,
         withEntry('masteringAssistantSuggestStereo', () => assistantParams(r)),
-      ),
-    );
-  });
-}
-
-/**
- * Stereo counterpart of {@link masteringAssistantSuggestChain}: the nested
- * {@link MasteringChainConfig} alone, ready to pass as `overrides` to
- * {@link masterAudioStereo}.
- */
-export function masteringAssistantSuggestChainStereo(
-  request: MasteringAssistantSuggestStereoRequest,
-): MasteringChainConfig {
-  return withEntry('masteringAssistantSuggestChainStereo', () => {
-    const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
-      'masteringAssistantSuggestChainStereo',
-      [request],
-    );
-    assertAudioInput(r.left, r.sampleRate, r, 'left');
-    assertAudioInput(r.right, r.sampleRate, r, 'right');
-    return chainConfigFromJson(
-      addon.masteringAssistantSuggestChainStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        withEntry('masteringAssistantSuggestChainStereo', () => assistantParams(r)),
       ),
     );
   });

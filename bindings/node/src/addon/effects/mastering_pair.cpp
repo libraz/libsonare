@@ -529,28 +529,6 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::MasteringAssistantSuggestChain(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  SONARE_NODE_TRY
-  auto samples = info[0].As<Napi::Float32Array>();
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", samples.Data(), samples.ElementLength(),
-                                       node_narrow_int(env, info[1], "sampleRate"));
-  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 2);
-  const auto result = sonare::mastering::assistant::suggest_chain(
-      samples.Data(), samples.ElementLength(), node_narrow_int(env, info[1], "sampleRate"), config);
-  return Napi::String::New(env, sonare::mastering::api::chain_config_to_json(result.config));
-  SONARE_NODE_CATCH(env)
-}
-
 Napi::Value SonareWrap::MasteringPresetParams(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
@@ -662,22 +640,6 @@ Napi::Value SonareWrap::MasteringAssistantSuggestStereo(const Napi::CallbackInfo
   const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), frames, 2, sample_rate, config);
   return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MasteringAssistantSuggestChainStereo(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  std::vector<float> interleaved;
-  size_t frames = 0;
-  int sample_rate = 0;
-  if (!ReadStereoPair("left", "right", info, &interleaved, &frames, &sample_rate)) {
-    return env.Undefined();
-  }
-  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 3);
-  const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
-      interleaved.data(), frames, 2, sample_rate, config);
-  return Napi::String::New(env, sonare::mastering::api::chain_config_to_json(result.config));
   SONARE_NODE_CATCH(env)
 }
 

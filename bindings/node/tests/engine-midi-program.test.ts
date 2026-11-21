@@ -116,17 +116,21 @@ describe('RealtimeEngine live program change', () => {
         new RangeError('RealtimeEngine.pushMidiProgram: program must be an integer in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 })).toThrow(
-        new RangeError('RealtimeEngine.pushMidiProgram: bank_msb must be an integer in [0, 127]'),
+        new RangeError('RealtimeEngine.pushMidiProgram: bank.msb must be an integer in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 300)).toThrow(/program/);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 300, lsb: 0 })).toThrow(/bankMsb/);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bankLsb/);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 300, lsb: 0 })).toThrow(
+        /bank\.msb/,
+      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 300 })).toThrow(
+        /bank\.lsb/,
+      );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, 'yes' as never)).toThrow(TypeError);
       expect(() => engine.pushMidiProgram('x' as unknown as number, 0, 0, 0)).toThrow(TypeError);
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, null, -1)).toThrow(RangeError);
       expect(() => engine.pushMidiInputProgram(300, 0, 0)).toThrow(/group/);
       expect(() => engine.pushMidiInputProgram(0, 0, 300)).toThrow(/program/);
-      expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bankLsb/);
+      expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bank\.lsb/);
     } finally {
       engine.destroy();
     }

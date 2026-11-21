@@ -63,7 +63,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['masterAudio', 'samples'],
   ['masteringApplyProcessor', 'samples'],
   ['masteringAssistantSuggest', 'samples'],
-  ['masteringAssistantSuggestChain', 'samples'],
   ['masteringAudioProfile', 'samples'],
   ['masteringDynamicsCompressor', 'samples'],
   ['masteringDynamicsGate', 'samples'],

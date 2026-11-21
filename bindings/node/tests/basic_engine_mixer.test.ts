@@ -58,7 +58,7 @@ describe('RealtimeEngine', () => {
       expect(Array.isArray(off)).toBe(true);
       expect(off).toHaveLength(2);
       expect(() => engine.process(planes, { withMonitor: 1 } as never)).toThrow(
-        new TypeError('withMonitor must be a boolean'),
+        new TypeError('RealtimeEngine.process: withMonitor must be a boolean'),
       );
       expect(() => engine.process(planes, { withMonitor: true, extra: 1 } as never)).toThrow(
         TypeError,

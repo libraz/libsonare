@@ -1303,14 +1303,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
       ],
       [
-        'masteringAssistantSuggestChain',
-        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
-      ],
-      [
-        'masteringAssistantSuggestChainStereo',
-        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
-      ],
-      [
         'masteringAssistantSuggestStereo',
         'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
       ],

@@ -169,12 +169,8 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   const std::string name = node_narrow_string(env, info[0], "name");
   int sample_rate = 0;
   const bool at_rate = !(info[1].IsUndefined() || info[1].IsNull());
-  if (at_rate && !RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) {
-    return env.Undefined();
-  }
   // 0 is the C ABI's rate-less query, so a given 0 is refused here rather than read as absent.
-  if (at_rate && sample_rate == 0) {
-    Napi::RangeError::New(env, "sampleRate 0 is out of range").ThrowAsJavaScriptException();
+  if (at_rate && !sonare_node::ReadWholeHertzSampleRate(env, info[1], &sample_rate)) {
     return env.Undefined();
   }
   char* json = nullptr;
