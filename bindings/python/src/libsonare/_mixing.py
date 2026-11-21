@@ -28,6 +28,7 @@ from ._runtime import (
     PanMode,
     SendTiming,
     SonareMixMeterSnapshot,
+    _bool_flag,
     _check,
     _check_realtime,
     _curve_value,
@@ -279,9 +280,9 @@ class Mixer:
         handle = lib.sonare_mixer_add_strip_ex(
             self._handle,
             _utf8_arg(id, "id"),
-            1 if enabled else 0,
-            1 if lufs else 0,
-            1 if true_peak else 0,
+            _bool_flag(enabled, "enabled"),
+            _bool_flag(lufs, "lufs"),
+            _bool_flag(true_peak, "true_peak"),
             _to_c_int(
                 _resolve_zero_default(true_peak_oversample, "true_peak_oversample"),
                 "true_peak_oversample",
@@ -1002,6 +1003,9 @@ class Mixer:
         leave the remaining strips silent; more raise ``SonareValueError``.
         """
         self._require()
+        for name, planes in (("left_inputs", left_inputs), ("right_inputs", right_inputs)):
+            if isinstance(planes, (str, bytes)) or not isinstance(planes, (Sequence, np.ndarray)):
+                raise _refuse_type(f"{name} must be a sequence of planes, one per strip")
         if len(left_inputs) != len(right_inputs):
             raise _refuse("left_inputs and right_inputs must have the same length")
         strip_count = self.strip_count

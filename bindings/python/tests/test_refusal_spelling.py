@@ -102,22 +102,94 @@ def _voice_changer(method: str, **required: Any) -> Callable[[], tuple[Callable[
     return make
 
 
-def _playback(method: str) -> Callable[[], tuple[Callable[..., Any], dict]]:
+def _playback(method: str, **required: Any) -> Callable[[], tuple[Callable[..., Any], dict]]:
     def make() -> tuple[Callable[..., Any], dict[str, Any]]:
         renderer = libsonare.PlaybackRenderer({}, sample_rate=48000, max_block_size=128)
-        return getattr(renderer, method), {"samples": _TONE[:128]}
+        return getattr(renderer, method), dict(required)
 
     return make
 
 
+def _engine() -> libsonare.RealtimeEngine:
+    return libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128)
+
+
+def _insert_param(method: str, ref: Any) -> Callable[[], tuple[Callable[..., Any], dict[str, Any]]]:
+    """A strip insert parameter edit: ``ref`` is a track id, ``"master"`` or a bus id."""
+
+    def make() -> tuple[Callable[..., Any], dict[str, Any]]:
+        target = {"bus_id": ref} if "bus" in method else {"ref": ref}
+        return getattr(_engine(), method), {**target, "insert_index": 0, "value": 0.0}
+
+    return make
+
+
+def _mixer_stereo() -> tuple[Callable[..., Any], dict[str, Any]]:
+    mixer = libsonare.Mixer(sample_rate=48000)
+    mixer.add_strip("a")
+    plane = [_TONE[:128]]
+    return mixer.process_stereo, {"left_inputs": plane, "right_inputs": plane}
+
+
 # A C entry a handle method reaches: the bound method and a valid value for each argument.
 _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
+    "engine_apply_bus_strip_insert_param_by_name_now": _insert_param(
+        "apply_bus_insert_param_now", 1
+    ),
+    "engine_apply_master_strip_insert_param_by_name_now": _insert_param(
+        "apply_strip_insert_param_now", "master"
+    ),
+    "engine_apply_track_strip_insert_param_by_name_now": _insert_param(
+        "apply_strip_insert_param_now", 1
+    ),
+    "engine_drain_external_midi": lambda: (_engine().drain_external_midi, {}),
+    "engine_resolve_master_automation_id": lambda: (
+        _engine().resolve_strip_automation_id,
+        {"ref": "master"},
+    ),
+    "engine_resolve_track_lane_automation_id": lambda: (
+        _engine().resolve_strip_automation_id,
+        {"ref": 1},
+    ),
+    "engine_restore_bus_strip_insert_param_by_name": _insert_param("restore_bus_insert_param", 1),
+    "engine_restore_master_strip_insert_param_by_name": _insert_param(
+        "restore_strip_insert_param", "master"
+    ),
+    "engine_restore_track_strip_insert_param_by_name": _insert_param(
+        "restore_strip_insert_param", 1
+    ),
+    "engine_set_bus_strip_insert_param_by_name": _insert_param("set_bus_insert_param", 1),
     "engine_set_capture_buffer": lambda: (
-        libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128).configure_capture,
+        _engine().configure_capture,
         {"capacity_frames": 1024},
     ),
-    "playback_renderer_process_interleaved": _playback("process_interleaved"),
-    "playback_renderer_render_offline": _playback("render_offline"),
+    "engine_set_master_strip_insert_param_by_name": _insert_param(
+        "set_strip_insert_param", "master"
+    ),
+    "engine_set_record_offset_samples": lambda: (
+        _engine().configure_capture,
+        {"capacity_frames": 1024},
+    ),
+    "engine_set_track_output_bus": lambda: (_engine().set_track_output_bus, {"track_id": 1}),
+    "engine_set_track_strip_insert_param_by_name": _insert_param("set_strip_insert_param", 1),
+    "mixer_add_strip": lambda: (libsonare.Mixer(sample_rate=48000).add_strip, {"id": "a"}),
+    "mixer_process_stereo": _mixer_stereo,
+    "mixing_scene_preset_json": lambda: (libsonare.mixing_scene_preset, {}),
+    "playback_loudness_meter_push_interleaved": lambda: (
+        libsonare.PlaybackLoudnessMeter(num_channels=1, sample_rate=48000).push_interleaved,
+        {},
+    ),
+    "playback_render_interleaved": lambda: (
+        libsonare.render_playback,
+        {"samples": _TONE[:128], "num_channels": 1, "sample_rate": 48000, "config": {}},
+    ),
+    "playback_renderer_process_interleaved": _playback(
+        "process_interleaved", samples=_TONE[:128], num_input_channels=1
+    ),
+    "playback_renderer_process_planar": _playback("process_planar"),
+    "playback_renderer_render_offline": _playback(
+        "render_offline", samples=_TONE[:128], num_input_channels=1
+    ),
     "project_add_clip": _clip,
     "project_add_loop_recording_takes": _loop_takes,
     "project_import_clip_file": lambda: (libsonare.Project().import_clip_file, {}),
@@ -127,6 +199,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
         libsonare.Project().set_marker,
         {"ppq": 0.0, "name": "m"},
     ),
+    "project_set_overlap_policy": lambda: (libsonare.Project().set_overlap_policy, {}),
     "project_set_source_audio": lambda: (
         libsonare.Project().set_source_audio,
         {"source_id": 1, "audio": _TONE, "sample_rate": 48000},
@@ -143,6 +216,11 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "realtime_voice_changer_process_mono_with_carrier": _voice_changer(
         "process_mono_with_carrier", carrier=_TONE[:128]
     ),
+    "stream_analyzer_process_with_offset": lambda: (
+        libsonare.StreamAnalyzer(sample_rate=22050).process_with_offset,
+        {"samples": _TONE[:512]},
+    ),
+    "stream_analyzer_reset": lambda: (libsonare.StreamAnalyzer(sample_rate=22050).reset, {}),
     "strip_add_send": lambda: (
         _mixer_with_send().add_send,
         {"strip": "a", "destination_bus_id": "b"},
