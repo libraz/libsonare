@@ -134,7 +134,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['splitNote', 'samples'],
   ['splitSilence', 'samples'],
   ['stft', 'samples'],
-  ['stftDb', 'samples'],
   ['streamingLoudnessGain', 'samples'],
   ['timeStretch', 'samples'],
   ['transcribe', 'samples'],

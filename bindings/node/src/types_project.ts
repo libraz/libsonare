@@ -726,20 +726,18 @@ export interface ProjectAudioSourceMetadataRequest {
   externalStemRole?: string;
 }
 
-/** Request of {@link Project.setProgramOnChannel}. */
-export interface ProjectProgramRequest {
-  /** UMP group, `0`..`15`. */
-  group: number;
-  /** MIDI channel, `0`..`15`. */
-  channel: number;
-  /** Program number, `0`..`127`. */
-  program: number;
-  /** Bank Select to emit before the program. Omitted, none is emitted. */
-  bank?: ProjectProgramBank;
+/** Options of {@link Project.setProgram}. */
+export interface ProjectProgramOptions {
+  /** Bank Select to emit with the program change; omitted emits none. */
+  bank?: MidiBank;
+  /** UMP group, `0`..`15`; defaults to 0. */
+  group?: number;
+  /** MIDI channel, `0`..`15`; defaults to 0. */
+  channel?: number;
 }
 
-/** Bank Select of a {@link ProjectProgramRequest}. */
-export interface ProjectProgramBank {
+/** A Bank Select as `{ msb, lsb }`, each `0`..`127`. */
+export interface MidiBank {
   /** Bank Select MSB (CC 0), `0`..`127`. */
   msb: number;
   /** Bank Select LSB (CC 32), `0`..`127`. */

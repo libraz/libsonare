@@ -143,7 +143,7 @@ fixFrames({ frames: frameIndices, xMin: 0, pad: true }) satisfies Int32Array;
 
 // Every request-object feature is called in its canonical request form.
 nodeFacade.stft({ samples, sampleRate: 22050, nFft: 2048, hopLength: 512 });
-nodeFacade.stftDb({ samples, sampleRate: 22050, nFft: 2048, hopLength: 512 });
+nodeFacade.stft({ samples, sampleRate: 22050, db: true }).db satisfies Matrix2D | undefined;
 nodeFacade.melSpectrogram({
   samples,
   sampleRate: 22050,

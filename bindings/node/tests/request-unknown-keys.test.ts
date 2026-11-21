@@ -88,9 +88,10 @@ const methodShapes = [
   'setLoop',
   'setMarker',
   'setMetronome',
+  'setParameter',
   'setPartRig',
   'setPolarityInvert',
-  'setProgramOnChannel',
+  'setProgram',
   'setSourceAudio',
   'setStripInsertBypassed',
   'setStripInsertParam',
@@ -337,7 +338,7 @@ describe('a Project request method refuses an unknown key', () => {
     ['setClipLoop', (p) => p.setClipLoop(1, extra as never)],
     ['setClipTakes', (p) => p.setClipTakes(1, [], extra as never)],
     ['setMarker', (p) => p.setMarker({ ppq: 0, ...extra } as never)],
-    ['setProgramOnChannel', (p) => p.setProgramOnChannel(1, { program: 0, ...extra } as never)],
+    ['setProgram', (p) => p.setProgram(1, 0, extra as never)],
     ['setSourceAudio', (p) => p.setSourceAudio({ sourceId: 1, ...extra } as never)],
   ];
 
@@ -357,14 +358,14 @@ describe('a Project request method refuses an unknown key', () => {
     }
   });
 
-  it('setProgramOnChannel refuses an unknown bank key and points a misplaced one at bank', () => {
+  it('setProgram refuses an unknown bank key and points a misplaced one at bank', () => {
     const project = new sonare.Project();
     try {
-      expect(() =>
-        project.setProgramOnChannel(1, { program: 0, bank: { notAnOption: 1 } } as never),
-      ).toThrow(unknownKeyText('setProgramOnChannel: unknown key bank.notAnOption'));
-      expect(() => project.setProgramOnChannel(1, { program: 0, msb: 0 } as never)).toThrow(
-        unknownKeyText('setProgramOnChannel: unknown key msb', 'bank.msb'),
+      expect(() => project.setProgram(1, 0, { bank: { notAnOption: 1 } } as never)).toThrow(
+        unknownKeyText('setProgram: unknown key bank.notAnOption'),
+      );
+      expect(() => project.setProgram(1, 0, { msb: 0 } as never)).toThrow(
+        unknownKeyText('setProgram: unknown key msb', 'bank.msb'),
       );
     } finally {
       project.destroy();

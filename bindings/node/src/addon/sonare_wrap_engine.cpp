@@ -242,8 +242,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::GraphConnectionCount>("graphConnectionCount",
                                                                     napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::Process>("process", napi_default_method),
-          InstanceMethod<&RealtimeEngineWrap::ProcessWithMonitor>("processWithMonitor",
-                                                                  napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::RenderOffline>("renderOffline", napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::FinishOfflineRender>("finishOfflineRender",
                                                                    napi_default_method),
@@ -253,8 +251,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
                                                               napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry",
                                                                    napi_default_method),
-          InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetryWide>("drainMeterTelemetryWide",
-                                                                       napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::MeterTargetInsertGainReduction>(
               "meterTargetInsertGainReduction", napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::ConfigureScopeTelemetry>("configureScopeTelemetry",
@@ -262,8 +258,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::DrainScopeTelemetry>("drainScopeTelemetry",
                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter", napi_default_method),
-          InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed",
-                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetParamSmoothingMs>("setParamSmoothingMs",
                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetSoloMute>("setSoloMute", napi_default_method),
@@ -284,8 +278,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::MidiInstrumentCount>("midiInstrumentCount",
                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::BindMidiCc>("bindMidiCc", napi_default_method),
-          InstanceMethod<&RealtimeEngineWrap::BindMidiCcBinding>("bindMidiCcBinding",
-                                                                 napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiCcBindings>("clearMidiCcBindings",
                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount",
@@ -412,9 +404,9 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
   SonareError err = sonare_engine_create(&engine_);
   ThrowIfError(env, err);
   if (env.IsExceptionPending()) return;
-  err = sonare_engine_prepare_with_channels(engine_, sample_rate, max_block_size,
-                                            static_cast<size_t>(command_capacity),
-                                            static_cast<size_t>(telemetry_capacity), max_channels);
+  err = sonare_engine_prepare(engine_, sample_rate, max_block_size,
+                              static_cast<size_t>(command_capacity),
+                              static_cast<size_t>(telemetry_capacity), max_channels);
   ThrowIfError(env, err);
   SONARE_NODE_CATCH_VOID(env)
 }
@@ -458,9 +450,9 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
                          &max_channels)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_prepare_with_channels(
-                        engine_, sample_rate, max_block_size, static_cast<size_t>(command_capacity),
-                        static_cast<size_t>(telemetry_capacity), max_channels));
+  ThrowIfError(env, sonare_engine_prepare(engine_, sample_rate, max_block_size,
+                                          static_cast<size_t>(command_capacity),
+                                          static_cast<size_t>(telemetry_capacity), max_channels));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -1001,12 +993,15 @@ Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
   uint32_t param_id = 0;
   float value = 0.0f;
   int64_t deadline = -1;
+  bool smoothed = false;
   if (!RequiredUint32Arg(env, info, 0, "paramId", &param_id) ||
       !RequiredFloatArg(env, info, 1, "value", &value) ||
-      !OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) {
+      !OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline) ||
+      !OptionalBoolArg(env, info, 3, "smoothed", false, &smoothed)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_parameter(engine_, param_id, value, deadline));
+  ThrowIfError(env,
+               sonare_engine_set_parameter(engine_, param_id, value, deadline, smoothed ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -1021,23 +1016,6 @@ Napi::Value RealtimeEngineWrap::InsertParameterConstructedValue(const Napi::Call
   ThrowIfError(env, sonare_engine_insert_parameter_constructed_value(engine_, param_id, &value));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, value);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t param_id = 0;
-  float value = 0.0f;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "paramId", &param_id) ||
-      !RequiredFloatArg(env, info, 1, "value", &value) ||
-      !OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) {
-    return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_set_parameter_smoothed(engine_, param_id, value, deadline));
-  return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 

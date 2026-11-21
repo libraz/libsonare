@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Matrix2D } from '../src/index.js';
 import {
   Audio,
   bassChroma,
@@ -54,7 +55,6 @@ import {
   spectralFlux,
   spectralRolloff,
   stft,
-  stftDb,
   timeStretch,
   timeToFrames,
   trim,
@@ -511,14 +511,17 @@ describe('features', () => {
     expect(result.magnitude.data.length).toBe(result.magnitude.rows * result.magnitude.cols);
   });
 
-  it('stftDb returns dB values', () => {
-    const result = stftDb(tone, SR, { nFft: 2048, hopLength: 512 });
+  it('stft with db returns dB values', () => {
+    const result = stft(tone, SR, { nFft: 2048, hopLength: 512, db: true }).db as Matrix2D;
+    expect(result).toBeDefined();
     expect(result.rows).toBe(1025);
     expect(result.data).toBeInstanceOf(Float32Array);
     for (let i = 0; i < result.data.length; i++) {
       expect(Number.isFinite(result.data[i])).toBe(true);
     }
-    expect(stftDb({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512 })).toEqual(result);
+    expect(
+      stft({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512, db: true }).db,
+    ).toEqual(result);
   });
 
   it('melSpectrogram returns power and dB', () => {

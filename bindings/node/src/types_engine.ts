@@ -633,6 +633,12 @@ export interface EngineFreezeOptions {
   gain?: number;
 }
 
+/** Options of {@link RealtimeEngine.setParameter}. */
+export interface EngineSetParameterOptions {
+  /** Ramp to the value through the engine smoother instead of jumping. Default `false`. */
+  smoothed?: boolean;
+}
+
 /** Result of {@link RealtimeEngine.freezeOffline}. */
 export interface EngineFreezeResult {
   /** Id of the clip created from the render. */

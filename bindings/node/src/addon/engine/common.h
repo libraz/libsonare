@@ -118,33 +118,6 @@ inline Napi::Object MeterTelemetryToObject(Napi::Env env,
   out.Set("targetId", Napi::Number::New(env, record.target_id));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
-  // Scalar L/R fields mirror the C ABI record (and the Python / WASM surfaces),
-  // so stereo meter code reads the same field names on every binding.
-  out.Set("peakDbL", Napi::Number::New(env, record.peak_db_l));
-  out.Set("peakDbR", Napi::Number::New(env, record.peak_db_r));
-  out.Set("rmsDbL", Napi::Number::New(env, record.rms_db_l));
-  out.Set("rmsDbR", Napi::Number::New(env, record.rms_db_r));
-  out.Set("truePeakDbL", Napi::Number::New(env, record.true_peak_dbtp_l));
-  out.Set("truePeakDbR", Napi::Number::New(env, record.true_peak_dbtp_r));
-  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_dbtp));
-  out.Set("correlation", Napi::Number::New(env, record.correlation));
-  out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
-  out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));
-  out.Set("shortTermLufs", Napi::Number::New(env, record.short_term_lufs));
-  out.Set("integratedLufs", Napi::Number::New(env, record.integrated_lufs));
-  out.Set("gainReductionDb", Napi::Number::New(env, record.gain_reduction_db));
-  out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
-  out.Set("inputPeakDbL", Napi::Number::New(env, record.input_peak_db_l));
-  out.Set("inputPeakDbR", Napi::Number::New(env, record.input_peak_db_r));
-  return out;
-}
-
-inline Napi::Object MeterTelemetryWideToObject(Napi::Env env,
-                                               const SonareMeterTelemetryRecordWide& record) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("targetId", Napi::Number::New(env, record.target_id));
-  out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
-  out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
   int planes = record.num_channels;
   if (planes < 0) planes = 0;
   if (planes > SONARE_METER_MAX_CHANNELS) planes = SONARE_METER_MAX_CHANNELS;

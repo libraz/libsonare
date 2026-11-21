@@ -358,8 +358,6 @@ struct BounceJob {
   JsThreadBridge* bridge;
   SonareProject* project;
   const SonareProjectBounceOptions* options;
-  const SonareInstrumentBinding* bindings;
-  size_t binding_count;
   float* interleaved = nullptr;
   size_t len = 0;
   int num_channels = 0;
@@ -368,13 +366,8 @@ struct BounceJob {
   bool shape_refusal = false;
 
   BounceJob(JsThreadBridge* bridge_in, SonareProject* project_in,
-            const SonareProjectBounceOptions* options_in,
-            const SonareInstrumentBinding* bindings_in, size_t binding_count_in)
-      : bridge(bridge_in),
-        project(project_in),
-        options(options_in),
-        bindings(bindings_in),
-        binding_count(binding_count_in) {}
+            const SonareProjectBounceOptions* options_in)
+      : bridge(bridge_in), project(project_in), options(options_in) {}
   BounceJob(const BounceJob&) = delete;
   BounceJob& operator=(const BounceJob&) = delete;
   ~BounceJob() {
@@ -397,9 +390,8 @@ Napi::Object BounceResultObject(Napi::Env env, const float* interleaved, size_t 
 
 void RunBounceJob(void* arg) {
   auto* job = static_cast<BounceJob*>(arg);
-  job->error = sonare_project_bounce_with_instruments(job->project, job->options, job->bindings,
-                                                      job->binding_count, &job->interleaved,
-                                                      &job->len, &job->num_channels);
+  job->error = sonare_project_bounce(job->project, job->options, &job->interleaved, &job->len,
+                                     &job->num_channels);
   // The detail slot is thread-local, so it is read here and not on the JS thread.
   if (job->error != SONARE_OK) {
     job->detail = sonare_node::ErrorMessageForCode(job->error);
@@ -407,28 +399,162 @@ void RunBounceJob(void* arg) {
   }
   job->bridge->Finish();
 }
+// Each reader below takes one optional instrument list of Project.bounce: absent, undefined and
+// null mean none, anything but an array is refused by name.
+bool ReadBuiltinBindings(Napi::Env env, const Napi::Value& value,
+                         std::vector<SonareBuiltinInstrumentBinding>* bindings) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array arr;
+  if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
+  bindings->reserve(arr.Length());
+  for (uint32_t i = 0; i < arr.Length(); ++i) {
+    Napi::Value element = arr.Get(i);
+    if (!element.IsObject()) {
+      Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
+      return false;
+    }
+    SonareBuiltinInstrumentBinding binding{};
+    sonare_builtin_synth_config_init(&binding.config);
+    if (!ParseBuiltinInstrument(env, element.As<Napi::Object>(), &binding)) {
+      return false;  // exception already pending
+    }
+    bindings->push_back(binding);
+  }
+  return true;
+}
+
+// Each binding is { destinationId?, ...patch } where the patch is a SynthPatch object or a
+// preset-name string ("sawLead" / "va:sawLead"); an unknown preset name is refused by the C entry.
+// `storages` owns the engine-param keys each binding's patch borrows and must outlive the call.
+bool ReadSynthBindings(Napi::Env env, const Napi::Value& value,
+                       std::vector<SonareSynthInstrumentBinding>* bindings,
+                       std::vector<sonare_node::SynthPatchStorage>* storages) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array arr;
+  if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
+  bindings->reserve(arr.Length());
+  storages->reserve(arr.Length());
+  for (uint32_t i = 0; i < arr.Length(); ++i) {
+    Napi::Value element = arr.Get(i);
+    SonareSynthInstrumentBinding binding{};
+    if (element.IsObject() && !element.IsArray()) {
+      Napi::Object obj = element.As<Napi::Object>();
+      binding.destination_id = sonare_node::Uint32Property(obj, "destinationId", 0u);
+      if (env.IsExceptionPending()) return false;
+      binding.use_gm_programs =
+          BoolProperty(obj, "useGmPrograms", binding.use_gm_programs != 0) ? 1 : 0;
+      if (env.IsExceptionPending()) return false;
+      // Borrowed for the call: the JS bank object stays reachable through the
+      // instruments array for the whole synchronous bounce.
+      if (!SampleBankWrap::ReadHandle(env, obj.Get("sampleBank"), &binding.sample_bank)) {
+        return false;  // exception already pending
+      }
+    }
+    storages->emplace_back();
+    if (!sonare_node::ReadSynthPatch(env, element, &storages->back())) {
+      return false;  // exception already pending
+    }
+    binding.patch = storages->back().patch;
+    bindings->push_back(binding);
+  }
+  return true;
+}
+
+bool ReadSf2Bindings(Napi::Env env, const Napi::Value& value,
+                     std::vector<SonareSf2InstrumentBinding>* bindings) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array arr;
+  if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
+  bindings->reserve(arr.Length());
+  for (uint32_t i = 0; i < arr.Length(); ++i) {
+    Napi::Value element = arr.Get(i);
+    if (!element.IsObject()) {
+      Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object obj = element.As<Napi::Object>();
+    SonareSf2InstrumentBinding binding{};
+    sonare_sf2_instrument_config_init(&binding.config);
+    binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
+    binding.config.gain = FloatProperty(obj, "gain", binding.config.gain);
+    binding.config.polyphony = IntProperty(obj, "polyphony", binding.config.polyphony);
+    binding.config.prefer_model_for_modeled_families =
+        BoolProperty(obj, "preferModelForModeledFamilies",
+                     binding.config.prefer_model_for_modeled_families != 0)
+            ? 1
+            : 0;
+    binding.config.clear_bank_rig =
+        BoolProperty(obj, "clearBankRig", binding.config.clear_bank_rig != 0) ? 1 : 0;
+    binding.config.gs_efx_realization =
+        sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
+    bindings->push_back(binding);
+  }
+  return true;
+}
+
+// The slots hold the JS callbacks the bindings point at; they must not grow after this returns.
+bool ReadCallbackBindings(Napi::Env env, const Napi::Value& value, JsThreadBridge* bridge,
+                          std::vector<JsInstrumentSlot>* slots,
+                          std::vector<SonareInstrumentBinding>* bindings) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array arr;
+  if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
+  slots->reserve(arr.Length());
+  bindings->reserve(arr.Length());
+  for (uint32_t i = 0; i < arr.Length(); ++i) {
+    const Napi::Value element = arr.Get(i);
+    if (!element.IsObject()) {
+      Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
+      return false;
+    }
+    const Napi::Object obj = element.As<Napi::Object>();
+    JsInstrumentSlot slot{env, obj, std::nullopt, std::nullopt, Napi::Function(), bridge, 1, {}};
+    const std::string label = "instruments[" + std::to_string(i) + "]";
+    std::optional<Napi::Function> render;
+    if (!ReadInstrumentCallback(env, obj.Get("prepare"), label + ".prepare", &slot.prepare) ||
+        !ReadInstrumentCallback(env, obj.Get("onEvent"), label + ".onEvent", &slot.on_event) ||
+        !ReadInstrumentCallback(env, obj.Get("render"), label + ".render", &render)) {
+      return false;
+    }
+    if (!render) {
+      Napi::TypeError::New(env, label + ".render must be a function").ThrowAsJavaScriptException();
+      return false;
+    }
+    slot.render = *render;
+    SonareInstrumentBinding binding{};
+    binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
+    binding.callbacks.latency_samples = IntProperty(obj, "latencySamples", 0);
+    binding.callbacks.tail_samples = IntProperty(obj, "tailSamples", 0);
+    if (env.IsExceptionPending()) return false;
+    binding.callbacks.prepare = &JsInstrumentPrepare;
+    binding.callbacks.on_event = &JsInstrumentOnEvent;
+    binding.callbacks.render = &JsInstrumentRender;
+    slots->push_back(std::move(slot));
+    bindings->push_back(binding);
+  }
+  // The slots vector no longer grows, so these addresses stay valid.
+  for (size_t i = 0; i < slots->size(); ++i) (*bindings)[i].callbacks.user_data = &(*slots)[i];
+  return true;
+}
+
 }  // namespace
 
+// Compiles the project. A truthy `withTimeline` also returns the compiled timeline
+// handle as `timeline`.
 Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  SonareProjectCompileResult result{};
-  ThrowIfError(env, sonare_project_compile(project_, &result));
-  if (env.IsExceptionPending()) return env.Undefined();
-  return CompileResultToObject(env, &result);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::CompileTimeline(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  bool with_timeline = false;
+  if (!OptionalBoolArg(env, info, 0, "withTimeline", false, &with_timeline)) {
+    return env.Undefined();
+  }
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
-  ThrowIfError(env, sonare_project_compile_timeline(project_, &result, &timeline));
+  ThrowIfError(env, sonare_project_compile(project_, &result, with_timeline ? &timeline : nullptr));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = CompileResultToObject(env, &result);
+  if (!with_timeline) return out;
   out.Set("timeline",
           timeline != nullptr ? Napi::Value(ProjectTimelineWrap::Wrap(env, timeline)) : env.Null());
   return out;
@@ -446,133 +572,57 @@ Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
+// Compiles + renders the project:
+//   bounce(options?, builtinInstruments?, synthInstruments?, sf2Instruments?, callbackInstruments?)
+// Each trailing list binds MIDI tracks to one kind of instrument and may be given together. A
+// callback instrument runs its JS callbacks synchronously on this thread for the whole bounce: a
+// throw from any callback skips the remaining callbacks and surfaces after the bounce returns.
 Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
   sonare_project_bounce_options_init(&options);
-  if (info.Length() > 0 && info[0].IsObject()) {
+  if (info.Length() > 0 && info[0].IsObject() && !info[0].IsArray()) {
     FillBounceOptions(info[0].As<Napi::Object>(), &options);
     if (env.IsExceptionPending()) return env.Undefined();
   }
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  ThrowIfError(env, sonare_project_bounce(project_, &options, &interleaved, &len, &num_channels));
-  if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
-  if (interleaved != nullptr) sonare_free_floats(interleaved);
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  // Argument order is instrument-first to match the WASM and Python bindings:
-  //   bounceWithBuiltinInstruments(instruments, options?)
-  SonareProjectBounceOptions options{};
-  sonare_project_bounce_options_init(&options);
-  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
-    FillBounceOptions(info[1].As<Napi::Object>(), &options);
-    if (env.IsExceptionPending()) return env.Undefined();
-  }
-  std::vector<SonareBuiltinInstrumentBinding> bindings;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array arr = info[0].As<Napi::Array>();
-    bindings.reserve(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      Napi::Value element = arr.Get(i);
-      if (!element.IsObject()) {
-        Napi::TypeError::New(env, "instrument bindings must be objects")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      SonareBuiltinInstrumentBinding binding{};
-      sonare_builtin_synth_config_init(&binding.config);
-      if (!ParseBuiltinInstrument(env, element.As<Napi::Object>(), &binding)) {
-        return env.Undefined();  // exception already pending
-      }
-      bindings.push_back(binding);
-    }
-  }
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  ThrowIfError(env, sonare_project_bounce_with_builtin_instruments(
-                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                        bindings.size(), &interleaved, &len, &num_channels));
-  if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
-  if (interleaved != nullptr) sonare_free_floats(interleaved);
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-// Compiles + renders the project, driving MIDI tracks through JS instruments
-// whose callbacks run synchronously on this thread for the whole bounce:
-//   bounceWithInstruments(instruments, options?)
-// A throw from any callback skips the remaining callbacks and surfaces after
-// the bounce returns.
-Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  SonareProjectBounceOptions options{};
-  sonare_project_bounce_options_init(&options);
-  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
-    FillBounceOptions(info[1].As<Napi::Object>(), &options);
-    if (env.IsExceptionPending()) return env.Undefined();
-  }
+  std::vector<SonareBuiltinInstrumentBinding> builtin_bindings;
+  std::vector<SonareSynthInstrumentBinding> synth_bindings;
+  // Owns the engine-param keys each synth binding's patch borrows; alive across the C call.
+  std::vector<sonare_node::SynthPatchStorage> patch_storages;
+  std::vector<SonareSf2InstrumentBinding> sf2_bindings;
   JsThreadBridge bridge;
   std::vector<JsInstrumentSlot> slots;
-  std::vector<SonareInstrumentBinding> bindings;
-  if (!info[0].IsUndefined() && !info[0].IsNull()) {
-    Napi::Array arr;
-    if (!RequiredArrayValue(env, info[0], "instruments", &arr)) return env.Undefined();
-    slots.reserve(arr.Length());
-    bindings.reserve(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      const Napi::Value element = arr.Get(i);
-      if (!element.IsObject()) {
-        Napi::TypeError::New(env, "instrument bindings must be objects")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      const Napi::Object obj = element.As<Napi::Object>();
-      JsInstrumentSlot slot{env, obj, std::nullopt, std::nullopt, Napi::Function(), &bridge, 1, {}};
-      const std::string label = "instruments[" + std::to_string(i) + "]";
-      std::optional<Napi::Function> render;
-      if (!ReadInstrumentCallback(env, obj.Get("prepare"), label + ".prepare", &slot.prepare) ||
-          !ReadInstrumentCallback(env, obj.Get("onEvent"), label + ".onEvent", &slot.on_event) ||
-          !ReadInstrumentCallback(env, obj.Get("render"), label + ".render", &render)) {
-        return env.Undefined();
-      }
-      if (!render) {
-        Napi::TypeError::New(env, label + ".render must be a function")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      slot.render = *render;
-      SonareInstrumentBinding binding{};
-      binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
-      binding.callbacks.latency_samples = IntProperty(obj, "latencySamples", 0);
-      binding.callbacks.tail_samples = IntProperty(obj, "tailSamples", 0);
-      if (env.IsExceptionPending()) return env.Undefined();
-      binding.callbacks.prepare = &JsInstrumentPrepare;
-      binding.callbacks.on_event = &JsInstrumentOnEvent;
-      binding.callbacks.render = &JsInstrumentRender;
-      slots.push_back(std::move(slot));
-      bindings.push_back(binding);
-    }
-    // The slots vector no longer grows, so these addresses stay valid.
-    for (size_t i = 0; i < slots.size(); ++i) bindings[i].callbacks.user_data = &slots[i];
+  std::vector<SonareInstrumentBinding> callback_bindings;
+  if (!ReadBuiltinBindings(env, info[1], &builtin_bindings) ||
+      !ReadSynthBindings(env, info[2], &synth_bindings, &patch_storages) ||
+      !ReadSf2Bindings(env, info[3], &sf2_bindings) ||
+      !ReadCallbackBindings(env, info[4], &bridge, &slots, &callback_bindings)) {
+    return env.Undefined();
   }
+  options.builtin_instruments = builtin_bindings.empty() ? nullptr : builtin_bindings.data();
+  options.builtin_instrument_count = builtin_bindings.size();
+  options.synth_instruments = synth_bindings.empty() ? nullptr : synth_bindings.data();
+  options.synth_instrument_count = synth_bindings.size();
+  options.sf2_instruments = sf2_bindings.empty() ? nullptr : sf2_bindings.data();
+  options.sf2_instrument_count = sf2_bindings.size();
+  options.instruments = callback_bindings.empty() ? nullptr : callback_bindings.data();
+  options.instrument_count = callback_bindings.size();
+
+  if (callback_bindings.empty()) {
+    float* interleaved = nullptr;
+    size_t len = 0;
+    int num_channels = 0;
+    ThrowIfError(env, sonare_project_bounce(project_, &options, &interleaved, &len, &num_channels));
+    if (env.IsExceptionPending()) return env.Undefined();
+    Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
+    if (interleaved != nullptr) sonare_free_floats(interleaved);
+    return out;
+  }
+
   auto busy_call = BeginBusyCall();
-  BounceJob job(&bridge, project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                bindings.size());
+  BounceJob job(&bridge, project_, &options);
   BounceThread worker(&bridge);
   if (!worker.Start(RunBounceJob, &job)) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
@@ -597,70 +647,6 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   }
   if (env.IsExceptionPending()) return env.Undefined();
   return BounceResultObject(env, job.interleaved, job.len, job.num_channels);
-  SONARE_NODE_CATCH(env)
-}
-
-// Compiles + renders the project, routing MIDI tracks through the patch-driven
-// NativeSynth (the full synthesizer; see SonareSynthPatch). Argument order is
-// instrument-first to match the WASM and Python bindings:
-//   bounceWithSynthInstruments(instruments, options?)
-// Each binding is { destinationId?, ...patch } where the patch is a SynthPatch
-// object or a preset-name string ("sawLead" / "va:sawLead"). An unknown
-// preset name throws (the C ABI rejects it).
-Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  SonareProjectBounceOptions options{};
-  sonare_project_bounce_options_init(&options);
-  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
-    FillBounceOptions(info[1].As<Napi::Object>(), &options);
-    if (env.IsExceptionPending()) return env.Undefined();
-  }
-  std::vector<SonareSynthInstrumentBinding> bindings;
-  // Owns the engine-param keys each binding's patch borrows; alive across the C call.
-  std::vector<sonare_node::SynthPatchStorage> patch_storages;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array arr = info[0].As<Napi::Array>();
-    bindings.reserve(arr.Length());
-    patch_storages.reserve(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      Napi::Value element = arr.Get(i);
-      SonareSynthInstrumentBinding binding{};
-      if (element.IsObject() && !element.IsArray()) {
-        Napi::Object obj = element.As<Napi::Object>();
-        binding.destination_id = sonare_node::Uint32Property(obj, "destinationId", 0u);
-        if (env.IsExceptionPending()) return env.Undefined();
-        binding.use_gm_programs =
-            BoolProperty(obj, "useGmPrograms", binding.use_gm_programs != 0) ? 1 : 0;
-        if (env.IsExceptionPending()) return env.Undefined();
-        // Borrowed for the call: the JS bank object stays reachable through the
-        // instruments array for the whole synchronous bounce.
-        if (!SampleBankWrap::ReadHandle(env, obj.Get("sampleBank"), &binding.sample_bank)) {
-          return env.Undefined();  // exception already pending
-        }
-      }
-      patch_storages.emplace_back();
-      if (!sonare_node::ReadSynthPatch(env, element, &patch_storages.back())) {
-        return env.Undefined();  // exception already pending
-      }
-      binding.patch = patch_storages.back().patch;
-      bindings.push_back(binding);
-    }
-  }
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  const SonareError bounce_err = sonare_project_bounce_with_synth_instruments(
-      project_, &options, bindings.empty() ? nullptr : bindings.data(), bindings.size(),
-      &interleaved, &len, &num_channels);
-  if (bounce_err != SONARE_OK && !env.IsExceptionPending()) {
-    sonare_node::ThrowLastSonareError(env, "", bounce_err);
-  }
-  if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
-  if (interleaved != nullptr) sonare_free_floats(interleaved);
-  return out;
   SONARE_NODE_CATCH(env)
 }
 
@@ -729,61 +715,6 @@ Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
     entry.Set("presetName", Napi::String::New(env, entries[i].preset_name));
     out.Set(static_cast<uint32_t>(i), entry);
   }
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  // Argument order is instrument-first to match bounceWithBuiltinInstruments:
-  //   bounceWithSf2Instruments(instruments, options?)
-  SonareProjectBounceOptions options{};
-  sonare_project_bounce_options_init(&options);
-  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
-    FillBounceOptions(info[1].As<Napi::Object>(), &options);
-    if (env.IsExceptionPending()) return env.Undefined();
-  }
-  std::vector<SonareSf2InstrumentBinding> bindings;
-  if (!info[0].IsUndefined() && !info[0].IsNull()) {
-    Napi::Array arr;
-    if (!RequiredArrayValue(env, info[0], "instruments", &arr)) return env.Undefined();
-    bindings.reserve(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      Napi::Value element = arr.Get(i);
-      if (!element.IsObject()) {
-        Napi::TypeError::New(env, "instrument bindings must be objects")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = element.As<Napi::Object>();
-      SonareSf2InstrumentBinding binding{};
-      sonare_sf2_instrument_config_init(&binding.config);
-      binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
-      binding.config.gain = FloatProperty(obj, "gain", binding.config.gain);
-      binding.config.polyphony = IntProperty(obj, "polyphony", binding.config.polyphony);
-      binding.config.prefer_model_for_modeled_families =
-          BoolProperty(obj, "preferModelForModeledFamilies",
-                       binding.config.prefer_model_for_modeled_families != 0)
-              ? 1
-              : 0;
-      binding.config.clear_bank_rig =
-          BoolProperty(obj, "clearBankRig", binding.config.clear_bank_rig != 0) ? 1 : 0;
-      binding.config.gs_efx_realization =
-          sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
-      bindings.push_back(binding);
-    }
-  }
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  ThrowIfError(env, sonare_project_bounce_with_sf2_instruments(
-                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                        bindings.size(), &interleaved, &len, &num_channels));
-  if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
-  if (interleaved != nullptr) sonare_free_floats(interleaved);
   return out;
   SONARE_NODE_CATCH(env)
 }

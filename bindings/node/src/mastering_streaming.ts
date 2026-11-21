@@ -595,7 +595,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
  * ```
  *
  * The native handle supports one serialized producer (`process`,
- * `processWithOffset`, or `finalize`) concurrently with one serialized consumer
+ * or `finalize`) concurrently with one serialized consumer
  * (`availableFrames`, a `readFrames*` method, `stats`, `frameCount`, or
  * `currentTimeSec`). Completed values use an allocation-free release/acquire
  * handoff. `reset`, setters, and `destroy` require both roles to be stopped.
@@ -603,7 +603,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
  * is not invoked by multiple threads within either role. A full pending ring
  * drops the newly produced output frame while analysis totals keep advancing.
  */
-@entryClass('StreamAnalyzer', ['process', 'processWithOffset'])
+@entryClass('StreamAnalyzer', ['process'])
 export class StreamAnalyzer {
   private native: InstanceType<typeof addon.StreamAnalyzer>;
   private disposed = false;
@@ -617,19 +617,19 @@ export class StreamAnalyzer {
     this.native = new addon.StreamAnalyzer(nativeStreamConfig(config));
   }
 
-  /** Feed a mono block of samples. */
-  process(samples: Float32Array): void {
-    this.native.process(samples);
-  }
-
   /**
-   * Feed a mono block anchored at a contiguous absolute sample offset. Gaps,
-   * seeks, and switching from `process()` require `reset()` first.
+   * Feed a mono block of samples.
    *
-   * @param startSample - Cumulative sample count at the start of this block
+   * @param startSample - Cumulative sample count at the start of this block.
+   *   Absent, the analyzer tracks the offset itself. Given, the block is
+   *   anchored at that contiguous absolute offset; gaps, seeks, and switching
+   *   between the two forms require `reset()` first.
    */
-  processWithOffset(samples: Float32Array, startSample: number): void {
-    this.native.processWithOffset(samples, startSample);
+  process(samples: Float32Array, startSample?: number): void {
+    if (startSample !== undefined && typeof startSample !== 'number') {
+      throw new TypeError('startSample must be a number');
+    }
+    this.native.process(samples, startSample);
   }
 
   /** Drain any high-rate resampler tail, then zero-pad the final partial frame. */

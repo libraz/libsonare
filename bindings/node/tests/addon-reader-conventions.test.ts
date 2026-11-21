@@ -946,7 +946,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }),
   },
   {
-    jsName: 'bindMidiCcBinding',
+    jsName: 'bindMidiCc',
     invoke: (o) =>
       withEngine((engine) => {
         engine.bindMidiCc({ ...o, ccNumber: 7, paramId: 1 });
@@ -1280,10 +1280,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['annotateKeys', 'Needs a project carrying analysed key data.'],
       ['bounce', 'Covered by project.test.ts; needs a fully built project.'],
       ['bounceOffline', 'Needs a prepared engine graph.'],
-      ['bounceWithBuiltinInstruments', 'Covered by project.test.ts.'],
-      ['bounceWithInstruments', 'Covered by project-bounce-instruments.test.ts.'],
-      ['bounceWithSf2Instruments', 'Needs a loaded SoundFont.'],
-      ['bounceWithSynthInstruments', 'Covered by project.test.ts.'],
       ['detectKey', 'Instance method on Audio; needs a decoded Audio handle.'],
       ['detectKeyCandidates', 'Instance method on Audio; needs a decoded Audio handle.'],
       ['detectOnsets', 'Positional-only options; no object bag on the public facade.'],

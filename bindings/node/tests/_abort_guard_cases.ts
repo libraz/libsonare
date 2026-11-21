@@ -279,7 +279,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.splitSilence', 'topDb', () => addon.splitSilence(readerTone, 'x')],
   ['addon.splitSilenceCommon', 'topDb', () => addon.splitSilenceCommon([readerTone], 'x')],
   ['addon.stft', 'sampleRate', () => addon.stft(readerTone, 'x')],
-  ['addon.stftDb', 'sampleRate', () => addon.stftDb(readerTone, 'x')],
+  ['addon.stft', 'db', () => addon.stft(readerTone, 22050, 2048, 512, 'x')],
   ['addon.tempogram', 'sampleRate', () => addon.tempogram(readerTone, 'x')],
   ['addon.tempogramRatio', 'win', () => addon.tempogramRatio(readerTone, 'x')],
   ['addon.timeStretch', 'nFft', () => addon.timeStretch(readerTone, 2, 2, 'x')],
@@ -1137,22 +1137,10 @@ export const CASES: AbortGuardCase[] = [
       { argument: 'paramId', call: (e) => e.setParameter('x', 0.5) },
       { argument: 'value', call: (e) => e.setParameter(PARAM_ID, 'x') },
       { argument: 'renderFrame', call: (e) => e.setParameter(PARAM_ID, 0.5, 'now') },
+      { argument: 'smoothed', call: (e) => e.setParameter(PARAM_ID, 0.5, undefined, 'yes') },
       {
         argument: 'omitted value',
         call: (e) => (e.setParameter as unknown as (paramId: unknown) => void)(PARAM_ID),
-      },
-    ],
-  },
-  {
-    name: 'RealtimeEngine.setParameterSmoothed',
-    missingRequired: [],
-    badTransportArguments: [
-      { argument: 'paramId', call: (e) => e.setParameterSmoothed('x', 0.5) },
-      { argument: 'value', call: (e) => e.setParameterSmoothed(PARAM_ID, 'x') },
-      { argument: 'renderFrame', call: (e) => e.setParameterSmoothed(PARAM_ID, 0.5, 'now') },
-      {
-        argument: 'omitted value',
-        call: (e) => (e.setParameterSmoothed as unknown as (paramId: unknown) => void)(PARAM_ID),
       },
     ],
   },
@@ -1330,15 +1318,24 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.bindMidiCc',
     missingRequired: [],
     badTransportArguments: [
-      { argument: 'channel', call: (e) => e.bindMidiCc('0', 7, PARAM_ID, 0, 1) },
       {
-        argument: 'controller out of byte range',
-        call: (e) => e.bindMidiCc(300, 300, PARAM_ID, 0, 1),
+        argument: 'channel',
+        call: (e) => e.bindMidiCc({ ccNumber: 7, channel: '0', paramId: PARAM_ID }),
+      },
+      {
+        argument: 'ccNumber out of byte range',
+        call: (e) => e.bindMidiCc({ ccNumber: 300, paramId: PARAM_ID }),
         error: RangeError,
       },
-      { argument: 'paramId', call: (e) => e.bindMidiCc(0, 7, 'x', 0, 1) },
-      { argument: 'minValue', call: (e) => e.bindMidiCc(0, 7, PARAM_ID, 'x', 1) },
-      { argument: 'maxValue', call: (e) => e.bindMidiCc(0, 7, PARAM_ID, 0, 'x') },
+      { argument: 'paramId', call: (e) => e.bindMidiCc({ ccNumber: 7, paramId: 'x' }) },
+      {
+        argument: 'minValue',
+        call: (e) => e.bindMidiCc({ ccNumber: 7, paramId: PARAM_ID, minValue: 'x' }),
+      },
+      {
+        argument: 'maxValue',
+        call: (e) => e.bindMidiCc({ ccNumber: 7, paramId: PARAM_ID, maxValue: 'x' }),
+      },
     ],
   },
   {
@@ -1719,7 +1716,7 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
-    name: 'Audio.fromFileChannel',
+    name: 'Audio.fromFile',
     missingRequired: [],
     // The channel index is read before the file is opened, so these are refused
     // without a fixture on disk. 2^32 + 1 is the wrap that matters: ToInt32
@@ -1728,15 +1725,16 @@ export const CASES: AbortGuardCase[] = [
     rejectsArgument: [
       {
         argument: 'channelIndex',
-        call: () => addon.Audio.fromFileChannel('/nonexistent.wav', '0'),
-      },
-      {
-        argument: 'omitted channelIndex',
-        call: () => addon.Audio.fromFileChannel('/nonexistent.wav'),
+        call: () => addon.Audio.fromFile('/nonexistent.wav', '0'),
       },
       {
         argument: 'channelIndex past the signed range',
-        call: () => addon.Audio.fromFileChannel('/nonexistent.wav', 2 ** 32 + 1),
+        call: () => addon.Audio.fromFile('/nonexistent.wav', 2 ** 32 + 1),
+        error: RangeError,
+      },
+      {
+        argument: 'negative channelIndex',
+        call: () => addon.Audio.fromFile('/nonexistent.wav', -1),
         error: RangeError,
       },
     ],
@@ -2336,24 +2334,20 @@ export const CASES: AbortGuardCase[] = [
     badProjectArguments: [
       {
         argument: 'program',
-        call: ({ project, midiClipId }) => project.setProgram(midiClipId, 'piano', 0),
+        call: ({ project, midiClipId }) => project.setProgram(midiClipId, 'piano' as never),
+      },
+      {
+        argument: 'group and channel out of byte range',
+        call: ({ project, midiClipId }) => project.setProgram(midiClipId, 40, undefined, 300, 300),
+        error: RangeError,
       },
     ],
   },
   {
-    name: 'Project.setProgramOnChannel',
+    name: 'Project.compile',
     missingRequired: [],
     badProjectArguments: [
-      {
-        argument: 'program',
-        call: ({ project, midiClipId }) =>
-          project.setProgramOnChannel(midiClipId, 0, 0, 'piano', 0),
-      },
-      {
-        argument: 'group and channel out of byte range',
-        call: ({ project, midiClipId }) => project.setProgramOnChannel(midiClipId, 300, 300, 40, 0),
-        error: RangeError,
-      },
+      { argument: 'withTimeline', call: ({ project }) => project.compile('x') },
     ],
   },
   {

@@ -114,7 +114,6 @@ const TABLE: Entry[] = [
   ...[
     'trim',
     'stft',
-    'stftDb',
     'chroma',
     'chromaCens',
     'chromaCqt',

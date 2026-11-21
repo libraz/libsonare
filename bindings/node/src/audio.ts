@@ -65,7 +65,6 @@ import type {
   SpectralCentroidRequest,
   SpectralFlatnessRequest,
   SpectralRolloffRequest,
-  StftDbRequest,
   StftRequest,
   ZeroCrossingRateRequest,
 } from './feature_spectral.js';
@@ -86,7 +85,6 @@ import {
   spectralCentroid as spectralCentroidFn,
   spectralFlatness as spectralFlatnessFn,
   spectralRolloff as spectralRolloffFn,
-  stftDb as stftDbFn,
   stft as stftFn,
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
@@ -182,7 +180,7 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
 
 /**
  * One channel of decoded audio and its sample rate, held in native memory. A multi-channel
- * source is downmixed as it is loaded; {@link Audio.fromFileChannel} loads one channel instead.
+ * source is downmixed as it is loaded; `Audio.fromFile(path, channelIndex)` loads one channel instead.
  * Release it with `destroy()` or a `using` declaration.
  */
 @entryClass('Audio', ['requireAlive'])
@@ -193,52 +191,42 @@ export class Audio {
 
   private constructor(key: symbol, native: InstanceType<typeof addon.Audio>) {
     if (key !== AUDIO_FACTORY_KEY) {
-      throw refuseType(
-        'construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
-      );
+      throw refuseType('construct it with Audio.fromBuffer, Audio.fromFile or Audio.fromMemory');
     }
     this.native = native;
   }
 
   /**
-   * Decode a file, downmixing a multi-channel source to mono. Reads WAV and MP3, and the
-   * FFmpeg formats when `capabilities().features.ffmpeg` is true.
+   * Decode a file. Without `channelIndex` a multi-channel source is downmixed to mono; with it,
+   * that one channel is loaded and the others are left out, which is what rendering a stereo
+   * result needs: pair it with {@link fileNumChannels} and load each channel in turn. Reads WAV
+   * and MP3, and the FFmpeg formats when `capabilities().features.ffmpeg` is true.
+   *
+   * The file is decoded once per call, so loading each channel of a stereo file costs two
+   * decodes.
    *
    * @param path - Source file path.
+   * @param channelIndex - Zero-based channel to load; omit it to downmix.
+   * @throws RangeError when `channelIndex` is negative or names no channel the file has.
    * @throws SonareError when the file is missing or unreadable, its format is not supported,
    *   or it fails to decode.
-   */
-  static fromFile(path: string): Audio {
-    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path));
-  }
-
-  /**
-   * Load one channel of a file, leaving the others out of it.
-   *
-   * An {@link Audio} carries a single channel, so {@link fromFile} downmixes a
-   * multi-channel source into it. This loads the requested channel instead,
-   * which is what rendering a stereo result needs: pair it with
-   * {@link fileNumChannels} and load each channel in turn.
-   *
-   * The file is decoded once per call, so a stereo load costs two decodes. The
-   * format set and the decoded-buffer contract are {@link fromFile}'s.
-   *
-   * @param path - Source file path.
-   * @param channelIndex - Zero-based channel to load.
-   * @throws RangeError when
-   *   `channelIndex` is negative or names no channel the file has, and the same
-   *   load errors {@link fromFile} raises.
    *
    * @example
    * ```ts
    * const path = 'take.wav';
    * const planes = Array.from({ length: Audio.fileNumChannels(path) }, (_, i) =>
-   *   Audio.fromFileChannel(path, i),
+   *   Audio.fromFile(path, i),
    * );
    * ```
    */
-  static fromFileChannel(path: string, channelIndex: number): Audio {
-    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFileChannel(path, channelIndex));
+  static fromFile(path: string, channelIndex?: number): Audio {
+    if (channelIndex === undefined) {
+      return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path));
+    }
+    if (typeof channelIndex !== 'number') {
+      throw new TypeError('channelIndex must be a number');
+    }
+    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path, channelIndex));
   }
 
   /**
@@ -597,11 +585,6 @@ export class Audio {
   /** Short-time Fourier transform of the held audio. */
   stft(options?: OptionsOf<StftRequest>): StftResult {
     return stftFn(audioRequest('stft', this.data, this.sampleRate, options));
-  }
-
-  /** Rows are frequency bins, cols are frames. */
-  stftDb(options?: OptionsOf<StftDbRequest>): Matrix2D {
-    return stftDbFn(audioRequest('stftDb', this.data, this.sampleRate, options));
   }
 
   /** Mel spectrogram of the held audio. */

@@ -86,7 +86,9 @@ describe('RealtimeEngine native binding', () => {
     expect(processed[0].at(-1)).toBeGreaterThan(0.75);
     expect(processed[0].at(-1)).toBeLessThan(1.25);
 
-    engine.setParameterSmoothed(engine.resolveStripAutomationId(10, 'faderDb'), -12);
+    engine.setParameter(engine.resolveStripAutomationId(10, 'faderDb'), -12, undefined, {
+      smoothed: true,
+    });
     for (let block = 0; block < 6; block += 1) {
       processed = engine.process([new Float32Array(256), new Float32Array(256)]);
     }
@@ -785,7 +787,7 @@ describe('RealtimeEngine native binding', () => {
     const processed = engine.process([new Float32Array(256)]);
     // Two unit clips (2) through the -12 dB master fader; a centred mono master is unity.
     expect(processed[0].at(-1)).toBeCloseTo(2 * 10 ** (-12 / 20), 3);
-    engine.setParameterSmoothed(0x4d58ff01, -24);
+    engine.setParameter(0x4d58ff01, -24, undefined, { smoothed: true });
     engine.setParameter(0x4d58ff02, 0.25);
     let attenuated = processed;
     for (let block = 0; block < 8; block += 1) {
@@ -803,7 +805,7 @@ describe('RealtimeEngine native binding', () => {
     // The retired positional encoding, for the lane that now holds track 7.
     for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
       for (const call of [
-        () => engine.setParameterSmoothed(positional, -6),
+        () => engine.setParameter(positional, -6, undefined, { smoothed: true }),
         () => engine.setParameter(positional, -6),
         () => engine.setAutomationLane(positional, point),
       ]) {
@@ -818,9 +820,9 @@ describe('RealtimeEngine native binding', () => {
       }
     }
     const laneFader = engine.resolveStripAutomationId(7, 'faderDb');
-    expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
+    expect(() => engine.setParameter(laneFader, -6, undefined, { smoothed: true })).not.toThrow();
     expect(() => engine.setAutomationLane(laneFader, point)).not.toThrow();
-    expect(() => engine.setParameterSmoothed(0x4d58ff01, -6)).not.toThrow();
+    expect(() => engine.setParameter(0x4d58ff01, -6, undefined, { smoothed: true })).not.toThrow();
     expect(() => engine.setAutomationLane(0x4d58ff01, point)).not.toThrow();
     engine.destroy();
   });

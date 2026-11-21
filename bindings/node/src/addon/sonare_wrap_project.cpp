@@ -121,8 +121,6 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::ImportClipFile>("importClipFile", napi_default_method),
           InstanceMethod<&ProjectWrap::ExportClipFile>("exportClipFile", napi_default_method),
           InstanceMethod<&ProjectWrap::SetProgram>("setProgram", napi_default_method),
-          InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel",
-                                                            napi_default_method),
           InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx", napi_default_method),
           InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount",
                                                            napi_default_method),
@@ -140,23 +138,14 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar", napi_default_method),
           InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars", napi_default_method),
           InstanceMethod<&ProjectWrap::Compile>("compile", napi_default_method),
-          InstanceMethod<&ProjectWrap::CompileTimeline>("compileTimeline", napi_default_method),
           InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult",
                                                                 napi_default_method),
           InstanceMethod<&ProjectWrap::Bounce>("bounce", napi_default_method),
-          InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>("bounceWithBuiltinInstruments",
-                                                                     napi_default_method),
-          InstanceMethod<&ProjectWrap::BounceWithInstruments>("bounceWithInstruments",
-                                                              napi_default_method),
-          InstanceMethod<&ProjectWrap::BounceWithSynthInstruments>("bounceWithSynthInstruments",
-                                                                   napi_default_method),
           InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont", napi_default_method),
           InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont", napi_default_method),
           InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount",
                                                              napi_default_method),
           InstanceMethod<&ProjectWrap::SoundFontManifest>("soundFontManifest", napi_default_method),
-          InstanceMethod<&ProjectWrap::BounceWithSf2Instruments>("bounceWithSf2Instruments",
-                                                                 napi_default_method),
           InstanceMethod<&ProjectWrap::GetSampleRate>("getSampleRate", napi_default_method),
           InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy", napi_default_method),
           InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy", napi_default_method),
@@ -367,8 +356,7 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
   const std::string name = StringProperty(obj, "name", "");
   uint32_t out_id = 0;
-  const SonareError err =
-      sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id);
+  const SonareError err = sonare_project_set_marker(project_, &marker, name.c_str(), &out_id);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareErrorFlattening(env, err, "marker");
     return env.Undefined();

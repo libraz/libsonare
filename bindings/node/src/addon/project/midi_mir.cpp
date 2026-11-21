@@ -163,46 +163,30 @@ Napi::Value ProjectWrap::ExportClipFile(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// setProgram(clipId, program, bank?, group?, channel?): an absent bank is -1 (no Bank Select), an
+// absent group and channel are 0.
 Napi::Value ProjectWrap::SetProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t clip_id = 0;
   int program = 0;
-  int bank = 0;
+  int bank = -1;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
       !Int32Arg(env, info, 1, "program", 0, &program) ||
-      !Int32Arg(env, info, 2, "bank", 0, &bank)) {
+      !Int32Arg(env, info, 2, "bank", -1, &bank)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_project_set_program(project_, clip_id, program, bank));
-  return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   // group/channel are uint8_t C-ABI arguments, read against the domains the C ABI enforces.
-  uint32_t clip_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
-  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !sonare_node::OptionalDomainArg(env, info, 1, "group", uint8_t{0},
+  if (!sonare_node::OptionalDomainArg(env, info, 3, "group", uint8_t{0},
                                       sonare_c_detail::kMidiUmpGroupDomain, &group) ||
-      !sonare_node::OptionalDomainArg(env, info, 2, "channel", uint8_t{0},
+      !sonare_node::OptionalDomainArg(env, info, 4, "channel", uint8_t{0},
                                       sonare_c_detail::kMidiChannelDomain, &channel)) {
     return env.Undefined();
   }
-  int program = 0;
-  int bank = -1;
-  if (!Int32Arg(env, info, 3, "program", 0, &program) ||
-      !Int32Arg(env, info, 4, "bank", -1, &bank)) {
-    return env.Undefined();
-  }
-  ThrowIfError(
-      env, sonare_project_set_program_on_channel(project_, clip_id, group, channel, program, bank));
+  ThrowIfError(env, sonare_project_set_program(project_, clip_id, group, channel, program, bank));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

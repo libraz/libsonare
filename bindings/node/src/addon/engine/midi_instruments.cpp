@@ -174,7 +174,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
   } else {
     sonare_synth_patch_init(&binding.patch);
   }
-  const SonareError bind_err = sonare_engine_set_synth_instrument_binding(engine_, &binding);
+  const SonareError bind_err = sonare_engine_set_synth_instrument(engine_, &binding);
   if (bind_err != SONARE_OK && !env.IsExceptionPending()) {
     sonare_node::ThrowLastSonareError(env, "", bind_err);
   }

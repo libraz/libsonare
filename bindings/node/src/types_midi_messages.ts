@@ -1,8 +1,8 @@
 import type {
+  MidiBank,
   ProjectMidiCcBinding,
   ProjectMidiEvent,
   ProjectMidiRouteConfig,
-  ProjectProgramBank,
 } from './types_project.js';
 
 /** Request of {@link midiNoteOn}. */
@@ -192,7 +192,7 @@ export interface Midi2ProgramRequest {
   /** Program number, `0`..`127`. */
   program: number;
   /** Bank Select applied with the program. Omitted, the message carries no bank. */
-  bank?: ProjectProgramBank;
+  bank?: MidiBank;
 }
 
 /** Request of {@link midi2RegisteredController}. */
@@ -332,7 +332,7 @@ export interface MidiBankProgramRequest {
   /** Program number, `0`..`127`. */
   program: number;
   /** Bank Select sent before the program. */
-  bank: ProjectProgramBank;
+  bank: MidiBank;
 }
 
 /** Request of {@link midiParamToCc}. */

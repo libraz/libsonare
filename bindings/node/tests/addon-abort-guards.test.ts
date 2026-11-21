@@ -136,8 +136,8 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
   ],
   [
-    'processWithOffset',
-    'Instance method on StreamAnalyzer, which needs a configured session; its sample-offset rejection is driven by basic_streaming_metering.test.ts.',
+    'process',
+    'Instance method on StreamAnalyzer and RealtimeEngine, which need a configured session; the analyzer sample-offset rejection is driven by basic_streaming_metering.test.ts and the engine withMonitor flag reads through OptionalBoolArg like the other trailing flags.',
   ],
   [
     'readFramesI16',
@@ -521,7 +521,7 @@ describe('rejected transport and MIDI arguments issue no command', () => {
       expect(transportSnapshot(engine)).not.toBe(before);
       const afterNote = transportSnapshot(engine);
 
-      engine.bindMidiCc(0, 8, PARAM_ID, 0, 1);
+      engine.bindMidiCc({ ccNumber: 8, channel: 0, paramId: PARAM_ID, minValue: 0, maxValue: 1 });
       expect(transportSnapshot(engine)).not.toBe(afterNote);
       const afterBinding = transportSnapshot(engine);
 
@@ -729,12 +729,7 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
   });
 });
 
-const DRAINS = [
-  'drainTelemetry',
-  'drainMeterTelemetry',
-  'drainMeterTelemetryWide',
-  'drainScopeTelemetry',
-] as const;
+const DRAINS = ['drainTelemetry', 'drainMeterTelemetry', 'drainScopeTelemetry'] as const;
 
 describe('telemetry drains bound their allocation by a validated budget', () => {
   for (const drain of DRAINS) {
@@ -879,11 +874,11 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => e.seekMarker('0', 'x'));
         swallow(() => e.countInEndSample('0', '1'));
         swallow(() => e.setParameter(1, 0.5, 'now'));
-        swallow(() => e.setParameterSmoothed(1, 0.5, 'now'));
+        swallow(() => e.setParameter(1, 0.5, 0, 'yes'));
         swallow(() => e.setSoloMute(0, true, false, 'now'));
         swallow(() => e.setTrackMonitorMode(0, 1, 'now'));
-        swallow(() => e.bindMidiCc(300, 300, 1, 0, 1));
-        swallow(() => e.bindMidiCc('0', 'x', 1, 0, 1));
+        swallow(() => e.bindMidiCc({ ccNumber: 300, channel: 300, paramId: 1 }));
+        swallow(() => e.bindMidiCc({ ccNumber: 7, channel: '0', paramId: 1, minValue: 'x' }));
         swallow(() => e.pushMidiNoteOn(0, 300, 300, 300, 300, 'now'));
         swallow(() => e.pushMidiNoteOff(0, 300, 300, 300, 300, 'now'));
         swallow(() => e.pushMidiCc(0, 300, 300, 300, 300, 'now'));
@@ -944,7 +939,7 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.setAudioSourceMetadata('1', 'h', 'r'));
         swallow(() => p.setMidiEvents('1', []));
         swallow(() => p.setProgram('1', 'piano', 'x'));
-        swallow(() => p.setProgramOnChannel('1', 300, 300, 'piano', 'x'));
+        swallow(() => p.setProgram('1', 'piano', 'x', 300, 300));
         swallow(() => p.bakeMidiFx('1', '{}'));
         swallow(() => p.bakeMidiFx('1', '{}', true));
         swallow(() => p.previewMidiFxCount('1', '{}'));

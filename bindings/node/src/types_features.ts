@@ -191,7 +191,7 @@ export interface StreamBarChord {
   name: string;
   /**
    * Start of the bar in seconds, on the same timeline as `timestampsSec`
-   * (including a `processWithOffset` anchor). Consecutive bars are
+   * (including a `process` start-sample anchor). Consecutive bars are
    * `barDurationSec` apart rather than snapped to the analysis frame grid.
    * Unused in `votedPattern`.
    */
@@ -305,6 +305,8 @@ export interface StftResult {
   magnitude: Matrix2D;
   /** Power matrix: rows = `nFft / 2 + 1` bins, cols = frames. */
   power: Matrix2D;
+  /** Magnitude in dB: rows = `nFft / 2 + 1` bins, cols = frames. Present only when requested with `db: true`. */
+  db?: Matrix2D;
 }
 
 /**

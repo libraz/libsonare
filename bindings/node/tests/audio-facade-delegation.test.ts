@@ -45,7 +45,6 @@ import {
   spectralFlatness,
   spectralRolloff,
   stft,
-  stftDb,
   zeroCrossingRate,
 } from '../src/index.js';
 import { textMatcher, unknownKeyText } from './_helpers.js';
@@ -195,16 +194,6 @@ const DELEGATIONS: Delegation[] = [
     ],
     method: (audio, [a, b]) => audio.stft({ nFft: a, hopLength: b }),
     facade: (samples, rate, [a, b]) => stft(samples, rate, { nFft: a, hopLength: b }),
-  },
-  {
-    name: 'stftDb',
-    valid: [2048, 512],
-    intArgs: [
-      { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength' },
-    ],
-    method: (audio, [a, b]) => audio.stftDb({ nFft: a, hopLength: b }),
-    facade: (samples, rate, [a, b]) => stftDb(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'melSpectrogram',
@@ -560,8 +549,7 @@ describe('Audio is built only by its factories', () => {
     expect(outcomeOf(() => new Construct(tone, sampleRate))).toEqual({
       refused: true,
       errorClass: 'TypeError',
-      message:
-        'Audio: construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
+      message: 'Audio: construct it with Audio.fromBuffer, Audio.fromFile or Audio.fromMemory',
     });
   });
 });

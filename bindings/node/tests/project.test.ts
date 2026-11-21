@@ -846,12 +846,7 @@ describe('Project native binding', () => {
       config: { transposeSemitones: 12, quantizePpq: 0.25, quantizeStrength: 1 },
     });
     project.setProgram(clipId, 42);
-    project.setProgramOnChannel(clipId, {
-      group: 0,
-      channel: 3,
-      program: 24,
-      bank: { msb: 0x0123 >> 7, lsb: 0x0123 & 0x7f },
-    });
+    project.setProgram(clipId, 24, { channel: 3, bank: { msb: 2, lsb: 0x23 } });
     const smf = project.exportSmf();
     expect(bytes(smf).includes(Buffer.from([0xc0, 42]))).toBe(true);
     expect(bytes(smf).includes(Buffer.from([0xc3, 24]))).toBe(true);
@@ -876,6 +871,49 @@ describe('Project native binding', () => {
     ).toBe(true);
     sysexProject.destroy();
     restored.destroy();
+  });
+
+  it('setProgram takes bank, group and channel as options', () => {
+    const exportWith = (call: (project: Project, clipId: number) => void): Buffer => {
+      const project = new Project();
+      try {
+        const { clipId } = project.addMidiClip(0, 2);
+        call(project, clipId);
+        return bytes(project.exportSmf());
+      } finally {
+        project.destroy();
+      }
+    };
+
+    // No options: a channel-0 program change and no Bank Select.
+    const plain = exportWith((project, clipId) => project.setProgram(clipId, 42));
+    expect(plain.includes(Buffer.from([0xc0, 42]))).toBe(true);
+    expect(plain.includes(Buffer.from([0xb0, 0x00]))).toBe(false);
+    expect(plain.includes(Buffer.from([0xb0, 0x20]))).toBe(false);
+
+    // A bank emits Bank Select MSB and LSB.
+    const banked = exportWith((project, clipId) =>
+      project.setProgram(clipId, 42, { bank: { msb: 2, lsb: 0x23 } }),
+    );
+    expect(banked.includes(Buffer.from([0xb0, 0x00, 2]))).toBe(true);
+    expect(banked.includes(Buffer.from([0xb0, 0x20, 0x23]))).toBe(true);
+    expect(banked.includes(Buffer.from([0xc0, 42]))).toBe(true);
+
+    // Group and channel route the program change to that channel.
+    const routed = exportWith((project, clipId) =>
+      project.setProgram(clipId, 24, { group: 0, channel: 5 }),
+    );
+    expect(routed.includes(Buffer.from([0xc5, 24]))).toBe(true);
+    expect(routed.includes(Buffer.from([0xc0, 24]))).toBe(false);
+
+    // The former positional bank is refused.
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 2);
+      expect(() => project.setProgram(clipId, 24, 1 as never)).toThrow(TypeError);
+    } finally {
+      project.destroy();
+    }
   });
 
   it('preserves more than 512 events when baking MIDI FX', () => {
@@ -1112,13 +1150,10 @@ describe('Project native binding', () => {
     (
       project as unknown as {
         handle: {
-          bounceWithBuiltinInstruments(
-            bindings: unknown[],
-            settings: object,
-          ): { interleaved: Float32Array };
+          bounce(settings: object, builtin: unknown[]): { interleaved: Float32Array };
         };
       }
-    ).handle.bounceWithBuiltinInstruments([{ waveform }], {}).interleaved;
+    ).handle.bounce({}, [{ waveform }]).interleaved;
 
   it('refuses a numeric waveform at the facade, in range or not', () => {
     for (const waveform of [0, 3, 4, -1, Number.NaN]) {

@@ -165,17 +165,20 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   // A JSON array ("[]" for an unknown name) the TS facade parses into the typed
-  // MasteringInsertParamInfo[]. A sample rate selects the _at_rate form.
+  // MasteringInsertParamInfo[]. An omitted sample rate is the rate-less query (C rate 0).
   const std::string name = node_narrow_string(env, info[0], "name");
   int sample_rate = 0;
   const bool at_rate = !(info[1].IsUndefined() || info[1].IsNull());
   if (at_rate && !RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) {
     return env.Undefined();
   }
+  // 0 is the C ABI's rate-less query, so a given 0 is refused here rather than read as absent.
+  if (at_rate && sample_rate == 0) {
+    Napi::RangeError::New(env, "sampleRate 0 is out of range").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   char* json = nullptr;
-  const SonareError err =
-      at_rate ? sonare_mastering_insert_param_info_at_rate(name.c_str(), sample_rate, &json)
-              : sonare_mastering_insert_param_info(name.c_str(), &json);
+  const SonareError err = sonare_mastering_insert_param_info(name.c_str(), sample_rate, &json);
   if (err != SONARE_OK) {
     ThrowSonareError(env, err, "mastering insert param info: ");
     return env.Undefined();

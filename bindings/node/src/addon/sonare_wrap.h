@@ -49,7 +49,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Static factory/query methods
   static Napi::Value FromFile(const Napi::CallbackInfo& info);
-  static Napi::Value FromFileChannel(const Napi::CallbackInfo& info);
   static Napi::Value FileChannelCount(const Napi::CallbackInfo& info);
   static Napi::Value FromBuffer(const Napi::CallbackInfo& info);
   static Napi::Value FromMemory(const Napi::CallbackInfo& info);
@@ -240,7 +239,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Features - Spectrogram
   static Napi::Value Stft(const Napi::CallbackInfo& info);
-  static Napi::Value StftDb(const Napi::CallbackInfo& info);
 
   // Features - Mel
   static Napi::Value MelSpectrogramFn(const Napi::CallbackInfo& info);

@@ -38,7 +38,7 @@ function withStereoFixture(run: (paths: { stereo: string; mono: string }) => voi
   }
 }
 
-describe('Audio.fromFileChannel', () => {
+describe('Audio.fromFile channelIndex', () => {
   const left = sine(440, 0.1, { sampleRate: SR, amp: 0.6 });
   const right = sine(110, 0.1, { sampleRate: SR, amp: 0.3 });
 
@@ -47,7 +47,7 @@ describe('Audio.fromFileChannel', () => {
       writePcm16Wav(stereo, [left, right], SR);
       expect(Audio.fileNumChannels(stereo)).toBe(2);
 
-      const planes = [0, 1].map((index) => Audio.fromFileChannel(stereo, index));
+      const planes = [0, 1].map((index) => Audio.fromFile(stereo, index));
       const downmixed = Audio.fromFile(stereo);
       try {
         const decoded = planes.map((audio) => audio.data);
@@ -75,28 +75,41 @@ describe('Audio.fromFileChannel', () => {
     });
   });
 
+  it('fromFile takes an optional channelIndex', () => {
+    withStereoFixture(({ stereo }) => {
+      writePcm16Wav(stereo, [left, right], SR);
+      const downmixed = Audio.fromFile(stereo);
+      const explicitAbsent = Audio.fromFile(stereo, undefined);
+      const rightPlane = Audio.fromFile(stereo, 1);
+      try {
+        // Absent: the downmix, the same as before the parameter existed.
+        expect(Array.from(explicitAbsent.data)).toEqual(Array.from(downmixed.data));
+        expect(maxAbsDiff(downmixed.data, rightPlane.data)).toBeGreaterThan(0.1);
+        // Given: that one channel.
+        expect(maxAbsDiff(rightPlane.data, right)).toBeLessThan(QUANTIZATION_TOLERANCE);
+      } finally {
+        downmixed.destroy();
+        explicitAbsent.destroy();
+        rightPlane.destroy();
+      }
+      expect(() => Audio.fromFile(stereo, 2)).toThrow(RangeError);
+    });
+  });
+
   it('refuses a channel index the file has no channel for', () => {
     withStereoFixture(({ stereo, mono }) => {
       writePcm16Wav(stereo, [left, right], SR);
       writePcm16Wav(mono, [left], SR);
 
       // The decoder's refusal, bounded by the channels the file holds.
-      for (const [call, last] of [
-        [() => Audio.fromFileChannel(stereo, 2), 1],
-        [() => Audio.fromFileChannel(mono, 1), 0],
-      ] as const) {
-        expect(call).toThrow(
-          new RangeError(`Audio.fromFileChannel: channelIndex must be an integer in [0, ${last}]`),
-        );
-      }
+      expect(() => Audio.fromFile(stereo, 2)).toThrow(RangeError);
+      expect(() => Audio.fromFile(mono, 1)).toThrow(RangeError);
       // A negative index is refused before the file is read.
-      expect(() => Audio.fromFileChannel(stereo, -1)).toThrow(
-        new RangeError('Audio.fromFileChannel: channelIndex must be an integer in [0, 2147483647]'),
-      );
+      expect(() => Audio.fromFile(stereo, -1)).toThrow(RangeError);
 
       // The refusals above are the file's channel count talking, not a blanket
       // rejection: the channels the file does have still load.
-      const monoPlane = Audio.fromFileChannel(mono, 0);
+      const monoPlane = Audio.fromFile(mono, 0);
       try {
         expect(maxAbsDiff(monoPlane.data, left)).toBeLessThan(QUANTIZATION_TOLERANCE);
       } finally {
@@ -108,12 +121,9 @@ describe('Audio.fromFileChannel', () => {
   it('refuses a wrong-typed path and channel index', () => {
     withStereoFixture(({ stereo }) => {
       writePcm16Wav(stereo, [left, right], SR);
-      expect(() => Audio.fromFileChannel(123 as unknown as string, 0)).toThrow(TypeError);
-      expect(() => Audio.fromFileChannel(stereo, '0' as unknown as number)).toThrow(TypeError);
-      expect(() => Audio.fromFileChannel(stereo, undefined as unknown as number)).toThrow(
-        TypeError,
-      );
-      expect(() => Audio.fromFileChannel(stereo, 0.5)).toThrow(RangeError);
+      expect(() => Audio.fromFile(123 as unknown as string, 0)).toThrow(TypeError);
+      expect(() => Audio.fromFile(stereo, '0' as unknown as number)).toThrow(TypeError);
+      expect(() => Audio.fromFile(stereo, 0.5)).toThrow(RangeError);
     });
   });
 });

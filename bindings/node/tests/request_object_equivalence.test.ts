@@ -1455,13 +1455,6 @@ const ROWS: Row[] = [
     invalid: { hopLength: 0 },
   },
   {
-    name: 'stftDb',
-    fn: sonare.stftDb,
-    params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { nFft: 1024, hopLength: 256 } },
-    invalid: { hopLength: 0 },
-  },
-  {
     name: 'reassignedSpectrogram',
     fn: sonare.reassignedSpectrogram,
     params: 'samples sampleRate ...options?',

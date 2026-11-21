@@ -19,7 +19,9 @@ describe('master automation ids (Node)', () => {
       expect(new Set(ids).size).toBe(3);
       ids.forEach((id, index) => {
         expect(engine.parameterInfo(id).name).toBe(['faderDb', 'pan', 'width'][index]);
-        expect(() => engine.setParameterSmoothed(id, index === 0 ? -6 : 0.5)).not.toThrow();
+        expect(() =>
+          engine.setParameter(id, index === 0 ? -6 : 0.5, undefined, { smoothed: true }),
+        ).not.toThrow();
       });
       expect(() => engine.resolveStripAutomationId('master', 'gain' as 'faderDb')).toThrow(
         RangeError,

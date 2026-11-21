@@ -36,6 +36,8 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   FrameAnalysisArgs args;
   if (!ReadStftFrameArgs(env, info, &args)) return env.Undefined();
+  bool db = false;
+  if (!OptionalBoolArg(env, info, 4, "db", false, &db)) return env.Undefined();
 
   sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
@@ -53,37 +55,7 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   out.Set("sampleRate", Napi::Number::New(env, spec.sample_rate()));
   out.Set("magnitude", VecToFloat32(env, spec.magnitude()));
   out.Set("power", VecToFloat32(env, spec.power()));
-
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  FrameAnalysisArgs args;
-  if (!ReadStftFrameArgs(env, info, &args)) return env.Undefined();
-
-  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
-  sonare::StftConfig config;
-  config.n_fft = args.frame_length;
-  config.hop_length = args.hop_length;
-
-  sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("nBins", Napi::Number::New(env, spec.n_bins()));
-  out.Set("nFrames", Napi::Number::New(env, spec.n_frames()));
-  out.Set("db", VecToFloat32(env, spec.to_db()));
+  if (db) out.Set("db", VecToFloat32(env, spec.to_db()));
 
   return out;
   SONARE_NODE_CATCH(env)

@@ -344,13 +344,15 @@ describe('stream analyzer surface', () => {
     }
   });
 
-  it('anchors processWithOffset and reset on startSample', () => {
+  it('process takes an optional startSample', () => {
     const a = analyzer();
     try {
+      // Given: the block is anchored at the explicit offset.
       a.reset(sampleRate);
-      a.processWithOffset(triad(1), sampleRate);
+      a.process(triad(1), sampleRate);
       const frames = a.readFrames(a.availableFrames);
       expect(frames.timestampsSec[0]).toBeGreaterThan(0.5);
+      // Absent: the analyzer tracks the offset itself.
       a.reset();
       a.process(triad(1));
       expect(a.readFrames(1).timestampsSec[0]).toBeLessThan(0.5);

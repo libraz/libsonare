@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Matrix2D } from '../../dist/index.js';
 import * as api from '../../dist/index.js';
 import { Audio, decodeChannels, ErrorCode, SonareError } from '../../dist/index.js';
 
@@ -74,7 +75,6 @@ const pitchOptions = {
 /** Audio method, module function it delegates to, and a non-default option bag. */
 const delegations: Array<[string, Record<string, unknown>]> = [
   ['stft', framing],
-  ['stftDb', framing],
   ['melSpectrogram', { ...framing, nMels: 40, fminHz: 50, fmaxHz: 8000, htk: true }],
   ['mfcc', { ...framing, nMels: 40, nMfcc: 13, fminHz: 50, fmaxHz: 8000, htk: true }],
   ['chroma', framing],
@@ -211,14 +211,14 @@ describe('Audio analysis methods', () => {
     expect('nFrames' in result).toBe(false);
   });
 
-  it('returns Matrix2D from stftDb with bins as rows and frames as cols', () => {
+  it('returns Matrix2D from stft db with bins as rows and frames as cols', () => {
     const audio = Audio.fromBuffer(signal(), sampleRate);
-    const result = audio.stftDb({ nFft: 1024, hopLength: 256 });
+    const result = audio.stft({ nFft: 1024, hopLength: 256, db: true }).db as Matrix2D;
+    expect(result).toBeDefined();
     expect(result.rows).toBe(513);
     expect(result.cols).toBeGreaterThan(0);
     expect(result.data.length).toBe(result.rows * result.cols);
     expect('nBins' in result).toBe(false);
-    expect('db' in result).toBe(false);
   });
 
   it('reports analysis progress through analyze options and drops analyzeWithProgress', () => {

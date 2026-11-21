@@ -58,7 +58,7 @@ describe('decodeChannels', () => {
           const plane = decoded.channels[channel];
           expect(plane).toBeInstanceOf(Float32Array);
           expect(plane).toHaveLength(FRAMES);
-          expect(Array.from(plane)).toEqual(Array.from(Audio.fromFileChannel(file, channel).data));
+          expect(Array.from(plane)).toEqual(Array.from(Audio.fromFile(file, channel).data));
         }
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });

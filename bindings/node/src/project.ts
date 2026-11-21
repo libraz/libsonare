@@ -69,7 +69,7 @@ import type {
   ProjectMidiFxPreviewRequest,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
-  ProjectProgramRequest,
+  ProjectProgramOptions,
   ProjectSource,
   ProjectSourceAudioRequest,
   ProjectTempoCandidate,
@@ -104,7 +104,6 @@ import {
   assertU32,
   C_INT_MAX,
   requestObject,
-  resolveOptionalNonNegative,
   sampleOneShot,
 } from './validation.js';
 import {
@@ -1296,30 +1295,25 @@ export class Project {
   }
 
   /**
-   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. Omit `bank` for
-   * no Bank Select, matching {@link setProgramOnChannel} and the Python/WASM surfaces;
-   * pass `>= 0` to emit a Bank Select. A negative `bank` is refused.
+   * Set a MIDI clip's program at source PPQ 0. `options.bank` emits a Bank Select
+   * before the program (omitted, none is emitted); `options.group` and
+   * `options.channel` pick the UMP group and MIDI channel and default to 0.
    */
-  setProgram(clipId: number, program: number, bank?: number): void {
-    this.native.setProgram(clipId, program, resolveOptionalNonNegative(bank, 'bank'));
-  }
-
-  /** Set a MIDI clip's program, and optionally its Bank Select, for one UMP group and channel. */
-  setProgramOnChannel(clipId: number, request: ProjectProgramRequest): void {
-    const fnName = 'setProgramOnChannel';
-    const record = requestObject(fnName, request, 'request', true);
+  setProgram(clipId: number, program: number, options?: ProjectProgramOptions): void {
+    const fnName = 'setProgram';
+    const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
     let bank = -1;
     if (!isAbsent(record.bank)) {
       const msb = assertU7(requireInteger(record.bank.msb, 'bank.msb'), 'bank.msb');
       const lsb = assertU7(requireInteger(record.bank.lsb, 'bank.lsb'), 'bank.lsb');
       bank = (msb << 7) | lsb;
     }
-    this.native.setProgramOnChannel(
+    this.native.setProgram(
       clipId,
-      requireInteger(record.group, 'group'),
-      requireInteger(record.channel, 'channel'),
-      requireInteger(record.program, 'program'),
+      requireInteger(program, 'program'),
       bank,
+      isAbsent(record.group) ? 0 : requireInteger(record.group, 'group'),
+      isAbsent(record.channel) ? 0 : requireInteger(record.channel, 'channel'),
     );
   }
 
@@ -1495,7 +1489,7 @@ export class Project {
    * later project edits do not change an already compiled timeline.
    */
   compileTimeline(): ProjectCompileTimelineResult {
-    const raw = this.native.compileTimeline();
+    const raw = this.native.compile(true);
     const diagnostics = diagnosticsFromNative(raw.diagnostics);
     return raw.timeline === null
       ? { diagnostics }
@@ -1563,7 +1557,10 @@ export class Project {
     const native = this.native;
     this.instrumentBounceActive = true;
     try {
-      return planarBounce(native.bounceWithInstruments(bindings, settings), native.getSampleRate());
+      return planarBounce(
+        native.bounce(settings, undefined, undefined, undefined, bindings),
+        native.getSampleRate(),
+      );
     } finally {
       this.instrumentBounceActive = false;
     }
@@ -1591,10 +1588,7 @@ export class Project {
       withDestinationCopy,
     );
     const native = this.native;
-    return planarBounce(
-      native.bounceWithBuiltinInstruments(bindings, settings),
-      native.getSampleRate(),
-    );
+    return planarBounce(native.bounce(settings, bindings), native.getSampleRate());
   }
 
   /**
@@ -1624,10 +1618,7 @@ export class Project {
       withDestinationCopy,
     );
     const native = this.native;
-    return planarBounce(
-      native.bounceWithSynthInstruments(bindings, settings),
-      native.getSampleRate(),
-    );
+    return planarBounce(native.bounce(settings, undefined, bindings), native.getSampleRate());
   }
 
   /**
@@ -1680,7 +1671,7 @@ export class Project {
     const bindings = bindInstruments(instruments, (i) => i, withDestinationCopy);
     const native = this.native;
     return planarBounce(
-      native.bounceWithSf2Instruments(bindings, settings),
+      native.bounce(settings, undefined, undefined, bindings),
       native.getSampleRate(),
     );
   }

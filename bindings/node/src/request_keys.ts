@@ -1414,7 +1414,7 @@ export const REQUEST_KEYS = {
   setClipLoop: keySet('loopMode', 'loopLengthPpq', 'loopCrossfadePpq'),
   setSourceAudio: keySet('sourceId', 'channels', 'sampleRate'),
   setAudioSourceMetadata: keySet('sourceId', 'contentHash', 'externalStemRole'),
-  setProgramOnChannel: keySet('group', 'channel', 'program', 'bank'),
+  setProgram: keySet('bank', 'group', 'channel'),
   setAssistSidecar: keySet(
     'moduleId',
     'schemaVersion',
@@ -1449,6 +1449,7 @@ export const REQUEST_KEYS = {
   configureCapture: CONFIGURE_CAPTURE_REQUEST_KEYS,
   armCapture: ARM_CAPTURE_REQUEST_KEYS,
   setLoop: SET_LOOP_REQUEST_KEYS,
+  setParameter: keySet('smoothed'),
   setMetronome: SET_METRONOME_REQUEST_KEYS,
   setTrackSoloMute: SET_TRACK_SOLO_MUTE_REQUEST_KEYS,
   pushMidiProgram: MIDI_BANK_REQUEST_KEYS,
@@ -1619,8 +1620,7 @@ export const REQUEST_KEYS = {
   realtimeVoiceChangerRender: REALTIME_VOICE_CHANGER_RENDER_REQUEST_KEYS,
   powerToDb: keySet('values', 'ref', 'amin', 'topDb'),
   amplitudeToDb: keySet('values', 'ref', 'amin', 'topDb'),
-  stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength'),
-  stftDb: keySet('samples', 'sampleRate', 'nFft', 'hopLength'),
+  stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength', 'db'),
   melSpectrogram: keySet(
     'samples',
     'sampleRate',
@@ -1904,7 +1904,7 @@ export const REQUEST_KEYS = {
 } as const;
 
 export const NESTED_REQUEST_KEYS = {
-  setProgramOnChannel: { bank: keySet('msb', 'lsb') },
+  setProgram: { bank: keySet('msb', 'lsb') },
   midi2Program: { bank: keySet('msb', 'lsb') },
   midiBankProgram: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },

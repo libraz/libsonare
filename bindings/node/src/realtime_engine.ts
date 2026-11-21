@@ -46,6 +46,7 @@ import type {
   EngineParameterInfo,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
+  EngineSetParameterOptions,
   EngineTelemetry,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
@@ -549,16 +550,6 @@ function telemetryFromNative(native: Record<string, unknown>): EngineTelemetry {
   } as unknown as EngineTelemetry;
 }
 
-function meterTelemetryFromNative(native: Record<string, unknown>): EngineMeterTelemetry {
-  const { truePeakDbL, truePeakDbR, maxTruePeakDb, ...rest } = native;
-  return {
-    ...rest,
-    truePeakDbtpL: truePeakDbL,
-    truePeakDbtpR: truePeakDbR,
-    maxTruePeakDbtp: maxTruePeakDb,
-  } as unknown as EngineMeterTelemetry;
-}
-
 function meterTelemetryWideFromNative(native: Record<string, unknown>): EngineMeterTelemetryWide {
   const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = native;
   return {
@@ -567,6 +558,25 @@ function meterTelemetryWideFromNative(native: Record<string, unknown>): EngineMe
     truePeakDbtp: truePeakDb,
     maxTruePeakDbtp: maxTruePeakDb,
   } as unknown as EngineMeterTelemetryWide;
+}
+
+/** Level a plane the target does not carry reads as, matching the engine's meter floor. */
+const METER_FLOOR_DB = -120;
+
+/** The stereo view of a per-plane record: planes 0 and 1, the floor where a plane is absent. */
+function meterTelemetryFromWide(wide: EngineMeterTelemetryWide): EngineMeterTelemetry {
+  const { numChannels: _numChannels, peakDb, rmsDb, truePeakDbtp, inputPeakDb, ...rest } = wide;
+  return {
+    ...rest,
+    peakDbL: peakDb[0] ?? METER_FLOOR_DB,
+    peakDbR: peakDb[1] ?? METER_FLOOR_DB,
+    rmsDbL: rmsDb[0] ?? METER_FLOOR_DB,
+    rmsDbR: rmsDb[1] ?? METER_FLOOR_DB,
+    truePeakDbtpL: truePeakDbtp[0] ?? METER_FLOOR_DB,
+    truePeakDbtpR: truePeakDbtp[1] ?? METER_FLOOR_DB,
+    inputPeakDbL: inputPeakDb[0] ?? METER_FLOOR_DB,
+    inputPeakDbR: inputPeakDb[1] ?? METER_FLOOR_DB,
+  } as unknown as EngineMeterTelemetry;
 }
 
 function graphToNative(spec: EngineGraphSpec): unknown {
@@ -978,7 +988,7 @@ export class RealtimeEngine {
    * Replaces the automation lane driving `paramId`. An empty `points` array
    * leaves the target undriven rather than snapping it to 0 or a default:
    * once adopted, the target reverts to the last value explicitly sent
-   * through {@link setParameter} / {@link setParameterSmoothed}, or is left
+   * through {@link setParameter}, or is left
    * unchanged if no such value was ever sent for `paramId`. This holds
    * regardless of whether the manual value or the lane clear reaches the
    * audio thread first.
@@ -1469,7 +1479,7 @@ export class RealtimeEngine {
   /**
    * Resolves a strip insert parameter (by its JSON-key name) to the reserved
    * automation id that can then be driven with {@link setAutomationLane},
-   * {@link setParameter}, or {@link setParameterSmoothed}, exactly like a
+   * or {@link setParameter}, exactly like a
    * fader/pan id. Throws a `RangeError` when the track, insert, or name is
    * unknown, like every `resolve*AutomationId` on every surface.
    *
@@ -1937,7 +1947,7 @@ export class RealtimeEngine {
    * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
    */
   processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
-    return this.native.processWithMonitor(channels);
+    return this.native.process(channels, true);
   }
 
   /**
@@ -2030,9 +2040,7 @@ export class RealtimeEngine {
    * Compatibility drain over the queue {@link drainMeterTelemetryWide} reads; use that one alone.
    */
   drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
-    return (this.native.drainMeterTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
-      meterTelemetryFromNative,
-    );
+    return this.drainMeterTelemetryWide(maxRecords).map(meterTelemetryFromWide);
   }
 
   /**
@@ -2042,7 +2050,7 @@ export class RealtimeEngine {
    * records) and stays for compatibility.
    */
   drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
-    return (this.native.drainMeterTelemetryWide(maxRecords) as Array<Record<string, unknown>>).map(
+    return (this.native.drainMeterTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
       meterTelemetryWideFromNative,
     );
   }
@@ -2082,11 +2090,13 @@ export class RealtimeEngine {
   }
 
   /**
-   * Push a live parameter value to the engine (immediate jump).
+   * Push a live parameter value to the engine (immediate jump unless `options.smoothed`).
    *
    * @param paramId - Target parameter id
    * @param value - New value
    * @param renderFrame - Render-frame time to apply; omit for immediate (negative is refused)
+   * @param options - `smoothed: true` ramps to the value instead of jumping; the ramp's target
+   *   (not its in-flight position) becomes the base value. Default `false`.
    *
    * This value also becomes `paramId`'s base value: if an automation lane
    * later starts (and stops) driving `paramId`, the target reverts to this
@@ -2095,23 +2105,23 @@ export class RealtimeEngine {
    * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
    * methods (`resolveStripAutomationId` for the master fader, pan and width).
    */
-  setParameter(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameter(paramId, value, resolveRenderFrame(renderFrame));
-  }
-
-  /**
-   * Push a live parameter value to the engine using a smoothed ramp. The
-   * ramp's target (not its in-flight position) becomes `paramId`'s base
-   * value, with the same restore-on-lane-release behavior as
-   * {@link setParameter}.
-   */
-  setParameterSmoothed(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameterSmoothed(paramId, value, resolveRenderFrame(renderFrame));
+  setParameter(
+    paramId: number,
+    value: number,
+    renderFrame?: number,
+    options?: EngineSetParameterOptions,
+  ): void {
+    const request =
+      options === undefined ? {} : requestObject('setParameter', options, 'options', true);
+    const smoothed = isAbsent(request.smoothed)
+      ? false
+      : requireBoolean(request.smoothed, 'smoothed');
+    this.native.setParameter(paramId, value, resolveRenderFrame(renderFrame), smoothed);
   }
 
   /**
    * Set the ramp time (ms) of the engine-level smoother. It governs only
-   * `setParameterSmoothed` on parameters bound through the automation engine.
+   * `setParameter` with `smoothed: true` on parameters bound through the automation engine.
    * Reserved engine targets — track and bus faders, pan and width, and insert and
    * instrument parameters — keep their own fixed smoothing whatever this is set
    * to, and MIDI-CC mappings apply their values directly. The default is 20 ms;
@@ -2272,7 +2282,7 @@ export class RealtimeEngine {
   /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
   bindMidiCc(binding: ProjectMidiCcBinding): void {
     assertMidiCcBindingBytes(binding);
-    this.native.bindMidiCcBinding(binding);
+    this.native.bindMidiCc(binding);
   }
 
   /** Removes every live MIDI CC / RPN / NRPN binding. */

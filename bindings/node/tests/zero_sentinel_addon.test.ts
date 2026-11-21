@@ -133,9 +133,7 @@ describe('an instrument polyphony, read literally', () => {
     }
     const project = midiProject([60, 64, 67]);
     try {
-      return digest(
-        project.bounceWithBuiltinInstruments([config], { totalFrames: 24000 }).interleaved,
-      );
+      return digest(project.bounce({ totalFrames: 24000 }, [config]).interleaved);
     } finally {
       project.destroy();
     }
@@ -149,7 +147,9 @@ describe('an instrument polyphony, read literally', () => {
     const project = midiProject([60, 64, 67]);
     project.loadSoundFont(sf2Bytes);
     try {
-      return digest(project.bounceWithSf2Instruments([config], { totalFrames: 24000 }).interleaved);
+      return digest(
+        project.bounce({ totalFrames: 24000 }, undefined, undefined, [config]).interleaved,
+      );
     } finally {
       project.destroy();
     }
@@ -227,9 +227,7 @@ describe('a bounce option whose omission derives the value', () => {
     }
     const project = midiProject([60]);
     try {
-      return digest(
-        project.bounceWithSynthInstruments([{ preset: 'sawLead' }], options).interleaved,
-      );
+      return digest(project.bounce(options, undefined, [{ preset: 'sawLead' }]).interleaved);
     } finally {
       project.destroy();
     }

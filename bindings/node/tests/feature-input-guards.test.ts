@@ -11,7 +11,6 @@ import {
   spectralFlatness,
   spectralRolloff,
   stft,
-  stftDb,
   zeroCrossingRate,
 } from '../src/index.js';
 
@@ -37,7 +36,6 @@ function withNaN(n = 2048): Float32Array {
 // instead of a clear error. Each must now throw, matching Python and the CLI.
 const featureCalls: Array<[string, (samples: Float32Array, sr: number) => unknown]> = [
   ['stft', (s, sr) => stft(s, sr)],
-  ['stftDb', (s, sr) => stftDb(s, sr)],
   ['melSpectrogram', (s, sr) => melSpectrogram(s, sr)],
   ['mfcc', (s, sr) => mfcc(s, sr)],
   ['chroma', (s, sr) => chroma(s, sr)],
@@ -93,7 +91,6 @@ type FftCall = (opts: { nFft?: number; hopLength?: number; sampleRate?: number }
 
 const fftCalls: Array<[string, FftCall]> = [
   ['stft', (o) => stft({ samples: sine(N), sampleRate: SR, ...o })],
-  ['stftDb', (o) => stftDb({ samples: sine(N), sampleRate: SR, ...o })],
   ['melSpectrogram', (o) => melSpectrogram({ samples: sine(N), sampleRate: SR, ...o })],
   ['mfcc', (o) => mfcc({ samples: sine(N), sampleRate: SR, ...o })],
   ['spectralCentroid', (o) => spectralCentroid({ samples: sine(N), sampleRate: SR, ...o })],

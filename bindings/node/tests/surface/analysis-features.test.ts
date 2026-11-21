@@ -64,7 +64,6 @@ const small = { nFft: 512, hopLength: 256 };
 /** Every function taking samples and a sample rate, with the options its tiny call needs. */
 const SAMPLE_FUNCTIONS: ReadonlyArray<[string, Record<string, unknown>]> = [
   ['stft', small],
-  ['stftDb', small],
   ['melSpectrogram', { ...small, nMels: 16 }],
   ['mfcc', { ...small, nMels: 16, nMfcc: 8 }],
   ['reassignedSpectrogram', small],
@@ -146,6 +145,19 @@ describe('sample-taking functions', () => {
     ['stft', { samples: [1, 2, 3], sampleRate }, TypeError],
   ] as const)('%s refuses a bad audio input by class', (name, request, cls) => {
     expectThrows(() => api[name](request), cls);
+  });
+
+  it('stft without db returns no db plane and the same magnitude as with db', () => {
+    const plain = sonare.stft(samples, sampleRate, small);
+    const withDb = sonare.stft(samples, sampleRate, { ...small, db: true });
+    expect('db' in plain).toBe(false);
+    expect(Array.from(plain.magnitude.data)).toEqual(Array.from(withDb.magnitude.data));
+    expect(Array.from(plain.power.data)).toEqual(Array.from(withDb.power.data));
+    const db = withDb.db;
+    expect(isMatrix2D(db)).toBe(true);
+    expect(db?.rows).toBe(plain.magnitude.rows);
+    expect(db?.rows).toBe(small.nFft / 2 + 1);
+    expect(db?.cols).toBe(plain.magnitude.cols);
   });
 
   it('refuses a non-finite sample by class', () => {
@@ -426,7 +438,7 @@ describe('Matrix2D results and inputs', () => {
   };
 
   it.each([
-    ['stftDb', () => sonare.stftDb(samples, sampleRate, small), 257],
+    ['stft db', () => sonare.stft(samples, sampleRate, { ...small, db: true }).db as Matrix2D, 257],
     [
       'spectralContrast',
       () => sonare.spectralContrast(samples, sampleRate, { ...small, nBands: 4 }),
@@ -930,7 +942,7 @@ describe('type shapes', () => {
     type NoInverseMel = sonare.InverseMelResult;
     // @ts-expect-error melToStft returns Matrix2D
     type NoInverseStft = sonare.InverseStftResult;
-    // @ts-expect-error stftDb returns Matrix2D
+    // @ts-expect-error stft({ db: true }) carries db on StftResult
     type NoStftDb = sonare.StftDbResult;
     // @ts-expect-error renamed StreamConfig
     type NoStreamAnalyzerConfig = sonare.StreamAnalyzerConfig;

@@ -99,7 +99,6 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value ImportClipFile(const Napi::CallbackInfo& info);
   Napi::Value ExportClipFile(const Napi::CallbackInfo& info);
   Napi::Value SetProgram(const Napi::CallbackInfo& info);
-  Napi::Value SetProgramOnChannel(const Napi::CallbackInfo& info);
   Napi::Value BakeMidiFx(const Napi::CallbackInfo& info);
   Napi::Value PreviewMidiFxCount(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
@@ -123,19 +122,14 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- compile / render --
   Napi::Value Compile(const Napi::CallbackInfo& info);
-  Napi::Value CompileTimeline(const Napi::CallbackInfo& info);
   Napi::Value LastBounceCompileResult(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
-  Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);
-  Napi::Value BounceWithInstruments(const Napi::CallbackInfo& info);
-  Napi::Value BounceWithSynthInstruments(const Napi::CallbackInfo& info);
 
   // -- SoundFont (SF2) instrument --
   void LoadSoundFont(const Napi::CallbackInfo& info);
   void ClearSoundFont(const Napi::CallbackInfo& info);
   Napi::Value SoundFontPresetCount(const Napi::CallbackInfo& info);
   Napi::Value SoundFontManifest(const Napi::CallbackInfo& info);
-  Napi::Value BounceWithSf2Instruments(const Napi::CallbackInfo& info);
 
   void Destroy(const Napi::CallbackInfo& info);
 

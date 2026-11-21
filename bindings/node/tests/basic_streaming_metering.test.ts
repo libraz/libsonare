@@ -1146,14 +1146,14 @@ describe('StreamAnalyzer external offsets', () => {
 
     const analyzer = new StreamAnalyzer(config);
     for (let offset = 0; offset < audio.length; offset += 128) {
-      analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
+      analyzer.process(audio.subarray(offset, offset + 128), offset);
     }
     expect(Array.from(analyzer.readFrames(64).timestampsSec)).toEqual(Array.from(expected));
     analyzer.reset();
-    analyzer.processWithOffset(audio.subarray(0, 128), 1000);
-    expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
+    analyzer.process(audio.subarray(0, 128), 1000);
+    expect(() => analyzer.process(audio.subarray(128, 256), 1129)).toThrow();
     analyzer.reset(5000);
-    expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
+    expect(() => analyzer.process(audio.subarray(0, 128), 5000)).not.toThrow();
   });
 
   it('rejects invalid size arguments without integer truncation or wrapping', () => {
@@ -1170,7 +1170,7 @@ describe('StreamAnalyzer external offsets', () => {
     // entry points now read through instead of a file-local copy of its domain.
     const refused = /finite non-negative integer no greater than Number\.MAX_SAFE_INTEGER/;
     for (const value of invalidValues) {
-      expect(() => analyzer.processWithOffset(new Float32Array([0]), value)).toThrow(refused);
+      expect(() => analyzer.process(new Float32Array([0]), value)).toThrow(refused);
       expect(() => analyzer.readFrames(value)).toThrow(refused);
       expect(() => analyzer.readFramesU8(value)).toThrow(refused);
       expect(() => analyzer.readFramesI16(value)).toThrow(refused);
@@ -1178,9 +1178,7 @@ describe('StreamAnalyzer external offsets', () => {
     }
 
     analyzer.reset(Number.MAX_SAFE_INTEGER);
-    expect(() =>
-      analyzer.processWithOffset(new Float32Array([0]), Number.MAX_SAFE_INTEGER),
-    ).not.toThrow();
+    expect(() => analyzer.process(new Float32Array([0]), Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFrames(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesU8(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesI16(Number.MAX_SAFE_INTEGER)).not.toThrow();

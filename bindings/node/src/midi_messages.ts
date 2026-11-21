@@ -42,11 +42,11 @@ import type {
   MidiRouteEventsRequest,
 } from './types_midi_messages.js';
 import type {
+  MidiBank,
   ProjectAutomationPoint,
   ProjectMidiCcBinding,
   ProjectMidiEvent,
   ProjectMidiRouteResult,
-  ProjectProgramBank,
 } from './types_project.js';
 import { assertBoundedInteger, midi1Event, requestObject } from './validation.js';
 import { projectAutomationPointFromNative } from './value_coercion.js';
@@ -105,7 +105,7 @@ function readBank(bank: unknown): { msb: number; lsb: number } {
   if (typeof bank !== 'object' || bank === null) {
     throw refuseType(`bank must be an object`);
   }
-  const { msb, lsb } = bank as ProjectProgramBank;
+  const { msb, lsb } = bank as MidiBank;
   return {
     msb: boundedInt(msb, 'bank.msb', 127),
     lsb: boundedInt(lsb, 'bank.lsb', 127),

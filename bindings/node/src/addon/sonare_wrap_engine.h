@@ -126,19 +126,16 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value GraphNodeCount(const Napi::CallbackInfo& info);
   Napi::Value GraphConnectionCount(const Napi::CallbackInfo& info);
   Napi::Value Process(const Napi::CallbackInfo& info);
-  Napi::Value ProcessWithMonitor(const Napi::CallbackInfo& info);
   Napi::Value RenderOffline(const Napi::CallbackInfo& info);
   Napi::Value FinishOfflineRender(const Napi::CallbackInfo& info);
   Napi::Value BounceOffline(const Napi::CallbackInfo& info);
   Napi::Value FreezeOffline(const Napi::CallbackInfo& info);
   Napi::Value DrainTelemetry(const Napi::CallbackInfo& info);
   Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
-  Napi::Value DrainMeterTelemetryWide(const Napi::CallbackInfo& info);
   Napi::Value MeterTargetInsertGainReduction(const Napi::CallbackInfo& info);
   Napi::Value ConfigureScopeTelemetry(const Napi::CallbackInfo& info);
   Napi::Value DrainScopeTelemetry(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);
-  Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
   Napi::Value SetParamSmoothingMs(const Napi::CallbackInfo& info);
   Napi::Value SetSoloMute(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMonitorMode(const Napi::CallbackInfo& info);
@@ -151,7 +148,6 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ClearMidiInstrument(const Napi::CallbackInfo& info);
   Napi::Value MidiInstrumentCount(const Napi::CallbackInfo& info);
   Napi::Value BindMidiCc(const Napi::CallbackInfo& info);
-  Napi::Value BindMidiCcBinding(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiCcBindings(const Napi::CallbackInfo& info);
   Napi::Value MidiCcBindingCount(const Napi::CallbackInfo& info);
   Napi::Value SetControllerProfile(const Napi::CallbackInfo& info);

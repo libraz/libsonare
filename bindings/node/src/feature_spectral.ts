@@ -31,10 +31,9 @@ export interface StftRequest {
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Also return the magnitude in dB as `db`. Default false. */
+  db?: boolean;
 }
-
-/** Request for {@link stftDb}. */
-export type StftDbRequest = StftRequest;
 
 /** Request for {@link spectralCentroid}. */
 export type SpectralCentroidRequest = StftRequest;
@@ -235,7 +234,7 @@ export interface PcenRequest {
   eps?: number;
 }
 
-/** STFT magnitude and power. */
+/** STFT magnitude and power; with `db: true` the result also carries the dB plane. */
 export function stft(request: StftRequest): StftResult;
 export function stft(
   samples: Float32Array,
@@ -247,31 +246,18 @@ export function stft(...args: unknown[]): StftResult {
     const request = sampleOneShot<StftRequest>('stft', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    const r = addon.stft(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
-    return {
+    const r = addon.stft(request.samples, request.sampleRate, fft.nFft, fft.hopLength, request.db);
+    const out: StftResult = {
       nFft: r.nFft,
       hopLength: r.hopLength,
       sampleRate: r.sampleRate,
       magnitude: toMatrix2D(r.magnitude, r.nBins, r.nFrames),
       power: toMatrix2D(r.power, r.nBins, r.nFrames),
     };
-  });
-}
-
-/** STFT in dB. Returns rows = `nFft / 2 + 1` bins, cols = frames. */
-export function stftDb(request: StftDbRequest): Matrix2D;
-export function stftDb(
-  samples: Float32Array,
-  sampleRate: number,
-  options?: OptionsOf<StftDbRequest>,
-): Matrix2D;
-export function stftDb(...args: unknown[]): Matrix2D {
-  return withEntry('stftDb', () => {
-    const request = sampleOneShot<StftDbRequest>('stftDb', args);
-    assertAudioInput(request.samples, request.sampleRate, request);
-    const fft = resolveFftOptions(request.nFft, request.hopLength);
-    const r = addon.stftDb(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
-    return toMatrix2D(r.db, r.nBins, r.nFrames);
+    if (request.db === true) {
+      out.db = toMatrix2D(r.db, r.nBins, r.nFrames);
+    }
+    return out;
   });
 }
 

@@ -85,8 +85,8 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_tempogram_with_mode(arr.Data(), arr.ElementLength(), sr, hop, win,
-                                               center, norm, mode, &out, &count, &n_frames);
+  SonareError err = sonare_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, center, norm,
+                                     mode, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);

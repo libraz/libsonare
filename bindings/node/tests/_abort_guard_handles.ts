@@ -59,8 +59,7 @@ export interface NativeEngine {
   parameterInfoByIndex(index: unknown): unknown;
   drainExternalMidi(maxRecords?: unknown): unknown[];
   addParameter(parameter: unknown): void;
-  setParameter(paramId: unknown, value: unknown, renderFrame?: unknown): void;
-  setParameterSmoothed(paramId: unknown, value: unknown, renderFrame?: unknown): void;
+  setParameter(paramId: unknown, value: unknown, renderFrame?: unknown, smoothed?: unknown): void;
   setParamSmoothingMs(smoothingMs: unknown): void;
   setSoloMute(laneIndex: unknown, solo: unknown, mute: unknown, renderFrame?: unknown): void;
   setTrackMonitorMode(laneIndex: unknown, mode: unknown, renderFrame?: unknown): void;
@@ -85,13 +84,7 @@ export interface NativeEngine {
   setWarpVoiceCapacity(voices: unknown): void;
   midiInputPendingCount(): number;
   midiCcBindingCount(): number;
-  bindMidiCc(
-    channel: unknown,
-    controller: unknown,
-    paramId: unknown,
-    minValue?: unknown,
-    maxValue?: unknown,
-  ): void;
+  bindMidiCc(binding: unknown): void;
   pushMidiNoteOn(
     destinationId: unknown,
     group: unknown,
@@ -217,7 +210,6 @@ export interface NativeEngine {
   clipCount(): number;
   drainTelemetry(maxRecords?: unknown): unknown[];
   drainMeterTelemetry(maxRecords?: unknown): unknown[];
-  drainMeterTelemetryWide(maxRecords?: unknown): unknown[];
   drainScopeTelemetry(maxRecords?: unknown): unknown[];
   setLaneSidechain(trackId: unknown, insertIndex: unknown, sourceTrackId: unknown): void;
   canSetLaneSidechain(trackId: unknown, insertIndex: unknown, sourceTrackId: unknown): number;
@@ -349,6 +341,7 @@ export interface NativeSampleBank {
 
 export interface NativeProject {
   destroy(): void;
+  compile(withTimeline?: unknown): unknown;
   toJson(): string;
   addMidiClip(startPpq: unknown, lengthPpq?: unknown): { trackId: number; clipId: number };
   addTrack(desc?: unknown): number;
@@ -402,13 +395,12 @@ export interface NativeProject {
   removeWarpMap(warpMapId: unknown): void;
   setSourceAudio(sourceId: unknown, audio: unknown, channels?: unknown, sampleRate?: unknown): void;
   setAudioSourceMetadata(sourceId: unknown, contentHash?: unknown, stemRole?: unknown): void;
-  setProgram(clipId: unknown, program?: unknown, bank?: unknown): void;
-  setProgramOnChannel(
+  setProgram(
     clipId: unknown,
-    group?: unknown,
-    channel?: unknown,
     program?: unknown,
     bank?: unknown,
+    group?: unknown,
+    channel?: unknown,
   ): void;
   bakeMidiFx(clipId: unknown, config?: unknown, withSourceIndex?: unknown): Int32Array | undefined;
   setMidiFx(clipId: unknown, config?: unknown): void;
@@ -599,7 +591,7 @@ export function withPreparedEngine<T>(body: (engine: NativeEngine) => T): T {
       maxValue: 1,
       defaultValue: 0.25,
     });
-    engine.bindMidiCc(0, 7, PARAM_ID, 0, 1);
+    engine.bindMidiCc({ ccNumber: 7, channel: 0, paramId: PARAM_ID, minValue: 0, maxValue: 1 });
     engine.setMidiInputSource(0);
     engine.play();
     pump(engine);

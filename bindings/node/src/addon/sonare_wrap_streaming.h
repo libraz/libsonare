@@ -237,7 +237,6 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
 
  private:
   Napi::Value Process(const Napi::CallbackInfo& info);
-  Napi::Value ProcessWithOffset(const Napi::CallbackInfo& info);
   // Named apart from the JS method it backs ("finalize"): Napi::ObjectWrap
   // declares a virtual Finalize(Napi::Env) GC hook, and a same-named member
   // here hides it, so a later attempt to override the hook would silently

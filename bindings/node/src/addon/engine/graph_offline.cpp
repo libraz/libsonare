@@ -221,38 +221,31 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
+  bool with_monitor = false;
+  if (!OptionalBoolArg(env, info, 1, "withMonitor", false, &with_monitor)) {
+    return env.Undefined();
+  }
+
+  ChannelBlock monitor;
+  if (with_monitor) {
+    monitor.frames = block.frames;
+    monitor.storage.resize(block.storage.size());
+    monitor.pointers.reserve(block.storage.size());
+    for (size_t ch = 0; ch < block.storage.size(); ++ch) {
+      monitor.storage[ch].assign(static_cast<size_t>(block.frames), 0.0f);
+      monitor.pointers.push_back(monitor.storage[ch].data());
+    }
+  }
+
   // Audio-thread entry point: its failure carries no detail message of its own,
   // so it must not be reported through the thread-local one (see
   // ThrowIfRealtimeError).
   ThrowIfRealtimeError(
       env, sonare_engine_process(engine_, block.pointers.data(),
+                                 with_monitor ? monitor.pointers.data() : nullptr,
                                  static_cast<int>(block.pointers.size()), block.frames));
   if (env.IsExceptionPending()) return env.Undefined();
-  return ChannelsToJs(env, block);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::ProcessWithMonitor(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  ChannelBlock block = ReadChannels(info, 0);
-  if (env.IsExceptionPending()) return env.Undefined();
-
-  ChannelBlock monitor;
-  monitor.frames = block.frames;
-  monitor.storage.resize(block.storage.size());
-  monitor.pointers.reserve(block.storage.size());
-  for (size_t ch = 0; ch < block.storage.size(); ++ch) {
-    monitor.storage[ch].assign(static_cast<size_t>(block.frames), 0.0f);
-    monitor.pointers.push_back(monitor.storage[ch].data());
-  }
-
-  // Audio-thread entry point; see the note in Process above.
-  ThrowIfRealtimeError(env, sonare_engine_process_with_monitor(
-                                engine_, block.pointers.data(), monitor.pointers.data(),
-                                static_cast<int>(block.pointers.size()), block.frames));
-  if (env.IsExceptionPending()) return env.Undefined();
+  if (!with_monitor) return ChannelsToJs(env, block);
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("output", ChannelsToJs(env, block));
@@ -392,15 +385,6 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& in
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   return DrainTelemetryInto<SonareMeterTelemetryRecord>(
       info, engine_, sonare_engine_drain_meter_telemetry, MeterTelemetryToObject);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  return DrainTelemetryInto<SonareMeterTelemetryRecordWide>(
-      info, engine_, sonare_engine_drain_meter_telemetry_wide, MeterTelemetryWideToObject);
   SONARE_NODE_CATCH(env)
 }
 

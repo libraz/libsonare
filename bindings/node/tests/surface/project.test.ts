@@ -332,15 +332,8 @@ describe('edits', () => {
   it('sets a program and a part rig from request objects with no positional form', () => {
     withProject((project) => {
       const { clipId } = project.addMidiClip(0, 4);
-      expect(() =>
-        project.setProgramOnChannel(clipId, {
-          group: 0,
-          channel: 0,
-          program: 5,
-          bank: { msb: 0, lsb: 1 },
-        }),
-      ).not.toThrow();
-      expect(() => loose(project).setProgramOnChannel(clipId, 0, 0, 5, 1)).toThrow(TypeError);
+      expect(() => project.setProgram(clipId, 5, { bank: { msb: 0, lsb: 1 } })).not.toThrow();
+      expect(() => loose(project).setProgram(clipId, 5, 1)).toThrow(TypeError);
       expect(() => loose(project).setPartRig(0, 0, 'none')).toThrow(TypeError);
       project.setPartRig({ destinationId: 3, part: 1, mode: 'none' });
       expect(project.partRig({ destinationId: 3, part: 1 })).toEqual({ mode: 'none' });

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "analysis/bpm_analyzer.h"
+#include "c_api/feature_input_domains.h"
 #include "core/channel_layout.h"
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_mixer.h"
@@ -84,7 +85,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                                                       napi_default_method),
           InstanceMethod<&SonareWrap::Destroy>("destroy", napi_default_method),
           StaticMethod<&SonareWrap::FromFile>("fromFile", napi_default_method),
-          StaticMethod<&SonareWrap::FromFileChannel>("fromFileChannel", napi_default_method),
           StaticMethod<&SonareWrap::FileChannelCount>("fileChannelCount", napi_default_method),
           StaticMethod<&SonareWrap::FromBuffer>("fromBuffer", napi_default_method),
           StaticMethod<&SonareWrap::FromMemory>("fromMemory", napi_default_method),
@@ -478,7 +478,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Features - Spectrogram
   exports.Set("stft", Napi::Function::New(env, &SonareWrap::Stft, "stft"));
-  exports.Set("stftDb", Napi::Function::New(env, &SonareWrap::StftDb, "stftDb"));
 
   // Features - Mel
   exports.Set("melSpectrogram",
@@ -671,40 +670,19 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  std::string path = node_narrow_string(env, info[0], "path");
-
-  SonareAudio* audio_raw = nullptr;
-  SonareError err = sonare_audio_from_file(path.c_str(), &audio_raw);
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  std::unique_ptr<SonareAudio, decltype(&sonare_audio_destroy)> audio_guard(audio_raw,
-                                                                            sonare_audio_destroy);
-
-  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
-  auto result = info.This().As<Napi::Function>().New({external});
-  audio_guard.release();
-  return result;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::FromFileChannel(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "path must be a string").ThrowAsJavaScriptException();
+  int channel_index = SONARE_AUDIO_CHANNEL_DOWNMIX;
+  if (!OptionalDomainArg(env, info, 1, "channelIndex", SONARE_AUDIO_CHANNEL_DOWNMIX,
+                         sonare_c_detail::kAudioChannelIndexDomain, &channel_index)) {
     return env.Undefined();
   }
 
-  int channel_index = 0;
-  if (!RequiredIntArg(env, info, 1, "channelIndex", &channel_index)) return env.Undefined();
-
   std::string path = node_narrow_string(env, info[0], "path");
 
+  SonareAudioFileOptions file_options;
+  sonare_audio_file_options_init(&file_options);
+  file_options.channel_index = channel_index;
   SonareAudio* audio_raw = nullptr;
-  SonareError err = sonare_audio_from_file_channel(path.c_str(), channel_index, &audio_raw);
+  SonareError err = sonare_audio_from_file(path.c_str(), &file_options, &audio_raw);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -72,28 +72,6 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t channel = 0;
-  uint8_t controller = 0;
-  uint32_t param_id = 0;
-  float min_value = 0.0f;
-  float max_value = 1.0f;
-  if (!OptionalMidiByteArg(env, info, 0, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 1, "controller", 0, &controller) ||
-      !RequiredUint32Arg(env, info, 2, "paramId", &param_id) ||
-      !OptionalFloatArg(env, info, 3, "minValue", 0.0f, &min_value) ||
-      !OptionalFloatArg(env, info, 4, "maxValue", 1.0f, &max_value)) {
-    return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, channel, controller, param_id, min_value,
-                                               max_value));
-  return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "binding must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -102,7 +80,7 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
   if (!sonare_node::CcBindingFromObject(env, info[0].As<Napi::Object>(), &binding)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_bind_midi_cc_binding(engine_, &binding));
+  ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, &binding));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

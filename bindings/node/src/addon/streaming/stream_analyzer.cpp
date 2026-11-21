@@ -154,8 +154,6 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
       env, "StreamAnalyzer",
       {
           InstanceMethod<&StreamAnalyzerWrap::Process>("process", napi_default_method),
-          InstanceMethod<&StreamAnalyzerWrap::ProcessWithOffset>("processWithOffset",
-                                                                 napi_default_method),
           InstanceMethod<&StreamAnalyzerWrap::FinalizeStream>("finalize", napi_default_method),
           InstanceMethod<&StreamAnalyzerWrap::AvailableFrames>("availableFrames",
                                                                napi_default_method),
@@ -277,24 +275,18 @@ Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
-  analyzer_->process(typed.Data(), typed.ElementLength());
-  return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+  // An absent, undefined or null startSample tracks the cumulative count internally.
+  const bool has_offset = !info[1].IsUndefined() && !info[1].IsNull();
+  size_t offset = 0;
+  if (has_offset && !NonNegativeSizeTArg(env, info, 1, "startSample", &offset)) {
     return env.Undefined();
   }
-  size_t offset = 0;
-  if (!NonNegativeSizeTArg(env, info, 1, "startSample", &offset)) return env.Undefined();
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
-  analyzer_->process(typed.Data(), typed.ElementLength(), offset);
+  if (has_offset) {
+    analyzer_->process(typed.Data(), typed.ElementLength(), offset);
+  } else {
+    analyzer_->process(typed.Data(), typed.ElementLength());
+  }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

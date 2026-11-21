@@ -77,7 +77,7 @@ const NON_FINITE = Float32Array.of(Number.NaN, 0);
 const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   downmix: [[], [new Float32Array(0)], [new Float32Array(4), new Float32Array(5)]],
   engine_drain_external_midi: [1, 2.5],
-  engine_process_with_monitor: [[], [new Float32Array(0)], [new Float32Array(1 << 20)]],
+  engine_process: [[], [new Float32Array(0)], [new Float32Array(1 << 20)]],
   mel_to_audio: [
     { data: new Float32Array(0), rows: 0, cols: 0 },
     { data: MEL.data, rows: 3 },
@@ -159,7 +159,7 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
   downmix: (_s, v) => downmix(v as Float32Array[], 'mono'),
   engine_drain_external_midi: (_s, v) =>
     withEngine((engine) => engine.drainExternalMidi(v as number)),
-  engine_process_with_monitor: (_s, v) =>
+  engine_process: (_s, v) =>
     withHandle(new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 }), (engine) =>
       engine.processWithMonitor(v as Float32Array[]),
     ),
@@ -214,8 +214,8 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     withHandle(new Project(), (project) => project.setOverlapPolicy(v as never)),
   realtime_voice_changer_process_mono: (_s, v) =>
     withChanger((changer) => changer.processMono(v as Float32Array)),
-  stream_analyzer_process_with_offset: (_s, v) =>
-    withAnalyzer((analyzer) => analyzer.processWithOffset(TONE.subarray(0, 512), v as number)),
+  stream_analyzer_process: (_s, v) =>
+    withAnalyzer((analyzer) => analyzer.process(TONE.subarray(0, 512), v as number)),
   stream_analyzer_reset: (_s, v) => withAnalyzer((analyzer) => analyzer.reset(v as number)),
   strip_remove_send: (_s, v) => withSendMixer((mixer) => mixer.removeSend('a', v as number)),
   strip_set_send_db: (_s, v) => withSendMixer((mixer) => mixer.setSendDb('a', v as number, 0)),

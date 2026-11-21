@@ -80,21 +80,9 @@ describe('Project MIR integer arguments are range-checked', () => {
 
   const INT_SITES: readonly Site[] = [
     ['setProgram program', (project, clipId, value) => project.setProgram(clipId, value)],
-    ['setProgram bank', (project, clipId, value) => project.setProgram(clipId, 24, value)],
     [
-      'setProgramOnChannel program',
-      (project, clipId, value) =>
-        project.setProgramOnChannel(clipId, { group: 0, channel: 0, program: value }),
-    ],
-    [
-      'setProgramOnChannel bank',
-      (project, clipId, value) =>
-        project.setProgramOnChannel(clipId, {
-          group: 0,
-          channel: 0,
-          program: 24,
-          bank: { msb: value, lsb: 0 },
-        }),
+      'setProgram bank',
+      (project, clipId, value) => project.setProgram(clipId, 24, { bank: { msb: value, lsb: 0 } }),
     ],
     ['autoTempo sampleRate', (project, _clipId, value) => project.autoTempo(silence(), value)],
     [
@@ -154,10 +142,8 @@ describe('Project MIR integer arguments are range-checked', () => {
       const { clipId } = project.addMidiClip(0, 4);
       expect(() => project.setProgram(clipId, 24)).not.toThrow();
       // An omitted bank emits no Bank Select; an explicit bank is a real value.
-      expect(() => project.setProgram(clipId, 24, 0)).not.toThrow();
-      expect(() =>
-        project.setProgramOnChannel(clipId, { group: 0, channel: 3, program: 24 }),
-      ).not.toThrow();
+      expect(() => project.setProgram(clipId, 24, { bank: { msb: 0, lsb: 0 } })).not.toThrow();
+      expect(() => project.setProgram(clipId, 24, { group: 0, channel: 3 })).not.toThrow();
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
       expect(project.assistSidecars()).toEqual([]);
     });

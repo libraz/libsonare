@@ -762,7 +762,7 @@ describe('RealtimeEngine native binding', () => {
     });
     // Live parameter injection must not throw.
     engine.setParameter(3, 3.0);
-    engine.setParameterSmoothed(3, -3.0);
+    engine.setParameter(3, -3.0, undefined, { smoothed: true });
 
     engine.play();
     engine.process([new Float32Array(128), new Float32Array(128)]);
@@ -790,6 +790,44 @@ describe('RealtimeEngine native binding', () => {
       expect(Number.isFinite(record.integratedLufs)).toBe(true);
     }
     engine.destroy();
+  });
+
+  it('setParameter takes smoothed as an option', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.addParameter({
+      id: 3,
+      name: 'gain',
+      unit: 'dB',
+      minValue: -60,
+      maxValue: 12,
+      defaultValue: 0,
+      rtSafe: true,
+      defaultCurve: 'linear',
+    });
+    try {
+      // The plain call jumps, the smoothed call ramps; both are accepted.
+      expect(() => engine.setParameter(3, 3.0)).not.toThrow();
+      expect(() => engine.setParameter(3, 3.0, 0)).not.toThrow();
+      expect(() => engine.setParameter(3, -3.0, undefined, { smoothed: true })).not.toThrow();
+      expect(() => engine.setParameter(3, -3.0, 0, { smoothed: false })).not.toThrow();
+      expect(() => engine.setParameter(3, -3.0, undefined, {})).not.toThrow();
+
+      expect(() =>
+        engine.setParameter(3, 1, undefined, { smoothed: 'yes' } as unknown as {
+          smoothed: boolean;
+        }),
+      ).toThrow(TypeError);
+      expect(() =>
+        engine.setParameter(3, 1, undefined, { notAnOption: true } as unknown as {
+          smoothed: boolean;
+        }),
+      ).toThrow(TypeError);
+
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+    } finally {
+      engine.destroy();
+    }
   });
 
   // A pad that outlives the render span: note-on at frame 0 and no note-off, so
