@@ -109,6 +109,19 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - When you fix a parity divergence, delete its allowlist entry in the same change.
 - When you rename, remove or reshape a public name, add its row to the surface's ledger under `tools/api/migration/` and run `make upgrade-notes`: `UPGRADING.md` is generated from the ledgers, and `make surface-check` fails while the tracked file differs from the render.
 
+### Public API changes
+
+- Give each operation one C entry with its optional parameters in a `Sonare<Op>Options` struct; add no `_ex`, `_with_<thing>` or other suffixed twin, except the closed channel-form (`_stereo`, `_linked`, `_interleaved`) and sample-format (`_u8`, `_i16`) classes.
+- Fold a twin that adds an output into an option on every surface, named after the output (`withMonitor`/`with_monitor`, `withTimeline`, `withResidual`, `db`), with one result type carrying the optional output.
+- Start every caller-filled C struct with `uint32_t struct_size` and provide `sonare_<struct>_init()`; read a NULL options pointer as the defaults.
+- Type an in-memory count `size_t`, a sample position `int64_t`, a sample rate `int` and a boolean `int32_t`; spell the auto hop as `0`.
+- Spell "not given" as absence on every surface, never a magic value; spell an optional C float that has no default as NaN.
+- Put the unit in a name (`Sec`, `Hz`, `Db`, `Samples`), and spell a bank select as `{ msb, lsb }` on Node and WASM and `bank_msb`/`bank_lsb` in Python.
+- Name the real parameter in a refusal (`options.<member>`, `config.<member>`), and raise it as `TypeError`/`RangeError` (`SonareValueError` in Python) or a coded `SonareError` by cause.
+- Run `make surface-check` and get rc=0 before sending a change that touches a public name, token, default or flag; CI runs it too.
+- Bump the owning ABI counter when a shipped struct, signature, constant or enumerator changes, measured against the last release tag: `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.
+- Ship a breaking change only in a major release, with its ledger row and the regenerated `UPGRADING.md`.
+
 ### The command-line front-ends
 
 - Classify a new subcommand in `tests/conformance/cli_contract_v2.json` in the same change as its implementation.
@@ -215,6 +228,14 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - A threshold against the bare maximum lets a single dominant event set the bar for everything else. Boundary detection's `referenceWindowSec` is the sliding instance; beat trimming's third-highest onset peak is the set-aside instance.
 - A sliding reference also sets aside a lone dominant event, one no other event in the window comes within a fixed ratio of. That ratio is held apart from the threshold, so raising the threshold never lowers the reference. With too few events to tell an outlier from the body, nothing is set aside (the assistant sets aside one per 10 s of audio, up to two).
 - An analyzer's `n_fft` is samples at 22050 Hz, rescaled to the rate the analyzer runs at. Its hop is in samples of the signal it analyses: the caller's buffer for the direct `analyze_*` entry points (BPM, rhythm, chords, timbre, dynamics, melody), and the analysis-rate signal — the input resampled to 22050 Hz when it is above that rate, the input itself otherwise — for the entry points that resample first (`detect_*`, sections, boundaries, the full music analysis). The polyphony chain and the streaming analyzer state `n_fft` (and, for polyphony, the hop) as samples at 44100 Hz. The mastering and mixing assistants read window and hop as samples at 48 kHz.
+
+### Public API changes
+
+- One entry per operation keeps a caller from choosing between near-identical functions; the closed suffix classes are the only twins whose trailing parameters and result type match their base.
+- A single `struct_size` lets every later field extend a struct without a second versioning scheme, and a size below `sizeof` is refused so the library never reads past the caller's struct.
+- Absence, not a sentinel, is the only spelling that means the same thing on every surface; the C ABI keeps `0` or NaN as its own spelling and each facade maps to absence.
+- `make surface-check` checks names, units, tokens, entry shape and the ledgers against the migration baseline; `make check-abi-bumps` needs release tags, so it runs in `make ci-local` and not on a shallow CI checkout.
+- ABI counters are separate from the release version: a release never bumps one, and a struct absent from every release tag may still grow.
 
 ### The command-line front-ends
 
