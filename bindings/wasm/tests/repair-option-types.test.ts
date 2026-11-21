@@ -31,7 +31,7 @@ const samples = sine(0.3);
 const entries: Array<{
   name: string;
   run: Run;
-  fields: Array<{ key: string; wrong: unknown; type: 'number' | 'boolean' }>;
+  fields: Array<{ key: string; wrong: unknown; type: 'number' | 'integer' | 'boolean' }>;
 }> = [
   {
     name: 'declick',
