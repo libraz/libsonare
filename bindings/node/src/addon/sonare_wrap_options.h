@@ -493,6 +493,12 @@ inline float DomainFloatProperty(const Napi::Object& obj, const char* key, float
   return sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
 }
 
+/// @brief What a wrong-type value is refused as for @p domain: an integer domain asks for an
+///        integer, a real domain for a number.
+inline const char* node_domain_type_text(const sonare::util::check::NumericDomain& domain) {
+  return domain.kind == sonare::util::check::NumberKind::Integer ? "an integer" : "a number";
+}
+
 /// @brief Narrow a JS number onto @p T after checking it against the core's statement of its
 ///        domain, so a fraction, a NaN, an infinity or a value @p T cannot hold is refused in the
 ///        domain's own text rather than in a reader text or a facade copy of the bound.
@@ -517,7 +523,7 @@ inline T DomainProperty(const Napi::Object& obj, const char* key, T fallback,
                         const sonare::util::check::NumericDomain& domain) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(obj.Env(), value.IsNumber(), key, node_domain_type_text(domain));
   return node_domain_number<T>(value, key, domain);
 }
 
@@ -1226,7 +1232,11 @@ inline bool RequiredDomainArg(Napi::Env env, const Napi::CallbackInfo& info, siz
                               const char* name, const sonare::util::check::NumericDomain& domain,
                               T* out) {
   if (env.IsExceptionPending()) return false;
-  if (!RequireNumberValue(env, info[index], name)) return false;
+  if (!info[index].IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be " + node_domain_type_text(domain))
+        .ThrowAsJavaScriptException();
+    return false;
+  }
   try {
     *out = node_domain_number<T>(info[index], name, domain);
   } catch (...) {

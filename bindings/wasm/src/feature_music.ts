@@ -18,8 +18,6 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertCqtHopLength,
-  assertFiniteScalar,
-  assertFrequencyBounds,
   assertMatrix2D,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
@@ -559,23 +557,14 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
   return withEntry('analyzeMelody', () => {
     const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    validatePositiveIntegers({
-      frameLength: request.frameLength ?? 2048,
-      hopLength: request.hopLength ?? 256,
-    });
-    const threshold = request.threshold ?? 0.1;
-    assertFiniteScalar(threshold, 'threshold');
-    const f0MinHz = request.f0MinHz ?? 65.0;
-    const f0MaxHz = request.f0MaxHz ?? 2093.0;
-    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
     const result = requireModule().analyzeMelody(
       request.samples,
       request.sampleRate,
-      f0MinHz,
-      f0MaxHz,
+      request.f0MinHz ?? 65.0,
+      request.f0MaxHz ?? 2093.0,
       request.frameLength ?? 2048,
       request.hopLength ?? 256,
-      threshold,
+      request.threshold ?? 0.1,
       optionalBoolean(request.usePyin, 'usePyin', false),
       optionalBoolean(request.center, 'center', true),
     );

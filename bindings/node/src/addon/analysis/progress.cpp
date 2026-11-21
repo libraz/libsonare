@@ -2,6 +2,7 @@
 #include <optional>
 #include <string>
 
+#include "analysis/melody_analyzer.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -283,15 +284,26 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   int sample_rate{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   float fmin{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "fmin", 65.0f, &fmin)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "f0MinHz", 65.0f, sonare::kMelodyF0MinHzDomain, &fmin)) {
+    return env.Undefined();
+  }
+  // The core states f0MaxHz only against f0MinHz, so the reader asks for a finite float.
   float fmax{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "fmax", 2093.0f, &fmax)) return env.Undefined();
+  if (!OptionalFiniteFloatArg(env, info, 3, "f0MaxHz", 2093.0f, &fmax)) return env.Undefined();
   int frame_length{};
-  if (!OptionalIntArg(env, info, 4, "frameLength", 2048, &frame_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "frameLength", 2048, sonare::kMelodyFrameDomain,
+                         &frame_length)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 5, "hopLength", 256, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "hopLength", 256, sonare::kMelodyFrameDomain, &hop_length)) {
+    return env.Undefined();
+  }
   float threshold{};
-  if (!OptionalFiniteFloatArg(env, info, 6, "threshold", 0.1f, &threshold)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "threshold", 0.1f, sonare::kMelodyThresholdDomain,
+                         &threshold)) {
+    return env.Undefined();
+  }
   bool use_pyin = false;
   if (!OptionalBoolArg(env, info, 7, "usePyin", false, &use_pyin)) {
     return env.Undefined();

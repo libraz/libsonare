@@ -62,7 +62,6 @@ import {
   assertFiniteScalar,
   assertFloatFields,
   assertFloatValue,
-  assertFrequencyBounds,
   assertInt32,
   assertInt64,
   assertNonNegativeFloatValue,
@@ -1136,17 +1135,11 @@ export function analyzeMelody(
 export function analyzeMelody(...args: unknown[]): MelodyResult {
   return withEntry('analyzeMelody', () => {
     const request = audioCall<AnalyzeMelodyRequest>('analyzeMelody', args);
-    // frameLength is a framing window, not a transform size, so it carries no evenness rule.
-    assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
-    assertPositiveInteger(request.hopLength ?? 256, 'hopLength');
-    const f0MinHz = request.f0MinHz ?? 65.0;
-    const f0MaxHz = request.f0MaxHz ?? 2093.0;
-    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
     const raw: Native = addon.analyzeMelody(
       request.samples,
       request.sampleRate,
-      f0MinHz,
-      f0MaxHz,
+      request.f0MinHz ?? 65.0,
+      request.f0MaxHz ?? 2093.0,
       request.frameLength ?? 2048,
       request.hopLength ?? 256,
       request.threshold ?? 0.1,

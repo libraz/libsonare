@@ -247,11 +247,14 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
 val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, const val& fmax_val,
                       const val& frame_length_val, const val& hop_length_val,
                       const val& threshold_val, bool use_pyin, bool center) {
-  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float fmin = checkedFloatFromVal(fmin_val, "f0MinHz");
+  const int frame_length =
+      domainNumberFromVal<int>(frame_length_val, "frameLength", kMelodyFrameDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kMelodyFrameDomain);
+  const float fmin = domainNumberFromVal<float>(fmin_val, "f0MinHz", kMelodyF0MinHzDomain);
+  // The core states f0MaxHz only against f0MinHz, so the reader asks for a finite float.
   const float fmax = checkedFloatFromVal(fmax_val, "f0MaxHz");
-  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
+  const float threshold =
+      domainNumberFromVal<float>(threshold_val, "threshold", kMelodyThresholdDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 

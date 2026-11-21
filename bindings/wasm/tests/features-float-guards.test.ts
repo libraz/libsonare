@@ -11,7 +11,7 @@
  *
  * These entry points are driven off the module rather than through the TS
  * facades: several facades (`melSpectrogram`, `mfcc`, `pseudoCqt`,
- * `hybridCqt`, `analyzeMelody`, `analyzeSections`) already run their own
+ * `hybridCqt`, `analyzeSections`) already run their own
  * `assertFiniteScalar` on the JS side, which would intercept `NaN`/`Infinity`
  * before they ever reach the WASM boundary under test here and throw a plain
  * `RangeError` instead of the branded `SonareError` this file asserts. Driving
@@ -131,6 +131,16 @@ function N_FRAMES() {
   return mfccResult().nFrames;
 }
 
+/** A float field read against its core domain, which refuses in the domain's own text. */
+const DOMAIN_FIELDS: Array<FloatField & { domain: string }> = [
+  {
+    entry: 'analyzeMelody',
+    key: 'threshold',
+    run: (v) => m().analyzeMelody(pureTone300, SR, 65, 3600, 1024, 256, v, false, true),
+    domain: 'must be finite and greater than 0',
+  },
+];
+
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {
   entry: string;
@@ -206,11 +216,6 @@ const FLOAT_FIELDS: FloatField[] = [
     run: (v) => m().analyzeMelody(pureTone300, SR, 65, v, 1024, 256, 0.1, false, true),
   },
   {
-    entry: 'analyzeMelody',
-    key: 'threshold',
-    run: (v) => m().analyzeMelody(pureTone300, SR, 65, 3600, 1024, 256, v, false, true),
-  },
-  {
     entry: 'pseudoCqt',
     key: 'fminHz',
     run: (v) => m().pseudoCqt(pureTone300, SR, 256, v, 12, 12, undefined),
@@ -240,7 +245,7 @@ describe('every converted float parameter refuses a value the float type cannot 
   it('covers one field per formerly-plain-float feature parameter', () => {
     // A field dropped from the table stops being covered without anything
     // going red, which is the one way this file could quietly shrink.
-    expect(FLOAT_FIELDS).toHaveLength(18);
+    expect(FLOAT_FIELDS).toHaveLength(17);
     const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -255,6 +260,20 @@ describe('every converted float parameter refuses a value the float type cannot 
           key,
           `${key} = ${value}`,
         );
+      }
+    },
+  );
+
+  it.each(DOMAIN_FIELDS)(
+    '$entry names $key in its core domain rather than accepting an infinity',
+    ({ entry, key, run, domain }) => {
+      for (const value of REFUSED) {
+        const error = expectArgumentRefusal(
+          capture(() => run(value)),
+          RangeError,
+          `${key} = ${value}`,
+        );
+        expect(error.message, `${key} = ${value}`).toBe(`${entry}: ${key} ${domain}`);
       }
     },
   );

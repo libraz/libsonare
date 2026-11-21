@@ -230,22 +230,10 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => JSON.stringify(native.analyzeSections(BLOCKED, SAMPLE_RATE, 2048, 512, 0.5, v)),
   },
   {
-    name: 'analyzeMelody fmin',
-    site: 'analysis/progress.cpp fmin',
-    control: [65, 500],
-    call: (v) => native.analyzeMelody(BLOCKED, SAMPLE_RATE, v, 2093, 2048, 256, 0.1).meanFrequency,
-  },
-  {
     name: 'analyzeMelody fmax',
     site: 'analysis/progress.cpp fmax',
     control: [2093, 300],
     call: (v) => native.analyzeMelody(BLOCKED, SAMPLE_RATE, 65, v, 2048, 256, 0.1).meanFrequency,
-  },
-  {
-    name: 'analyzeMelody threshold',
-    site: 'analysis/progress.cpp AnalyzeMelody threshold',
-    control: [0.1, 0.95],
-    call: (v) => native.analyzeMelody(BLOCKED, SAMPLE_RATE, 65, 2093, 2048, 256, v).meanFrequency,
   },
   {
     name: 'vqt fmin',
