@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version check-c-exports \
+       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
@@ -448,6 +448,7 @@ lint:
 	$(MAKE) gs-efx-bindings-check
 	$(MAKE) gs-efx-join-check
 	$(MAKE) gs-classic-overlays-check
+	$(MAKE) numeric-domains-check
 # The refusal translation points read these generated tables; both render from
 # committed declarations alone, so drift is a static fact.
 	python3 tools/parity/gen_c_entry_names.py --check
@@ -1133,6 +1134,28 @@ abi-layout:
 # Fail if the committed snapshot is stale (regenerate + git-diff style check).
 abi-layout-check:
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/abi/gen_abi_layout.py --check
+
+# The named numeric domains the C entries check against, printed from
+# src/c_api/numeric_domain_rows.h by a header-only dump (no library link).
+NUMERIC_DOMAINS_JSON = tools/api/numeric-domains.json
+
+numeric-domains:
+	@scratch=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$scratch"' EXIT; \
+	set -e; \
+	$(CXX) -std=c++17 -I include -I src tools/api/dump_numeric_domains.cpp -o "$$scratch/dump"; \
+	"$$scratch/dump" > $(NUMERIC_DOMAINS_JSON)
+
+# Fail if the committed table is stale or a named domain is missing from the rows.
+numeric-domains-check:
+	@scratch=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$scratch"' EXIT; \
+	set -e; \
+	$(CXX) -std=c++17 -I include -I src tools/api/dump_numeric_domains.cpp -o "$$scratch/dump"; \
+	"$$scratch/dump" > "$$scratch/numeric-domains.json"; \
+	diff -u $(NUMERIC_DOMAINS_JSON) "$$scratch/numeric-domains.json" \
+	  || { echo "numeric-domains-check: $(NUMERIC_DOMAINS_JSON) is stale; run make numeric-domains" >&2; exit 1; }; \
+	python3 tools/api/check_numeric_domain_rows.py
 
 # Verify the ABI-version mirror literals in every binding match the C source of
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.

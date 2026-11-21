@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "automation/parameter.h"
+#include "c_api/instrument_config_domains.h"
 #include "engine/realtime_engine.h"
 #include "rt/command.h"
 #include "sonare_c_engine_internal.h"
@@ -727,14 +728,17 @@ SonareError sonare_engine_set_metronome(SonareEngine* engine,
   if (const SonareError err = run_validation([&] {
         require_struct_size(config->struct_size, sizeof(SonareEngineMetronomeConfig), "config",
                             "sonare_engine_metronome_config_init");
-        util::check::at_least(config->beat_gain, 0.0, "config.beat_gain");
-        util::check::at_least(config->accent_gain, 0.0, "config.accent_gain");
+        util::check::within(config->beat_gain, sonare_c_detail::kMetronomeGainDomain,
+                            "config.beat_gain");
+        util::check::within(config->accent_gain, sonare_c_detail::kMetronomeGainDomain,
+                            "config.accent_gain");
         if (config->click_samples != SONARE_ENGINE_METRONOME_CLICK_FROM_SEC) {
-          util::check::integer_in_range(config->click_samples, 1, engine::kMaxMetronomeClickSamples,
-                                        "config.click_samples");
+          util::check::integer_within(config->click_samples,
+                                      sonare_c_detail::kMetronomeClickSamplesDomain,
+                                      "config.click_samples");
         }
-        util::check::in_interval(config->click_sec, 0.0, false, engine::kMaxMetronomeClickSeconds,
-                                 true, "config.click_sec");
+        util::check::within(config->click_sec, sonare_c_detail::kMetronomeClickSecDomain,
+                            "config.click_sec");
       });
       err != SONARE_OK) {
     return err;

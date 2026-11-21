@@ -218,6 +218,12 @@ add_executable(sonare_tests
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
   api/c_refusal_subjects_test.cpp
+  api/numeric_domain_rows_analysis_test.cpp
+  api/numeric_domain_rows_effects_test.cpp
+  api/numeric_domain_rows_instruments_test.cpp
+  api/numeric_domain_rows_mastering_test.cpp
+  api/numeric_domain_rows_project_test.cpp
+  api/numeric_domain_rows_test.cpp
   api/c_bare_refusal_acoustic_test.cpp
   api/c_bare_refusal_compat_test.cpp
   api/c_bare_refusal_editing_test.cpp

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "c_api/c_ordinal.h"
+#include "c_api/instrument_config_domains.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/patch_tuning.h"
@@ -67,17 +68,12 @@ inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c,
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "waveform is not a SONARE_SYNTH_WAVEFORM_* value");
   }
-  check::in_interval(c.gain, 0.0, false, sonare::midi::kMaxSynthGain, true,
-                     (subject + "gain").c_str());
-  check::in_interval(c.attack_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
-                     (subject + "attack_ms").c_str());
-  check::in_interval(c.decay_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
-                     (subject + "decay_ms").c_str());
-  check::in_interval(c.sustain, 0.0, false, 1.0, true, (subject + "sustain").c_str());
-  check::in_interval(c.release_ms, 0.0, false, sonare::midi::kMaxSynthStageMs, true,
-                     (subject + "release_ms").c_str());
-  check::integer_in_range(c.polyphony, 1, sonare::midi::kMaxSynthVoices,
-                          (subject + "polyphony").c_str());
+  check::within(c.gain, kBuiltinSynthGainDomain, (subject + "gain").c_str());
+  check::within(c.attack_ms, kBuiltinSynthStageMsDomain, (subject + "attack_ms").c_str());
+  check::within(c.decay_ms, kBuiltinSynthStageMsDomain, (subject + "decay_ms").c_str());
+  check::within(c.sustain, kBuiltinSynthSustainDomain, (subject + "sustain").c_str());
+  check::within(c.release_ms, kBuiltinSynthStageMsDomain, (subject + "release_ms").c_str());
+  check::integer_within(c.polyphony, kSynthPolyphonyDomain, (subject + "polyphony").c_str());
   cfg.gain = c.gain;
   cfg.attack_ms = c.attack_ms;
   cfg.decay_ms = c.decay_ms;
@@ -95,13 +91,14 @@ inline sonare::midi::synth::Sf2PlayerConfig sf2_player_config_from_c(const C& c,
                                                                      const std::string& subject) {
   namespace check = sonare::util::check;
   sonare::midi::synth::Sf2PlayerConfig cfg;
-  check::in_range(c.gain, 0.0, sonare::midi::kMaxSynthGain, (subject + "gain").c_str());
-  check::integer_in_range(c.polyphony, 1, sonare::midi::kMaxSynthVoices,
-                          (subject + "polyphony").c_str());
-  check::integer_at_least(c.prefer_model_for_modeled_families, 0,
-                          (subject + "prefer_model_for_modeled_families").c_str());
-  check::integer_at_least(c.clear_bank_rig, 0, (subject + "clear_bank_rig").c_str());
-  check::integer_in_range(c.gs_efx_realization, 0, 1, (subject + "gs_efx_realization").c_str());
+  check::within(c.gain, kSf2PlayerGainDomain, (subject + "gain").c_str());
+  check::integer_within(c.polyphony, kSynthPolyphonyDomain, (subject + "polyphony").c_str());
+  check::integer_within(c.prefer_model_for_modeled_families, kSf2PlayerFlagDomain,
+                        (subject + "prefer_model_for_modeled_families").c_str());
+  check::integer_within(c.clear_bank_rig, kSf2PlayerFlagDomain,
+                        (subject + "clear_bank_rig").c_str());
+  check::integer_within(c.gs_efx_realization, kGsEfxRealizationDomain,
+                        (subject + "gs_efx_realization").c_str());
   cfg.gain = c.gain;
   cfg.polyphony = c.polyphony;
   cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;

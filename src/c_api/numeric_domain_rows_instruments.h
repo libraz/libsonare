@@ -1,0 +1,54 @@
+#pragma once
+
+/// @file numeric_domain_rows_instruments.h
+/// @brief Numeric-domain rows of the instrument and metronome configurations an engine or a
+///        bounce takes.
+
+#include "c_api/instrument_config_domains.h"
+#include "c_api/numeric_domain_row.h"
+
+namespace sonare_c_detail {
+
+/// @brief The rows, sorted by (entry, param).
+inline const NumericDomainRow kInstrumentDomainRows[] = {
+    {"engine_set_builtin_instrument", "config.attack_ms", kBuiltinSynthStageMsDomain, nullptr},
+    {"engine_set_builtin_instrument", "config.decay_ms", kBuiltinSynthStageMsDomain, nullptr},
+    {"engine_set_builtin_instrument", "config.gain", kBuiltinSynthGainDomain, nullptr},
+    {"engine_set_builtin_instrument", "config.polyphony", kSynthPolyphonyDomain, nullptr},
+    {"engine_set_builtin_instrument", "config.release_ms", kBuiltinSynthStageMsDomain, nullptr},
+    {"engine_set_builtin_instrument", "config.sustain", kBuiltinSynthSustainDomain, nullptr},
+    {"engine_set_metronome", "config.accent_gain", kMetronomeGainDomain, nullptr},
+    {"engine_set_metronome", "config.beat_gain", kMetronomeGainDomain, nullptr},
+    {"engine_set_metronome", "config.click_samples", kMetronomeClickSamplesDomain, nullptr},
+    {"engine_set_metronome", "config.click_sec", kMetronomeClickSecDomain, nullptr},
+    {"engine_set_sf2_instrument", "config.clear_bank_rig", kSf2PlayerFlagDomain, nullptr},
+    {"engine_set_sf2_instrument", "config.gain", kSf2PlayerGainDomain, nullptr},
+    {"engine_set_sf2_instrument", "config.gs_efx_realization", kGsEfxRealizationDomain, nullptr},
+    {"engine_set_sf2_instrument", "config.polyphony", kSynthPolyphonyDomain, nullptr},
+    {"engine_set_sf2_instrument", "config.prefer_model_for_modeled_families", kSf2PlayerFlagDomain,
+     nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.attack_ms",
+     kBuiltinSynthStageMsDomain, nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.decay_ms",
+     kBuiltinSynthStageMsDomain, nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.gain",
+     kBuiltinSynthGainDomain, nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.polyphony",
+     kSynthPolyphonyDomain, nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.release_ms",
+     kBuiltinSynthStageMsDomain, nullptr},
+    {"project_bounce_with_builtin_instruments", "instruments[].config.sustain",
+     kBuiltinSynthSustainDomain, nullptr},
+    {"project_bounce_with_sf2_instruments", "instruments[].config.clear_bank_rig",
+     kSf2PlayerFlagDomain, nullptr},
+    {"project_bounce_with_sf2_instruments", "instruments[].config.gain", kSf2PlayerGainDomain,
+     nullptr},
+    {"project_bounce_with_sf2_instruments", "instruments[].config.gs_efx_realization",
+     kGsEfxRealizationDomain, nullptr},
+    {"project_bounce_with_sf2_instruments", "instruments[].config.polyphony", kSynthPolyphonyDomain,
+     nullptr},
+    {"project_bounce_with_sf2_instruments",
+     "instruments[].config.prefer_model_for_modeled_families", kSf2PlayerFlagDomain, nullptr},
+};
+
+}  // namespace sonare_c_detail

@@ -2,6 +2,7 @@
 
 #include "c_api/features_internal.h"
 #include "c_api/inverse_input_domains.h"
+#include "core/spectrum.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
@@ -242,7 +243,7 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
         check::integer_within(n_bins, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_bins");
         check::integer_within(n_frames, sonare_c_detail::kInverseSpectrogramExtentDomain,
                               "n_frames");
-        check::integer_within(n_fft, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_fft");
+        check::even_within(n_fft, sonare::kColaNFftDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
         check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
         check::integer_within(n_iter, sonare_c_detail::kGriffinLimIterationsDomain, "n_iter");
