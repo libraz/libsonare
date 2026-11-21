@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "automation/parameter.h"
+#include "c_api/engine_config_domains.h"
 #include "engine/clip_page_limits.h"
 #include "engine/realtime_engine.h"
 #include "sonare_c_internal.h"
@@ -29,7 +30,8 @@ inline int resolve_offline_block(const sonare::engine::RealtimeEngine& engine, i
 /// @brief Refuses an offline block that is neither positive nor @ref SONARE_ENGINE_BLOCK_SIZE_AUTO.
 inline void check_offline_block(int block_size, const char* subject) {
   if (block_size != SONARE_ENGINE_BLOCK_SIZE_AUTO) {
-    sonare::util::check::integer_at_least(block_size, 1, subject);
+    sonare::util::check::integer_within(block_size, sonare_c_detail::kEngineOfflineBlockDomain,
+                                        subject);
   }
 }
 
@@ -41,7 +43,8 @@ inline int offline_block_from_c(int block_size) {
 /// @brief Refuses a rate that is neither positive nor @ref SONARE_ENGINE_SAMPLE_RATE_PREPARED.
 inline void check_engine_rate(int sample_rate, const char* subject) {
   if (sample_rate != SONARE_ENGINE_SAMPLE_RATE_PREPARED) {
-    sonare::util::check::integer_at_least(sample_rate, 1, subject);
+    sonare::util::check::integer_within(sample_rate, sonare_c_detail::kEngineSampleRateDomain,
+                                        subject);
   }
 }
 

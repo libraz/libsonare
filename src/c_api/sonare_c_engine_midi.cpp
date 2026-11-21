@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
 #include "midi/live_push_args.h"
@@ -189,7 +190,7 @@ void midi_event_from_c(const SonareEngineMidiEvent& src, const std::string& pref
   // assignment is kept so this boundary conversion yields a self-consistent Ump
   // on its own terms, not because anything downstream depends on it. Anyone
   // changing the sequencer's derivation must not read this line as coverage.
-  util::check::integer_in_range(src.group, 0, 15, (prefix + "group").c_str());
+  util::check::integer_within(src.group, kEngineUmpGroupDomain, (prefix + "group").c_str());
   if (src.reserved != 0) util::check::refuse((prefix + "reserved").c_str(), "must be 0");
   midi::Ump ump{};
   ump.words[0] = src.word0;
@@ -261,21 +262,21 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                               "sonare_engine_midi_clip_schedule_init");
           util::check::finite(src.start_ppq, subject("start_ppq").c_str());
           if (src.length_samples != SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED) {
-            util::check::integer_at_least<int64_t>(src.length_samples, 1,
-                                                   subject("length_samples").c_str());
+            util::check::integer_within(src.length_samples, kEngineClipLengthDomain,
+                                        subject("length_samples").c_str());
           }
-          util::check::integer_at_least(src.loop, 0, subject("loop").c_str());
+          util::check::integer_within(src.loop, kEngineMidiClipLoopDomain, subject("loop").c_str());
           if (src.loop != 0) {
-            util::check::integer_at_least<int64_t>(src.loop_length_samples, 1,
-                                                   subject("loop_length_samples").c_str());
+            util::check::integer_within(src.loop_length_samples, kEngineMidiClipLoopLengthDomain,
+                                        subject("loop_length_samples").c_str());
           }
           util::check::non_null_when_count(src.events, src.event_count, subject("events").c_str(),
                                            subject("event_count").c_str());
           util::check::at_least(src.gain, 0.0, subject("gain").c_str());
-          util::check::integer_at_least<int64_t>(src.fade_in_samples, 0,
-                                                 subject("fade_in_samples").c_str());
-          util::check::integer_at_least<int64_t>(src.fade_out_samples, 0,
-                                                 subject("fade_out_samples").c_str());
+          util::check::integer_within(src.fade_in_samples, kEngineClipFadeDomain,
+                                      subject("fade_in_samples").c_str());
+          util::check::integer_within(src.fade_out_samples, kEngineClipFadeDomain,
+                                      subject("fade_out_samples").c_str());
           if (src.fade_out_samples > 0 &&
               src.length_samples == SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED) {
             util::check::refuse_relation({subject("fade_out_samples"), subject("length_samples")},
@@ -469,7 +470,8 @@ SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* da
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(data);
   if (size == 0) {
-    return run_validation([&] { util::check::integer_at_least<size_t>(size, 1, "size"); });
+    return run_validation(
+        [&] { util::check::integer_within(size, kEngineSoundFontSizeDomain, "size"); });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
@@ -573,7 +575,8 @@ SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destin
   // caller cannot tell from a request that took.
   SONARE_C_REQUIRE_NONNULL(engine);
   if (channel > 15) {
-    return run_validation([&] { util::check::integer_in_range(channel, 0, 15, "channel"); });
+    return run_validation(
+        [&] { util::check::integer_within(channel, kEngineMidiChannelDomain, "channel"); });
   }
   if (!valid_c_enum(articulation, SONARE_ARTICULATION_COUNT)) {
     return run_validation([&] {
@@ -598,7 +601,8 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
   SONARE_C_ZERO_OUTS(out_articulation);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (channel > 15) {
-    return run_validation([&] { util::check::integer_in_range(channel, 0, 15, "channel"); });
+    return run_validation(
+        [&] { util::check::integer_within(channel, kEngineMidiChannelDomain, "channel"); });
   }
   SONARE_C_REQUIRE_NONNULL(out_articulation);
   // Defined on every exit path, so a feature-disabled build and an instrument
@@ -706,9 +710,9 @@ SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, uint8_t channel, ui
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(channel, 0, 15, "channel");
-        util::check::integer_in_range(controller, 0, 127, "controller");
-        util::check::integer_at_least(param_id, 1, "param_id");
+        util::check::integer_within(channel, kEngineMidiChannelDomain, "channel");
+        util::check::integer_within(controller, kEngineMidiControllerDomain, "controller");
+        util::check::integer_within(param_id, kEngineParameterIdDomain, "param_id");
         util::check::finite_float(min_value, "min_value");
         util::check::finite_float(max_value, "max_value");
         if (max_value < min_value) {
@@ -744,12 +748,14 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(binding);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(binding->cc_number, 0, 127, "binding.cc_number");
+        util::check::integer_within(binding->cc_number, kEngineMidiControllerDomain,
+                                    "binding.cc_number");
         if (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) {
           util::check::refuse("binding.channel", "must be an integer in [0, 15] or 255");
         }
         util::check::one_of(binding->kind, std::array<int, 4>{0, 1, 2, 3}, "binding.kind");
-        util::check::integer_at_least(binding->param_id, 1, "binding.param_id");
+        util::check::integer_within(binding->param_id, kEngineParameterIdDomain,
+                                    "binding.param_id");
         util::check::finite_float(binding->min_value, "binding.min_value");
         util::check::finite_float(binding->max_value, "binding.max_value");
         if (binding->max_value < binding->min_value) {
@@ -760,7 +766,8 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
           util::check::refuse("binding.param_id", "must not be a reserved engine parameter id");
         }
         if (binding->kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
-          util::check::integer_in_range(binding->cc_number, 0, 31, "binding.cc_number");
+          util::check::integer_within(binding->cc_number, kEngineMidiCc14NumberDomain,
+                                      "binding.cc_number");
           if (binding->cc_lsb_number != binding->cc_number + 32u) {
             util::check::refuse_relation({"binding.cc_lsb_number", "binding.cc_number"},
                                          "{0} must be {1} + 32");
@@ -1225,9 +1232,7 @@ SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destina
   SONARE_C_REQUIRE_NONNULL(data);
   if (size == 0 || size > sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes) {
     return run_validation([&] {
-      util::check::integer_in_range(
-          static_cast<long long>(size), 1,
-          static_cast<long long>(sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes), "size");
+      util::check::integer_within(static_cast<long long>(size), kEngineSysExSizeDomain, "size");
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -1241,10 +1246,7 @@ SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destina
     switch (engine->engine.last_midi_sysex_push_status()) {
       case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
         return run_validation([&] {
-          util::check::integer_in_range(
-              static_cast<long long>(size), 1,
-              static_cast<long long>(sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes),
-              "size");
+          util::check::integer_within(static_cast<long long>(size), kEngineSysExSizeDomain, "size");
         });
       case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
         return run_validation([&] {

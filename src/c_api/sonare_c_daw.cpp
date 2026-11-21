@@ -28,6 +28,7 @@
 #endif
 #include <sonare/sonare_c.h>
 
+#include "c_api/daw_config_domains.h"
 #include "core/audio.h"
 // Ungated: the percussive event model depends only on HPSS and the onset
 // analyzer, both of which are compiled in every configuration.
@@ -75,10 +76,12 @@ SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
                                           int32_t kernel_harmonic, int32_t kernel_percussive,
                                           editing::event_model::PercussiveSeparationConfig& out) {
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(n_fft, 1, "config.n_fft");
+        util::check::integer_within(n_fft, kPercussiveNFftDomain, "config.n_fft");
         check_stft_hop(hop_length, "config.hop_length");
-        util::check::integer_at_least(kernel_harmonic, 1, "config.hpss_kernel_harmonic");
-        util::check::integer_at_least(kernel_percussive, 1, "config.hpss_kernel_percussive");
+        util::check::integer_within(kernel_harmonic, kPercussiveHpssKernelDomain,
+                                    "config.hpss_kernel_harmonic");
+        util::check::integer_within(kernel_percussive, kPercussiveHpssKernelDomain,
+                                    "config.hpss_kernel_percussive");
       });
       err != SONARE_OK) {
     return err;
@@ -164,7 +167,7 @@ void check_pitch_track(const float* f0_hz, const float* voiced_prob, const int32
 SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, int hop_length) {
   SONARE_C_REQUIRE_NONNULL(f0_hz);
   return run_validation([&] {
-    util::check::integer_at_least(n_frames, 1, "n_frames");
+    util::check::integer_within(n_frames, kTimeVaryingFrameCountDomain, "n_frames");
     util::check::integer_at_least(hop_length, 1, "hop_length");
   });
 }
@@ -236,8 +239,7 @@ SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
 SonareError validate_f0_frames(const float* f0_hz, size_t n_frames, float frame_rate) {
   SONARE_C_REQUIRE_NONNULL(f0_hz);
   return run_validation([&] {
-    util::check::integer_in_range(static_cast<long long>(n_frames), 1,
-                                  std::numeric_limits<int>::max(), "n_frames");
+    util::check::integer_within(static_cast<long long>(n_frames), kF0FrameCountDomain, "n_frames");
     util::check::greater_than(frame_rate, 0.0, "frame_rate");
   });
 }
@@ -299,8 +301,8 @@ SonareError read_envelope(const SonareNoteEdit& edit, const std::string& edit_su
   if (const SonareError err = run_validation([&] {
         util::check::non_null_when_count(envelopes, edit.envelope_count, "envelopes",
                                          (edit_subject + "envelope_count").c_str());
-        util::check::integer_at_least(edit.envelope_offset, 0,
-                                      (edit_subject + "envelope_offset").c_str());
+        util::check::integer_within(edit.envelope_offset, kEnvelopeOffsetDomain,
+                                    (edit_subject + "envelope_offset").c_str());
         if (static_cast<uint64_t>(edit.envelope_offset) > static_cast<uint64_t>(envelope_count)) {
           util::check::refuse_relation({edit_subject + "envelope_offset", "envelope_count"},
                                        "{0} must not exceed {1}");
@@ -867,8 +869,8 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
           if (f0_hz != nullptr) {
             // The note's pitch curve is the caller's track sliced by its own bounds.
             if (const SonareError err = run_validation([&] {
-                  util::check::integer_at_least(row.frame_start, 0,
-                                                (note_prefix + "frame_start").c_str());
+                  util::check::integer_within(row.frame_start, kNoteFrameStartDomain,
+                                              (note_prefix + "frame_start").c_str());
                   if (row.frame_end < row.frame_start) {
                     util::check::refuse_relation(
                         {note_prefix + "frame_end", note_prefix + "frame_start"},
@@ -1102,8 +1104,9 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   SONARE_C_REQUIRE_NONNULL(out_assigned_count);
   *out_assigned_count = 0;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(sample_rate, 1, "sample_rate"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(sample_rate, kNoteTargetSampleRateDomain, "sample_rate");
+      });
       err != SONARE_OK) {
     return err;
   }

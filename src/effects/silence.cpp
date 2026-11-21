@@ -65,7 +65,7 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
 
 /// @brief Rejects inputs whose sample indices do not fit the int interval arithmetic.
 void require_indexable_length(std::size_t n) {
-  util::check::integer_in_range(static_cast<long long>(n), 0, std::numeric_limits<int>::max(), "n");
+  util::check::integer_within(static_cast<long long>(n), kSilenceIndexableLengthDomain, "n");
 }
 
 /// @brief Per-frame RMS and the non-silent mask derived from it.
@@ -84,8 +84,8 @@ FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int fra
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x", "must not be empty");
   }
   util::check::non_null(x, "x");
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(frame_length, kSilenceFrameLengthDomain, "frame_length");
+  util::check::integer_within(hop_length, kSilenceHopLengthDomain, "hop_length");
   require_indexable_length(n);
   util::check::greater_than(top_db, 0.0, "top_db");
   if (!numeric::all_finite(x, n)) {
@@ -177,7 +177,8 @@ std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_
 CommonSplitReport split_common_with_report(const float* const* signals, const std::size_t* lengths,
                                            std::size_t signal_count, float top_db, int frame_length,
                                            int hop_length) {
-  util::check::integer_at_least(static_cast<long long>(signal_count), 1, "signal_count");
+  util::check::integer_within(static_cast<long long>(signal_count), kSilenceSignalCountDomain,
+                              "signal_count");
   util::check::non_null(signals, "signals");
   util::check::non_null(lengths, "lengths");
   CommonSplitReport out;

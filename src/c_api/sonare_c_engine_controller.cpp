@@ -16,6 +16,7 @@
 #include <cmath>
 #include <string>
 
+#include "c_api/engine_config_domains.h"
 #include "engine/realtime_engine.h"
 #include "sonare_c_internal.h"
 #include "util/parameter_checks.h"
@@ -163,8 +164,10 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
     });
   }
   if (binding->index > 127) {
-    return run_validation(
-        [&] { util::check::integer_in_range(binding->index, 0, 127, "binding.index"); });
+    return run_validation([&] {
+      util::check::integer_within(binding->index, kEngineControllerBindingIndexDomain,
+                                  "binding.index");
+    });
   }
   sonare::midi::ControllerAxis axis{};
   if (!ordinal_to_enum(binding->axis, 0, SONARE_CONTROLLER_AXIS_COUNT - 1, &axis)) {

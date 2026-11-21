@@ -7,8 +7,11 @@
 ///          take raw float buffers and return sample-index ranges.
 
 #include <cstddef>
+#include <limits>
 #include <utility>
 #include <vector>
+
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -17,6 +20,19 @@ inline constexpr float kDefaultSilenceTopDb = 60.0f;
 /// RMS frame and hop of the silence detectors when a caller gives none (librosa's trim/split).
 inline constexpr int kDefaultSilenceFrameLength = 2048;
 inline constexpr int kDefaultSilenceHopLength = 512;
+
+/// @brief What the RMS frame length of the silence detectors accepts.
+inline constexpr util::check::NumericDomain kSilenceFrameLengthDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the RMS hop length of the silence detectors accepts.
+inline constexpr util::check::NumericDomain kSilenceHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What a buffer length accepts so its sample indices fit the int interval arithmetic.
+inline constexpr util::check::NumericDomain kSilenceIndexableLengthDomain =
+    util::check::integer_domain(0, std::numeric_limits<int>::max());
+/// @brief What the signal count of a common split accepts.
+inline constexpr util::check::NumericDomain kSilenceSignalCountDomain =
+    util::check::integer_domain_of<long long>(1);
 
 /// @brief Result of trim().
 struct TrimResult {

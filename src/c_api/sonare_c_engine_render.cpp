@@ -148,18 +148,21 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(num_channels, 1, "num_channels"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(num_channels, kEngineRenderChannelsDomain, "num_channels");
+      });
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least<int64_t>(total_frames, 0, "total_frames"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(total_frames, kEngineRenderFramesDomain, "total_frames");
+      });
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(block_size, 0, "block_size"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(block_size, kEngineRenderBlockSizeDomain, "block_size");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -253,9 +256,11 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   if (const SonareError err = run_validation([&] {
         require_struct_size(options->struct_size, sizeof(SonareEngineBounceOptions), "options",
                             "sonare_engine_bounce_options_init");
-        util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
+        util::check::integer_within(options->total_frames, kEngineBounceFramesDomain,
+                                    "options.total_frames");
         sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
-        util::check::integer_at_least(options->num_channels, 1, "options.num_channels");
+        util::check::integer_within(options->num_channels, kEngineRenderChannelsDomain,
+                                    "options.num_channels");
       });
       err != SONARE_OK) {
     return err;
@@ -293,9 +298,8 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
     if (const SonareError err = run_validation([&] {
-          util::check::integer_in_range(
-              options->dither_bits, mastering::final::kMinDitherTargetBits,
-              mastering::final::kMaxDitherTargetBits, "options.dither_bits");
+          util::check::integer_within(options->dither_bits, kEngineDitherBitsDomain,
+                                      "options.dither_bits");
         });
         err != SONARE_OK) {
       return err;
@@ -421,9 +425,11 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   if (const SonareError err = run_validation([&] {
         require_struct_size(options->struct_size, sizeof(SonareEngineFreezeOptions), "options",
                             "sonare_engine_freeze_options_init");
-        util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
+        util::check::integer_within(options->total_frames, kEngineBounceFramesDomain,
+                                    "options.total_frames");
         sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
-        util::check::integer_at_least(options->num_channels, 1, "options.num_channels");
+        util::check::integer_within(options->num_channels, kEngineRenderChannelsDomain,
+                                    "options.num_channels");
       });
       err != SONARE_OK) {
     return err;

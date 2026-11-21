@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
 #include "mixing/alignment_delay.h"
@@ -51,13 +52,11 @@ SonareError check_finite_value(float value) {
 
 SonareError check_band_index(int band_index) {
 #if defined(SONARE_WITH_MIXING)
-  return run_validation([&] {
-    util::check::integer_in_range(
-        band_index, 0, static_cast<long long>(mastering::eq::ParametricEq::kMaxBands) - 1,
-        "band_index");
-  });
+  return run_validation(
+      [&] { util::check::integer_within(band_index, kEngineBandIndexDomain, "band_index"); });
 #else
-  return run_validation([&] { util::check::integer_at_least(band_index, 0, "band_index"); });
+  return run_validation(
+      [&] { util::check::integer_within(band_index, kEngineBandIndexFloorDomain, "band_index"); });
 #endif
 }
 
@@ -153,7 +152,7 @@ constexpr const char* kParamNamePredicate =
 SonareError refuse_no_automation_id(unsigned int insert_index) {
   if (insert_index > engine::kInsertIndexMask) {
     return run_validation([&] {
-      util::check::integer_in_range(insert_index, 0, engine::kInsertIndexMask, "insert_index");
+      util::check::integer_within(insert_index, kEngineInsertIndexDomain, "insert_index");
     });
   }
   return refuse_automation_table_full();
@@ -540,8 +539,8 @@ SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngi
 #else
   static_assert(SONARE_ENGINE_MAX_TRACK_LANES == engine::TrackMixerRuntime::kMaxTrackLanes);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(static_cast<long long>(lane_count), 0,
-                                      SONARE_ENGINE_MAX_TRACK_LANES, "lane_count");
+        util::check::integer_within(static_cast<long long>(lane_count), kEngineLaneCountDomain,
+                                    "lane_count");
       });
       err != SONARE_OK) {
     return err;
@@ -1699,8 +1698,7 @@ SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareEngine* en
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(delay_samples, 0, sonare::mixing::kMaxAlignmentDelaySamples,
-                                      "delay_samples");
+        util::check::integer_within(delay_samples, kEngineAlignmentDelayDomain, "delay_samples");
       });
       err != SONARE_OK) {
     return err;

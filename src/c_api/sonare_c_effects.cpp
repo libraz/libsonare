@@ -21,6 +21,7 @@
 #include "effects/remix.h"
 #include "effects/spectral_edit.h"
 #include "effects/time_stretch.h"
+#include "effects_config_domains.h"
 #include "filters/iir.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
@@ -41,10 +42,10 @@ void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
   namespace check = sonare::util::check;
   require_struct_size(config.struct_size, sizeof(config), "config",
                       "sonare_decompose_stems_config_init");
-  check::integer_at_least(config.n_components, 1, "config.n_components");
-  check::integer_at_least(config.n_fft, 1, "config.n_fft");
+  check::integer_within(config.n_components, kDecomposeNComponentsDomain, "config.n_components");
+  check::integer_within(config.n_fft, kDecomposeStemsNFftDomain, "config.n_fft");
   check_stft_hop(config.hop_length, "config.hop_length");
-  check::integer_at_least(config.n_iter, 1, "config.n_iter");
+  check::integer_within(config.n_iter, kDecomposeStemsIterDomain, "config.n_iter");
   check::finite_float(config.beta, "config.beta");
   check::non_null(config.init, "config.init");
   check::at_least(config.mask_power, 1.0, "config.mask_power");
@@ -131,7 +132,7 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
   }
   // The FFT size and hop are refused before any input is decoded.
   if (const SonareError err = run_validation([&] {
-        sonare::util::check::integer_at_least(n_fft, 1, "n_fft");
+        sonare::util::check::integer_within(n_fft, kHpssNFftDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
       });
       err != SONARE_OK) {
@@ -373,8 +374,7 @@ void check_biquad_filter_config(const SonareBiquadFilterConfig& config, int samp
   namespace check = sonare::util::check;
   sonare_c_detail::require_struct_size(config.struct_size, sizeof(config), "config",
                                        "sonare_biquad_filter_config_init");
-  check::integer_in_range(config.type, SONARE_BIQUAD_FILTER_HIGH_PASS, SONARE_BIQUAD_FILTER_NOTCH,
-                          "config.type");
+  check::integer_within(config.type, kBiquadFilterTypeDomain, "config.type");
   check::one_of(config.order, std::array<int, 2>{2, 4}, "config.order");
   const bool corner =
       config.type == SONARE_BIQUAD_FILTER_HIGH_PASS || config.type == SONARE_BIQUAD_FILTER_LOW_PASS;
@@ -525,8 +525,9 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        sonare::util::check::integer_at_least(frame_length, 1, "frame_length");
-        sonare::util::check::integer_at_least(hop_length, 1, "hop_length");
+        sonare::util::check::integer_within(frame_length, kSilenceFrameLengthDomain,
+                                            "frame_length");
+        sonare::util::check::integer_within(hop_length, kSilenceHopLengthDomain, "hop_length");
       });
       err != SONARE_OK) {
     return err;
@@ -594,8 +595,8 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(s);
   if (const SonareError err = run_validation([&] {
-        sonare::util::check::integer_at_least(n_features, 1, "n_features");
-        sonare::util::check::integer_at_least(n_frames, 1, "n_frames");
+        sonare::util::check::integer_within(n_features, kDecomposeNFeaturesDomain, "n_features");
+        sonare::util::check::integer_within(n_frames, kDecomposeNFramesDomain, "n_frames");
       });
       err != SONARE_OK) {
     return err;
@@ -733,10 +734,10 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
                      out_w_length, out_h, out_h_length);
   if (const SonareError err = run_validation([&] {
         sonare::util::check::non_null(channels, "channels");
-        sonare::util::check::integer_in_range(
+        sonare::util::check::integer_within(
             static_cast<long long>(
                 std::min<size_t>(num_channels, kMaxDecomposeStemsLinkedChannels + 1)),
-            1, static_cast<long long>(kMaxDecomposeStemsLinkedChannels), "num_channels");
+            kDecomposeStemsLinkedChannelsDomain, "num_channels");
       });
       err != SONARE_OK) {
     return err;
@@ -952,11 +953,12 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
           namespace check = sonare::util::check;
           require_struct_size(config->struct_size, sizeof(*config), "config",
                               "sonare_spectral_edit_config_init");
-          check::integer_at_least(config->n_fft, 1, "config.n_fft");
+          check::power_of_two_within(config->n_fft, sonare::kSpectralEditNFftDomain,
+                                     "config.n_fft");
           check_stft_hop(config->hop_length, "config.hop_length");
-          check::integer_at_least(config->heal_radius_frames, 1, "config.heal_radius_frames");
-          check::integer_in_range(config->window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR,
-                                  "config.window");
+          check::integer_within(config->heal_radius_frames, kSpectralEditHealRadiusDomain,
+                                "config.heal_radius_frames");
+          check::integer_within(config->window, kSpectralEditWindowDomain, "config.window");
         });
         err != SONARE_OK) {
       return err;
@@ -979,9 +981,8 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
           if (!std::isnan(ops[i].high_hz)) {
             sonare::util::check::greater_than(ops[i].high_hz, 0.0, (subject + ".high_hz").c_str());
           }
-          sonare::util::check::integer_in_range(ops[i].mode, SONARE_SPECTRAL_EDIT_MODE_GAIN,
-                                                SONARE_SPECTRAL_EDIT_MODE_HEAL,
-                                                (subject + ".mode").c_str());
+          sonare::util::check::integer_within(ops[i].mode, kSpectralEditModeDomain,
+                                              (subject + ".mode").c_str());
         });
         err != SONARE_OK) {
       return err;

@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -43,6 +44,9 @@ void validate_spectral_region_op(const SpectralRegionOp& op);
 /// 192 kHz rounded up to a power of two -- so 384 kHz gets 0.68 s, not the second.
 /// Not @ref kMaxStftNFft: that is a backstop that must never bind a consumer, this binds.
 inline constexpr int kSpectralEditMaxNFft = 262144;
+/// @brief What the spectral edit's FFT size accepts.
+inline constexpr util::check::NumericDomain kSpectralEditNFftDomain =
+    util::check::integer_domain(4, kSpectralEditMaxNFft);
 
 /// @brief STFT + heal parameters for a spectral edit pass.
 struct SpectralEditConfig {

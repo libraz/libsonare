@@ -170,8 +170,8 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
                                                     int frame_length, int hop_length) {
   // Reject non-positive frame/hop before any loop or division: a zero/negative
   // hop_length spins the scan forever and a zero frame_length divides by zero.
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(frame_length, kSilenceFrameLengthDomain, "frame_length");
+  util::check::integer_within(hop_length, kSilenceHopLengthDomain, "hop_length");
   // Agrees with metering::silence_ratio, which measures the same quantity: a
   // non-finite threshold makes every comparison below false, so both scans
   // return the whole buffer for a request they could not evaluate.

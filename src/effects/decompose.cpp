@@ -175,10 +175,10 @@ void build_component_model(const DecomposeResult& factors, int n_bins, int n_fra
 }  // namespace
 
 void validate_decompose_shape(int n_features, int n_frames, int n_components, int n_iter) {
-  util::check::integer_at_least(n_features, 1, "n_features");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
-  util::check::integer_at_least(n_components, 1, "n_components");
-  util::check::integer_at_least(n_iter, 0, "n_iter");
+  util::check::integer_within(n_features, kDecomposeNFeaturesDomain, "n_features");
+  util::check::integer_within(n_frames, kDecomposeNFramesDomain, "n_frames");
+  util::check::integer_within(n_components, kDecomposeNComponentsDomain, "n_components");
+  util::check::integer_within(n_iter, kDecomposeIterDomain, "n_iter");
 }
 
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
@@ -454,11 +454,11 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
 }
 
 void validate_config(const DecomposeStemsConfig& config) {
-  util::check::integer_at_least(config.n_components, 1, "n_components");
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  util::check::integer_within(config.n_components, kDecomposeNComponentsDomain, "n_components");
+  util::check::integer_within(config.n_fft, kDecomposeStemsNFftDomain, "n_fft");
   // 0 takes a quarter of n_fft.
-  util::check::integer_at_least(config.hop_length, 0, "hop_length");
-  util::check::integer_at_least(config.n_iter, 1, "n_iter");
+  util::check::integer_within(config.hop_length, kDecomposeStemsHopLengthDomain, "hop_length");
+  util::check::integer_within(config.n_iter, kDecomposeStemsIterDomain, "n_iter");
   util::check::finite_float(config.beta, "beta");
   util::check::at_least(config.mask_power, 1.0, "mask_power");
   // The components are resynthesised, so the analysis has to overlap-add back

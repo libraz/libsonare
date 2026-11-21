@@ -57,7 +57,8 @@ SonareError graph_swap_error(const engine::GraphSwapFault& fault) {
                      "the engine was given no graph or no node id to swap in");
       return SONARE_ERROR_INVALID_STATE;
     case Cause::kNoChannels:
-      return run_validation([&] { util::check::integer_at_least(0, 1, "spec.num_channels"); });
+      return run_validation(
+          [&] { util::check::integer_within(0, kEngineGraphChannelsDomain, "spec.num_channels"); });
     case Cause::kReservedParameterId:
       return run_validation([&] {
         util::check::refuse(id_subject.c_str(), "must not be a reserved engine parameter id");
@@ -91,10 +92,8 @@ SonareError graph_swap_error(const engine::GraphSwapFault& fault) {
                 0, static_cast<double>(engine::GraphRuntime::kMaxParameterBindings)));
       });
     case Cause::kBindingIdZero:
-      return run_validation([&] {
-        util::check::integer_in_range(0, 1, std::numeric_limits<uint32_t>::max(),
-                                      id_subject.c_str());
-      });
+      return run_validation(
+          [&] { util::check::integer_within(0, kEngineParameterIdDomain, id_subject.c_str()); });
     case Cause::kBindingIdRepeated:
       return run_validation([&] {
         util::check::refuse(id_subject.c_str(), "must be unique among spec.parameter_bindings");
@@ -123,8 +122,10 @@ SonareError sonare_engine_set_capture_buffer(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(buffer);
   if (const SonareError err = run_validation([&] {
         util::check::non_null(buffer->channels, "buffer.channels");
-        util::check::integer_at_least(buffer->num_channels, 1, "buffer.num_channels");
-        util::check::integer_at_least(buffer->capacity_frames, 1, "buffer.capacity_frames");
+        util::check::integer_within(buffer->num_channels, kEngineCaptureChannelsDomain,
+                                    "buffer.num_channels");
+        util::check::integer_within(buffer->capacity_frames, kEngineCaptureCapacityFramesDomain,
+                                    "buffer.capacity_frames");
         for (int ch = 0; ch < buffer->num_channels; ++ch) {
           util::check::non_null(buffer->channels[ch],
                                 ("buffer.channels[" + std::to_string(ch) + "]").c_str());
@@ -152,7 +153,7 @@ SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_
   // An enabled empty window would read as "no punch" and record everything.
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(start_sample, 0, "start_sample");
+        util::check::integer_within(start_sample, kEngineCapturePunchStartDomain, "start_sample");
         if (end_sample < start_sample) {
           util::check::refuse_relation({"end_sample", "start_sample"},
                                        "{0} must not be before {1}");
@@ -244,8 +245,10 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
   SONARE_C_REQUIRE_NONNULL(spec);
   if (const SonareError err = run_validation([&] {
         util::check::non_null(spec->nodes, "spec.nodes");
-        util::check::integer_at_least(spec->node_count, 1, "spec.node_count");
-        util::check::integer_at_least(spec->num_channels, 1, "spec.num_channels");
+        util::check::integer_within(spec->node_count, kEngineGraphNodeCountDomain,
+                                    "spec.node_count");
+        util::check::integer_within(spec->num_channels, kEngineGraphChannelsDomain,
+                                    "spec.num_channels");
         util::check::non_null_when_count(spec->connections, spec->connection_count,
                                          "spec.connections", "spec.connection_count");
         util::check::non_null_when_count(spec->parameter_bindings, spec->parameter_binding_count,
@@ -264,8 +267,8 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
                               "spec.nodes[" + std::to_string(i) + "]",
                               "sonare_engine_graph_node_init");
           if (node.num_ports != SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC) {
-            util::check::integer_at_least(node.num_ports, 1,
-                                          indexed_subject("spec.nodes", i, "num_ports").c_str());
+            util::check::integer_within(node.num_ports, kEngineGraphNodePortsDomain,
+                                        indexed_subject("spec.nodes", i, "num_ports").c_str());
           }
         });
         err != SONARE_OK) {

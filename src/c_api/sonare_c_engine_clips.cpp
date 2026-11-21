@@ -96,21 +96,23 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
   const int64_t source_samples =
       paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
   if (!paged) util::check::non_null(clip.channels, subject("channels").c_str());
-  util::check::integer_at_least(source_channels, 1, subject("num_channels").c_str());
-  util::check::integer_at_least<int64_t>(source_samples, 1, subject("num_samples").c_str());
+  util::check::integer_within(source_channels, kEngineClipChannelsDomain,
+                              subject("num_channels").c_str());
+  util::check::integer_within(source_samples, kEngineClipSamplesDomain,
+                              subject("num_samples").c_str());
   util::check::in_range(clip.start_ppq, 0.0, transport::kMaxPublicPpq,
                         subject("start_ppq").c_str());
   util::check::integer_in_range(clip.clip_offset_samples, 0, source_samples - 1,
                                 subject("clip_offset_samples").c_str());
   if (clip.length_samples != SONARE_ENGINE_CLIP_LENGTH_TO_END) {
-    util::check::integer_at_least<int64_t>(clip.length_samples, 1,
-                                           subject("length_samples").c_str());
+    util::check::integer_within(clip.length_samples, kEngineClipLengthDomain,
+                                subject("length_samples").c_str());
   }
   util::check::at_least(clip.gain, 0.0, subject("gain").c_str());
-  util::check::integer_at_least<int64_t>(clip.fade_in_samples, 0,
-                                         subject("fade_in_samples").c_str());
-  util::check::integer_at_least<int64_t>(clip.fade_out_samples, 0,
-                                         subject("fade_out_samples").c_str());
+  util::check::integer_within(clip.fade_in_samples, kEngineClipFadeDomain,
+                              subject("fade_in_samples").c_str());
+  util::check::integer_within(clip.fade_out_samples, kEngineClipFadeDomain,
+                              subject("fade_out_samples").c_str());
   util::check::one_of(clip.warp_mode, std::array<int, 4>{0, 1, 2, 3}, subject("warp_mode").c_str());
   if (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
     util::check::refuse_relation({subject("warp_mode"), subject("page_provider")},
@@ -306,9 +308,9 @@ SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_sampl
   SONARE_C_ZERO_OUTS(out_provider);
   if (!engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
     return run_validation([&] {
-      util::check::integer_in_range(num_channels, 1, engine::kMaxClipPageChannels, "num_channels");
-      util::check::integer_at_least<int64_t>(num_samples, 1, "num_samples");
-      util::check::integer_in_range(page_frames, 1, engine::kMaxClipPageFrames, "page_frames");
+      util::check::integer_within(num_channels, kEngineClipPageChannelsDomain, "num_channels");
+      util::check::integer_within(num_samples, kEngineClipSamplesDomain, "num_samples");
+      util::check::integer_within(page_frames, kEngineClipPageFramesDomain, "page_frames");
       util::check::refuse_relation({"num_samples", "page_frames"},
                                    "{0} must span at most " +
                                        std::to_string(engine::kMaxClipPageCount) +
@@ -409,7 +411,7 @@ SonareError sonare_engine_set_warp_voice_capacity(SonareEngine* engine, uint32_t
   SONARE_C_REQUIRE_NONNULL(engine);
   if (!engine->engine.set_warp_voice_capacity(voices)) {
     return run_validation(
-        [&] { util::check::integer_in_range(voices, 0, SONARE_ENGINE_MAX_WARP_VOICES, "voices"); });
+        [&] { util::check::integer_within(voices, kEngineWarpVoicesDomain, "voices"); });
   }
   return SONARE_OK;
 }
@@ -425,8 +427,8 @@ SonareError sonare_engine_warp_voice_capacity(SonareEngine* engine, uint32_t* ou
 SonareError sonare_engine_set_clip_page_prefetch_frames(SonareEngine* engine, int64_t frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least<int64_t>(frames, 0, "frames"); });
+  if (const SonareError err = run_validation(
+          [&] { util::check::integer_within(frames, kEnginePrefetchFramesDomain, "frames"); });
       err != SONARE_OK) {
     return err;
   }

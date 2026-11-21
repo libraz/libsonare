@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "c_api/daw_config_domains.h"
 #include "midi/synth/sample_bank.h"
 #include "sample_bank_internal.h"
 #include "sonare_c_internal.h"
@@ -16,8 +17,6 @@ namespace {
 /// Total sample points one bank may hold, matching the SoundFont loader's cap
 /// so neither door is the cheaper way to exhaust memory.
 constexpr size_t kMaxBankSamplePoints = 67108864u;
-/// Keymap sets are dense, so an index also sizes the table it creates.
-constexpr uint32_t kMaxKeymapSets = 4096u;
 
 }  // namespace
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
@@ -50,15 +49,19 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(bank);
   SONARE_C_REQUIRE_NONNULL(data);
-  if (const SonareError err = sonare_c_detail::run_validation(
-          [&] { sonare::util::check::integer_at_least(n_frames, 1, "n_frames"); });
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_within(n_frames, sonare_c_detail::kSampleBankFrameCountDomain,
+                                            "n_frames");
+      });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(desc);
   // loop_mode is a SoundFont sampleModes value, 0..3; 2 is the spec's "unused, no loop".
-  if (const SonareError err = sonare_c_detail::run_validation(
-          [&] { sonare::util::check::integer_in_range(desc->loop_mode, 0, 3, "desc.loop_mode"); });
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_within(desc->loop_mode, sonare_c_detail::kSampleLoopModeDomain,
+                                            "desc.loop_mode");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -106,7 +109,8 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(bank);
   if (const SonareError err = sonare_c_detail::run_validation([&] {
-        sonare::util::check::integer_in_range(set_index, 0, kMaxKeymapSets - 1, "set_index");
+        sonare::util::check::integer_within(set_index, sonare_c_detail::kKeymapSetIndexDomain,
+                                            "set_index");
       });
       err != SONARE_OK) {
     return err;

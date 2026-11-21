@@ -10,6 +10,7 @@
 #endif
 #include <sonare/sonare_c.h>
 
+#include "c_api/daw_config_domains.h"
 #include "core/audio.h"
 #include "sonare_c_internal.h"
 #include "util/parameter_checks.h"
@@ -105,8 +106,8 @@ SonareError process_realtime_voice_change_compensated(SonareRealtimeVoiceChanger
         util::check::non_null(handle, "handle");
         util::check::non_null(samples, "samples");
         util::check::non_null(output, "output");
-        util::check::integer_in_range(channels, 1, 2, "channels");
-        util::check::integer_at_least(block_size, 1, "block_size");
+        util::check::integer_within(channels, kVoiceChangerChannelsDomain, "channels");
+        util::check::integer_within(block_size, kVoiceChangerBlockSizeDomain, "block_size");
       });
       err != SONARE_OK) {
     return err;
@@ -248,7 +249,7 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
       validate_audio_params("voice_change_realtime", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   err = run_validation([&] {
-    util::check::integer_in_range(channels, 1, 2, "channels");
+    util::check::integer_within(channels, kVoiceChangerChannelsDomain, "channels");
     if (channels == 2) check_interleaved_stereo_length(length);
   });
   if (err != SONARE_OK) return err;
@@ -486,8 +487,7 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
   // nullptr for the same input, and every other surface's strict handling.
   if (!vc_preset_is_valid(preset)) {
     return run_validation([&] {
-      util::check::integer_in_range(preset, SONARE_VC_PRESET_NEUTRAL_MONITOR,
-                                    SONARE_VC_PRESET_RADIO_VOICE, "preset");
+      util::check::integer_within(static_cast<int>(preset), kVoiceChangerPresetDomain, "preset");
     });
   }
   SONARE_C_REQUIRE_NONNULL(out);

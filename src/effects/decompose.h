@@ -7,12 +7,36 @@
 #include <string>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare {
 
 /// @brief Default multiplicative-update iteration count of @ref decompose.
 inline constexpr int kDecomposeDefaultIter = 50;
 /// @brief Default beta divergence of @ref decompose (2 = Frobenius).
 inline constexpr float kDecomposeDefaultBeta = 2.0f;
+
+/// @brief What the number of feature rows accepts.
+inline constexpr util::check::NumericDomain kDecomposeNFeaturesDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the number of frames accepts.
+inline constexpr util::check::NumericDomain kDecomposeNFramesDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the number of components accepts.
+inline constexpr util::check::NumericDomain kDecomposeNComponentsDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the iteration count of @ref decompose accepts.
+inline constexpr util::check::NumericDomain kDecomposeIterDomain =
+    util::check::integer_domain_of<int>(0);
+/// @brief What the iteration count of the stem separation accepts.
+inline constexpr util::check::NumericDomain kDecomposeStemsIterDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the stem separation's FFT size accepts.
+inline constexpr util::check::NumericDomain kDecomposeStemsNFftDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the stem separation's hop length accepts (0 takes a quarter of n_fft).
+inline constexpr util::check::NumericDomain kDecomposeStemsHopLengthDomain =
+    util::check::integer_domain_of<int>(0);
 
 /// @brief Output of @ref decompose: NMF components.
 struct DecomposeResult {

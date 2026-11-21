@@ -1,0 +1,140 @@
+#pragma once
+
+/// @file engine_config_domains.h
+/// @brief Numeric domains of the engine C-ABI arguments and structs, stated once for the checks
+///        that refuse them and for the table in numeric_domain_rows.h.
+
+#include <sonare/sonare_c_engine.h>
+
+#include <cstddef>
+#include <cstdint>
+
+#include "engine/clip_page_limits.h"
+#include "engine/insert_automation_id.h"
+#include "engine/realtime_engine.h"
+#include "mastering/eq/parametric.h"
+#include "mastering/final/dither.h"
+#include "mixing/alignment_delay.h"
+#include "util/parameter_checks.h"
+
+namespace sonare_c_detail {
+
+/// @brief What a graph spec's num_channels accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineGraphChannelsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What a graph spec's node_count accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineGraphNodeCountDomain =
+    sonare::util::check::integer_domain_of<size_t>(1);
+/// @brief What a graph node's num_ports accepts when it is not taken from the spec.
+inline constexpr sonare::util::check::NumericDomain kEngineGraphNodePortsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What an engine automation parameter id accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineParameterIdDomain =
+    sonare::util::check::integer_domain_of<uint32_t>(1);
+
+/// @brief What a capture buffer's num_channels accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineCaptureChannelsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What a capture buffer's capacity_frames accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineCaptureCapacityFramesDomain =
+    sonare::util::check::integer_domain_of<int64_t>(1);
+/// @brief What the capture punch window's start_sample accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineCapturePunchStartDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+
+/// @brief What an audio clip's source channel count accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineClipChannelsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What an audio clip's source length and a page provider's num_samples accept.
+inline constexpr sonare::util::check::NumericDomain kEngineClipSamplesDomain =
+    sonare::util::check::integer_domain_of<int64_t>(1);
+/// @brief What an audio or MIDI clip's length_samples accepts when it is not the to-end sentinel.
+inline constexpr sonare::util::check::NumericDomain kEngineClipLengthDomain =
+    sonare::util::check::integer_domain_of<int64_t>(1);
+/// @brief What an audio or MIDI clip's fade_in_samples and fade_out_samples accept.
+inline constexpr sonare::util::check::NumericDomain kEngineClipFadeDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+/// @brief What a clip page provider's num_channels accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineClipPageChannelsDomain =
+    sonare::util::check::integer_domain(1, sonare::engine::kMaxClipPageChannels);
+/// @brief What a clip page provider's page_frames accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineClipPageFramesDomain =
+    sonare::util::check::integer_domain(1, sonare::engine::kMaxClipPageFrames);
+/// @brief What the warp voice capacity accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineWarpVoicesDomain =
+    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_WARP_VOICES);
+/// @brief What the clip page prefetch frame count accepts.
+inline constexpr sonare::util::check::NumericDomain kEnginePrefetchFramesDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+
+/// @brief What a controller binding's index accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineControllerBindingIndexDomain =
+    sonare::util::check::integer_domain(0, 127);
+
+/// @brief What a MIDI channel accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMidiChannelDomain =
+    sonare::util::check::integer_domain(0, 15);
+/// @brief What a UMP group accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineUmpGroupDomain =
+    sonare::util::check::integer_domain(0, 15);
+/// @brief What a MIDI controller number accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMidiControllerDomain =
+    sonare::util::check::integer_domain(0, 127);
+/// @brief What the MSB controller number of a 14-bit MIDI CC binding accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMidiCc14NumberDomain =
+    sonare::util::check::integer_domain(0, 31);
+/// @brief What a MIDI clip's loop count accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopDomain =
+    sonare::util::check::integer_domain_of<int>(0);
+/// @brief What a MIDI clip's loop_length_samples accepts when it loops.
+inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopLengthDomain =
+    sonare::util::check::integer_domain_of<int64_t>(1);
+/// @brief What the size of a SoundFont image accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineSoundFontSizeDomain =
+    sonare::util::check::integer_domain_of<size_t>(1);
+/// @brief What the payload size of a pushed SysEx message accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineSysExSizeDomain =
+    sonare::util::check::integer_domain(
+        1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes));
+
+/// @brief What an EQ band index accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineBandIndexDomain =
+    sonare::util::check::integer_domain(
+        0, static_cast<long long>(sonare::mastering::eq::ParametricEq::kMaxBands) - 1);
+/// @brief What an EQ band index accepts in a build without the mixing engine.
+inline constexpr sonare::util::check::NumericDomain kEngineBandIndexFloorDomain =
+    sonare::util::check::integer_domain_of<int>(0);
+/// @brief What an insert index accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineInsertIndexDomain =
+    sonare::util::check::integer_domain(0, sonare::engine::kInsertIndexMask);
+/// @brief What a track mixer's lane_count accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineLaneCountDomain =
+    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_TRACK_LANES);
+/// @brief What a track's alignment delay_samples accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineAlignmentDelayDomain =
+    sonare::util::check::integer_domain(0, sonare::mixing::kMaxAlignmentDelaySamples);
+
+/// @brief What an offline render's num_channels accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineRenderChannelsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What the total_frames argument of a render accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineRenderFramesDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+/// @brief What the block_size argument of a render accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineRenderBlockSizeDomain =
+    sonare::util::check::integer_domain_of<int>(0);
+/// @brief What the total_frames of bounce and freeze options accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineBounceFramesDomain =
+    sonare::util::check::integer_domain_of<int64_t>(1);
+/// @brief What the block_size of bounce and freeze options accepts when it is not automatic.
+inline constexpr sonare::util::check::NumericDomain kEngineOfflineBlockDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What a bounce sample rate accepts when it is not the prepared-rate sentinel.
+inline constexpr sonare::util::check::NumericDomain kEngineSampleRateDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What the dither_bits of bounce options accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineDitherBitsDomain =
+    sonare::util::check::integer_domain(sonare::mastering::final::kMinDitherTargetBits,
+                                        sonare::mastering::final::kMaxDitherTargetBits);
+
+}  // namespace sonare_c_detail
