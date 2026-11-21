@@ -9,6 +9,15 @@ so a binding can only state the C type's range for that member. This lists those
 A bound that reads a runtime value (a buffer length, a prepared channel count) is a
 relation between arguments rather than a domain, and is not listed.
 
+Each site falls in one class, derived rather than tagged:
+- ``enum``: the bounds are an enumeration's ordinals (a ``*_COUNT`` / ``k*Count`` limit, or
+  enumerator casts); a closed set, not a numeric domain.
+- ``c-only``: no Python, Node or WASM facade parameter or record field of a numeric type
+  carries the subject's name, so a facade reaches it only as a token or not at all, and the
+  core's own refusal states the domain.
+- ``facade``: a facade reaches the subject (or the subject is not a literal, so that cannot
+  be ruled out); a facade refusing a fraction there states the C type's range.
+
 Usage: python3 tools/api/unnamed_integer_bounds.py [--count]
 """
 
@@ -118,13 +127,73 @@ def sites(root: Path = ROOT) -> list[tuple[str, int, str, str, str]]:
     return [(p, n, check, " ".join(b.split()), " ".join(s.split())) for p, n, check, b, s in out]
 
 
+CLASSES = ("enum", "c-only", "facade")
+_ENUM_LIMIT = re.compile(r"\b(SONARE_\w*_COUNT|k\w*Count)\b")
+_ENUMERATOR = re.compile(r"^static_cast<\w+>\(\s*(\w+::)+[A-Z]\w*\s*\)$")
+_FACADES = ("python", "node", "wasm")
+
+
+def _numeric(spelled: str) -> bool:
+    """Whether a facade type admits a number; an unextracted type is not ruled out."""
+    return not spelled or bool(
+        re.search(r"\b(int|number|bigint)\b", spelled) or re.fullmatch(r"[\d\s|]+", spelled)
+    )
+
+
+def facade_names(root: Path = ROOT) -> frozenset[str]:
+    """Every numeric parameter and record-field name the facades expose, in snake case.
+
+    Read through the parity extractors; a Python ctypes mirror (``_ffi*``) is not a facade.
+    """
+    sys.path.insert(0, str(root / "tools/parity"))
+    try:
+        import check_parity
+    finally:
+        sys.path.pop(0)
+    names: set[str] = set()
+    for surface in _FACADES:
+        extraction = check_parity._EXTRACTORS[surface](root)
+        for fn in extraction.functions:
+            names.update(p.name for p in fn.params if _numeric(p.type))
+        for record in extraction.records:
+            if not Path(record.file).name.startswith("_ffi"):
+                names.update(f.name for f in record.fields if _numeric(f.type))
+    return frozenset(names)
+
+
+def subject_name(subject: str) -> str | None:
+    """The member name a subject expression ends in, or None when it holds no literal."""
+    literals = re.findall(r'"([^"]*)"', subject)
+    if not literals:
+        return None
+    leaf = literals[-1].rpartition(".")[2]
+    return re.sub(r"\[[^]]*\]", "", leaf) or None
+
+
+def classify(bounds: str, subject: str, exposed: frozenset[str]) -> str:
+    parts = [b.strip() for b in bounds.split(",")]
+    if _ENUM_LIMIT.search(bounds) or (len(parts) == 2 and all(_ENUMERATOR.match(b) for b in parts)):
+        return "enum"
+    name = subject_name(subject)
+    if name is not None and name not in exposed:
+        return "c-only"
+    return "facade"
+
+
+def classified(root: Path = ROOT) -> list[tuple[str, int, str, str, str, str]]:
+    """Every site with its class appended."""
+    exposed = facade_names(root)
+    return [(*site, classify(site[3], site[4], exposed)) for site in sites(root)]
+
+
 def main(argv: list[str]) -> int:
-    found = sites()
+    rows = classified()
     if "--count" in argv:
-        print(len(found))
+        for name in CLASSES:
+            print(f"{name}\t{sum(row[5] == name for row in rows)}")
         return 0
-    for path, line, check, bounds, subject in found:
-        print(f"{path}:{line}\t{check}\t{bounds}\t{subject}")
+    for path, line, check, bounds, subject, cls in rows:
+        print(f"{path}:{line}\t{cls}\t{check}\t{bounds}\t{subject}")
     return 0
 
 
