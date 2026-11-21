@@ -16,9 +16,10 @@ inline constexpr sonare::util::check::NumericDomain kMixingAssistantSampleRateDo
 /// @brief What the sample rate of one assistant input track accepts.
 inline constexpr sonare::util::check::NumericDomain kMixingAssistantTrackSampleRateDomain =
     sonare::util::check::integer_domain_of<int>(1);
-/// @brief What a mixer's max_block_size accepts.
+/// @brief What a mixer's max_block_size accepts; 0 takes the mixer default.
 inline constexpr sonare::util::check::NumericDomain kMixerMaxBlockSizeDomain =
-    sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize);
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize), 0);
 /// @brief What the curve of a scheduled automation event accepts.
 inline constexpr sonare::util::check::NumericDomain kStripAutomationCurveDomain =
     sonare::util::check::integer_domain(

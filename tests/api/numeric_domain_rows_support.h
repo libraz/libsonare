@@ -49,9 +49,13 @@ inline std::string subject_of(const NumericDomainRow& row) {
   return subject;
 }
 
-/// A value outside the domain: below lo by 1 for an integer, lo itself when excluded, else past hi.
+/// A value outside the domain: below lo by 1 for an integer (by 2 when lo - 1 is the domain's
+/// sentinel, which the entry reads as "not given"), lo itself when excluded, else past hi.
 inline double outside_value(const NumericDomain& d) {
-  if (d.kind == NumberKind::Integer) return *d.lo - 1.0;
+  if (d.kind == NumberKind::Integer) {
+    const double below = *d.lo - 1.0;
+    return d.sentinel && *d.sentinel == below ? below - 1.0 : below;
+  }
   if (!d.lo_included) return *d.lo;
   if (d.hi) return *d.hi + std::max(1e-3 * std::fabs(*d.hi), 1e-6);
   return *d.lo - 1.0;

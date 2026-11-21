@@ -22,18 +22,21 @@ inline constexpr sonare::util::check::NumericDomain kTranscribeSegmentationCents
 /// @brief What the level mapped to the softest velocity accepts, in dB below full scale.
 inline constexpr sonare::util::check::NumericDomain kTranscribeVelocityFloorDbDomain =
     sonare::util::check::real_domain_below(0.0, false);
-/// @brief What a fixed note velocity accepts.
+/// @brief What a fixed note velocity accepts; SONARE_FIXED_VELOCITY_UNSET (0) is "not given".
 inline constexpr sonare::util::check::NumericDomain kTranscribeFixedVelocityDomain =
-    sonare::util::check::integer_domain(1, 127);
-/// @brief What the voice count of polyphonic transcription accepts.
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain(1, 127), 0);
+/// @brief What the voice count of polyphonic transcription accepts; SONARE_MAX_POLYPHONY_UNSET
+///        (0) is "not given".
 inline constexpr sonare::util::check::NumericDomain kTranscribeMaxPolyphonyDomain =
-    sonare::util::check::integer_domain(1, sonare::editing::polyphony::kMaxPolyphonyVoices);
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(1, sonare::editing::polyphony::kMaxPolyphonyVoices), 0);
 /// @brief What a peak ratio (frame or ridge) of polyphonic transcription accepts.
 inline constexpr sonare::util::check::NumericDomain kTranscribePeakRatioDomain =
     sonare::util::check::real_domain(0.0, 1.0);
-/// @brief What the shortest note as a division of a whole note accepts.
+/// @brief What the shortest note as a division of a whole note accepts;
+///        SONARE_NOTE_DIVISION_UNSET (0) is "not given".
 inline constexpr sonare::util::check::NumericDomain kTranscribeMinNoteDivisionDomain =
-    sonare::util::check::integer_domain(1, 128);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain(1, 128), 0);
 /// @brief What the level rise that splits a sustained ridge into a new note accepts.
 inline constexpr sonare::util::check::NumericDomain kReattackRatioDomain =
     sonare::util::check::real_domain_above(1.0, false);

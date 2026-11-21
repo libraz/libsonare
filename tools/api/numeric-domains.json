@@ -8,7 +8,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "align_take_to_reference_ex",
@@ -18,7 +19,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_bpm",
@@ -28,7 +30,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_bpm",
@@ -38,7 +41,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_dynamics",
@@ -48,7 +52,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_dynamics",
@@ -58,7 +63,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_dynamics",
@@ -68,7 +74,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_impulse_response",
@@ -78,7 +85,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_impulse_response_ex",
@@ -88,7 +96,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_impulse_response_ex",
@@ -98,7 +107,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -108,7 +118,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -118,7 +129,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -128,7 +140,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -138,7 +151,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -148,7 +162,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex",
@@ -158,7 +173,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -168,7 +184,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -178,7 +195,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -188,7 +206,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -198,7 +217,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -208,7 +228,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "analyze_json_ex_with_progress",
@@ -218,7 +239,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody",
@@ -228,7 +250,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody",
@@ -238,7 +261,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody",
@@ -248,7 +272,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody",
@@ -258,7 +283,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody_ex",
@@ -268,7 +294,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody_ex",
@@ -278,7 +305,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody_ex",
@@ -288,7 +316,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_melody_ex",
@@ -298,7 +327,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_rhythm",
@@ -308,7 +338,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_rhythm",
@@ -318,7 +349,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_sections",
@@ -328,7 +360,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_sections",
@@ -338,7 +371,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_timbre",
@@ -348,7 +382,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_timbre",
@@ -358,7 +393,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_timbre",
@@ -368,7 +404,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_timbre",
@@ -378,7 +415,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "analyze_timbre",
@@ -388,7 +426,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "assign_note_targets",
@@ -398,7 +437,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "audio_from_file_channel",
@@ -408,7 +448,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "audio_silence_ratio",
@@ -418,7 +459,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "audio_silence_ratio",
@@ -428,7 +470,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "bass_chroma",
@@ -438,7 +481,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "bass_chroma",
@@ -448,7 +492,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "biquad_filter",
@@ -458,7 +503,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chirp",
@@ -468,7 +514,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chord_functional_analysis",
@@ -478,7 +525,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chord_functional_analysis",
@@ -488,7 +536,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chord_functional_analysis",
@@ -498,7 +547,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chord_functions",
@@ -508,7 +558,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chord_symbol_from_analysis",
@@ -518,7 +569,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma",
@@ -528,7 +580,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma",
@@ -538,7 +591,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "chroma_cens",
@@ -548,7 +602,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cens",
@@ -558,7 +613,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cens_ex",
@@ -568,7 +624,8 @@
       "hi": 306783378,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cens_ex",
@@ -578,7 +635,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cens_ex",
@@ -588,7 +646,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cqt",
@@ -598,7 +657,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cqt",
@@ -608,7 +668,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cqt_ex",
@@ -618,7 +679,8 @@
       "hi": 306783378,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cqt_ex",
@@ -628,7 +690,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "chroma_cqt_ex",
@@ -638,7 +701,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "clicks",
@@ -648,7 +712,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "clicks",
@@ -658,7 +723,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "clip_page_provider_create",
@@ -668,7 +734,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "clip_page_provider_create",
@@ -678,7 +745,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "clip_page_provider_create",
@@ -688,7 +756,8 @@
       "hi": 16777216,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt",
@@ -698,7 +767,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt",
@@ -708,7 +778,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt",
@@ -718,7 +789,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -728,7 +800,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -738,7 +811,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -748,7 +822,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -758,7 +833,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -768,7 +844,8 @@
       "hi": 256,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio",
@@ -778,7 +855,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -788,7 +866,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -798,7 +877,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -808,7 +888,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -818,7 +899,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -828,7 +910,8 @@
       "hi": 256,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cqt_to_audio_checked",
@@ -838,7 +921,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cyclic_tempogram",
@@ -848,7 +932,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cyclic_tempogram",
@@ -858,7 +943,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cyclic_tempogram",
@@ -868,7 +954,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "cyclic_tempogram",
@@ -878,7 +965,8 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose",
@@ -888,7 +976,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose",
@@ -898,7 +987,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose",
@@ -908,7 +998,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose",
@@ -918,7 +1009,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "decompose_note_pitch",
@@ -928,7 +1020,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_stems",
@@ -938,7 +1031,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_stems",
@@ -948,7 +1042,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "decompose_stems",
@@ -958,7 +1053,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_stems_linked",
@@ -968,7 +1064,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_stems_linked",
@@ -978,7 +1075,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "decompose_stems_linked",
@@ -988,7 +1086,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_stems_linked",
@@ -998,7 +1097,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_with_init",
@@ -1008,7 +1108,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_with_init",
@@ -1018,7 +1119,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_with_init",
@@ -1028,7 +1130,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "decompose_with_init",
@@ -1038,7 +1141,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "detect_acoustic",
@@ -1048,7 +1152,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_acoustic",
@@ -1058,7 +1163,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_acoustic",
@@ -1068,7 +1174,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_acoustic",
@@ -1078,7 +1185,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_boundaries",
@@ -1088,7 +1196,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_boundaries",
@@ -1098,7 +1207,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_boundaries",
@@ -1108,7 +1218,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_boundaries",
@@ -1118,7 +1229,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_boundaries",
@@ -1128,7 +1240,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_chords",
@@ -1138,7 +1251,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_chords",
@@ -1148,7 +1262,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_chords_ex",
@@ -1158,7 +1273,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_chords_ex",
@@ -1168,7 +1284,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_chords_ex",
@@ -1178,7 +1295,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates",
@@ -1188,7 +1306,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates",
@@ -1198,7 +1317,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_extended_options",
@@ -1208,7 +1328,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_extended_options",
@@ -1218,7 +1339,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_modes",
@@ -1228,7 +1350,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_modes",
@@ -1238,7 +1361,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_tuning",
@@ -1248,7 +1372,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_candidates_with_tuning",
@@ -1258,7 +1383,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_extended_options",
@@ -1268,7 +1394,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_extended_options",
@@ -1278,7 +1405,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_options",
@@ -1288,7 +1416,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_options",
@@ -1298,7 +1427,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_options_and_modes",
@@ -1308,7 +1438,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_options_and_modes",
@@ -1318,7 +1449,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_tuning",
@@ -1328,7 +1460,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "detect_key_with_tuning",
@@ -1338,7 +1471,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "downmix",
@@ -1348,7 +1482,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "downmix",
@@ -1358,7 +1493,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_add_parameter",
@@ -1368,7 +1504,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_articulation",
@@ -1378,7 +1515,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bind_controller",
@@ -1388,7 +1526,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bind_midi_cc",
@@ -1398,7 +1537,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bind_midi_cc",
@@ -1408,7 +1548,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bind_midi_cc",
@@ -1418,7 +1559,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bind_midi_cc_binding",
@@ -1428,7 +1570,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "below_32_when_14_bit"
+      "stricter": "below_32_when_14_bit",
+      "sentinel": null
     },
     {
       "entry": "engine_bind_midi_cc_binding",
@@ -1438,7 +1581,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1448,7 +1592,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1458,7 +1603,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1468,7 +1614,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1478,7 +1625,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1488,7 +1636,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_bounce_offline",
@@ -1498,7 +1647,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_count_in_end_sample",
@@ -1508,7 +1658,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_freeze_offline",
@@ -1518,7 +1669,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_freeze_offline",
@@ -1528,7 +1680,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_freeze_offline",
@@ -1538,7 +1691,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_load_soundfont",
@@ -1548,7 +1702,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_prepare",
@@ -1558,7 +1713,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_prepare",
@@ -1568,7 +1724,8 @@
       "hi": 1048576,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare",
@@ -1578,7 +1735,8 @@
       "hi": 16384,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1588,7 +1746,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1598,7 +1757,8 @@
       "hi": 1048576,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1608,7 +1768,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1618,7 +1779,8 @@
       "hi": 16384,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_prime_offline_parameters",
@@ -1628,7 +1790,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_prime_offline_parameters",
@@ -1638,7 +1801,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_push_midi_sysex",
@@ -1648,7 +1812,8 @@
       "hi": 512,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_render_offline",
@@ -1658,7 +1823,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_render_offline",
@@ -1668,7 +1834,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_render_offline",
@@ -1678,7 +1845,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_render_offline_ex",
@@ -1688,7 +1856,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "engine_render_offline_ex",
@@ -1698,7 +1867,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_render_offline_ex",
@@ -1708,7 +1878,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_seek_sample",
@@ -1718,7 +1889,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_articulation",
@@ -1728,7 +1900,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1738,7 +1911,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1748,7 +1922,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1758,7 +1933,8 @@
       "hi": 4,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1768,7 +1944,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1778,7 +1955,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_builtin_instrument",
@@ -1788,7 +1966,8 @@
       "hi": 1,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_bus_strip_eq_band_json",
@@ -1798,7 +1977,8 @@
       "hi": 23,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_capture_buffer",
@@ -1808,7 +1988,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_capture_buffer",
@@ -1818,7 +1999,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_capture_punch",
@@ -1828,7 +2010,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clip_page_prefetch_frames",
@@ -1838,7 +2021,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clips",
@@ -1848,7 +2032,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clips",
@@ -1858,7 +2043,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clips",
@@ -1868,7 +2054,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clips",
@@ -1878,7 +2065,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_clips",
@@ -1888,7 +2076,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_graph",
@@ -1898,7 +2087,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_graph",
@@ -1908,7 +2098,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "engine_set_graph",
@@ -1918,7 +2109,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_graph",
@@ -1928,7 +2120,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_markers",
@@ -1938,7 +2131,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_master_strip_eq_band_json",
@@ -1948,7 +2142,8 @@
       "hi": 23,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_metronome",
@@ -1958,7 +2153,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_metronome",
@@ -1968,7 +2164,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_metronome",
@@ -1978,7 +2175,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_metronome",
@@ -1988,7 +2186,8 @@
       "hi": 1,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -1998,7 +2197,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -2008,7 +2208,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -2018,7 +2219,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -2028,7 +2230,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -2038,7 +2241,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_midi_clips",
@@ -2048,7 +2252,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_sf2_instrument",
@@ -2058,7 +2263,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_sf2_instrument",
@@ -2068,7 +2274,8 @@
       "hi": 4,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_sf2_instrument",
@@ -2078,7 +2285,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_sf2_instrument",
@@ -2088,7 +2296,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_sf2_instrument",
@@ -2098,7 +2307,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_tempo_segments",
@@ -2108,7 +2318,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_time_signature",
@@ -2118,7 +2329,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_time_signature",
@@ -2128,7 +2340,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_time_signature_segments",
@@ -2138,7 +2351,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_time_signature_segments",
@@ -2148,7 +2362,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_time_signature_segments",
@@ -2158,7 +2373,19 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_track_buses",
+      "param": "buses[].bus_id",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4294967295,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_track_lanes",
@@ -2168,7 +2395,19 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_track_lanes",
+      "param": "lanes[].track_id",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4294967295,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_track_strip_channel_delay_samples",
@@ -2178,7 +2417,8 @@
       "hi": 192000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_track_strip_eq_band_json",
@@ -2188,7 +2428,8 @@
       "hi": 23,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_set_warp_voice_capacity",
@@ -2198,7 +2439,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_upsert_clip",
@@ -2208,7 +2450,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_upsert_clip",
@@ -2218,7 +2461,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_upsert_clip",
@@ -2228,7 +2472,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_upsert_clip",
@@ -2238,7 +2483,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "engine_upsert_clip",
@@ -2248,7 +2494,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "eq_match",
@@ -2258,7 +2505,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "eq_match_ex",
@@ -2268,7 +2516,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "eq_set_band",
@@ -2278,7 +2527,8 @@
       "hi": 23,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "estimate_meter_json",
@@ -2288,7 +2538,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "estimate_room",
@@ -2298,7 +2549,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "estimate_tuning",
@@ -2308,7 +2560,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "estimate_tuning",
@@ -2318,7 +2571,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "estimate_tuning",
@@ -2328,7 +2582,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "extract_notes",
@@ -2338,7 +2593,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "extract_percussive_events",
@@ -2348,7 +2604,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "extract_percussive_events",
@@ -2358,7 +2615,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "extract_percussive_events",
@@ -2368,7 +2626,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "extract_percussive_events",
@@ -2378,7 +2637,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "fourier_tempogram",
@@ -2388,7 +2648,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "fourier_tempogram",
@@ -2398,7 +2659,8 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "frame_signal",
@@ -2408,7 +2670,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "frame_signal",
@@ -2418,7 +2681,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "frames_to_time",
@@ -2428,7 +2692,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "frames_to_time",
@@ -2438,7 +2703,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2448,7 +2714,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2458,7 +2725,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2468,7 +2736,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2478,7 +2747,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2488,7 +2758,8 @@
       "hi": 256,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "griffin_lim",
@@ -2498,7 +2769,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "hpss_ex",
@@ -2508,7 +2780,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "hybrid_cqt",
@@ -2518,7 +2791,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "hybrid_cqt",
@@ -2528,7 +2802,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "hybrid_cqt",
@@ -2538,7 +2813,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "lufs_interleaved",
@@ -2548,7 +2824,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "lufs_series_interleaved",
@@ -2558,7 +2835,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_apply_processor",
@@ -2568,7 +2846,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_apply_processor_stereo",
@@ -2578,7 +2857,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_apply_processor_stereo",
@@ -2588,7 +2868,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_audio_profile",
@@ -2598,7 +2879,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_audio_profile",
@@ -2608,7 +2890,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_audio_profile_stereo",
@@ -2618,7 +2901,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_audio_profile_stereo",
@@ -2628,7 +2912,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_analyze",
@@ -2638,7 +2923,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_apply",
@@ -2648,7 +2934,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declick",
@@ -2658,7 +2945,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declick",
@@ -2668,7 +2956,8 @@
       "hi": 512,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declick_stereo",
@@ -2678,7 +2967,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declick_stereo",
@@ -2688,7 +2978,8 @@
       "hi": 512,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declip",
@@ -2698,7 +2989,8 @@
       "hi": 8,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declip",
@@ -2708,7 +3000,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declip_stereo",
@@ -2718,7 +3011,8 @@
       "hi": 8,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_declip_stereo",
@@ -2728,7 +3022,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_decrackle",
@@ -2738,7 +3033,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_decrackle_stereo",
@@ -2748,7 +3044,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dehum",
@@ -2758,7 +3055,8 @@
       "hi": 16384,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dehum",
@@ -2768,7 +3066,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dehum_stereo",
@@ -2778,7 +3077,8 @@
       "hi": 16384,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dehum_stereo",
@@ -2788,7 +3088,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_denoise_classical",
@@ -2798,7 +3099,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_denoise_classical_linked",
@@ -2808,7 +3110,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_denoise_classical_linked",
@@ -2818,7 +3121,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_denoise_classical_stereo",
@@ -2828,7 +3132,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical",
@@ -2838,7 +3143,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical",
@@ -2848,7 +3154,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical",
@@ -2858,7 +3165,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_linked",
@@ -2868,7 +3176,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_linked",
@@ -2878,7 +3187,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_linked",
@@ -2888,7 +3198,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_linked",
@@ -2898,7 +3209,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_stereo",
@@ -2908,7 +3220,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_stereo",
@@ -2918,7 +3231,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_dereverb_classical_stereo",
@@ -2928,7 +3242,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_clicks",
@@ -2938,7 +3253,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_clicks",
@@ -2948,7 +3264,8 @@
       "hi": 512,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_clipping",
@@ -2958,7 +3275,8 @@
       "hi": 8,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_clipping",
@@ -2968,7 +3286,8 @@
       "hi": 2048,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_crackle",
@@ -2978,7 +3297,8 @@
       "hi": 24,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_hum",
@@ -2988,7 +3308,8 @@
       "hi": 16384,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_hum",
@@ -2998,7 +3319,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_noise_floor",
@@ -3008,7 +3330,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_reverb",
@@ -3018,7 +3341,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_reverb",
@@ -3028,7 +3352,8 @@
       "hi": 16,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_reverb",
@@ -3038,7 +3363,8 @@
       "hi": 32,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_trim_range",
@@ -3048,7 +3374,8 @@
       "hi": 960000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_detect_trim_range_stereo",
@@ -3058,7 +3385,8 @@
       "hi": 960000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_noise_band_bins",
@@ -3068,7 +3396,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_noise_band_bins",
@@ -3078,7 +3407,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_trim_silence",
@@ -3088,7 +3418,8 @@
       "hi": 960000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mastering_repair_trim_silence_stereo",
@@ -3098,7 +3429,8 @@
       "hi": 960000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_delta",
@@ -3108,7 +3440,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_delta",
@@ -3118,7 +3451,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_delta",
@@ -3128,7 +3462,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "odd"
+      "stricter": "odd",
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram",
@@ -3138,7 +3473,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram",
@@ -3148,7 +3484,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram",
@@ -3158,7 +3495,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram_ex",
@@ -3168,7 +3506,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram_ex",
@@ -3178,7 +3517,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_spectrogram_ex",
@@ -3188,7 +3528,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio",
@@ -3198,7 +3539,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio",
@@ -3208,7 +3550,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio",
@@ -3218,7 +3561,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio",
@@ -3228,7 +3572,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio",
@@ -3238,7 +3583,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3248,7 +3594,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3258,7 +3605,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3268,7 +3616,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3278,7 +3627,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3288,7 +3638,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3298,7 +3649,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3308,7 +3660,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3318,7 +3671,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3328,7 +3682,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3338,7 +3693,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3348,7 +3704,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3358,7 +3715,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3368,7 +3726,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3378,7 +3737,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3388,7 +3748,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft",
@@ -3398,7 +3759,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft",
@@ -3408,7 +3770,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft",
@@ -3418,7 +3781,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft",
@@ -3428,7 +3792,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked",
@@ -3438,7 +3803,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked",
@@ -3448,7 +3814,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked",
@@ -3458,7 +3825,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked",
@@ -3468,7 +3836,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked_ex",
@@ -3478,7 +3847,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked_ex",
@@ -3488,7 +3858,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked_ex",
@@ -3498,7 +3869,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_checked_ex",
@@ -3508,7 +3880,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_ex",
@@ -3518,7 +3891,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_ex",
@@ -3528,7 +3902,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_ex",
@@ -3538,7 +3913,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mel_to_stft_ex",
@@ -3548,7 +3924,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "merge_notes",
@@ -3558,7 +3935,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "merge_notes",
@@ -3568,7 +3946,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "metering_silence_ratio",
@@ -3578,7 +3957,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "metering_silence_ratio",
@@ -3588,7 +3968,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc",
@@ -3598,7 +3979,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc",
@@ -3608,7 +3990,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc",
@@ -3618,7 +4001,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc",
@@ -3628,7 +4012,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_ex",
@@ -3638,7 +4023,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_ex",
@@ -3648,7 +4034,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_ex",
@@ -3658,7 +4045,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_ex",
@@ -3668,7 +4056,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3678,7 +4067,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3688,7 +4078,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3698,7 +4089,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3708,7 +4100,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3718,7 +4111,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio",
@@ -3728,7 +4122,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3738,7 +4133,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3748,7 +4144,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3758,7 +4155,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3768,7 +4166,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3778,7 +4177,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3788,7 +4188,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3798,7 +4199,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3808,7 +4210,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3818,7 +4221,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3828,7 +4232,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3838,7 +4243,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3848,7 +4254,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3858,7 +4265,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3868,7 +4276,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3878,7 +4287,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3888,7 +4298,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3898,7 +4309,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3908,7 +4320,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3918,7 +4331,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3928,7 +4342,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3938,7 +4353,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3948,7 +4364,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3958,7 +4375,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3968,7 +4386,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -3978,7 +4397,8 @@
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -3988,7 +4408,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -3998,7 +4419,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -4008,7 +4430,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -4018,7 +4441,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -4028,7 +4452,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel",
@@ -4038,7 +4463,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel",
@@ -4048,7 +4474,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel",
@@ -4058,7 +4485,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked",
@@ -4068,7 +4496,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked",
@@ -4078,7 +4507,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked",
@@ -4088,7 +4518,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked_ex",
@@ -4098,7 +4529,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked_ex",
@@ -4108,7 +4540,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_checked_ex",
@@ -4118,7 +4551,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_ex",
@@ -4128,7 +4562,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_ex",
@@ -4138,7 +4573,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mfcc_to_mel_ex",
@@ -4148,7 +4584,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_controller",
@@ -4158,7 +4595,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_controller",
@@ -4168,7 +4606,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_controller",
@@ -4178,7 +4617,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_controller",
@@ -4188,7 +4628,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_per_note_controller",
@@ -4198,7 +4639,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_per_note_controller",
@@ -4208,7 +4650,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_assignable_per_note_controller",
@@ -4218,7 +4661,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_cc",
@@ -4228,7 +4672,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_cc",
@@ -4238,7 +4683,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_cc",
@@ -4248,7 +4694,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_channel_pressure",
@@ -4258,7 +4705,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_channel_pressure",
@@ -4268,7 +4716,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_off",
@@ -4278,7 +4727,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_off",
@@ -4288,7 +4738,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_off",
@@ -4298,7 +4749,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_on",
@@ -4308,7 +4760,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_on",
@@ -4318,7 +4771,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_note_on",
@@ -4328,7 +4782,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_management",
@@ -4338,7 +4793,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_management",
@@ -4348,7 +4804,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_management",
@@ -4358,7 +4815,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_pitch_bend",
@@ -4368,7 +4826,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_pitch_bend",
@@ -4378,7 +4837,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_per_note_pitch_bend",
@@ -4388,7 +4848,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_pitch_bend",
@@ -4398,7 +4859,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_pitch_bend",
@@ -4408,7 +4870,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_poly_pressure",
@@ -4418,7 +4881,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_poly_pressure",
@@ -4428,7 +4892,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_poly_pressure",
@@ -4438,7 +4903,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_program",
@@ -4448,7 +4914,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_program",
@@ -4458,7 +4925,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_program",
@@ -4468,7 +4936,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_program",
@@ -4478,7 +4947,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_program",
@@ -4488,7 +4958,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_controller",
@@ -4498,7 +4969,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_controller",
@@ -4508,7 +4980,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_controller",
@@ -4518,7 +4991,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_controller",
@@ -4528,7 +5002,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_per_note_controller",
@@ -4538,7 +5013,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_per_note_controller",
@@ -4548,7 +5024,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_registered_per_note_controller",
@@ -4558,7 +5035,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_assignable_controller",
@@ -4568,7 +5046,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_assignable_controller",
@@ -4578,7 +5057,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_assignable_controller",
@@ -4588,7 +5068,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_assignable_controller",
@@ -4598,7 +5079,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_registered_controller",
@@ -4608,7 +5090,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_registered_controller",
@@ -4618,7 +5101,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_registered_controller",
@@ -4628,7 +5112,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi2_relative_registered_controller",
@@ -4638,7 +5123,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_bank_program",
@@ -4648,7 +5134,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_bank_program",
@@ -4658,7 +5145,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_bank_program",
@@ -4668,7 +5156,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_bank_program",
@@ -4678,7 +5167,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_bank_program",
@@ -4688,7 +5178,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc",
@@ -4698,7 +5189,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc",
@@ -4708,7 +5200,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc",
@@ -4718,7 +5211,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc",
@@ -4728,7 +5222,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc_learn",
@@ -4738,7 +5233,8 @@
       "hi": 31250000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc_learn",
@@ -4748,7 +5244,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc_learn",
@@ -4758,7 +5255,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc_to_breakpoint",
@@ -4768,7 +5266,8 @@
       "hi": 31,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_cc_to_breakpoint",
@@ -4778,7 +5277,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_channel_pressure",
@@ -4788,7 +5288,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_channel_pressure",
@@ -4798,7 +5299,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_channel_pressure",
@@ -4808,7 +5310,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_off",
@@ -4818,7 +5321,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_off",
@@ -4828,7 +5332,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_off",
@@ -4838,7 +5343,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_off",
@@ -4848,7 +5354,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_on",
@@ -4858,7 +5365,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_on",
@@ -4868,7 +5376,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_on",
@@ -4878,7 +5387,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_note_on",
@@ -4888,7 +5398,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_param_to_cc",
@@ -4898,7 +5409,8 @@
       "hi": 31,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_param_to_cc",
@@ -4908,7 +5420,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_param_to_cc",
@@ -4918,7 +5431,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_param_to_cc",
@@ -4928,7 +5442,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_pitch_bend",
@@ -4938,7 +5453,8 @@
       "hi": 16383,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_pitch_bend",
@@ -4948,7 +5464,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_pitch_bend",
@@ -4958,7 +5475,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_poly_pressure",
@@ -4968,7 +5486,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_poly_pressure",
@@ -4978,7 +5497,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_poly_pressure",
@@ -4988,7 +5508,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_poly_pressure",
@@ -4998,7 +5519,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_program",
@@ -5008,7 +5530,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_program",
@@ -5018,7 +5541,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_program",
@@ -5028,7 +5552,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "midi_route_events",
@@ -5038,7 +5563,8 @@
       "hi": 31250000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mixer_create",
@@ -5048,7 +5574,8 @@
       "hi": 1048576,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "mixing_assistant_suggest",
@@ -5058,7 +5585,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "mixing_assistant_suggest",
@@ -5068,7 +5596,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "nn_filter",
@@ -5078,7 +5607,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "nn_filter",
@@ -5088,7 +5618,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "nnls_chroma_ex",
@@ -5098,7 +5629,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "nnls_chroma_ex2",
@@ -5108,7 +5640,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "nnls_chroma_ex2",
@@ -5118,7 +5651,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "note_segments",
@@ -5128,7 +5662,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "onset_strength",
@@ -5138,7 +5673,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "onset_strength",
@@ -5148,7 +5684,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "onset_strength",
@@ -5158,7 +5695,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "onset_strength_multi",
@@ -5168,7 +5706,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "onset_strength_multi",
@@ -5178,7 +5717,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "onset_strength_multi",
@@ -5188,7 +5728,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "onset_strength_multi",
@@ -5198,7 +5739,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pcen",
@@ -5208,7 +5750,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pcen",
@@ -5218,7 +5761,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "phase_vocoder",
@@ -5228,7 +5772,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "piptrack",
@@ -5238,7 +5783,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "piptrack",
@@ -5248,7 +5794,41 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
+    },
+    {
+      "entry": "pitch_correct_timevarying",
+      "param": "config.scale_mode_mask",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4095,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "pitch_correct_timevarying",
+      "param": "config.scale_root",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 11,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "pitch_correct_timevarying",
+      "param": "hop_length",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_correct_timevarying",
@@ -5258,7 +5838,19 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "pitch_correct_to_midi_timevarying",
+      "param": "hop_length",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_correct_to_midi_timevarying",
@@ -5268,7 +5860,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_pyin",
@@ -5278,7 +5871,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_pyin",
@@ -5288,7 +5882,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_shift_ex",
@@ -5298,7 +5893,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "pitch_tuning",
@@ -5308,7 +5904,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_yin",
@@ -5318,7 +5915,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pitch_yin",
@@ -5328,7 +5926,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "plp",
@@ -5338,7 +5937,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "plp",
@@ -5348,7 +5948,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "plp",
@@ -5358,7 +5959,8 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "poly_features",
@@ -5368,7 +5970,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "poly_features",
@@ -5378,7 +5981,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "poly_features",
@@ -5388,7 +5992,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "polyphonic_analyze",
@@ -5398,7 +6003,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "polyphonic_analyze",
@@ -5408,7 +6014,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "polyphonic_analyze",
@@ -5418,7 +6025,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_automation_lane",
@@ -5428,7 +6036,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_automation_lane_ex",
@@ -5438,7 +6047,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_clip",
@@ -5448,7 +6058,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_clip",
@@ -5458,7 +6069,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_loop_recording_takes",
@@ -5468,7 +6080,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_add_loop_recording_takes",
@@ -5478,7 +6091,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_analyze_tempo_with_options",
@@ -5488,7 +6102,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_annotate_chords",
@@ -5498,7 +6113,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_annotate_keys",
@@ -5508,7 +6124,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_apply_vocal_edit",
@@ -5518,7 +6135,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_apply_vocal_edit",
@@ -5528,7 +6146,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_apply_vocal_edit",
@@ -5538,7 +6157,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_auto_tempo_with_options",
@@ -5548,7 +6168,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce",
@@ -5558,7 +6179,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce",
@@ -5568,7 +6190,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce",
@@ -5578,7 +6201,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce",
@@ -5588,7 +6212,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5598,7 +6223,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5608,7 +6234,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5618,7 +6245,8 @@
       "hi": 4,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5628,7 +6256,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5638,7 +6267,8 @@
       "hi": 20000,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5648,7 +6278,8 @@
       "hi": 1,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5658,7 +6289,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5668,7 +6300,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5678,7 +6311,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -5688,7 +6322,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -5698,7 +6333,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -5708,7 +6344,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -5718,7 +6355,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -5728,7 +6366,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5738,7 +6377,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5748,7 +6388,8 @@
       "hi": 4,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5758,7 +6399,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5768,7 +6410,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5778,7 +6421,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5788,7 +6432,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5798,7 +6443,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5808,7 +6454,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -5818,7 +6465,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -5828,7 +6476,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -5838,7 +6487,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -5848,7 +6498,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -5858,7 +6509,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_edit_automation_lane",
@@ -5868,7 +6520,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_edit_automation_lane_ex",
@@ -5878,7 +6531,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_import_external_stems",
@@ -5888,7 +6542,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_import_external_stems",
@@ -5898,7 +6553,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_rehydrate_vocal_edits",
@@ -5908,7 +6564,8 @@
       "hi": 500000000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_rehydrate_vocal_edits",
@@ -5918,7 +6575,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_marker",
@@ -5928,7 +6586,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_marker_ex",
@@ -5938,7 +6597,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_marker_ex",
@@ -5948,7 +6608,8 @@
       "hi": 7,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_marker_ex_name",
@@ -5958,7 +6619,8 @@
       "hi": 4294967294,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_marker_ex_name",
@@ -5968,7 +6630,8 @@
       "hi": 7,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_midi_events",
@@ -5978,7 +6641,8 @@
       "hi": 31250000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_program",
@@ -5988,7 +6652,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_program_on_channel",
@@ -5998,7 +6663,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_program_on_channel",
@@ -6008,7 +6674,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_program_on_channel",
@@ -6018,7 +6685,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_source_audio",
@@ -6028,7 +6696,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_source_audio",
@@ -6038,7 +6707,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_time_signatures",
@@ -6048,7 +6718,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_time_signatures",
@@ -6058,7 +6729,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_set_warp_map",
@@ -6068,7 +6740,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_snap_to_grid_ex",
@@ -6078,7 +6751,8 @@
       "hi": 1024,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6088,7 +6762,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6098,7 +6773,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6108,7 +6784,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6118,7 +6795,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6128,7 +6806,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6138,7 +6817,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6148,7 +6828,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6158,7 +6839,8 @@
       "hi": 128,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6168,7 +6850,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6178,7 +6861,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6188,7 +6872,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6198,7 +6883,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6208,7 +6894,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "project_transcribe_to_clip",
@@ -6218,7 +6905,8 @@
       "hi": 0,
       "lo_included": true,
       "hi_included": false,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pseudo_cqt",
@@ -6228,7 +6916,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pseudo_cqt",
@@ -6238,7 +6927,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "pseudo_cqt",
@@ -6248,7 +6938,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "realtime_voice_changer_preset_config",
@@ -6258,7 +6949,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "reassigned_spectrogram",
@@ -6268,7 +6960,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "reassigned_spectrogram",
@@ -6278,7 +6971,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "render_notes",
@@ -6288,7 +6982,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "render_notes",
@@ -6298,7 +6993,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "render_notes",
@@ -6308,7 +7004,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "render_percussive_events",
@@ -6318,7 +7015,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "render_percussive_events",
@@ -6328,7 +7026,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "render_percussive_events",
@@ -6338,7 +7037,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "rms_energy",
@@ -6348,7 +7048,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "rms_energy",
@@ -6358,7 +7059,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "room_morph",
@@ -6368,7 +7070,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "room_morph_stereo",
@@ -6378,7 +7081,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "sample_bank_add_sample",
@@ -6388,7 +7092,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "sample_bank_add_sample",
@@ -6398,7 +7103,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "sample_bank_add_zone",
@@ -6408,7 +7114,8 @@
       "hi": 4095,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_correction_semitones",
@@ -6418,7 +7125,8 @@
       "hi": 4095,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_correction_semitones",
@@ -6428,7 +7136,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_mask_for_mode",
@@ -6438,7 +7147,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_pitch_class_enabled",
@@ -6448,7 +7158,8 @@
       "hi": 4095,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_pitch_class_enabled",
@@ -6458,7 +7169,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_pitch_class_enabled",
@@ -6468,7 +7180,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_quantize_midi",
@@ -6478,7 +7191,8 @@
       "hi": 4095,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "scale_quantize_midi",
@@ -6488,7 +7202,8 @@
       "hi": 11,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_agglomerative",
@@ -6498,7 +7213,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_agglomerative",
@@ -6508,7 +7224,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_agglomerative",
@@ -6518,7 +7235,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_cross_similarity",
@@ -6528,7 +7246,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "segment_cross_similarity",
@@ -6538,7 +7257,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_cross_similarity",
@@ -6548,7 +7268,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_cross_similarity",
@@ -6558,7 +7279,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_cross_similarity",
@@ -6568,7 +7290,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_lag_to_recurrence",
@@ -6578,7 +7301,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_lag_to_recurrence",
@@ -6588,7 +7312,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_path_enhance",
@@ -6598,7 +7323,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_path_enhance",
@@ -6608,7 +7334,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_path_enhance",
@@ -6618,7 +7345,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_path_enhance",
@@ -6628,7 +7356,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_path_enhance",
@@ -6638,7 +7367,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_recurrence_matrix",
@@ -6648,7 +7378,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_recurrence_matrix",
@@ -6658,7 +7389,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "segment_recurrence_matrix",
@@ -6668,7 +7400,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_recurrence_matrix",
@@ -6678,7 +7411,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_recurrence_to_lag",
@@ -6688,7 +7422,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_subsegment",
@@ -6698,7 +7433,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_subsegment",
@@ -6708,7 +7444,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "segment_subsegment",
@@ -6718,7 +7455,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_bandwidth",
@@ -6728,7 +7466,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_bandwidth",
@@ -6738,7 +7477,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_bandwidth_ex",
@@ -6748,7 +7488,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_bandwidth_ex",
@@ -6758,7 +7499,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_centroid",
@@ -6768,7 +7510,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_centroid",
@@ -6778,7 +7521,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_contrast",
@@ -6788,7 +7532,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_contrast",
@@ -6798,7 +7543,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_contrast",
@@ -6808,7 +7554,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_edit",
@@ -6818,7 +7565,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_edit",
@@ -6828,7 +7576,8 @@
       "hi": 262144,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "power_of_two"
+      "stricter": "power_of_two",
+      "sentinel": null
     },
     {
       "entry": "spectral_edit",
@@ -6838,7 +7587,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_edit",
@@ -6848,7 +7598,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_flatness",
@@ -6858,7 +7609,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_flatness",
@@ -6868,7 +7620,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_flux",
@@ -6878,7 +7631,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_flux",
@@ -6888,7 +7642,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_flux",
@@ -6898,7 +7653,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "spectral_rolloff",
@@ -6908,7 +7664,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "spectral_rolloff",
@@ -6918,7 +7675,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "split_note",
@@ -6928,7 +7686,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_note",
@@ -6938,7 +7697,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence",
@@ -6948,7 +7708,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence",
@@ -6958,7 +7719,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence_common",
@@ -6968,7 +7730,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence_common",
@@ -6978,7 +7741,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence_common_ex",
@@ -6988,7 +7752,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "split_silence_common_ex",
@@ -6998,7 +7763,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stft",
@@ -7008,7 +7774,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stft",
@@ -7018,7 +7785,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "stft_db",
@@ -7028,7 +7796,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stft_db",
@@ -7038,7 +7807,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7048,7 +7818,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7058,7 +7829,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7068,7 +7840,8 @@
       "hi": 1048576,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7078,7 +7851,8 @@
       "hi": 1048576,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7088,7 +7862,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7098,7 +7873,8 @@
       "hi": 4096,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "stream_analyzer_create",
@@ -7108,7 +7884,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "streaming_mastering_chain_prepare",
@@ -7118,7 +7895,8 @@
       "hi": 2,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_fader_automation",
@@ -7128,7 +7906,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_insert_automation",
@@ -7138,7 +7917,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_insert_automation",
@@ -7148,7 +7928,8 @@
       "hi": 65535,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_pan_automation",
@@ -7158,7 +7939,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_send_automation",
@@ -7168,7 +7950,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_schedule_width_automation",
@@ -7178,7 +7961,8 @@
       "hi": 3,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "strip_set_channel_delay_samples",
@@ -7188,7 +7972,8 @@
       "hi": 192000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "synthesize_rir",
@@ -7198,7 +7983,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "synthesize_rir",
@@ -7208,7 +7994,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram",
@@ -7218,7 +8005,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram",
@@ -7228,7 +8016,8 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram_ratio",
@@ -7238,7 +8027,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram_ratio",
@@ -7248,7 +8038,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram_with_mode",
@@ -7258,7 +8049,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tempogram_with_mode",
@@ -7268,7 +8060,8 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "time_stretch_ex",
@@ -7278,7 +8071,8 @@
       "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": "even"
+      "stricter": "even",
+      "sentinel": null
     },
     {
       "entry": "time_to_frames",
@@ -7288,7 +8082,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "time_to_frames",
@@ -7298,7 +8093,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tone",
@@ -7308,7 +8104,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tonnetz",
@@ -7318,7 +8115,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "tonnetz",
@@ -7328,7 +8126,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7338,7 +8137,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7348,7 +8148,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7358,7 +8159,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7368,7 +8170,8 @@
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "transcribe",
@@ -7378,7 +8181,8 @@
       "hi": 15,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7388,7 +8192,8 @@
       "hi": 64,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "transcribe",
@@ -7398,7 +8203,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7408,7 +8214,8 @@
       "hi": 128,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "transcribe",
@@ -7418,7 +8225,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7428,7 +8236,8 @@
       "hi": 1,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7438,7 +8247,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7448,7 +8258,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7458,7 +8269,8 @@
       "hi": null,
       "lo_included": false,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "transcribe",
@@ -7468,7 +8280,8 @@
       "hi": 0,
       "lo_included": true,
       "hi_included": false,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "trim_ex",
@@ -7478,7 +8291,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "trim_ex",
@@ -7488,7 +8302,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "trim_silence",
@@ -7498,7 +8313,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "trim_silence",
@@ -7508,7 +8324,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vocal_session_create",
@@ -7518,7 +8335,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vocal_session_create",
@@ -7528,7 +8346,8 @@
       "hi": 4294967295,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "voice_change_realtime",
@@ -7538,7 +8357,8 @@
       "hi": 2,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt",
@@ -7548,7 +8368,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt",
@@ -7558,7 +8379,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt",
@@ -7568,7 +8390,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7578,7 +8401,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7588,7 +8412,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7598,7 +8423,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7608,7 +8434,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7618,7 +8445,8 @@
       "hi": 256,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio",
@@ -7628,7 +8456,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7638,7 +8467,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7648,7 +8478,8 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7658,7 +8489,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7668,7 +8500,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7678,7 +8511,8 @@
       "hi": 256,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "vqt_to_audio_checked",
@@ -7688,7 +8522,8 @@
       "hi": 384000,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "waveform_peak_pyramid",
@@ -7698,7 +8533,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "waveform_peak_pyramid",
@@ -7708,7 +8544,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "waveform_peaks",
@@ -7718,7 +8555,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "waveform_peaks",
@@ -7728,7 +8566,8 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "zero_crossing_rate",
@@ -7738,7 +8577,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     },
     {
       "entry": "zero_crossing_rate",
@@ -7748,7 +8588,8 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": null,
+      "sentinel": null
     }
   ]
 }

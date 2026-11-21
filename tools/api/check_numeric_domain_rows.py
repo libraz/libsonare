@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fail unless every named NumericDomain constant under src/ appears in a row partition.
 
 A constant only a binding reads is allowed through _UNROWED, with the reason beside it.
@@ -18,7 +17,6 @@ _UNROWED: dict[str, str] = {
     "kEngineBandIndexFloorDomain": "read only in a build without mixing; the same subjects read kEngineBandIndexDomain otherwise",
     "kEngineInsertIndexDomain": "the insert-count relation refuses first; inserts are capped below the domain's bound",
     "kEngineMidiCc14NumberDomain": "binding.cc_number's row is kEngineMidiControllerDomain; this bound is its below_32_when_14_bit relation",
-    "kF0TrackHopLengthDomain": "every C caller refuses or derives the hop under its own subject before the F0 track is checked",
     "kMelFrequencyCountDomain": "mel_frequencies has no C entry",
     "kMultibandDynamicBandCountDomain": "the band-list builders stop at DynamicEq::kMaxBands, so no C entry reaches the bound",
     "kSilenceIndexableLengthDomain": "refuses only a buffer longer than INT_MAX samples",

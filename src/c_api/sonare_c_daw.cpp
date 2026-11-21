@@ -169,7 +169,8 @@ SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, int hop_
   SONARE_C_REQUIRE_NONNULL(f0_hz);
   return run_validation([&] {
     util::check::integer_within(n_frames, kTimeVaryingFrameCountDomain, "n_frames");
-    util::check::integer_at_least(hop_length, 1, "hop_length");
+    util::check::integer_within(hop_length, editing::pitch_editor::kF0TrackHopLengthDomain,
+                                "hop_length");
   });
 }
 
@@ -657,9 +658,11 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
           if (!scale_mode) {
             util::check::in_range(config->target_midi, 0.0, 127.0, "config.target_midi");
           }
-          util::check::integer_in_range(config->scale_root, 0, 11, "config.scale_root");
-          util::check::integer_in_range(config->scale_mode_mask, 1, 0x0FFF,
-                                        "config.scale_mode_mask");
+          util::check::integer_within(config->scale_root, editing::pitch_editor::kScaleRootDomain,
+                                      "config.scale_root");
+          util::check::integer_within(config->scale_mode_mask,
+                                      editing::pitch_editor::kScaleModeMaskDomain,
+                                      "config.scale_mode_mask");
           apply_correction_knobs(*config, core_config);
         });
         err != SONARE_OK) {

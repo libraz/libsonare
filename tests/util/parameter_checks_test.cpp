@@ -260,3 +260,32 @@ TEST_CASE("a numeric domain refuses a fraction, a NaN and an out-of-type value i
     CHECK_FALSE(e.domain()->hi);
   }
 }
+
+TEST_CASE("a domain's sentinel comes off the end it sits on and leaves the checks alone",
+          "[util][parameter_checks]") {
+  constexpr check::NumericDomain counts = check::with_sentinel(check::integer_domain_of<int>(0), 0);
+  constexpr check::NumericDomain given_counts = check::given_domain(counts);
+  static_assert(*given_counts.lo == 1.0 && given_counts.lo_included);
+  static_assert(*given_counts.hi == *counts.hi);
+
+  constexpr check::NumericDomain top = check::with_sentinel(check::integer_domain(1, 16), 16);
+  static_assert(*check::given_domain(top).hi == 15.0);
+
+  constexpr check::NumericDomain ceiling =
+      check::with_sentinel(check::real_domain_above(0.0, true), 0.0);
+  constexpr check::NumericDomain given_ceiling = check::given_domain(ceiling);
+  static_assert(*given_ceiling.lo == 0.0 && !given_ceiling.lo_included);
+
+  constexpr check::NumericDomain unset = check::with_sentinel(check::integer_domain(1, 127), 0);
+  constexpr check::NumericDomain given_unset = check::given_domain(unset);
+  static_assert(*given_unset.lo == 1.0 && *given_unset.hi == 127.0);
+
+  constexpr check::NumericDomain plain = check::integer_domain(1, 8);
+  static_assert(!check::given_domain(plain).sentinel);
+
+  CHECK_THROWS_AS(check::given_domain(check::with_sentinel(check::integer_domain(0, 8), 4)),
+                  std::logic_error);
+  CHECK_NOTHROW(check::integer_within(0, counts, "k"));
+  CHECK(refusal_text([&] { check::integer_within(0, unset, "fixed_velocity"); }) ==
+        "fixed_velocity must be an integer in [1, 127]");
+}

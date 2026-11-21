@@ -25,15 +25,16 @@ inline constexpr util::check::NumericDomain kDecomposeNFramesDomain =
 /// @brief What the number of components accepts.
 inline constexpr util::check::NumericDomain kDecomposeNComponentsDomain =
     util::check::integer_domain_of<int>(1);
-/// @brief What the iteration count of @ref decompose accepts.
+/// @brief What the iteration count of @ref decompose accepts; the C ABI reads 0 as its default
+///        count, so 0 is the sentinel a caller there gives by leaving it out.
 inline constexpr util::check::NumericDomain kDecomposeIterDomain =
-    util::check::integer_domain_of<int>(0);
+    util::check::with_sentinel(util::check::integer_domain_of<int>(0), 0);
 /// @brief What the iteration count of the stem separation accepts.
 inline constexpr util::check::NumericDomain kDecomposeStemsIterDomain =
     util::check::integer_domain_of<int>(1);
 /// @brief What the stem separation's hop length accepts (0 takes a quarter of n_fft).
 inline constexpr util::check::NumericDomain kDecomposeStemsHopLengthDomain =
-    util::check::integer_domain_of<int>(0);
+    util::check::with_sentinel(util::check::integer_domain_of<int>(0), 0);
 
 /// @brief Output of @ref decompose: NMF components.
 struct DecomposeResult {

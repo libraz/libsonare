@@ -313,9 +313,8 @@ std::string fault_send_subject(const EditContext& context, const engine::MixerEd
 }
 
 SonareError refuse_id_zero(const std::string& subject) {
-  return run_validation([&] {
-    util::check::integer_in_range(0, 1, std::numeric_limits<uint32_t>::max(), subject.c_str());
-  });
+  return run_validation(
+      [&] { util::check::integer_within(0, kEngineMixerIdDomain, subject.c_str()); });
 }
 
 SonareError refuse_unknown_bus_in(const std::string& subject, const char* owner) {

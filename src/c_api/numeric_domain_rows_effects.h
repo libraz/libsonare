@@ -8,6 +8,8 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "core/spectrum.h"
+#include "editing/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/silence.h"
 
 namespace sonare_c_detail {
@@ -105,7 +107,9 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
      kEngineTimeSignatureDenominatorDomain, nullptr},
     {"engine_set_time_signature_segments", "segments[].numerator",
      kEngineTimeSignatureNumeratorDomain, nullptr},
+    {"engine_set_track_buses", "buses[].bus_id", kEngineMixerIdDomain, nullptr},
     {"engine_set_track_lanes", "lane_count", kEngineLaneCountDomain, nullptr},
+    {"engine_set_track_lanes", "lanes[].track_id", kEngineMixerIdDomain, nullptr},
     {"engine_set_track_strip_channel_delay_samples", "delay_samples", kEngineAlignmentDelayDomain,
      nullptr},
     {"engine_set_track_strip_eq_band_json", "band_index", kEngineBandIndexDomain, nullptr},
@@ -127,7 +131,15 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"nn_filter", "n_features", sonare::kDecomposeNFeaturesDomain, nullptr},
     {"nn_filter", "n_frames", sonare::kDecomposeNFramesDomain, nullptr},
     {"phase_vocoder", "n_fft", sonare::kColaNFftDomain, "even"},
+    {"pitch_correct_timevarying", "config.scale_mode_mask",
+     sonare::editing::pitch_editor::kScaleModeMaskDomain, nullptr},
+    {"pitch_correct_timevarying", "config.scale_root",
+     sonare::editing::pitch_editor::kScaleRootDomain, nullptr},
+    {"pitch_correct_timevarying", "hop_length",
+     sonare::editing::pitch_editor::kF0TrackHopLengthDomain, nullptr},
     {"pitch_correct_timevarying", "n_frames", kTimeVaryingFrameCountDomain, nullptr},
+    {"pitch_correct_to_midi_timevarying", "hop_length",
+     sonare::editing::pitch_editor::kF0TrackHopLengthDomain, nullptr},
     {"pitch_correct_to_midi_timevarying", "n_frames", kTimeVaryingFrameCountDomain, nullptr},
     {"pitch_shift_ex", "n_fft", sonare::kColaNFftDomain, "even"},
     {"realtime_voice_changer_preset_config", "preset", kVoiceChangerPresetDomain, nullptr},

@@ -495,17 +495,13 @@ SonareError probe_engine_set_track_strip_channel_delay_samples(const std::string
                                                              static_cast<int>(value));
 }
 
-/// A sized prepare argument reads 0 as the library default, so a value below the domain's
-/// lower edge is probed at -1, which the argument refuses.
-int prepare_int(double value) { return value < 1.0 ? -1 : static_cast<int>(value); }
-
 SonareError probe_engine_prepare(const std::string& param, double value) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   int max_block_size = 64;
   std::size_t command_capacity = 32;
   std::size_t telemetry_capacity = 16;
-  if (is_param(param, "max_block_size")) max_block_size = prepare_int(value);
+  if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
   if (is_param(param, "command_capacity")) command_capacity = as_size(value);
   if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
   const SonareError err =
@@ -521,10 +517,10 @@ SonareError probe_engine_prepare_with_channels(const std::string& param, double 
   std::size_t command_capacity = 32;
   std::size_t telemetry_capacity = 16;
   int max_channels = 2;
-  if (is_param(param, "max_block_size")) max_block_size = prepare_int(value);
+  if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
   if (is_param(param, "command_capacity")) command_capacity = as_size(value);
   if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
-  if (is_param(param, "max_channels")) max_channels = prepare_int(value);
+  if (is_param(param, "max_channels")) max_channels = static_cast<int>(value);
   const SonareError err = sonare_engine_prepare_with_channels(
       engine, 48000.0, max_block_size, command_capacity, telemetry_capacity, max_channels);
   sonare_engine_destroy(engine);
@@ -667,10 +663,22 @@ SonareError probe_engine_set_midi_clips(const std::string& param, double value) 
 
 #if defined(SONARE_WITH_MIXING)
 
-SonareError probe_engine_set_track_lanes(const std::string&, double value) {
+SonareError probe_engine_set_track_lanes(const std::string& param, double value) {
   PreparedEngine engine;
-  const SonareEngineTrackLane lane{};
+  SonareEngineTrackLane lane{};
+  lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  if (is_param(param, "lanes[].track_id")) {
+    lane.track_id = as_u32(value);
+    return sonare_engine_set_track_lanes(engine.get(), &lane, 1);
+  }
   return sonare_engine_set_track_lanes(engine.get(), &lane, as_size(value));
+}
+
+SonareError probe_engine_set_track_buses(const std::string&, double value) {
+  PreparedEngine engine;
+  SonareEngineBus bus{};
+  bus.bus_id = as_u32(value);
+  return sonare_engine_set_track_buses(engine.get(), &bus, 1);
 }
 
 SonareError probe_engine_set_track_strip_eq_band_json(const std::string&, double value) {
@@ -782,24 +790,32 @@ const std::vector<int32_t>& track_voiced() {
   return voiced;
 }
 
-SonareError probe_pitch_correct_to_midi_timevarying(const std::string&, double value) {
+SonareError probe_pitch_correct_to_midi_timevarying(const std::string& param, double value) {
+  const bool hop = is_param(param, "hop_length");
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError err = sonare_pitch_correct_to_midi_timevarying(
       analysis_samples().data(), analysis_samples().size(), kAnalysisRate, track_f0().data(),
-      nullptr, track_voiced().data(), as_size(value), 512, 60.0f, &out, &out_length);
+      nullptr, track_voiced().data(), hop ? track_f0().size() : as_size(value),
+      hop ? static_cast<int>(value) : 512, 60.0f, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
 
-SonareError probe_pitch_correct_timevarying(const std::string&, double value) {
+SonareError probe_pitch_correct_timevarying(const std::string& param, double value) {
   SonarePitchCorrectionConfig config{};
   sonare_pitch_correction_config_init(&config);
+  size_t n_frames = track_f0().size();
+  int hop_length = 512;
+  if (is_param(param, "n_frames")) n_frames = as_size(value);
+  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "config.scale_root")) config.scale_root = static_cast<int>(value);
+  if (is_param(param, "config.scale_mode_mask")) config.scale_mode_mask = as_u32(value);
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError err = sonare_pitch_correct_timevarying(
       analysis_samples().data(), analysis_samples().size(), kAnalysisRate, track_f0().data(),
-      nullptr, track_voiced().data(), as_size(value), 512, &config, &out, &out_length);
+      nullptr, track_voiced().data(), n_frames, hop_length, &config, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -987,6 +1003,7 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_MIXING)
       {"engine_set_bus_strip_eq_band_json", probe_engine_set_bus_strip_eq_band_json},
       {"engine_set_master_strip_eq_band_json", probe_engine_set_master_strip_eq_band_json},
+      {"engine_set_track_buses", probe_engine_set_track_buses},
       {"engine_set_track_lanes", probe_engine_set_track_lanes},
       {"engine_set_track_strip_eq_band_json", probe_engine_set_track_strip_eq_band_json},
       {"strip_set_channel_delay_samples", probe_strip_set_channel_delay_samples},

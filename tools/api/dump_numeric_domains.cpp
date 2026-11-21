@@ -54,10 +54,13 @@ int main() {
     std::printf(",\n      \"lo_included\": %s,\n", row.domain.lo_included ? "true" : "false");
     std::printf("      \"hi_included\": %s,\n", row.domain.hi_included ? "true" : "false");
     if (row.stricter != nullptr) {
-      std::printf("      \"stricter\": \"%s\"\n", row.stricter);
+      std::printf("      \"stricter\": \"%s\",\n", row.stricter);
     } else {
-      std::printf("      \"stricter\": null\n");
+      std::printf("      \"stricter\": null,\n");
     }
+    std::printf("      \"sentinel\": ");
+    print_bound(row.domain.sentinel, integer);
+    std::printf("\n");
     std::printf("    }%s\n", i + 1 < rows.size() ? "," : "");
   }
   std::printf("  ]\n}\n");

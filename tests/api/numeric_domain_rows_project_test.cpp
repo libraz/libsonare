@@ -113,10 +113,7 @@ SonareError probe_vocal_session_create(const std::string& param, double value) {
 
 SonareError probe_mixer_create(const std::string& param, double value) {
   int max_block_size = 256;
-  if (is_param(param, "max_block_size")) {
-    // 0 selects the library default, so a value below the domain is probed as a negative one.
-    max_block_size = value < 1.0 ? -1 : static_cast<int>(value);
-  }
+  if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
   SonareMixer* mixer = nullptr;
   const SonareError err = sonare_mixer_create(48000, max_block_size, &mixer);
   sonare_mixer_destroy(mixer);
@@ -744,7 +741,7 @@ SonareTranscribeConfig transcribe_config(const std::string& param, double value)
   sonare_transcribe_config_init(&config);
   const std::string field = param.substr(param.rfind('.') + 1);
   const auto set_value = static_cast<float>(value);
-  const int32_t set_int = value < 1.0 ? -1 : static_cast<int32_t>(value);
+  const auto set_int = static_cast<int32_t>(value);
   if (field == "reference_hz") config.reference_hz = set_value;
   if (field == "f0_min_hz") config.f0_min_hz = set_value;
   if (field == "f0_max_hz") config.f0_max_hz = set_value;

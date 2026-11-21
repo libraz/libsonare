@@ -16,8 +16,8 @@ namespace sonare {
 ///        audio sample-rate domain.
 inline constexpr util::check::NumericDomain kSynthesisSampleRateDomain = kAudioSampleRateDomain;
 /// @brief What the output length of clicks accepts, in samples; 0 sizes it to the last click.
-inline constexpr util::check::NumericDomain kClicksLengthDomain =
-    util::check::integer_domain(0, static_cast<long long>(resource::kMaxOfflineAudioSamples));
+inline constexpr util::check::NumericDomain kClicksLengthDomain = util::check::with_sentinel(
+    util::check::integer_domain(0, static_cast<long long>(resource::kMaxOfflineAudioSamples)), 0);
 
 /// Length of a generated signal when a caller gives none, in seconds.
 inline constexpr float kDefaultSynthesisDurationSec = 1.0f;

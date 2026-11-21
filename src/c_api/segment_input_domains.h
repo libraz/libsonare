@@ -11,9 +11,10 @@ namespace sonare_c_detail {
 /// @brief What a row or column count of a segmentation matrix argument accepts.
 inline constexpr sonare::util::check::NumericDomain kSegmentMatrixExtentDomain =
     sonare::util::check::integer_domain_of<int>(1);
-/// @brief What the neighbour count of a recurrence or cross-similarity matrix accepts.
+/// @brief What the neighbour count of a recurrence or cross-similarity matrix accepts; 0 takes
+///        the librosa default.
 inline constexpr sonare::util::check::NumericDomain kSegmentNeighbourCountDomain =
-    sonare::util::check::integer_domain_of<int>(0);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int>(0), 0);
 /// @brief What the diagonal exclusion width of a recurrence matrix accepts.
 inline constexpr sonare::util::check::NumericDomain kSegmentRecurrenceWidthDomain =
     sonare::util::check::integer_domain_of<int>(0);

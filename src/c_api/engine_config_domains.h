@@ -27,9 +27,10 @@ inline constexpr sonare::util::check::NumericDomain kEngineGraphChannelsDomain =
 /// @brief What a graph spec's node_count accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineGraphNodeCountDomain =
     sonare::util::check::integer_domain_of<size_t>(1);
-/// @brief What a graph node's num_ports accepts when it is not taken from the spec.
+/// @brief What a graph node's num_ports accepts; SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC (-1) takes
+///        the count from the spec.
 inline constexpr sonare::util::check::NumericDomain kEngineGraphNodePortsDomain =
-    sonare::util::check::integer_domain_of<int>(1);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int>(1), -1);
 /// @brief What an engine automation parameter id accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineParameterIdDomain =
     sonare::util::check::integer_domain_of<uint32_t>(1);
@@ -122,9 +123,9 @@ inline constexpr sonare::util::check::NumericDomain kEngineRenderChannelsDomain 
 /// @brief What the total_frames argument of a render accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineRenderFramesDomain =
     sonare::util::check::integer_domain_of<int64_t>(0);
-/// @brief What the block_size argument of a render accepts.
+/// @brief What the block_size argument of a render accepts; 0 takes the default offline block.
 inline constexpr sonare::util::check::NumericDomain kEngineRenderBlockSizeDomain =
-    sonare::util::check::integer_domain_of<int>(0);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int>(0), 0);
 /// @brief What the total_frames of bounce and freeze options accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineBounceFramesDomain =
     sonare::util::check::integer_domain_of<int64_t>(1);
@@ -139,19 +140,22 @@ inline constexpr sonare::util::check::NumericDomain kEngineDitherBitsDomain =
     sonare::util::check::integer_domain(sonare::mastering::final::kMinDitherTargetBits,
                                         sonare::mastering::final::kMaxDitherTargetBits);
 
-/// @brief What prepare's max_block_size accepts.
+/// @brief What prepare's max_block_size accepts; 0 takes the engine default.
 inline constexpr sonare::util::check::NumericDomain kEngineMaxBlockSizeDomain =
-    sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize);
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize), 0);
 /// @brief What prepare's command_capacity accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineCommandCapacityDomain =
     sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_COMMAND_CAPACITY);
 /// @brief What prepare's telemetry_capacity accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineTelemetryCapacityDomain =
     sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_TELEMETRY_CAPACITY);
-/// @brief What prepare's max_channels accepts.
+/// @brief What prepare's max_channels accepts; 0 takes the engine default.
 inline constexpr sonare::util::check::NumericDomain kEngineMaxChannelsDomain =
-    sonare::util::check::integer_domain(
-        1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxAudioChannels));
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(
+            1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxAudioChannels)),
+        0);
 /// @brief What a seek's timeline_sample accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineTimelineSampleDomain =
     sonare::util::check::integer_domain_of<int64_t>(0);
@@ -169,6 +173,10 @@ inline constexpr sonare::util::check::NumericDomain kEngineSegmentCountDomain =
     sonare::util::check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize));
 /// @brief What a marker id accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineMarkerIdDomain =
+    sonare::util::check::integer_domain_of<uint32_t>(1);
+
+/// @brief What a mixer lane's track_id and a bus's bus_id accept; 0 means unset.
+inline constexpr sonare::util::check::NumericDomain kEngineMixerIdDomain =
     sonare::util::check::integer_domain_of<uint32_t>(1);
 
 }  // namespace sonare_c_detail

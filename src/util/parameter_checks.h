@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -31,23 +32,56 @@ enum class NumberKind { Integer, Real };
 ///        that refuses it and by a binding's reader before it narrows a caller's number, so a
 ///        fraction, a NaN or a value no target type holds is refused in the domain's own text.
 /// @details An absent bound leaves that side open. An integer domain is closed at both ends or
-///          open above; a real domain may be open or half-open at either end.
+///          open above; a real domain may be open or half-open at either end. @ref sentinel is the
+///          value that stands for "not given" in the C ABI (a default the entry resolves), stated
+///          so a binding can map absence to it and refuse it when typed; the checks ignore it.
 struct NumericDomain {
   NumberKind kind = NumberKind::Real;
   std::optional<double> lo;
   std::optional<double> hi;
   bool lo_included = true;
   bool hi_included = true;
+  std::optional<double> sentinel;
 };
+
+/// @brief @p domain with @p value as its "not given" sentinel.
+constexpr NumericDomain with_sentinel(const NumericDomain& domain, double value) {
+  return {domain.kind, domain.lo, domain.hi, domain.lo_included, domain.hi_included, value};
+}
+
+/// @brief What a caller who gives the member may pass: @p domain without its sentinel.
+/// @details A sentinel at an included end is taken off that end (the next integer, or the end
+///          excluded for a real domain); one outside the domain leaves it unchanged. A sentinel
+///          strictly inside the domain cannot be told apart from a given value, so it fails to
+///          compile where the domain is a constant.
+constexpr NumericDomain given_domain(const NumericDomain& domain) {
+  if (!domain.sentinel) return domain;
+  const double s = *domain.sentinel;
+  const bool integer = domain.kind == NumberKind::Integer;
+  const bool at_lo = domain.lo && domain.lo_included && s == *domain.lo;
+  const bool at_hi = domain.hi && domain.hi_included && s == *domain.hi;
+  const bool below = domain.lo && (s < *domain.lo || (s == *domain.lo && !domain.lo_included));
+  const bool above = domain.hi && (s > *domain.hi || (s == *domain.hi && !domain.hi_included));
+  if (!at_lo && !at_hi && !below && !above) {
+    throw std::logic_error("a domain's sentinel lies strictly inside it");
+  }
+  return {domain.kind,
+          at_lo && integer ? std::optional<double>(*domain.lo + 1.0) : domain.lo,
+          at_hi && integer ? std::optional<double>(*domain.hi - 1.0) : domain.hi,
+          at_lo && !integer ? false : domain.lo_included,
+          at_hi && !integer ? false : domain.hi_included,
+          domain.sentinel};
+}
 
 /// @brief The integers in [lo, hi].
 constexpr NumericDomain integer_domain(long long lo, long long hi) {
-  return {NumberKind::Integer, static_cast<double>(lo), static_cast<double>(hi), true, true};
+  return {NumberKind::Integer, static_cast<double>(lo), static_cast<double>(hi), true, true,
+          std::nullopt};
 }
 
 /// @brief The integers of at least @p lo, for a 64-bit position or count.
 constexpr NumericDomain integer_domain_at_least(long long lo) {
-  return {NumberKind::Integer, static_cast<double>(lo), std::nullopt, true, true};
+  return {NumberKind::Integer, static_cast<double>(lo), std::nullopt, true, true, std::nullopt};
 }
 
 /// @brief The integers of at least @p lo that @p T holds: closed at T's maximum when T is no
@@ -64,7 +98,7 @@ constexpr NumericDomain integer_domain_of(long long lo) {
 
 /// @brief The finite reals between @p lo and @p hi, each end included as given.
 constexpr NumericDomain real_domain(double lo, bool lo_included, double hi, bool hi_included) {
-  return {NumberKind::Real, lo, hi, lo_included, hi_included};
+  return {NumberKind::Real, lo, hi, lo_included, hi_included, std::nullopt};
 }
 
 /// @brief The finite reals in [lo, hi].
@@ -74,12 +108,12 @@ constexpr NumericDomain real_domain(double lo, double hi) {
 
 /// @brief The finite reals of at least @p bound, or greater than it when @p included is false.
 constexpr NumericDomain real_domain_above(double bound, bool included) {
-  return {NumberKind::Real, bound, std::nullopt, included, true};
+  return {NumberKind::Real, bound, std::nullopt, included, true, std::nullopt};
 }
 
 /// @brief The finite reals of at most @p bound, or less than it when @p included is false.
 constexpr NumericDomain real_domain_below(double bound, bool included) {
-  return {NumberKind::Real, std::nullopt, bound, true, included};
+  return {NumberKind::Real, std::nullopt, bound, true, included, std::nullopt};
 }
 
 /// @brief Every value a 32-bit float holds, for a float member with no narrower domain.
