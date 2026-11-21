@@ -131,13 +131,17 @@ function N_FRAMES() {
   return mfccResult().nFrames;
 }
 
-/** A float field read against its core domain, which refuses in the domain's own text. */
-const DOMAIN_FIELDS: Array<FloatField & { domain: string }> = [
+/**
+ * A float field read against its core domain: a value outside it is refused in the domain's
+ * text, and one inside it that a float cannot hold in the float range's text.
+ */
+const DOMAIN_FIELDS: Array<FloatField & { domain: string; holds: (value: number) => boolean }> = [
   {
     entry: 'analyzeMelody',
     key: 'threshold',
     run: (v) => m().analyzeMelody(pureTone300, SR, 65, 3600, 1024, 256, v, false, true),
     domain: 'must be finite and greater than 0',
+    holds: (value) => value > 0,
   },
 ];
 
@@ -266,14 +270,15 @@ describe('every converted float parameter refuses a value the float type cannot 
 
   it.each(DOMAIN_FIELDS)(
     '$entry names $key in its core domain rather than accepting an infinity',
-    ({ entry, key, run, domain }) => {
+    ({ entry, key, run, domain, holds }) => {
       for (const value of REFUSED) {
         const error = expectArgumentRefusal(
           capture(() => run(value)),
           RangeError,
           `${key} = ${value}`,
         );
-        expect(error.message, `${key} = ${value}`).toBe(`${entry}: ${key} ${domain}`);
+        const predicate = Number.isFinite(value) && holds(value) ? RANGE_MESSAGE : domain;
+        expect(error.message, `${key} = ${value}`).toBe(`${entry}: ${key} ${predicate}`);
       }
     },
   );

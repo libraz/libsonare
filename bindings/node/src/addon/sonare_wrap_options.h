@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -510,6 +511,10 @@ inline T node_domain_number(const Napi::Value& value, const char* name,
   const double number = value.As<Napi::Number>().DoubleValue();
   try {
     sonare::util::check::within(number, domain, name);
+    // A value inside an open-ended real domain can still be one a float cannot hold.
+    if constexpr (std::is_floating_point_v<T> && sizeof(T) < sizeof(double)) {
+      sonare::util::check::within(number, sonare::util::check::float_domain(), name);
+    }
   } catch (const sonare::SonareParameterRefusal& refusal) {
     throw refusal.as_caller_spelled();
   }

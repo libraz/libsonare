@@ -706,7 +706,7 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
 }
 
 double domainCheckedNumber(const val& value, const char* key,
-                           const sonare::util::check::NumericDomain& domain) {
+                           const sonare::util::check::NumericDomain& domain, bool float_target) {
   if (!value.isNumber()) {
     throw WasmTypeError(std::string(key) + (domain.kind == sonare::util::check::NumberKind::Integer
                                                 ? " must be an integer"
@@ -715,6 +715,7 @@ double domainCheckedNumber(const val& value, const char* key,
   const double number = value.as<double>();
   try {
     sonare::util::check::within(number, domain, key);
+    if (float_target) sonare::util::check::within(number, sonare::util::check::float_domain(), key);
   } catch (const sonare::SonareParameterRefusal& refusal) {
     throw refusal.as_caller_spelled();
   }

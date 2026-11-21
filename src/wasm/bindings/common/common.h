@@ -582,14 +582,16 @@ std::optional<float> optionalDomainNumber(const val& v, const char* key);
 /// @details Defined out of line so the refusal's catch stays in a TU compiled with exceptions;
 ///          the refusal is the core's, with @p key taken as already in the caller's spelling.
 /// @throws WasmTypeError naming @p key when @p value is not a number.
+/// @param float_target When true, a value inside @p domain that a 32-bit float cannot hold is
+///        refused in the float range's text.
 double domainCheckedNumber(const val& value, const char* key,
-                           const sonare::util::check::NumericDomain& domain);
+                           const sonare::util::check::NumericDomain& domain, bool float_target);
 /// @brief Narrows a JS number onto @p T after @ref domainCheckedNumber.
 /// @details @p domain must lie inside @p T.
 template <typename T>
 T domainNumberFromVal(const val& value, const char* key,
                       const sonare::util::check::NumericDomain& domain) {
-  return static_cast<T>(domainCheckedNumber(value, key, domain));
+  return static_cast<T>(domainCheckedNumber(value, key, domain, std::is_same_v<T, float>));
 }
 /// @brief Optional sibling of domainNumberFromVal: omitted, `undefined` or `null` is
 ///        std::nullopt.
