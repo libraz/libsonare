@@ -497,6 +497,13 @@ reason = "Sets the gain from RMS, accepts any target and hard-clips to [-1, 1]; 
 [[allow]]
 check = "options-struct:suffix"
 surface = "c"
+name = "sonare_pitch_correct_to_midi_timevarying"
+category = "distinct-operation"
+reason = "Takes a per-frame f0_hz/voiced_prob/voiced track and retunes each voiced frame to its nearest target; sonare_pitch_correct_to_midi applies one constant transpose from a single current_midi."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
 name = "sonare_trim_silence"
 category = "librosa-mirror"
 reason = "librosa.effects.trim: thresholds top_db below the signal's peak and returns the kept span; sonare_trim thresholds at an absolute RMS dBFS level."
