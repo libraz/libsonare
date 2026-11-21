@@ -127,19 +127,37 @@ def test_a_command_only_the_native_cli_ships_shows_as_a_python_gap() -> None:
 
     A command only the native `sonare-cli` ships has no Python CLI counterpart.
     The parity checker's `cli` surface is the union of the two front-ends, so it
-    sees no gap at all; the per-front-end columns are where it appears. The
-    commands are derived, so the test follows the CLIs as they converge.
+    sees no gap at all; the per-front-end columns are where it appears. The two
+    CLIs ship the same commands, so the asymmetry is injected: one command that
+    names a C entry point is withheld from the Python front-end's extraction.
     """
     root = _HERE.parent.parent
     import check_parity
 
-    merged = check_parity.run(root=root)
-    split = surface_coverage.unreachable_by_column(root, merged)
     declared = set(surface_coverage.c_declaration_headers(root))
-    native_only = (set(split["cli_python"]) - set(split["cli_native"])) & declared
-    assert native_only, "no native-only CLI command left to show the asymmetry on"
+    merged = check_parity.run(root=root)
     merged_gaps = surface_coverage.unreachable_keys(merged, ("cli",))["cli"]
-    assert not native_only & set(merged_gaps), sorted(native_only & set(merged_gaps))
+    real_extract = surface_coverage.cli.extract
+    withheld = next(
+        sig.key
+        for sig in real_extract(root, "python").functions
+        if sig.key in declared and sig.key not in merged_gaps
+    )
+
+    def python_without_one(r, front_end="both"):
+        extraction = real_extract(r, front_end)
+        if front_end == "python":
+            extraction.functions = [sig for sig in extraction.functions if sig.key != withheld]
+        return extraction
+
+    surface_coverage.cli.extract = python_without_one
+    try:
+        split = surface_coverage.unreachable_by_column(root, merged)
+    finally:
+        surface_coverage.cli.extract = real_extract
+    native_only = set(split["cli_python"]) - set(split["cli_native"])
+    assert withheld in native_only, (withheld, sorted(native_only))
+    assert withheld not in merged_gaps
 
 
 def test_the_tracked_table_matches_the_current_surfaces() -> None:
