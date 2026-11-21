@@ -3,7 +3,9 @@
 A C-ABI refusal records the refusing entry and its subjects in the C spelling. The
 leading segment of each subject (``options`` in ``options.total_frames``,
 ``ranges`` in ``ranges[2].start``) must be a parameter the entry's header
-declaration carries, or no surface can respell it to what its caller wrote.
+declaration carries, or no surface can respell it to what its caller wrote. A
+path inside a JSON document parameter roots at the parameter's stem
+(``config.loudness.targetLufs`` under ``config_json``).
 
 The plugin wraps the binding's single refusal translation point, records each
 (entry, subject) the suite reaches, and fails the session on a subject whose root
@@ -55,8 +57,13 @@ def header_parameters(root: Path = ROOT) -> dict[str, set[str]]:
     for text in texts:
         for m in decl.finditer(text):
             names = {c_api._parse_param(p).name for p in c_api._split_args(m.group("args"))}
-            params[entry_key(m.group("name"))] |= {n for n in names if n}
+            params[entry_key(m.group("name"))] |= {n for n in names if n} | document_roots(names)
     return params
+
+
+def document_roots(names: set[str]) -> set[str]:
+    """The root a JSON document parameter's paths take: ``config_json`` -> ``config``."""
+    return {n.removesuffix("_json") for n in names if n.endswith("_json") and n != "_json"}
 
 
 def misnamed(

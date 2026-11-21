@@ -31,10 +31,16 @@ class MisnamedTest(unittest.TestCase):
             plugin.misnamed(seen, _PARAMS), [("gone", "engine"), ("render", "total_frames")]
         )
 
+    def test_a_json_document_parameter_roots_its_paths_at_its_stem(self) -> None:
+        self.assertEqual(
+            plugin.document_roots({"config_json", "out_json", "samples"}), {"config", "out"}
+        )
+
     def test_the_tree_declarations_are_read(self) -> None:
         params = plugin.header_parameters()
         self.assertGreater(len(params), 500)
         self.assertIn("sample_rate", params["chirp"])
+        self.assertIn("overrides", params["master_audio"])
 
 
 if __name__ == "__main__":

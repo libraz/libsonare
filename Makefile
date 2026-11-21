@@ -544,7 +544,8 @@ build-wasm-binding:
 
 test-python: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v
+# The refusal-subject plugin fails the run when a refusal names no parameter of its entry.
+	PYTHONPATH=tests/conformance $(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
 
 # Tests marked @pytest.mark.slow are excluded by the default addopts
 # (-m "not slow"); the explicit -m here overrides that and runs just them.
