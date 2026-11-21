@@ -493,3 +493,10 @@ surface = "c"
 name = "sonare_normalize_rms"
 category = "distinct-operation"
 reason = "Sets the gain from RMS, accepts any target and hard-clips to [-1, 1]; sonare_normalize sets it from the sample peak, refuses a target above 0 dBFS and never clips."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_trim_silence"
+category = "librosa-mirror"
+reason = "librosa.effects.trim: thresholds top_db below the signal's peak and returns the kept span; sonare_trim thresholds at an absolute RMS dBFS level."
