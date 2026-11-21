@@ -145,7 +145,17 @@ class ClassifyTest(unittest.TestCase):
         return [gen.Unbound("node", "downmix", "frames", kind, "h:1")]
 
     def test_an_unclassified_unbound_parameter_fails(self) -> None:
-        self.assertEqual(len(gen.classify(self._unbound(), {})), 1)
+        problems = gen.classify(self._unbound(), {})
+        self.assertTrue(any("downmix.frames" in p for p in problems), problems)
+        self.assertTrue(any("records 0" in p for p in problems), problems)
+
+    def test_a_recorded_count_of_unclassified_parameters_passes_quietly(self) -> None:
+        self.assertEqual(gen.classify(self._unbound(), {}, recorded={"node": 1}), [])
+
+    def test_a_recorded_count_off_in_either_direction_fails(self) -> None:
+        for recorded in ({"node": 2}, {"node": 0}, {"node": 1, "wasm": 1}):
+            with self.subTest(recorded=recorded):
+                self.assertNotEqual(gen.classify(self._unbound(), {}, recorded=recorded), [])
 
     def test_a_classified_parameter_passes(self) -> None:
         self.assertEqual(gen.classify(self._unbound(), {"downmix.frames": "derived length: x"}), [])

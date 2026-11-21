@@ -39,7 +39,7 @@ CPP_TARGETS = {
 PY_TARGET = ROOT / "bindings/python/src/libsonare/_field_spelling.py"
 RENAMES = ROOT / "tools/api/field_spelling_renames.toml"
 UNBOUND = ROOT / "tools/api/field_spelling_unbound.toml"
-UNBOUND_KINDS = ("derived length", "output", "C-only plumbing", "folded into ")
+UNBOUND_KINDS = ("derived length", "output", "C-only plumbing", "folded into ", "not exposed")
 SURFACES = ("node", "wasm", "python")
 
 
@@ -227,16 +227,35 @@ def surface_spelling(entry: str, subject: str) -> str:
 
 
 def classify(
-    unbound: list[Unbound], table: dict[str, str], pending: dict[str, str] | None = None
+    unbound: list[Unbound],
+    table: dict[str, str],
+    pending: dict[str, str] | None = None,
+    recorded: dict[str, int] | None = None,
 ) -> list[str]:
-    """Problems with the unbound-parameter classification: missing, stale or of no known kind."""
+    """Problems with the unbound-parameter classification: missing, stale or of no known kind.
+
+    ``recorded`` holds, per surface, how many unbound parameters are still awaiting a
+    classification. A surface whose count matches exactly reports none of them; any other
+    count, higher or lower, fails and names them, so the record moves with every change.
+    """
     pending = pending or {}
+    recorded = recorded or {}
     problems = []
     live = {f"{u.c_key}.{u.c_subject}" for u in unbound if u.kind == "param"}
+    waiting: dict[str, list[str]] = defaultdict(list)
     for u in unbound:
         name = f"{u.c_key}.{u.c_subject}"
         if u.kind == "param" and name not in table and name not in pending:
-            problems.append(f"unclassified unbound {u.surface} parameter {name} ({u.location})")
+            waiting[u.surface].append(
+                f"unclassified unbound {u.surface} parameter {name} ({u.location})"
+            )
+    for surface in sorted(set(waiting) | set(recorded)):
+        if len(waiting[surface]) != recorded.get(surface, 0):
+            problems.extend(waiting[surface])
+            problems.append(
+                f"{len(waiting[surface])} unclassified unbound {surface} parameter(s), "
+                f"[unclassified] records {recorded.get(surface, 0)}; update the record"
+            )
     for name in sorted(pending):
         if name not in live:
             problems.append(f"{name} is pending but every surface binds it; drop the entry")
@@ -246,6 +265,16 @@ def classify(
         elif not reason.startswith(UNBOUND_KINDS):
             problems.append(f"{name}: '{reason}' starts with none of {', '.join(UNBOUND_KINDS)}")
     return sorted(set(problems))
+
+
+def struct_entries_without_bindings(bindings: list) -> list[str]:
+    try:
+        from facts import struct_entries_without_bindings as check
+    except ImportError as error:
+        raise SystemExit(
+            f"field spelling: tools/parity/facts.py is unavailable ({error})"
+        ) from error
+    return check(ROOT, bindings)
 
 
 def load_bindings() -> Callable[[Path], list]:
@@ -281,7 +310,13 @@ def main(argv: list[str], field_bindings: Callable[[Path], list] | None = None) 
     renames = tomllib.loads(RENAMES.read_text(encoding="utf-8"))
     rows, unbound, idle = derive(bindings, load_request_fields(), renames)
     classified = tomllib.loads(UNBOUND.read_text(encoding="utf-8"))
-    problems = classify(unbound, classified["params"], classified["pending"])
+    problems = classify(
+        unbound, classified["params"], classified["pending"], classified.get("unclassified")
+    )
+    problems += [
+        f"{key} takes a caller-filled struct and no surface binds any of its members"
+        for key in struct_entries_without_bindings(bindings)
+    ]
     outputs = {CPP_TARGETS[s]: render_cpp(s, rows[s]) for s in CPP_TARGETS}
     outputs[PY_TARGET] = render_py(rows["python"])
     check = "--check" in argv

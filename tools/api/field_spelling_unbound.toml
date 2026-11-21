@@ -1,11 +1,19 @@
 # C-ABI parameters no facade binds under any spelling, each with the reason a refusal
-# cannot name it to a caller. The value starts with one of: "derived length",
-# "output", "C-only plumbing", "folded into <field>". gen_field_spelling.py fails on an
-# unbound parameter missing here and on an entry that no surface leaves unbound.
+# cannot name it to a caller. The value is one of the closed reason classes: "derived
+# length: <param>.length", "output", "C-only plumbing: <what>", "folded into <field>",
+# "not exposed". gen_field_spelling.py fails on an unbound parameter missing here and on
+# an entry that no surface leaves unbound.
+# [unclassified] records, per surface, how many unbound parameters still await a row
+# here or a rename; any other count, higher or lower, fails, so each change moves it.
 # A subject a refusal can name to a caller is bound by a rename or a facade fix instead;
 # until that lands it sits under [pending] with the change that retires it, and the
 # run fails once it binds.
 [pending]
+
+[unclassified]
+node = 225
+wasm = 227
+python = 231
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"
@@ -18,13 +26,12 @@
 "chord_functions.roman" = "output"
 "chord_functions.key_mode" = "folded into key"
 "chord_functions.key_root" = "folded into key"
-"chord_symbol_from_analysis.bass" = "folded into chord"
-"chord_symbol_from_analysis.quality" = "folded into chord"
-"chord_symbol_from_analysis.root" = "folded into chord"
 "chord_symbol_from_analysis.extension_capacity" = "C-only plumbing: output buffer capacity"
 "deemphasis.use_zi" = "folded into zi: given or absent"
 "preemphasis.use_zi" = "folded into zi: given or absent"
 "downmix.num_channels" = "derived length: channel count"
+"engine_drain_telemetry.written" = "output"
+"eq_magnitude_response.count" = "derived length: frequencies_hz.length"
 "hpss.use_soft_mask" = "folded into hard_mask: its negation"
 "hpss.with_residual" = "C-only plumbing: set by the entry, hpss or hpss_with_residual"
 "fourier_tempogram.norm" = "C-only plumbing: the facade passes a fixed value"
@@ -58,6 +65,10 @@
 "midi2_program.bank_valid" = "folded into bank: given or absent"
 "midi_cc_learn.count" = "derived length: events.length"
 "midi_route_events.count" = "derived length: events.length"
+"mixer_drain_tail_stereo.output_left" = "output"
+"mixer_drain_tail_stereo.output_right" = "output"
+"mixer_process_stereo.output_left" = "output"
+"mixer_process_stereo.output_right" = "output"
 "render_percussive_events.count" = "derived length: events.length"
 "mixing_assistant_suggest.input_left" = "folded into tracks[]"
 "mixing_assistant_suggest.input_right" = "folded into tracks[]"
@@ -65,9 +76,56 @@
 "mixing_assistant_suggest.track_names" = "folded into tracks[].name"
 "mixing_assistant_suggest.track_lengths" = "derived length: tracks[] channel length"
 "mixing_assistant_suggest.track_sample_rates" = "folded into tracks[].sampleRate"
+"project_analyze_tempo.candidates" = "output"
+"project_annotate_chords.count" = "derived length: chords.length"
+"project_annotate_keys.count" = "derived length: keys.length"
+"project_apply_vocal_edit.result" = "output"
+"project_rehydrate_vocal_edits.cancel" = "C-only plumbing: cancellation hook"
+"project_rehydrate_vocal_edits.result" = "output"
+"project_set_assist_sidecar.payload_len" = "derived length: payload.length"
+"project_set_midi_events.count" = "derived length: events.length"
+"realtime_voice_changer_process_interleaved.output" = "output"
+"realtime_voice_changer_process_interleaved_with_carrier.output" = "output"
+"realtime_voice_changer_process_mono.output" = "output"
+"realtime_voice_changer_process_mono_with_carrier.output" = "output"
 "split_silence_common.lengths" = "derived length: signals[].length"
 "streaming_loudness_gain.config_json" = "folded into config"
 "streaming_loudness_gain_stereo.config_json" = "folded into config"
+"streaming_mastering_chain_flush_mono.samples_written" = "output"
+"streaming_mastering_chain_flush_stereo.left" = "output"
+"streaming_mastering_chain_flush_stereo.right" = "output"
+"streaming_mastering_chain_flush_stereo.samples_written" = "output"
 "tempogram_ratio.win_length" = "derived length: tempogram.rows"
 "trim_silence.end_sample" = "output"
 "trim_silence.start_sample" = "output"
+"vocal_draft_apply.count" = "derived length: operations.length"
+"vocal_draft_apply.result" = "output"
+"vocal_draft_capture_snapshot.snapshot" = "output"
+"vocal_draft_commit.result" = "output"
+"vocal_draft_destination_to_source.source_sample" = "output"
+"vocal_draft_evaluate_pitch.result" = "output"
+"vocal_draft_notes.result" = "output"
+"vocal_draft_source_to_destination.destination_sample" = "output"
+"vocal_draft_token.token" = "output"
+"vocal_render_job_begin.job" = "output"
+"vocal_render_job_finalize.cancel" = "C-only plumbing: cancellation hook"
+"vocal_render_job_finalize.result" = "output"
+"vocal_render_job_next.cancel" = "C-only plumbing: cancellation hook"
+"vocal_render_job_next.complete" = "output"
+"vocal_session_analysis.result" = "output"
+"vocal_session_capabilities.result" = "output"
+"vocal_session_capture_snapshot.snapshot" = "output"
+"vocal_session_destination_to_source.source_sample" = "output"
+"vocal_session_evaluate_pitch.result" = "output"
+"vocal_session_export_state.state" = "output"
+"vocal_session_history.can_redo" = "output"
+"vocal_session_history.can_undo" = "output"
+"vocal_session_notes.result" = "output"
+"vocal_session_redo.result" = "output"
+"vocal_session_restore.session" = "output"
+"vocal_session_revision.revision" = "output"
+"vocal_session_source_to_destination.destination_sample" = "output"
+"vocal_session_token.token" = "output"
+"vocal_session_undo.result" = "output"
+"vocal_snapshot_render.cancel" = "C-only plumbing: cancellation hook"
+"vocal_snapshot_render.result" = "output"

@@ -109,6 +109,106 @@ def test_real_tree_yields_bound_rows_of_both_kinds_on_every_facade():
             assert bound[(surface, kind)] > 0, f"{surface} {kind}: no paired row"
 
 
+def _c_param(name: str, type_: str) -> Param:
+    return Param(name=name, raw_name=name, type=type_)
+
+
+def _record(surface: str, raw: str, key: str, *fields: tuple[str, str]) -> RecordShape:
+    return RecordShape(
+        key=key, surface=surface, raw_name=raw, fields=[RecordField(n, r) for n, r in fields]
+    )
+
+
+def test_caller_filled_struct_members_bind_to_keywords_or_request_fields():
+    desc = _record("c", "SonareEditDesc", "edit_desc", ("clip_id", "clip_id"), ("gain", "gain"))
+    c = FunctionSig(key="edit", surface="c", params=[_c_param("desc", "const SonareEditDesc*")])
+    py = _sig("python", ("clip_id", "clip_id"), ("gain", "gain"))
+    rows = {
+        (b.c_subject, b.surface_spelling)
+        for b in facts._param_rows(c, py, "python", {desc.raw_name: desc})
+    }
+    assert rows == {("clip_id", "clip_id"), ("gain", "gain")}, rows
+    request = _record(
+        "node", "EditRequest", "edit_request", ("clip_id", "clipId"), ("gain", "gain")
+    )
+    node = FunctionSig(
+        key="edit",
+        surface="node",
+        params=[Param(name="request", raw_name="request", type="EditRequest")],
+    )
+    rows = {
+        (b.c_subject, b.surface_spelling)
+        for b in facts._param_rows(
+            c, node, "node", {desc.raw_name: desc}, {request.raw_name: request}
+        )
+    }
+    assert rows == {("clip_id", "clipId"), ("gain", "gain")}, rows
+
+
+def test_a_struct_the_facade_takes_as_its_mirror_is_left_to_the_record_rows():
+    cfg = _record("c", "SonareMeterConfig", "meter_config", ("enabled", "enabled"))
+    c = FunctionSig(
+        key="meter", surface="c", params=[_c_param("config", "const SonareMeterConfig*")]
+    )
+    mirror = _record("node", "MeterConfig", "meter_config", ("enabled", "enabled"))
+    node = FunctionSig(
+        key="meter",
+        surface="node",
+        params=[Param(name="options", raw_name="options", type="MeterConfig")],
+    )
+    assert facts._param_rows(c, node, "node", {cfg.raw_name: cfg}, {mirror.raw_name: mirror}) == []
+
+
+def test_a_c_argument_folded_into_a_request_field_binds_to_that_field():
+    c = _sig("c", ("hop_length", "hop_length"))
+    request = _record("node", "MfccRequest", "mfcc_request", ("hop_length", "hopLength"))
+    node = FunctionSig(
+        key="demo",
+        surface="node",
+        params=[
+            Param(
+                name="options", raw_name="options", type="OptionsOf<MfccRequest>", structural=True
+            )
+        ],
+    )
+    rows = {
+        (b.c_subject, b.surface_spelling)
+        for b in facts._param_rows(c, node, "node", {}, {request.raw_name: request})
+    }
+    assert rows == {("hop_length", "hopLength")}, rows
+
+
+def test_a_handle_op_drops_its_handle_argument_for_a_class_method():
+    c = FunctionSig(
+        key="project_edit",
+        surface="c",
+        params=[_c_param("project", "SonareProject*"), _c_param("clip_id", "uint32_t")],
+    )
+    assert [p.name for p in facts._as_method(c, True, {}).params] == ["clip_id"]
+    assert facts._as_method(c, False, {}) is c
+
+
+def test_a_second_form_reports_under_the_key_the_c_layer_folds_it_to():
+    assert facts.entry_key("analyze_json_ex") == "analyze_json"
+    assert facts.entry_key("analyze_json_ex_with_progress") == "analyze_json_ex"
+    assert facts.entry_key("mfcc") == "mfcc"
+
+
+def test_real_tree_binds_a_handle_op_desc_and_every_reached_struct_entry():
+    root = _HERE.parent.parent
+    rows = facts.field_bindings(root)
+    vocal = {
+        (b.surface, b.c_subject)
+        for b in rows
+        if b.c_key == "project_apply_vocal_edit" and b.surface_spelling is not None
+    }
+    for surface in facts.FACADES:
+        assert (surface, "clip_id") in vocal, f"{surface}: desc member clip_id unbound"
+    assert facts.struct_entries_without_bindings(root, rows) == []
+    stripped = [b for b in rows if b.c_key != "project_apply_vocal_edit"]
+    assert "project_apply_vocal_edit" in facts.struct_entries_without_bindings(root, stripped)
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
