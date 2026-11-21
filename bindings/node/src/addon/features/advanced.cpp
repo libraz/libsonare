@@ -658,11 +658,9 @@ Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 2, "nFft", 2048, sonare::kPitchCountDomain, &n_fft)) {
-    return env.Undefined();
-  }
+  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kPitchCountDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop_length)) {
     return env.Undefined();
   }
   float resolution{};

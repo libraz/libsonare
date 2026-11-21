@@ -5,6 +5,7 @@
 
 #include "feature/pitch.h"
 
+#include "core/spectrum.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -149,13 +150,15 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
                          const val& hop_length_val, const val& resolution_val,
                          const val& bins_per_octave_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kPitchCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kPitchCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const int bins_per_octave =
       domainNumberFromVal<int>(bins_per_octave_val, "binsPerOctave", kPitchCountDomain);
   const float resolution = checkedFloatFromVal(resolution_val, "resolution");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
+  return util::check::with_camel_paths(
+      [&] { return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave); },
+      kPiptrackRequestKeys);
 }
 
 // Mirrors the C ABI sonare_tuning_to_reference_hz / sonare_reference_hz_to_tuning (tuning in
@@ -186,8 +189,8 @@ val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
                 const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                 const val& threshold_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kPitchCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kPitchCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");

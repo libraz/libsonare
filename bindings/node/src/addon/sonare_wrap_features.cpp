@@ -246,9 +246,7 @@ Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const auto typed = info[0].As<Napi::Float32Array>();
   FrameAnalysisArgs args;
-  if (!ReadFrameAnalysisArgs(env, info, &args, sonare::kPitchCountDomain,
-                             sonare::kPitchCountDomain))
-    return env.Undefined();
+  if (!ReadStftFrameArgs(env, info, &args)) return env.Undefined();
   float fmin{};
   if (!OptionalFloatArg(env, info, 4, "fminHz", 150.0f, &fmin)) return env.Undefined();
   float fmax{};
