@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/daw_config_domains.h"
+#include "core/spectrum.h"
 #include "editing/event_model/event_extractor.h"
 #include "editing/event_model/event_renderer.h"
 #include "util/parameter_checks.h"
@@ -18,20 +20,23 @@ using editing::event_model::PercussiveEvent;
 // the core, which rejects it on both calls.
 editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(val options) {
   editing::event_model::PercussiveSeparationConfig separation;
-  separation.n_fft = intProperty(options, "nFft", separation.n_fft);
-  separation.hop_length = intProperty(options, "hopLength", separation.hop_length);
-  separation.hpss.kernel_size_harmonic =
-      intProperty(options, "hpssKernelHarmonic", separation.hpss.kernel_size_harmonic);
-  separation.hpss.kernel_size_percussive =
-      intProperty(options, "hpssKernelPercussive", separation.hpss.kernel_size_percussive);
-  sonare::util::check::integer_at_least(separation.n_fft, 1, "nFft");
-  if (hasProperty(options, "hopLength")) {
-    sonare::util::check::integer_at_least(separation.hop_length, 1, "hopLength");
+  if (hasProperty(options, "nFft")) {
+    separation.n_fft = domainNumberFromVal<int>(options["nFft"], "nFft", sonare::kColaNFftDomain);
   }
-  sonare::util::check::integer_at_least(separation.hpss.kernel_size_harmonic, 1,
-                                        "hpssKernelHarmonic");
-  sonare::util::check::integer_at_least(separation.hpss.kernel_size_percussive, 1,
-                                        "hpssKernelPercussive");
+  if (hasProperty(options, "hopLength")) {
+    separation.hop_length =
+        domainNumberFromVal<int>(options["hopLength"], "hopLength", sonare::kStftHopDomain);
+  }
+  if (hasProperty(options, "hpssKernelHarmonic")) {
+    separation.hpss.kernel_size_harmonic =
+        domainNumberFromVal<int>(options["hpssKernelHarmonic"], "hpssKernelHarmonic",
+                                 sonare_c_detail::kPercussiveHpssKernelDomain);
+  }
+  if (hasProperty(options, "hpssKernelPercussive")) {
+    separation.hpss.kernel_size_percussive =
+        domainNumberFromVal<int>(options["hpssKernelPercussive"], "hpssKernelPercussive",
+                                 sonare_c_detail::kPercussiveHpssKernelDomain);
+  }
   return separation;
 }
 

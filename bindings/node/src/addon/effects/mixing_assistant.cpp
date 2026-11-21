@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/mixing_input_domains.h"
 #include "mastering/api/named_processor.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
@@ -87,8 +88,13 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     }
     out->sample_rates.reserve(count);
     for (uint32_t index = 0; index < count; ++index) {
-      out->sample_rates.push_back(
-          node_narrow_int_element(env, rate_input.Get(index), "trackSampleRates", index));
+      const Napi::Value rate = rate_input.Get(index);
+      const std::string element = "tracks[" + std::to_string(index) + "].sampleRate";
+      if (!rate.IsNumber()) {
+        throw Napi::TypeError::New(env, element + " must be an integer");
+      }
+      out->sample_rates.push_back(node_domain_number<int>(
+          rate, element.c_str(), sonare_c_detail::kMixingAssistantTrackSampleRateDomain));
     }
   }
 
@@ -190,7 +196,9 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
       tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
       tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
       tracks.lengths.data(), tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(),
-      tracks.left.size(), node_narrow_int(env, info[5], "sampleRate"),
+      tracks.left.size(),
+      node_domain_number<int>(info[5], "sampleRate",
+                              sonare_c_detail::kMixingAssistantSampleRateDomain),
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
   if (err != SONARE_OK) {
     sonare_free_string(json);

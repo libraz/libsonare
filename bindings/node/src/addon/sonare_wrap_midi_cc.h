@@ -10,6 +10,7 @@
 
 #include <array>
 
+#include "c_api/midi_input_domains.h"
 #include "midi/cc_map.h"
 #include "sonare_wrap_options.h"
 
@@ -34,8 +35,14 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
     return false;
   }
   *out = SonareMidiCcBinding{};
-  // Byte-wide fields go through the MidiByte readers so 256 cannot arrive as 0.
-  if (!RequiredMidiByteValue(env, cc_number, "ccNumber", &out->cc_number)) return false;
+  // The 14-bit kind's narrower [0, 31] is refused by the C ABI, which sees the kind.
+  try {
+    out->cc_number =
+        node_domain_number<uint8_t>(cc_number, "ccNumber", sonare_c_detail::kMidiDataByteDomain);
+  } catch (...) {
+    ThrowCurrentException(env);
+    return false;
+  }
   // An omitted channel matches any channel; 255, the C ABI's spelling of that, is refused.
   out->channel = static_cast<uint8_t>(
       IntInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));

@@ -551,9 +551,9 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
     assertMidiCcBindingListBytes(record.bindings);
     return addon.midiParamToCc(
       record.bindings,
-      boundedInt(record.paramId, 'paramId', 0xffffffff),
+      requireNumber(record.paramId, 'paramId'),
       requireNumber(record.unitValue, 'unitValue'),
-      boundedInt(record.group, 'group', 15),
+      requireNumber(record.group, 'group'),
       isAbsent(record.ppq) ? 0 : requireNumber(record.ppq, 'ppq'),
     );
   });

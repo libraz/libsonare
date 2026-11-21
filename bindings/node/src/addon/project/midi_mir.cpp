@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+#include "analysis/music_analyzer.h"
+#include "c_api/midi_input_domains.h"
+#include "c_api/project_input_domains.h"
+#include "feature/cqt.h"
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
@@ -180,14 +184,15 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  // group/channel are uint8_t C-ABI arguments; the MidiByte reader rejects the
-  // values a narrowing cast would wrap into a range the C ABI accepts.
+  // group/channel are uint8_t C-ABI arguments, read against the domains the C ABI enforces.
   uint32_t clip_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel)) {
+      !sonare_node::OptionalDomainArg(env, info, 1, "group", uint8_t{0},
+                                      sonare_c_detail::kMidiUmpGroupDomain, &group) ||
+      !sonare_node::OptionalDomainArg(env, info, 2, "channel", uint8_t{0},
+                                      sonare_c_detail::kMidiChannelDomain, &channel)) {
     return env.Undefined();
   }
   int program = 0;
@@ -292,8 +297,9 @@ SonareProjectTempoOptions TempoOptionsFrom(Napi::Value value) {
   Napi::Object object = value.As<Napi::Object>();
   options.adaptive_tempo =
       sonare_node::BoolProperty(object, "adaptiveTempo", options.adaptive_tempo != 0) ? 1 : 0;
-  options.tempo_update_interval_beats = sonare_node::IntProperty(
-      object, "tempoUpdateIntervalBeats", options.tempo_update_interval_beats);
+  options.tempo_update_interval_beats = sonare_node::DomainProperty<int>(
+      object, "tempoUpdateIntervalBeats", options.tempo_update_interval_beats,
+      sonare::kMusicCountDomain);
   options.ramp_threshold = static_cast<float>(
       sonare_node::DoubleProperty(object, "rampThreshold", options.ramp_threshold));
   options.include_octave_candidates =
@@ -389,7 +395,8 @@ Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
   int division = 1;
   if (!OptionalDoubleArg(env, info, 0, "ppq", 0.0, &ppq) ||
       !OptionalDoubleArg(env, info, 1, "strength", 1.0, &strength) ||
-      !Int32Arg(env, info, 2, "division", 1, &division)) {
+      !sonare_node::OptionalDomainArg<int>(env, info, 2, "division", 1,
+                                           sonare_c_detail::kSnapDivisionDomain, &division)) {
     return env.Undefined();
   }
   double out_ppq = 0.0;
@@ -617,8 +624,10 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   sonare_take_align_config_init(&config);
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object options = info[4].As<Napi::Object>();
-    config.hop_length = IntProperty(options, "hopLength", config.hop_length);
-    config.bins_per_octave = IntProperty(options, "binsPerOctave", config.bins_per_octave);
+    config.hop_length = sonare_node::DomainProperty<int>(options, "hopLength", config.hop_length,
+                                                         sonare::kCqtHopLengthDomain);
+    config.bins_per_octave = sonare_node::DomainProperty<int>(
+        options, "binsPerOctave", config.bins_per_octave, sonare::kCqtCountDomain);
   }
 
   SonareProjectWarpAnchor* raw_anchors = nullptr;

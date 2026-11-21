@@ -25,7 +25,7 @@ describe('synthetic audio generation', () => {
    * the core then accepts -- 44100.7 rendered at 44100 with nothing anywhere
    * reporting the substitution.
    */
-  describe('a generator refuses a fractional rate without gaining a range', () => {
+  describe('a generator reads its rate in the audio sample-rate domain', () => {
     const calls: Array<[string, (sampleRate: number) => Float32Array]> = [
       ['tone', (sampleRate) => tone({ frequencyHz: 440, sampleRate, durationSec: 0.01 })],
       ['chirp', (sampleRate) => chirp({ fminHz: 200, fmaxHz: 800, sampleRate, durationSec: 0.01 })],
@@ -49,11 +49,11 @@ describe('synthetic audio generation', () => {
         expect(() => call(44100.7)).toThrow(/sampleRate must be an integer/);
       });
 
-      it(`${name} still accepts a rate outside the analysis range`, () => {
-        // Both ends, so a range quietly added later fails here rather than in a
-        // caller: 100 is below the analysis floor and 500000 above its ceiling.
-        expect(() => call(100)).not.toThrow();
-        expect(() => call(500000)).not.toThrow();
+      it(`${name} takes the audio sample-rate domain`, () => {
+        expect(() => call(8000)).not.toThrow();
+        expect(() => call(384000)).not.toThrow();
+        expect(() => call(7999)).toThrow(/sampleRate must be an integer in \[8000, 384000\]$/);
+        expect(() => call(384001)).toThrow(RangeError);
       });
     }
   });

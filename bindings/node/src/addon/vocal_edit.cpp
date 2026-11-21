@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/editing_input_domains.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -769,17 +770,12 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
     if (!RequiredBoolValue(env, centered, "centered", &flag)) return false;
     options->centered = flag ? 1u : 0u;
   }
-  const Napi::Value frame_length = object.Get("frameLengthSamples");
-  if (!frame_length.IsUndefined() && !frame_length.IsNull() &&
-      !RequiredUint32Value(env, frame_length, "frameLengthSamples",
-                           &options->frame_length_samples)) {
-    return false;
-  }
-  const Napi::Value hop_length = object.Get("hopLengthSamples");
-  if (!hop_length.IsUndefined() && !hop_length.IsNull() &&
-      !RequiredUint32Value(env, hop_length, "hopLengthSamples", &options->hop_length_samples)) {
-    return false;
-  }
+  options->frame_length_samples =
+      DomainProperty<uint32_t>(object, "frameLengthSamples", options->frame_length_samples,
+                               sonare_c_detail::kVocalCreateFrameLengthDomain);
+  options->hop_length_samples =
+      DomainProperty<uint32_t>(object, "hopLengthSamples", options->hop_length_samples,
+                               sonare_c_detail::kVocalCreateHopLengthDomain);
   if (!ReadSessionLimits(env, object, &options->max_history_bytes, &options->max_cache_bytes,
                          &options->max_undo_depth, &options->max_render_jobs)) {
     return false;

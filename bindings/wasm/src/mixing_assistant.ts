@@ -2,7 +2,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
-import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
+import { assertClosedToken, requestOnly } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -144,8 +144,8 @@ function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTr
     // An empty or non-finite track is not refused: the core reports it as an excluded track so a
     // batch needs no per-track error handling.
     const [first, second] = trackChannels(`tracks[${index}]`, track.channels);
-    if (track.sampleRate !== undefined) {
-      assertSampleRate(track.sampleRate, `tracks[${index}].sampleRate`);
+    if (track.sampleRate !== undefined && typeof track.sampleRate !== 'number') {
+      throw refuseType(`tracks[${index}].sampleRate must be an integer`);
     }
     left.push(first);
     right.push(second ?? null);
@@ -215,7 +215,9 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
     const fnName = 'mixingAssistantSuggest';
     const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
     // Required, not defaulted: a guessed rate would misread every band edge and lag.
-    assertSampleRate(req.sampleRate);
+    if (typeof req.sampleRate !== 'number') {
+      throw refuseType('sampleRate must be an integer');
+    }
     const { left, right, ids, names, sampleRates } = planarTracks(req.tracks, req.sampleRate);
     assertTempo(req.tempoBpm);
     const params: Record<string, number | boolean> = {};

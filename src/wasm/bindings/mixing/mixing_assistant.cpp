@@ -27,6 +27,7 @@
 #include "mixing_wasm.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+#include "c_api/mixing_input_domains.h"
 #include "core/resample.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
@@ -86,7 +87,8 @@ std::string optionalTrackName(const val& names, std::size_t index) {
 }
 
 AssistantInput buildAssistantInput(val left_channels, val right_channels, val track_ids,
-                                   val track_names, val track_sample_rates, int sample_rate) {
+                                   val track_names, val track_sample_rates,
+                                   const val& sample_rate_value) {
   requireJsArray(left_channels, "leftChannels");
   requireJsArray(track_ids, "trackIds");
   if (!isAbsent(right_channels)) requireJsArray(right_channels, "rightChannels");
@@ -112,10 +114,13 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
   // Zero tracks is a valid degenerate call that yields an empty suggestion, and
   // the sample rate is never read on that path, so it is checked only once there
   // is audio for it to describe.
-  if (count == 0) return input;
-  if (sample_rate <= 0) {
-    throw WasmRangeError("sampleRate must be an integer of at least 1");
+  if (count == 0) {
+    // Type-only: the domain is read once there is audio for the rate to describe.
+    (void)checkedIntFromVal(sample_rate_value, "sampleRate");
+    return input;
   }
+  const int sample_rate = domainNumberFromVal<int>(
+      sample_rate_value, "sampleRate", sonare_c_detail::kMixingAssistantSampleRateDomain);
 
   input.left.resize(count);
   input.right.resize(count);
@@ -148,11 +153,10 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
     }
 
     if (!isAbsent(track_sample_rates)) {
-      const std::string subject = "trackSampleRates[" + std::to_string(index) + "]";
-      const int track_rate = checkedIntFromVal(track_sample_rates[index], subject.c_str());
-      if (track_rate <= 0) {
-        throw WasmRangeError(subject + " must be an integer of at least 1");
-      }
+      const std::string subject = "tracks[" + std::to_string(index) + "].sampleRate";
+      const int track_rate =
+          domainNumberFromVal<int>(track_sample_rates[index], subject.c_str(),
+                                   sonare_c_detail::kMixingAssistantTrackSampleRateDomain);
       if (track_rate != sample_rate && !input.left[index].empty()) {
         input.left[index] = sonare::resample(input.left[index].data(), input.left[index].size(),
                                              track_rate, sample_rate);
@@ -210,9 +214,8 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
                                         const val& sample_rate, val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
-  const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names, track_sample_rates,
-                          checkedIntFromVal(sample_rate, "sampleRate"));
+  const AssistantInput input = buildAssistantInput(left_channels, right_channels, track_ids,
+                                                   track_names, track_sample_rates, sample_rate);
   return assistant::mix_assistant_result_to_json(assistant::suggest_scene(input.tracks, config));
 #else
   (void)left_channels;

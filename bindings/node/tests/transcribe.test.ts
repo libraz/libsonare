@@ -310,7 +310,7 @@ describe('transcribe', () => {
       transcribe({ ...request, ...extra } as unknown as TranscribeRequest);
 
     expect(bad({ fixedVelocity: 'loud' })).toThrow(TypeError);
-    expect(bad({ fixedVelocity: 'loud' })).toThrow(/fixedVelocity must be a number/);
+    expect(bad({ fixedVelocity: 'loud' })).toThrow(/fixedVelocity must be an integer$/);
     expect(bad({ referenceHz: 'high' })).toThrow(/referenceHz must be a number/);
     expect(bad({ polyphonic: 'yes' })).toThrow(/polyphonic must be a boolean/);
     expect(bad({ group: {} })).toThrow(/group must be a number/);

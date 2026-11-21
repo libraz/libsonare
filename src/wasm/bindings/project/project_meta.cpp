@@ -5,6 +5,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/project_input_domains.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -187,7 +188,9 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   SonareProjectMarker desc{};
   desc.id = uintProperty(marker, "id", desc.id);
   desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", desc.kind));
-  desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", desc.key_fifths));
+  desc.key_fifths = optionalDomainValue<int8_t>(marker["keyFifths"], "keyFifths",
+                                                sonare_c_detail::kMarkerKeyFifthsDomain)
+                        .value_or(desc.key_fifths);
   desc.key_minor =
       static_cast<uint8_t>(boolProperty(marker, "keyMinor", desc.key_minor != 0) ? 1 : 0);
   desc.ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
@@ -421,8 +424,10 @@ void ProjectWasm::setTimeSignatures(val segments) {
       val entry = segments[i];
       SonareProjectTimeSignatureSegment seg{};
       seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      seg.numerator = intProperty(entry, "numerator", 0);
-      seg.denominator = intProperty(entry, "denominator", 0);
+      seg.numerator = domainNumberFromVal<int>(entry["numerator"], "numerator",
+                                               sonare_c_detail::kTimeSignatureNumeratorDomain);
+      seg.denominator = domainNumberFromVal<int>(entry["denominator"], "denominator",
+                                                 sonare_c_detail::kTimeSignatureDenominatorDomain);
       segs.push_back(seg);
     }
   }

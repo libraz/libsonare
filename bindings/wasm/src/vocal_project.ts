@@ -79,12 +79,10 @@ function nativeInt64(value: unknown, field: string): number {
   return value;
 }
 
-function positiveSampleCount(value: unknown, field: string): number {
+/** A numeric request field whose range the native side states; only the type is checked here. */
+function requestNumber(value: unknown, field: string): number {
   if (typeof value !== 'number') {
     throw refuseType(`${field} must be an integer`);
-  }
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw refuse(`${field} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return value;
 }
@@ -171,7 +169,7 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
   const source = requireObject(request, 'request');
   requestObject('applyProjectVocalEdit', request, 'request', true);
   const renderedMono = finiteMono(source.renderedMono, 'renderedMono');
-  const expectedSourceSampleCount = positiveSampleCount(
+  const expectedSourceSampleCount = requestNumber(
     source.expectedSourceSampleCount,
     'expectedSourceSampleCount',
   );
@@ -195,10 +193,10 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
     throw refuse('renderToken must be a committed session token');
   }
   return {
-    clipId: requestUint32(source.clipId, 'clipId', false),
+    clipId: requestNumber(source.clipId, 'clipId'),
     takeId:
       source.takeId === undefined || source.takeId === null ? 0 : requestTakeId(source.takeId),
-    expectedSourceId: requestUint32(source.expectedSourceId, 'expectedSourceId', false),
+    expectedSourceId: requestNumber(source.expectedSourceId, 'expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
     expectedSourceSha256: hexSha256(source.expectedSourceSha256, 'expectedSourceSha256'),
@@ -301,7 +299,7 @@ function copyOriginalSources(
   const seen = new Set<number>();
   return originals.map((original, index) => {
     const source = requireObject(original, `originals[${index}]`);
-    const sourceId = requestUint32(source.sourceId, `originals[${index}].sourceId`, false);
+    const sourceId = requestNumber(source.sourceId, `originals[${index}].sourceId`);
     if (seen.has(sourceId)) {
       throw refuse(`originals contains duplicate sourceId ${sourceId}`);
     }

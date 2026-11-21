@@ -1,7 +1,10 @@
 import { assertU7 } from '../validation.js';
 
-/** The binding fields that carry a MIDI data byte; the C struct holds them as `uint8_t`. */
-const MIDI_CC_BYTE_FIELDS = ['ccNumber', 'ccLsbNumber', 'selectorMsb', 'selectorLsb'] as const;
+/**
+ * The binding fields that carry a MIDI data byte; the C struct holds them as `uint8_t`.
+ * `ccNumber` is not listed: the native reader states its domain.
+ */
+const MIDI_CC_BYTE_FIELDS = ['ccLsbNumber', 'selectorMsb', 'selectorLsb'] as const;
 
 /**
  * Refuses a binding's data byte outside [0, 127], which the C struct would hold

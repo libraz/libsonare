@@ -264,8 +264,8 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kInverseMelBandsDomain);
   const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kMelToStftFramesDomain);
   const int sample_rate =
-      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseAudioSampleRateDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
@@ -339,8 +339,8 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kMelToStftFramesDomain);
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int sample_rate =
-      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseAudioSampleRateDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");

@@ -105,6 +105,14 @@ function requestUint32(value: unknown, field: string, allowZero = true): number 
   return requestSafeInteger(value, field, allowZero ? 0 : 1, UINT32_MAX);
 }
 
+/** A numeric request field whose range the native side states; only the type is checked here. */
+function requestNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${field} must be an integer`);
+  }
+  return value;
+}
+
 function requestProjectId(value: unknown, field: string, allowZero = false): number {
   return requestSafeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
@@ -183,10 +191,9 @@ function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApp
   requestObject('applyProjectVocalEdit', request, 'request', true);
   const renderedMono = float32Copy(input.renderedMono, 'request.renderedMono');
   const sve1 = uint8Copy(input.vocalState, 'request.vocalState');
-  const expectedSourceSampleCount = requestSafeInteger(
+  const expectedSourceSampleCount = requestNumber(
     input.expectedSourceSampleCount,
     'request.expectedSourceSampleCount',
-    1,
   );
   if (renderedMono.length !== expectedSourceSampleCount) {
     throw refuse('request.renderedMono length must equal request.expectedSourceSampleCount');
@@ -211,11 +218,11 @@ function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApp
     throw refuse('request.renderToken must be a committed session token');
   }
   return {
-    clipId: requestProjectId(input.clipId, 'request.clipId'),
+    clipId: requestNumber(input.clipId, 'request.clipId'),
     ...(input.takeId === undefined || input.takeId === null
       ? {}
       : { takeId: requestTakeId(input.takeId) }),
-    expectedSourceId: requestProjectId(input.expectedSourceId, 'request.expectedSourceId'),
+    expectedSourceId: requestNumber(input.expectedSourceId, 'request.expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
     expectedSourceSha256: digest(input.expectedSourceSha256, 'request.expectedSourceSha256'),
@@ -323,7 +330,7 @@ function originalSource(value: unknown, index: number): ProjectVocalOriginalSour
     MAX_SAMPLE_RATE,
   );
   return {
-    sourceId: requestProjectId(source.sourceId, `originals[${index}].sourceId`),
+    sourceId: requestNumber(source.sourceId, `originals[${index}].sourceId`),
     mono,
     sampleRate,
   };

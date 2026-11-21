@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "core/audio.h"
 #include "engine/common.h"
 #include "engine/realtime_engine.h"
@@ -399,10 +400,12 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
   int64_t command_capacity = 0;
   int64_t telemetry_capacity = 0;
   int max_channels = 0;
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize", max_block_size, &max_block_size) ||
+  if (!OptionalDomainArg(env, info, 1, "maxBlockSize", 0,
+                         sonare_c_detail::kEngineMaxBlockSizeDomain, &max_block_size) ||
       !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
       !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
-      !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
+      !OptionalDomainArg(env, info, 4, "maxChannels", 0, sonare_c_detail::kEngineMaxChannelsDomain,
+                         &max_channels)) {
     return;
   }
 
@@ -447,10 +450,12 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   int64_t command_capacity = 0;
   int64_t telemetry_capacity = 0;
   int max_channels = 0;
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize", max_block_size, &max_block_size) ||
+  if (!OptionalDomainArg(env, info, 1, "maxBlockSize", 0,
+                         sonare_c_detail::kEngineMaxBlockSizeDomain, &max_block_size) ||
       !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
       !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
-      !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
+      !OptionalDomainArg(env, info, 4, "maxChannels", 0, sonare_c_detail::kEngineMaxChannelsDomain,
+                         &max_channels)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_prepare_with_channels(
@@ -595,7 +600,8 @@ Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo&
   int num_channels = 0;
   int block_size = 0;  // C value 0 = library default offline block
   if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
-      !OptionalIntArg(env, info, 1, "blockSize", block_size, &block_size)) {
+      !OptionalDomainArg(env, info, 1, "blockSize", 0,
+                         sonare_c_detail::kEngineRenderBlockSizeDomain, &block_size)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_prime_offline_parameters(engine_, num_channels, block_size));

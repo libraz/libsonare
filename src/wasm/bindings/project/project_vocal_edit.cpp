@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
+#include "core/audio.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -61,11 +63,6 @@ uint32_t projectId(uint32_t result, const char* field, bool allow_zero = true) {
   if (result == std::numeric_limits<uint32_t>::max()) {
     invalid(std::string(field) + " must be less than UINT32_MAX");
   }
-  return result;
-}
-
-uint32_t positiveUint32(uint32_t result, const char* field) {
-  if (result == 0) invalid(std::string(field) + " must be non-zero");
   return result;
 }
 
@@ -167,24 +164,18 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
     invalidType("request must be an object");
   }
   sonare_project_vocal_edit_apply_desc_init(&storage->desc);
-  storage->desc.clip_id =
-      projectId(checkedUintFromVal(property(request, "clipId"), "clipId"), "clipId", false);
+  storage->desc.clip_id = domainNumberFromVal<uint32_t>(property(request, "clipId"), "clipId",
+                                                        sonare_c_detail::kVocalClipIdDomain);
   storage->desc.take_id = projectId(uintProperty(request, "takeId", 0), "takeId");
   storage->desc.expected_source_id =
-      projectId(checkedUintFromVal(property(request, "expectedSourceId"), "expectedSourceId"),
-                "expectedSourceId", false);
-  storage->desc.expected_source_sample_rate = positiveUint32(
-      checkedUintFromVal(property(request, "expectedSourceSampleRate"), "expectedSourceSampleRate"),
-      "expectedSourceSampleRate");
-  storage->desc.expected_source_sample_count = checkedInt64FromVal(
-      property(request, "expectedSourceSampleCount"), "expectedSourceSampleCount");
-  if (storage->desc.expected_source_sample_count <= 0) {
-    invalid("expectedSourceSampleCount must be an integer of at least 1");
-  }
-  if (static_cast<uint64_t>(storage->desc.expected_source_sample_count) >
-      std::numeric_limits<size_t>::max()) {
-    invalid("expectedSourceSampleCount is too large for this WASM build");
-  }
+      domainNumberFromVal<uint32_t>(property(request, "expectedSourceId"), "expectedSourceId",
+                                    sonare_c_detail::kVocalSourceIdDomain);
+  storage->desc.expected_source_sample_rate =
+      domainNumberFromVal<uint32_t>(property(request, "expectedSourceSampleRate"),
+                                    "expectedSourceSampleRate", sonare::kAudioSampleRateDomain);
+  storage->desc.expected_source_sample_count = domainNumberFromVal<int64_t>(
+      property(request, "expectedSourceSampleCount"), "expectedSourceSampleCount",
+      sonare_c_detail::kVocalSourceSampleCountDomain);
   storage->source_sha =
       hexSha256(property(request, "expectedSourceSha256"), "expectedSourceSha256");
   std::copy(storage->source_sha.begin(), storage->source_sha.end(),
@@ -199,9 +190,9 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
   }
   storage->desc.rendered_mono = storage->rendered.data();
   storage->desc.rendered_sample_count = static_cast<int64_t>(storage->rendered.size());
-  storage->desc.rendered_sample_rate = positiveUint32(
-      checkedUintFromVal(property(request, "renderedSampleRate"), "renderedSampleRate"),
-      "renderedSampleRate");
+  storage->desc.rendered_sample_rate =
+      domainNumberFromVal<uint32_t>(property(request, "renderedSampleRate"), "renderedSampleRate",
+                                    sonare::kAudioSampleRateDomain);
   const val rendered_start = property(request, "renderedStartSample");
   storage->desc.rendered_start_sample =
       absent(rendered_start) ? 0 : checkedInt64FromVal(rendered_start, "renderedStartSample");
@@ -320,14 +311,14 @@ OriginalStorage originalsFromVal(const val& originals) {
     }
     auto& row = storage.rows[index];
     sonare_project_vocal_original_source_init(&row);
-    row.source_id =
-        projectId(checkedUintFromVal(property(source, "sourceId"), "sourceId"), "sourceId", false);
+    row.source_id = domainNumberFromVal<uint32_t>(property(source, "sourceId"), "sourceId",
+                                                  sonare_c_detail::kVocalSourceIdDomain);
     if (std::find(source_ids.begin(), source_ids.end(), row.source_id) != source_ids.end()) {
       invalid("originals contains duplicate sourceId");
     }
     source_ids.push_back(row.source_id);
-    row.sample_rate = positiveUint32(
-        checkedUintFromVal(property(source, "sampleRate"), "sampleRate"), "sampleRate");
+    row.sample_rate = domainNumberFromVal<uint32_t>(property(source, "sampleRate"), "sampleRate",
+                                                    sonare::kAudioSampleRateDomain);
     storage.buffers.push_back(copyMono(property(source, "mono"), "original.mono"));
     row.mono = storage.buffers.back().data();
     row.sample_count = static_cast<int64_t>(storage.buffers.back().size());

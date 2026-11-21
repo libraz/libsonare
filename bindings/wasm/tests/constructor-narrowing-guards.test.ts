@@ -149,6 +149,8 @@ interface NarrowedSlot {
   field: string;
   legal: number;
   domainRefusal: string;
+  /** The reader checks the field's domain itself, so every shape gets the domain's wording. */
+  readsDomain?: boolean;
   construct: (value: number) => NativeHandle;
 }
 
@@ -157,7 +159,8 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/4',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'maxBlockSize must be within 1..',
+    domainRefusal: 'maxBlockSize must be an integer in [1, 1048576]',
+    readsDomain: true,
     construct: (maxBlockSize) => newEngine4({ maxBlockSize }),
   },
   {
@@ -178,7 +181,8 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/5',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'maxBlockSize must be within 1..',
+    domainRefusal: 'maxBlockSize must be an integer in [1, 1048576]',
+    readsDomain: true,
     construct: (maxBlockSize) => newEngine5({ maxBlockSize }),
   },
   {
@@ -199,7 +203,8 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/5',
     field: 'maxChannels',
     legal: 4,
-    domainRefusal: 'maxChannels must be within 1..',
+    domainRefusal: 'maxChannels must be an integer in [1, 64]',
+    readsDomain: true,
     construct: (maxChannels) => newEngine5({ maxChannels }),
   },
   {
@@ -270,7 +275,8 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
       for (const shape of READER_REFUSED) {
         const error = refusalFor(() => slot.construct(shape.value));
         expect(error.message, `${slot.field} = ${shape.label}`).toContain(slot.field);
-        expect(error.message, `${slot.field} = ${shape.label}`).toContain(shape.reason);
+        const reason = slot.readsDomain ? slot.domainRefusal : shape.reason;
+        expect(error.message, `${slot.field} = ${shape.label}`).toContain(reason);
       }
     });
 

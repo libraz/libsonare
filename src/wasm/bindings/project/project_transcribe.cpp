@@ -20,6 +20,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/transcribe_input_domains.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -58,18 +59,11 @@ float signedField(val config, const char* key, FloatDomain domain, float absent)
   return value;
 }
 
-// The same rule on the fields whose domain is an integer range rather than a
-// sign. Omission keeps the initialised UNSET value; a written value is checked
-// against [lo, hi], and 0 is in none of [1, 127], [1, 64] and [1, 128].
-// Wording is Node's verbatim, so one domain reports one way everywhere.
-int rangeField(val config, const char* key, int lo, int hi, int absent) {
-  if (!hasProperty(config, key)) return absent;
-  const int value = intProperty(config, key, 0);
-  if (value < lo || value > hi) {
-    throw WasmRangeError(std::string(key) + " must be an integer in [" + std::to_string(lo) + ", " +
-                         std::to_string(hi) + "]");
-  }
-  return value;
+// Omission keeps the initialised UNSET value; a written value is read in the core's domain for the
+// field, which refuses 0 as it refuses any other out-of-domain integer.
+int rangeField(val config, const char* key, const sonare::util::check::NumericDomain& domain,
+               int absent) {
+  return optionalDomainValue<int>(objectProperty(config, key), key, domain).value_or(absent);
 }
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
@@ -91,15 +85,21 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   out.f0_max_hz = signedField(config, "f0MaxHz", FloatDomain::kPositive, out.f0_max_hz);
   out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive, out.min_note_ms);
   // Both spellings written is forwarded; the C ABI refuses it naming min_note_division.
-  out.min_note_division = rangeField(config, "minNoteDivision", 1, 128, SONARE_NOTE_DIVISION_UNSET);
+  out.min_note_division =
+      rangeField(config, "minNoteDivision", sonare_c_detail::kTranscribeMinNoteDivisionDomain,
+                 SONARE_NOTE_DIVISION_UNSET);
   out.segmentation_threshold_cents =
       signedField(config, "segmentationThresholdCents", FloatDomain::kPositive,
                   out.segmentation_threshold_cents);
   out.velocity_floor_db =
       signedField(config, "velocityFloorDb", FloatDomain::kNegative, out.velocity_floor_db);
-  out.fixed_velocity = rangeField(config, "fixedVelocity", 1, 127, SONARE_FIXED_VELOCITY_UNSET);
+  out.fixed_velocity =
+      rangeField(config, "fixedVelocity", sonare_c_detail::kTranscribeFixedVelocityDomain,
+                 SONARE_FIXED_VELOCITY_UNSET);
   // Polyphonic only; a monophonic call with any of these written is refused by the C ABI.
-  out.max_polyphony = rangeField(config, "maxPolyphony", 1, 64, SONARE_MAX_POLYPHONY_UNSET);
+  out.max_polyphony =
+      rangeField(config, "maxPolyphony", sonare_c_detail::kTranscribeMaxPolyphonyDomain,
+                 SONARE_MAX_POLYPHONY_UNSET);
   out.min_frame_peak_ratio =
       signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio, out.min_frame_peak_ratio);
   out.min_ridge_peak_ratio =

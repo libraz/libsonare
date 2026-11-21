@@ -131,6 +131,11 @@ function requireFiniteInteger(value: unknown, argName: string): number {
   return value;
 }
 
+/** An optional integer whose native domain refuses an out-of-range value: absent stays absent. */
+function optionalInteger(value: unknown, argName: string): number | undefined {
+  return isAbsent(value) ? undefined : requireFiniteInteger(value, argName);
+}
+
 /** An optional integer on a field where `0` would mean "the default": absent stays absent, `0` is refused. */
 function optionalNonZeroInteger(value: unknown, argName: string): number | undefined {
   if (isAbsent(value)) {
@@ -265,10 +270,10 @@ function resolveEngineConfig(
   const sampleRate = requireFinite(request.sampleRate, 'sampleRate');
   return {
     sampleRate,
-    maxBlockSize: optionalNonZeroInteger(request.maxBlockSize, 'maxBlockSize'),
+    maxBlockSize: optionalInteger(request.maxBlockSize, 'maxBlockSize'),
     commandCapacity: optionalNonZeroInteger(request.commandCapacity, 'commandCapacity'),
     telemetryCapacity: optionalNonZeroInteger(request.telemetryCapacity, 'telemetryCapacity'),
-    maxChannels: optionalNonZeroInteger(request.maxChannels, 'maxChannels'),
+    maxChannels: optionalInteger(request.maxChannels, 'maxChannels'),
   };
 }
 
@@ -813,7 +818,7 @@ export class RealtimeEngine {
    *   channel count, or the engine was never prepared
    */
   primeOfflineParameters(numChannels: number, blockSize?: number): void {
-    this.native.primeOfflineParameters(numChannels, optionalNonZeroInteger(blockSize, 'blockSize'));
+    this.native.primeOfflineParameters(numChannels, optionalInteger(blockSize, 'blockSize'));
   }
 
   /**
@@ -1953,7 +1958,7 @@ export class RealtimeEngine {
     }
     return this.native.renderOffline(
       record.channels,
-      optionalNonZeroInteger(record.blockSize, 'blockSize'),
+      optionalInteger(record.blockSize, 'blockSize'),
       record.finalize ?? true,
     );
   }

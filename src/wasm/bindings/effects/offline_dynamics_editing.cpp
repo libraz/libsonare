@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "analysis/key_profiles.h"
+#include "c_api/editing_input_domains.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
@@ -203,19 +204,11 @@ namespace {
 
 /// @p scale_reference_midi absent keeps the quantizer's own reference (A4); 0 is MIDI note 0.
 editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(
-    int root, int mode_mask, std::optional<float> scale_reference_midi) {
-  if (root < 0 || root > 11) {
-    throw WasmRangeError("root must be in [0, 11]");
-  }
-  if (mode_mask == 0) {
-    throw WasmRangeError("modeMask must be non-zero");
-  }
-  if (mode_mask < 0 || mode_mask > 4095) {
-    throw WasmRangeError("modeMask must be in [0, 4095]");
-  }
+    const val& root, const val& mode_mask, std::optional<float> scale_reference_midi) {
   editing::pitch_editor::ScaleQuantizerConfig cfg;
-  cfg.root = root;
-  cfg.mode_mask = static_cast<uint16_t>(mode_mask);
+  cfg.root = domainNumberFromVal<int>(root, "root", editing::pitch_editor::kScaleRootDomain);
+  cfg.mode_mask = domainNumberFromVal<uint16_t>(mode_mask, "modeMask",
+                                                editing::pitch_editor::kScaleModeMaskDomain);
   if (scale_reference_midi.has_value()) {
     util::check::in_range(*scale_reference_midi, 0.0, editing::pitch_editor::kMaxReferenceMidi,
                           "scaleReferenceMidi");
@@ -227,10 +220,7 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(
 }  // namespace
 
 int js_scale_mask_for_mode(const val& root_val, const val& mode_val) {
-  const int root = checkedIntFromVal(root_val, "root");
-  if (root < 0 || root > 11) {
-    throw WasmRangeError("root must be in [0, 11]");
-  }
+  domainNumberFromVal<int>(root_val, "root", sonare_c_detail::kScaleMaskRootDomain);
   return sonare::scale_mask_for_mode(modeFromVal(mode_val, "mode"));
 }
 
@@ -238,8 +228,7 @@ float js_scale_quantize_midi(const val& root, const val& mode_mask, const val& m
                              const val& reference_midi_val) {
   const std::optional<float> reference_midi =
       optionalDomainNumber(reference_midi_val, "scaleReferenceMidi");
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
-      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, reference_midi));
   return q.quantize_midi(checkedFloatFromVal(midi, "midi"));
 }
 
@@ -247,19 +236,15 @@ float js_scale_correction_semitones(const val& root, const val& mode_mask, const
                                     const val& reference_midi_val) {
   const std::optional<float> reference_midi =
       optionalDomainNumber(reference_midi_val, "scaleReferenceMidi");
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
-      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, reference_midi));
   return q.correction_semitones(checkedFloatFromVal(midi, "midi"));
 }
 
 bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,
                                   const val& pitch_class_val) {
-  const int pitch_class = checkedIntFromVal(pitch_class_val, "pitchClass");
-  if (pitch_class < 0 || pitch_class > 11) {
-    throw WasmRangeError("pitchClass must be in [0, 11]");
-  }
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
-      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), std::nullopt));
+  const int pitch_class = domainNumberFromVal<int>(pitch_class_val, "pitchClass",
+                                                   sonare_c_detail::kScalePitchClassDomain);
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, std::nullopt));
   return q.pitch_class_enabled(pitch_class);
 }
 

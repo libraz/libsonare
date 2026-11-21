@@ -274,7 +274,8 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
               const val& frequency_val, const val& click_duration_val) {
   const int sample_rate =
       domainNumberFromVal<int>(sample_rate_val, "sampleRate", kSynthesisSampleRateDomain);
-  const int length = checkedIntFromVal(length_val, "length");
+  const int length =
+      optionalDomainValue<int>(length_val, "length", sonare::kClicksLengthDomain).value_or(0);
   const float frequency = checkedFloatFromVal(frequency_val, "frequency");
   const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
   std::vector<float> values = float32ArrayToVector(times);

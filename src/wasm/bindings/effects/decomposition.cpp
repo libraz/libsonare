@@ -19,14 +19,15 @@ DecomposeStemsConfig readDecomposeStemsConfig(val options) {
   DecomposeStemsConfig config;
   config.n_components = intProperty(options, "nComponents", config.n_components);
   config.n_fft = intProperty(options, "nFft", config.n_fft);
-  config.hop_length = intProperty(options, "hopLength", config.hop_length);
+  config.hop_length = optionalDomainValue<int>(objectProperty(options, "hopLength"), "hopLength",
+                                               sonare::kDecomposeStemsHopLengthDomain)
+                          .value_or(config.hop_length);
   config.n_iter = intProperty(options, "nIter", config.n_iter);
   config.beta = floatProperty(options, "beta", config.beta);
   config.init = stringProperty(options, "init", config.init);
   config.mask_power = floatProperty(options, "maskPower", config.mask_power);
   check::integer_at_least(config.n_components, 1, "nComponents");
   check::integer_at_least(config.n_fft, 1, "nFft");
-  if (hasProperty(options, "hopLength")) check::integer_at_least(config.hop_length, 1, "hopLength");
   check::integer_at_least(config.n_iter, 1, "nIter");
   check::finite_float(config.beta, "beta");
   check::at_least(config.mask_power, 1.0, "maskPower");
@@ -48,14 +49,10 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
   const int n_components = domainNumberFromVal<int>(n_components_val, "nComponents",
                                                     sonare::kDecomposeNComponentsDomain);
   // An omitted (undefined or null) iteration count takes the core default.
-  const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
-                         ? kDecomposeDefaultIter
-                         : checkedIntFromVal(n_iter_val, "nIter");
+  const int n_iter = optionalDomainValue<int>(n_iter_val, "nIter", sonare::kDecomposeIterDomain)
+                         .value_or(kDecomposeDefaultIter);
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
-  if (n_iter <= 0) {
-    throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
-  }
   if (static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
@@ -84,14 +81,10 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
   const int n_components = domainNumberFromVal<int>(n_components_val, "nComponents",
                                                     sonare::kDecomposeNComponentsDomain);
   // An omitted (undefined or null) iteration count takes the core default.
-  const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
-                         ? kDecomposeDefaultIter
-                         : checkedIntFromVal(n_iter_val, "nIter");
+  const int n_iter = optionalDomainValue<int>(n_iter_val, "nIter", sonare::kDecomposeIterDomain)
+                         .value_or(kDecomposeDefaultIter);
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
-  if (n_iter <= 0) {
-    throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
-  }
   if (static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {

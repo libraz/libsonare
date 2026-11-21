@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "streaming/realtime_limits.h"
 
@@ -64,7 +65,8 @@ void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
                                        const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(0));
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
+                      val::undefined());
 }
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
@@ -76,7 +78,8 @@ RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_
 
 void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size,
                                  const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(0));
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
+                      val::undefined());
 }
 
 void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_block_size_val,
@@ -84,20 +87,17 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
                                              const val& telemetry_capacity_val,
                                              const val& max_channels_val) {
   using sonare::engine::RealtimeEngine;
-  // 0 is the library-default sentinel for each of the four sized arguments.
-  int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
-  if (max_block_size == 0) max_block_size = RealtimeEngine::kDefaultMaxBlock;
+  // An omitted maxBlockSize or maxChannels takes the engine default; a written one is read in its
+  // domain. The two capacities read 0 as their default.
+  const int max_block_size = optionalDomainValue<int>(max_block_size_val, "maxBlockSize",
+                                                      sonare_c_detail::kEngineMaxBlockSizeDomain)
+                                 .value_or(RealtimeEngine::kDefaultMaxBlock);
   const int command_capacity = checkedIntFromVal(command_capacity_val, "commandCapacity");
   const int telemetry_capacity = checkedIntFromVal(telemetry_capacity_val, "telemetryCapacity");
-  int max_channels = checkedIntFromVal(max_channels_val, "maxChannels");
-  if (max_channels == 0) max_channels = RealtimeEngine::kDefaultMaxChannels;
+  const int max_channels = optionalDomainValue<int>(max_channels_val, "maxChannels",
+                                                    sonare_c_detail::kEngineMaxChannelsDomain)
+                               .value_or(RealtimeEngine::kDefaultMaxChannels);
   validatePrepare(sample_rate, max_block_size);
-  // Both the bound and the message it reports come from the engine's constant,
-  // so raising the ceiling moves the guard and the text a host reads together.
-  constexpr int kMaxChannels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
-  if (max_channels <= 0 || max_channels > kMaxChannels) {
-    throw WasmRangeError("maxChannels must be within 1.." + std::to_string(kMaxChannels));
-  }
   // The C ABI takes both as size_t, so only this surface can express a negative
   // one. Refuse it here rather than letting capacity() read it as the sentinel,
   // which would answer a caller error with the default queue.

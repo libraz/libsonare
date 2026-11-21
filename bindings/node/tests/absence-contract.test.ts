@@ -256,7 +256,9 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
           ),
         );
       }
-      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(/numPorts must be an integer$/);
+      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(
+        /spec\.nodes\[0\]\.numPorts must be an integer in \[1, 2147483647\]$/,
+      );
       expect(() => engine.setGraph(graph({ numChannels: 0 }))).toThrow(
         new RangeError(
           'RealtimeEngine.setGraph: numChannels must not be 0; omit it for the default',

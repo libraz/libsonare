@@ -11,7 +11,6 @@ import {
   assertClosedToken,
   assertHpssKernels,
   assertInt32,
-  assertPositiveInteger,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -232,9 +231,6 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
     if (r.x.rows !== r.y.rows) {
       throw refuse('x and y must have the same number of rows');
     }
-    if (r.k !== undefined) {
-      assertPositiveInteger(r.k, 'k');
-    }
     return toSegmentMatrix(
       addon.segmentCrossSimilarity(
         r.x.data,
@@ -243,7 +239,7 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
         r.y.data,
         r.y.rows,
         r.y.cols,
-        r.k ?? 0,
+        r.k,
         r.metric ?? 'cosine',
         r.mode ?? 'connectivity',
       ),
@@ -257,15 +253,12 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceMatrix', () => {
     const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
     assertMatrix2D(r.data, 'data');
-    if (r.k !== undefined) {
-      assertPositiveInteger(r.k, 'k');
-    }
     return toSegmentMatrix(
       addon.segmentRecurrenceMatrix(
         r.data.data,
         r.data.rows,
         r.data.cols,
-        r.k ?? 0,
+        r.k,
         r.width ?? 1,
         r.sym ?? false,
         r.metric ?? 'euclidean',

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 
+#include "c_api/midi_input_domains.h"
 #include "c_api/part_rig_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
@@ -136,7 +137,8 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
 void RealtimeEngineWasm::bindMidiCcBinding(val object) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   sonare::midi::CcBinding binding{};
-  binding.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
+  binding.cc_number = domainNumberFromVal<uint8_t>(object["ccNumber"], "ccNumber",
+                                                   sonare_c_detail::kMidiDataByteDomain);
   binding.channel = static_cast<uint8_t>(
       intInRangeOrAbsentProperty(object, "channel", 0, 15, sonare::midi::kCcAnyChannel));
   // Only ccNumber and paramId are required; every other field falls back to the

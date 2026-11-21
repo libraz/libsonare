@@ -13,7 +13,6 @@ import {
   assertAudioInput,
   assertHpssKernels,
   assertMatrix2D,
-  assertPositiveInteger,
   optionalBoolean,
   optionalToken,
   requestOnly,
@@ -512,9 +511,6 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
     if (x.rows !== y.rows) {
       throw refuse('feature dimensions must match');
     }
-    if (r.k !== undefined) {
-      assertPositiveInteger(r.k, 'k');
-    }
     const native = requireModule().segmentCrossSimilarity(
       x.data,
       x.rows,
@@ -522,7 +518,7 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
       y.data,
       y.rows,
       y.cols,
-      r.k ?? 0,
+      r.k,
       r.metric ?? 'cosine',
       r.mode ?? 'connectivity',
     );
@@ -540,14 +536,11 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceMatrix', () => {
     const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
     const data = assertMatrix2D(r.data, 'data');
-    if (r.k !== undefined) {
-      assertPositiveInteger(r.k, 'k');
-    }
     const native = requireModule().segmentRecurrenceMatrix(
       data.data,
       data.rows,
       data.cols,
-      r.k ?? 0,
+      r.k,
       r.width ?? 1,
       optionalBoolean(r.sym, 'sym', false),
       r.metric ?? 'euclidean',

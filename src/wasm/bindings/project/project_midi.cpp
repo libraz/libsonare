@@ -5,6 +5,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "analysis/music_analyzer.h"
+#include "c_api/midi_input_domains.h"
+#include "c_api/project_input_domains.h"
 #include "project_wasm.h"
 #include "wasm/bindings/common/midi_cc_kind.h"
 
@@ -95,13 +98,14 @@ void ProjectWasm::setProgramOnChannel(const val& clip_id_val, const val& group_v
                                       const val& channel_val, const val& program_val,
                                       const val& bank_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const uint32_t group = checkedUintFromVal(group_val, "group");
-  const uint32_t channel = checkedUintFromVal(channel_val, "channel");
+  const uint8_t group =
+      domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
+  const uint8_t channel =
+      domainNumberFromVal<uint8_t>(channel_val, "channel", sonare_c_detail::kMidiChannelDomain);
   const int program = checkedIntFromVal(program_val, "program");
   const int bank = checkedIntFromVal(bank_val, "bank");
   const SonareError err =
-      sonare_project_set_program_on_channel(project_.get(), clip_id, static_cast<uint8_t>(group),
-                                            static_cast<uint8_t>(channel), program, bank);
+      sonare_project_set_program_on_channel(project_.get(), clip_id, group, channel, program, bank);
   if (err != SONARE_OK) {
     throwCError(err);
   }
@@ -176,13 +180,13 @@ SonareProjectTempoOptions tempoOptionsFrom(val options) {
   SonareProjectTempoOptions out;
   sonare_project_tempo_options_init(&out);
   if (options.isUndefined() || options.isNull()) return out;
-  // The presence-checked *Property readers, not a bare object["key"] read: every
-  // field here is optional and the seeded default is the value to keep when one
-  // is omitted. Range rules stay with the C ABI, which rejects what it cannot
-  // use rather than silently substituting a default.
+  // Every field here is optional and keeps its seeded default when omitted; a written count is
+  // read in its domain.
   out.adaptive_tempo = boolProperty(options, "adaptiveTempo", out.adaptive_tempo != 0) ? 1 : 0;
   out.tempo_update_interval_beats =
-      intProperty(options, "tempoUpdateIntervalBeats", out.tempo_update_interval_beats);
+      optionalDomainValue<int>(options["tempoUpdateIntervalBeats"], "tempoUpdateIntervalBeats",
+                               sonare::kMusicCountDomain)
+          .value_or(out.tempo_update_interval_beats);
   out.ramp_threshold = floatProperty(options, "rampThreshold", out.ramp_threshold);
   out.include_octave_candidates =
       boolProperty(options, "includeOctaveCandidates", out.include_octave_candidates != 0) ? 1 : 0;
@@ -237,7 +241,8 @@ float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& c
 }
 
 double ProjectWasm::snapToGrid(double ppq, double strength, const val& division_val) {
-  const int division = checkedIntFromVal(division_val, "division");
+  const int division =
+      domainNumberFromVal<int>(division_val, "division", sonare_c_detail::kSnapDivisionDomain);
   double out = 0.0;
   const SonareError err =
       sonare_project_snap_to_grid_ex(project_.get(), ppq, strength, division, &out);
@@ -306,16 +311,17 @@ val js_midi_per_note_controller_name(const val& index) {
 
 val js_midi_bank_program(double ppq, const val& group_val, const val& channel_val,
                          const val& bank_msb_val, const val& bank_lsb_val, const val& program_val) {
-  const int group = checkedIntFromVal(group_val, "group");
-  const int channel = checkedIntFromVal(channel_val, "channel");
+  const uint8_t group =
+      domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
+  const uint8_t channel =
+      domainNumberFromVal<uint8_t>(channel_val, "channel", sonare_c_detail::kMidiChannelDomain);
   const int bank_msb = checkedIntFromVal(bank_msb_val, "bankMsb");
   const int bank_lsb = checkedIntFromVal(bank_lsb_val, "bankLsb");
   const int program = checkedIntFromVal(program_val, "program");
   SonareMidiEventPod events[3]{};
   size_t count = 0;
   const SonareError err =
-      sonare_midi_bank_program(ppq, static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
-                               bank_msb, bank_lsb, program, events, 3, &count);
+      sonare_midi_bank_program(ppq, group, channel, bank_msb, bank_lsb, program, events, 3, &count);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
@@ -348,7 +354,9 @@ val js_midi_event_to_val(const SonareMidiEventPod& event) {
 
 SonareMidiCcBinding js_cc_binding_from_val(val object) {
   SonareMidiCcBinding out{};
-  out.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
+  // The 14-bit kind's narrower [0, 31] is refused by the C ABI, which sees the kind.
+  out.cc_number = domainNumberFromVal<uint8_t>(object["ccNumber"], "ccNumber",
+                                               sonare_c_detail::kMidiDataByteDomain);
   out.channel = static_cast<uint8_t>(
       intInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));
   out.kind = static_cast<uint8_t>(ccBindingKindProperty(object));
@@ -388,13 +396,12 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
 
 val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_val,
                      const val& max_value_val, const val& min_movement_val) {
-  const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
+  const uint32_t param_id = domainNumberFromVal<uint32_t>(
+      param_id_val, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
   const float min_value = checkedFloatFromVal(min_value_val, "minValue");
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
-  const uint8_t min_movement = checkedByteFromVal(min_movement_val, "minMovement");
-  if (min_movement > 127) {
-    throw WasmRangeError("minMovement must be an integer within [0, 127]");
-  }
+  const uint8_t min_movement = domainNumberFromVal<uint8_t>(min_movement_val, "minMovement",
+                                                            sonare_c_detail::kMidiDataByteDomain);
   const size_t count = wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
@@ -435,14 +442,16 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 // refuse what neither can represent.
 val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, const val& group_val,
                         double ppq) {
-  const uint32_t requested_param_id = checkedUintFromVal(param_id, "paramId");
+  const uint32_t requested_param_id =
+      domainNumberFromVal<uint32_t>(param_id, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
   const float unit_value = checkedFloatFromVal(unit_value_val, "unitValue");
-  const int group = checkedIntFromVal(group_val, "group");
+  const uint8_t group =
+      domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), requested_param_id,
-      unit_value, static_cast<uint8_t>(group), ppq, &event);
+      unit_value, group, ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
     throwCodedCError(err);

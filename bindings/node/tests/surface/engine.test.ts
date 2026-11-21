@@ -76,7 +76,11 @@ describe('RealtimeEngine construction', () => {
         () => new RealtimeEngine({ sampleRate: SR, [key]: 0 } as unknown as RealtimeEngineConfig),
       );
       expect(error, key).toBeInstanceOf(RangeError);
-      expect((error as Error).message).toContain('omit it for the default');
+      expect((error as Error).message).toMatch(
+        key === 'maxBlockSize' || key === 'maxChannels'
+          ? new RegExp(`${key} must be an integer in \\[1, \\d+\\]$`)
+          : /omit it for the default/,
+      );
     }
   });
 

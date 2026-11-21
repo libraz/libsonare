@@ -321,12 +321,12 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
+  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseAudioSampleRateDomain,
                          &sr)) {
     return env.Undefined();
   }
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 4, "nFft", 2048, sonare::kMelToStftFftSizeDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
@@ -446,12 +446,12 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!OptionalIntArg(env, info, 3, "nMels", 128, &n_mels)) return env.Undefined();
   int sr{};
-  if (!OptionalDomainArg(env, info, 4, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
+  if (!OptionalDomainArg(env, info, 4, "sampleRate", 22050, sonare::kInverseAudioSampleRateDomain,
                          &sr)) {
     return env.Undefined();
   }
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kMelToStftFftSizeDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};

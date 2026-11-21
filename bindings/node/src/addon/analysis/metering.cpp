@@ -7,8 +7,10 @@
 #include <vector>
 
 #include "analysis/music_analyzer.h"
+#include "c_api/editing_input_domains.h"
 #include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
+#include "editing/pitch_editor/scale_quantizer.h"
 #include "metering/waveform.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
@@ -467,16 +469,12 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
       !RequireNumberValue(env, info[2], "midi")) {
     return false;
   }
-  *root = node_narrow_int(env, info[0], "root");
-  int mask_int = node_narrow_int(env, info[1], "modeMask");
-  // modeMask is a 12-bit pitch-class set (one bit per semitone). Validate the
-  // range explicitly: the narrowing cast to uint16_t would otherwise turn -1
-  // into 0xFFFF and any value > 4095 into an unrelated mask.
-  if (mask_int < 0 || mask_int > 4095) {
-    Napi::RangeError::New(info.Env(), "modeMask must be in [0, 4095]").ThrowAsJavaScriptException();
+  if (!RequiredDomainArg(env, info, 0, "root", sonare::editing::pitch_editor::kScaleRootDomain,
+                         root) ||
+      !RequiredDomainArg(env, info, 1, "modeMask",
+                         sonare::editing::pitch_editor::kScaleModeMaskDomain, mode_mask)) {
     return false;
   }
-  *mode_mask = static_cast<uint16_t>(mask_int);
   *midi = node_narrow_finite_float(info.Env(), info[2], "midi");
   // NaN (not given) selects A4 (69); a given 0 is MIDI note 0.
   return OptionalFiniteFloatArg(info.Env(), info, 3, "scaleReferenceMidi",
@@ -507,7 +505,10 @@ Napi::Value SonareWrap::ScaleMaskForMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
-  const int root = node_narrow_int(env, info[0], "root");
+  int root = 0;
+  if (!RequiredDomainArg(env, info, 0, "root", sonare_c_detail::kScaleMaskRootDomain, &root)) {
+    return env.Undefined();
+  }
   uint16_t mask = 0;
   const SonareError err =
       sonare_scale_mask_for_mode(root, node_mode_from_value(info[1], "mode"), &mask);
@@ -543,9 +544,17 @@ Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
   if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
   if (!RequireNumberValue(env, info[1], "modeMask")) return env.Undefined();
   if (!RequireNumberValue(env, info[2], "pitchClass")) return env.Undefined();
-  int root = node_narrow_int(env, info[0], "root");
-  uint16_t mask = node_narrow_uint16(env, info[1], "modeMask");
-  int pitch_class = node_narrow_int(env, info[2], "pitchClass");
+  int root = 0;
+  uint16_t mask = 0;
+  int pitch_class = 0;
+  if (!RequiredDomainArg(env, info, 0, "root", sonare::editing::pitch_editor::kScaleRootDomain,
+                         &root) ||
+      !RequiredDomainArg(env, info, 1, "modeMask",
+                         sonare::editing::pitch_editor::kScaleModeMaskDomain, &mask) ||
+      !RequiredDomainArg(env, info, 2, "pitchClass", sonare_c_detail::kScalePitchClassDomain,
+                         &pitch_class)) {
+    return env.Undefined();
+  }
   int out_enabled = 0;
   SonareError err = sonare_scale_pitch_class_enabled(root, mask, pitch_class, &out_enabled);
   if (err != SONARE_OK) {

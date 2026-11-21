@@ -66,7 +66,7 @@ describe('construction', () => {
       /maxNumChannels/,
     );
     expect(() => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 0 })).toThrow(
-      /omit it for the default/,
+      /maxBlockSize must be an integer in \[1, 1048576\]$/,
     );
     expect(() => new RealtimeEngine({ sampleRate: Number.NaN })).toThrow(RangeError);
     const engine = new RealtimeEngine({ sampleRate: 48000 });

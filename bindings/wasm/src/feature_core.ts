@@ -450,24 +450,19 @@ export function chirp(...args: unknown[]): Float32Array {
 
 /**
  * Click train.
- *
- * @throws RangeError for an explicit `length` of 0.
  */
 export function clicks(request: ClicksRequest): Float32Array;
 export function clicks(...args: unknown[]): Float32Array {
   return withEntry('clicks', () => {
     const r = requestOnly<ClicksRequest>('clicks', args);
     assertFloat32Array(r.times, 'times');
-    if (r.length !== undefined && r.length !== null) {
-      assertPositiveInteger(r.length, 'length');
-    }
     const frequencyHz = r.frequencyHz ?? 1000;
     const clickDurationSec = r.clickDurationSec ?? 0.1;
     assertFloatFields({ frequencyHz, clickDurationSec });
     return requireModule().clicks(
       r.times,
       r.sampleRate ?? 22050,
-      r.length ?? 0,
+      r.length,
       frequencyHz,
       clickDurationSec,
     );

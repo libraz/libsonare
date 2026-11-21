@@ -696,8 +696,8 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
     const bank = bankPair(r.bank);
     return projectModule().midiBankProgram(
       num(r.ppq, 'ppq'),
-      boundedInt(r.group, 'group', 15),
-      boundedInt(r.channel, 'channel', 15),
+      num(r.group, 'group'),
+      num(r.channel, 'channel'),
       bank.msb,
       bank.lsb,
       boundedInt(r.program, 'program', 127),
@@ -766,9 +766,9 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
     assertMidiCcBindingListBytes(r.bindings);
     return projectModule().midiParamToCc(
       r.bindings,
-      boundedInt(r.paramId, 'paramId', 0xffffffff),
+      num(r.paramId, 'paramId'),
       num(r.unitValue, 'unitValue'),
-      boundedInt(r.group, 'group', 15),
+      num(r.group, 'group'),
       r.ppq === undefined || r.ppq === null ? 0 : num(r.ppq, 'ppq'),
     );
   });

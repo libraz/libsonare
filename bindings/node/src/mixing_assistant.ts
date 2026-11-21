@@ -2,12 +2,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
-import {
-  assertClosedToken,
-  assertPositiveInteger,
-  assertSampleRate,
-  requestOnly,
-} from './validation.js';
+import { assertClosedToken, assertPositiveInteger, requestOnly } from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
@@ -144,8 +139,8 @@ function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): Nativ
     if (track.name !== undefined && typeof track.name !== 'string') {
       throw refuseType(`${prefix}.name must be a string when present`);
     }
-    if (track.sampleRate !== undefined) {
-      assertSampleRate(track.sampleRate, `${prefix}.sampleRate`);
+    if (track.sampleRate !== undefined && typeof track.sampleRate !== 'number') {
+      throw refuseType(`${prefix}.sampleRate must be an integer`);
     }
     left.push(first);
     right.push(second ?? null);
@@ -246,7 +241,9 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
   return withEntry('mixingAssistantSuggest', () => {
     const fnName = 'mixingAssistantSuggest';
     const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
-    assertSampleRate(req.sampleRate);
+    if (typeof req.sampleRate !== 'number') {
+      throw refuseType('sampleRate must be an integer');
+    }
     const tracks = normalizeTracks(req.tracks, req.sampleRate);
     assertTempo(req.tempoBpm);
     const params = normalizeOptions(req);

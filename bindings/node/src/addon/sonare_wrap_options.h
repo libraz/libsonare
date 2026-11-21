@@ -510,7 +510,8 @@ inline T node_domain_number(const Napi::Value& value, const char* name,
                             const sonare::util::check::NumericDomain& domain) {
   const double number = value.As<Napi::Number>().DoubleValue();
   try {
-    sonare::util::check::within(number, domain, name);
+    // A written value never means "not given", so the domain's sentinel is refused here.
+    sonare::util::check::within(number, sonare::util::check::given_domain(domain), name);
     // A value inside an open-ended real domain can still be one a float cannot hold.
     if constexpr (std::is_floating_point_v<T> && sizeof(T) < sizeof(double)) {
       sonare::util::check::within(number, sonare::util::check::float_domain(), name);

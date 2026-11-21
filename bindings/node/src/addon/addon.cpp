@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/midi_input_domains.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_clip_page_provider.h"
 #include "sonare_wrap_engine.h"
@@ -170,9 +171,7 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
                                          "bankMsb", "bankLsb", "program"};
     if (!sonare_node::RequireNumberValue(env, info[i], kNames[i])) return env.Undefined();
   }
-  // group/channel are uint8_t C-ABI fields; read them with the MidiByte reader
-  // so an out-of-range value is rejected instead of wrapping into a value the
-  // C ABI's own range check accepts.
+  // group/channel are uint8_t C-ABI fields, read against the domains the C ABI enforces.
   double ppq = 0.0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -180,8 +179,10 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   int bank_lsb = 0;
   int program = 0;
   if (!sonare_node::RequiredDoubleArg(env, info, 0, "ppq", &ppq) ||
-      !sonare_node::RequiredMidiByteValue(env, info[1], "group", &group) ||
-      !sonare_node::RequiredMidiByteValue(env, info[2], "channel", &channel) ||
+      !sonare_node::RequiredDomainArg(env, info, 1, "group", sonare_c_detail::kMidiUmpGroupDomain,
+                                      &group) ||
+      !sonare_node::RequiredDomainArg(env, info, 2, "channel", sonare_c_detail::kMidiChannelDomain,
+                                      &channel) ||
       !sonare_node::RequiredIntArg(env, info, 3, "bankMsb", &bank_msb) ||
       !sonare_node::RequiredIntArg(env, info, 4, "bankLsb", &bank_lsb) ||
       !sonare_node::RequiredIntArg(env, info, 5, "program", &program)) {
@@ -260,16 +261,12 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
-  // min_movement is a uint8_t C-ABI argument; the MidiByte reader rejects the
-  // values a narrowing cast would wrap into an accepted range.
   uint8_t min_movement = 0;
-  if (!sonare_node::OptionalMidiByteArg(env, info, 4, "minMovement", 0, &min_movement)) {
-    return env.Undefined();
-  }
-  // The core compares movement in 7-bit CC units, so a larger threshold could never be met.
-  if (min_movement > 127) {
-    Napi::RangeError::New(env, "minMovement must be an integer in [0, 127]")
-        .ThrowAsJavaScriptException();
+  uint32_t param_id = 0;
+  if (!sonare_node::OptionalDomainArg(env, info, 4, "minMovement", uint8_t{0},
+                                      sonare_c_detail::kMidiDataByteDomain, &min_movement) ||
+      !sonare_node::RequiredDomainArg(env, info, 1, "paramId",
+                                      sonare_c_detail::kMidiTargetParamIdDomain, &param_id)) {
     return env.Undefined();
   }
   float min_value = 0.0f;
@@ -280,9 +277,8 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   }
   SonareMidiCcBinding learned{};
   const SonareError err =
-      sonare_midi_cc_learn(events.empty() ? nullptr : events.data(), events.size(),
-                           sonare_node::node_narrow_uint32(env, info[1], "paramId"), min_value,
-                           max_value, min_movement, &learned);
+      sonare_midi_cc_learn(events.empty() ? nullptr : events.data(), events.size(), param_id,
+                           min_value, max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
@@ -344,15 +340,19 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   }
   std::vector<SonareMidiCcBinding> bindings;
   if (!CcBindingsFromArray(env, info[0].As<Napi::Array>(), &bindings)) return env.Undefined();
-  // The UMP group is a uint8_t C-ABI argument; reject rather than wrap.
   uint8_t group = 0;
-  if (!sonare_node::RequiredMidiByteValue(env, info[3], "group", &group)) return env.Undefined();
+  uint32_t param_id = 0;
+  if (!sonare_node::RequiredDomainArg(env, info, 3, "group", sonare_c_detail::kMidiUmpGroupDomain,
+                                      &group) ||
+      !sonare_node::RequiredDomainArg(env, info, 1, "paramId",
+                                      sonare_c_detail::kMidiTargetParamIdDomain, &param_id)) {
+    return env.Undefined();
+  }
   double ppq = 0.0;
   if (!sonare_node::OptionalDoubleArg(env, info, 4, "ppq", 0.0, &ppq)) return env.Undefined();
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
-      bindings.empty() ? nullptr : bindings.data(), bindings.size(),
-      sonare_node::node_narrow_uint32(env, info[1], "paramId"),
+      bindings.empty() ? nullptr : bindings.data(), bindings.size(), param_id,
       sonare_node::node_narrow_finite_float(env, info[2], "unitValue"), group, ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 
+#include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "util/parameter_checks.h"
 
@@ -56,12 +57,12 @@ void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
 void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
                                                 const val& block_size_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
-  int block_size = 0;  // C value 0 = library default offline block
-  if (!block_size_val.isUndefined() && !block_size_val.isNull()) {
-    block_size = checkedIntFromVal(block_size_val, "blockSize");
-  }
+  // An omitted blockSize is the automatic offline block (0 below); a written one is read in its
+  // domain.
+  int block_size = optionalDomainValue<int>(block_size_val, "blockSize",
+                                            sonare_c_detail::kEngineRenderBlockSizeDomain)
+                       .value_or(0);
   sonare::util::check::integer_at_least(num_channels, 1, "num_channels");
-  sonare::util::check::integer_at_least(block_size, 0, "block_size");
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }

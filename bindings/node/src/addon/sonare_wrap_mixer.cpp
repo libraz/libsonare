@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/mixing_input_domains.h"
 #include "core/audio.h"
 #include "mixing/api/scene.h"
 #include "sonare_wrap_options.h"
@@ -91,16 +92,12 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
     return;
   }
   std::string json = node_narrow_string(env, info[0], "sceneJson");
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate_)) return;
-  if (sample_rate_ < sonare::kMinAudioSampleRate || sample_rate_ > sonare::kMaxAudioSampleRate) {
-    Napi::RangeError::New(env, "sampleRate out of supported range [" +
-                                   std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                                   std::to_string(sonare::kMaxAudioSampleRate) + "]")
-        .ThrowAsJavaScriptException();
+  if (!OptionalDomainArg<int>(env, info, 1, "sampleRate", 48000, sonare::kAudioSampleRateDomain,
+                              &sample_rate_))
     return;
-  }
-  if (!OptionalIntArg(env, info, 2, "blockSize", sonare::mixing::api::kMixerDefaultMaxBlock,
-                      &block_size_))
+  if (!OptionalDomainArg<int>(env, info, 2, "maxBlockSize",
+                              sonare::mixing::api::kMixerDefaultMaxBlock,
+                              sonare_c_detail::kMixerMaxBlockSizeDomain, &block_size_))
     return;
 
   mixer_ = sonare_mixer_from_scene_json(json.c_str(), sample_rate_, block_size_);
@@ -362,11 +359,14 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
 
   const size_t strip_index = sonare_node::node_narrow_uint32(env, info[0], "stripIndex");
   const unsigned int insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
-  const unsigned int param_id = sonare_node::node_narrow_uint32(env, info[2], "paramId");
+  const unsigned int param_id = node_domain_number<unsigned int>(
+      info[2], "paramId", sonare_c_detail::kStripInsertAutomationParamIdDomain);
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[3], "samplePos");
   const float value = sonare_node::node_narrow_finite_float(env, info[4], "value");
   int curve{};
-  if (!RequiredIntArg(env, info, 5, "curve", &curve)) return env.Undefined();
+  if (!RequiredDomainArg<int>(env, info, 5, "curve", sonare_c_detail::kStripAutomationCurveDomain,
+                              &curve))
+    return env.Undefined();
 
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, strip_index);
   if (strip == nullptr) {

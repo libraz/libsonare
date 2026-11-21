@@ -82,8 +82,8 @@ SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, st
   Napi::Object options = value.As<Napi::Object>();
   config.n_components = IntProperty(options, "nComponents", config.n_components);
   config.n_fft = IntProperty(options, "nFft", config.n_fft);
-  config.hop_length = IntInRangeOrAbsentProperty(
-      options, "hopLength", 1, std::numeric_limits<int>::max(), config.hop_length);
+  config.hop_length = DomainProperty<int>(options, "hopLength", config.hop_length,
+                                          sonare::kDecomposeStemsHopLengthDomain);
   config.n_iter = IntProperty(options, "nIter", config.n_iter);
   config.beta = FloatProperty(options, "beta", config.beta);
   config.mask_power = FloatProperty(options, "maskPower", config.mask_power);
@@ -166,13 +166,7 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int n_iter{};
-  if (!OptionalIntArg(env, info, 4, "nIter", sonare::kDecomposeDefaultIter, &n_iter)) {
-    return env.Undefined();
-  }
-  // 0 is the C entry's spelling of "library default"; absence is this surface's.
-  if (n_iter < 1) {
-    Napi::RangeError::New(env, "nIter must be an integer in [1, " + node_int_max_text() + "]")
-        .ThrowAsJavaScriptException();
+  if (!OptionalDomainArg(env, info, 4, "nIter", 0, sonare::kDecomposeIterDomain, &n_iter)) {
     return env.Undefined();
   }
   float beta{};

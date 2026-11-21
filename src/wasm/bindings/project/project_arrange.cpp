@@ -7,6 +7,8 @@
 
 #include <cmath>
 
+#include "c_api/project_input_domains.h"
+#include "feature/cqt.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -198,7 +200,8 @@ void ProjectWasm::setWarpMap(val desc) {
   }
   std::string name = stringProperty(desc, "name", "");
   SonareProjectWarpMapDesc cdesc{};
-  cdesc.id = uintProperty(desc, "id", 0u);
+  cdesc.id = optionalDomainValue<uint32_t>(desc["id"], "id", sonare_c_detail::kWarpMapIdDomain)
+                 .value_or(0u);
   cdesc.name = name.empty() ? nullptr : wasmCString(name, "name");
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
@@ -226,11 +229,17 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int take_sample_rate = checkedIntFromVal(take_sample_rate_val, "takeSampleRate");
   // An omitted key keeps the init value; a written one, 0 included, is read literally and a value
-  // outside the domain is refused by the C entry.
+  // outside the domain is refused under its key.
   SonareTakeAlignConfig resolved;
   sonare_take_align_config_init(&resolved);
-  resolved.hop_length = intProperty(config, "hopLength", resolved.hop_length);
-  resolved.bins_per_octave = intProperty(config, "binsPerOctave", resolved.bins_per_octave);
+  if (hasProperty(config, "hopLength")) {
+    resolved.hop_length =
+        domainNumberFromVal<int>(config["hopLength"], "hopLength", sonare::kCqtHopLengthDomain);
+  }
+  if (hasProperty(config, "binsPerOctave")) {
+    resolved.bins_per_octave =
+        domainNumberFromVal<int>(config["binsPerOctave"], "binsPerOctave", sonare::kCqtCountDomain);
+  }
 
   validateWasmFloat32ArrayPair(reference, "reference samples", take, "take samples", false);
   const std::vector<float> reference_buffer = float32ArrayToVector(reference);

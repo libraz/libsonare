@@ -64,10 +64,13 @@ describe('WASM Project vocal input number errors', () => {
     ['expectedSourceOffsetPpq', Number.POSITIVE_INFINITY],
     ['expectedSourceSampleRate', Number.NaN],
     ['expectedSourceSampleCount', Number.POSITIVE_INFINITY],
-    ['clipId', Number.NaN],
     ['renderToken', { ...TOKEN, profileId: Number.NaN }],
   ])('reports RangeError for a numeric value outside the %s domain', (field, value) => {
     expect(() => apply({ [field]: value })).toThrow(RangeError);
+  });
+
+  it.each([['clipId', Number.NaN]])('leaves the %s domain to the native reader', (field, value) => {
+    expect(() => apply({ [field]: value })).toThrow(/native apply reached/);
   });
 
   it('reads an omitted or null takeId as the base source and refuses 0 by name', () => {
@@ -99,14 +102,22 @@ describe('WASM Project vocal input number errors', () => {
     ).toThrow(TypeError);
   });
 
-  it.each([
-    ['sourceId', Number.NaN],
-    ['sampleRate', Number.POSITIVE_INFINITY],
-  ])('reports RangeError for a numeric rehydrate %s outside its domain', (field, value) => {
+  it.each([['sampleRate', Number.POSITIVE_INFINITY]])(
+    'reports RangeError for a numeric rehydrate %s outside its domain',
+    (field, value) => {
+      expect(() =>
+        projectRehydrateVocalEdits(native, [
+          { sourceId: 7, mono: new Float32Array([0.1]), sampleRate: 48000, [field]: value },
+        ] as never),
+      ).toThrow(RangeError);
+    },
+  );
+
+  it('leaves the rehydrate sourceId domain to the native reader', () => {
     expect(() =>
       projectRehydrateVocalEdits(native, [
-        { sourceId: 7, mono: new Float32Array([0.1]), sampleRate: 48000, [field]: value },
+        { sourceId: Number.NaN, mono: new Float32Array([0.1]), sampleRate: 48000 },
       ] as never),
-    ).toThrow(RangeError);
+    ).toThrow(/native rehydrate reached/);
   });
 });

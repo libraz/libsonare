@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "engine/common.h"
 #include "engine/realtime_engine.h"
 #include "sonare_wrap_engine.h"
@@ -99,7 +100,13 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     if (!CopyString(env, node.id, sizeof(node.id), text, "graph node id")) return env.Undefined();
     node.type = IntProperty(obj, "type", node.type);
     node.gain_db = FloatProperty(obj, "gainDb", node.gain_db);
-    node.num_ports = IntProperty(obj, "numPorts", AbsentIsSentinel<int>{node.num_ports});
+    const Napi::Value ports = obj.Get("numPorts");
+    if (!ports.IsUndefined() && !ports.IsNull()) {
+      const std::string ports_subject = "spec.nodes[" + std::to_string(i) + "].numPorts";
+      if (!sonare_node::RequireNumberValue(env, ports, ports_subject)) return env.Undefined();
+      node.num_ports = sonare_node::node_domain_number<int>(
+          ports, ports_subject.c_str(), sonare_c_detail::kEngineGraphNodePortsDomain);
+    }
     // A wrong-typed optional field left one pending JS exception; stop here so
     // no further N-API throw lands on top of it (that would be a fatal abort).
     if (env.IsExceptionPending()) return env.Undefined();
@@ -262,7 +269,8 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   int block_size = 0;  // C value 0 = library default offline block
   bool finalize = true;
-  if (!OptionalIntArg(env, info, 1, "blockSize", block_size, &block_size) ||
+  if (!OptionalDomainArg(env, info, 1, "blockSize", 0,
+                         sonare_c_detail::kEngineRenderBlockSizeDomain, &block_size) ||
       !OptionalBoolArg(env, info, 2, "finalize", true, &finalize)) {
     return env.Undefined();
   }

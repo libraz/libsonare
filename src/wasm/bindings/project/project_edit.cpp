@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "c_api/project_input_domains.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -277,7 +278,9 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
   if (desc.isUndefined() || desc.isNull()) {
     throw WasmTypeError("desc must be given");
   }
-  d.target_param_id = uintProperty(desc, "targetParamId", 0);
+  d.target_param_id = optionalDomainValue<uint32_t>(desc["targetParamId"], "targetParamId",
+                                                    sonare_c_detail::kAutomationTargetParamIdDomain)
+                          .value_or(0);
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
   d.points = storage->empty() ? nullptr : storage->data();
   d.point_count = storage->size();

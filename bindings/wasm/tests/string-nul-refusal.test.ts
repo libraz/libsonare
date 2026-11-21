@@ -463,6 +463,12 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'error-subject label built from a literal name and an element index',
     },
     {
+      file: 'realtime/processing.cpp',
+      text: 'ports_subject.c_str()',
+      count: 1,
+      reason: 'error-subject label built from a graph node index and a literal member name',
+    },
+    {
       file: 'realtime/clips.cpp',
       text: 'subject.c_str()',
       count: 3,

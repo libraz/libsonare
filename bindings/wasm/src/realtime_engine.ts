@@ -323,13 +323,13 @@ function requireObject(argName: string, value: unknown): void {
   }
 }
 
-/** An omitted size is `0`, which the native engine reads as the library default. */
+/** An omitted size is `0`, which the native engine reads as the library default; an omitted `maxBlockSize` or `maxChannels` stays absent. */
 interface ResolvedEngineConfig {
   sampleRate: number;
-  maxBlockSize: number;
+  maxBlockSize: number | undefined;
   commandCapacity: number;
   telemetryCapacity: number;
-  maxChannels: number;
+  maxChannels: number | undefined;
 }
 
 function normalizeEngineConfig(
@@ -346,10 +346,10 @@ function normalizeEngineConfig(
   }
   return {
     sampleRate,
-    maxBlockSize: optionalCount('maxBlockSize', request.maxBlockSize) ?? 0,
+    maxBlockSize: request.maxBlockSize,
     commandCapacity: optionalCount('commandCapacity', request.commandCapacity) ?? 0,
     telemetryCapacity: optionalCount('telemetryCapacity', request.telemetryCapacity) ?? 0,
-    maxChannels: optionalCount('maxChannels', request.maxChannels) ?? 0,
+    maxChannels: request.maxChannels,
   };
 }
 
@@ -368,7 +368,7 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   }
   return {
     channels: request.channels,
-    blockSize: optionalCount('blockSize', request.blockSize),
+    blockSize: request.blockSize,
     finalize: optionalBoolean(request.finalize, 'finalize', true),
   };
 }
@@ -1615,7 +1615,7 @@ export class RealtimeEngine {
    *   channel count, or the engine was never prepared
    */
   primeOfflineParameters(numChannels: number, blockSize?: number): void {
-    this.native.primeOfflineParameters(numChannels, optionalCount('blockSize', blockSize));
+    this.native.primeOfflineParameters(numChannels, blockSize);
   }
 
   /**
@@ -1895,14 +1895,12 @@ export class RealtimeEngine {
               return entry;
             }
             graphName(`nodes[${i}].id`, entry.id);
-            const { type, numPorts, ...node } = entry;
-            const ports = engineCount(`spec.nodes[${i}].numPorts`, numPorts, C_INT_MAX);
+            const { type, ...node } = entry;
             return {
               ...node,
               ...(type === undefined || type === null
                 ? {}
                 : { type: tokenCode(`nodes[${i}].type`, type, GRAPH_NODE_TYPES) }),
-              ...(ports === undefined ? {} : { numPorts: ports }),
             };
           })
         : spec.nodes,
@@ -2811,9 +2809,6 @@ export class RealtimeEngine {
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
     noOrdinal('dither', options.dither);
-    for (const name of ['blockSize', 'targetSampleRate', 'sourceSampleRate'] as const) {
-      engineCount(`options.${name}`, options[name], C_INT_MAX);
-    }
     if (typeof options.targetLufs === 'number' && !Number.isFinite(options.targetLufs)) {
       throw refuse('targetLufs must be finite');
     }
@@ -2849,12 +2844,10 @@ export class RealtimeEngine {
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     requestObject('freezeOffline', options, 'options', true);
-    const { blockSize, clipId, ...rest } = options;
-    const block = engineCount('options.blockSize', blockSize, C_INT_MAX);
+    const { clipId, ...rest } = options;
     const clip = optionalId('clipId', clipId);
     return this.native.freezeOffline({
       ...rest,
-      ...(block === undefined ? {} : { blockSize: block }),
       ...(clip === undefined ? {} : { clipId: clip }),
     });
   }

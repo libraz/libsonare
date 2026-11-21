@@ -255,17 +255,18 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
       }
     }
     target_midi = floatProperty(options, "targetMidi", target_midi);
-    config.scale.root = intProperty(options, "scaleRoot", config.scale.root);
+    if (hasProperty(options, "scaleRoot")) {
+      config.scale.root = domainNumberFromVal<int>(options["scaleRoot"], "scaleRoot",
+                                                   editing::pitch_editor::kScaleRootDomain);
+    }
     const val mask_value =
         hasProperty(options, "scaleModeMask") ? options["scaleModeMask"] : val::undefined();
-    const int scale_mode_mask =
-        mask_value.isString()
-            ? static_cast<int>(scale_mask_for_mode(modeFromVal(mask_value, "scaleModeMask")))
-            : intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask));
-    if (scale_mode_mask < 0 || scale_mode_mask > 0x0FFF) {
-      throw WasmRangeError("scaleModeMask must be a non-zero 12-bit mask");
+    if (mask_value.isString()) {
+      config.scale.mode_mask = scale_mask_for_mode(modeFromVal(mask_value, "scaleModeMask"));
+    } else if (hasProperty(options, "scaleModeMask")) {
+      config.scale.mode_mask = domainNumberFromVal<uint16_t>(
+          mask_value, "scaleModeMask", editing::pitch_editor::kScaleModeMaskDomain);
     }
-    config.scale.mode_mask = static_cast<uint16_t>(scale_mode_mask);
     config.scale.reference_midi =
         floatProperty(options, "scaleReferenceMidi", config.scale.reference_midi);
     config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);

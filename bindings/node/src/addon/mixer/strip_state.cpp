@@ -1,5 +1,6 @@
 #include <string>
 
+#include "c_api/engine_config_domains.h"
 #include "sonare_wrap_mixer.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -239,7 +240,8 @@ Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareError err = sonare_strip_set_channel_delay_samples(
-      strip, sonare_node::node_narrow_int(env, info[1], "delaySamples"));
+      strip, sonare_node::node_domain_number<int>(info[1], "delaySamples",
+                                                  sonare_c_detail::kEngineAlignmentDelayDomain));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip channel delay: ");
   }

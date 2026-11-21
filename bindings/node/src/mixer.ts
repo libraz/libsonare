@@ -20,7 +20,6 @@ import {
   assertFloatValue,
   assertIntegerValue,
   assertSampleRate,
-  C_INT_MAX,
   requestObject,
 } from './validation.js';
 import {
@@ -176,12 +175,6 @@ function maxBlockSizeOf(value: unknown): number | undefined {
     return undefined;
   }
   assertIntegerValue(value, 'maxBlockSize');
-  if (value === 0) {
-    throw refuse(`maxBlockSize must not be 0; omit it for the default`);
-  }
-  if (value < 0 || value > C_INT_MAX) {
-    throw refuse(`maxBlockSize must be an integer in [1, ${C_INT_MAX}]`);
-  }
   return value;
 }
 

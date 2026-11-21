@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -411,7 +412,8 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   SonareProjectMarker marker{};
   marker.id = Uint32Property(obj, "id", kZeroIsSentinel);
   marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
-  marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
+  marker.key_fifths = sonare_node::DomainProperty<int8_t>(obj, "keyFifths", 0,
+                                                          sonare_c_detail::kMarkerKeyFifthsDomain);
   marker.key_minor = BoolProperty(obj, "keyMinor", marker.key_minor != 0) ? 1 : 0;
   if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
   const std::string name = StringProperty(obj, "name", "");
@@ -600,8 +602,14 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
       Napi::Object obj = entry.As<Napi::Object>();
       SonareProjectTimeSignatureSegment seg{};
       if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
-      if (!RequiredIntProperty(env, obj, "numerator", &seg.numerator)) return env.Undefined();
-      if (!RequiredIntProperty(env, obj, "denominator", &seg.denominator)) return env.Undefined();
+      const Napi::Value numerator = obj.Get("numerator");
+      const Napi::Value denominator = obj.Get("denominator");
+      if (!RequireNumberValue(env, numerator, "numerator")) return env.Undefined();
+      seg.numerator = sonare_node::node_domain_number<int>(
+          numerator, "numerator", sonare_c_detail::kTimeSignatureNumeratorDomain);
+      if (!RequireNumberValue(env, denominator, "denominator")) return env.Undefined();
+      seg.denominator = sonare_node::node_domain_number<int>(
+          denominator, "denominator", sonare_c_detail::kTimeSignatureDenominatorDomain);
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {

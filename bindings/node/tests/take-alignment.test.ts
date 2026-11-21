@@ -117,10 +117,10 @@ describe('alignTakeToReference', () => {
   it('refuses a config key by name rather than substituting a default', () => {
     expect(() =>
       alignTakeToReference(request({ hopLength: '512' as unknown as number })),
-    ).toThrowError(/hopLength must be a number/);
+    ).toThrowError(/hopLength must be an integer$/);
     expect(() =>
       alignTakeToReference(request({ binsPerOctave: {} as unknown as number })),
-    ).toThrowError(/binsPerOctave must be a number/);
+    ).toThrowError(/binsPerOctave must be an integer$/);
     expect(() => alignTakeToReference(request({ hopLength: 512.5 }))).toThrowError(
       /hopLength must be an integer/,
     );

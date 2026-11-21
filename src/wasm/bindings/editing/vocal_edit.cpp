@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/editing_input_domains.h"
 #include "util/exception.h"
 #include "wasm/bindings/common/common.h"
 
@@ -371,10 +372,16 @@ SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storag
   storage->options.segmentation_threshold_cents = doubleProperty(
       object, "segmentationThresholdCents", storage->options.segmentation_threshold_cents);
   storage->options.min_note_ms = doubleProperty(object, "minNoteMs", storage->options.min_note_ms);
-  storage->options.frame_length_samples =
-      uintProperty(object, "frameLengthSamples", storage->options.frame_length_samples);
-  storage->options.hop_length_samples =
-      uintProperty(object, "hopLengthSamples", storage->options.hop_length_samples);
+  if (hasProperty(object, "frameLengthSamples")) {
+    storage->options.frame_length_samples =
+        domainNumberFromVal<uint32_t>(object["frameLengthSamples"], "frameLengthSamples",
+                                      sonare_c_detail::kVocalCreateFrameLengthDomain);
+  }
+  if (hasProperty(object, "hopLengthSamples")) {
+    storage->options.hop_length_samples =
+        domainNumberFromVal<uint32_t>(object["hopLengthSamples"], "hopLengthSamples",
+                                      sonare_c_detail::kVocalCreateHopLengthDomain);
+  }
   storage->options.fmin_hz = doubleProperty(object, "fminHz", storage->options.fmin_hz);
   storage->options.fmax_hz = doubleProperty(object, "fmaxHz", storage->options.fmax_hz);
   storage->options.yin_threshold =

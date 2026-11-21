@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "project/common.h"
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_utils.h"
@@ -102,13 +103,16 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     desc.layout = layout;
     desc.planar_samples = stem_planes.data();
     desc.frame_count = static_cast<int64_t>(frame_count);
-    desc.start_frame = Int64Property(stem, "startFrame", desc.start_frame);
+    desc.start_frame = sonare_node::DomainProperty<int64_t>(
+        stem, "startFrame", desc.start_frame, sonare_c_detail::kExternalStemStartFrameDomain);
     descriptors.push_back(desc);
   }
 
   SonareExternalStemImportRequest request_desc;
   sonare_external_stem_import_request_init(&request_desc);
-  request_desc.sample_rate = IntProperty(request, "sampleRate", request_desc.sample_rate);
+  request_desc.sample_rate =
+      sonare_node::DomainProperty<int>(request, "sampleRate", request_desc.sample_rate,
+                                       sonare_c_detail::kExternalStemSampleRateDomain);
   request_desc.stems = descriptors.data();
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};

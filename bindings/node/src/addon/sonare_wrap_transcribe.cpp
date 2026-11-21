@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include "c_api/transcribe_input_domains.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_utils.h"
@@ -24,7 +25,7 @@ namespace {
 // f0MinHz, f0MaxHz and minNoteMs are the fields whose C defaults are themselves 0
 // sentinels: an omitted key must stay 0 so the C layer can resolve it from the
 // selected source. Their presence is therefore carried separately and only present values are
-// checked here. fixedVelocity is handled at its read for the same reason. group
+// checked here. fixedVelocity, maxPolyphony and minNoteDivision are checked at their read. group
 // and channel are absent on purpose -- there 0 is a value a caller can mean, and
 // that is the distinction deciding the whole set.
 bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_f0_min,
@@ -68,12 +69,6 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 // or a NaN as selecting anything, so a non-finite value is refused by name here
 // rather than reaching the C ABI, which refuses it without saying which field
 // carried it.
-//
-// fixedVelocity is read WITHOUT ZeroIsSentinel, which is the one place that tag
-// would be actively misleading: it exists so a refusal can say "its zero selects
-// the library default", and that sentence is false for a caller here, whose zero
-// is refused. The C ABI still reads the 0 an omitted key sends as "measure";
-// what changed is that no caller can spell it.
 bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTranscribeConfig* out) {
   sonare_transcribe_config_init(out);
   out->polyphonic = BoolProperty(request, "polyphonic", out->polyphonic != 0) ? 1 : 0;
@@ -93,22 +88,13 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   out->segmentation_threshold_cents =
       FiniteFloatProperty(request, "segmentationThresholdCents", out->segmentation_threshold_cents);
   out->velocity_floor_db = FiniteFloatProperty(request, "velocityFloorDb", out->velocity_floor_db);
-  // Presence, not value: an omitted fixedVelocity has to reach the C ABI as the
-  // 0 that means "measure", and a written 0 has to be refused, so the number
-  // alone cannot say which happened. Get()/IsUndefined() rather than Has(),
-  // which would make an explicit `undefined` diverge from an omitted field.
-  const Napi::Value fixed_velocity = request.Get("fixedVelocity");
-  const bool wrote_fixed_velocity = !fixed_velocity.IsUndefined() && !fixed_velocity.IsNull();
-  out->fixed_velocity = IntProperty(request, "fixedVelocity", 0);
-  // maxPolyphony and minNoteDivision carry presence for the same reason as fixedVelocity: the
-  // C ABI's 0 means "default", so an omitted key stays 0 while a written 0 is refused.
-  const Napi::Value max_polyphony = request.Get("maxPolyphony");
-  const bool wrote_max_polyphony = !max_polyphony.IsUndefined() && !max_polyphony.IsNull();
-  out->max_polyphony = IntProperty(request, "maxPolyphony", 0);
-  const Napi::Value min_note_division = request.Get("minNoteDivision");
-  const bool wrote_min_note_division =
-      !min_note_division.IsUndefined() && !min_note_division.IsNull();
-  out->min_note_division = IntProperty(request, "minNoteDivision", 0);
+  // Absence selects the C ABI's 0; a written value is checked against the given-value domain.
+  out->fixed_velocity = DomainProperty<int>(request, "fixedVelocity", 0,
+                                            sonare_c_detail::kTranscribeFixedVelocityDomain);
+  out->max_polyphony = DomainProperty<int>(request, "maxPolyphony", 0,
+                                           sonare_c_detail::kTranscribeMaxPolyphonyDomain);
+  out->min_note_division = DomainProperty<int>(request, "minNoteDivision", 0,
+                                               sonare_c_detail::kTranscribeMinNoteDivisionDomain);
   const Napi::Value frame_ratio = request.Get("minFramePeakRatio");
   const bool wrote_frame_ratio = !frame_ratio.IsUndefined() && !frame_ratio.IsNull();
   out->min_frame_peak_ratio =
@@ -135,21 +121,6 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   // Short-circuited: a reader that already refused a key left an exception
   // pending, and a second throw on top of it aborts rather than reaching JS.
   if (env.IsExceptionPending()) return false;
-  if (wrote_fixed_velocity && (out->fixed_velocity < 1 || out->fixed_velocity > 127)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "fixedVelocity must be an integer in [1, 127]");
-    return false;
-  }
-  if (wrote_max_polyphony && (out->max_polyphony < 1 || out->max_polyphony > 64)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "maxPolyphony must be an integer in [1, 64]");
-    return false;
-  }
-  if (wrote_min_note_division && (out->min_note_division < 1 || out->min_note_division > 128)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "minNoteDivision must be an integer in [1, 128]");
-    return false;
-  }
   const struct {
     const char* key;
     float* value;

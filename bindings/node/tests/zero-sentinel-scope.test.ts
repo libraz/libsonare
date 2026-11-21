@@ -81,18 +81,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'An index into the bank; 0 is the first sample, a valid index the caller can mean.',
   ],
   [
-    'sonare_wrap_transcribe.cpp:fixedVelocity',
-    'The 0 an omitted key sends, which the C ABI reads as "measure". Untagged deliberately: the sentinel wording claims a caller\'s zero selects the default, and here a WRITTEN 0 is refused by name (1..127), so the read site checks presence and no caller can reach this zero.',
-  ],
-  [
-    'sonare_wrap_transcribe.cpp:maxPolyphony',
-    'Same as fixedVelocity: the 0 an omitted key sends reads as "default" in the C ABI, and a WRITTEN 0 is refused (1..64) after the presence check.',
-  ],
-  [
-    'sonare_wrap_transcribe.cpp:minNoteDivision',
-    'Same as maxPolyphony: the 0 an omitted key sends reads as "unset" in the C ABI, and a WRITTEN 0 is refused (1..128) after the presence check.',
-  ],
-  [
     'project/vocal_edit.cpp:takeId',
     'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.sourceId and clip.sourceOffsetPpq; zero is therefore an explicit binding selector rather than omission.',
   ],
@@ -139,10 +127,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
-  ],
-  [
-    'sonare_wrap_project.cpp:keyFifths',
-    'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
   ],
 ]);
 

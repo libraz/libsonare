@@ -6,6 +6,7 @@
 #include "core/audio.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
+#include "editing/pitch_editor/scale_quantizer.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
@@ -382,7 +383,8 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
     config.target_mode = sonare_node::NamedSelectorProperty(
         opts, "targetMode", std::array<const char*, 2>{"midi", "scale"}, config.target_mode);
     config.target_midi = sonare_node::FloatProperty(opts, "targetMidi", config.target_midi);
-    config.scale_root = sonare_node::IntProperty(opts, "scaleRoot", config.scale_root);
+    config.scale_root = sonare_node::DomainProperty<int32_t>(
+        opts, "scaleRoot", config.scale_root, sonare::editing::pitch_editor::kScaleRootDomain);
     const Napi::Value mask_value = opts.Get("scaleModeMask");
     if (mask_value.IsString()) {
       uint16_t named_mask = 0;
@@ -394,8 +396,9 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
       }
       config.scale_mode_mask = named_mask;
     } else {
-      config.scale_mode_mask =
-          sonare_node::Uint32Property(opts, "scaleModeMask", config.scale_mode_mask);
+      config.scale_mode_mask = sonare_node::DomainProperty<uint32_t>(
+          opts, "scaleModeMask", config.scale_mode_mask,
+          sonare::editing::pitch_editor::kScaleModeMaskDomain);
     }
     config.scale_reference_midi =
         sonare_node::FloatProperty(opts, "scaleReferenceMidi", config.scale_reference_midi);

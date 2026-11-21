@@ -337,7 +337,7 @@ function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: 
   if (framing.nFft < 0 || framing.hopLength < 0) {
     expectRefusalOf(run);
     expect(() => run()).toThrow(
-      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft|hopLength) must be an integer in \[1, 2147483647\]$/,
+      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft must be an integer in \[4, 524288\]|hopLength must be an integer in \[1, 2147483647\])$/,
     );
   } else {
     expectCoreRefusal(
@@ -1018,15 +1018,15 @@ describe('renderPercussiveEvents', () => {
       expectRangeRefusal(() => render([edited(4410, 15435)], { fadeMs: bad }));
     }
     expectRangeRefusal(() => render([edited(4410, 15435)], { fadeMs: -1 }));
-    for (const options of [
-      { nFft: -2048 },
-      { hopLength: -512 },
-      { hpssKernelHarmonic: -1 },
-      { hpssKernelPercussive: -1 },
-    ]) {
+    for (const [options, domain] of [
+      [{ nFft: -2048 }, '[4, 524288]'],
+      [{ hopLength: -512 }, '[1, 2147483647]'],
+      [{ hpssKernelHarmonic: -1 }, '[1, 2147483647]'],
+      [{ hpssKernelPercussive: -1 }, '[1, 2147483647]'],
+    ] as const) {
       expectRangeRefusal(() => render([edited(4410, 15435)], options));
       expect(() => render([edited(4410, 15435)], options)).toThrow(
-        `renderPercussiveEvents: ${Object.keys(options)[0]} must be an integer in [1, 2147483647]`,
+        `renderPercussiveEvents: ${Object.keys(options)[0]} must be an integer in ${domain}`,
       );
     }
     for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {

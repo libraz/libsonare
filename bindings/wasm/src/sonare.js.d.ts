@@ -1802,10 +1802,10 @@ export interface WasmRealtimeEngine {
   process: (channels: Float32Array[]) => Float32Array[];
   prepareWithChannels: (
     sampleRate: number,
-    maxBlockSize: number,
+    maxBlockSize: number | undefined,
     commandCapacity: number,
     telemetryCapacity: number,
-    maxChannels: number,
+    maxChannels: number | undefined,
   ) => void;
   prepareChannels: (numChannels: number, maxFrames: number) => void;
   getChannelBuffer: (channel: number, numFrames: number) => Float32Array;
@@ -3152,7 +3152,7 @@ export interface SonareModule {
     y: Float32Array,
     yRows: number,
     yCols: number,
-    k: number,
+    k: number | undefined,
     metric: string,
     mode: string,
   ) => WasmSegmentMatrixResult;
@@ -3160,7 +3160,7 @@ export interface SonareModule {
     data: Float32Array,
     rows: number,
     cols: number,
-    k: number,
+    k: number | undefined,
     width: number,
     sym: boolean,
     metric: string,
@@ -3451,7 +3451,7 @@ export interface SonareModule {
   clicks: (
     times: Float32Array,
     sampleRate: number,
-    length: number,
+    length: number | undefined,
     frequency: number,
     clickDuration: number,
   ) => Float32Array;
@@ -3749,7 +3749,7 @@ export interface SonareModule {
 
   RealtimeEngine: new (
     sampleRate: number,
-    maxBlockSize: number,
+    maxBlockSize: number | undefined,
     commandCapacity: number,
     telemetryCapacity: number,
     maxChannels?: number,

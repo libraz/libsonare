@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/project_input_domains.h"
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -77,12 +78,18 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.layout = layout;
     descriptor.planar_samples = planes.data();
     descriptor.frame_count = static_cast<int64_t>(frames);
-    descriptor.start_frame = int64Property(stem, "startFrame", descriptor.start_frame);
+    descriptor.start_frame =
+        optionalDomainValue<int64_t>(stem["startFrame"], "startFrame",
+                                     sonare_c_detail::kExternalStemStartFrameDomain)
+            .value_or(descriptor.start_frame);
     descriptors.push_back(descriptor);
   }
   SonareExternalStemImportRequest request_desc;
   sonare_external_stem_import_request_init(&request_desc);
-  request_desc.sample_rate = intProperty(request, "sampleRate", request_desc.sample_rate);
+  request_desc.sample_rate =
+      optionalDomainValue<int>(request["sampleRate"], "sampleRate",
+                               sonare_c_detail::kExternalStemSampleRateDomain)
+          .value_or(request_desc.sample_rate);
   request_desc.stems = descriptors.data();
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};

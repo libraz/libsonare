@@ -238,12 +238,12 @@ val js_segment_cross_similarity(val x, const val& x_rows_val, const val& x_cols_
       domainNumberFromVal<int>(y_rows_val, "yRows", sonare_c_detail::kSegmentMatrixExtentDomain);
   const int y_cols =
       domainNumberFromVal<int>(y_cols_val, "yCols", sonare_c_detail::kSegmentMatrixExtentDomain);
-  const int k = checkedIntFromVal(k_val, "k");
+  const int k = optionalDomainValue<int>(k_val, "k", sonare_c_detail::kSegmentNeighbourCountDomain)
+                    .value_or(0);
   std::vector<float> x_data = load_segment_matrix(x, x_rows, x_cols, "x");
   std::vector<float> y_data = load_segment_matrix(y, y_rows, y_cols, "y");
-  if (x_rows != y_rows || k < 0) {
-    throw WasmRangeError(
-        "feature dimensions must match and k must be an integer in [0, 2147483647]");
+  if (x_rows != y_rows) {
+    throw WasmRangeError("feature dimensions must match");
   }
   const int rows = mode == "affinity" ? y_cols : x_cols;
   const int cols = mode == "affinity" ? x_cols : y_cols;
@@ -259,13 +259,11 @@ val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_
       domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
   const int cols =
       domainNumberFromVal<int>(cols_val, "cols", sonare_c_detail::kSegmentMatrixExtentDomain);
-  const int k = checkedIntFromVal(k_val, "k");
+  const int k = optionalDomainValue<int>(k_val, "k", sonare_c_detail::kSegmentNeighbourCountDomain)
+                    .value_or(0);
   const int width =
       domainNumberFromVal<int>(width_val, "width", sonare_c_detail::kSegmentRecurrenceWidthDomain);
   std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
-  if (k < 0) {
-    throw WasmRangeError("k must be an integer in [0, 2147483647]");
-  }
   return segment_matrix_result(
       recurrence_matrix(values.data(), rows, cols, k, width, sym, metric, mode), cols, cols);
 }

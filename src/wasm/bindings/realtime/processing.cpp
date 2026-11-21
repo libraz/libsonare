@@ -121,14 +121,11 @@ void RealtimeEngineWasm::setGraph(val spec) {
       throw WasmRangeError("graph node id must be at most " + std::to_string(kMaxNodeIdBytes) +
                            " bytes");
     }
-    // Match the C ABI (sonare_engine_set_graph): an explicit `numPorts: 0`, which
-    // intProperty passes through as-is, asks for num_channels. A negative count
-    // is refused there and must be refused here for the same value.
-    const int requested_ports = intProperty(node, "numPorts", num_channels);
-    if (requested_ports < 0) {
-      throw WasmRangeError("graph node numPorts must not be negative");
-    }
-    const int ports = requested_ports == 0 ? num_channels : requested_ports;
+    // An omitted numPorts takes the spec's channel count; a written one is read in its domain.
+    const std::string ports_subject = "spec.nodes[" + std::to_string(i) + "].numPorts";
+    const int ports = optionalDomainValue<int>(node["numPorts"], ports_subject.c_str(),
+                                               sonare_c_detail::kEngineGraphNodePortsDomain)
+                          .value_or(num_channels);
     if (!graph->add_node(id, std::move(processor), ports)) {
       throw WasmRangeError("failed to add graph node");
     }
@@ -384,11 +381,21 @@ void RealtimeEngineWasm::finishOfflineRender() {
 
 val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
-  int block_size = intProperty(options_val, "blockSize", 0);
+  // An omitted blockSize is the automatic offline block (0 below); a written one is read in its
+  // domain, so a typed 0 is refused as on the C ABI.
+  int block_size = optionalDomainValue<int>(options_val["blockSize"], "options.blockSize",
+                                            sonare_c_detail::kEngineOfflineBlockDomain)
+                       .value_or(0);
   const int num_channels = requireIntProperty(options_val, "numChannels", "options");
-  // 0 (or absent) selects the prepared rate for the source and the source rate for the target.
-  const int requested_source_rate = intProperty(options_val, "sourceSampleRate", 0);
-  const int requested_target_rate = intProperty(options_val, "targetSampleRate", 0);
+  // An omitted rate selects the prepared rate for the source and the source rate for the target.
+  const int requested_source_rate =
+      optionalDomainValue<int>(options_val["sourceSampleRate"], "options.sourceSampleRate",
+                               sonare_c_detail::kEngineSampleRateDomain)
+          .value_or(0);
+  const int requested_target_rate =
+      optionalDomainValue<int>(options_val["targetSampleRate"], "options.targetSampleRate",
+                               sonare_c_detail::kEngineSampleRateDomain)
+          .value_or(0);
   const int source_sample_rate = requested_source_rate == 0
                                      ? static_cast<int>(std::lround(engine_.sample_rate()))
                                      : requested_source_rate;
@@ -404,13 +411,8 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int dither = intProperty(options_val, "dither", 0);
   sonare::util::check::integer_within(total_frames, sonare_c_detail::kEngineBounceFramesDomain,
                                       "totalFrames");
-  if (block_size < 0) throw WasmRangeError("blockSize must not be negative");
   sonare::util::check::integer_within(num_channels, sonare_c_detail::kEngineRenderChannelsDomain,
                                       "numChannels");
-  if (requested_target_rate < 0) throw WasmRangeError("targetSampleRate must not be negative");
-  if (requested_source_rate < 0) {
-    throw WasmRangeError("source_sample_rate must be an integer in [0, 2147483647]");
-  }
   if (dither_bits < 0) throw WasmRangeError("ditherBits must not be negative");
   if (source_sample_rate <= 0) {
     throw WasmRangeError("source_sample_rate is 0 and the engine has no prepared sample rate");
@@ -503,9 +505,11 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
 
 val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
-  int block_size = intProperty(options_val, "blockSize", 0);
+  int block_size = optionalDomainValue<int>(options_val["blockSize"], "options.blockSize",
+                                            sonare_c_detail::kEngineOfflineBlockDomain)
+                       .value_or(0);
   const int num_channels = requireIntProperty(options_val, "numChannels", "options");
-  if (total_frames <= 0 || block_size < 0 || num_channels <= 0 ||
+  if (total_frames <= 0 || num_channels <= 0 ||
       !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
     throw WasmRangeError("invalid freeze options");
   }

@@ -305,7 +305,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     'measureLufs',
     () => withMixer((mixer) => mixer.configureMeter(true, undefined, 'x')),
   ],
-  ['addon.midiParamToCc', 'ppq', () => addon.midiParamToCc([], 0, 0, 0, 'x')],
+  ['addon.midiParamToCc', 'ppq', () => addon.midiParamToCc([], 1, 0, 0, 'x')],
   [
     'Mixer.scheduleFaderAutomation',
     'curve',

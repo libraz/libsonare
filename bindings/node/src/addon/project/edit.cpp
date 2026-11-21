@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
@@ -188,7 +189,10 @@ bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj, bool* pres
 bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
                             std::vector<SonareAutomationPoint>* points,
                             SonareAutomationLaneDesc* desc) {
-  if (!RequiredUint32Property(env, obj, "targetParamId", &desc->target_param_id)) return false;
+  const Napi::Value target_param_id = obj.Get("targetParamId");
+  if (!RequireNumberValue(env, target_param_id, "targetParamId")) return false;
+  desc->target_param_id = sonare_node::node_domain_number<uint32_t>(
+      target_param_id, "targetParamId", sonare_c_detail::kAutomationTargetParamIdDomain);
   if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
     return false;
   }
@@ -200,7 +204,10 @@ bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
 bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
                      std::vector<SonareProjectWarpAnchor>* anchors,
                      SonareProjectWarpMapDesc* desc) {
-  if (!RequiredUint32Property(env, obj, "id", &desc->id)) return false;
+  const Napi::Value warp_map_id = obj.Get("id");
+  if (!RequireNumberValue(env, warp_map_id, "id")) return false;
+  desc->id = sonare_node::node_domain_number<uint32_t>(warp_map_id, "id",
+                                                       sonare_c_detail::kWarpMapIdDomain);
   desc->name = nullptr;
   Napi::Value value = obj.Get("anchors");
   if (!value.IsArray()) {
@@ -909,7 +916,9 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
   uint32_t track_id = 0;
   uint32_t target_param_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
-      !OptionalUint32Arg(env, info, 1, "targetParamId", 0, &target_param_id)) {
+      !sonare_node::OptionalDomainArg<uint32_t>(env, info, 1, "targetParamId", 0,
+                                                sonare_c_detail::kAutomationTargetParamIdDomain,
+                                                &target_param_id)) {
     return env.Undefined();
   }
   if (info.Length() < 3 || !info[2].IsObject()) {
@@ -951,7 +960,9 @@ Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
   uint32_t track_id = 0;
   uint32_t target_param_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
-      !OptionalUint32Arg(env, info, 1, "targetParamId", 0, &target_param_id)) {
+      !sonare_node::OptionalDomainArg<uint32_t>(env, info, 1, "targetParamId", 0,
+                                                sonare_c_detail::kAutomationTargetParamIdDomain,
+                                                &target_param_id)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_project_remove_automation_lane(project_, track_id, target_param_id));

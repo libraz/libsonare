@@ -11,9 +11,7 @@ import {
   assertFiniteScalar,
   assertFloat32Array,
   assertFloatFields,
-  assertIntegralSampleRate,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSampleRate,
   requestOnly,
   resolveOptionalNonNegative,
@@ -410,10 +408,7 @@ export function tone(request: ToneRequest): Float32Array;
 export function tone(...args: unknown[]): Float32Array {
   return withEntry('tone', () => {
     const r = requestOnly<ToneRequest>('tone', args);
-    // Integrality only: a generator's rate has no domain in the core, so the
-    // audio-analysis bound would refuse rates it renders correctly today.
     const sampleRate = r.sampleRate ?? 22050;
-    assertIntegralSampleRate(sampleRate);
     const frequencyHz = r.frequencyHz ?? 440;
     const durationSec = r.durationSec ?? 1;
     assertFloatFields({ frequencyHz, durationSec });
@@ -426,9 +421,7 @@ export function chirp(request: ChirpRequest): Float32Array;
 export function chirp(...args: unknown[]): Float32Array {
   return withEntry('chirp', () => {
     const r = requestOnly<ChirpRequest>('chirp', args);
-    // Integrality only, as `tone`: a generator's rate has no domain in the core.
     const sampleRate = r.sampleRate ?? 22050;
-    assertIntegralSampleRate(sampleRate);
     const fminHz = r.fminHz ?? 440;
     const fmaxHz = r.fmaxHz ?? 880;
     const durationSec = r.durationSec ?? 1;
@@ -443,15 +436,9 @@ export function clicks(...args: unknown[]): Float32Array {
   return withEntry('clicks', () => {
     const r = requestOnly<ClicksRequest>('clicks', args);
     assertFloat32Array(r.times, 'times');
-    // Integrality only, as `tone`: a generator's rate has no domain in the core.
     const sampleRate = r.sampleRate ?? 22050;
-    assertIntegralSampleRate(sampleRate);
-    // The native 0 means "derive from the last click"; the facade spells that as absence.
-    let length = 0;
-    if (r.length !== undefined && r.length !== null) {
-      assertPositiveInteger(r.length, 'length');
-      length = r.length;
-    }
+    // An omitted length derives it from the last click.
+    const length = r.length;
     const frequencyHz = r.frequencyHz ?? 1000;
     const clickDurationSec = r.clickDurationSec ?? 0.1;
     assertFloatFields({ frequencyHz, clickDurationSec });

@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/engine_config_domains.h"
 #include "mixing_wasm.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -85,7 +86,8 @@ void MixerWasm::setPanLaw(const val& strip_index_val, const val& pan_law_val) {
 // other strips; it is not latency, so compensation does not cancel it.
 void MixerWasm::setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
-  const int delay_samples = checkedIntFromVal(delay_samples_val, "delaySamples");
+  const int delay_samples = domainNumberFromVal<int>(delay_samples_val, "delaySamples",
+                                                     sonare_c_detail::kEngineAlignmentDelayDomain);
   checkStripError(sonare_strip_set_channel_delay_samples(stripAt(strip_index), delay_samples));
 }
 

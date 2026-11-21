@@ -66,7 +66,8 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
                          &y_cols))
     return env.Undefined();
   int k{};
-  if (!OptionalIntArg(env, info, 6, "k", 0, &k)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "k", 0, sonare_c_detail::kSegmentNeighbourCountDomain, &k))
+    return env.Undefined();
   std::string metric;
   if (!OptionalStringArg(env, info, 7, "metric", "cosine", &metric)) {
     return env.Undefined();
@@ -75,7 +76,7 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   if (!OptionalStringArg(env, info, 8, "mode", "connectivity", &mode)) {
     return env.Undefined();
   }
-  if (k < 0 || x.ElementLength() != static_cast<size_t>(x_rows) * x_cols ||
+  if (x.ElementLength() != static_cast<size_t>(x_rows) * x_cols ||
       y.ElementLength() != static_cast<size_t>(y_rows) * y_cols) {
     Napi::TypeError::New(env, "invalid matrix dimensions").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -101,7 +102,8 @@ Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) 
     return env.Undefined();
   if (!SegmentMatrixInput(env, data, rows, cols)) return env.Undefined();
   int k{};
-  if (!OptionalIntArg(env, info, 3, "k", 0, &k)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "k", 0, sonare_c_detail::kSegmentNeighbourCountDomain, &k))
+    return env.Undefined();
   int width{};
   if (!OptionalIntArg(env, info, 4, "width", 1, &width)) return env.Undefined();
   bool sym{};
