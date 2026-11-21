@@ -287,8 +287,8 @@ _ALIAS_COVERAGE = {
     "engine_render_offline": ("render_offline",),
     "project_add_automation_lane": ("add_automation_lane",),
     "project_edit_automation_lane": ("edit_automation_lane",),
-    "stream_analyzer_read_frames_i16": ("read_frames_i16",),
-    "stream_analyzer_read_frames_u8": ("read_frames_u8",),
+    "stream_analyzer_read_quantized_frames_i16": ("read_frames_i16",),
+    "stream_analyzer_read_quantized_frames_u8": ("read_frames_u8",),
     # One EQ match method under the handle's verb.
     "eq_match": ("match",),
     # The assistant's suggestion is one C entry; the facades name it by layout.
