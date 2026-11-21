@@ -90,6 +90,27 @@ def test_process_planar_switches_auto_input_layout() -> None:
         assert renderer.num_input_channels == 6
 
 
+def test_process_silence_renders_without_fixing_the_auto_input_layout() -> None:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
+        out = renderer.process_silence(BLOCK)
+        assert out.shape == (6, BLOCK)
+        assert out.dtype == np.float32
+        assert np.isfinite(out).all()
+        assert renderer.process_silence(0).shape == (6, 0)
+        renderer.process_planar([_sine(BLOCK) for _ in range(6)])
+        assert renderer.num_input_channels == 6
+        assert renderer.diagnostics()["layoutSwitches"] == 0
+
+
+@pytest.mark.parametrize("frames", [-1, BLOCK + 1])
+def test_process_silence_refuses_frames_outside_the_block(frames: int) -> None:
+    with (
+        PlaybackRenderer({}, max_block_size=BLOCK, sample_rate=48000) as renderer,
+        pytest.raises(SonareValueError),
+    ):
+        renderer.process_silence(frames)
+
+
 def test_process_interleaved_renders_finite_output() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         samples = np.array(_sine(BLOCK * 2), dtype=np.float32)
@@ -288,6 +309,7 @@ def test_closed_renderer_rejects_further_calls() -> None:
         "diagnostics": lambda: renderer.diagnostics(),
         "process_planar": lambda: renderer.process_planar(None),  # type: ignore[arg-type]
         "process_interleaved": lambda: renderer.process_interleaved(None, 0),  # type: ignore[arg-type]
+        "process_silence": lambda: renderer.process_silence(None),  # type: ignore[arg-type]
         "render_offline": lambda: renderer.render_offline(None, 0),  # type: ignore[arg-type]
     }
     for name, operation in operations.items():

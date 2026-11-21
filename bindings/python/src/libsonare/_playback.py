@@ -344,6 +344,30 @@ class PlaybackRenderer:
         )
         return out
 
+    @_entry("PlaybackRenderer.process_silence")
+    def process_silence(self, frames: int) -> np.ndarray:
+        """Render one planar block of silence; returns a ``(num_output_channels, frames)`` array.
+
+        For a host with no input connected yet: every stage advances as for a block of zeros
+        through the active input layout, and the layout is neither fixed nor switched, so under
+        ``"auto"`` the first block carrying input still sets it. ``frames`` must be an integer
+        in ``[0, max_block_size]``; 0 is a no-op.
+        """
+        handle = self._require_handle()
+        count = _narrow_int(frames, "frames", 0, _C_INT_MAX)
+        out_channels = self.num_output_channels
+        out = np.zeros((out_channels, count), dtype=np.float32)
+        row_ptr = ctypes.POINTER(ctypes.c_float)
+        out_ptrs = (row_ptr * out_channels)(
+            *[out[row].ctypes.data_as(row_ptr) for row in range(out_channels)]
+        )
+        _check_realtime(
+            self._lib.sonare_playback_renderer_process_silence(
+                handle, out_ptrs, _to_c_int(out_channels, "num_output_channels"), count
+            )
+        )
+        return out
+
     @_entry("PlaybackRenderer.process_interleaved")
     def process_interleaved(
         self, samples: Sequence[float] | list[float] | np.ndarray, num_input_channels: int

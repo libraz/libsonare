@@ -88,6 +88,14 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
     ]
 
+    lib.sonare_playback_renderer_process_silence.restype = ctypes.c_int32
+    lib.sonare_playback_renderer_process_silence.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+
     lib.sonare_playback_renderer_process_interleaved.restype = ctypes.c_int32
     lib.sonare_playback_renderer_process_interleaved.argtypes = [
         ctypes.c_void_p,
