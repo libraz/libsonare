@@ -594,10 +594,10 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
       err != SONARE_OK) {
     return err;
   }
-  const std::string init = resolved.init != nullptr ? resolved.init : "random";
+  const char* init = resolved.init != nullptr ? resolved.init : "random";
   if (const SonareError err = run_validation([&] {
         validate_decompose_shape(n_features, n_frames, n_components, n_iter);
-        if (init != "random" && init != "nndsvd") {
+        if (std::strcmp(init, "random") != 0 && std::strcmp(init, "nndsvd") != 0) {
           sonare::util::check::refuse("options.init", "must be \"random\" or \"nndsvd\"");
         }
       });
