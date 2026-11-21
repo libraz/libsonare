@@ -26,7 +26,9 @@ TEST_CASE("voice_change_ex names the refused config", "[c_api][voice_changer]") 
                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "config must not be NULL");
 
-  SonareVoiceChangeConfig config = {0.0f, 1.0f, 2};
+  SonareVoiceChangeConfig config;
+  sonare_voice_change_config_init(&config);
+  config.formant_mode = 2;
   REQUIRE(sonare_voice_change_ex(samples.data(), samples.size(), 22050, &config, &out,
                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "config.formant_mode must be one of 0, 1");

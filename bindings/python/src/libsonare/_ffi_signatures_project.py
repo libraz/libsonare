@@ -135,6 +135,9 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_synth_builtin_waveform_from_name.restype = ctypes.c_int
     lib.sonare_synth_builtin_waveform_from_name.argtypes = [ctypes.c_char_p]
 
+    lib.sonare_synth_patch_init.restype = None
+    lib.sonare_synth_patch_init.argtypes = [ctypes.POINTER(SonareSynthPatch)]
+
     lib.sonare_synth_preset_patch.restype = ctypes.c_int32
     lib.sonare_synth_preset_patch.argtypes = [
         ctypes.c_char_p,
@@ -225,6 +228,10 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_uint32),
     ]
 
+    lib.sonare_external_stem_import_request_init.restype = None
+    lib.sonare_external_stem_import_request_init.argtypes = [
+        ctypes.POINTER(SonareExternalStemImportRequest)
+    ]
     lib.sonare_project_import_external_stems.restype = ctypes.c_int32
     lib.sonare_project_import_external_stems.argtypes = [
         ctypes.c_void_p,
@@ -328,6 +335,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
 
     # Take alignment: no project handle, so it carries its own guard rather
     # than riding on the project block's.
+    lib.sonare_take_align_config_init.restype = None
+    lib.sonare_take_align_config_init.argtypes = [ctypes.POINTER(SonareTakeAlignConfig)]
     lib.sonare_align_take_to_reference.restype = ctypes.c_int32
     lib.sonare_align_take_to_reference.argtypes = [
         ctypes.POINTER(ctypes.c_float),

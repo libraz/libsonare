@@ -121,10 +121,8 @@ describe('alignTakeToReference', () => {
     expect(() =>
       alignTakeToReference(request({ binsPerOctave: {} as unknown as number })),
     ).toThrowError(/binsPerOctave must be a number/);
-    // A fraction would select the library default and report success, which is a
-    // different mistake from a magnitude one step off, so it is named as such.
     expect(() => alignTakeToReference(request({ hopLength: 512.5 }))).toThrowError(
-      /hopLength must be a whole number/,
+      /hopLength must be an integer/,
     );
   });
 
@@ -157,11 +155,17 @@ describe('alignTakeToReference', () => {
   });
 
   it('refuses a hop outside the constant-Q bound by its name', () => {
-    for (const hopLength of [-256, 65_537]) {
+    for (const hopLength of [0, -256, 65_537]) {
       expect(() => alignTakeToReference(request({ hopLength }))).toThrow(
-        new RangeError('alignTakeToReference: hopLength must be an integer in [0, 65536]'),
+        new RangeError('alignTakeToReference: hopLength must be an integer in [1, 65536]'),
       );
     }
+  });
+
+  it('refuses a written zero resolution rather than reading it as the library value', () => {
+    expect(() => alignTakeToReference(request({ binsPerOctave: 0 }))).toThrow(
+      new RangeError('alignTakeToReference: binsPerOctave must be an integer in [1, 2147483647]'),
+    );
   });
 
   it('refuses a resolution the rate cannot carry in the two fields that decide it', () => {

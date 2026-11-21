@@ -80,8 +80,9 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.start_frame = int64Property(stem, "startFrame", descriptor.start_frame);
     descriptors.push_back(descriptor);
   }
-  SonareExternalStemImportRequest request_desc{};
-  request_desc.sample_rate = intProperty(request, "sampleRate", 0);
+  SonareExternalStemImportRequest request_desc;
+  sonare_external_stem_import_request_init(&request_desc);
+  request_desc.sample_rate = intProperty(request, "sampleRate", request_desc.sample_rate);
   request_desc.stems = descriptors.data();
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};

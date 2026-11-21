@@ -105,18 +105,13 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
 }
 
 // Parses the wrapper-section fields of a JS SynthPatch descriptor (a preset-name string — a "va:"
-// routing prefix is accepted — or an object of wrapper-section overrides) into the versioned C
+// routing prefix is accepted — or an object of wrapper-section overrides) into the C
 // struct. A key the caller actually supplied also sets its present_fields bit, so `stereoSpread: 0`
 // reaches the core as an explicit zero rather than the "keep base" sentinel a bare zero would be.
 // Returns false with a pending JS exception on an unknown enum name or an empty or over-long preset
 // name; unknown PRESET names are validated downstream by the C ABI.
 inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
-  *patch = SonareSynthPatch{};
-  // Version 5 is a superset: the sample block at the tail is read only when the
-  // resolved engine is the sample engine, and the series highpass and converter
-  // past it are inert at zero, so a zero-filled tail is exactly version 2's
-  // behaviour.
-  patch->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  sonare_synth_patch_init(patch);
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
   // An empty name is never the init patch (omission is), and a name is refused rather than cut.
@@ -221,7 +216,7 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch->polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch->bus_drive);
 
-  // Second presence word (struct_version 9).
+  // Second presence word.
   auto read_float2 = [&](const char* key, uint32_t bit, float* out) {
     *out = FloatProperty(obj, key, 0.0f);
     if (SynthFieldPresent(obj, key)) patch->present_fields2 |= bit;
@@ -234,7 +229,7 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   patch->one_shot = BoolProperty(obj, "oneShot", patch->one_shot != 0) ? 1 : 0;
   if (SynthFieldPresent(obj, "oneShot")) patch->present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
 
-  // Sample engine (struct_version 3). No presence bits: only a sample patch
+  // Sample engine. No presence bits: only a sample patch
   // reads this block, which is what keeps keymap set 0 addressable as a plain
   // zero, and the other three keep the usual "0 => base".
   patch->sample_set = IntProperty(obj, "sampleSet", patch->sample_set);
@@ -315,7 +310,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SynthPatchSto
   return true;
 }
 
-// Converts a versioned C synth patch into the JS SynthPatch object shape
+// Converts a C synth patch into the JS SynthPatch object shape
 // (the read direction for synthPresetPatch): enum ordinals become their
 // canonical names so the object can be passed back verbatim. The engine section
 // stays out: a patch reads back without `engineParams`.

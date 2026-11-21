@@ -44,6 +44,7 @@ std::vector<float> bounce_gm_synth(SonareProject* project) {
   options.num_channels = 2;
   options.sample_rate = 48000;
   SonareSynthInstrumentBinding binding{};
+  sonare_synth_patch_init(&binding.patch);
   binding.destination_id = kDestination;
   binding.use_gm_programs = 1;
   float* out = nullptr;
@@ -159,6 +160,7 @@ TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
 
   SonareSynthInstrumentBinding synth{};
+  sonare_synth_patch_init(&synth.patch);
   synth.destination_id = 1;
   synth.use_gm_programs = 1;
   REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);

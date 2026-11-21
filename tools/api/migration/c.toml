@@ -1509,6 +1509,160 @@ new = "SonareVocalSnapshot"
 domain = "project"
 rule = "c-create"
 
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditApplyDesc.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditApplyResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditDependenciesResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditDependency.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalOriginalSource.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalRehydrateItem.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalRehydrateResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalAnalysis.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalAnalysisResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalCapabilities.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalCreateOptions.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalEditResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalErrorDetail.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNote.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNoteEdit.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNotesResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalOperation.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalPitchResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalRenderResult.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalRestoreOptions.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalStateBytes.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalTransition.schema_version"
+removed = "struct_size and the init function identify the layout; the member is gone"
+domain = "project"
+rule = "options-struct"
+
 # Constructors return SonareError and write the handle through their last parameter.
 
 [[entry]]
@@ -2400,3 +2554,48 @@ changed = "leads with uint32_t struct_size; prepare it with sonare_midi_route_co
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/api/c_refusal_subjects_test.cpp::the project MIDI entries name a route field and a bank outside their domains"
+
+[[entry]]
+kind = "type"
+old = "SonareTakeAlignConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C ABI take alignment reads its configuration and refuses unusable input"
+
+[[entry]]
+kind = "type"
+old = "SonareVoiceChangeConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change_ex selects the formant mode"
+
+[[entry]]
+kind = "type"
+old = "SonareExternalStemImportRequest"
+changed = "leads with uint32_t struct_size in place of struct_version; prepare it with sonare_external_stem_import_request_init, after which every field is read literally: sample_rate must equal the project's (default 0, so it is always set), stems non-NULL and stem_count at least 1; a struct whose struct_size was not set is refused"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/arrangement/c_abi_external_stems_test.cpp::C ABI external stem import reads its request through struct_size"
+
+[[entry]]
+kind = "field"
+old = "SonareExternalStemImportRequest.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareSynthPatch.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_synth_patch_init"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_SYNTH_PATCH_STRUCT_VERSION"
+removed = "the macro is gone; initialise the struct with sonare_synth_patch_init, which sets struct_size"
+domain = "engine"
+rule = "options-struct"

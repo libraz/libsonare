@@ -3269,6 +3269,7 @@ TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][m
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   SonareSynthInstrumentBinding synth{};
+  sonare_synth_patch_init(&synth.patch);
   synth.destination_id = 1;
   synth.use_gm_programs = 1;
   REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);

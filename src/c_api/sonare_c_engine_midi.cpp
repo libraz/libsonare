@@ -354,6 +354,13 @@ namespace {
 SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
                               const SonareSynthPatch& patch, SonareSampleBank* bank,
                               bool use_gm_programs) {
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(patch.struct_size, sizeof(SonareSynthPatch), "patch",
+                            "sonare_synth_patch_init");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   if (!sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error)) {

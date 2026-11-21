@@ -103,7 +103,8 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_anchors must not be NULL");
 
-  SonareTakeAlignConfig config{};
+  SonareTakeAlignConfig config;
+  sonare_take_align_config_init(&config);
   config.bins_per_octave = 18;
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                           take.size(), 22050, &config, nullptr, &count,
@@ -113,17 +114,17 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                           take.size(), 22050, &config, &anchors, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.bins_per_octave must be an integer in [0, 2147483647]");
-  config = SonareTakeAlignConfig{};
-  for (const int hop : {-256, 65537}) {
+  CHECK(last_message() == "config.bins_per_octave must be an integer in [1, 2147483647]");
+  sonare_take_align_config_init(&config);
+  for (const int hop : {0, -256, 65537}) {
     config.hop_length = hop;
     CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                             take.size(), 22050, &config, &anchors, &count,
                                             &alignment) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "config.hop_length must be an integer in [0, 65536]");
+    CHECK(last_message() == "config.hop_length must be an integer in [1, 65536]");
   }
   // The CQT's fmin and n_bins are derived from these two, so its Nyquist refusal names them.
-  config = SonareTakeAlignConfig{};
+  sonare_take_align_config_init(&config);
   config.bins_per_octave = 24;
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 8000, take.data(),
                                           take.size(), 8000, &config, &anchors, &count,
@@ -593,7 +594,8 @@ const std::map<std::string_view, std::function<void()>>& spelling_row_drivers() 
        [] {
          // 8000 Hz carries only 12 bins per octave, so 60 is refused against the reference rate.
          std::vector<float> audio(8000, 0.1f);
-         SonareTakeAlignConfig config{};
+         SonareTakeAlignConfig config;
+         sonare_take_align_config_init(&config);
          config.bins_per_octave = 60;
          SonareProjectWarpAnchor* anchors = nullptr;
          size_t count = 0;

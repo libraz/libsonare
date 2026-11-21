@@ -7,7 +7,8 @@
 extern "C" {
 #endif
 
-/// Layout version of the vocal project structs; equals sonare_vocal_project_abi_version().
+/// ABI version of the vocal project structs and functions; raised when a layout or signature
+/// changes.
 #define SONARE_VOCAL_PROJECT_ABI_VERSION 1u
 /// Capacity in bytes, including the terminating NUL, of the sidecar_key char arrays.
 #define SONARE_VOCAL_PROJECT_SIDECAR_KEY_CAPACITY 96u
@@ -23,10 +24,9 @@ typedef enum SONARE_ENUM_BASE {
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;  ///< Layout version; set by the init function.
-  uint32_t clip_id;         ///< Clip receiving the derived source; must exist on an audio track.
-  uint32_t take_id;         ///< Take of the clip to bind; 0 binds the clip's base source.
+  uint32_t struct_size;  ///< sizeof of this struct; set by the init function.
+  uint32_t clip_id;      ///< Clip receiving the derived source; must exist on an audio track.
+  uint32_t take_id;      ///< Take of the clip to bind; 0 binds the clip's base source.
   uint32_t
       expected_source_id;  ///< The root original source, even when the binding is already derived.
   uint32_t expected_source_sample_rate;  ///< Sample rate of the original, in [8000, 384000] Hz.
@@ -49,7 +49,6 @@ typedef struct {
 ///        @ref sonare_project_vocal_edit_apply_result_init before the call.
 typedef struct {
   uint32_t struct_size;         ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;      ///< Layout version; set by the init function.
   uint32_t clip_id;             ///< Clip that was edited.
   uint32_t take_id;             ///< Take that was edited; 0 for the clip's base source.
   uint32_t original_source_id;  ///< Root original source recorded in the envelope.
@@ -63,7 +62,6 @@ typedef struct {
 /// @brief The recorded envelope of one vocal-edit sidecar and whether its PCM is present.
 typedef struct {
   uint32_t struct_size;         ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;      ///< Layout version; set by the init function.
   uint32_t clip_id;             ///< Clip the sidecar belongs to.
   uint32_t take_id;             ///< Take the sidecar belongs to; 0 for the clip's base source.
   uint32_t original_source_id;  ///< Root original source id.
@@ -84,8 +82,7 @@ typedef struct {
 ///   Library-allocated arrays; release them with
 ///   sonare_free_project_vocal_edit_dependencies_result, which also resets the struct.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;  ///< Layout version; set by the init function.
+  uint32_t struct_size;  ///< sizeof of this struct; set by the init function.
   SonareProjectVocalEditDependency* dependencies;  ///< Library-owned array; NULL when empty.
   uint64_t dependency_count;                       ///< Number of entries in dependencies.
 } SonareProjectVocalEditDependenciesResult;
@@ -94,18 +91,16 @@ typedef struct {
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;  ///< Layout version; set by the init function.
-  uint32_t source_id;       ///< Project source id this PCM is the original of.
-  const float* mono;        ///< Mono PCM of the original; borrowed, copied during the call.
-  int64_t sample_count;     ///< Frames in mono.
-  uint32_t sample_rate;     ///< Sample rate of mono in Hz.
+  uint32_t struct_size;  ///< sizeof of this struct; set by the init function.
+  uint32_t source_id;    ///< Project source id this PCM is the original of.
+  const float* mono;     ///< Mono PCM of the original; borrowed, copied during the call.
+  int64_t sample_count;  ///< Frames in mono.
+  uint32_t sample_rate;  ///< Sample rate of mono in Hz.
 } SonareProjectVocalOriginalSource;
 
 /// @brief Outcome of rehydrating one vocal-edit sidecar.
 typedef struct {
   uint32_t struct_size;        ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;     ///< Layout version; set by the init function.
   uint32_t clip_id;            ///< Clip the sidecar belongs to.
   uint32_t take_id;            ///< Take the sidecar belongs to; 0 for the clip's base source.
   uint32_t derived_source_id;  ///< Derived source id the entry restores.
@@ -118,7 +113,6 @@ typedef struct {
 ///   also resets the struct.
 typedef struct {
   uint32_t struct_size;                    ///< sizeof of this struct; set by the init function.
-  uint32_t schema_version;                 ///< Layout version; set by the init function.
   SonareProjectVocalRehydrateItem* items;  ///< Library-owned array; NULL when empty.
   uint64_t item_count;                     ///< Number of entries in items.
 } SonareProjectVocalRehydrateResult;

@@ -185,6 +185,15 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 #endif
 }
 
+void sonare_voice_change_config_init(SonareVoiceChangeConfig* config) {
+  if (config == nullptr) return;
+  *config = SonareVoiceChangeConfig{};
+  config->struct_size = sizeof(SonareVoiceChangeConfig);
+  config->pitch_semitones = 0.0f;
+  config->formant_factor = 1.0f;
+  config->formant_mode = SONARE_FORMANT_MODE_RELATIVE;
+}
+
 SonareError sonare_voice_change_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareVoiceChangeConfig* config, float** out,
                                    size_t* out_length) {
@@ -198,6 +207,8 @@ SonareError sonare_voice_change_ex(const float* samples, size_t length, int samp
   }
   SONARE_C_REQUIRE_NONNULL(config);
   if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareVoiceChangeConfig),
+                                             "config", "sonare_voice_change_config_init");
         constexpr std::array<int, 2> kFormantModes = {SONARE_FORMANT_MODE_RELATIVE,
                                                       SONARE_FORMANT_MODE_ABSOLUTE};
         util::check::one_of(config->formant_mode, kFormantModes, "config.formant_mode");

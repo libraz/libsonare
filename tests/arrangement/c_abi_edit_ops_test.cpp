@@ -467,7 +467,8 @@ TEST_CASE("C-ABI detached PCM edits become non-undoable at a byte boundary",
     stem.planar_samples = planes;
     stem.frame_count = static_cast<int64_t>(left.size());
     stem.start_frame = 0;
-    SonareExternalStemImportRequest request{};
+    SonareExternalStemImportRequest request;
+    sonare_external_stem_import_request_init(&request);
     request.sample_rate = 48000;
     request.stems = &stem;
     request.stem_count = 1;
@@ -1806,23 +1807,49 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     return code;
   };
 
-  SECTION("a zeroed config asks for the library values, as NULL does") {
+  SECTION("an initialised config asks for the library values, as NULL does") {
     size_t from_null = 0;
-    size_t from_zeroed = 0;
-    const SonareTakeAlignConfig zeroed{};
+    size_t from_init = 0;
+    SonareTakeAlignConfig initialised;
+    sonare_take_align_config_init(&initialised);
+    REQUIRE(initialised.struct_size == sizeof(SonareTakeAlignConfig));
+    REQUIRE(initialised.hop_length == sonare::mir::ChromaDtwConfig{}.hop_length);
+    REQUIRE(initialised.bins_per_octave == sonare::mir::ChromaDtwConfig{}.bins_per_octave);
     REQUIRE(align(nullptr, &from_null) == SONARE_OK);
-    REQUIRE(align(&zeroed, &from_zeroed) == SONARE_OK);
-    REQUIRE(from_null == from_zeroed);
+    REQUIRE(align(&initialised, &from_init) == SONARE_OK);
+    REQUIRE(from_null == from_init);
     REQUIRE(from_null >= 2);
+  }
+
+  SECTION("a config that was not initialised is refused by name, and so is a zero field") {
+    size_t count = 0;
+    const SonareTakeAlignConfig zeroed{};
+    REQUIRE(align(&zeroed, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("config.struct_size") !=
+            std::string::npos);
+    SonareTakeAlignConfig zero_hop;
+    sonare_take_align_config_init(&zero_hop);
+    zero_hop.hop_length = 0;
+    REQUIRE(align(&zero_hop, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("config.hop_length") !=
+            std::string::npos);
+    SonareTakeAlignConfig zero_bins;
+    sonare_take_align_config_init(&zero_bins);
+    zero_bins.bins_per_octave = 0;
+    REQUIRE(align(&zero_bins, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("config.bins_per_octave") !=
+            std::string::npos);
   }
 
   SECTION("the hop reaches the alignment, so a finer one yields more anchors") {
     // A domain check would only prove the value was read off the struct. Two runs
     // differing in one field, required to answer differently, is what shows it
     // reached the measurement: a hop dropped on the floor gives the same count.
-    SonareTakeAlignConfig coarse{};
+    SonareTakeAlignConfig coarse;
+    sonare_take_align_config_init(&coarse);
     coarse.hop_length = 1024;
-    SonareTakeAlignConfig fine{};
+    SonareTakeAlignConfig fine;
+    sonare_take_align_config_init(&fine);
     fine.hop_length = 256;
     size_t coarse_count = 0;
     size_t fine_count = 0;
@@ -1837,13 +1864,16 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     // only checks the sign, so a span the chroma fold cannot use is refused only
     // if the value travelled all the way into the core's grid.
     size_t count = 0;
-    SonareTakeAlignConfig folds{};
+    SonareTakeAlignConfig folds;
+    sonare_take_align_config_init(&folds);
     folds.bins_per_octave = 36;
     REQUIRE(align(&folds, &count) == SONARE_OK);
-    SonareTakeAlignConfig does_not_fold{};
+    SonareTakeAlignConfig does_not_fold;
+    sonare_take_align_config_init(&does_not_fold);
     does_not_fold.bins_per_octave = 18;
     REQUIRE(align(&does_not_fold, &count) == SONARE_ERROR_INVALID_PARAMETER);
-    SonareTakeAlignConfig negative{};
+    SonareTakeAlignConfig negative;
+    sonare_take_align_config_init(&negative);
     negative.bins_per_octave = -12;
     REQUIRE(align(&negative, &count) == SONARE_ERROR_INVALID_PARAMETER);
   }
@@ -1982,9 +2012,10 @@ TEST_CASE("C ABI two-rate take alignment refuses an oversized resampled take bef
   const size_t take_len = kMaxBufferSize / static_cast<size_t>(reference_rate / take_rate) + 1;
   const std::vector<float> take(take_len, 0.0f);
   const std::vector<float> reference(384, 0.0f);
-  // A bins value the core refuses before its first chromagram keeps the equal-rate
-  // control from analysing the whole take; the two calls differ only in the rate.
-  SonareTakeAlignConfig refused_by_core{};
+  // A bins value refused before the first chromagram keeps the equal-rate control from
+  // analysing the whole take; the two calls differ only in the rate.
+  SonareTakeAlignConfig refused_by_core;
+  sonare_take_align_config_init(&refused_by_core);
   refused_by_core.bins_per_octave = -12;
 
   const auto align = [&](int declared_take_rate, std::string* message) {

@@ -941,16 +941,20 @@ typedef enum {
   SONARE_FORMANT_MODE_ABSOLUTE = 1
 } SonareFormantMode;
 
-/// @brief Configuration for @ref sonare_voice_change_ex.
-/// @details A data record: no field has an "unspecified" spelling, so set all three.
+/// @brief Configuration for @ref sonare_voice_change_ex. Start from
+///        @ref sonare_voice_change_config_init; every field is then read literally.
 typedef struct {
-  /// Transpose in semitones; 0 leaves the pitch alone. Must be finite.
+  uint32_t struct_size;  ///< sizeof(SonareVoiceChangeConfig); set by the init function.
+  /// Transpose in semitones; 0 leaves the pitch alone. Must be finite. Default 0.
   float pitch_semitones;
-  /// Formant scale; its meaning is chosen by @c formant_mode. Must be finite.
+  /// Formant scale; its meaning is chosen by @c formant_mode. Must be finite. Default 1.
   float formant_factor;
-  /// A @ref SonareFormantMode.
+  /// A @ref SonareFormantMode. Default @ref SONARE_FORMANT_MODE_RELATIVE.
   int32_t formant_mode;
 } SonareVoiceChangeConfig;
+
+/// @brief Writes every default into @p config and sets its @c struct_size; NULL is ignored.
+void sonare_voice_change_config_init(SonareVoiceChangeConfig* config);
 
 /// @brief @ref sonare_voice_change with a choice of formant mode.
 /// @param config Required. A @c formant_mode outside @ref SonareFormantMode, a

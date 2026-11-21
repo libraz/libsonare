@@ -570,7 +570,6 @@ class SynthPatch:
                     f"synth patch preset must be at most {SONARE_SYNTH_PRESET_NAME_MAX - 1} bytes"
                 )
         c = SonareSynthPatch()
-        c.struct_version = 10
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.

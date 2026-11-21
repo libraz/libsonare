@@ -251,7 +251,6 @@ bool ReadTransition(Napi::Env env, const Napi::Value& value, SonareVocalTransiti
   if (!RequiredObjectValue(env, value, "transition", &object)) return false;
   *out = {};
   out->struct_size = sizeof(*out);
-  out->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   const Napi::Value left = object.Get("leftNoteId");
   const Napi::Value right = object.Get("rightNoteId");
   if (!ReadNoteId(env, left, "transition.leftNoteId", &out->left_note_id) ||

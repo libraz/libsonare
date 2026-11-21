@@ -55,23 +55,32 @@ static_assert(offsetof(SonareExternalStemDesc, start_frame) ==
               "ExternalStemDesc.start_frame offset");
 #endif
 
-/// Versioned request for @ref sonare_project_import_external_stems.
-/// Zero-initialize for the current layout; @c struct_version 0 and 1 are
-/// accepted. @p sample_rate must exactly equal the target project's rate: this
-/// API never resamples, retimes, phase-aligns, normalizes, or compensates gain.
+/// Request for @ref sonare_project_import_external_stems. Start from
+/// @ref sonare_external_stem_import_request_init, then set the fields; every field is read
+/// literally. @p sample_rate must exactly equal the target project's rate: this API never
+/// resamples, retimes, phase-aligns, normalizes, or compensates gain.
 typedef struct {
-  int struct_version;  ///< Layout version; 0 and 1 are accepted.
-  int sample_rate;     ///< Sample rate of every stem in Hz; must equal the project's rate.
-  const SonareExternalStemDesc* stems;  ///< Array of stem_count descriptors.
-  size_t stem_count;                    ///< Number of entries in stems.
+  /// sizeof(SonareExternalStemImportRequest); set by the init function.
+  uint32_t struct_size;
+  /// Sample rate of every stem; must equal the project's. Default 0, which no project has, so the
+  /// caller always sets it.
+  int sample_rate;
+  /// The stems, @p stem_count entries. Default NULL.
+  const SonareExternalStemDesc* stems;
+  /// Number of stems; at least 1. Default 0.
+  size_t stem_count;
 } SonareExternalStemImportRequest;
 
+/// @brief Writes every default into @p request and sets its @c struct_size; NULL is ignored.
+///        Allocates nothing; @c stems is left NULL, so the request does not transfer ownership.
+void sonare_external_stem_import_request_init(SonareExternalStemImportRequest* request);
+
 #ifdef __cplusplus
-static_assert(offsetof(SonareExternalStemImportRequest, struct_version) == 0,
-              "ExternalStemImportRequest.struct_version offset");
-static_assert(offsetof(SonareExternalStemImportRequest, sample_rate) == sizeof(int),
+static_assert(offsetof(SonareExternalStemImportRequest, struct_size) == 0,
+              "ExternalStemImportRequest.struct_size offset");
+static_assert(offsetof(SonareExternalStemImportRequest, sample_rate) == sizeof(uint32_t),
               "ExternalStemImportRequest.sample_rate offset");
-static_assert(offsetof(SonareExternalStemImportRequest, stems) == 2u * sizeof(int),
+static_assert(offsetof(SonareExternalStemImportRequest, stems) == 2u * sizeof(uint32_t),
               "ExternalStemImportRequest.stems offset");
 static_assert(offsetof(SonareExternalStemImportRequest, stem_count) ==
                   offsetof(SonareExternalStemImportRequest, stems) + sizeof(void*),

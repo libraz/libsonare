@@ -403,7 +403,12 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
     return err;
   };
 
-  SonareVoiceChangeConfig config{};
+  SonareVoiceChangeConfig config;
+  sonare_voice_change_config_init(&config);
+  REQUIRE(config.struct_size == sizeof(SonareVoiceChangeConfig));
+  REQUIRE(config.pitch_semitones == 0.0f);
+  REQUIRE(config.formant_factor == 1.0f);
+  REQUIRE(config.formant_mode == SONARE_FORMANT_MODE_RELATIVE);
   config.pitch_semitones = 3.0f;
   config.formant_factor = 1.1f;
   config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
@@ -437,6 +442,11 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   config.formant_mode = 2;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(run(nullptr, &none) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // A config that was not started from the init function is refused by name.
+  const SonareVoiceChangeConfig zeroed{};
+  REQUIRE(run(&zeroed, &none) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("config.struct_size") != std::string::npos);
 }
 
 namespace {

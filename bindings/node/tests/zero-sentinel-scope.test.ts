@@ -105,10 +105,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'Taken as a source-rate hint only above 0; without one the clip keeps the project rate, which is also what the omitted field gives.',
   ],
   [
-    'project/external_stems.cpp:sampleRate',
-    "The import rejects sample_rate <= 0, and accepts only the project's own rate above it, so 0 selects nothing.",
-  ],
-  [
     'project/midi_mir.cpp:schemaVersion',
     'A module-owned sidecar version the core stores verbatim; 0 is the unversioned payload.',
   ],

@@ -282,6 +282,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SONARE_REVERB_MODEL_SABINE` | removed: set prefer_eyring to 0 on SonareRirSynthConfig or SonareRoomMorphConfig |
 | `SonareRirSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults) |
 | `SonareRoomMorphConfig` | leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5) |
+| `SonareVoiceChangeConfig` | leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused |
 | `sonare_hpss_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
 | `sonare_phase_vocoder` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
 | `sonare_pitch_shift_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
@@ -541,7 +542,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SONARE_SYNTH_PATCH_STRUCT_VERSION` | removed: the macro is gone; initialise the struct with sonare_synth_patch_init, which sets struct_size |
 | `SonareEngineSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_engine_sf2_instrument_config_init |
+| `SonareSynthPatch.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_synth_patch_init |
 
 #### C constructors return SonareError and an out pointer
 
@@ -580,10 +583,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default |
+| `SonareExternalStemImportRequest` | leads with uint32_t struct_size in place of struct_version; prepare it with sonare_external_stem_import_request_init, after which every field is read literally: sample_rate must equal the project's (default 0, so it is always set), stems non-NULL and stem_count at least 1; a struct whose struct_size was not set is refused |
 | `SonareMidiRouteConfig` | leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults |
 | `SonareProjectBounceOptions` | leads with uint32_t struct_size; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
 | `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused |
 | `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
+| `SonareTakeAlignConfig` | leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults |
 | `sonare_project_tempo_options_default` | removed: call sonare_project_tempo_options_init(&options) on a caller-owned struct instead |
 
 #### String values are lowerCamelCase tokens
@@ -597,7 +602,30 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareExternalStemImportRequest.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init |
+| `SonareProjectVocalEditApplyDesc.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalEditApplyResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalEditDependenciesResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalEditDependency.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalOriginalSource.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalRehydrateItem.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareProjectVocalRehydrateResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_sf2_instrument_config_init |
+| `SonareVocalAnalysis.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalAnalysisResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalCapabilities.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalCreateOptions.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalEditResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalErrorDetail.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalNote.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalNoteEdit.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalNotesResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalOperation.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalPitchResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalRenderResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalRestoreOptions.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalStateBytes.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `SonareVocalTransition.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 
 #### C constructors return SonareError and an out pointer
 

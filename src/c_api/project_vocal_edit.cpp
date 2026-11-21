@@ -39,22 +39,18 @@ void init_value(T* value) {
   if (value == nullptr) return;
   *value = {};
   value->struct_size = sizeof(T);
-  value->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
 }
 
 template <typename T>
 bool initialized(const T* value) noexcept {
-  return value != nullptr && value->struct_size >= sizeof(T) &&
-         value->schema_version == SONARE_VOCAL_PROJECT_ABI_VERSION;
+  return value != nullptr && value->struct_size >= sizeof(T);
 }
 
-/// Refuses a versioned struct whose header this library cannot read.
+/// Refuses a struct whose header this library cannot read.
 template <typename T>
 void check_header(const T& value, const std::string& name) {
   namespace check = sonare::util::check;
   check::integer_at_least<uint32_t>(value.struct_size, sizeof(T), (name + ".struct_size").c_str());
-  check::one_of(value.schema_version, std::array<uint32_t, 1>{SONARE_VOCAL_PROJECT_ABI_VERSION},
-                (name + ".schema_version").c_str());
 }
 
 template <size_t N>
@@ -388,7 +384,6 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   if (result_ready) {
     *result = {};
     result->struct_size = sizeof(*result);
-    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   }
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(project);
@@ -618,7 +613,6 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   if (result_ready) {
     *result = {};
     result->struct_size = sizeof(*result);
-    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
@@ -720,7 +714,6 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   if (result_ready) {
     *result = {};
     result->struct_size = sizeof(*result);
-    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   }
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(project);

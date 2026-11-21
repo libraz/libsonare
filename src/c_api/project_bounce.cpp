@@ -734,6 +734,11 @@ SonareError sonare_project_bounce_with_synth_instruments(
   owned.reserve(instrument_count);
   hosted.reserve(instrument_count);
   for (size_t i = 0; i < instrument_count; ++i) {
+    sonare_c_detail::require_struct_size(instruments[i].patch.struct_size, sizeof(SonareSynthPatch),
+                                         "instruments[" + std::to_string(i) + "].patch",
+                                         "sonare_synth_patch_init");
+  }
+  for (size_t i = 0; i < instrument_count; ++i) {
     sonare::midi::synth::NativeSynthConfig cfg;
     const char* error = nullptr;
     if (!sonare_c_detail::synth_config_from_patch_c(instruments[i].patch, &cfg, &error)) {

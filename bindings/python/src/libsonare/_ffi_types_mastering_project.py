@@ -251,8 +251,10 @@ class SonareExternalStemDesc(CStruct):
 class SonareExternalStemImportRequest(CStruct):
     """Maps to SonareExternalStemImportRequest in sonare_c_project.h."""
 
+    _c_init_ = "sonare_external_stem_import_request_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("sample_rate", ctypes.c_int),
         ("stems", ctypes.POINTER(SonareExternalStemDesc)),
         ("stem_count", ctypes.c_size_t),
@@ -292,7 +294,10 @@ class SonareProjectWarpMapDesc(CStruct):
 class SonareTakeAlignConfig(CStruct):
     """Maps to SonareTakeAlignConfig in sonare_c_project.h."""
 
+    _c_init_ = "sonare_take_align_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("hop_length", ctypes.c_int32),
         ("bins_per_octave", ctypes.c_int32),
     ]
@@ -699,7 +704,7 @@ SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ = 1 << 28
 SONARE_SYNTH_FIELD_BIT_DEPTH = 1 << 29
 SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS = 1 << 30
 
-# Bit positions for SonareSynthPatch.present_fields2 (struct_version 9).
+# Bit positions for SonareSynthPatch.present_fields2.
 SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ = 1 << 0
 SONARE_SYNTH_FIELD2_AMP_DELAY_MS = 1 << 1
 SONARE_SYNTH_FIELD2_AMP_HOLD_MS = 1 << 2
@@ -721,25 +726,20 @@ class SonareSynthEngineParam(CStruct):
 
 
 class SonareSynthPatch(CStruct):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 10).
+    """Maps to SonareSynthPatch in sonare_c_types.h.
 
-    Versioned NativeSynth patch: the base is the named ``preset`` (or the
-    default subtractive patch when empty) and every non-zero field overrides
-    the base ("0 => keep"). Enum fields reserve 0 as "keep". ``present_fields``
-    names the fields the caller set on purpose, so an explicit zero override is
-    representable; it is honoured from ``struct_version`` 2 on. Version 3
-    adds the sample-engine block, read only by a sample patch; version 4 adds
-    the series highpass past it; version 5 adds the voice's own converter;
-    version 6 adds the pitch offset at the tail; version 7 adds the
-    retrigger mode past it; version 8 adds the engine params, a borrowed
-    array of ``SonareSynthEngineParam`` the caller keeps alive for the call;
-    version 9 adds ``present_fields2`` and the drift rate, envelope delay /
-    hold and one-shot fields it marks; version 10 adds the LFO shape at the
-    tail.
+    NativeSynth patch seeded through ``sonare_synth_patch_init``: the base is the named
+    ``preset`` (or the default subtractive patch when empty) and every non-zero field
+    overrides the base ("0 => keep"). Enum fields reserve 0 as "keep". ``present_fields`` and
+    ``present_fields2`` name the fields the caller set on purpose, so an explicit zero
+    override is representable. ``engine_params`` is a borrowed array of
+    ``SonareSynthEngineParam`` the caller keeps alive for the call.
     """
 
+    _c_init_ = "sonare_synth_patch_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("preset", ctypes.c_char * SONARE_SYNTH_PRESET_NAME_MAX),
         ("engine_mode", ctypes.c_int),
         ("waveform", ctypes.c_int),

@@ -22,7 +22,6 @@ class SonareProjectVocalEditApplyDesc(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("clip_id", ctypes.c_uint32),
         ("take_id", ctypes.c_uint32),
         ("expected_source_id", ctypes.c_uint32),
@@ -48,7 +47,6 @@ class SonareProjectVocalEditApplyResult(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("clip_id", ctypes.c_uint32),
         ("take_id", ctypes.c_uint32),
         ("original_source_id", ctypes.c_uint32),
@@ -65,7 +63,6 @@ class SonareProjectVocalEditDependency(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("clip_id", ctypes.c_uint32),
         ("take_id", ctypes.c_uint32),
         ("original_source_id", ctypes.c_uint32),
@@ -90,7 +87,6 @@ class SonareProjectVocalEditDependenciesResult(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("dependencies", ctypes.POINTER(SonareProjectVocalEditDependency)),
         ("dependency_count", ctypes.c_uint64),
     ]
@@ -101,7 +97,6 @@ class SonareProjectVocalOriginalSource(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("source_id", ctypes.c_uint32),
         ("mono", ctypes.POINTER(ctypes.c_float)),
         ("sample_count", ctypes.c_int64),
@@ -114,7 +109,6 @@ class SonareProjectVocalRehydrateItem(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("clip_id", ctypes.c_uint32),
         ("take_id", ctypes.c_uint32),
         ("derived_source_id", ctypes.c_uint32),
@@ -130,7 +124,6 @@ class SonareProjectVocalRehydrateResult(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("items", ctypes.POINTER(SonareProjectVocalRehydrateItem)),
         ("item_count", ctypes.c_uint64),
     ]

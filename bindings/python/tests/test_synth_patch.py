@@ -3,10 +3,9 @@ Project.bounce_with_synth_instrument and RealtimeEngine.set_synth_instrument."""
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
 import gc
-import re
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -29,6 +28,7 @@ from libsonare import (
     synth_preset_names,
     synth_preset_patch,
 )
+from libsonare._ffi_types_mastering_project import SonareSynthPatch
 from libsonare._project import SYNTH_ENUM_TABLES
 from libsonare.types import SynthParamCondition
 
@@ -255,7 +255,6 @@ def test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals() -> None:
 
 def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
     """Each name-to-ordinal map Python resolves through spells the C ABI's table for its kind."""
-    import ctypes
 
     from libsonare import _project_synth as synth
     from libsonare._runtime import _get_lib
@@ -303,17 +302,9 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
     assert tuple(synth._SAMPLE_DESC_LOOP_MODES.values()) == (0, 1, 3)
 
 
-def _header_struct_version() -> int:
-    header = Path(__file__).resolve().parents[3] / "include/sonare/sonare_c_types_analysis.h"
-    match = re.search(r"#define SONARE_SYNTH_PATCH_STRUCT_VERSION (\d+)", header.read_text())
-    assert match is not None
-    return int(match.group(1))
-
-
-def test_synth_patch_struct_version_is_the_header_macro() -> None:
-    # Nothing else holds the literal: a stale one still passes the layout check
-    # and silently never sends the fields appended after it.
-    assert SynthPatch()._to_c().struct_version == _header_struct_version()
+def test_synth_patch_is_seeded_with_its_size() -> None:
+    # The struct comes from sonare_synth_patch_init, so a layout change cannot leave a stale size.
+    assert SynthPatch()._to_c().struct_size == ctypes.sizeof(SonareSynthPatch)
 
 
 def test_synth_patch_second_presence_word_fields() -> None:
@@ -412,7 +403,6 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
         assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
         with pytest.raises(TypeError):
             SynthPatch(retrigger=ordinal)._to_c()  # type: ignore[arg-type]
-    assert SynthPatch()._to_c().struct_version == _header_struct_version()
     assert synth_preset_patch("sawLead").retrigger == "free"
     with pytest.raises(ValueError):
         SynthPatch(retrigger="phase")._to_c()

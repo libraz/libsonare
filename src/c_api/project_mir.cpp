@@ -512,6 +512,17 @@ SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
 // Take alignment
 // ============================================================================
 
+void sonare_take_align_config_init(SonareTakeAlignConfig* config) {
+  if (config == nullptr) return;
+  *config = SonareTakeAlignConfig{};
+  config->struct_size = sizeof(SonareTakeAlignConfig);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const sonare::mir::ChromaDtwConfig defaults;
+  config->hop_length = defaults.hop_length;
+  config->bins_per_octave = defaults.bins_per_octave;
+#endif
+}
+
 SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
                                            const float* take, size_t take_len, int sample_rate,
                                            const SonareTakeAlignConfig* config,
@@ -555,38 +566,33 @@ SonareError sonare_align_take_to_reference_ex(
                              "{0} resampled from {1} to {2} must not exceed the buffer size limit");
     });
   }
-  // The chroma is a constant-Q one, so its hop takes the transform's bound; 0 is the library value.
+  SonareTakeAlignConfig resolved;
   if (config != nullptr) {
-    if (const SonareError err = run_validation([&] {
-          check::integer_in_range(config->hop_length, 0, sonare::kMaxCqtHopLength,
-                                  "config.hop_length");
-        });
-        err != SONARE_OK) {
-      return err;
-    }
+    resolved = *config;
+  } else {
+    sonare_take_align_config_init(&resolved);
   }
-  // Chroma folds the grid into 12 classes, so a grid it cannot fold is refused by its C member.
-  if (config != nullptr && config->bins_per_octave != 0) {
-    if (const SonareError err = run_validation([&] {
-          check::integer_at_least(config->bins_per_octave, 0, "config.bins_per_octave");
-          if (config->bins_per_octave % 12 != 0) {
-            check::refuse("config.bins_per_octave", "must be a multiple of 12");
-          }
-        });
-        err != SONARE_OK) {
-      return err;
-    }
+  if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(resolved.struct_size, sizeof(SonareTakeAlignConfig),
+                                             "config", "sonare_take_align_config_init");
+        // The chroma is a constant-Q one, so its hop takes the transform's bound.
+        check::integer_in_range(resolved.hop_length, 1, sonare::kMaxCqtHopLength,
+                                "config.hop_length");
+        // Chroma folds the grid into 12 classes, so a grid it cannot fold is refused by its member.
+        check::integer_at_least(resolved.bins_per_octave, 1, "config.bins_per_octave");
+        if (resolved.bins_per_octave % 12 != 0) {
+          check::refuse("config.bins_per_octave", "must be a multiple of 12");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_anchors);
   SONARE_C_REQUIRE_NONNULL(out_count);
 
   sonare::mir::ChromaDtwConfig dtw_config;
-  if (config != nullptr) {
-    // Zero is not a value either field can take, so it reads as "library value"
-    // rather than needing a separate default-filling entry point.
-    if (config->hop_length != 0) dtw_config.hop_length = config->hop_length;
-    if (config->bins_per_octave != 0) dtw_config.bins_per_octave = config->bins_per_octave;
-  }
+  dtw_config.hop_length = resolved.hop_length;
+  dtw_config.bins_per_octave = resolved.bins_per_octave;
 
   SONARE_C_TRY
   const Audio reference_audio = Audio::from_vector(

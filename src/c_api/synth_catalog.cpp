@@ -82,6 +82,12 @@ int sonare_synth_builtin_waveform_from_name(const char* name) {
   return -1;
 }
 
+void sonare_synth_patch_init(SonareSynthPatch* patch) {
+  if (patch == nullptr) return;
+  *patch = SonareSynthPatch{};
+  patch->struct_size = sizeof(SonareSynthPatch);
+}
+
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = {};

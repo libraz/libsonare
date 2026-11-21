@@ -1426,7 +1426,6 @@ TEST_CASE("sonare_free_vectorscope_result leaves the result zeroed", "[c_api][c_
 TEST_CASE("sonare_free_vocal_analysis_result leaves the result zeroed", "[c_api][c_free]") {
   SonareVocalAnalysisResult r{};
   r.analysis.struct_size = static_cast<decltype(r.analysis.struct_size)>(1);
-  r.analysis.schema_version = static_cast<decltype(r.analysis.schema_version)>(1);
   r.analysis.frame_origin_sample = static_cast<decltype(r.analysis.frame_origin_sample)>(1);
   r.analysis.samples_per_frame = static_cast<decltype(r.analysis.samples_per_frame)>(1);
   r.analysis.frame_length_samples = static_cast<decltype(r.analysis.frame_length_samples)>(1);
@@ -1447,7 +1446,6 @@ TEST_CASE("sonare_free_vocal_analysis_result leaves the result zeroed", "[c_api]
   r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
   sonare_free_vocal_analysis_result(&r);
   CHECK(r.analysis.struct_size == static_cast<decltype(r.analysis.struct_size)>(0));
-  CHECK(r.analysis.schema_version == static_cast<decltype(r.analysis.schema_version)>(0));
   CHECK(r.analysis.frame_origin_sample == static_cast<decltype(r.analysis.frame_origin_sample)>(0));
   CHECK(r.analysis.samples_per_frame == static_cast<decltype(r.analysis.samples_per_frame)>(0));
   CHECK(r.analysis.frame_length_samples ==

@@ -653,25 +653,6 @@ fields = [
   "chord_detection_options.tuning_auto",
   "music_analyze_options.tuning_auto",
 
-  # --- ABI plumbing omitted by the TypeScript read models ---
-  # schema_version is used by the C/Python layout mirrors and struct seeders;
-  # Node/WASM expose the decoded values and do not surface this wire tag.
-  "project_vocal_edit_apply_result.schema_version",
-  "project_vocal_edit_dependency.schema_version",
-  "project_vocal_original_source.schema_version",
-  "project_vocal_rehydrate_item.schema_version",
-  "vocal_analysis.schema_version",
-  "vocal_capabilities.schema_version",
-  "vocal_create_options.schema_version",
-  "vocal_edit_result.schema_version",
-  "vocal_error_detail.schema_version",
-  "vocal_note.schema_version",
-  "vocal_note_edit.schema_version",
-  "vocal_notes_result.schema_version",
-  "vocal_render_result.schema_version",
-  "vocal_state_bytes.schema_version",
-  "vocal_transition.schema_version",
-
   # --- Vocal read-model folds ---
   # VocalAnalysis wraps the C analysis payload with source/hash provenance
   # returned by the result envelope.

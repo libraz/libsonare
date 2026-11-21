@@ -758,7 +758,10 @@ class SonarePercussiveRenderConfig(CStruct):
 class SonareVoiceChangeConfig(CStruct):
     """Maps to SonareVoiceChangeConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_voice_change_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("pitch_semitones", ctypes.c_float),
         ("formant_factor", ctypes.c_float),
         ("formant_mode", ctypes.c_int32),

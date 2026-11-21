@@ -212,7 +212,7 @@ inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
 
 /// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 /// prefix is accepted — or an object of wrapper-section overrides) into the
-/// versioned C struct. A key the caller actually supplied also sets its
+/// C struct. A key the caller actually supplied also sets its
 /// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit
 /// zero rather than the "keep base" sentinel a bare zero would be. Throws on
 /// unknown enum names; unknown PRESET names and refused `engineParams` keys or
@@ -220,7 +220,7 @@ inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
 inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   SynthPatchStorage storage;
   SonareSynthPatch& patch = storage.patch;
-  patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  sonare_synth_patch_init(&patch);
   if (desc.isUndefined() || desc.isNull()) return storage;
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
@@ -290,7 +290,7 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch.polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch.bus_drive);
 
-  // Second presence word (struct_version 9).
+  // Second presence word.
   auto read_float2 = [&desc, &patch](const char* key, uint32_t bit, float* out) {
     *out = floatProperty(desc, key, 0.0f);
     if (hasProperty(desc, key)) patch.present_fields2 |= bit;
@@ -339,7 +339,7 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   return storage;
 }
 
-/// Converts a versioned C synth patch into the JS SynthPatch object shape
+/// Converts a C synth patch into the JS SynthPatch object shape
 /// (enum ordinals become their canonical names, so the object can be passed
 /// back verbatim).
 inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {

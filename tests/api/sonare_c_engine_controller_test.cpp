@@ -55,7 +55,7 @@ SonareEngine* make_reed_engine(uint32_t dest) {
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareSynthPatch patch{};
-  patch.struct_version = 1;
+  sonare_synth_patch_init(&patch);
   patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
   REQUIRE(sonare_engine_set_synth_instrument(engine, dest, &patch) == SONARE_OK);
   return engine;

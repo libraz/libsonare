@@ -1694,7 +1694,7 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
 
   const auto base = [] {
     SonareSynthPatch patch{};
-    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    sonare_synth_patch_init(&patch);
     patch.num_mod_routings = 1;
     patch.mod_routings[0] = {1, 1, 100.0f};
     return patch;
@@ -1716,10 +1716,10 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
     patch.mod_routings[0].source = source;
     refused(patch);
   }
-  for (int version : {-1, SONARE_SYNTH_PATCH_STRUCT_VERSION + 1}) {
-    CAPTURE(version);
+  for (uint32_t size : {uint32_t{0}, static_cast<uint32_t>(sizeof(SonareSynthPatch)) - 1u}) {
+    CAPTURE(size);
     SonareSynthPatch patch = base();
-    patch.struct_version = version;
+    patch.struct_size = size;
     refused(patch);
   }
   for (int destination : {-1, SONARE_SYNTH_MOD_DESTINATION_COUNT, 99}) {

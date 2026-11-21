@@ -80,12 +80,12 @@ def test_ctypes_vocal_layout_matches_header() -> None:
     # by the root agent; these are the sizes of the public C structs.
     assert ctypes.sizeof(SonareVocalAnalysis) == 136
     assert ctypes.sizeof(SonareVocalCreateOptions) == 136
-    assert ctypes.sizeof(SonareVocalNoteEdit) == 144
-    assert ctypes.sizeof(SonareVocalNote) == 240
-    assert ctypes.sizeof(SonareVocalOperation) == 264
+    assert ctypes.sizeof(SonareVocalNoteEdit) == 136
+    assert ctypes.sizeof(SonareVocalNote) == 224
+    assert ctypes.sizeof(SonareVocalOperation) == 256
     assert ctypes.sizeof(SonareVocalAnalysisResult) == 296
     assert ctypes.sizeof(SonareVocalRenderResult) == 120
-    assert ctypes.sizeof(SonareVocalErrorDetail) == 320
+    assert ctypes.sizeof(SonareVocalErrorDetail) == 312
 
 
 def test_create_rejects_stereo_without_touching_output() -> None:

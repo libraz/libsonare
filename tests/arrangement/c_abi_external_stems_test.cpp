@@ -28,6 +28,16 @@ struct StemBuffers {
   }
 };
 
+SonareExternalStemImportRequest make_request(int sample_rate, const SonareExternalStemDesc* stems,
+                                             size_t stem_count) {
+  SonareExternalStemImportRequest request;
+  sonare_external_stem_import_request_init(&request);
+  request.sample_rate = sample_rate;
+  request.stems = stems;
+  request.stem_count = stem_count;
+  return request;
+}
+
 }  // namespace
 
 TEST_CASE("C ABI imports externally separated planar stems atomically",
@@ -42,7 +52,7 @@ TEST_CASE("C ABI imports externally separated planar stems atomically",
       {"vocals", "lead", SONARE_EXTERNAL_STEM_STEREO, vocals.planes.data(), 31, 113},
       {"drums", nullptr, SONARE_EXTERNAL_STEM_STEREO, drums.planes.data(), 31, 113},
   };
-  const SonareExternalStemImportRequest request{0, 48000, stems, 2};
+  const SonareExternalStemImportRequest request = make_request(48000, stems, 2);
   SonareExternalStemImportResult result{};
   REQUIRE(sonare_project_import_external_stems(project, &request, &result) == SONARE_OK);
   REQUIRE(result.count == 2);
@@ -105,7 +115,7 @@ TEST_CASE("C ABI imports externally separated planar stems atomically",
       {"duplicate", nullptr, SONARE_EXTERNAL_STEM_STEREO, vocals.planes.data(), 31, 0},
       {"duplicate", nullptr, SONARE_EXTERNAL_STEM_STEREO, drums.planes.data(), 31, 0},
   };
-  const SonareExternalStemImportRequest invalid_request{0, 48000, invalid, 2};
+  const SonareExternalStemImportRequest invalid_request = make_request(48000, invalid, 2);
   REQUIRE(sonare_project_import_external_stems(project, &invalid_request, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_track_count(project, &tracks) == SONARE_OK);
@@ -139,7 +149,7 @@ TEST_CASE("C ABI external stem import rejects source-id collisions without mutat
   StemBuffers stem(4);
   const SonareExternalStemDesc desc = {"collision",        nullptr, SONARE_EXTERNAL_STEM_STEREO,
                                        stem.planes.data(), 4,       0};
-  const SonareExternalStemImportRequest request{0, 48000, &desc, 1};
+  const SonareExternalStemImportRequest request = make_request(48000, &desc, 1);
   SonareExternalStemImportResult result{};
   // Depth before, not zero: every setter above is itself an undoable command.
   // What this asserts is that the REJECTED import added nothing.
@@ -169,10 +179,7 @@ TEST_CASE("C ABI external stem import refuses an argument by its header name",
   StemBuffers buffers(8);
   const SonareExternalStemDesc stem = {
       "vocals", nullptr, SONARE_EXTERNAL_STEM_STEREO, buffers.planes.data(), 8, 0};
-  SonareExternalStemImportRequest request{};
-  request.sample_rate = 48000;
-  request.stems = &stem;
-  request.stem_count = 1;
+  SonareExternalStemImportRequest request = make_request(48000, &stem, 1);
   SonareExternalStemImportResult result{};
 
   REQUIRE(sonare_project_import_external_stems(nullptr, &request, &result) ==
@@ -187,10 +194,10 @@ TEST_CASE("C ABI external stem import refuses an argument by its header name",
   CHECK(message() == "out must not be NULL");
 
   SonareExternalStemImportRequest bad = request;
-  bad.struct_version = 2;
+  bad.struct_size = 0;
   REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "request.struct_version must be one of 0, 1");
+  CHECK(message() == "request.struct_size must be set by sonare_external_stem_import_request_init");
   bad = request;
   bad.stems = nullptr;
   REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
@@ -238,7 +245,8 @@ TEST_CASE("C ABI external stem import names the stem field it refuses",
   StemBuffers b(8);
   SonareExternalStemImportResult result{};
   const auto refused = [&](const SonareExternalStemDesc* stems, size_t count, int sample_rate) {
-    const SonareExternalStemImportRequest request{0, sample_rate, stems, count};
+    const SonareExternalStemImportRequest request{sizeof(SonareExternalStemImportRequest),
+                                                  sample_rate, stems, count};
     REQUIRE(sonare_project_import_external_stems(project, &request, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     const char* message = sonare_last_error_message();
@@ -279,5 +287,38 @@ TEST_CASE("C ABI external stem import names the stem field it refuses",
   size_t tracks = 0;
   REQUIRE(sonare_project_track_count(project, &tracks) == SONARE_OK);
   CHECK(tracks == 0);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C ABI external stem import reads its request through struct_size",
+          "[arrangement][external_stems][c_api]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  StemBuffers stem(4);
+  const SonareExternalStemDesc desc = {
+      "stem", nullptr, SONARE_EXTERNAL_STEM_STEREO, stem.planes.data(), 4, 0};
+  SonareExternalStemImportResult result{};
+
+  SonareExternalStemImportRequest initialised;
+  sonare_external_stem_import_request_init(&initialised);
+  REQUIRE(initialised.struct_size == sizeof(SonareExternalStemImportRequest));
+
+  SECTION("a request that was not initialised is refused by name") {
+    SonareExternalStemImportRequest request = make_request(48000, &desc, 1);
+    request.struct_size = 0;
+    REQUIRE(sonare_project_import_external_stems(project, &request, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("request.struct_size") !=
+            std::string::npos);
+  }
+
+  SECTION("a sample rate of 0 is read literally and does not match the project") {
+    SonareExternalStemImportRequest request = make_request(0, &desc, 1);
+    REQUIRE(sonare_project_import_external_stems(project, &request, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.count == 0);
+  }
+
   sonare_project_destroy(project);
 }

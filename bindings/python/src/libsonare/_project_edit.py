@@ -389,7 +389,6 @@ class _ProjectEditMixin:
             )
         c_descs = (SonareExternalStemDesc * len(descs))(*descs)
         request = SonareExternalStemImportRequest(
-            struct_version=0,
             sample_rate=sample_rate,
             stems=c_descs,
             stem_count=len(descs),

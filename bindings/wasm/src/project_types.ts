@@ -591,9 +591,9 @@ export interface ProjectWarpMapDesc {
  * Canonical request form for {@link alignTakeToReference}.
  *
  * Both resolution fields (`hopLength`, `binsPerOctave`) are optional, and
- * omitting one takes the library value. A `0` in either is the same request as
- * omission. A value outside the domain is refused: a negative, a `binsPerOctave`
- * that is not a multiple of 12. The sample rates are never defaulted from `0`:
+ * omitting one takes the library value. A value outside the domain is refused: a
+ * `0` or negative, a `binsPerOctave` that is not a multiple of 12. The sample
+ * rates are never defaulted from `0`:
  * `sampleRate: 0` and `takeSampleRate: 0` are refused.
  */
 export interface AlignTakeToReferenceRequest {

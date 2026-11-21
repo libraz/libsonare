@@ -279,11 +279,11 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
     if (auto_select_gm) {
       // GM routing replaces the patch at every note-on, so a base preset named
       // here would assert thirty field values the caller never chose and that
-      // nothing ever reads. The zero-initialized patch is the init patch (an
+      // nothing ever reads. The initialised patch is the init patch (an
       // empty preset name), which is what the other front-end sends: with the
       // patch inert either spelling renders the same, and this one stays the
       // same if the routing is ever asked to yield.
-      synth_binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+      sonare_synth_patch_init(&synth_binding.patch);
     } else {
       // The preset is named by its library id in any letter case; an unknown one was refused
       // with the other command-line checks.
@@ -527,12 +527,10 @@ int cmd_project_align_takes(const CliArgs& args) {
     return paths_exit;
   }
 
-  // 0 is the C ABI's "use the library value" for both fields, which is what an
-  // absent option means, so neither is given a value this CLI would have to keep
-  // in step with the core's.
-  SonareTakeAlignConfig config{};
-  config.hop_length = args.get_int("hop-length", 0);
-  config.bins_per_octave = args.get_int("bins-per-octave", 0);
+  SonareTakeAlignConfig config;
+  sonare_take_align_config_init(&config);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
 
   double project_sample_rate = 0.0;
   if (const SonareError sr_err = sonare_project_get_sample_rate(handle.ptr, &project_sample_rate);

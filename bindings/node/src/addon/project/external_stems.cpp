@@ -106,8 +106,11 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     descriptors.push_back(desc);
   }
 
-  const SonareExternalStemImportRequest request_desc{0, IntProperty(request, "sampleRate", 0),
-                                                     descriptors.data(), descriptors.size()};
+  SonareExternalStemImportRequest request_desc;
+  sonare_external_stem_import_request_init(&request_desc);
+  request_desc.sample_rate = IntProperty(request, "sampleRate", request_desc.sample_rate);
+  request_desc.stems = descriptors.data();
+  request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};
   ThrowIfError(env, sonare_project_import_external_stems(project_, &request_desc, &result));
   if (env.IsExceptionPending()) return env.Undefined();

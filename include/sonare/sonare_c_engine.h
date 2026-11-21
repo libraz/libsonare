@@ -1399,7 +1399,7 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
 ///        SONARE_SYNTH_ENUM_ENGINE_MODE). The
 ///        patch resolves exactly like the project bounce surface
 ///        (@ref SonareSynthPatch: preset catalog base + field overrides); an
-///        invalid struct_version or unknown preset name fails with
+///        struct_size below sizeof or an unknown preset name fails with
 ///        SONARE_ERROR_INVALID_PARAMETER. Control-thread API; the engine owns
 ///        the synth. Live MIDI input and scheduled MIDI clips routed to
 ///        @p destination_id render through it. This is a control-thread

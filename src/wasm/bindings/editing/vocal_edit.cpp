@@ -265,7 +265,6 @@ SonareVocalTransition transitionFromVal(const val& object) {
   }
   SonareVocalTransition result{};
   result.struct_size = sizeof(result);
-  result.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   result.left_note_id =
       nonZeroId(checkedUintFromVal(property(object, "leftNoteId"), "leftNoteId"), "leftNoteId");
   result.right_note_id =

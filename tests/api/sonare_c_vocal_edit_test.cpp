@@ -18,7 +18,6 @@ TEST_CASE("vocal C options preserve literal zero controls", "[vocal_c_api]") {
   SonareVocalCreateOptions options;
   sonare_vocal_create_options_init(&options);
   CHECK(options.struct_size == sizeof(options));
-  CHECK(options.schema_version == SONARE_VOCAL_EDIT_ABI_VERSION);
   CHECK(options.edge_fade_ms == 5.0);
   SonareVocalNoteEdit edit;
   sonare_vocal_note_edit_init(&edit);
@@ -473,7 +472,6 @@ TEST_CASE("vocal error detail has a valid header on a fresh thread", "[vocal_c_a
   });
   reader.join();
   CHECK(result.struct_size == sizeof(result));
-  CHECK(result.schema_version == SONARE_VOCAL_EDIT_ABI_VERSION);
   CHECK(result.reason == SONARE_VOCAL_REASON_NONE);
 }
 
@@ -568,11 +566,9 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
   SECTION("malformed options are refused") {
     SonareVocalRestoreOptions small = defaults;
     small.struct_size = sizeof(small) - 1;
-    SonareVocalRestoreOptions schema = defaults;
-    schema.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION + 1;
     SonareVocalRestoreOptions zero_jobs = defaults;
     zero_jobs.max_render_jobs = 0;
-    for (const auto* options : {&small, &schema, &zero_jobs}) {
+    for (const auto* options : {&small, &zero_jobs}) {
       auto* restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
       CHECK(restore(options, &restored) == SONARE_ERROR_INVALID_PARAMETER);
       CHECK(restored == nullptr);

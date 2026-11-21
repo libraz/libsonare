@@ -153,7 +153,7 @@ def align_take_to_reference(
     lib = _get_lib()
     if take_sample_rate is None:
         take_sample_rate = sample_rate
-    # Left at 0, the C spelling of "library value", when the caller supplied nothing.
+    # A bound the caller left out keeps the value the init function wrote.
     config = SonareTakeAlignConfig()
     if hop_length is not None:
         config.hop_length = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)

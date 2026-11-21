@@ -249,7 +249,6 @@ TEST_CASE("vocal project dependency API has initialized output ownership", "[pro
   SonareProjectVocalEditDependenciesResult result;
   sonare_project_vocal_edit_dependencies_result_init(&result);
   REQUIRE(result.struct_size == sizeof(result));
-  REQUIRE(result.schema_version == 1u);
   REQUIRE(sonare_project_get_vocal_edit_dependencies(project, &result) == SONARE_OK);
   CHECK(result.dependencies == nullptr);
   CHECK(result.dependency_count == 0);
@@ -257,7 +256,6 @@ TEST_CASE("vocal project dependency API has initialized output ownership", "[pro
   CHECK(result.dependencies == nullptr);
   CHECK(result.dependency_count == 0);
   CHECK(result.struct_size == sizeof(result));
-  CHECK(result.schema_version == 1u);
   sonare_project_destroy(project);
 }
 
@@ -266,22 +264,18 @@ TEST_CASE("vocal project descriptor and rehydrate results require ABI initializa
   SonareProjectVocalEditApplyDesc desc;
   sonare_project_vocal_edit_apply_desc_init(&desc);
   CHECK(desc.struct_size == sizeof(desc));
-  CHECK(desc.schema_version == 1u);
 
   SonareProjectVocalEditApplyResult apply_result;
   sonare_project_vocal_edit_apply_result_init(&apply_result);
   CHECK(apply_result.struct_size == sizeof(apply_result));
-  CHECK(apply_result.schema_version == 1u);
 
   SonareProjectVocalOriginalSource original;
   sonare_project_vocal_original_source_init(&original);
   CHECK(original.struct_size == sizeof(original));
-  CHECK(original.schema_version == 1u);
 
   SonareProjectVocalRehydrateResult rehydrate_result;
   sonare_project_vocal_rehydrate_result_init(&rehydrate_result);
   CHECK(rehydrate_result.struct_size == sizeof(rehydrate_result));
-  CHECK(rehydrate_result.schema_version == 1u);
   sonare_free_project_vocal_rehydrate_result(&rehydrate_result);
 }
 
@@ -1079,7 +1073,6 @@ TEST_CASE("vocal project preserves initialized feature-off outputs", "[project][
   sonare_project_vocal_edit_apply_result_init(&applied);
   CHECK(sonare_project_apply_vocal_edit(project, &desc, &applied) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(applied.struct_size == sizeof(applied));
-  CHECK(applied.schema_version == 1u);
   CHECK(applied.derived_source_id == 0);
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
@@ -1099,18 +1092,15 @@ TEST_CASE("vocal project entry points define an initialized result on a rejected
   SonareProjectVocalEditApplyResult result;
   std::memset(&result, 0, sizeof(result));
   result.struct_size = sizeof(result);
-  result.schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   result.clip_id = 99;
   REQUIRE(sonare_project_apply_vocal_edit(nullptr, &desc, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(result.clip_id == 0);
   CHECK(result.struct_size == sizeof(result));
-  CHECK(result.schema_version == SONARE_VOCAL_PROJECT_ABI_VERSION);
 
   SonareProjectVocalEditDependenciesResult dependencies;
   std::memset(&dependencies, 0, sizeof(dependencies));
   dependencies.struct_size = sizeof(dependencies);
-  dependencies.schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   dependencies.dependency_count = 5;
   REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &dependencies) ==
           SONARE_ERROR_INVALID_PARAMETER);

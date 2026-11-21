@@ -749,7 +749,7 @@ TEST_CASE("sonare_engine_parameter_info describes a hosted instrument's reserved
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
   SonareSynthPatch patch{};
-  patch.struct_version = 1;
+  sonare_synth_patch_init(&patch);
   REQUIRE(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_OK);
 
   uint32_t id = 0;
@@ -786,7 +786,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
 
     SonareSynthPatch patch{};
-    patch.struct_version = 1;
+    sonare_synth_patch_init(&patch);
     std::strncpy(patch.preset, "sawLead", sizeof(patch.preset) - 1);
 
     SonareSynthInstrumentBinding binding{};
@@ -837,7 +837,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
   REQUIRE(fixed_piano == fixed_violin);
 
   SonareSynthPatch patch{};
-  patch.struct_version = 1;
+  sonare_synth_patch_init(&patch);
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = kDestination;
   binding.patch = patch;

@@ -441,6 +441,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_voice_change_config_init.restype = None
+    lib.sonare_voice_change_config_init.argtypes = [ctypes.POINTER(SonareVoiceChangeConfig)]
     lib.sonare_voice_change_ex.restype = ctypes.c_int32
     lib.sonare_voice_change_ex.argtypes = [
         ctypes.POINTER(ctypes.c_float),

@@ -196,9 +196,8 @@ export interface AlignTakeToReferenceRequest {
   takeSampleRate?: number;
   /**
    * Chroma hop in reference-rate samples, which sets the time resolution of the anchors: a
-   * finer hop yields more of them. Omit for the library value — 0 is not a
-   * meaningful hop, so the library reads it as "keep the default" and a
-   * fractional value is refused rather than truncated onto one.
+   * finer hop yields more of them. Omit for the library value of 512; 0 and a
+   * fractional value are refused rather than read as the default or truncated.
    */
   hopLength?: number;
   /**

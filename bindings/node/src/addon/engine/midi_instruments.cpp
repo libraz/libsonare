@@ -172,7 +172,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
       }
     }
   } else {
-    binding.patch.struct_version = 3;
+    sonare_synth_patch_init(&binding.patch);
   }
   const SonareError bind_err = sonare_engine_set_synth_instrument_binding(engine_, &binding);
   if (bind_err != SONARE_OK && !env.IsExceptionPending()) {

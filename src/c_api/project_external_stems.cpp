@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -143,6 +142,12 @@ class ExternalStemImportCommand final : public arr::EditCommand,
 
 #endif
 
+void sonare_external_stem_import_request_init(SonareExternalStemImportRequest* request) {
+  if (request == nullptr) return;
+  *request = SonareExternalStemImportRequest{};
+  request->struct_size = sizeof(SonareExternalStemImportRequest);
+}
+
 SonareError sonare_project_import_external_stems(SonareProject* project,
                                                  const SonareExternalStemImportRequest* request,
                                                  SonareExternalStemImportResult* out) {
@@ -155,7 +160,9 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   SONARE_C_TRY
   namespace check = sonare::util::check;
   constexpr size_t kMaxSamples = sonare::resource::kMaxOfflineAudioSamples;
-  check::one_of(request->struct_version, std::array<int, 2>{0, 1}, "request.struct_version");
+  sonare_c_detail::require_struct_size(request->struct_size,
+                                       sizeof(SonareExternalStemImportRequest), "request",
+                                       "sonare_external_stem_import_request_init");
   check::non_null_when_count(request->stems, request->stem_count, "request.stems",
                              "request.stem_count");
   if (request->stem_count == 0 || request->stem_count > kMaxSamples) {

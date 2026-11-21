@@ -37,7 +37,6 @@ class SonareVocalAnalysis(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("frame_origin_sample", ctypes.c_double),
         ("samples_per_frame", ctypes.c_double),
         ("frame_length_samples", ctypes.c_uint32),
@@ -62,7 +61,6 @@ class SonareVocalRestoreOptions(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("max_history_bytes", ctypes.c_uint64),
         ("max_cache_bytes", ctypes.c_uint64),
         ("max_undo_depth", ctypes.c_uint32),
@@ -75,7 +73,6 @@ class SonareVocalCreateOptions(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("output_length_samples", ctypes.c_int64),
         ("edge_fade_ms", ctypes.c_double),
         ("vibrato_cutoff_hz", ctypes.c_double),
@@ -102,7 +99,6 @@ class SonareVocalNoteEdit(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("target_mode", ctypes.c_uint32),
         ("target_midi", ctypes.c_double),
         ("target_points", ctypes.POINTER(SonareVocalPitchPoint)),
@@ -127,7 +123,6 @@ class SonareVocalNoteEdit(CStruct):
 class SonareVocalNote(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("id", ctypes.c_uint32),
         ("source_start_sample", ctypes.c_int64),
         ("source_end_sample", ctypes.c_int64),
@@ -146,7 +141,6 @@ class SonareVocalNote(CStruct):
 class SonareVocalTransition(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("left_note_id", ctypes.c_uint32),
         ("right_note_id", ctypes.c_uint32),
         ("left_window_samples", ctypes.c_int64),
@@ -160,7 +154,6 @@ class SonareVocalOperation(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("kind", ctypes.c_uint32),
         ("note_id", ctypes.c_uint32),
         ("edit", SonareVocalNoteEdit),
@@ -190,7 +183,6 @@ class SonareVocalStateToken(CStruct):
 class SonareVocalNotesResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("notes", ctypes.POINTER(SonareVocalNote)),
         ("note_count", ctypes.c_uint64),
         ("transitions", ctypes.POINTER(SonareVocalTransition)),
@@ -201,7 +193,6 @@ class SonareVocalNotesResult(CStruct):
 class SonareVocalAnalysisResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("analysis", SonareVocalAnalysis),
         ("source_sha256", ctypes.c_char * 65),
         ("analysis_sha256", ctypes.c_char * 65),
@@ -222,7 +213,6 @@ class SonareVocalIdChange(CStruct):
 class SonareVocalEditResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("token", SonareVocalStateToken),
         ("dirty_ranges", ctypes.POINTER(SonareVocalRange)),
         ("dirty_range_count", ctypes.c_uint64),
@@ -234,7 +224,6 @@ class SonareVocalEditResult(CStruct):
 class SonareVocalPitchResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("source_samples", ctypes.POINTER(ctypes.c_double)),
         ("measured_midi", ctypes.POINTER(ctypes.c_double)),
         ("target_midi", ctypes.POINTER(ctypes.c_double)),
@@ -248,7 +237,6 @@ class SonareVocalPitchResult(CStruct):
 class SonareVocalRenderResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("samples", ctypes.POINTER(ctypes.c_float)),
         ("sample_count", ctypes.c_int64),
         ("start_sample", ctypes.c_int64),
@@ -264,7 +252,6 @@ class SonareVocalRenderResult(CStruct):
 class SonareVocalStateBytes(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("data", ctypes.POINTER(ctypes.c_uint8)),
         ("size", ctypes.c_uint64),
     ]
@@ -273,7 +260,6 @@ class SonareVocalStateBytes(CStruct):
 class SonareVocalCapabilities(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("abi_version", ctypes.c_uint32),
         ("profile_id", ctypes.c_uint32),
         ("monophonic_only", ctypes.c_uint32),
@@ -288,7 +274,6 @@ class SonareVocalErrorDetail(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("schema_version", ctypes.c_uint32),
         ("reason", ctypes.c_uint32),
         ("field", ctypes.c_char * 96),
         ("expected", ctypes.c_uint64),

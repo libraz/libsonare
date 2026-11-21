@@ -246,7 +246,7 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
 
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 0;
-  binding.patch.struct_version = 3;
+  sonare_synth_patch_init(&binding.patch);
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = bank;
 
@@ -295,7 +295,7 @@ TEST_CASE("narrowing one range leaves the other covering everything", "[project]
   REQUIRE(sonare_project_deserialize(doc.data(), doc.size(), &project, nullptr) == SONARE_OK);
 
   SonareSynthInstrumentBinding binding{};
-  binding.patch.struct_version = 3;
+  sonare_synth_patch_init(&binding.patch);
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = bank;
 
@@ -324,7 +324,7 @@ TEST_CASE("a sample patch without a bank renders silence, not an error", "[proje
   REQUIRE(sonare_project_deserialize(doc.data(), doc.size(), &project, nullptr) == SONARE_OK);
 
   SonareSynthInstrumentBinding binding{};
-  binding.patch.struct_version = 3;
+  sonare_synth_patch_init(&binding.patch);
   binding.patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   binding.sample_bank = nullptr;
 
@@ -357,13 +357,14 @@ TEST_CASE("the sample engine appears in the engine-mode names", "[project][sampl
   CHECK(lines == SONARE_SYNTH_ENGINE_MODE_COUNT);
 }
 
-TEST_CASE("a struct_version past the newest is refused", "[project][sample_bank]") {
+TEST_CASE("a synth patch whose struct_size is below sizeof is refused", "[project][sample_bank]") {
   SonareProject* project = nullptr;
   const std::string doc = one_note_project();
   REQUIRE(sonare_project_deserialize(doc.data(), doc.size(), &project, nullptr) == SONARE_OK);
 
   SonareSynthInstrumentBinding binding{};
-  binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
+  sonare_synth_patch_init(&binding.patch);
+  binding.patch.struct_size = sizeof(SonareSynthPatch) - 1;
 
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);

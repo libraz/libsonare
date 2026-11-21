@@ -225,14 +225,12 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
                                const val& take_sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int take_sample_rate = checkedIntFromVal(take_sample_rate_val, "takeSampleRate");
-  // Both fields default to 0, which the C ABI reads as "use the library value",
-  // so an omitted key and a written 0 are one request -- as they are on the other
-  // two surfaces. A value outside the domain is refused by the measurement rather
-  // than here: the resolution has to divide the twelve pitch classes and the hop
-  // has to be positive, and neither condition belongs to this layer.
-  SonareTakeAlignConfig resolved{};
-  resolved.hop_length = intProperty(config, "hopLength", 0);
-  resolved.bins_per_octave = intProperty(config, "binsPerOctave", 0);
+  // An omitted key keeps the init value; a written one, 0 included, is read literally and a value
+  // outside the domain is refused by the C entry.
+  SonareTakeAlignConfig resolved;
+  sonare_take_align_config_init(&resolved);
+  resolved.hop_length = intProperty(config, "hopLength", resolved.hop_length);
+  resolved.bins_per_octave = intProperty(config, "binsPerOctave", resolved.bins_per_octave);
 
   validateWasmFloat32ArrayPair(reference, "reference samples", take, "take samples", false);
   const std::vector<float> reference_buffer = float32ArrayToVector(reference);

@@ -146,11 +146,9 @@ describe('WASM alignTakeToReference', () => {
   });
 
   it('reads an absent resolution field as the library value however absence is spelled', () => {
-    // The control for the refusals below. This reader zero-initializes the config
-    // rather than seeding it from the C defaults, so an omitted field IS the 0 the
-    // guard refuses, and presence is the only thing separating them. Nothing but a
-    // call with the field left out can show that separation works -- a value check
-    // would refuse omission, and no rejection test would notice.
+    // The control for the refusals below. This reader seeds the config from the C init and a
+    // written value, 0 included, is read literally, so presence is the only thing separating
+    // an omitted field from a refused 0. Only a call with the field left out shows it works.
     const expected = shape(baseline);
     for (const key of ['hopLength', 'binsPerOctave'] as const) {
       for (const absent of [undefined, null]) {
@@ -208,21 +206,23 @@ describe('WASM alignTakeToReference', () => {
     );
   });
 
-  it('reads a written zero as the library value, the way the C ABI defines it', () => {
-    // 0 is the C ABI's "use the library value" on both fields, so a written 0 and an
-    // omitted key are one request -- the same answer the other two surfaces give,
-    // which is what this case holds this surface to.
-    for (const options of [
-      { hopLength: 0 },
-      { binsPerOctave: 0 },
-      {
-        hopLength: 0,
-        binsPerOctave: 0,
-      },
-    ]) {
-      const written = alignTakeToReference({ reference, take, sampleRate, ...options });
-      expect(written.anchors.length).toBe(baseline.anchors.length);
-      expect(written.alignment.referenceFrames).toBe(baseline.alignment.referenceFrames);
+  it('refuses a written zero, which is a value outside both domains', () => {
+    // Every field is read literally after the C init, so 0 is no longer "omitted".
+    const zeroes: Array<[Partial<AlignTakeToReferenceRequest>, string]> = [
+      [{ hopLength: 0 }, 'hopLength must be an integer in [1, 65536]'],
+      [{ binsPerOctave: 0 }, 'binsPerOctave must be an integer in [1, 2147483647]'],
+    ];
+    for (const [options, message] of zeroes) {
+      let thrown: unknown;
+      try {
+        alignTakeToReference({ reference, take, sampleRate, ...options });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, message).toBeDefined();
+      expect(expectArgumentRefusal(thrown, RangeError, message).message, message).toBe(
+        `alignTakeToReference: ${message}`,
+      );
     }
   });
 
@@ -247,11 +247,11 @@ describe('WASM alignTakeToReference', () => {
     }
 
     const unusable: Array<[string, Partial<AlignTakeToReferenceRequest>, string]> = [
-      ['a negative hop', { hopLength: -256 }, 'hopLength must be an integer in [0, 65536]'],
+      ['a negative hop', { hopLength: -256 }, 'hopLength must be an integer in [1, 65536]'],
       [
         'a negative resolution',
         { binsPerOctave: -12 },
-        'binsPerOctave must be an integer in [0, 2147483647]',
+        'binsPerOctave must be an integer in [1, 2147483647]',
       ],
       // Positive and a whole number, and still refused: the chroma folds onto
       // twelve pitch classes and 18 does not divide by them. Nothing short of the

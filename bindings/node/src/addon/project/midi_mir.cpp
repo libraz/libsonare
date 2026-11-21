@@ -613,14 +613,12 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   if (!Int32Arg(env, info, 2, "sampleRate", 0, &sample_rate)) return env.Undefined();
   int take_sample_rate = 0;
   if (!Int32Arg(env, info, 3, "takeSampleRate", 0, &take_sample_rate)) return env.Undefined();
-  // Zeroed rather than seeded: the C entry reads 0 on either field as "library
-  // value", so a key the caller left out must stay 0 instead of carrying a
-  // default this surface spelled.
-  SonareTakeAlignConfig config{};
+  SonareTakeAlignConfig config;
+  sonare_take_align_config_init(&config);
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object options = info[4].As<Napi::Object>();
-    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
-    config.bins_per_octave = IntProperty(options, "binsPerOctave", kZeroIsSentinel);
+    config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+    config.bins_per_octave = IntProperty(options, "binsPerOctave", config.bins_per_octave);
   }
 
   SonareProjectWarpAnchor* raw_anchors = nullptr;

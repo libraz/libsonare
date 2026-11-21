@@ -595,7 +595,7 @@ TEST_CASE("clip page provider refusals", "[c_api][engine_refusal]") {
 TEST_CASE("engine controller profile refusals", "[c_api][engine_refusal]") {
   SonareEngine* engine = make_engine();
   SonareSynthPatch patch{};
-  patch.struct_version = 1;
+  sonare_synth_patch_init(&patch);
   patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
   REQUIRE(sonare_engine_set_synth_instrument(engine, 3, &patch) == SONARE_OK);
 

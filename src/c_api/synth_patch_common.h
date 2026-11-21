@@ -350,18 +350,14 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
 /// selected engine, else that engine's base preset's (@ref base_preset_name).
 /// Every non-zero struct field then overrides the base ("0 => keep"), and the
 /// engine params assign fields of the selected engine's section by key.
-/// Struct version 2 adds @c present_fields, so a caller can also override with
-/// an explicit zero; version 1 has no presence bits and cannot express one.
-/// Version 3 adds the sample-engine block, which only a sample patch reads.
-/// Version 4 adds the series highpass, 5 the converter, 6 the pitch offset, 7
-/// the retrigger mode, 8 the engine params, 9 the second presence word and its
-/// fields and 10 the LFO shape; an older caller's tail is never read. Returns false (and sets @p
-/// out_error, valid until the next refusal on this thread) for an unsupported struct_version, an
-/// unknown preset name, a refused engine param, a bounded numeric field that is non-finite or
-/// outside the range sonare_synth_patch_param_info() publishes for it, an enum ordinal outside its
-/// set, a mod routing with an unknown source or destination or a depth that is non-finite or beyond
-/// the patch clamp, or more mod routings than the matrix holds; nothing is clamped silently at that
-/// step.
+/// The presence words @c present_fields and @c present_fields2 let a caller also override with an
+/// explicit zero. The sample-engine block is read only by a sample patch. Returns false (and sets
+/// @p out_error, valid until the next refusal on this thread) for a struct_size below
+/// sizeof(SonareSynthPatch), an unknown preset name, a refused engine param, a bounded numeric
+/// field that is non-finite or outside the range sonare_synth_patch_param_info() publishes for it,
+/// an enum ordinal outside its set, a mod routing with an unknown source or destination or a depth
+/// that is non-finite or beyond the patch clamp, or more mod routings than the matrix holds;
+/// nothing is clamped silently at that step.
 inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
                                       sonare::midi::synth::NativeSynthConfig* out,
                                       const char** out_error) {
@@ -386,16 +382,13 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     *dst = value;
     return true;
   };
-  if (c.struct_version < 0 || c.struct_version > SONARE_SYNTH_PATCH_STRUCT_VERSION) {
-    if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
+  if (c.struct_size < sizeof(SonareSynthPatch)) {
+    if (out_error) *out_error = "patch.struct_size must be set by sonare_synth_patch_init";
     return false;
   }
-  // A version-1 caller's struct predates present_fields, so its bits are not
-  // part of that contract even though the member exists in this build.
-  const uint32_t present = c.struct_version >= 2 ? c.present_fields : 0u;
+  const uint32_t present = c.present_fields;
   const auto set = [present](uint32_t bit) { return (present & bit) != 0u; };
-  // A pre-9 struct ends at engine_param_count, so the second word is not read.
-  const uint32_t present2 = c.struct_version >= 9 ? c.present_fields2 : 0u;
+  const uint32_t present2 = c.present_fields2;
   const auto set2 = [present2](uint32_t bit) { return (present2 & bit) != 0u; };
   if (!valid_c_enum(c.engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
     if (out_error) *out_error = "invalid synth engine_mode";
@@ -417,29 +410,26 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     if (out_error) *out_error = "invalid synth body";
     return false;
   }
-  // A pre-7 struct has no retrigger member, so its tail bytes are not read.
-  const int retrigger = c.struct_version >= 7 ? c.retrigger : SONARE_SYNTH_RETRIGGER_BASE;
+  const int retrigger = c.retrigger;
   if (!valid_c_enum(retrigger, SONARE_SYNTH_RETRIGGER_COUNT)) {
     if (out_error) *out_error = "invalid synth retrigger";
     return false;
   }
-  // A pre-10 struct has no lfo_shape member, so its tail bytes are not read.
-  const int lfo_shape = c.struct_version >= 10 ? c.lfo_shape : SONARE_SYNTH_LFO_SHAPE_BASE;
+  const int lfo_shape = c.lfo_shape;
   if (!valid_c_enum(lfo_shape, SONARE_SYNTH_LFO_SHAPE_COUNT)) {
     if (out_error) *out_error = "invalid synth lfo_shape";
     return false;
   }
-  // A pre-3 struct ends before the sample block; any engine refuses an unknown ordinal there.
-  if (c.struct_version >= 3 && !valid_c_enum(c.sample_loop, SONARE_SAMPLE_LOOP_MODE_COUNT)) {
+  // Any engine refuses an unknown ordinal in the sample block.
+  if (!valid_c_enum(c.sample_loop, SONARE_SAMPLE_LOOP_MODE_COUNT)) {
     if (out_error) *out_error = "invalid synth sample_loop";
     return false;
   }
-  if (c.struct_version >= 3 && !valid_c_enum(c.sample_key_track, SONARE_SAMPLE_KEY_TRACK_COUNT)) {
+  if (!valid_c_enum(c.sample_key_track, SONARE_SAMPLE_KEY_TRACK_COUNT)) {
     if (out_error) *out_error = "invalid synth sample_key_track";
     return false;
   }
-  // A pre-8 struct ends before the engine params, so its tail is not read.
-  const size_t engine_param_count = c.struct_version >= 8 ? c.engine_param_count : 0u;
+  const size_t engine_param_count = c.engine_param_count;
   if (engine_param_count > 0 && c.engine_params == nullptr) {
     if (out_error) *out_error = "engine_params is NULL with a non-zero engine_param_count";
     return false;
@@ -581,41 +571,34 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     return false;
   }
 
-  // Sample engine: only a version-3 caller's struct reaches this block, and
-  // only a sample patch reads it, which is what keeps set 0 addressable
-  // without a presence bit of its own.
-  if (c.struct_version >= 4 && !take(set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ), ParamId::kHpCutoffHz,
-                                     c.hp_cutoff_hz, &p.hp_cutoff_hz)) {
+  if (!take(set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ), ParamId::kHpCutoffHz, c.hp_cutoff_hz,
+            &p.hp_cutoff_hz)) {
     return false;
   }
-  if (c.struct_version >= 5 &&
-      (!take(set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ), ParamId::kSampleHoldHz, c.sample_hold_hz,
-             &p.sample_hold_hz) ||
-       !take(set(SONARE_SYNTH_FIELD_BIT_DEPTH), ParamId::kBitDepth, c.bit_depth, &p.bit_depth))) {
+  if (!take(set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ), ParamId::kSampleHoldHz, c.sample_hold_hz,
+            &p.sample_hold_hz) ||
+      !take(set(SONARE_SYNTH_FIELD_BIT_DEPTH), ParamId::kBitDepth, c.bit_depth, &p.bit_depth)) {
     return false;
   }
-  if (c.struct_version >= 6 &&
-      !take(set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS), ParamId::kPitchOffsetCents,
+  if (!take(set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS), ParamId::kPitchOffsetCents,
             c.pitch_offset_cents, &p.pitch_offset_cents)) {
     return false;
   }
   if (retrigger > 0) p.retrigger = admitted_ordinal_to_enum<SynthRetrigger>(retrigger, 1);
   if (lfo_shape > 0) p.lfo_shape = admitted_ordinal_to_enum<LfoShape>(lfo_shape, 1);
-  if (c.struct_version >= 9) {
-    if (!take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, c.drift_rate_hz,
-              &p.drift_rate_hz) ||
-        !take(set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS), ParamId::kAmpDelayMs, c.amp_delay_ms,
-              &p.amp_env.delay_ms) ||
-        !take(set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS), ParamId::kAmpHoldMs, c.amp_hold_ms,
-              &p.amp_env.hold_ms) ||
-        !take(set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS), ParamId::kFilterDelayMs, c.filter_delay_ms,
-              &p.filter_env.delay_ms) ||
-        !take(set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS), ParamId::kFilterHoldMs, c.filter_hold_ms,
-              &p.filter_env.hold_ms)) {
-      return false;
-    }
-    if (set2(SONARE_SYNTH_FIELD2_ONE_SHOT) || c.one_shot != 0) p.one_shot = c.one_shot != 0;
+  if (!take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, c.drift_rate_hz,
+            &p.drift_rate_hz) ||
+      !take(set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS), ParamId::kAmpDelayMs, c.amp_delay_ms,
+            &p.amp_env.delay_ms) ||
+      !take(set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS), ParamId::kAmpHoldMs, c.amp_hold_ms,
+            &p.amp_env.hold_ms) ||
+      !take(set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS), ParamId::kFilterDelayMs, c.filter_delay_ms,
+            &p.filter_env.delay_ms) ||
+      !take(set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS), ParamId::kFilterHoldMs, c.filter_hold_ms,
+            &p.filter_env.hold_ms)) {
+    return false;
   }
+  if (set2(SONARE_SYNTH_FIELD2_ONE_SHOT) || c.one_shot != 0) p.one_shot = c.one_shot != 0;
   if (engine_param_count > 0) {
     std::vector<sonare::midi::synth::EngineParam> params(engine_param_count);
     for (size_t i = 0; i < engine_param_count; ++i) {
@@ -628,7 +611,9 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
       return false;
     }
   }
-  if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
+  // Only a sample patch reads the sample block, which is what keeps set 0 addressable without a
+  // presence bit of its own.
+  if (p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     const SynthPatchSampleBounds& sample_bounds = synth_patch_sample_bounds();
     if (c.sample_level != 0.0f) {
@@ -694,13 +679,13 @@ inline constexpr uint32_t kSynthPatchAllFields2 =
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS | SONARE_SYNTH_FIELD2_FILTER_DELAY_MS |
     SONARE_SYNTH_FIELD2_FILTER_HOLD_MS | SONARE_SYNTH_FIELD2_ONE_SHOT;
 
-/// Fills a versioned C synth patch from a catalog preset (the read direction:
+/// Fills a C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
 inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
                              SonareSynthPatch* out) {
   const sonare::midi::synth::NativeSynthPatch& p = preset.config.patch;
   *out = SonareSynthPatch{};
-  out->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  out->struct_size = sizeof(SonareSynthPatch);
   out->present_fields = kSynthPatchAllFields;
   out->present_fields2 = kSynthPatchAllFields2;
   // Catalog names are bounded by a test, so the copy never cuts one.

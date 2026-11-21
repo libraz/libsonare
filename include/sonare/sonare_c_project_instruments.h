@@ -251,6 +251,11 @@ int sonare_synth_builtin_waveform_from_name(const char* name);
 ///        return SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 
+/// @brief Fills @p patch with sizeof and the empty patch: no preset, every numeric field 0 (keep
+///        the base) and no presence bit set. NULL is ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
+void sonare_synth_patch_init(SonareSynthPatch* patch);
+
 /// @brief Describes the engine-section fields @ref SonareSynthPatch
 ///        @c engine_params accepts for @p engine_mode (a SonareSynthEngineMode).
 /// @details A JSON array in the field names of
@@ -354,7 +359,7 @@ typedef struct {
 ///        realism layer; @ref sonare_synth_enum_names with
 ///        SONARE_SYNTH_ENUM_ENGINE_MODE lists them at runtime).
 ///        Each binding resolves its @ref SonareSynthPatch via
-///        the preset catalog + field overrides; an invalid struct_version or
+///        the preset catalog + field overrides; a struct_size below sizeof or an
 ///        unknown preset name or a refused engine param fails with
 ///        SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames is

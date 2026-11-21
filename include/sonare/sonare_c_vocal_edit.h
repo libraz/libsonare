@@ -12,8 +12,8 @@
 extern "C" {
 #endif
 
-/// @brief ABI version of the vocal-edit structs and functions in this header;
-///        every struct's @c schema_version must carry it.
+/// @brief ABI version of the vocal-edit structs and functions in this header; raised when a
+///        layout or signature changes, and reported by sonare_vocal_edit_abi_version.
 #define SONARE_VOCAL_EDIT_ABI_VERSION 1u
 
 /// @brief Opaque editing session over one mono source; destroy with sonare_vocal_session_destroy.
@@ -85,7 +85,6 @@ typedef struct {
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
   uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   double frame_origin_sample;     ///< Source sample at which frame 0 is positioned.
   double samples_per_frame;       ///< Hop between frames, in source samples (default 512).
   uint32_t frame_length_samples;  ///< Analysis window length in samples (default 2048).
@@ -111,7 +110,6 @@ typedef struct {
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
   uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   int64_t output_length_samples;  ///< Output length in samples; 0 selects the source length.
   double edge_fade_ms;            ///< Fade applied at note edges, in milliseconds (default 5).
   double vibrato_cutoff_hz;       ///< Cutoff separating vibrato from drift, in Hz (default 3).
@@ -136,7 +134,6 @@ typedef struct {
 /// @brief Runtime limits for a restored session; the authored state carries everything else.
 typedef struct {
   uint32_t struct_size;        ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;     ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   uint64_t max_history_bytes;  ///< Memory budget of the undo history in bytes (default 64 MiB).
   uint64_t max_cache_bytes;    ///< Memory budget of the render cache in bytes (default 128 MiB).
   uint32_t max_undo_depth;     ///< Maximum number of undo steps kept (default 128).
@@ -147,10 +144,9 @@ typedef struct {
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
-  uint32_t target_mode;     ///< A @ref SonareVocalTargetMode choosing how the target is given.
-  double target_midi;       ///< Target pitch as a MIDI note number for CENTER mode.
+  uint32_t struct_size;  ///< sizeof of this struct; set by the matching init function.
+  uint32_t target_mode;  ///< A @ref SonareVocalTargetMode choosing how the target is given.
+  double target_midi;    ///< Target pitch as a MIDI note number for CENTER mode.
   const SonareVocalPitchPoint* target_points;  ///< target_point_count curve points for CURVE mode.
   uint64_t target_point_count;                 ///< Number of entries in target_points.
   double amount;                       ///< Correction strength toward the target, in [0, 1].
@@ -174,7 +170,6 @@ typedef struct {
 ///   sonare_free_vocal_notes_result on the owning @ref SonareVocalNotesResult.
 typedef struct {
   uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   uint32_t id;                    ///< Note id; never 0.
   int64_t source_start_sample;    ///< First source sample of the note.
   int64_t source_end_sample;      ///< One past the last source sample of the note.
@@ -192,7 +187,6 @@ typedef struct {
 /// @brief Pitch blend across the boundary between two adjacent notes.
 typedef struct {
   uint32_t struct_size;          ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;       ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   uint32_t left_note_id;         ///< Id of the earlier note.
   uint32_t right_note_id;        ///< Id of the later note.
   int64_t left_window_samples;   ///< Blend length inside the left note, in samples; positive.
@@ -205,7 +199,6 @@ typedef struct {
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
   uint32_t struct_size;              ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;           ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   uint32_t kind;                     ///< A @ref SonareVocalOperationKind selecting the operation.
   uint32_t note_id;                  ///< Target note of SET_EDIT, SET_SOURCE_SPAN and SPLIT.
   SonareVocalNoteEdit edit;          ///< New edit for SET_EDIT.
@@ -235,10 +228,9 @@ typedef struct {
 ///   Library-allocated arrays; release them with sonare_free_vocal_notes_result, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
-  SonareVocalNote* notes;   ///< note_count notes.
-  uint64_t note_count;      ///< Number of entries in notes.
+  uint32_t struct_size;    ///< sizeof of this struct; set by the matching init function.
+  SonareVocalNote* notes;  ///< note_count notes.
+  uint64_t note_count;     ///< Number of entries in notes.
   SonareVocalTransition* transitions;  ///< transition_count transitions.
   uint64_t transition_count;           ///< Number of entries in transitions.
 } SonareVocalNotesResult;
@@ -248,7 +240,6 @@ typedef struct {
 ///   resets the struct.
 typedef struct {
   uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   SonareVocalAnalysis analysis;   ///< Analysis grid, F0 track and settings; library-owned arrays.
   char source_sha256[65];         ///< Lowercase hex SHA-256 of the source, NUL-terminated.
   char analysis_sha256[65];       ///< Lowercase hex SHA-256 of the analysis, NUL-terminated.
@@ -269,7 +260,6 @@ typedef struct {
 ///   the struct.
 typedef struct {
   uint32_t struct_size;             ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;          ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   SonareVocalStateToken token;      ///< State after the call.
   SonareVocalRange* dirty_ranges;   ///< Ranges whose rendered audio changed.
   uint64_t dirty_range_count;       ///< Number of entries in dirty_ranges.
@@ -281,15 +271,14 @@ typedef struct {
 ///   Library-allocated arrays; release them with sonare_free_vocal_pitch_result, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
-  double* source_samples;   ///< frame_count frame positions, in source samples.
-  double* measured_midi;    ///< frame_count measured pitches as MIDI note numbers.
-  double* target_midi;      ///< frame_count target pitches as MIDI note numbers.
-  double* effective_midi;   ///< frame_count pitches after the edit as MIDI note numbers.
-  uint8_t* voiced;          ///< frame_count flags; nonzero marks a voiced frame.
-  uint8_t* has_target;      ///< frame_count flags; nonzero where target_midi is defined.
-  uint64_t frame_count;     ///< Number of entries in each array.
+  uint32_t struct_size;    ///< sizeof of this struct; set by the matching init function.
+  double* source_samples;  ///< frame_count frame positions, in source samples.
+  double* measured_midi;   ///< frame_count measured pitches as MIDI note numbers.
+  double* target_midi;     ///< frame_count target pitches as MIDI note numbers.
+  double* effective_midi;  ///< frame_count pitches after the edit as MIDI note numbers.
+  uint8_t* voiced;         ///< frame_count flags; nonzero marks a voiced frame.
+  uint8_t* has_target;     ///< frame_count flags; nonzero where target_midi is defined.
+  uint64_t frame_count;    ///< Number of entries in each array.
 } SonareVocalPitchResult;
 
 /// @brief Rendered PCM and the ranges it covers.
@@ -297,7 +286,6 @@ typedef struct {
 ///   the struct.
 typedef struct {
   uint32_t struct_size;         ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;      ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   float* samples;               ///< sample_count mono samples.
   int64_t sample_count;         ///< Number of entries in samples.
   int64_t start_sample;         ///< Output sample at which samples begins.
@@ -313,16 +301,14 @@ typedef struct {
 ///   Library-allocated arrays; release them with sonare_free_vocal_state_bytes, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
-  uint8_t* data;            ///< size bytes of state; pass to sonare_vocal_session_restore.
-  uint64_t size;            ///< Number of bytes in data.
+  uint32_t struct_size;  ///< sizeof of this struct; set by the matching init function.
+  uint8_t* data;         ///< size bytes of state; pass to sonare_vocal_session_restore.
+  uint64_t size;         ///< Number of bytes in data.
 } SonareVocalStateBytes;
 
 /// @brief What the session's renderer supports.
 typedef struct {
   uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
   uint32_t abi_version;           ///< Vocal-edit ABI version of the library.
   uint32_t profile_id;            ///< Render profile id; 1 is the PSOLA vocal profile.
   uint32_t monophonic_only;       ///< Nonzero if only monophonic sources are supported.
@@ -333,14 +319,13 @@ typedef struct {
 
 /// @brief Structured context of the last failed vocal-edit call on the calling thread.
 typedef struct {
-  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
-  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
-  uint32_t reason;          ///< A @ref SonareVocalReason naming the cause.
-  char field[96];           ///< Name of the offending field; empty if none.
-  uint64_t expected;        ///< Numeric form of expected_text; 0 if it is not a number.
-  uint64_t actual;          ///< Numeric form of actual_text; 0 if it is not a number.
-  char expected_text[96];   ///< Expected value as text; empty if none.
-  char actual_text[96];     ///< Offending value as text; empty if none.
+  uint32_t struct_size;    ///< sizeof of this struct; set by the matching init function.
+  uint32_t reason;         ///< A @ref SonareVocalReason naming the cause.
+  char field[96];          ///< Name of the offending field; empty if none.
+  uint64_t expected;       ///< Numeric form of expected_text; 0 if it is not a number.
+  uint64_t actual;         ///< Numeric form of actual_text; 0 if it is not a number.
+  char expected_text[96];  ///< Expected value as text; empty if none.
+  char actual_text[96];    ///< Offending value as text; empty if none.
 } SonareVocalErrorDetail;
 
 /// @brief Nonzero requests cancellation; user_data is used only during the call.

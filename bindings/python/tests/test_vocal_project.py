@@ -89,8 +89,8 @@ def test_project_vocal_ffi_layout_matches_header() -> None:
     assert ctypes.sizeof(SonareProjectVocalEditApplyResult) == 168
     assert ctypes.sizeof(SonareProjectVocalEditDependency) == 224
     assert ctypes.sizeof(SonareProjectVocalEditDependenciesResult) == 24
-    assert ctypes.sizeof(SonareProjectVocalOriginalSource) == 40
-    assert ctypes.sizeof(SonareProjectVocalRehydrateItem) == 28
+    assert ctypes.sizeof(SonareProjectVocalOriginalSource) == 32
+    assert ctypes.sizeof(SonareProjectVocalRehydrateItem) == 24
     assert ctypes.sizeof(SonareProjectVocalRehydrateResult) == 24
 
 

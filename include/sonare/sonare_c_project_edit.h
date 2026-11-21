@@ -191,16 +191,16 @@ static_assert(sizeof(SonareProjectWarpMapDesc) == 3u * sizeof(void*) + sizeof(si
 
 /// @brief Chroma-DTW parameters for @ref sonare_align_take_to_reference.
 ///
-/// A zeroed struct is a valid request for the library values, and passing NULL
-/// does the same: neither field has a meaning at 0, so unlike
-/// @ref SonareNoteTargetAssignConfig there is no default-filling entry point to
-/// call first. The multiscale and band parameters the core also carries are not
-/// exposed, because they trade working memory against path precision without
-/// changing what an anchor means.
+/// Start from @ref sonare_take_align_config_init; every field is then read literally and checked
+/// against the range given beside it. Passing NULL selects those initial values. The multiscale
+/// and band parameters the core also carries are not exposed, because they trade working memory
+/// against path precision without changing what an anchor means.
 typedef struct {
-  /// Chroma hop in samples, which sets the time resolution of the anchors.
+  uint32_t struct_size;  ///< sizeof(SonareTakeAlignConfig); set by the init function.
+  /// Chroma hop in samples, which sets the time resolution of the anchors. In [1, 65536];
+  /// default 512.
   int32_t hop_length;
-  /// Chroma bins per octave. Must be a positive multiple of 12, because the grid
+  /// Chroma bins per octave; default 12. Must be a positive multiple of 12, because the grid
   /// is folded onto the twelve pitch classes and a span that does not divide by
   /// them has no fold -- 13 and 18 are refused for that reason alone.
   ///
@@ -209,10 +209,13 @@ typedef struct {
   /// inside the analysed band. The ceiling is not monotonic in the rate -- 22050
   /// carries 60 where 44100 stops at 36, and 8000 and 192000 carry only 12 -- so
   /// it is measured rather than stated, and 12 is the one value every rate the
-  /// bindings accept can carry. Leave the field at 0 unless a finer grid has been
+  /// bindings accept can carry. Leave the field at its default unless a finer grid has been
   /// checked against the rate it will run at.
   int32_t bins_per_octave;
 } SonareTakeAlignConfig;
+
+/// @brief Writes every default into @p config and sets its @c struct_size; NULL is ignored.
+void sonare_take_align_config_init(SonareTakeAlignConfig* config);
 
 /// @brief How well an alignment was conditioned.
 ///
@@ -236,11 +239,14 @@ typedef struct {
 } SonareTakeAlignment;
 
 #ifdef __cplusplus
-static_assert(offsetof(SonareTakeAlignConfig, hop_length) == 0,
+static_assert(offsetof(SonareTakeAlignConfig, struct_size) == 0,
+              "TakeAlignConfig.struct_size offset");
+static_assert(offsetof(SonareTakeAlignConfig, hop_length) == sizeof(uint32_t),
               "TakeAlignConfig.hop_length offset");
-static_assert(offsetof(SonareTakeAlignConfig, bins_per_octave) == sizeof(int32_t),
+static_assert(offsetof(SonareTakeAlignConfig, bins_per_octave) ==
+                  sizeof(uint32_t) + sizeof(int32_t),
               "TakeAlignConfig.bins_per_octave offset");
-static_assert(sizeof(SonareTakeAlignConfig) == 2u * sizeof(int32_t),
+static_assert(sizeof(SonareTakeAlignConfig) == sizeof(uint32_t) + 2u * sizeof(int32_t),
               "SonareTakeAlignConfig layout drift");
 static_assert(offsetof(SonareTakeAlignment, mean_residual_frames) == 0,
               "TakeAlignment.mean_residual_frames offset");
@@ -527,7 +533,7 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 ///   track the takes were sung against.
 /// @param take The signal to be placed under it.
 /// @param sample_rate Sample rate of both buffers; must be > 0.
-/// @param config Optional; NULL or a zeroed struct selects the library values.
+/// @param config Optional; NULL selects the @ref sonare_take_align_config_init values.
 /// @param out_anchors Receives a heap-owned array of @p out_count anchors,
 ///   released with @ref sonare_free_project_warp_anchors. Written on success only.
 /// @param out_alignment Optional; receives how well the alignment was
@@ -565,7 +571,7 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 /// @param reference_sample_rate Sample rate of @p reference; must be > 0.
 /// @param take The signal to be placed under it.
 /// @param take_sample_rate Sample rate of @p take; must be > 0.
-/// @param config Optional; NULL or a zeroed struct selects the library values.
+/// @param config Optional; NULL selects the @ref sonare_take_align_config_init values.
 /// @param out_anchors Receives a heap-owned array of @p out_count anchors,
 ///   released with @ref sonare_free_project_warp_anchors. Written on success only.
 /// @param out_alignment Optional; receives how well the alignment was
