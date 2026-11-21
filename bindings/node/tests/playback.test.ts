@@ -321,7 +321,9 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
     for (let block = 0; block < 3; block++) {
       const silent = renderer.processSilence(128);
       expect(silent).toHaveLength(renderer.numOutputChannels);
-      for (const plane of silent) expect(plane).toHaveLength(128);
+      for (const plane of silent) {
+        expect(plane).toHaveLength(128);
+      }
     }
     expect(renderer.processSilence(0).every((plane) => plane.length === 0)).toBe(true);
     const input = Array.from({ length: 6 }, () => new Float32Array(128).fill(0.25));

@@ -9,13 +9,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  alignTakeToReference,
   Audio,
+  alignTakeToReference,
   downmix,
+  Mixer,
   melToAudio,
   melToStft,
   meteringSpectrumFrame,
-  Mixer,
   mixingScenePreset,
   noteTargetsFromSmf,
   PlaybackLoudnessMeter,
@@ -141,7 +141,10 @@ const withAnalyzer = (fn: (analyzer: StreamAnalyzer) => unknown) =>
   withHandle(new StreamAnalyzer({ sampleRate: SR, nFft: 512, hopLength: 256 }), fn);
 
 const withChanger = (fn: (changer: RealtimeVoiceChanger) => unknown) =>
-  withHandle(new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, maxBlockSize: 256 }), fn);
+  withHandle(
+    new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, maxBlockSize: 256 }),
+    fn,
+  );
 
 /**
  * A fresh valid call of the facade reaching each C entry, every argument valid except the one
@@ -184,7 +187,7 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
         : mixer.processStereo([new Float32Array(4)], [v] as never),
     ),
   mixing_scene_preset_json: (_s, v) => mixingScenePreset(v as never),
-  note_targets_from_smf: (s, v) => noteTargetsFromSmf(given({}, s, v) as never),
+  note_targets_from_smf: (s, v) => noteTargetsFromSmf(given({ data: SMF }, s, v) as never),
   playback_loudness_meter_push_interleaved: (_s, v) =>
     withHandle(new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 }), (meter) =>
       meter.pushInterleaved(v as Float32Array),
@@ -212,7 +215,9 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
   realtime_voice_changer_process_mono: (_s, v) =>
     withChanger((changer) => changer.processMono(v as Float32Array)),
   realtime_voice_changer_process_mono_with_carrier: (_s, v) =>
-    withChanger((changer) => changer.processMonoWithCarrier(v as Float32Array, new Float32Array(4))),
+    withChanger((changer) =>
+      changer.processMonoWithCarrier(v as Float32Array, new Float32Array(4)),
+    ),
   stream_analyzer_process_with_offset: (_s, v) =>
     withAnalyzer((analyzer) => analyzer.processWithOffset(TONE.subarray(0, 512), v as number)),
   stream_analyzer_reset: (_s, v) => withAnalyzer((analyzer) => analyzer.reset(v as number)),
