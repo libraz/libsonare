@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-c-exports \
+       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
@@ -944,7 +944,7 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
 	$(CHECK) python3 -m unittest tests/conformance/test_playback_cli.py
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_exception_scope.py
-	$(CHECK) python3 -m unittest tools/abi/test_check_c_exports.py
+	$(CHECK) python3 -m unittest tools/abi/test_check_c_exports.py tools/abi/test_check_abi_bumps.py
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
 	$(CHECK) python3 -m unittest tests/conformance/test_capability_feature_gates.py
 	$(CHECK) python3 -m unittest tests/conformance/test_binding_warning_flags.py
@@ -1169,6 +1169,10 @@ check-c-exports:
 
 check-abi-version:
 	python3 tools/abi/check_abi_versions.py
+
+# A counter equal to the last release tag's while a header it governs changed layout since.
+check-abi-bumps:
+	python3 tools/abi/check_abi_bumps.py
 
 # Where every voice in the bank stands and what its next round needs — the entry
 # point of the calibration loop, and the one target here that neither builds nor
@@ -1427,6 +1431,7 @@ ci-local:
 	$(MAKE) parity
 	$(MAKE) processor-types-check
 	$(MAKE) check-abi-version
+	$(MAKE) check-abi-bumps
 	$(MAKE) abi-layout-check
 
 # Coverage targets
