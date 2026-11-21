@@ -271,18 +271,24 @@ def test_an_omitted_effect_hop_is_a_quarter_of_the_given_n_fft() -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["n_fft", "hop_length", "hpss_kernel_harmonic", "hpss_kernel_percussive"]
+    ("field", "domain"),
+    [
+        ("n_fft", r"an even integer in \[4, 524288\]"),
+        ("hop_length", r"an integer in \[1, "),
+        ("hpss_kernel_harmonic", r"an integer in \[1, "),
+        ("hpss_kernel_percussive", r"an integer in \[1, "),
+    ],
 )
-def test_percussive_separation_refuses_zero_where_none_is_the_default(field: str) -> None:
+def test_percussive_separation_refuses_zero_where_none_is_the_default(
+    field: str, domain: str
+) -> None:
     tone = _tone()
     with pytest.raises(
-        SonareValueError,
-        match=rf"^extract_percussive_events: {field} must be an integer in \[1, ",
+        SonareValueError, match=rf"^extract_percussive_events: {field} must be {domain}"
     ):
         libsonare.extract_percussive_events(tone, SR, **{field: 0})
     with pytest.raises(
-        SonareValueError,
-        match=rf"^render_percussive_events: {field} must be an integer in \[1, ",
+        SonareValueError, match=rf"^render_percussive_events: {field} must be {domain}"
     ):
         libsonare.render_percussive_events(tone, SR, [], **{field: 0})
 

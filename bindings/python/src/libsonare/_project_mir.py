@@ -20,6 +20,7 @@ from ._project_model import (
 )
 from ._runtime import (
     _C_INT_MAX,
+    _C_INT_MIN,
     SonareProjectWarpAnchor,
     SonareTakeAlignConfig,
     SonareTakeAlignment,
@@ -156,9 +157,11 @@ def align_take_to_reference(
     # A bound the caller left out keeps the value the init function wrote.
     config = SonareTakeAlignConfig()
     if hop_length is not None:
-        config.hop_length = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
+        config.hop_length = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if bins_per_octave is not None:
-        config.bins_per_octave = _narrow_int(bins_per_octave, "bins_per_octave", 1, _C_INT_MAX)
+        config.bins_per_octave = _narrow_int(
+            bins_per_octave, "bins_per_octave", _C_INT_MIN, _C_INT_MAX
+        )
 
     reference_array, reference_len = _to_c_float_array(reference, arg_name="reference")
     take_array, take_len = _to_c_float_array(take, arg_name="take")

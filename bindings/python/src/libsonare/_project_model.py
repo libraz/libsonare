@@ -282,7 +282,7 @@ def _automation_lane_desc(
     Returns ``(desc, backing)``; the caller must keep ``backing`` (the C point
     array) alive for the duration of the native call.
     """
-    target_id = _automation_target_param_id_value(target_param_id)
+    target_id = _narrow_int(target_param_id, "target_param_id", 0, _UINT32_MAX)
     c_points = _automation_points_to_c(points if points is not None else [])
     desc = SonareAutomationLaneDesc(
         target_param_id=target_id,

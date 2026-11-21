@@ -397,11 +397,9 @@ def _create_options_to_c(
     if min_note_ms is not None:
         raw.min_note_ms = _finite_float(min_note_ms, "min_note_ms")
     if frame_length_samples is not None:
-        raw.frame_length_samples = _uint32(
-            frame_length_samples, "frame_length_samples", allow_zero=False
-        )
+        raw.frame_length_samples = _uint32(frame_length_samples, "frame_length_samples")
     if hop_length_samples is not None:
-        raw.hop_length_samples = _uint32(hop_length_samples, "hop_length_samples", allow_zero=False)
+        raw.hop_length_samples = _uint32(hop_length_samples, "hop_length_samples")
     if fmin_hz is not None:
         raw.fmin_hz = _finite_float(fmin_hz, "fmin_hz")
     if fmax_hz is not None:

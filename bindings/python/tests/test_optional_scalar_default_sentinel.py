@@ -190,7 +190,7 @@ class TestSegmentNeighbourCount:
     @pytest.mark.parametrize("name", sorted(SEGMENT_NEIGHBOURS))
     @pytest.mark.parametrize("value", [0, -1])
     def test_a_count_below_one_is_refused(self, name: str, value: int) -> None:
-        with pytest.raises(SonareValueError, match="k must be greater than 0"):
+        with pytest.raises(SonareValueError, match=r"k must be an integer in \[1, 2147483647\]"):
             SEGMENT_NEIGHBOURS[name](k=value)
 
 

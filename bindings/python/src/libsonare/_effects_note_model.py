@@ -19,7 +19,7 @@ from ._ffi import (
     SonareTranscribeConfig,
     SonareTranscribeResult,
 )
-from ._narrowing import _is_number, _narrow_double
+from ._narrowing import _is_number, _narrow_double, _resolve_zero_default
 from ._project_model import ProjectMidiEvent, _midi_event_from_c
 from ._runtime import (
     _C_INT_MAX,
@@ -299,6 +299,13 @@ def _transcribe_int(value: object, arg_name: str, low: int, high: int) -> int:
         raise _int_refusal(value, arg_name, domain) from exc
 
 
+def _transcribe_optional(value: object, arg_name: str) -> int:
+    """One transcription config integer whose C ``0`` means "not given"."""
+    if value is None:
+        return 0
+    return int(_resolve_zero_default(_to_c_int(value, arg_name).value, arg_name))
+
+
 def _transcribe_positive(value: float, arg_name: str) -> float:
     """Accept one transcription config float that has to be finite and greater than 0."""
     number = _validate_scalar(value, arg_name)
@@ -389,17 +396,14 @@ def _transcribe_config(
             raise _refuse("velocity_floor_db must be negative")
         config.velocity_floor_db = level
 
-    config.fixed_velocity = (
-        0 if fixed_velocity is None else _transcribe_int(fixed_velocity, "fixed_velocity", 1, 127)
-    )
+    # Absence is the C ABI's 0; a typed 0 is refused in the domain the core states.
+    config.fixed_velocity = _transcribe_optional(fixed_velocity, "fixed_velocity")
     config.group = _transcribe_int(group, "group", 0, 15)
     config.channel = _transcribe_int(channel, "channel", 0, 15)
 
     # Polyphonic-only fields: given on the monophonic path, the C ABI refuses
     # them by name, so nothing is pre-checked against `polyphonic` here.
-    config.max_polyphony = (
-        0 if max_polyphony is None else _transcribe_int(max_polyphony, "max_polyphony", 1, 64)
-    )
+    config.max_polyphony = _transcribe_optional(max_polyphony, "max_polyphony")
     if min_frame_peak_ratio is not None:
         config.min_frame_peak_ratio = _transcribe_ratio(
             min_frame_peak_ratio, "min_frame_peak_ratio"
@@ -413,11 +417,7 @@ def _transcribe_config(
 
     # Both polyphonic and monophonic read the division; giving it together with
     # min_note_ms is refused by the C ABI, naming min_note_division.
-    config.min_note_division = (
-        0
-        if min_note_division is None
-        else _transcribe_int(min_note_division, "min_note_division", 1, 128)
-    )
+    config.min_note_division = _transcribe_optional(min_note_division, "min_note_division")
 
     # Given with `polyphonic`, a non-default model is refused by the C ABI,
     # naming the field.

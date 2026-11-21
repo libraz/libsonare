@@ -13,7 +13,7 @@ import numbers
 import operator
 from typing import NamedTuple, SupportsFloat, SupportsIndex
 
-from ._errors import _refuse, _refuse_integer, _refuse_type
+from ._errors import SonareValueError, _refuse, _refuse_integer, _refuse_type
 
 
 def _narrow_int(value: object, name: str, low: int, high: int) -> int:
@@ -339,6 +339,14 @@ def _resolve_optional_non_negative(value: object, name: str) -> int | float:
     return value  # type: ignore[return-value]
 
 
+def _finite_or_domain(value: object, name: str) -> float:
+    """``_narrow_double``, whose non-finite refusal an integer keyword restates in its domain."""
+    try:
+        return _narrow_double(value, name)
+    except SonareValueError as exc:
+        raise _refuse_integer(name, str(exc)) from exc
+
+
 def _resolve_absent_positive(value: object, name: str) -> int | float:
     """Map an optional positive argument onto the C ABI's ``-1`` for "not given".
 
@@ -351,9 +359,9 @@ def _resolve_absent_positive(value: object, name: str) -> int | float:
     """
     if value is None:
         return _C_ABSENT
-    number = _narrow_double(value, name)
+    number = _finite_or_domain(value, name)
     if number <= 0:
-        raise _refuse(f"{name} must be greater than 0; omit it for the default")
+        raise _refuse_integer(name, f"{name} must be greater than 0; omit it for the default")
     return value  # type: ignore[return-value]
 
 
@@ -369,9 +377,9 @@ def _resolve_zero_default(value: object, name: str) -> int | float:
     """
     if value is None:
         return 0
-    number = _narrow_double(value, name)
+    number = _finite_or_domain(value, name)
     if number <= 0:
-        raise _refuse(f"{name} must be greater than 0; omit it for the default")
+        raise _refuse_integer(name, f"{name} must be greater than 0; omit it for the default")
     return value  # type: ignore[return-value]
 
 
@@ -383,9 +391,9 @@ def _optional_nonzero(value: object, name: str, absent: str = "the library value
     """
     if value is None:
         return 0.0
-    number = _narrow_double(value, name)
+    number = _finite_or_domain(value, name)
     if number == 0:
-        raise _refuse(f"{name} must not be 0; omit it for {absent}")
+        raise _refuse_integer(name, f"{name} must not be 0; omit it for {absent}")
     return number
 
 

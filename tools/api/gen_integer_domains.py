@@ -48,9 +48,8 @@ def overrides() -> dict[tuple[str, str], str]:
     raise SystemExit(f"{SPELLING.relative_to(ROOT)} declares no OVERRIDES")
 
 
-# Resolvers that map an omitted keyword onto the C ABI's "not given" value and refuse 0
-# when it is given, which the C domain admits; the resolver's own refusal states the
-# keyword's domain, so the C row is not the caller's.
+# Resolvers that map an omitted keyword onto the C ABI's "not given" value and refuse it
+# when typed. Such a keyword keeps its row only where the row declares that sentinel.
 _SENTINEL_RESOLVERS = frozenset(
     {"_resolve_zero_default", "_resolve_absent_positive", "_optional_nonzero"}
 )
@@ -79,36 +78,74 @@ def _decorated_entries(
                     yield dec.args[0].value, node
 
 
-def entries(package: Path = PACKAGE) -> dict[str, frozenset[str]]:
-    """Public entry name -> the C entries (without ``sonare_``) its body names."""
-    out: dict[str, frozenset[str]] = {}
+def _named_symbols(node: ast.AST) -> tuple[set[str], set[str]]:
+    """(C entries a body names, private module-level helpers it calls by bare name)."""
+    named: set[str] = set()
+    called: set[str] = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id[:1] == "_":
+            called.add(n.func.id)
+        if isinstance(n, ast.Attribute):
+            m = _SYMBOL.fullmatch(n.attr)
+        elif isinstance(n, ast.Constant) and isinstance(n.value, str):
+            m = _SYMBOL.fullmatch(n.value)
+        else:
+            continue
+        if m:
+            named.add(m.group(1))
+    return named, called
+
+
+def _bodies(package: Path) -> dict[str, list[ast.AST]]:
+    """Public entry name -> its body, plus the private helpers it delegates to.
+
+    An entry whose body names no C entry of its own reaches the C entries through the
+    private module-level helpers it calls by bare name, followed through such helpers.
+    """
+    helpers: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for path in sorted(package.glob("*.py")):
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name[:1] == "_":
+                helpers[node.name] = node
+    out: dict[str, list[ast.AST]] = {}
     for entry, node in _decorated_entries(package):
-        named = set()
-        for n in ast.walk(node):
-            if isinstance(n, ast.Attribute):
-                m = _SYMBOL.fullmatch(n.attr)
-            elif isinstance(n, ast.Constant) and isinstance(n.value, str):
-                m = _SYMBOL.fullmatch(n.value)
-            else:
+        bodies: list[ast.AST] = [node]
+        named, pending = _named_symbols(node)
+        seen: set[str] = set()
+        while not named and pending:
+            name = pending.pop()
+            if name in seen or name not in helpers:
                 continue
-            if m:
-                named.add(m.group(1))
-        out[entry] = frozenset(named)
+            seen.add(name)
+            bodies.append(helpers[name])
+            found, more = _named_symbols(helpers[name])
+            named |= found
+            pending |= more
+        out[entry] = bodies
     return out
+
+
+def entries(package: Path = PACKAGE) -> dict[str, frozenset[str]]:
+    """Public entry name -> the C entries (without ``sonare_``) its bodies name."""
+    return {
+        entry: frozenset(set().union(*(_named_symbols(b)[0] for b in bodies)))
+        for entry, bodies in _bodies(package).items()
+    }
 
 
 def sentinel_keywords(package: Path = PACKAGE) -> set[tuple[str, str]]:
     """(entry, keyword) pairs whose keyword an entry resolves through a sentinel resolver."""
     out: set[tuple[str, str]] = set()
-    for entry, node in _decorated_entries(package):
-        for n in ast.walk(node):
-            if (
-                isinstance(n, ast.Call)
-                and getattr(n.func, "id", None) in _SENTINEL_RESOLVERS
-                and n.args
-                and isinstance(n.args[0], ast.Name)
-            ):
-                out.add((entry, n.args[0].id))
+    for entry, bodies in _bodies(package).items():
+        for body in bodies:
+            for n in ast.walk(body):
+                if (
+                    isinstance(n, ast.Call)
+                    and getattr(n.func, "id", None) in _SENTINEL_RESOLVERS
+                    and n.args
+                    and isinstance(n.args[0], ast.Name)
+                ):
+                    out.add((entry, n.args[0].id))
     return out
 
 
@@ -145,6 +182,7 @@ def rows(
     spelled: dict[tuple[str, str], str],
     reached: dict[str, frozenset[str]],
     excluded: set[tuple[str, str]] = frozenset(),
+    sentinels: set[tuple[str, str]] = frozenset(),
 ) -> dict[tuple[str, str], Domain]:
     """(entry, keyword) -> (lo, hi, stricter) for every integer domain.
 
@@ -152,7 +190,9 @@ def rows(
     restriction, or None.
 
     A keyword two reached C entries bound differently gets no row, since the caller's
-    value would be refused in either domain's words; nor does a keyword in ``excluded``.
+    value would be refused in either domain's words; nor does a keyword in ``excluded``,
+    nor one in ``sentinels`` whose row declares no sentinel, since Python reads a value
+    the core does not as "not given".
     """
     by_c: dict[str, list[tuple[str, Domain]]] = {}
     for row in domains:
@@ -162,17 +202,21 @@ def rows(
         keyword = spelled.get((row["entry"], subject), subject)
         stricter = row["stricter"] if row["stricter"] in _KIND_STRICTER else None
         value = (*_explicit_bounds(row), stricter)
-        by_c.setdefault(row["entry"], []).append((keyword, value))
+        by_c.setdefault(row["entry"], []).append((keyword, value, row.get("sentinel") is not None))
     out: dict[tuple[str, str], Domain] = {}
     split: set[tuple[str, str]] = set()
+    undeclared: set[tuple[str, str]] = set()
     for entry, c_entries in reached.items():
         for c_entry in sorted(c_entries):
-            for keyword, value in by_c.get(c_entry, []):
+            for keyword, value, declared in by_c.get(c_entry, []):
                 key = (entry, keyword)
                 if out.get(key, value) != value:
                     split.add(key)
+                if key in sentinels and not declared:
+                    undeclared.add(key)
                 out.setdefault(key, value)
-    return dict(sorted((k, v) for k, v in out.items() if k not in split and k not in excluded))
+    dropped = split | undeclared | excluded
+    return dict(sorted((k, v) for k, v in out.items() if k not in dropped))
 
 
 def _quoted(stricter: str | None) -> str:
@@ -204,8 +248,7 @@ def render(table: dict[tuple[str, str], Domain]) -> str:
 def main(argv: list[str]) -> int:
     source = Path(argv[argv.index("--source") + 1]) if "--source" in argv else SOURCE
     domains = json.loads(source.read_text())["rows"]
-    excluded = sentinel_keywords() | named_keywords()
-    text = render(rows(domains, overrides(), entries(), excluded))
+    text = render(rows(domains, overrides(), entries(), named_keywords(), sentinel_keywords()))
     if "--check" in argv:
         if not TARGET.exists() or TARGET.read_text() != text:
             print(f"{TARGET.relative_to(ROOT)} is stale; run tools/api/gen_integer_domains.py")

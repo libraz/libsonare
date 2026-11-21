@@ -26,7 +26,7 @@ from ._ffi_types_vocal_project import (
     SonareProjectVocalRehydrateItem,
     SonareProjectVocalRehydrateResult,
 )
-from ._narrowing import _narrow_double, _narrow_int
+from ._narrowing import _narrow_double, _narrow_int, _optional_nonzero
 from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
@@ -314,9 +314,10 @@ def _apply_project_vocal_edit(
         raise _refuse("render_token must be a committed session token")
     desc = SonareProjectVocalEditApplyDesc()
     lib = _get_lib()
-    desc.clip_id = _id(clip_id, "clip_id")
+    desc.clip_id = _narrow_int(clip_id, "clip_id", 0, _UINT32_MAX)
     # None binds the clip's base source (C 0); no take is allocated id 0.
-    desc.take_id = 0 if take_id is None else _id(take_id, "take_id")
+    if _optional_nonzero(take_id, "take_id", "the clip's base source"):
+        desc.take_id = _id(take_id, "take_id")
     desc.expected_source_id = _id(expected_source_id, "expected_source_id")
     desc.expected_source_sample_rate = expected_rate
     desc.expected_source_sample_count = expected_count
