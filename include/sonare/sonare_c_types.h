@@ -16,7 +16,7 @@
 
 /// @brief ABI version of the realtime command-queue record layout, as returned
 ///        by sonare_engine_abi_version(). Not folded into SONARE_ABI_VERSION.
-#define SONARE_ENGINE_ABI_VERSION 3u
+#define SONARE_ENGINE_ABI_VERSION 4u
 
 /// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
 ///        prebuilt binding linked against a different libsonare can detect a

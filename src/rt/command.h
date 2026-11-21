@@ -11,7 +11,7 @@ namespace sonare::rt {
 /// Increment when Command, telemetry, or SharedArrayBuffer record layouts
 /// change. Bindings compare this value at startup before connecting to the
 /// realtime engine.
-inline constexpr uint32_t kEngineAbiVersion = 3;
+inline constexpr uint32_t kEngineAbiVersion = 4;
 
 // The enum below is split into two disjoint groups, marked inline:
 //
