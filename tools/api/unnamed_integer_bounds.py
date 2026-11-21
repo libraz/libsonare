@@ -18,6 +18,9 @@ Each site falls in one class, derived rather than tagged:
 - ``facade``: a facade reaches the subject (or the subject is not a literal, so that cannot
   be ruled out); a facade refusing a fraction there states the C type's range.
 
+It fails on any ``facade`` site and when it scanned no integer check at all; the other
+two classes are reported only.
+
 Usage: python3 tools/api/unnamed_integer_bounds.py [--count]
 """
 
@@ -101,6 +104,12 @@ def _is_constant(expr: str) -> bool:
 
 def sites(root: Path = ROOT) -> list[tuple[str, int, str, str, str]]:
     """(path, line, check, bounds, subject) for every unnamed constant integer bound."""
+    return scan(root)[0]
+
+
+def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int]:
+    """The unnamed constant integer bounds, and how many integer checks were read to find them."""
+    scanned = 0
     listed = subprocess.run(
         ["git", "ls-files", "src", "include"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.split()
@@ -117,14 +126,17 @@ def sites(root: Path = ROOT) -> list[tuple[str, int, str, str, str]]:
 
         for m in _WITHIN.finditer(text):
             args = _arguments(text, m.end())
+            scanned += 1
             if len(args) == 3 and _INLINE_DOMAIN.match(args[1]):
                 out.append((path, line(m.start()), "within", args[1], args[2]))
         for m in _CALL.finditer(text):
             args = _arguments(text, m.end())
+            scanned += 1
             bounds = args[1:2] if m.group(1) == "integer_at_least" else args[1:3]
             if bounds and all(_is_constant(b) for b in bounds):
                 out.append((path, line(m.start()), m.group(1), ", ".join(bounds), args[-1]))
-    return [(p, n, check, " ".join(b.split()), " ".join(s.split())) for p, n, check, b, s in out]
+    rows = [(p, n, check, " ".join(b.split()), " ".join(s.split())) for p, n, check, b, s in out]
+    return rows, scanned
 
 
 CLASSES = ("enum", "c-only", "facade")
@@ -187,13 +199,31 @@ def classified(root: Path = ROOT) -> list[tuple[str, int, str, str, str, str]]:
 
 
 def main(argv: list[str]) -> int:
-    rows = classified()
+    found, scanned = scan()
+    exposed = facade_names()
+    rows = [(*site, classify(site[3], site[4], exposed)) for site in found]
+    counts = {name: sum(row[5] == name for row in rows) for name in CLASSES}
     if "--count" in argv:
         for name in CLASSES:
-            print(f"{name}\t{sum(row[5] == name for row in rows)}")
-        return 0
-    for path, line, check, bounds, subject, cls in rows:
-        print(f"{path}:{line}\t{cls}\t{check}\t{bounds}\t{subject}")
+            print(f"{name}\t{counts[name]}")
+    else:
+        for path, line, check, bounds, subject, cls in rows:
+            print(f"{path}:{line}\t{cls}\t{check}\t{bounds}\t{subject}")
+    print(
+        f"unnamed integer bounds: scanned {scanned} integer checks; "
+        + " ".join(f"{name}={counts[name]}" for name in CLASSES),
+        file=sys.stderr,
+    )
+    if scanned == 0:
+        print("unnamed integer bounds: no integer check was scanned", file=sys.stderr)
+        return 1
+    if counts["facade"]:
+        print(
+            f"unnamed integer bounds: {counts['facade']} facade-reached site(s) state their "
+            "domain at the call; name it as a NumericDomain",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
