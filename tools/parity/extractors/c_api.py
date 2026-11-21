@@ -332,6 +332,11 @@ def _parse_record_field(decl: str) -> RecordField | None:
     return RecordField(name=canonical_field_name(name), raw_name=name, type=ctype)
 
 
+def is_member_a_caller_sets(f: RecordField) -> bool:
+    """True for every member but padding and ABI plumbing, length companions included."""
+    return not (_PADDING_FIELD_RE.match(f.name) or f.name in _ABI_PLUMBING_FIELDS)
+
+
 def _mark_structural_fields(fields: list[RecordField]) -> None:
     """Flag members with no facade counterpart by design (in place).
 

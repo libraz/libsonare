@@ -34,13 +34,14 @@
 "polyphonic_set_note_edit.envelope" = "rename: node amplitudeEnvelope, python amplitude_envelope, wasm amplitudeEnvelope"
 
 [unclassified]
-node = 0
-wasm = 0
-python = 0
+node = 1
+wasm = 1
+python = 1
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"
 "align_take_to_reference.take_len" = "derived length: take.length"
+"analyze_json.meter_candidate_numerator_count" = "derived length: meter_candidate_numerators.length"
 "chord_functional_analysis.chords" = "output"
 "chord_functional_analysis.functions" = "output"
 "chord_functional_analysis.roman" = "output"
@@ -51,6 +52,7 @@ python = 0
 "chord_functions.key_root" = "folded into key"
 "chord_symbol_from_analysis.extension_capacity" = "C-only plumbing: output buffer capacity"
 "deemphasis.use_zi" = "folded into zi: given or absent"
+"estimate_meter_json.candidate_numerator_count" = "derived length: candidate_numerators.length"
 "preemphasis.use_zi" = "folded into zi: given or absent"
 "downmix.num_channels" = "derived length: channel count"
 "engine_drain_telemetry.written" = "output"
@@ -79,6 +81,14 @@ python = 0
 "mel_to_stft.n_frames" = "derived length: power.cols"
 "mel_to_stft.n_mels" = "derived length: power.rows"
 "merge_notes.envelopes" = "folded into notes[].amplitudeEnvelope"
+"project_add_automation_lane.point_count" = "derived length: points.length"
+"project_edit_automation_lane.point_count" = "derived length: points.length"
+"project_import_external_stems.stem_count" = "derived length: stems.length"
+"project_set_warp_map.anchor_count" = "derived length: anchors.length"
+"room_morph.band_absorption_count" = "derived length: band_absorption.length"
+"room_morph.band_scattering_count" = "derived length: band_scattering.length"
+"room_morph_stereo.band_absorption_count" = "derived length: band_absorption.length"
+"room_morph_stereo.band_scattering_count" = "derived length: band_scattering.length"
 "split_note.envelopes" = "folded into notes[].amplitudeEnvelope"
 "render_notes.envelopes" = "folded into notes[].amplitudeEnvelope"
 "midi_bank_program.bank_lsb" = "folded into bank.lsb"
@@ -118,6 +128,8 @@ python = 0
 "streaming_mastering_chain_flush_stereo.left" = "output"
 "streaming_mastering_chain_flush_stereo.right" = "output"
 "streaming_mastering_chain_flush_stereo.samples_written" = "output"
+"synthesize_rir.band_absorption_count" = "derived length: band_absorption.length"
+"synthesize_rir.band_scattering_count" = "derived length: band_scattering.length"
 "tempogram_ratio.win_length" = "derived length: tempogram.rows"
 "trim_silence.end_sample" = "output"
 "trim_silence.start_sample" = "output"

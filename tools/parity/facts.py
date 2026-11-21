@@ -36,6 +36,7 @@ if str(_HERE) not in sys.path:
 import check_parity
 import compare
 import normalize
+from extractors import c_api
 from model import Extraction, FunctionSig, Param, RecordShape
 
 # Canonical spellings of the sample rate, which C marks structural.
@@ -131,14 +132,14 @@ def _member_rows(
     # A trailing options object is structural to the comparisons but still holds members.
     bags = {p.name: rec for p in sig.params if (rec := _record_of(p.type, records)) is not None}
     rows: list[FieldBinding] = []
-    for f in c_rec.core_fields():
+    for f in filter(c_api.is_member_a_caller_sets, c_rec.fields):
         spelling = None
         if f.name in facade:
             spelling = facade.pop(f.name)
             spelling = spelling.raw_name or spelling.name
         else:
             for rec in bags.values():
-                field_ = next((x for x in rec.core_fields() if x.name == f.name), None)
+                field_ = next((x for x in rec.fields if x.name == f.name), None)
                 if field_ is not None:
                     spelling = field_.raw_name or field_.name
                     break
