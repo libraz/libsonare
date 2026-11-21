@@ -238,6 +238,8 @@ MAPPING_TYPES = ("dict", "Dict", "Mapping", "MutableMapping")
 # The struct base whose `__setattr__` narrows an integer or `c_float` field
 # against the field's own declared type. Mechanism 3.
 STRUCT_BASE = "CStruct"
+# The CStruct classmethod that seeds through the init function and writes the given fields.
+STRUCT_GIVEN = "_given"
 
 # How the loaded shared library is spelled at a call site. A call through one of
 # these reaches the declared `argtypes`, which refuses a non-integral value.
@@ -1418,8 +1420,8 @@ class Flow:
                     return Reach("refused", "operator.index(...)")
                 if self._is_lib_call(node.func):
                     return Reach("ctypes", f"lib.{named}(...)")
-                if named in self.tree.struct_classes:
-                    return Reach("struct", f"{named}(...)")
+                if self._constructs_struct(node.func):
+                    return Reach("struct", f"{ast.unparse(node.func)}(...)")
         if isinstance(node, ast.Assign) and self._is_identity(
             node.value, aliases, scope
         ):
@@ -1513,6 +1515,13 @@ class Flow:
         more often than the scalar form.
         """
         if _callee_name(callee) in self.tree.struct_classes:
+            return True
+        # `Struct._given(...)` constructs the struct with every non-None keyword.
+        if (
+            isinstance(callee, ast.Attribute)
+            and callee.attr == STRUCT_GIVEN
+            and _callee_name(callee.value) in self.tree.struct_classes
+        ):
             return True
         if isinstance(callee, ast.BinOp) and isinstance(callee.op, ast.Mult):
             return any(
