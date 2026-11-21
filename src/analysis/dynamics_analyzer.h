@@ -35,13 +35,22 @@ struct DynamicsConfig {
   float compression_threshold = 6.0f;  ///< Dynamic range below this suggests compression
 };
 
+/// @brief Domains of the DynamicsConfig members, stated once for the core check and the readers.
+inline constexpr util::check::NumericDomain kDynamicsWindowSecDomain =
+    util::check::real_domain_above(0.0, false);
+inline constexpr util::check::NumericDomain kDynamicsHopDomain =
+    util::check::integer_domain_of<int>(1);
+inline constexpr util::check::NumericDomain kDynamicsCompressionThresholdDomain =
+    util::check::real_domain_above(0.0, true);
+
 /// @brief Refuses a DynamicsConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless window_sec is finite and positive, hop_length
 ///         is positive, and compression_threshold is finite and non-negative.
 inline void validate_dynamics_config(const DynamicsConfig& config) {
-  util::check::greater_than(config.window_sec, 0.0, "window_sec");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::at_least(config.compression_threshold, 0.0, "compression_threshold");
+  util::check::within(config.window_sec, kDynamicsWindowSecDomain, "window_sec");
+  util::check::within(config.hop_length, kDynamicsHopDomain, "hop_length");
+  util::check::within(config.compression_threshold, kDynamicsCompressionThresholdDomain,
+                      "compression_threshold");
 }
 
 /// @brief Dynamics analyzer for loudness and dynamic range.
