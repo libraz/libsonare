@@ -372,7 +372,8 @@ val js_realtime_voice_changer_render(val samples, const val& sample_rate, std::s
   std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
-  SonareRealtimeVoiceChangerConfig config;
+  SonareRealtimeVoiceChangerConfig config{};
+  sonare_realtime_voice_changer_config_init(&config);
   SonareError err =
       sonare_realtime_voice_changer_config_from_json(wasmCString(preset, "preset"), &config);
   if (err == SONARE_OK) {
