@@ -1601,19 +1601,19 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
     [
         (
             '{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}',
-            "unknown key platforms[0].targetLufs (renamed to platforms[0].target_lufs)",
+            "unknown key platforms[0].targetLufs (expected name, target_lufs, ceiling_dbtp)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDb":-1}',
-            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDbtp":-1}',
-            "unknown key platforms[0].ceilingDbtp (renamed to platforms[0].ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDbtp (expected name, target_lufs, ceiling_dbtp)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceiling_db":-1}',
-            "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
+            "unknown key platforms[0].ceiling_db (expected name, target_lufs, ceiling_dbtp)",
         ),
         ('{"name":"x","target_lufs":-14}', "platforms[0].ceiling_dbtp must be given"),
         (

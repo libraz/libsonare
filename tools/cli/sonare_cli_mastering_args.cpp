@@ -202,14 +202,6 @@ namespace {
 /// The record's keys; every one is required, matching the library's platform record.
 constexpr const char* kStreamingPlatformKeys[] = {"name", "target_lufs", "ceiling_dbtp"};
 
-/// Spellings the record used to take, refused with the key that replaced them.
-constexpr std::pair<const char*, const char*> kStreamingPlatformRenamed[] = {
-    {"targetLufs", "target_lufs"},
-    {"ceilingDb", "ceiling_dbtp"},
-    {"ceilingDbtp", "ceiling_dbtp"},
-    {"ceiling_db", "ceiling_dbtp"},
-};
-
 float streaming_platform_number(const sonare::util::json::Value& entry, const std::string& where,
                                 const char* key) {
   const sonare::util::json::Value& value = *entry.find(key);
@@ -226,12 +218,6 @@ void check_streaming_platform_keys(const sonare::util::json::Value& entry,
                                    const std::string& where) {
   for (const auto& [key, unused] : entry.as_object()) {
     (void)unused;
-    for (const auto& [old_key, new_key] : kStreamingPlatformRenamed) {
-      if (key == old_key) {
-        throw std::invalid_argument("unknown key " + where + "." + key + " (renamed to " + where +
-                                    "." + new_key + ")");
-      }
-    }
     bool known = false;
     std::string expected_list;
     for (const char* expected : kStreamingPlatformKeys) {

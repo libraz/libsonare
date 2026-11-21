@@ -666,21 +666,18 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
   const auto payload = sonare::util::json::parse_strict(accepted.out);
   REQUIRE(payload["platforms"].as_array().size() == 1);
 
-  for (const auto& [old_key, new_key] :
-       std::vector<std::pair<std::string, std::string>>{{"targetLufs", "target_lufs"},
-                                                        {"ceilingDb", "ceiling_dbtp"},
-                                                        {"ceilingDbtp", "ceiling_dbtp"},
-                                                        {"ceiling_db", "ceiling_dbtp"}}) {
+  // A former spelling is an unknown key like any other: refused with the accepted list.
+  for (const std::string old_key : {"targetLufs", "ceilingDb", "ceilingDbtp", "ceiling_db"}) {
     INFO(old_key);
     const std::string record =
-        new_key == "target_lufs"
+        old_key == "targetLufs"
             ? R"([{"name":"custom","targetLufs":-14,"ceiling_dbtp":-1}])"
             : R"([{"name":"custom","target_lufs":-14,")" + old_key + R"(":-1}])";
     const SplitResult refused = run(record);
     CHECK(refused.exit_code == 2);
     CHECK_THAT(refused.err,
                ContainsSubstring("argument --platforms: unknown key platforms[0]." + old_key +
-                                 " (renamed to platforms[0]." + new_key + ")"));
+                                 " (expected name, target_lufs, ceiling_dbtp)"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
@@ -833,7 +830,7 @@ TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][
     return bytes;
   };
 
-  SECTION("a retired shorthand in the document is refused naming the current key") {
+  SECTION("a retired shorthand in the document is refused as an unknown key") {
     const std::string config = write_config(
         R"("dynamics.multibandComp.enabled":true,"dynamics.multibandComp.lowThresholdDb":-20)");
     auto [code, output] =
@@ -841,8 +838,8 @@ TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][
                      " --params dynamics.multibandComp.bands.0.thresholdDb=-18"
                      " -q 2>&1");
     CHECK(code == 5);
-    CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.lowThresholdDb"));
-    CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.bands.0.thresholdDb"));
+    CHECK_THAT(output,
+               ContainsSubstring("unknown key params.dynamics.multibandComp.lowThresholdDb"));
     std::remove(config.c_str());
   }
 

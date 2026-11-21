@@ -18385,7 +18385,7 @@
           "stdout": "json"
         },
         {
-          "id": "platforms_renamed_key_refused",
+          "id": "platforms_former_key_refused",
           "argv": [
             "mastering-streaming",
             "{audio}",
@@ -18399,7 +18399,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "argument --platforms: unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)"
+            "argument --platforms: unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)"
           ]
         },
         {

@@ -774,14 +774,8 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
-# The record's keys, all required, and the spellings it used to take.
+# The record's keys, all required.
 _STREAMING_PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
-_STREAMING_PLATFORM_RENAMED = {
-    "targetLufs": "target_lufs",
-    "ceilingDb": "ceiling_dbtp",
-    "ceilingDbtp": "ceiling_dbtp",
-    "ceiling_db": "ceiling_dbtp",
-}
 _FLOAT32_MAX = 3.4028234663852886e38
 
 
@@ -813,9 +807,6 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
         for index, entry in enumerate(document):
             where = f"platforms[{index}]"
             for key in entry:
-                if key in _STREAMING_PLATFORM_RENAMED:
-                    renamed = _STREAMING_PLATFORM_RENAMED[key]
-                    raise ValueError(f"unknown key {where}.{key} (renamed to {where}.{renamed})")
                 if key not in _STREAMING_PLATFORM_KEYS:
                     expected = ", ".join(_STREAMING_PLATFORM_KEYS)
                     raise ValueError(f"unknown key {where}.{key} (expected {expected})")

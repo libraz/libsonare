@@ -159,7 +159,7 @@ rule = "loudness-names"
 [[entry]]
 kind = "flag"
 old = "mastering-streaming --platforms"
-changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused with the key that replaced them, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported as \"argument --platforms: <reason>\" before the input is read, while a --platforms-file document is still refused after it (exit 3)"
+changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused as unknown keys with the accepted list, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB; a document refused on any of these grounds, or as not an array of platform objects, an empty or non-string name or a non-number target, is a usage error (exit 2) reported as \"argument --platforms: <reason>\" before the input is read, while a --platforms-file document is still refused after it (exit 3)"
 domain = "mastering"
 rule = "loudness-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering-streaming takes one platform record spelling"
