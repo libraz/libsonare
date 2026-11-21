@@ -23,9 +23,8 @@ export interface ResampleRequest {
 /**
  * Resample audio to a different sample rate.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate of `samples` in Hz
- * @param targetSampleRate - Sample rate to resample to, in Hz
+ * @param request - Mono `samples`, `sampleRate` of `samples` in Hz and `targetSampleRate` to
+ *   resample to, in Hz; or pass `(samples, sampleRate, targetSampleRate)`.
  * @returns Resampled audio
  * @throws TypeError for a missing or non-number rate, RangeError for a rate that is not an integer or lies outside the supported range.
  */

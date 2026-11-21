@@ -66,9 +66,10 @@ function resolveRegionTimes(
  * a negative bound is refused. The output has the same length and sample rate as
  * the input; an empty `ops` list returns a copy of the input.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - `ops` (required, {@link SpectralRegionOp}) plus the STFT and heal configuration
+ * @param request - Mono `samples`, `sampleRate` in Hz (required; region frequency boundaries are
+ *   mapped to STFT bins using this rate), `ops` (required, applied in order, {@link
+ *   SpectralRegionOp}) plus the optional STFT and heal configuration; or pass
+ *   `(samples, sampleRate, options)`.
  * @returns Edited audio
  * @throws TypeError for a missing `sampleRate` or `ops`
  */

@@ -238,9 +238,8 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
 /**
  * Suggest a mastering chain for mono audio.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Assistant settings ({@link MasteringAssistantSuggestRequest})
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   assistant settings; or pass `(samples, sampleRate, options?)`.
  * @returns The suggested chain, one explanation line per decision and the measured profile
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
  * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`

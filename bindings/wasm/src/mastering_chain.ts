@@ -403,9 +403,8 @@ export function masteringPlatformNames(): MasteringPlatform[] {
  * `overrides` is applied on top; without one the chain runs `overrides` alone.
  * Giving neither is refused, since that call would return the input unchanged.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `preset`, `overrides`, `onProgress`, `cancel`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `preset`,
+ *   `overrides`, `onProgress` and `cancel`; or pass `(samples, sampleRate, options?)`.
  * @returns Processed audio, loudness metadata, and applied stage names
  * @throws {TypeError} when `sampleRate` is missing, neither `preset` nor `overrides` is given,
  *   or a request field has the wrong type

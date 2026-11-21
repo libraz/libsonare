@@ -392,9 +392,9 @@ function nativeLoudnessArgs(r: MasteringNormalizeLoudnessRequest) {
 /**
  * Normalize loudness to a target and hold a true-peak ceiling.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Loudness/ceiling settings ({@link MasteringNormalizeLoudnessOptions})
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   loudness/ceiling settings ({@link MasteringNormalizeLoudnessOptions}); or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns Processed audio and loudness metadata
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
  * @throws {RangeError} on audio out of domain, or an explicit 0 `truePeakOversample` or `releaseMs`
@@ -594,9 +594,8 @@ export function masteringStereoAnalysisNames(): StereoAnalysis[] {
 /**
  * Apply one named processor to mono audio.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `processor` (required), `params`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `processor`
+ *   (required) and `params`; or pass `(samples, sampleRate, options)`.
  * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
  *   parameter key is one the processor does not read
  * @throws {RangeError} on audio out of domain, an unknown processor or a parameter value it refuses
@@ -961,9 +960,8 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
 /**
  * Suggest a mastering chain for mono audio.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Assistant settings ({@link MasteringAssistantSuggestRequest})
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   assistant settings; or pass `(samples, sampleRate, options?)`.
  * @returns The suggested chain, one explanation line per decision and the measured profile
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
  * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`

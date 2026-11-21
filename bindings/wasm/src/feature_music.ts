@@ -172,8 +172,8 @@ export interface NnlsChromaRequest extends SampleInput {
 /**
  * Compute NNLS (non-negative least squares) chromagram.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional NNLS settings; or pass `(samples, sampleRate, options?)`.
  * @returns {@link Matrix2D} whose rows are the 12 chroma bins and cols are frames
  */
 export function nnlsChroma(request: NnlsChromaRequest): Matrix2D;
@@ -231,9 +231,9 @@ function cqtFamily<R extends CqtRequest>(
 /**
  * Compute the Constant-Q Transform magnitude.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `hopLength` (512), `fminHz` (32.70319566257483, C1), `nBins` (84), `binsPerOctave` (12), `filterScale` (1)
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `hopLength`
+ *   (512), `fminHz` (32.70319566257483, C1), `nBins` (84), `binsPerOctave` (12) and `filterScale`
+ *   (1); or pass `(samples, sampleRate, options?)`.
  * @returns CQT magnitude result
  */
 export function cqt(request: CqtRequest): CqtResult;
@@ -382,9 +382,9 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
 /**
  * Detect song-structure sections (intro/verse/chorus/...).
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `nFft` (2048), `hopLength` (512), `minSectionSec` (4.0)
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `nFft`
+ *   (2048), `hopLength` (512) and `minSectionSec` (4.0); or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns The detected sections and the form they spell
  */
 export function analyzeSections(request: AnalyzeSectionsRequest): SectionAnalysis;
@@ -520,9 +520,8 @@ export interface MelodyOptions {
 /**
  * Extract the melody contour from monophonic audio via YIN (or pYIN).
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Tracker options ({@link MelodyOptions})
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   tracker options ({@link MelodyOptions}); or pass `(samples, sampleRate, options?)`.
  * @returns Melody contour with per-frame pitch points and summary stats
  */
 export function analyzeMelody(request: AnalyzeMelodyRequest): MelodyResult;
@@ -564,9 +563,8 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
 /**
  * Compute the onset strength envelope.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `nFft` (2048), `hopLength` (512), `nMels` (128)
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `nFft`
+ *   (2048), `hopLength` (512) and `nMels` (128); or pass `(samples, sampleRate, options?)`.
  * @returns Onset strength for each frame
  */
 export function onsetStrength(request: OnsetStrengthRequest): Float32Array;
@@ -594,9 +592,9 @@ export function onsetStrength(...args: unknown[]): Float32Array {
 /**
  * Compute multi-band onset strength envelopes.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `nFft` (2048), `hopLength` (512), `nMels` (128), `nBands` (3)
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, `nFft`
+ *   (2048), `hopLength` (512), `nMels` (128) and `nBands` (3); or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns {@link Matrix2D} whose rows are the onset bands and cols are frames
  */
 export function onsetStrengthMulti(request: OnsetStrengthMultiRequest): Matrix2D;
@@ -681,9 +679,8 @@ export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
 /**
  * Measure loudness (EBU R128 / ITU-R BS.1770).
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
- *   pass the buffer's actual rate
+ * @param request - Mono `samples` and `sampleRate` in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate; or pass `(samples, sampleRate, options?)`.
  * @returns Loudness measurement result
  */
 export function lufs(request: LufsRequest): LufsResult;
@@ -711,9 +708,8 @@ export function lufs(...args: unknown[]): LufsResult {
 /**
  * Compute the momentary loudness (LUFS) over time.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
- *   pass the buffer's actual rate
+ * @param request - Mono `samples` and `sampleRate` in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate; or pass `(samples, sampleRate, options?)`.
  * @returns Momentary LUFS values over time
  */
 export function momentaryLufs(request: MomentaryLufsRequest): Float32Array;
@@ -733,9 +729,8 @@ export function momentaryLufs(...args: unknown[]): Float32Array {
 /**
  * Compute the short-term loudness (LUFS) over time.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
- *   pass the buffer's actual rate
+ * @param request - Mono `samples` and `sampleRate` in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate; or pass `(samples, sampleRate, options?)`.
  * @returns Short-term LUFS values over time
  */
 export function shortTermLufs(request: ShortTermLufsRequest): Float32Array;

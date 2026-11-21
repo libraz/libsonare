@@ -242,10 +242,9 @@ function assertNoteTrackRequest(request: ExtractNotesRequest): Int32Array | unde
 /**
  * Time-stretch a note region between two offsets without changing pitch.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - The region (`onsetSample`/`onsetSec`, `offsetSample`/`offsetSec`)
- *   and `stretchRatio` (0.5 = half duration, 2.0 = double duration), which is required
+ * @param request - Mono `samples`, `sampleRate` in Hz, the region (`onsetSample`/`onsetSec`,
+ *   `offsetSample`/`offsetSec`) and `stretchRatio` (0.5 = half duration, 2.0 = double duration),
+ *   which is required; or pass `(samples, sampleRate, options)`.
  * @returns Audio with the note region stretched
  * @throws TypeError for a missing `sampleRate` or `stretchRatio`
  */
@@ -290,10 +289,8 @@ export function noteStretch(...args: unknown[]): Float32Array {
 /**
  * Move a note region to a new onset without changing its duration.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - The region and the destination: `targetOnsetSample` or
- *   `targetOnsetSec` is required
+ * @param request - Mono `samples`, `sampleRate` in Hz, the region and the destination, where
+ *   `targetOnsetSample` or `targetOnsetSec` is required; or pass `(samples, sampleRate, options)`.
  * @returns Audio with the note region moved
  * @throws TypeError for a missing `sampleRate` or target onset
  */

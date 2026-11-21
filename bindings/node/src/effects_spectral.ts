@@ -73,10 +73,10 @@ function resolveRegionTimes(
  * refused. An empty `ops` array returns a copy of the input. Wraps the C
  * `sonare_spectral_edit`.
  *
- * @param samples - Mono input audio.
- * @param sampleRate - Sample rate in Hz (required; region frequency boundaries
- *   are mapped to STFT bins using this rate).
- * @param options - `ops` (required, applied in order) plus the optional STFT and heal configuration.
+ * @param request - Mono `samples`, `sampleRate` in Hz (required; region frequency boundaries are
+ *   mapped to STFT bins using this rate), `ops` (required, applied in order, {@link
+ *   SpectralRegionOp}) plus the optional STFT and heal configuration; or pass
+ *   `(samples, sampleRate, options)`.
  * @returns The edited audio (same length as `samples`).
  * @throws TypeError for a missing `sampleRate` or `ops`.
  */

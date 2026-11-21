@@ -351,8 +351,8 @@ export interface AnalyzeTimbreRequest extends SampleInput, AnalyzeTimbreOptions 
 /**
  * Detect BPM from audio samples.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional BPM search range; or pass `(samples, sampleRate, options?)`.
  * @returns Detected BPM
  * @throws {TypeError} when `sampleRate` is missing or not a number
  * @throws {RangeError} on empty or non-finite audio, or an out-of-range rate
@@ -379,8 +379,9 @@ export function detectBpm(...args: unknown[]): number {
  * value in cents in `[-50, 50)` (0 reads concert A440), or `'auto'`. The result
  * reports the tuning used.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`,
+ *   `tuningCents` and the other optional key-detection settings; or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns Detected key and the tuning its chroma was built with
  * @throws {TypeError} on a wrong-typed field or a missing `sampleRate`
  * @throws {RangeError} on an unknown `profile`, `modes` or `genreHint` token, or audio out of domain
@@ -464,8 +465,8 @@ export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
 /**
  * Detect onset times from audio samples.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional detection settings; or pass `(samples, sampleRate, options?)`.
  * @returns Array of onset times in seconds
  */
 export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
@@ -485,8 +486,8 @@ export function detectOnsets(...args: unknown[]): Float32Array {
 /**
  * Detect beat times from audio samples.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional detection settings; or pass `(samples, sampleRate, options?)`.
  * @returns Array of beat times in seconds
  */
 export function detectBeats(request: DetectBeatsRequest): Float32Array;
@@ -507,8 +508,8 @@ export function detectBeats(...args: unknown[]): Float32Array {
 /**
  * Detect downbeat times from audio samples.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional detection settings; or pass `(samples, sampleRate, options?)`.
  * @returns Array of downbeat times in seconds
  */
 export function detectDownbeats(request: DetectDownbeatsRequest): Float32Array;
@@ -528,9 +529,8 @@ export function detectDownbeats(...args: unknown[]): Float32Array {
 /**
  * Detect chords from audio samples.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Optional chord detection settings
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, and the
+ *   optional chord detection settings; or pass `(samples, sampleRate, options?)`.
  * @returns Detected chord segments
  * @throws {TypeError} on a wrong-typed field (`keyRoot` is a number, `keyMode` a name)
  * @throws {RangeError} on an out-of-domain `keyRoot`, `keyMode` or `chromaMethod`
@@ -754,8 +754,9 @@ export interface AnalyzeRequest extends SampleInput, MusicAnalyzeOptions {
 /**
  * Perform complete music analysis.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param request - Mono `samples`, `sampleRate` in Hz, an integer in `[8000, 384000]`, the
+ *   optional analysis settings, `onProgress` and `cancel`; or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns Complete analysis result
  * @throws {TypeError} when `onProgress` or `cancel` is not a function
  *

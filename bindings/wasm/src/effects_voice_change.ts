@@ -49,9 +49,8 @@ export interface VoiceChangeRequest extends VoiceChangeOptions {
 /**
  * Apply a voice change by shifting pitch and formants independently.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (required)
- * @param options - Pitch/formant settings ({@link VoiceChangeOptions})
+ * @param request - Mono `samples`, `sampleRate` in Hz (required), and the pitch/formant settings
+ *   ({@link VoiceChangeOptions}); or pass `(samples, sampleRate, options?)`.
  * @returns Voice-changed audio
  * @throws TypeError for a wrong-typed argument, a missing `sampleRate` or an unknown key;
  *   RangeError for out-of-domain audio, rate or setting.

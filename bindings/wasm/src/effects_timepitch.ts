@@ -91,9 +91,9 @@ export interface AutoTuneRequest extends AutoTuneOptions {
  * `options.hopLength` is in `(0, nFft / 2]` (default `nFft / 4`, rounded down).
  * `speedRatio` is required.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - `speedRatio` (0.5 = double duration, 2.0 = half duration) and the FFT framing
+ * @param request - Mono `samples`, `sampleRate` in Hz, `speedRatio` (0.5 = double duration, 2.0 =
+ *   half duration), which is required, and the FFT framing (`nFft`, `hopLength`); or pass
+ *   `(samples, sampleRate, options)`.
  * @returns Time-stretched audio
  * @throws TypeError for a missing `sampleRate` or `speedRatio`, RangeError for an out-of-domain one
  */
@@ -126,9 +126,9 @@ export function timeStretch(...args: unknown[]): Float32Array {
  * `options.hopLength` is in `(0, nFft / 2]` (default `nFft / 4`, rounded down).
  * `pitchSemitones` is required.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - `pitchSemitones` (+12 = one octave up) and the FFT framing
+ * @param request - Mono `samples`, `sampleRate` in Hz, `pitchSemitones` (+12 = one octave up),
+ *   which is required, and the FFT framing (`nFft`, `hopLength`); or pass
+ *   `(samples, sampleRate, options)`.
  * @returns Pitch-shifted audio
  * @throws TypeError for a missing `sampleRate` or `pitchSemitones`, RangeError for an out-of-domain one
  */
@@ -163,9 +163,8 @@ export function pitchShift(...args: unknown[]): Float32Array {
  * C3 -> C5 transposes by the full 24 semitones. Use
  * {@link pitchCorrectTimevarying} for a caller-supplied pitch contour.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - `currentMidi` and `targetMidi`, both required
+ * @param request - Mono `samples`, `sampleRate` in Hz, and `currentMidi` and `targetMidi`, both
+ *   required; or pass `(samples, sampleRate, options)`.
  * @returns Pitch-corrected audio
  * @throws TypeError for a missing `sampleRate`, `currentMidi` or `targetMidi`
  */
@@ -200,10 +199,9 @@ export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
  * output; the `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be
  * passed through directly.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - `f0Hz` (required), `hopLength` (F0 frame-center spacing in
- *   samples, default 512), target mode and retune knobs
+ * @param request - Mono `samples`, `sampleRate` in Hz, `f0Hz` (required), `hopLength` (F0
+ *   frame-center spacing in samples, default 512), the target mode and the retune knobs; or pass
+ *   `(samples, sampleRate, options)`.
  * @returns Pitch-corrected audio
  * @throws TypeError for a missing `sampleRate` or `f0Hz`, RangeError for an unknown `targetMode`
  */
@@ -265,9 +263,8 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
  * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, retuneAmount: 0.8 });
  * ```
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param options - The key and the tuning knobs
+ * @param request - Mono `samples`, `sampleRate` in Hz (required), the `key` and the tuning knobs;
+ *   or pass `(samples, sampleRate, options?)`.
  * @returns The corrected audio and the key it was tuned to
  * @throws TypeError for a missing `sampleRate` or a malformed `key`
  */
