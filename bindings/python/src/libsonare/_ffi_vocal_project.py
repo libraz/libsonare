@@ -58,7 +58,7 @@ def configure_vocal_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_project_rehydrate_vocal_edits.argtypes = [
         handle,
         ctypes.POINTER(SonareProjectVocalOriginalSource),
-        ctypes.c_uint64,
+        ctypes.c_size_t,
         SonareVocalCancelCallback,
         ctypes.c_void_p,
         ctypes.POINTER(SonareProjectVocalRehydrateResult),

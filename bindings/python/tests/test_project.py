@@ -52,7 +52,7 @@ def test_create_factory_matches_constructor() -> None:
     try:
         assert isinstance(created, Project)
         assert created.to_json_bytes() == constructed.to_json_bytes()
-        created.set_sample_rate(48000.0)
+        created.set_sample_rate(48000)
         track_id = created.add_track("audio", "factory")
         assert track_id > 0
         assert created.tracks()[0].id == track_id
@@ -632,7 +632,7 @@ def test_comp_segment_crossfade_ppq_reaches_the_library() -> None:
 def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         track_id = project.add_track("audio", "record")
         before = project.to_json_bytes()
         audio = np.empty(48000, dtype=np.float32)
@@ -681,7 +681,7 @@ def _capture(frames: int, **kwargs: Any) -> tuple[int, list[int], int]:
     """Add a mono capture to a fresh project; return take count, partial take ids, active take."""
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         track_id = project.add_track("audio", "record")
         result = project.add_loop_recording_takes(
             track_id,
@@ -722,7 +722,7 @@ def test_add_loop_recording_takes_one_frame_remainder_is_not_partial() -> None:
 def test_partial_take_mark_survives_json_round_trip() -> None:
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         track_id = project.add_track("audio", "record")
         project.add_loop_recording_takes(
             track_id,
@@ -750,7 +750,7 @@ def test_add_loop_recording_takes_planar_matches_interleaved() -> None:
     for form in ("interleaved", "list", "matrix"):
         project = Project()
         try:
-            project.set_sample_rate(48000.0)
+            project.set_sample_rate(48000)
             track_id = project.add_track("audio", "record")
             if form == "interleaved":
                 result = project.add_loop_recording_takes(
@@ -858,7 +858,7 @@ def test_set_track_midi_destination_rejects_unknown_track() -> None:
 def test_snap_to_grid_snaps_near_beat_to_line() -> None:
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         assert project.snap_to_grid(1.02, 1.0) == 1.0
         assert project.snap_to_grid(0.27, 1.0, division=4) == 0.25
         assert project.snap_to_grid(4.02, 1.0, division=0) == 4.0
@@ -869,7 +869,7 @@ def test_snap_to_grid_snaps_near_beat_to_line() -> None:
 def test_auto_tempo_returns_positive_bpm() -> None:
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         # A steady click-like pulse train so the beat bridge has onsets.
         sr = 48000
         audio = np.zeros(sr * 2, dtype=np.float32)
@@ -891,7 +891,7 @@ def test_auto_tempo_returns_positive_bpm() -> None:
 
 def test_context_manager_closes_handle_and_has_no_close_aliases() -> None:
     with Project() as project:
-        project.set_sample_rate(44100.0)
+        project.set_sample_rate(44100)
     project.close()  # a second close is a no-op
     assert not hasattr(project, "destroy")
     assert not hasattr(project, "delete")
@@ -914,7 +914,7 @@ def test_overlap_policy_is_a_token_and_an_ordinal_is_refused() -> None:
 def test_project_getters_setters_and_counts() -> None:
     project = Project()
     try:
-        project.set_sample_rate(44100.0)
+        project.set_sample_rate(44100)
         assert project.sample_rate == 44100.0
 
         assert project.overlap_policy == "disallow"

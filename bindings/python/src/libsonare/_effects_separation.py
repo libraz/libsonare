@@ -716,7 +716,7 @@ def phase_vocoder(
                 _to_c_int(sample_rate, "sample_rate"),
                 _to_c_float(speed_ratio, "speed_ratio"),
                 _to_c_int(n_fft, "n_fft"),
-                _to_c_int(hop_length, "hop_length"),
+                _to_c_size_t(hop_length, "hop_length"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )

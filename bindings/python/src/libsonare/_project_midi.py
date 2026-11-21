@@ -1089,7 +1089,7 @@ class _ProjectMidiMixin:
         out = (SonareMidiEventPod * n)()
         out_count = ctypes.c_size_t()
         overflowed = ctypes.c_int()
-        overflow_count = ctypes.c_uint32()
+        overflow_count = ctypes.c_size_t()
         _check(
             lib.sonare_midi_route_events(
                 c_in if n else None,

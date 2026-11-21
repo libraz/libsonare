@@ -147,7 +147,7 @@ def test_a_wrapped_param_id_is_refused_rather_than_read_as_a_bound_one() -> None
 
 def test_a_marker_kind_is_an_exact_token() -> None:
     """A number never selects a marker kind, and another spelling is refused."""
-    with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with ls.RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_markers(
             [
                 ls.EngineMarker(0.0, id=1, name="a", kind="cuePoint"),

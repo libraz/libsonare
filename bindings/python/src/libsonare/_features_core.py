@@ -25,6 +25,7 @@ from ._ffi import (
 )
 from ._field_spelling import surface_spelling
 from ._runtime import (
+    _C_INT_MAX,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -123,7 +124,9 @@ def clicks(
                 data,
                 _to_c_size_t(count, "times length"),
                 _to_c_int(sr, "sr"),
-                _to_c_int(_resolve_zero_default(length, "length"), "length"),
+                ctypes.c_size_t(
+                    _narrow_int(_resolve_zero_default(length, "length"), "length", 0, _C_INT_MAX)
+                ),
                 _to_c_float(click_freq, "click_freq"),
                 _to_c_float(click_duration, "click_duration"),
                 ctypes.byref(out),
@@ -166,7 +169,7 @@ def stft(
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         ctypes.byref(options),
         ctypes.byref(out),
     )
@@ -232,7 +235,7 @@ def mel_spectrogram(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         ctypes.byref(options),
         ctypes.byref(out),
@@ -298,7 +301,7 @@ def mfcc(
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         _to_c_int(n_mfcc, "n_mfcc"),
         ctypes.byref(options),
@@ -386,7 +389,7 @@ def chroma(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -579,7 +582,7 @@ def spectral_centroid(
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
     )
 
 
@@ -610,7 +613,7 @@ def spectral_bandwidth(
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         ctypes.byref(options),
     )
 
@@ -630,7 +633,7 @@ def spectral_flux(
         samples,
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(lag, "lag"),
     )
 
@@ -683,7 +686,7 @@ def spectral_rolloff(
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_float(roll_percent, "roll_percent"),
     )
 
@@ -712,7 +715,7 @@ def spectral_flatness(
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
     )
 
 
@@ -739,8 +742,8 @@ def zero_crossing_rate(
         "sonare_zero_crossing_rate",
         samples,
         _to_c_int(sr, "sr"),
-        _to_c_int(frame_length, "frame_length"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(frame_length, "frame_length"),
+        _to_c_size_t(hop_length, "hop_length"),
     )
 
 
@@ -767,8 +770,8 @@ def rms_energy(
         "sonare_rms_energy",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(frame_length, "frame_length"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(frame_length, "frame_length"),
+        _to_c_size_t(hop_length, "hop_length"),
     )
 
 
@@ -822,7 +825,7 @@ def spectral_contrast(
             _to_c_size_t(length, "length"),
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             _to_c_int(n_bands, "n_bands"),
             _to_c_float(fmin, "fmin"),
             _to_c_float(quantile, "quantile"),
@@ -868,7 +871,7 @@ def poly_features(
             _to_c_size_t(length, "length"),
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             _to_c_int(order, "order"),
             ctypes.byref(out),
             ctypes.byref(out_rows),
@@ -945,7 +948,7 @@ def reassigned_spectrogram(
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_float(ref_power, "ref_power"),
         ctypes.c_int(bool(fill_nan)),
         ctypes.byref(out),

@@ -605,7 +605,7 @@ class SonareSpectralEditConfig(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int),
-        ("hop_length", ctypes.c_int),
+        ("hop_length", ctypes.c_size_t),
         ("window", ctypes.c_int),
         ("heal_radius_frames", ctypes.c_int),
     ]
@@ -743,7 +743,7 @@ class SonarePercussiveEventConfig(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
-        ("hop_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
         ("hpss_kernel_harmonic", ctypes.c_int32),
         ("hpss_kernel_percussive", ctypes.c_int32),
         ("onset_wait", ctypes.c_int32),
@@ -761,7 +761,7 @@ class SonarePercussiveRenderConfig(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
-        ("hop_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
         ("hpss_kernel_harmonic", ctypes.c_int32),
         ("hpss_kernel_percussive", ctypes.c_int32),
         ("fade_ms", ctypes.c_float),
@@ -832,8 +832,8 @@ class SonarePolyphonicConfig(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
-        ("hop_length", ctypes.c_int32),
-        ("win_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
+        ("win_length", ctypes.c_size_t),
         ("cent_ref_hz", ctypes.c_float),
         ("cents_per_bin", ctypes.c_float),
         ("cent_max_hz", ctypes.c_float),

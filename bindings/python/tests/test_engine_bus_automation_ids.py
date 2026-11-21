@@ -24,7 +24,7 @@ def _settled(engine: RealtimeEngine, blocks: int = 30) -> float:
 
 
 def test_bus_fader_id_keeps_its_bus_across_a_reorder_and_retires_with_it() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         # Only track 20 sounds and it feeds bus 200, so the output reads bus 200's fader alone.
         engine.set_clips(
             [
@@ -63,7 +63,7 @@ def test_bus_fader_id_keeps_its_bus_across_a_reorder_and_retires_with_it() -> No
 
 
 def test_master_automation_ids_resolve_fader_pan_and_width() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         names = ("faderDb", "pan", "width")
         ids = [engine.resolve_strip_automation_id("master", name) for name in names]
         assert len(set(ids)) == 3
@@ -74,7 +74,7 @@ def test_master_automation_ids_resolve_fader_pan_and_width() -> None:
 
 
 def test_set_bus_gain_db_drives_the_bus_fader() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_clips(
             [
                 EngineClip(

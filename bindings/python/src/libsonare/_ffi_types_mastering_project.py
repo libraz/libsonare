@@ -243,7 +243,7 @@ class SonareExternalStemDesc(CStruct):
         ("role", ctypes.c_char_p),
         ("layout", ctypes.c_uint32),
         ("planar_samples", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-        ("frame_count", ctypes.c_int64),
+        ("frame_count", ctypes.c_size_t),
         ("start_frame", ctypes.c_int64),
     ]
 
@@ -298,7 +298,7 @@ class SonareTakeAlignConfig(CStruct):
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
-        ("hop_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
         ("bins_per_octave", ctypes.c_int32),
     ]
 
@@ -539,7 +539,7 @@ class SonareProjectTempoCandidate(CStruct):
         ("bpm", ctypes.c_float),
         ("confidence", ctypes.c_float),
         ("kind", ctypes.c_uint32),
-        ("time_signature_count", ctypes.c_uint32),
+        ("time_signature_count", ctypes.c_size_t),
         ("first_time_signature", SonareProjectTimeSignatureSegment),
     ]
 

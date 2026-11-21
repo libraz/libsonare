@@ -299,7 +299,7 @@ class PlaybackRenderer:
     def non_finite_discard_count(self) -> int:
         """Non-finite input samples replaced with 0 since creation."""
         handle = self._require_handle()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check(
             self._lib.sonare_playback_renderer_non_finite_discard_count(handle, ctypes.byref(out))
         )

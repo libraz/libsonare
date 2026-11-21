@@ -97,7 +97,9 @@ def test_frames_are_band_major_columns_per_frame() -> None:
         np.testing.assert_array_equal(batch.chroma[:, index], frame.chroma[:, 0])
 
 
-@pytest.mark.parametrize("read", ["read_frames", "read_frames_u8", "read_frames_i16"])
+@pytest.mark.parametrize(
+    "read", ["read_frames", "read_quantized_frames_u8", "read_quantized_frames_i16"]
+)
 def test_a_feature_that_is_not_computed_is_none(read: str) -> None:
     config = dict(
         sample_rate=SR, n_mels=8, compute_mel=False, compute_onset=False, compute_spectral=False
@@ -169,6 +171,8 @@ def test_the_quantize_ranges_take_the_stream_name() -> None:
     assert not hasattr(libsonare, "QuantizeConfig")
     with StreamAnalyzer(sample_rate=SR) as analyzer:
         analyzer.process(_triad(0.25))
-        frames = analyzer.read_frames_u8(2, libsonare.StreamQuantizeConfig(centroid_max=1.0))
+        frames = analyzer.read_quantized_frames_u8(
+            2, libsonare.StreamQuantizeConfig(centroid_max=1.0)
+        )
     assert frames.spectral_centroid is not None
     assert frames.spectral_centroid[0] == 255

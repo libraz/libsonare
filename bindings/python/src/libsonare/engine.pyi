@@ -62,7 +62,7 @@ MAX_TRACK_LANES: int
 class RealtimeEngine:
     def __init__(
         self,
-        sample_rate: float,
+        sample_rate: int,
         max_block_size: int | None = None,
         *,
         command_capacity: int | None = None,
@@ -81,7 +81,7 @@ class RealtimeEngine:
         ...
     def prepare(
         self,
-        sample_rate: float,
+        sample_rate: int,
         max_block_size: int | None = None,
         command_capacity: int | None = None,
         telemetry_capacity: int | None = None,

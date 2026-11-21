@@ -379,7 +379,7 @@ def test_a_failed_handle_construction_reports_only_the_real_error(
             sonare_engine_abi_version=lambda: engine_module._EXPECTED_ENGINE_ABI_VERSION + 1
         )
         monkeypatch.setattr(engine_module, "_get_lib", lambda: stub)
-        construct: Callable[[], object] = partial(libsonare.RealtimeEngine, sample_rate=48000.0)
+        construct: Callable[[], object] = partial(libsonare.RealtimeEngine, sample_rate=48000)
         expected = "engine ABI mismatch"
     else:
 

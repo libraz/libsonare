@@ -14,7 +14,7 @@ BLOCKS = 32
 
 def _render(prepare) -> np.ndarray:
     """Render one held note on the fallback Sf2Player after ``prepare(engine)``."""
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         prepare(engine)
         engine.push_midi_note_on(DESTINATION, 0, 0, 60, 100)
@@ -26,7 +26,7 @@ def _render(prepare) -> np.ndarray:
 
 
 def _render_input(prepare) -> np.ndarray:
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         engine.set_midi_input_source(DESTINATION)
         prepare(engine)
@@ -74,7 +74,7 @@ def test_push_midi_input_program_matches_raw_ump_and_reaches_the_voice() -> None
 
 @pytest.mark.parametrize("bank_msb,bank_lsb", [(1, 0), (0, 1), (8, 3)])
 def test_bank_without_bank_valid_is_refused(bank_msb: int, bank_lsb: int) -> None:
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         engine.set_midi_input_source(DESTINATION)
         bank_rule = "bank MSB and LSB must be 0 when bank-valid is false"
@@ -132,7 +132,7 @@ def test_midi2_program_bank_is_refused_outside_0_to_127(name: str, value: int) -
 )
 def test_out_of_range_is_refused_like_push_midi_cc(kwargs) -> None:
     args = {"group": 0, "channel": 0, "program": 0} | kwargs
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         engine.set_midi_input_source(DESTINATION)
         refused = next(name for name in kwargs if name != "bank_valid")
@@ -146,7 +146,7 @@ def test_out_of_range_is_refused_like_push_midi_cc(kwargs) -> None:
 
 
 def test_values_beyond_uint8_are_narrowing_errors() -> None:
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         with pytest.raises(SonareValueError):
             engine.push_midi_program(DESTINATION, 0, 0, 256)
@@ -155,7 +155,7 @@ def test_values_beyond_uint8_are_narrowing_errors() -> None:
 
 
 def test_input_program_requires_the_input_source() -> None:
-    with RealtimeEngine(48000.0, BLOCK) as engine:
+    with RealtimeEngine(48000, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         with pytest.raises(SonareError) as refused:
             engine.push_midi_input_program(0, 0, 0)

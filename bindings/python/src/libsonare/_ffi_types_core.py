@@ -100,7 +100,7 @@ class SonareOnsetDetectConfig(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
-        ("hop_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
         ("threshold", ctypes.c_float),
         ("pre_max", ctypes.c_int32),
         ("post_max", ctypes.c_int32),
@@ -218,7 +218,7 @@ class SonareTransportState(CStruct):
         ("bpm", ctypes.c_double),
         ("loop_start_ppq", ctypes.c_double),
         ("loop_end_ppq", ctypes.c_double),
-        ("sample_rate", ctypes.c_double),
+        ("sample_rate", ctypes.c_int),
         # Musical position derived from the tempo map (computed every block).
         ("bar_start_ppq", ctypes.c_double),
         ("bar_index", ctypes.c_int64),
@@ -437,7 +437,7 @@ class SonareEngineCaptureStatus(CStruct):
 
     _fields_ = [
         ("captured_frames", ctypes.c_int64),
-        ("overflow_count", ctypes.c_uint32),
+        ("overflow_count", ctypes.c_size_t),
         ("armed", ctypes.c_int),
         ("punch_enabled", ctypes.c_int),
         ("source", ctypes.c_int),

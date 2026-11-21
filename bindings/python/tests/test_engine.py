@@ -12,6 +12,7 @@ from libsonare import (
     EngineMetronomeConfig,
     ErrorCode,
     ParameterInfo,
+    Project,
     RealtimeEngine,
     SonareError,
     SonareValueError,
@@ -36,7 +37,7 @@ def test_voice_changer_abi_version() -> None:
 
 
 def test_engine_rejects_hostile_tempo_and_metronome_lengths() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_tempo(100000.0)
         with pytest.raises(SonareError):
             engine.set_tempo(100000.1)
@@ -55,7 +56,7 @@ def test_metronome_default_click_length_is_absent() -> None:
 
 
 def test_engine_transport_state_and_live_parameters() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_tempo(90.0)
         engine.set_loop(0.0, 4.0, enabled=True)
         engine.add_parameter(
@@ -81,7 +82,7 @@ def test_engine_transport_state_and_live_parameters() -> None:
         assert state.bpm == pytest.approx(90.0)
         assert state.looping
         assert state.loop_end_ppq == pytest.approx(4.0)
-        assert state.sample_rate == pytest.approx(48000.0)
+        assert state.sample_rate == 48000 and isinstance(state.sample_rate, int)
         assert isinstance(state.sample_position, int)
         # Musical beat readout: `beat` is one-based, `beat_fraction` in [0, 1).
         assert isinstance(state.beat, int)
@@ -96,7 +97,7 @@ def test_engine_transport_state_and_live_parameters() -> None:
 
 
 def test_engine_tempo_and_time_signature_segments() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         # Valid ramp + time-signature map (mappings and tuples both accepted).
         engine.set_tempo_segments(
             [
@@ -125,7 +126,7 @@ def test_engine_tempo_and_time_signature_segments() -> None:
 
 
 def test_engine_rejects_out_of_range_automation_curve() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.add_parameter(
             ParameterInfo(
                 id=5,
@@ -161,7 +162,7 @@ def test_engine_rejects_out_of_range_automation_curve() -> None:
 
 
 def test_engine_close_is_the_one_release_name() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=128)
     engine.close()
     engine.close()  # a second close is a no-op
     assert not hasattr(engine, "destroy")
@@ -171,7 +172,7 @@ def test_engine_close_is_the_one_release_name() -> None:
 
 
 def test_engine_marker_kind_and_key_signature_round_trip() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_markers(
             [
                 EngineMarker(0.0, id=1, name="verse", kind="cuePoint"),
@@ -213,22 +214,34 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
 
 
 def test_engine_prepare_rejects_nonfinite_and_out_of_range_sample_rates() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        for sample_rate in (float("nan"), 7999.0, 384001.0):
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        for sample_rate in (float("nan"), 7999, 384001):
             with pytest.raises(SonareError):
                 engine.prepare(sample_rate, 128)
 
 
+def test_float_sample_rate_is_refused_by_engine_and_project() -> None:
+    with pytest.raises(SonareValueError):
+        RealtimeEngine(sample_rate=48000.0, max_block_size=128)  # type: ignore[arg-type]
+    with (
+        RealtimeEngine(sample_rate=48000, max_block_size=128) as engine,
+        pytest.raises(SonareValueError),
+    ):
+        engine.prepare(48000.0, 128)  # type: ignore[arg-type]
+    with Project() as project, pytest.raises(SonareValueError):
+        project.set_sample_rate(48000.0)  # type: ignore[arg-type]
+
+
 def test_engine_prepare_accepts_declared_channel_capacity() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128, max_channels=2) as engine:
-        engine.prepare(48000.0, 128, max_channels=2)
+    with RealtimeEngine(sample_rate=48000, max_block_size=128, max_channels=2) as engine:
+        engine.prepare(48000, 128, max_channels=2)
         for max_channels in (0, 65):
             with pytest.raises(SonareError):
-                engine.prepare(48000.0, 128, max_channels=max_channels)
+                engine.prepare(48000, 128, max_channels=max_channels)
 
 
 def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
         engine.set_bus_strip(
             1,
@@ -276,7 +289,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
 
 def test_engine_apply_commands_due_now_preserves_future_commands() -> None:
     block = 256
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=block) as engine:
         engine.settle_insert_parameters()
         # Unscheduled (-1) and frame-0 seeks are due now and apply in FIFO order;
         # the later two fall inside the second and third blocks.
@@ -302,7 +315,7 @@ def test_engine_apply_commands_due_now_preserves_future_commands() -> None:
 
 
 def test_engine_empty_automation_lane_removes_it() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.add_parameter(
             ParameterInfo(
                 id=7,
@@ -322,7 +335,7 @@ def test_engine_empty_automation_lane_removes_it() -> None:
 
 
 def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(
             10,
@@ -387,7 +400,7 @@ def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
 
 def test_engine_set_param_smoothing_ms_validates_argument() -> None:
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_param_smoothing_ms(0.0)
         engine.set_param_smoothing_ms(75.0)

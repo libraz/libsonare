@@ -26,12 +26,12 @@ class SonareProjectVocalEditApplyDesc(CStruct):
         ("take_id", ctypes.c_uint32),
         ("expected_source_id", ctypes.c_uint32),
         ("expected_source_sample_rate", ctypes.c_uint32),
-        ("expected_source_sample_count", ctypes.c_int64),
+        ("expected_source_sample_count", ctypes.c_size_t),
         ("expected_source_sha256", ctypes.c_uint8 * 32),
         ("expected_clip_length_ppq", ctypes.c_double),
         ("expected_source_offset_ppq", ctypes.c_double),
         ("rendered_mono", ctypes.POINTER(ctypes.c_float)),
-        ("rendered_sample_count", ctypes.c_int64),
+        ("rendered_sample_count", ctypes.c_size_t),
         ("rendered_sample_rate", ctypes.c_uint32),
         ("rendered_start_sample", ctypes.c_int64),
         ("render_token", SonareVocalStateToken),
@@ -69,7 +69,7 @@ class SonareProjectVocalEditDependency(CStruct):
         ("derived_source_id", ctypes.c_uint32),
         ("source_sample_rate", ctypes.c_uint32),
         ("profile_id", ctypes.c_uint32),
-        ("source_sample_count", ctypes.c_int64),
+        ("source_sample_count", ctypes.c_size_t),
         ("committed_revision", ctypes.c_uint64),
         ("original_source_sha256", ctypes.c_uint8 * 32),
         ("derived_source_sha256", ctypes.c_uint8 * 32),
@@ -88,7 +88,7 @@ class SonareProjectVocalEditDependenciesResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("dependencies", ctypes.POINTER(SonareProjectVocalEditDependency)),
-        ("dependency_count", ctypes.c_uint64),
+        ("dependency_count", ctypes.c_size_t),
     ]
 
 
@@ -99,8 +99,8 @@ class SonareProjectVocalOriginalSource(CStruct):
         ("struct_size", ctypes.c_uint32),
         ("source_id", ctypes.c_uint32),
         ("mono", ctypes.POINTER(ctypes.c_float)),
-        ("sample_count", ctypes.c_int64),
-        ("sample_rate", ctypes.c_uint32),
+        ("sample_count", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int),
     ]
 
 
@@ -125,7 +125,7 @@ class SonareProjectVocalRehydrateResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("items", ctypes.POINTER(SonareProjectVocalRehydrateItem)),
-        ("item_count", ctypes.c_uint64),
+        ("item_count", ctypes.c_size_t),
     ]
 
 

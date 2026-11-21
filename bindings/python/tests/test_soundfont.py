@@ -25,7 +25,7 @@ _SF2_BYTES = _FIXTURE.read_bytes()
 
 def _build_midi_only_project() -> Project:
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     _midi = project.add_midi_clip(0.0, 4.0)
     track = _midi.track_id
     clip = _midi.clip_id
@@ -155,7 +155,7 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
     misread, not a compile error.
     """
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     _midi = project.add_midi_clip(0.0, 2.0)
     track = _midi.track_id
     clip = _midi.clip_id
@@ -192,7 +192,7 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
 
 
 def test_engine_sf2_instrument_renders_live_midi() -> None:
-    engine = RealtimeEngine(48000.0, 128)
+    engine = RealtimeEngine(48000, 128)
     try:
         # Binding before a SoundFont is loaded is allowed: live MIDI plays
         # through the built-in synthesizer GM fallback (the data-free floor).
@@ -228,7 +228,7 @@ def _gs_dt1(a0: int, a1: int, a2: int, data: list[int]) -> bytes:
 
 def _render_overdrive(realization: str | None) -> np.ndarray:
     """One held note on part 1 through an Overdrive insertion effect, realised as asked."""
-    engine = RealtimeEngine(48000.0, 128)
+    engine = RealtimeEngine(48000, 128)
     try:
         engine.load_sound_font(_SF2_BYTES)
         config = (

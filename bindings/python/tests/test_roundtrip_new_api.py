@@ -233,17 +233,29 @@ def test_stream_analyzer_quantized_python_api():
     cfg = dict(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
     with ls.StreamAnalyzer(**cfg) as sa:
         sa.process(_sine(sr // 2, 440.0, sr))
-        frames = sa.read_frames_u8(4)
+        frames = sa.read_quantized_frames_u8(4)
         assert 0 < frames.n_frames <= 4
         assert frames.mel is not None and frames.mel.dtype == np.uint8
         assert frames.mel.shape == (32, frames.n_frames)
         assert frames.chroma is not None and frames.chroma.shape == (12, frames.n_frames)
+        assert frames.chord_root is not None and frames.chord_root.shape == (frames.n_frames,)
+        assert frames.chord_quality is not None and frames.chord_quality.shape == (frames.n_frames,)
+        assert frames.chord_confidence is not None
+        assert frames.chord_confidence.shape == (frames.n_frames,)
+        assert frames.chord_confidence.dtype == np.uint8
 
         sa.process(_sine(sr // 2, 440.0, sr))
-        frames16 = sa.read_frames_i16(4)
+        frames16 = sa.read_quantized_frames_i16(4)
         assert 0 < frames16.n_frames <= 4
         assert frames16.mel is not None and frames16.mel.dtype == np.int16
         assert frames16.mel.shape == (32, frames16.n_frames)
+        assert frames16.chord_root is not None
+        assert frames16.chord_root.shape == (frames16.n_frames,)
+        assert frames16.chord_quality is not None
+        assert frames16.chord_quality.shape == (frames16.n_frames,)
+        assert frames16.chord_confidence is not None
+        assert frames16.chord_confidence.shape == (frames16.n_frames,)
+        assert frames16.chord_confidence.dtype == np.int16
 
 
 def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types():
@@ -260,7 +272,7 @@ def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types(
             compute_onset=bool(mask & 4),
             compute_spectral=bool(mask & 8),
         )
-        for method_name in ("read_frames", "read_frames_u8", "read_frames_i16"):
+        for method_name in ("read_frames", "read_quantized_frames_u8", "read_quantized_frames_i16"):
             with ls.StreamAnalyzer(**cfg) as analyzer:
                 analyzer.process(input_samples)
                 frames = getattr(analyzer, method_name)(1)
@@ -297,10 +309,10 @@ def test_stream_analyzer_quantize_config_override():
     # native quantizer.
     with ls.StreamAnalyzer(**cfg) as tight:
         tight.process(_sine(sr // 2, 440.0, sr))
-        narrow = tight.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0))
+        narrow = tight.read_quantized_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0))
     with ls.StreamAnalyzer(**cfg) as wide:
         wide.process(_sine(sr // 2, 440.0, sr))
-        broad = wide.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0e9))
+        broad = wide.read_quantized_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0e9))
 
     assert narrow.n_frames == broad.n_frames
     assert narrow.spectral_centroid is not None and broad.spectral_centroid is not None
@@ -363,8 +375,8 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
         operations = (
             lambda value: analyzer.process([0.0], value),
             analyzer.read_frames,
-            analyzer.read_frames_u8,
-            analyzer.read_frames_i16,
+            analyzer.read_quantized_frames_u8,
+            analyzer.read_quantized_frames_i16,
             analyzer.reset,
         )
         for value in invalid_values:
@@ -377,8 +389,8 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
 
         analyzer.reset(size_t_max)
         assert analyzer.read_frames(size_t_max).n_frames == 0
-        assert analyzer.read_frames_u8(size_t_max).n_frames == 0
-        assert analyzer.read_frames_i16(size_t_max).n_frames == 0
+        assert analyzer.read_quantized_frames_u8(size_t_max).n_frames == 0
+        assert analyzer.read_quantized_frames_i16(size_t_max).n_frames == 0
 
         analyzer.reset()
         analyzer.process([0.0], 0)

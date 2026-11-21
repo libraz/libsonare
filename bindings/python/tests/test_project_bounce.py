@@ -43,7 +43,7 @@ def test_bounce_is_bit_exact_across_two_renders() -> None:
 def _build_midi_only_project() -> Project:
     """A MIDI-only arrangement: one MIDI track + clip with a sustained note."""
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     clip = project.add_midi_clip(0.0, 4.0).clip_id
     project.set_midi_events(
         clip,
@@ -289,7 +289,7 @@ def test_bounce_without_instrument_keywords_is_the_plain_bounce() -> None:
 def test_bounce_mixes_instrument_kinds_on_separate_destinations() -> None:
     """One call hosts an external and a built-in instrument on two destinations."""
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     try:
         for destination, note in ((0, 60), (1, 72)):
             midi = project.add_midi_clip(0.0, 1.0)

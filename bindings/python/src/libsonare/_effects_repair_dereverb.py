@@ -69,7 +69,7 @@ def mastering_repair_dereverb_classical(
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
     n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     # Narrowed, not int()-coerced: int() takes 256.7 as 256, a hop nobody asked for.
-    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
+    hop_length_value = _narrow_int(hop_length, "hop_length", 0, _C_INT_MAX)
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -181,7 +181,7 @@ def mastering_repair_detect_reverb(
         SonareError: If the C call rejects the request.
     """
     n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
+    hop_length_value = _narrow_int(hop_length, "hop_length", 0, _C_INT_MAX)
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -284,7 +284,7 @@ def mastering_repair_dereverb_classical_stereo(
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
-        _C_INT_MIN,
+        0,
         _C_INT_MAX,
     )
 
@@ -420,7 +420,7 @@ def mastering_repair_dereverb_classical_linked(
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
-        _C_INT_MIN,
+        0,
         _C_INT_MAX,
     )
 
@@ -563,7 +563,7 @@ def mastering_repair_dereverb_config_for_room(
         hop_length=_narrow_int(
             hop_length,
             "hop_length",
-            _C_INT_MIN,
+            0,
             _C_INT_MAX,
         ),
         t60_sec=_narrow_double(t60_sec, "t60_sec"),

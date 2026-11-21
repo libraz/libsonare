@@ -260,8 +260,8 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames(ctypes.byref(raw))
 
-    @_entry("StreamAnalyzer.read_frames_u8")
-    def read_frames_u8(
+    @_entry("StreamAnalyzer.read_quantized_frames_u8")
+    def read_quantized_frames_u8(
         self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesU8:
         """Read up to ``max_frames`` frames as 8-bit quantized arrays.
@@ -273,7 +273,7 @@ class StreamAnalyzer:
         raw = _ffi_streaming.SonareStreamFramesU8()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_u8(
+            lib.sonare_stream_analyzer_read_quantized_frames_u8(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
                 _to_c_size_t(max_frames, "max_frames"),
@@ -285,8 +285,8 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames_u8(ctypes.byref(raw))
 
-    @_entry("StreamAnalyzer.read_frames_i16")
-    def read_frames_i16(
+    @_entry("StreamAnalyzer.read_quantized_frames_i16")
+    def read_quantized_frames_i16(
         self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesI16:
         """Read up to ``max_frames`` frames as 16-bit quantized arrays.
@@ -298,7 +298,7 @@ class StreamAnalyzer:
         raw = _ffi_streaming.SonareStreamFramesI16()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_i16(
+            lib.sonare_stream_analyzer_read_quantized_frames_i16(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
                 _to_c_size_t(max_frames, "max_frames"),
@@ -333,7 +333,7 @@ class StreamAnalyzer:
     @property
     def frame_count(self) -> int:
         """Return the total number of frames processed."""
-        out = ctypes.c_int()
+        out = ctypes.c_size_t()
         _check(
             _get_lib().sonare_stream_analyzer_frame_count(self._require_handle(), ctypes.byref(out))
         )
@@ -533,19 +533,31 @@ def _stream_frames_from_c(raw: _ffi_streaming.SonareStreamFrames) -> StreamFrame
 
 def _stream_frames_u8_from_c(raw: _ffi_streaming.SonareStreamFramesU8) -> StreamFramesU8:
     n = int(raw.n_frames)
+    chords = bool(int(raw.feature_flags) & _FEATURE_CHROMA)
     return StreamFramesU8(
         n_frames=n,
         timestamps_sec=_from_c_float_array(raw.timestamps_sec, n),
         **_frame_arrays(raw, ctypes.c_uint8, np.uint8),
+        chord_root=_copy(raw.chord_root, n, ctypes.c_int8, np.int8) if chords else None,
+        chord_quality=_copy(raw.chord_quality, n, ctypes.c_int8, np.int8) if chords else None,
+        chord_confidence=_copy(raw.chord_confidence, n, ctypes.c_uint8, np.uint8)
+        if chords
+        else None,
     )
 
 
 def _stream_frames_i16_from_c(raw: _ffi_streaming.SonareStreamFramesI16) -> StreamFramesI16:
     n = int(raw.n_frames)
+    chords = bool(int(raw.feature_flags) & _FEATURE_CHROMA)
     return StreamFramesI16(
         n_frames=n,
         timestamps_sec=_from_c_float_array(raw.timestamps_sec, n),
         **_frame_arrays(raw, ctypes.c_int16, np.int16),
+        chord_root=_copy(raw.chord_root, n, ctypes.c_int8, np.int8) if chords else None,
+        chord_quality=_copy(raw.chord_quality, n, ctypes.c_int8, np.int8) if chords else None,
+        chord_confidence=_copy(raw.chord_confidence, n, ctypes.c_int16, np.int16)
+        if chords
+        else None,
     )
 
 

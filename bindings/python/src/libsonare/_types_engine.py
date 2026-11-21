@@ -843,7 +843,7 @@ class TransportState:
     """Loop start in PPQ."""
     loop_end_ppq: float
     """Loop end in PPQ."""
-    sample_rate: float
+    sample_rate: int
     """Sample rate in Hz."""
     # Musical position derived from the tempo map (computed every block).
     bar_start_ppq: float

@@ -30,7 +30,7 @@ from ._helpers import _midi1_word, raises_coded
 
 
 def test_engine_builtin_instrument_bind_and_clear() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(waveform="saw", gain=0.5), 0)
         assert engine.midi_instrument_count == 1
         engine.set_builtin_instrument()  # default sine patch on destination 0
@@ -74,7 +74,7 @@ def test_an_engine_instrument_config_is_seeded_by_the_engines_own_init(
 
     monkeypatch.setattr(lib, init, record_init)
     monkeypatch.setattr(lib, entry, record_entry)
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         getattr(engine, bind)(config, 0)
         assert engine.midi_instrument_count == 1
     assert len(seeded) == 1 and seeded[0] > 0
@@ -82,7 +82,7 @@ def test_an_engine_instrument_config_is_seeded_by_the_engines_own_init(
 
 
 def test_engine_midi_cc_bindings() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
         engine.bind_midi_cc(
             MidiCcBinding(
@@ -103,14 +103,14 @@ def test_engine_midi_cc_bindings() -> None:
 
 
 def test_a_cc_binding_mapping_is_a_type_error() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(TypeError, match="MidiCcBinding"):
             engine.bind_midi_cc({"cc_number": 2, "param_id": 43})  # type: ignore[arg-type]
         assert engine.midi_cc_binding_count == 0
 
 
 def test_engine_set_and_clear_midi_fx_round_trips() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_midi_fx(0, {"transposeSemitones": 12})
         engine.clear_midi_fx(0)
         with pytest.raises(TypeError, match="json.loads"):
@@ -118,7 +118,7 @@ def test_engine_set_and_clear_midi_fx_round_trips() -> None:
 
 
 def test_engine_live_midi_input_source_queue() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         # The input family is refused until the input source is enabled.
         with pytest.raises(SonareError) as disabled:
@@ -136,14 +136,14 @@ def test_engine_live_midi_input_source_queue() -> None:
 
 
 def test_engine_push_immediate_notes_do_not_raise() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         engine.push_midi_note_on(0, 0, 0, 60, 100)
         engine.push_midi_note_off(0, 0, 0, 60, 0)
 
 
 def test_engine_push_midi_bend_and_pressure_change_rendered_audio() -> None:
-    sample_rate = 48000.0
+    sample_rate = 48000
     block = 512
     window = 8192
 
@@ -196,7 +196,7 @@ def test_engine_push_midi_bend_and_pressure_change_rendered_audio() -> None:
 
 
 def test_engine_push_midi_bend_rejects_out_of_range_value() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         engine.push_midi_pitch_bend(0, 0, 0, 16383)
         with pytest.raises(SonareValueError, match=r"bend14 must be in \[0, 16383\]"):
@@ -210,7 +210,7 @@ def test_engine_push_midi_bend_rejects_out_of_range_value() -> None:
 
 
 def test_engine_push_midi_sysex_accepts_frame_and_rejects_oversized() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         # GM system-on universal SysEx (0xF0 ... 0xF7).
         engine.push_midi_sysex(0, b"\xf0\x7e\x7f\x09\x01\xf7")
@@ -225,7 +225,7 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
     def midi1_word(status: int, channel: int, word0: int, word1: int) -> int:
         return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (word0 << 8) | word1
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
         engine.set_midi_clips(
             [
@@ -273,7 +273,7 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
 
 def test_engine_drains_external_midi_routing_to_host() -> None:
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         # Route destination 5 to the external queue instead of an instrument.
         engine.set_midi_destination_external(5, True)
@@ -316,7 +316,7 @@ def test_engine_drains_external_midi_routing_to_host() -> None:
 
 def test_engine_clip_event_group_comes_from_word0() -> None:
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_midi_destination_external(7, True)
         group = 3
@@ -373,7 +373,7 @@ def test_engine_clip_event_group_comes_from_word0() -> None:
 
 def test_engine_external_destination_table_overflow() -> None:
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         for dest_id in range(16):
             engine.set_midi_destination_external(dest_id, True)
@@ -391,7 +391,7 @@ def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
     # Regression: drain must treat max_records as an output-event cap (not drain
     # the whole queue), and must not lose events past the cap — they stay queued.
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_midi_destination_external(5, True)
         n_notes = 24
@@ -449,7 +449,7 @@ def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
     and the other bindings refuse the same budget.
     """
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_midi_destination_external(5, True)
         engine.set_midi_clips(
@@ -489,7 +489,7 @@ def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
 
 def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=24000, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=24000, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_tempo(120.0)
         engine.set_external_midi_clock_enabled(True)
@@ -510,7 +510,7 @@ def test_engine_set_midi_clips_forwards_explicit_destination_id_zero() -> None:
     # Regression: an explicit destination_id=0 must be forwarded unchanged, not
     # silently rewritten to track_id. Only the instrument at destination 0 is
     # bound, so a rewrite to track_id would leave the note unheard (silence).
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 0)
         engine.set_midi_clips(
             [
@@ -534,7 +534,7 @@ def test_engine_set_midi_clips_forwards_explicit_destination_id_zero() -> None:
 def test_engine_set_midi_clips_omitted_destination_id_falls_back_to_track_id() -> None:
     # Omitting destination_id (the sentinel default None) still falls back to
     # track_id, so an instrument bound only at the track's own destination is heard.
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
         engine.set_midi_clips(
             [
@@ -558,7 +558,7 @@ def test_engine_drain_external_midi_delivers_a_midi2_rpn_as_four_cc_messages() -
     """A MIDI 2.0 Registered Controller reaches a MIDI 1.0 port as CC 101/100/6/38."""
     rpn_word0 = (0x4 << 28) | (0x2 << 20) | (1 << 16)  # group 0, channel 1, RPN 0/0
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_midi_destination_external(5, True)
         engine.set_midi_clips(
@@ -614,7 +614,7 @@ _LIVE_PUSH_REFUSALS = [
 
 @pytest.mark.parametrize("method,args,message", _LIVE_PUSH_REFUSALS)
 def test_live_push_names_the_refused_argument(method: str, args: tuple, message: str) -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(SonareValueError) as refused:
             getattr(engine, method)(*args)
         assert str(refused.value) == f"RealtimeEngine.{method}: {message}"
@@ -637,7 +637,7 @@ _LIVE_INPUT_PUSHES = [
 def test_live_input_push_refuses_a_disabled_source_as_invalid_state(
     method: str, args: tuple
 ) -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(SonareError) as refused:
             getattr(engine, method)(*args)
         assert refused.value.code == int(ErrorCode.INVALID_STATE)

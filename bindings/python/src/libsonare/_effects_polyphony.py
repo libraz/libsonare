@@ -42,11 +42,15 @@ from ._ffi import (
     SonarePolyphonicConfig,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    SonareValueError,
     _check,
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
     _guard_buffer,
+    _int_refusal,
+    _narrow_int,
     _out_float_array,
     _resolve_time_offset,
     _to_c_float_array,
@@ -56,9 +60,17 @@ from ._runtime import (
     _validate_samples,
 )
 
+# size_t fields of SonarePolyphonicConfig; 0 is refused because win_length's 0 would mean n_fft.
+_SIZE_FIELDS = ("hop_length", "win_length")
+
 
 def _count_field(name: str, value: int) -> int:
     """Narrowed rather than coerced: int(0.5) would run at 0 and report success."""
+    if name in _SIZE_FIELDS:
+        try:
+            return _narrow_int(value, name, 1, _C_INT_MAX)
+        except (TypeError, SonareValueError) as exc:
+            raise _int_refusal(value, name, f"must be an integer in [1, {_C_INT_MAX}]") from exc
     return _validate_c_int_field(value, name)
 
 
@@ -156,7 +168,7 @@ class PolyphonicAnalysis:
                 chain is tuned at). Samples at 44100 Hz, converted to the
                 input's sample rate, explicit values too.
             hop_length: STFT hop (default 512), samples at 44100 Hz, converted
-                like ``n_fft``.
+                like ``n_fft``. A given 0 is refused.
             win_length: Window length (``None``, the default, is ``n_fft``),
                 samples at 44100 Hz, converted like ``n_fft``. A given 0 is refused.
             cent_ref_hz: Bottom of the cent axis the salience is folded onto
@@ -377,7 +389,7 @@ class PolyphonicAnalysis:
     def frame_count(self) -> int:
         """Number of STFT frames the analysis ran over."""
         lib = _get_lib()
-        out = ctypes.c_int32()
+        out = ctypes.c_size_t()
         _check(lib.sonare_polyphonic_frame_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 

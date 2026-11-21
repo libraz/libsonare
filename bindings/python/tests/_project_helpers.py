@@ -27,7 +27,7 @@ def _make_stereo_sine(frames: int, sample_rate: float = 48000.0) -> np.ndarray:
 def _build_project() -> tuple[Project, int, int, int]:
     """Build a small non-trivial project: audio track+clip and MIDI track+clip."""
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
 
     audio_track = project.add_track("audio", "audio")
     assert audio_track != 0

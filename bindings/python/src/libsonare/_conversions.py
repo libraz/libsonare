@@ -126,7 +126,7 @@ def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float
         lib.sonare_frames_to_time(
             _to_c_int(frames, "frames"),
             ctypes.c_int(_narrow_int(sr, "sr", 1, _C_INT_MAX)),
-            ctypes.c_int(_narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)),
+            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
         )
     )
 
@@ -143,7 +143,7 @@ def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> i
         lib.sonare_time_to_frames(
             _to_c_float(time_sec, "time_sec"),
             ctypes.c_int(_narrow_int(sr, "sr", 1, _C_INT_MAX)),
-            ctypes.c_int(_narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)),
+            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
         )
     )
 
@@ -292,15 +292,15 @@ def trim_silence(
     """Trim leading/trailing silence and return a :class:`TrimResult`."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    start = ctypes.c_int()
-    end = ctypes.c_int()
+    start = ctypes.c_int64()
+    end = ctypes.c_int64()
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_trim_silence(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_float(top_db, "top_db"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(start),
@@ -333,8 +333,8 @@ def split_silence(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_float(top_db, "top_db"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_count),
         )
@@ -447,8 +447,8 @@ def split_silence_common(
             _to_c_size_t(len(c_arrays), "signal_count"),
             length_array,
             _to_c_float(top_db, "top_db"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_count),
             None,
@@ -495,8 +495,8 @@ def split_silence_common_with_report(
             _to_c_size_t(len(c_arrays), "signal_count"),
             length_array,
             _to_c_float(top_db, "top_db"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_count),
             ctypes.byref(report),
@@ -531,8 +531,8 @@ def frame_signal(
         rc = lib.sonare_frame_signal(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
@@ -689,7 +689,7 @@ def pcen(
             _to_c_int(n_bins, "n_bins"),
             _to_c_int(n_frames, "n_frames"),
             _to_c_int(sr, "sr"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             _to_c_float(time_constant, "time_constant"),
             _to_c_float(gain, "gain"),
             _to_c_float(bias, "bias"),
@@ -743,8 +743,8 @@ def tempogram(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sr, "sr"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_int(win_length, "win_length"),
+            _to_c_size_t(hop_length, "hop_length"),
+            _to_c_size_t(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
             ctypes.c_int(1 if norm else 0),
             _to_c_int(mode_id, "mode_id"),
@@ -774,8 +774,8 @@ def cyclic_tempogram(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_int(win_length, "win_length"),
+            _to_c_size_t(hop_length, "hop_length"),
+            _to_c_size_t(win_length, "win_length"),
             _to_c_float(bpm_min, "bpm_min"),
             _to_c_int(n_bins, "n_bins"),
             ctypes.byref(out),
@@ -804,10 +804,10 @@ def plp(
         "sonare_plp",
         onset_envelope,
         _to_c_int(sr, "sr"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_float(_DEFAULT_BPM_MIN if tempo_min is None else tempo_min, "tempo_min"),
         _to_c_float(_DEFAULT_BPM_MAX if tempo_max is None else tempo_max, "tempo_max"),
-        _to_c_int(win_length, "win_length"),
+        _to_c_size_t(win_length, "win_length"),
         arg_name="onset_envelope",
     )
 
@@ -831,7 +831,7 @@ def onset_strength(
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
     )
 
@@ -856,7 +856,7 @@ def onset_strength_multi(
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_int(n_fft, "n_fft"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             _to_c_int(n_mels, "n_mels"),
             _to_c_int(n_bands, "n_bands"),
             ctypes.byref(out),
@@ -887,8 +887,8 @@ def fourier_tempogram(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sr, "sr"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_int(win_length, "win_length"),
+            _to_c_size_t(hop_length, "hop_length"),
+            _to_c_size_t(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
             # The C norm flag stays set, as on every other surface.
             ctypes.c_int(1),
@@ -931,9 +931,9 @@ def tempogram_ratio(
     return _call_float_array_transform(
         "sonare_tempogram_ratio",
         matrix.reshape(-1),
-        _to_c_int(win_length, "win_length"),
+        _to_c_size_t(win_length, "win_length"),
         _to_c_int(sr, "sr"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         factors_ptr,
         _to_c_size_t(n_factors, "n_factors"),
         arg_name="tempogram",

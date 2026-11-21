@@ -26,8 +26,11 @@ from ._ffi_types_vocal_project import (
 )
 from ._narrowing import _narrow_double, _narrow_int, _optional_nonzero
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     _INT64_MAX,
     _INT64_MIN,
+    _SIZE_T_MAX,
     _UINT32_MAX,
     _check,
     _get_lib,
@@ -273,7 +276,7 @@ def _apply_project_vocal_edit(
     handle = _project_handle(project)
     source = _validate_samples(rendered_mono, arg_name="rendered_mono")
     expected_count = _narrow_int(
-        expected_source_sample_count, "expected_source_sample_count", _INT64_MIN, _INT64_MAX
+        expected_source_sample_count, "expected_source_sample_count", 0, _SIZE_T_MAX
     )
     expected_rate = _narrow_int(
         expected_source_sample_rate, "expected_source_sample_rate", 0, _UINT32_MAX
@@ -356,8 +359,8 @@ def _originals_to_c(
         sample_rate = _narrow_int(
             original.sample_rate,
             f"originals[{index}].sample_rate",
-            0,
-            _UINT32_MAX,
+            _C_INT_MIN,
+            _C_INT_MAX,
         )
         buffer = _validate_samples(
             original.mono,
@@ -413,7 +416,7 @@ def _rehydrate_project_vocal_edits(
 
     originals = tuple(originals)
     original_count = _narrow_int(
-        len(originals), "original_count", 0, min(_UINT64_MAX, _MAX_RESULT_ITEMS)
+        len(originals), "original_count", 0, min(_SIZE_T_MAX, _MAX_RESULT_ITEMS)
     )
     rows, buffers = _originals_to_c(originals)
     callback, callback_errors = _project_cancel_callback(cancel)

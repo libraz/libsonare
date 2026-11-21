@@ -104,7 +104,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
     source, sample_rate, source_sha256, rendered, state_and_token = _source_and_render()
     state, token = state_and_token
     with Project.create() as project:
-        project.set_sample_rate(float(sample_rate))
+        project.set_sample_rate(sample_rate)
         track_id = project.add_track()
         clip_id = project.add_clip(
             track_id,
@@ -218,7 +218,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
     source, sample_rate, source_sha256, rendered, state_and_token = _source_and_render()
     state, token = state_and_token
     with Project.create() as project:
-        project.set_sample_rate(float(sample_rate))
+        project.set_sample_rate(sample_rate)
         track_id = project.add_track()
         clip_id = project.add_clip(
             track_id,
@@ -390,7 +390,7 @@ def test_apply_range_validation_comes_from_the_c_abi(clip_length: float, offset:
     source, sample_rate, source_sha256, rendered, state_and_token = _source_and_render()
     state, token = state_and_token
     with Project.create() as project:
-        project.set_sample_rate(float(sample_rate))
+        project.set_sample_rate(sample_rate)
         track_id = project.add_track()
         clip_id = project.add_clip(
             track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate
@@ -415,7 +415,7 @@ def test_apply_range_validation_comes_from_the_c_abi(clip_length: float, offset:
 def test_a_rendered_length_mismatch_is_refused_by_the_core_in_the_callers_words() -> None:
     source, sample_rate, source_sha256, rendered, (state, token) = _source_and_render()
     with Project.create() as project:
-        project.set_sample_rate(float(sample_rate))
+        project.set_sample_rate(sample_rate)
         track_id = project.add_track()
         clip_id = project.add_clip(
             track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate

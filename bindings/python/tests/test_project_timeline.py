@@ -35,7 +35,7 @@ _SYNTH = BuiltinSynthConfig(waveform="saw", gain=0.3, attack_ms=1.0, release_ms=
 def _build_project() -> tuple[Project, int]:
     """One audio clip and one MIDI clip routed to ``_DESTINATION`` at 120 BPM."""
     project = Project()
-    project.set_sample_rate(float(_RATE))
+    project.set_sample_rate(_RATE)
     audio_track = project.add_track("audio", "audio")
     audio_clip = project.add_clip(
         audio_track,
@@ -72,7 +72,7 @@ def _project_bounce(project: Project) -> np.ndarray:
 
 
 def _prepared_engine() -> RealtimeEngine:
-    return RealtimeEngine(sample_rate=float(_RATE), max_block_size=_BLOCK)
+    return RealtimeEngine(sample_rate=_RATE, max_block_size=_BLOCK)
 
 
 def _silent_block() -> list[list[float]]:

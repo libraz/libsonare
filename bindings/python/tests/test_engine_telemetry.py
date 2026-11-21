@@ -32,7 +32,7 @@ from ._helpers import scene_strip
 
 def test_engine_drain_meter_telemetry_surround_bus() -> None:
     frames = 256
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -72,7 +72,7 @@ def _plane_powers(planes: list[list[float]]) -> list[float]:
 def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None:
     block = 256
     blocks = 24
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=block) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -154,7 +154,7 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
 
 
 def test_realtime_engine_process_and_telemetry() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_tempo(60.0)
         engine.set_time_signature(3, 4)
         engine.set_markers(
@@ -325,7 +325,7 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
     errors = get_args(EngineTelemetryError)
     assert errors[19:21] == ("invalidCommand", "maxChannelsExceeded")
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128, max_channels=2) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128, max_channels=2) as engine:
         output = engine.process([[0.0] * 8, [0.0] * 8, [0.0] * 8])
         assert [plane.tolist() for plane in output] == [[0.0] * 8, [0.0] * 8, [0.0] * 8]
 
@@ -339,7 +339,7 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
 
 
 def test_realtime_engine_scope_telemetry() -> None:
-    sample_rate = 48000.0
+    sample_rate = 48000
     block = 256
     num_blocks = 12
     total = block * num_blocks
@@ -438,7 +438,7 @@ def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drop
     never requested, or that a time-stretched clip fell back to resampling.
     """
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         assert engine.clip_page_request_overflow_count == 0
         assert engine.warp_stretch_overflow_count == 0
@@ -470,7 +470,7 @@ def test_graph_connection_mix_is_replace_or_add_only() -> None:
 
 
 def test_capture_source_is_an_exact_token() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.configure_capture(capacity_frames=128, source="input")
         engine.configure_capture(capacity_frames=128, source="output")
         with pytest.raises(SonareValueError, match="input"):
@@ -481,7 +481,7 @@ def test_capture_source_is_an_exact_token() -> None:
 
 
 def test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.configure_capture(
             capacity_frames=128, source="input", punch=CapturePunch(start_ppq=1.0, end_ppq=2.0)
         )

@@ -125,16 +125,16 @@ class _ProjectEditMixin:
         ) -> ProjectSource: ...
 
     @_entry("Project.set_sample_rate")
-    def set_sample_rate(self, sample_rate: float) -> None:
+    def set_sample_rate(self, sample_rate: int) -> None:
         """Set the project sample rate in Hz.
 
-        Must be a whole number of hertz within ``[8000, 384000]``; anything else
+        Must be an integer number of hertz within ``[8000, 384000]``; anything else
         raises.
         The change is applied through the edit history, so it is undoable.
         """
         _check(
             _get_lib().sonare_project_set_sample_rate(
-                self._require_handle(), _narrow_double(sample_rate, "sample_rate")
+                self._require_handle(), _to_c_int(sample_rate, "sample_rate")
             )
         )
 

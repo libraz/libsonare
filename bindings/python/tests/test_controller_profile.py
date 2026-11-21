@@ -31,7 +31,7 @@ from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
-SAMPLE_RATE = 48000.0
+SAMPLE_RATE = 48000
 BLOCK = 128
 DESTINATION = 3
 
@@ -39,7 +39,7 @@ DESTINATION = 3
 def _reed_engine() -> RealtimeEngine:
     """An engine with a reed synth on DESTINATION: an engine whose excitation
     axis a controller can actually reach, so a binding has somewhere to land."""
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
     engine.set_synth_instrument(SynthPatch(engine_mode="reed"), destination_id=DESTINATION)
     return engine
@@ -194,7 +194,7 @@ def test_controller_note_tracking_round_trips_per_dimension() -> None:
 
 
 def test_controller_calls_name_the_destination_that_has_no_instrument() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     try:
         engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
         for call in (

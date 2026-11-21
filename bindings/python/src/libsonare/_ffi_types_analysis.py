@@ -384,7 +384,7 @@ class SonareWaveformPeaksResult(CStruct):
     _fields_ = [
         ("min", ctypes.POINTER(ctypes.c_float)),
         ("max", ctypes.POINTER(ctypes.c_float)),
-        ("channels", ctypes.c_int),
+        ("num_channels", ctypes.c_int),
         ("bucket_count", ctypes.c_size_t),
         ("samples_per_bucket", ctypes.c_size_t),
     ]
@@ -410,7 +410,7 @@ class SonareMusicAnalyzeOptions(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int),
-        ("hop_length", ctypes.c_int),
+        ("hop_length", ctypes.c_size_t),
         ("bpm_min", ctypes.c_float),
         ("bpm_max", ctypes.c_float),
         ("start_bpm", ctypes.c_float),
@@ -427,7 +427,7 @@ class SonareMusicAnalyzeOptions(CStruct):
         ("tempo_update_interval_beats", ctypes.c_int),
         ("compute_tempo_curve", ctypes.c_int),
         ("meter_candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
-        ("meter_candidate_numerator_count", ctypes.c_int),
+        ("meter_candidate_numerator_count", ctypes.c_size_t),
         ("meter_denominator", ctypes.c_int),
         ("tuning_cents", ctypes.c_float),
         ("tuning_auto", ctypes.c_int),
@@ -446,7 +446,7 @@ class SonareMeterOptions(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
-        ("candidate_numerator_count", ctypes.c_int),
+        ("candidate_numerator_count", ctypes.c_size_t),
         ("denominator", ctypes.c_int),
         ("downbeat_weight", ctypes.c_float),
         ("measure_weight", ctypes.c_float),
@@ -508,7 +508,7 @@ class SonareDetectKeyOptions(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int),
-        ("hop_length", ctypes.c_int),
+        ("hop_length", ctypes.c_size_t),
         ("use_hpss", ctypes.c_int),
         ("loudness_weighted", ctypes.c_int),
         ("chroma_high_pass_hz", ctypes.c_float),
@@ -614,7 +614,7 @@ class SonareNnlsChromaOptions(CStruct):
         ("enable_stft_blend", ctypes.c_int32),
         ("stft_blend_weight", ctypes.c_float),
         ("stft_blend_n_fft", ctypes.c_int32),
-        ("hop_length", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
     ]
 
 

@@ -47,7 +47,7 @@ def _mixer(size: int | None) -> object:
 
 
 def _engine(size: int | None) -> object:
-    return ls.RealtimeEngine(sample_rate=float(SR), max_block_size=size)
+    return ls.RealtimeEngine(sample_rate=SR, max_block_size=size)
 
 
 _BUILDERS: dict[str, Callable[[int | None], object]] = {
@@ -93,16 +93,16 @@ def test_a_default_block_size_still_chunks_or_flushes_a_long_buffer(name: str) -
 
 
 def test_engine_capacities_take_none_and_refuse_zero() -> None:
-    with ls.RealtimeEngine(sample_rate=float(SR)) as engine:
-        engine.prepare(float(SR), None, command_capacity=None, telemetry_capacity=None)
-        engine.prepare(float(SR), 128, command_capacity=256, max_channels=2)
+    with ls.RealtimeEngine(sample_rate=SR) as engine:
+        engine.prepare(SR, None, command_capacity=None, telemetry_capacity=None)
+        engine.prepare(SR, 128, command_capacity=256, max_channels=2)
         for field in ("command_capacity", "telemetry_capacity", "max_channels"):
             with pytest.raises(SonareValueError, match=field):
-                engine.prepare(float(SR), 128, **{field: 0})
+                engine.prepare(SR, 128, **{field: 0})
 
 
 def test_engine_offline_block_size_takes_none_and_refuses_zero() -> None:
-    with ls.RealtimeEngine(sample_rate=float(SR), max_block_size=128) as engine:
+    with ls.RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
         planes = [[0.0] * 256, [0.0] * 256]
         assert len(engine.render_offline(planes)) == 2
         with pytest.raises(SonareValueError, match="block_size"):
@@ -150,7 +150,7 @@ def test_a_required_channel_count_or_sample_rate_has_no_default(
 def test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero() -> None:
     project = ls.Project()
     try:
-        project.set_sample_rate(float(SR))
+        project.set_sample_rate(SR)
         assert project.bounce(total_frames=64).ndim == 2
         for field in ("total_frames", "block_size", "num_channels", "sample_rate"):
             with pytest.raises(SonareValueError, match=field):
@@ -207,7 +207,7 @@ def test_the_reported_block_is_the_one_each_handle_accepts() -> None:
     with ls.PlaybackRenderer({}, sample_rate=SR) as renderer:
         planes = renderer.num_input_channels
         _accepts(lambda n: renderer.process_planar([zeros(n)] * planes), renderer.max_block_size)
-    with ls.RealtimeEngine(sample_rate=float(SR)) as engine:
+    with ls.RealtimeEngine(sample_rate=SR) as engine:
         # The audio thread never raises: an over-long block is published as telemetry.
         limit = engine.max_block_size
         engine.process([zeros(limit), zeros(limit)])

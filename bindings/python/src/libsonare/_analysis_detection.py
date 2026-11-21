@@ -136,7 +136,7 @@ def _detect_key_options(
     )
     options = SonareDetectKeyOptions._given(
         n_fft=_to_c_int(n_fft, "n_fft"),
-        hop_length=_to_c_int(hop_length, "hop_length"),
+        hop_length=_to_c_size_t(hop_length, "hop_length"),
         use_hpss=1 if use_hpss else 0,
         loudness_weighted=1 if loudness_weighted else 0,
         chroma_high_pass_hz=_to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),

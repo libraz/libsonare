@@ -189,7 +189,7 @@ from ._types_engine import AutomationPoint
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).
-_EXPECTED_PROJECT_ABI_VERSION = 2
+_EXPECTED_PROJECT_ABI_VERSION = 3
 
 # Track kind; a token's index is its SonareProjectTrackKind ordinal.
 ProjectTrackKind: TypeAlias = Literal["audio", "midi", "aux"]

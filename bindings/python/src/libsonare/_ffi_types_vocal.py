@@ -42,7 +42,7 @@ class SonareVocalAnalysis(CStruct):
         ("frame_length_samples", ctypes.c_uint32),
         ("f0_hz", ctypes.POINTER(ctypes.c_float)),
         ("voiced", ctypes.POINTER(ctypes.c_uint8)),
-        ("frame_count", ctypes.c_uint64),
+        ("frame_count", ctypes.c_size_t),
         ("algorithm_id", ctypes.c_char_p),
         ("algorithm_version", ctypes.c_uint32),
         ("fmin_hz", ctypes.c_double),
@@ -102,7 +102,7 @@ class SonareVocalNoteEdit(CStruct):
         ("target_mode", ctypes.c_uint32),
         ("target_midi", ctypes.c_double),
         ("target_points", ctypes.POINTER(SonareVocalPitchPoint)),
-        ("target_point_count", ctypes.c_uint64),
+        ("target_point_count", ctypes.c_size_t),
         ("amount", ctypes.c_double),
         ("speed_ms", ctypes.c_double),
         ("max_correction_semitones", ctypes.c_double),
@@ -116,7 +116,7 @@ class SonareVocalNoteEdit(CStruct):
         ("formant_mode", ctypes.c_uint32),
         ("formant_shift_semitones", ctypes.c_double),
         ("amplitude_envelope", ctypes.POINTER(ctypes.c_float)),
-        ("amplitude_envelope_count", ctypes.c_uint64),
+        ("amplitude_envelope_count", ctypes.c_size_t),
     ]
 
 
@@ -133,7 +133,7 @@ class SonareVocalNote(CStruct):
         ("center_midi", ctypes.c_double),
         ("f0_stability", ctypes.c_double),
         ("amplitude", ctypes.POINTER(ctypes.c_float)),
-        ("amplitude_count", ctypes.c_uint64),
+        ("amplitude_count", ctypes.c_size_t),
         ("edit", SonareVocalNoteEdit),
     ]
 
@@ -163,7 +163,7 @@ class SonareVocalOperation(CStruct):
         ("destination_length_samples", ctypes.c_int64),
         ("cut_source_sample", ctypes.c_int64),
         ("note_ids", ctypes.POINTER(ctypes.c_uint32)),
-        ("note_id_count", ctypes.c_uint64),
+        ("note_id_count", ctypes.c_size_t),
         ("merge_policy", ctypes.c_uint32),
         ("transition", SonareVocalTransition),
     ]
@@ -184,9 +184,9 @@ class SonareVocalNotesResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("notes", ctypes.POINTER(SonareVocalNote)),
-        ("note_count", ctypes.c_uint64),
+        ("note_count", ctypes.c_size_t),
         ("transitions", ctypes.POINTER(SonareVocalTransition)),
-        ("transition_count", ctypes.c_uint64),
+        ("transition_count", ctypes.c_size_t),
     ]
 
 
@@ -197,7 +197,7 @@ class SonareVocalAnalysisResult(CStruct):
         ("source_sha256", ctypes.c_char * 65),
         ("analysis_sha256", ctypes.c_char * 65),
         ("source_length_samples", ctypes.c_int64),
-        ("sample_rate", ctypes.c_uint32),
+        ("sample_rate", ctypes.c_int),
     ]
 
 
@@ -215,9 +215,9 @@ class SonareVocalEditResult(CStruct):
         ("struct_size", ctypes.c_uint32),
         ("token", SonareVocalStateToken),
         ("dirty_ranges", ctypes.POINTER(SonareVocalRange)),
-        ("dirty_range_count", ctypes.c_uint64),
+        ("dirty_range_count", ctypes.c_size_t),
         ("id_changes", ctypes.POINTER(SonareVocalIdChange)),
-        ("id_change_count", ctypes.c_uint64),
+        ("id_change_count", ctypes.c_size_t),
     ]
 
 
@@ -230,7 +230,7 @@ class SonareVocalPitchResult(CStruct):
         ("effective_midi", ctypes.POINTER(ctypes.c_double)),
         ("voiced", ctypes.POINTER(ctypes.c_uint8)),
         ("has_target", ctypes.POINTER(ctypes.c_uint8)),
-        ("frame_count", ctypes.c_uint64),
+        ("frame_count", ctypes.c_size_t),
     ]
 
 
@@ -238,11 +238,11 @@ class SonareVocalRenderResult(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("samples", ctypes.POINTER(ctypes.c_float)),
-        ("sample_count", ctypes.c_int64),
+        ("sample_count", ctypes.c_size_t),
         ("start_sample", ctypes.c_int64),
         ("token", SonareVocalStateToken),
         ("processed_ranges", ctypes.POINTER(SonareVocalRange)),
-        ("processed_range_count", ctypes.c_uint64),
+        ("processed_range_count", ctypes.c_size_t),
         ("cache_hit_units", ctypes.c_uint64),
         ("dry_passed_frames", ctypes.c_uint64),
         ("limited_correction_frames", ctypes.c_uint64),

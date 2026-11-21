@@ -779,11 +779,11 @@ def metering_spectrum_frame(
 
 
 def _waveform_peaks_from_c(out: SonareWaveformPeaksResult) -> WaveformPeaksReport:
-    count = int(out.channels) * int(out.bucket_count)
+    count = int(out.num_channels) * int(out.bucket_count)
     return WaveformPeaksReport(
         min=_from_c_float_array(out.min, count),
         max=_from_c_float_array(out.max, count),
-        num_channels=int(out.channels),
+        num_channels=int(out.num_channels),
         bucket_count=int(out.bucket_count),
         samples_per_bucket=int(out.samples_per_bucket),
     )

@@ -31,7 +31,7 @@ _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
 def test_value_refusal_is_sonare_value_error(
     name: str, call: Callable[[RealtimeEngine], object]
 ) -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=64) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
         with pytest.raises(SonareValueError) as exc:
             call(engine)
         assert exc.value.code == int(ErrorCode.INVALID_PARAMETER)
@@ -54,7 +54,7 @@ _MASTER_STRIP_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
 def test_master_strip_setter_without_a_master_strip_is_coded_invalid_state(
     name: str, call: Callable[[RealtimeEngine], object]
 ) -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=64) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
         with pytest.raises(SonareError) as exc:
             call(engine)
         assert not isinstance(exc.value, SonareValueError)
@@ -62,7 +62,7 @@ def test_master_strip_setter_without_a_master_strip_is_coded_invalid_state(
 
 
 def test_call_on_closed_engine_is_coded_invalid_state() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=64)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=64)
     engine.close()
     with pytest.raises(SonareError) as exc:
         engine.set_track_output_bus(1, None)
@@ -89,7 +89,7 @@ def test_wrong_argument_type_is_type_error(
     name: str, call: Callable[[RealtimeEngine], object]
 ) -> None:
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=64) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=64) as engine,
         pytest.raises(TypeError, match="must be an?"),
     ):
         call(engine)

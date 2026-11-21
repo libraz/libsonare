@@ -1553,8 +1553,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `PitchResult.voiced_flag` | bool ndarray instead of list[bool] |
 | `PitchResult.voiced_prob` | float32 ndarray instead of list[float] |
 | `RhythmResult.beat_intervals` | float32 ndarray instead of list |
-| `StreamAnalyzer.read_frames_i16` | returns band-major (bands, n_frames) ndarrays, None for a feature not computed |
-| `StreamAnalyzer.read_frames_u8` | returns band-major (bands, n_frames) ndarrays, None for a feature not computed |
+| `StreamAnalyzer.read_frames_i16` | `StreamAnalyzer.read_quantized_frames_i16`: returns band-major (bands, n_frames) ndarrays, None for a feature not computed, and carries chord_root and chord_quality (int8) and chord_confidence (int16) per frame |
+| `StreamAnalyzer.read_frames_u8` | `StreamAnalyzer.read_quantized_frames_u8`: returns band-major (bands, n_frames) ndarrays, None for a feature not computed, and carries chord_root and chord_quality (int8) and chord_confidence (uint8) per frame |
 | `StreamAnalyzer.read_frames` | returns band-major (bands, n_frames) ndarrays, None for a feature not computed |
 | `StreamFrames.n_chroma` | removed: taken from the 2-D array's shape |
 | `StreamFrames.n_mels` | removed: taken from the 2-D array's shape |
@@ -2987,6 +2987,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_track_sends(sends)` | a send takes bus_id, level_db, enabled and send_timing only; busId, levelDb, sendTiming and timing raise SonareValueError naming the key |
 | `SynthParamInfo.activeWhen` | `SynthParamInfo.active_when` |
 
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `RealtimeEngine.constructor(sample_rate)` | an int number of hertz; a float such as 48000.0 raises SonareValueError |
+| `RealtimeEngine.prepare(sample_rate)` | an int number of hertz; a float such as 48000.0 raises SonareValueError |
+| `TransportState.sample_rate` | an int number of hertz instead of a float |
+
 #### Errors are coded by cause on every surface
 
 | 1.x | 2.0.0 |
@@ -3397,6 +3405,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.annotate_chords(chords)` | a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field |
 | `Project.import_external_stems(stems)` | a stem mapping takes name, layout, planar_samples, role and start_frame only, any other key raising SonareValueError naming it; layout is a ProjectStemLayout token ('mono', 'stereo') and a channel count 1 or 2 is TypeError |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.set_sample_rate(sample_rate)` | an int number of hertz; a float such as 48000.0 raises SonareValueError |
 
 #### Errors are coded by cause on every surface
 

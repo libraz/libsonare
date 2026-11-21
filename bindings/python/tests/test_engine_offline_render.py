@@ -27,7 +27,7 @@ from ._helpers import _midi1_word, scene_strip
 
 def test_bounce_options_seeded_from_native_layer() -> None:
     """An omitted ``target_lufs`` keeps the init's NaN, which the C ABI normalizes to -14 LUFS."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.play()
         bounced = engine.bounce_offline(
             EngineBounceOptions(
@@ -49,7 +49,7 @@ def test_realtime_engine_offline_render_matches_process() -> None:
     left = [math.sin(i * 0.01) for i in range(frames)]
     right = [-sample for sample in left]
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as realtime:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as realtime:
         realtime.play()
         rt_left: list[float] = []
         rt_right: list[float] = []
@@ -58,14 +58,14 @@ def test_realtime_engine_offline_render_matches_process() -> None:
             rt_left.extend(block[0])
             rt_right.extend(block[1])
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as offline:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as offline:
         offline.play()
         rendered = offline.render_offline([left, right], block_size=128)
 
     assert np.array_equal(rendered[0], rt_left)
     assert np.array_equal(rendered[1], rt_right)
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as bounce_engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as bounce_engine:
         bounce_engine.play()
         bounced = bounce_engine.bounce_offline(
             EngineBounceOptions(
@@ -85,7 +85,7 @@ def test_realtime_engine_offline_render_matches_process() -> None:
     # for signals below the gating threshold (e.g. this very short bounce).
     assert math.isfinite(bounced.integrated_lufs) or bounced.integrated_lufs == float("-inf")
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as freeze_engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as freeze_engine:
         freeze_engine.set_clips(
             [
                 EngineClip(
@@ -117,7 +117,7 @@ def _pad_engine() -> RealtimeEngine:
     Note-on at frame 0 and no note-off, so whether it is still sounding at the
     end of a chunk is exactly the state a non-finalizing render must preserve.
     """
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=128)
     engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
     engine.set_midi_clips(
         [
@@ -200,7 +200,7 @@ def _plate_engine() -> RealtimeEngine:
         0.4 * math.sin(2.0 * math.pi * 330.0 * i / 48000.0) if i % 2400 < 1200 else 0.0
         for i in range(_RESET_FRAMES)
     ]
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=_RESET_BLOCK)
     engine.set_clips(
         [
             EngineClip(
@@ -269,7 +269,7 @@ def test_prime_offline_parameters_accepts_the_prepared_shape_and_refuses_others(
 
 def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
     frames = 256
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(SonareValueError) as render_error:
             engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=129)
         assert render_error.value.code == ErrorCode.INVALID_PARAMETER
@@ -289,7 +289,7 @@ def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
 
 
 def test_tail_and_latency_follow_the_configured_strips() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_RESET_BLOCK) as engine:
         assert engine.tail_samples == 0
         assert engine.graph_latency_samples == 0.0
         engine.set_track_lanes([{"track_id": 10}])
@@ -324,7 +324,7 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
 
 
 def test_tail_samples_reports_a_lane_channel_delay() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_RESET_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(
             10,
@@ -370,7 +370,7 @@ def test_graph_latency_is_the_native_q8_reading_in_fractional_samples() -> None:
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_RESET_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         # Aliasing mode 1 (first-order ADAA) delays its stage by half a sample.
         engine.set_strip(10, scene_strip(_adaa1_clipper_strip()))

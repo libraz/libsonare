@@ -234,7 +234,7 @@ class TestTrimPadding:
 
 class TestEngine:
     def test_punch_in_window_seconds_and_required_bounds(self) -> None:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
             punch = libsonare.CapturePunch(start_sec=1.0, end_sample=48128)
             engine.configure_capture(capacity_frames=128, punch=punch)
             assert engine.capture_status().punch_enabled
@@ -256,7 +256,7 @@ class TestEngine:
                 )
 
     def test_a_library_refusal_names_the_spelling_the_caller_gave(self) -> None:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
             with pytest.raises(
                 SonareValueError,
                 match=r"^RealtimeEngine\.configure_capture: "
@@ -298,7 +298,7 @@ class TestEngine:
             libsonare.note_move(samples, 48000, onset_sec=0.1, offset_sec=0.2, target_onset_sec=5.0)
 
     def test_render_frame_none_is_immediate_and_negative_is_refused(self) -> None:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
             engine.play()
             engine.play(render_frame=0)
             for call in (

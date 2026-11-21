@@ -28,7 +28,7 @@ CHAIN = [{"processor": "saturation.softClipper", "params": {}}]
 
 def _project() -> Project:
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     return project
 
 
@@ -127,8 +127,8 @@ def test_invalid_input_is_refused():
 
 
 def test_engine_refuses_builtin_instrument():
-    with RealtimeEngine(sample_rate=48000.0) as engine:
-        engine.prepare(48000.0, 128, 16, 16)
+    with RealtimeEngine(sample_rate=48000) as engine:
+        engine.prepare(48000, 128, 16, 16)
         engine.set_builtin_instrument(BuiltinSynthConfig(), DESTINATION)
         with pytest.raises(SonareError) as refusal:
             engine.set_part_rig(DESTINATION, 0, mode="none")
@@ -136,8 +136,8 @@ def test_engine_refuses_builtin_instrument():
 
 
 def test_engine_refuses_unbound_destination():
-    with RealtimeEngine(sample_rate=48000.0) as engine:
-        engine.prepare(48000.0, 128, 16, 16)
+    with RealtimeEngine(sample_rate=48000) as engine:
+        engine.prepare(48000, 128, 16, 16)
         with pytest.raises(SonareValueError) as refusal:
             engine.set_part_rig(DESTINATION, 0, mode="none")
         assert refusal.value.code == int(ErrorCode.INVALID_PARAMETER)

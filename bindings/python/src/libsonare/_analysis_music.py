@@ -366,7 +366,7 @@ def analyze_sections(
     c_array, length = _to_c_float_array(samples)
     options = SonareSectionOptions()
     options.n_fft = _to_c_int(n_fft, "n_fft")
-    options.hop_length = _to_c_int(hop_length, "hop_length")
+    options.hop_length = _to_c_size_t(hop_length, "hop_length")
     options.min_section_sec = _to_c_float(min_section_sec, "min_section_sec")
     if threshold is not None:
         options.threshold = _to_c_float(threshold, "threshold")
@@ -470,7 +470,7 @@ def detect_boundaries(
     c_array, length = _to_c_float_array(samples)
     options = SonareBoundaryOptions(
         n_fft=_to_c_int(n_fft, "n_fft"),
-        hop_length=_to_c_int(hop_length, "hop_length"),
+        hop_length=_to_c_size_t(hop_length, "hop_length"),
         kernel_size=_to_c_int(kernel_size, "kernel_size"),
         threshold=_to_c_float(threshold, "threshold"),
         absolute_threshold=_to_c_float(absolute_threshold, "absolute_threshold"),
@@ -554,8 +554,8 @@ def analyze_melody(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(f0_min_hz, "f0_min_hz"),
         _to_c_float(f0_max_hz, "f0_max_hz"),
-        _to_c_int(frame_length, "frame_length"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(frame_length, "frame_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_float(threshold, "threshold"),
         ctypes.byref(options),
         ctypes.byref(out),

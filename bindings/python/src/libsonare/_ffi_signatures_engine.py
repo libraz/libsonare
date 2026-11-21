@@ -18,7 +18,7 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_prepare.restype = ctypes.c_int32
     lib.sonare_engine_prepare.argtypes = [
         ctypes.c_void_p,
-        ctypes.c_double,
+        ctypes.c_int,
         ctypes.c_int,
         ctypes.c_size_t,
         ctypes.c_size_t,
@@ -561,17 +561,17 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_external_midi_dropped_count.restype = ctypes.c_int32
     lib.sonare_engine_external_midi_dropped_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_engine_clip_page_request_overflow_count.restype = ctypes.c_int32
     lib.sonare_engine_clip_page_request_overflow_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_engine_warp_stretch_overflow_count.restype = ctypes.c_int32
     lib.sonare_engine_warp_stretch_overflow_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_engine_set_warp_voice_capacity.restype = ctypes.c_int32
     lib.sonare_engine_set_warp_voice_capacity.argtypes = [
@@ -749,8 +749,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_configure_scope_telemetry.argtypes = [
         ctypes.c_void_p,
         ctypes.c_int,
-        ctypes.c_uint,
-        ctypes.POINTER(ctypes.c_uint),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_engine_drain_scope_telemetry.restype = ctypes.c_int32
     lib.sonare_engine_drain_scope_telemetry.argtypes = [
@@ -1012,7 +1012,7 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_legato_fallback_count.argtypes = [
         ctypes.c_void_p,
         ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_engine_set_midi_fx.restype = ctypes.c_int32
     lib.sonare_engine_set_midi_fx.argtypes = [

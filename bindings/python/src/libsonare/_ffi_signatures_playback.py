@@ -126,7 +126,7 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_playback_renderer_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_playback_renderer_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
 
     lib.sonare_playback_render_interleaved.restype = ctypes.c_int32

@@ -111,7 +111,7 @@ from .types import (
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
 # binding's _EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
-_EXPECTED_ENGINE_ABI_VERSION = 3
+_EXPECTED_ENGINE_ABI_VERSION = 4
 # The C record's destination_id for a byte meant for every external port.
 _ALL_EXTERNAL_PORTS = 0xFFFFFFFF
 
@@ -141,7 +141,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     @_entry("RealtimeEngine")
     def __init__(
         self,
-        sample_rate: float,
+        sample_rate: int,
         max_block_size: int | None = None,
         *,
         command_capacity: int | None = None,
@@ -226,7 +226,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     @_entry("RealtimeEngine.prepare")
     def prepare(
         self,
-        sample_rate: float,
+        sample_rate: int,
         max_block_size: int | None = None,
         command_capacity: int | None = None,
         telemetry_capacity: int | None = None,
@@ -245,7 +245,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             _get_lib().sonare_engine_prepare(
                 self._require_handle(),
-                _narrow_double(sample_rate, "sample_rate"),
+                _to_c_int(sample_rate, "sample_rate"),
                 _to_c_int(
                     _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
                 ),
@@ -259,7 +259,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 _to_c_int(_resolve_zero_default(max_channels, "max_channels"), "max_channels"),
             )
         )
-        self._sample_rate = _narrow_double(sample_rate, "sample_rate")
+        self._sample_rate = _to_c_int(sample_rate, "sample_rate").value
 
     @_entry("RealtimeEngine.play")
     def play(self, render_frame: int | None = None) -> None:
@@ -1007,7 +1007,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         Advisory telemetry; monotonic within a prepared session.
         """
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check(
             lib.sonare_engine_external_midi_dropped_count(self._require_handle(), ctypes.byref(out))
         )
@@ -1023,7 +1023,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         for, so their reads produced silence.
         """
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check(
             lib.sonare_engine_clip_page_request_overflow_count(
                 self._require_handle(), ctypes.byref(out)
@@ -1042,7 +1042,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         detect that degradation.
         """
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check(
             lib.sonare_engine_warp_stretch_overflow_count(self._require_handle(), ctypes.byref(out))
         )
@@ -1157,7 +1157,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             bpm=float(raw.bpm),
             loop_start_ppq=float(raw.loop_start_ppq),
             loop_end_ppq=float(raw.loop_end_ppq),
-            sample_rate=float(raw.sample_rate),
+            sample_rate=int(raw.sample_rate),
             bar_start_ppq=float(raw.bar_start_ppq),
             bar_index=int(raw.bar_index),
             time_signature=TimeSignature(

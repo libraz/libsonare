@@ -57,7 +57,7 @@ def test_a_non_mapping_descriptor_is_a_type_error() -> None:
 def test_engine_mixing_mappings_take_one_spelling() -> None:
     from libsonare import RealtimeEngine
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         bus = {"bus_id": 1, "gain_db": 0.0, "channel_layout": "stereo", "output_bus_id": None}
         target = {"bus_id": 2, "gain_db": 0.0}
         _refuses(lambda m: engine.set_track_buses([m, target]), bus, "gainDb")
@@ -76,7 +76,7 @@ def test_engine_mixing_mappings_take_one_spelling() -> None:
 def test_engine_tempo_and_meter_segments_take_one_spelling() -> None:
     from libsonare import RealtimeEngine
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         tempo = {"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 0.0}
         _refuses(lambda m: engine.set_tempo_segments([m]), tempo, "startPpq")
         _refuses(lambda m: engine.set_tempo_segments([m]), tempo, "start_sample")
@@ -179,7 +179,7 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
     finally:
         project.close()
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0}])
         engine.set_time_signature_segments([{"start_ppq": 0.0, "numerator": 3, "denominator": 4}])

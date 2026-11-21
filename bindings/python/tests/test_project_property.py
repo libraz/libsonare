@@ -22,7 +22,7 @@ import pytest
 
 from libsonare import Project
 
-SAMPLE_RATES = (44100.0, 48000.0, 96000.0)
+SAMPLE_RATES = (44100, 48000, 96000)
 TRACK_NAMES = ("lead", "bass", "drums", "pad", "fx", "vox-é", "ベース")
 
 
@@ -132,7 +132,7 @@ def test_boundary_values_round_trip() -> None:
     """Extreme-but-valid content (dense events, long ppq, unicode names) is stable."""
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         project.set_tempo_segments(
             [{"start_ppq": 0.0, "bpm": 40.0}, {"start_ppq": 1000.0, "bpm": 240.0}]
         )

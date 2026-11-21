@@ -26,7 +26,7 @@ def test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path() -> None:
 
 
 def test_engine_strip_setters_refuse_an_unknown_key() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         for call in (
             lambda: engine.set_strip(10, scene_strip(_TYPO_STRIP)),

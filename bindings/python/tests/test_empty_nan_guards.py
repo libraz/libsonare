@@ -339,7 +339,7 @@ class TestSonareValueErrorCatchContract:
         from libsonare import EngineMidiClipSchedule, EngineMidiEvent, RealtimeEngine
 
         with (
-            RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine,
+            RealtimeEngine(sample_rate=48000, max_block_size=128) as engine,
             pytest.raises(SonareValueError) as exc_info,
         ):
             engine.set_midi_clips(

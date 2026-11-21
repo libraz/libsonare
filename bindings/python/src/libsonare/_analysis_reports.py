@@ -550,7 +550,7 @@ def analyze_bpm(
         _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         _to_c_float(start_bpm, "start_bpm"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(max_candidates, "max_candidates"),
         ctypes.byref(out),
     )
@@ -706,7 +706,7 @@ def analyze_rhythm(
         _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         _to_c_float(start_bpm, "start_bpm"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -750,7 +750,7 @@ def analyze_dynamics(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(window_sec, "window_sec"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_float(compression_threshold_db, "compression_threshold_db"),
         ctypes.byref(out),
     )
@@ -794,7 +794,7 @@ def analyze_timbre(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         _to_c_int(n_mfcc, "n_mfcc"),
         _to_c_float(window_sec, "window_sec"),

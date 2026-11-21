@@ -140,7 +140,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
 
 def _build_midi_only_project(note: int = 60) -> Project:
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     _midi = project.add_midi_clip(0.0, 4.0)
     track = _midi.track_id
     clip = _midi.clip_id
@@ -157,7 +157,7 @@ def _build_midi_only_project(note: int = 60) -> Project:
 
 def _build_gm_program_project(program: int) -> Project:
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     _midi = project.add_midi_clip(0.0, 1.0)
     track = _midi.track_id
     clip = _midi.clip_id
@@ -437,7 +437,7 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
     # is no whole number of the note's periods.
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         _midi = project.add_midi_clip(0.0, 16.0)
         track = _midi.track_id
         clip = _midi.clip_id
@@ -677,7 +677,7 @@ def test_synth_bounce_gm_programs_4_and_40_are_finite_audible_and_distinct() -> 
 def _build_two_destination_gm_project(program: int = 40) -> Project:
     """Two MIDI tracks on two destinations, each sending its own GM program."""
     project = Project()
-    project.set_sample_rate(48000.0)
+    project.set_sample_rate(48000)
     for destination, note in ((0, 60), (1, 72)):
         _midi = project.add_midi_clip(0.0, 1.0)
         track = _midi.track_id
@@ -748,9 +748,9 @@ def test_drum_kit_preset_plays_the_gm_map() -> None:
 
 
 def test_engine_set_synth_instrument_renders_live_midi() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     try:
-        engine.prepare(48000.0, 128, 16, 16)
+        engine.prepare(48000, 128, 16, 16)
         engine.set_synth_instrument("sawLead", destination_id=7)
         engine.push_midi_note_on(7, 0, 0, 60, 100)
         out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
@@ -774,9 +774,9 @@ def test_engine_set_synth_instrument_follows_gm_programs_only_when_enabled() -> 
     block_count = 32
 
     def render(use_gm_programs: bool, program: int) -> np.ndarray:
-        engine = RealtimeEngine(sample_rate=48000.0)
+        engine = RealtimeEngine(sample_rate=48000)
         try:
-            engine.prepare(48000.0, block_size, 16, 16)
+            engine.prepare(48000, block_size, 16, 16)
             engine.set_synth_instrument(
                 SynthPatch(preset="sawLead", use_gm_programs=use_gm_programs), destination_id=1
             )
@@ -1093,7 +1093,7 @@ def test_engine_params_survive_garbage_collection_until_the_call_returns() -> No
 
 
 def test_engine_params_reach_the_live_engine_binding() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     try:
         engine.set_synth_instrument(
             SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.5}),

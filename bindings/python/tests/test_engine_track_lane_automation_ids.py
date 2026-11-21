@@ -24,7 +24,7 @@ def _settled(engine: RealtimeEngine, blocks: int = 30) -> float:
 
 
 def test_fader_id_keeps_its_track_across_a_reorder_and_retires_with_it() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         # Only track 20 sounds, so the output reads track 20's fader alone.
         engine.set_clips(
             [
@@ -72,7 +72,7 @@ def test_a_strip_reference_is_a_track_id_or_master(
     ref: object, error: type[Exception], match: str
 ) -> None:
     """``None`` is not a spelling of the master strip; only ``"master"`` is."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         with pytest.raises(error, match=match):
             engine.resolve_strip_automation_id(ref, "faderDb")  # type: ignore[arg-type]
@@ -91,14 +91,14 @@ def test_a_strip_reference_is_a_track_id_or_master(
 )
 def test_track_only_strip_setters_refuse_the_master_strip(call) -> None:
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine,
         pytest.raises(SonareValueError, match="master strip"),
     ):
         call(engine)
 
 
 def test_width_resolves_on_the_master_strip_only() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         assert engine.resolve_strip_automation_id("master", "width") > 0
         with pytest.raises(SonareValueError, match="'width'"):
@@ -108,7 +108,7 @@ def test_width_resolves_on_the_master_strip_only() -> None:
 
 
 def test_set_strip_fader_db_drives_the_track_fader() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_clips(
             [
                 EngineClip(

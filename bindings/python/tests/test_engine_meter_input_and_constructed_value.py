@@ -19,7 +19,7 @@ _STRIP_JSON = (
 
 
 def test_meter_input_peaks_and_reset_command() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.configure_capture(capacity_frames=128)
         engine.play()
         engine.process([[0.25] * 128, [-0.25] * 128])
@@ -33,7 +33,7 @@ def test_meter_input_peaks_and_reset_command() -> None:
 
 
 def test_constructed_insert_value_and_invalid_id() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(10, scene_strip(_STRIP_JSON))
         param_id = engine.resolve_strip_insert_automation_id(10, 0, "band0.gainDb")
@@ -75,7 +75,7 @@ def test_meter_target_insert_gain_reduction() -> None:
         track_id=10,
         length_samples=frames,
     )
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=block) as engine:
         engine.set_clips([clip])
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(10, scene_strip(_DYNAMICS_STRIP_JSON))

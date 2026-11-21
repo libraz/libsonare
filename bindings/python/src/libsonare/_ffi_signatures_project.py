@@ -63,7 +63,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     ]
 
     lib.sonare_project_set_sample_rate.restype = ctypes.c_int32
-    lib.sonare_project_set_sample_rate.argtypes = [ctypes.c_void_p, ctypes.c_double]
+    lib.sonare_project_set_sample_rate.argtypes = [ctypes.c_void_p, ctypes.c_int]
 
     lib.sonare_project_diagnostic_code_name.restype = ctypes.c_char_p
     lib.sonare_project_diagnostic_code_name.argtypes = [ctypes.c_int]
@@ -802,7 +802,7 @@ def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
 
     lib.sonare_midi_cc_learn.restype = ctypes.c_int32

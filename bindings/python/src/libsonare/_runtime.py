@@ -1072,15 +1072,11 @@ def _validate_hpss_kernel(value: int, arg_name: str) -> int:
 _DEFAULT_EFFECT_N_FFT = 2048
 
 
-# SONARE_STFT_HOP_AUTO: the C hop for "a quarter of n_fft"; 0 is refused.
-_STFT_HOP_AUTO = -1
-
-
 def _validate_effect_hop(hop_length: object) -> int:
-    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default."""
+    """Narrow a given STFT hop onto the core's hop domain; 0 is refused, not a default."""
     domain = f"must be an integer in [1, {_C_INT_MAX}]"
     try:
-        hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
+        hop = _narrow_int(hop_length, "hop_length", 0, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
         raise _int_refusal(hop_length, "hop_length", domain) from exc
     if hop <= 0:
@@ -1089,8 +1085,8 @@ def _validate_effect_hop(hop_length: object) -> int:
 
 
 def _effect_hop(hop_length: object) -> int:
-    """The C hop for a given STFT hop, or ``SONARE_STFT_HOP_AUTO`` when it is omitted."""
-    return _STFT_HOP_AUTO if hop_length is None else _validate_effect_hop(hop_length)
+    """The C hop for a given STFT hop, or 0 (a quarter of ``n_fft``) when it is omitted."""
+    return 0 if hop_length is None else _validate_effect_hop(hop_length)
 
 
 def _synth_enum_value(value: object, names: Mapping[str, int], key: str) -> int:

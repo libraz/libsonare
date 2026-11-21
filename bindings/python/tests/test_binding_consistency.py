@@ -450,7 +450,7 @@ def test_set_program_default_bank_is_none() -> None:
 
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         clip = project.add_midi_clip(0.0, 4.0).clip_id
 
         # Default bank (None) emits program only; an explicit pair emits Bank Select.
@@ -532,7 +532,7 @@ def test_empty_bounce_returns_empty_array_repeatably() -> None:
 
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         # No tracks/clips -> nothing to render -> empty output. Repeat to surface
         # any double-free / sentinel-leak regression.
         for _ in range(5):
@@ -549,7 +549,7 @@ def test_empty_builtin_instrument_bounce_is_empty() -> None:
 
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         for _ in range(5):
             audio = project.bounce(
                 builtin_instruments=[(0, BuiltinSynthConfig())],

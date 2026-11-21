@@ -287,7 +287,7 @@ def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_s
     """None on click_samples derives the click length from click_sec; 0 and -1 are refused."""
 
     def stored(**kwargs) -> int | None:
-        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        with ls.RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
             engine.set_metronome(
                 ls.EngineMetronomeConfig(enabled=True, beat_gain=0.5, accent_gain=0.8, **kwargs)
             )
@@ -307,7 +307,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
     frames = 256
 
     def bus_peak_db(output_bus_id) -> float:
-        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        with ls.RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
             engine.set_clips(
                 [
                     ls.EngineClip(
@@ -345,7 +345,7 @@ def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channe
 
     def build(num_ports) -> tuple[float, float]:
         node_kwargs = {} if num_ports is None else {"num_ports": num_ports}
-        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with ls.RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
             engine.set_graph(
                 ls.EngineGraphSpec(
                     nodes=[
@@ -398,7 +398,7 @@ def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
         kwargs = dict(extra)
         if polyphony is not None:
             kwargs["polyphony"] = polyphony
-        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=frames) as engine:
+        with ls.RealtimeEngine(sample_rate=48000, max_block_size=frames) as engine:
             getattr(engine, binder)(getattr(ls, config)(**kwargs), 6)
             engine.set_midi_clips(
                 [
@@ -438,7 +438,7 @@ def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_defa
 
     def bounced(dither_bits) -> str:
         kwargs = {} if dither_bits is None else {"dither_bits": dither_bits}
-        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        with ls.RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
             rng = np.random.default_rng(5)
             signal = (0.4 * rng.standard_normal(frames)).astype(np.float32).tolist()
             engine.set_clips(

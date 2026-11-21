@@ -67,7 +67,7 @@ def _render_last(engine: RealtimeEngine, blocks: int = 30) -> float:
 
 def _direct_level() -> float:
     """Direct-to-master level of one DC lane, the unit the routing cases scale."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -90,7 +90,7 @@ def test_engine_bus_output_bus_id_routes_into_another_bus() -> None:
     half = 10.0 ** (-6.0 / 20.0)
 
     def run(bus1_output: int | None) -> float:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
             engine.set_clips(
                 [
                     EngineClip(
@@ -121,7 +121,7 @@ def test_engine_bus_sends_tap_before_or_after_gain_db() -> None:
     g1 = 10.0 ** (-12.0 / 20.0)
 
     def run(timing: str, level_db: float, enabled: bool) -> float:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
             engine.set_clips(
                 [
                     EngineClip(
@@ -162,7 +162,7 @@ def test_engine_bus_sends_tap_before_or_after_gain_db() -> None:
 
 def _routing_engine(lanes: list[object]) -> RealtimeEngine:
     """Engine with one DC lane (track 10), buses 1 and 2 declared, and ``lanes`` applied."""
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK)
     engine.set_clips(
         [
             EngineClip(
@@ -244,7 +244,7 @@ def test_partial_lane_edits_refuse_bad_input_and_leave_the_lane_rendering() -> N
 
 def test_partial_lane_edits_refuse_every_track_before_the_first_lane_list() -> None:
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine,
         pytest.raises(
             SonareValueError,
             match=(
@@ -273,7 +273,7 @@ def test_set_track_lanes_omitting_sends_clears_them() -> None:
 # has an insert 0 to key; the master carries a ducker. Mirrors make_keyed_rig()
 # in the C ABI reference test.
 def _make_keyed_rig() -> RealtimeEngine:
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK)
     engine.set_clips(
         [
             EngineClip(
@@ -406,7 +406,7 @@ def _held_note_events() -> list[EngineMidiEvent]:
 
 
 def _render_midi_clip(clip: EngineMidiClipSchedule) -> list[float]:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), _MIDI_DESTINATION)
         engine.set_midi_clips([clip])
         engine.play()
@@ -445,7 +445,7 @@ def test_engine_midi_clip_gain_scales_destination_render() -> None:
 
 def test_engine_midi_clip_fade_out_on_open_ended_clip_is_refused() -> None:
     events = _held_note_events()
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), _MIDI_DESTINATION)
 
         clip = EngineMidiClipSchedule(
@@ -482,7 +482,7 @@ def test_grown_structs_match_abi_layout_snapshot() -> None:
 
 
 def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -> None:
-    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
+    engine = RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK)
     try:
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         for track_id in (10, 20):
@@ -582,7 +582,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         engine.close()
 
     # Table full: every slot of the binding table taken by lane 10, then a new key.
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as full:
         full.set_track_lanes([{"track_id": 10}, {"track_id": 30}])
         full.set_strip(10, scene_strip(_strip_json(10, [_PASS_LIMITER] * 33)))
         for insert in range(32):
@@ -599,7 +599,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         "dynamics.duckingProcessor",
         {"thresholdDb": -20.0, "ratio": 20.0, "attackMs": 0.05, "releaseMs": 80.0, "rangeDb": 30.0},
     )
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as plan:
+    with RealtimeEngine(sample_rate=48000, max_block_size=_BLOCK) as plan:
         plan.set_track_lanes([{"track_id": 10}, {"track_id": 20}, {"track_id": 30}])
         plan.set_strip(20, scene_strip(_strip_json(20, [long_limiter])))
         plan.set_strip(

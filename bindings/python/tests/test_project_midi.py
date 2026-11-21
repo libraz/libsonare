@@ -536,7 +536,7 @@ def test_project_import_smf_replaces_invalid_utf8_before_json_serialization() ->
 def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
     project = Project()
     try:
-        project.set_sample_rate(48000.0)
+        project.set_sample_rate(48000)
         clip = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_midi_events(
             clip,

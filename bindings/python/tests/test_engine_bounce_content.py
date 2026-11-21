@@ -32,7 +32,7 @@ def _tone() -> list[float]:
 def _bounce(**overrides: object) -> tuple[list[float], float]:
     tone = _tone()
     clip = EngineClip(id=1, channels=[tone, list(tone)], start_ppq=0.0, length_samples=FRAMES)
-    with RealtimeEngine(sample_rate=float(SAMPLE_RATE), max_block_size=BLOCK_SIZE) as engine:
+    with RealtimeEngine(sample_rate=SAMPLE_RATE, max_block_size=BLOCK_SIZE) as engine:
         engine.set_clips([clip])
         engine.play()
         result = engine.bounce_offline(
@@ -61,7 +61,7 @@ def _on_grid(samples: list[float]) -> int:
 
 
 def test_bounce_defaults_both_rates_to_the_prepared_rate() -> None:
-    with RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine:
+    with RealtimeEngine(sample_rate=44100, max_block_size=BLOCK_SIZE) as engine:
         result = engine.bounce_offline(EngineBounceOptions(total_frames=441, num_channels=2))
         assert result.sample_rate == 44100
         assert result.frames == 441
@@ -74,7 +74,7 @@ def test_bounce_defaults_both_rates_to_the_prepared_rate() -> None:
 
 def test_bounce_refuses_a_source_rate_other_than_the_prepared_rate() -> None:
     with (
-        RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine,
+        RealtimeEngine(sample_rate=44100, max_block_size=BLOCK_SIZE) as engine,
         pytest.raises(SonareError),
     ):
         engine.bounce_offline(

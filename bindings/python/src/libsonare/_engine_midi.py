@@ -798,8 +798,7 @@ class _EngineMidiMixin:
 
         Counted rather than inferred: a refusal sounds like an ordinary note,
         so nothing in the audio separates "this engine declines legato" from
-        "the mode was never set". Saturates at ``2**32 - 1`` rather than
-        wrapping, so a large value stays readable as "at least this many".
+        "the mode was never set".
 
         Refuses on the same terms as :meth:`set_articulation` rather than
         answering zero: :class:`SonareValueError` for a destination nothing is bound
@@ -810,7 +809,7 @@ class _EngineMidiMixin:
         slur took", which is the reading this counter exists to prevent.
         """
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check(
             lib.sonare_engine_legato_fallback_count(
                 self._require_handle(),

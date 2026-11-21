@@ -606,13 +606,13 @@ def test_planar_rank_rejection_names_the_caller_subject(subject, expected) -> No
 
 def _process_channels(channels: Any) -> None:
     """Drive the public realtime path, whose subject is ``channels``."""
-    with libsonare.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.process(channels)
 
 
 def _set_clip_channels(channels: Any) -> None:
     """Drive the public clip path, whose subject is ``clip channels``."""
-    with libsonare.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_clips([libsonare.EngineClip(id=1, channels=channels, start_ppq=0.0)])
 
 

@@ -34,7 +34,7 @@ def _alive(engine: RealtimeEngine, param_id: int) -> bool:
 
 
 def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         engine.set_strip(10, scene_strip(_scene("strips", "track-10", ["utility.gain"])))
         engine.set_strip(20, scene_strip(_scene("strips", "track-20", ["utility.gain"])))
@@ -56,7 +56,7 @@ def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
 
 
 def test_bus_id_survives_reorder_and_retires_when_the_bus_is_removed() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 2, "gain_db": 0.0}])
         engine.set_bus_strip(1, scene_bus(_scene("buses", "1", ["utility.gain"])))
         engine.set_bus_strip(2, scene_bus(_scene("buses", "2", ["utility.gain"])))
@@ -78,7 +78,7 @@ def test_bus_id_survives_reorder_and_retires_when_the_bus_is_removed() -> None:
 
 
 def test_ids_retire_when_the_slot_changes_processor_type() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
 
@@ -110,7 +110,7 @@ def test_ids_retire_when_the_slot_changes_processor_type() -> None:
 
 
 def test_strip_change_overflowing_the_id_table_is_refused() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=64) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
         # 64 slots per rebuild against 8192 entries: rebuild 129 cannot fit.
         gain = _scene("strips", "master", ["utility.gain"] * 64)
         tilt = _scene("strips", "master", ["eq.tilt"] * 64)

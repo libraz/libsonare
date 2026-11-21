@@ -124,6 +124,12 @@ class StreamFramesU8:
     """Quantized spectral centroid per frame; None when not computed."""
     spectral_flatness: NDArray[np.uint8] | None
     """Quantized spectral flatness per frame; None when not computed."""
+    chord_root: NDArray[np.int8] | None
+    """Per-frame chord root pitch class, -1 where none; None when chroma is not computed."""
+    chord_quality: NDArray[np.int8] | None
+    """Per-frame chord quality ordinal; None when chroma is not computed."""
+    chord_confidence: NDArray[np.uint8] | None
+    """Chord confidence quantized over ``[0, 1]``; None when chroma is not computed."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -150,6 +156,12 @@ class StreamFramesI16:
     """Quantized spectral centroid per frame; None when not computed."""
     spectral_flatness: NDArray[np.int16] | None
     """Quantized spectral flatness per frame; None when not computed."""
+    chord_root: NDArray[np.int8] | None
+    """Per-frame chord root pitch class, -1 where none; None when chroma is not computed."""
+    chord_quality: NDArray[np.int8] | None
+    """Per-frame chord quality ordinal; None when chroma is not computed."""
+    chord_confidence: NDArray[np.int16] | None
+    """Chord confidence quantized over ``[0, 1]``; None when chroma is not computed."""
 
 
 @dataclass(frozen=True, slots=True)

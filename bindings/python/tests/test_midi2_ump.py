@@ -144,7 +144,7 @@ def test_midi2_builder_rejects_out_of_range(call) -> None:
 def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
     event = Project.midi2_note_on(0.0, 0, 0, 60, 0xC000)
     w0, w1 = event.word0, event.word1
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         engine.push_midi_ump(0, [w0, w1])
         engine.push_midi_ump(0, (w0, w1))
@@ -163,7 +163,7 @@ def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
     ],
 )
 def test_push_midi_ump_rejects_bad_messages(words) -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         with pytest.raises(SonareValueError) as excinfo:
             engine.push_midi_ump(0, words)
@@ -175,7 +175,7 @@ def test_push_midi_ump_rejects_bad_messages(words) -> None:
 
 def test_push_midi_ump_rejects_word_out_of_range() -> None:
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=128) as engine,
         pytest.raises(SonareValueError),
     ):
         engine.push_midi_ump(0, [1 << 32])
@@ -184,7 +184,7 @@ def test_push_midi_ump_rejects_word_out_of_range() -> None:
 def test_push_midi_input_ump_queues_messages() -> None:
     event = Project.midi2_cc(0.0, 0, 0, 1, 0x80000000)
     w0, w1 = event.word0, event.word1
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         with pytest.raises(SonareError) as disabled:
             engine.push_midi_input_ump([w0, w1], 0)

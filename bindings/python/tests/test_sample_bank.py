@@ -30,7 +30,7 @@ def _tone(freq: float = 440.0, frames: int = 4800) -> np.ndarray:
 
 def _one_note_project(note: int) -> Project:
     project = Project()
-    project.set_sample_rate(float(SAMPLE_RATE))
+    project.set_sample_rate(SAMPLE_RATE)
     _midi = project.add_midi_clip(0.0, 1.0)
     track = _midi.track_id
     clip = _midi.clip_id
@@ -237,7 +237,7 @@ def test_each_binding_carries_its_own_bank() -> None:
     """
     project = Project()
     try:
-        project.set_sample_rate(float(SAMPLE_RATE))
+        project.set_sample_rate(SAMPLE_RATE)
         for destination, note in ((0, 60), (1, 72)):
             _midi = project.add_midi_clip(0.0, 1.0)
             track = _midi.track_id
@@ -366,7 +366,7 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
 
     def render(loop_mode: str | int) -> np.ndarray:
         project = Project()
-        project.set_sample_rate(float(SAMPLE_RATE))
+        project.set_sample_rate(SAMPLE_RATE)
         _midi = project.add_midi_clip(0.0, 4.0)
         track = _midi.track_id
         clip = _midi.clip_id
@@ -419,9 +419,9 @@ def _play_live(
     close_after_binding: SampleBank | None = None,
 ) -> np.ndarray:
     """Bind a sample patch to a prepared engine and render 8 blocks of one note."""
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     try:
-        engine.prepare(float(SAMPLE_RATE), BLOCK, 16, 16)
+        engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
         engine.set_synth_instrument(patch, destination_id=DESTINATION, sample_bank=sample_bank)
         if close_after_binding is not None:
             close_after_binding.close()
@@ -474,9 +474,9 @@ def test_a_closed_bank_is_rejected_on_both_hosts() -> None:
     bank = SampleBank()
     bank.add_zone(0, sample_index=bank.add_sample(_tone()))
     bank.close()
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     try:
-        engine.prepare(float(SAMPLE_RATE), BLOCK, 16, 16)
+        engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
         with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):
             engine.set_synth_instrument(_sample_patch(bank), destination_id=DESTINATION)
     finally:
@@ -497,7 +497,7 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
 
     def render(loop_mode: SampleDescLoopMode) -> np.ndarray:
         project = Project()
-        project.set_sample_rate(float(sample_rate))
+        project.set_sample_rate(sample_rate)
         _midi = project.add_midi_clip(0.0, 4.0)
         track = _midi.track_id
         clip = _midi.clip_id

@@ -21,7 +21,7 @@ from libsonare import (
 def _process_through_clip(channels: object, frames: int) -> list[list[float]]:
     """Render one block over a fixed clip, so the result is derived, not echoed back."""
     clip_plane = [0.5, 0.25, 0.125, 0.0625][:frames]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=frames) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=frames) as engine:
         engine.set_clips(
             [EngineClip(id=401, channels=[clip_plane], start_ppq=0.0, length_samples=frames)]
         )
@@ -57,15 +57,15 @@ def test_engine_refuses_a_fractional_sample_rate() -> None:
     """A rate that is not a whole number of hertz is refused, and the old rate stays."""
     with pytest.raises(SonareError):
         RealtimeEngine(sample_rate=44100.5, max_block_size=128)
-    with RealtimeEngine(sample_rate=44100.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=44100, max_block_size=128) as engine:
         with pytest.raises(SonareError):
             engine.prepare(48000.25, 128)
-        assert engine.transport_state().sample_rate == 44100.0
+        assert engine.transport_state().sample_rate == 44100
 
 
 def test_upsert_clip_and_remove_clip_change_one_clip() -> None:
     """One clip changes or leaves while the rest of the published set stays."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=4) as engine:
         engine.set_clips(
             [
                 EngineClip(id=1, channels=[[0.25] * 4], start_ppq=0.0),
@@ -97,7 +97,7 @@ def test_set_clips_accepts_planar_channels_as_a_2d_ndarray() -> None:
     nested = [[0.5, 0.25, 0.125, 0.0625]]
 
     def rendered(channels: object) -> list[list[float]]:
-        with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+        with RealtimeEngine(sample_rate=48000, max_block_size=4) as engine:
             engine.set_clips(
                 [EngineClip(id=402, channels=channels, start_ppq=0.0, length_samples=4)]
             )
@@ -112,7 +112,7 @@ def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
     """A page supplied as a (channels, frames) array renders as a nested-list page does."""
     page = np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=8) as engine,
         ClipPageProvider(num_channels=1, num_samples=8, page_frames=4) as provider,
     ):
         provider.supply(0, page)
@@ -124,7 +124,7 @@ def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
 
 def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=8) as engine,
         ClipPageProvider(num_channels=1, num_samples=8, page_frames=4) as provider,
     ):
         provider.supply(0, [[1.0, 2.0, 3.0, 4.0]])
@@ -163,7 +163,7 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
     np.asarray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype="<f4").tofile(raw_path)
 
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=8) as engine,
         FileClipPageProvider(raw_path, num_channels=1, num_samples=8, page_frames=4) as provider,
     ):
         assert provider.supply_page(0) is True
@@ -225,7 +225,7 @@ def test_file_clip_page_provider_truncated_page_returns_false(tmp_path) -> None:
 
 
 def test_realtime_engine_renders_repitch_warped_clip() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=4) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -245,7 +245,7 @@ def test_realtime_engine_renders_repitch_warped_clip() -> None:
         assert math.isclose(processed[0][2], 10.0, abs_tol=0.0001)
         assert math.isclose(processed[0][3], 15.0, abs_tol=0.0001)
     tempo_source = [math.sin(i * 0.02) for i in range(4096)]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=8192) as tempo_engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=8192) as tempo_engine:
         tempo_engine.set_clips(
             [
                 EngineClip(
@@ -272,7 +272,7 @@ def test_realtime_engine_renders_time_stretch_warped_clip_at_source_pitch() -> N
     source_samples = 12000
     output_samples = 24000
     source = [0.5 * math.sin(2.0 * math.pi * 440.0 * i / sr) for i in range(source_samples)]
-    with RealtimeEngine(sample_rate=float(sr), max_block_size=output_samples) as engine:
+    with RealtimeEngine(sample_rate=sr, max_block_size=output_samples) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -306,7 +306,7 @@ def test_realtime_engine_renders_time_stretch_warped_clip_at_source_pitch() -> N
 
 
 def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=4) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -323,7 +323,7 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
         processed = engine.process([[0.0] * 4])
         assert math.isclose(processed[0][1], 5.0, abs_tol=0.0001)
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=4) as engine:
         for mode in ("typo", "Repitch", "time-stretch", 1, 1.9, True):
             expected = ValueError if isinstance(mode, str) else TypeError
             with pytest.raises(
@@ -364,12 +364,12 @@ def test_realtime_engine_process_zero_copy_matches_list_input() -> None:
         length_samples=128,
     )
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as list_engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as list_engine:
         list_engine.set_clips([clip])
         list_engine.play()
         list_out = list_engine.process(list_channels)
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as np_engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as np_engine:
         np_engine.set_clips([clip])
         np_engine.play()
         np_out = np_engine.process([np_left, np_right])
@@ -389,7 +389,7 @@ def test_realtime_engine_process_zero_copy_matches_list_input() -> None:
 def test_engine_warp_voice_capacity_default_and_round_trip() -> None:
     """Default capacity is 8, set/get round-trips, and 0 disables stretch cleanly."""
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         assert engine.warp_voice_capacity() == 8
 
@@ -407,7 +407,7 @@ def test_engine_warp_voice_capacity_default_and_round_trip() -> None:
 def test_engine_set_warp_voice_capacity_rejects_out_of_range_values(bad_voices: object) -> None:
     """65, -1, and 1.5 are all refused, leaving the stored capacity unchanged."""
     with RealtimeEngine(
-        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+        sample_rate=48000, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
         engine.set_warp_voice_capacity(12)
         with pytest.raises(ValueError):
@@ -430,7 +430,7 @@ def _bounce_offset_clip(length_samples: int | None) -> list[float]:
         fade_out_samples=_OPEN_SOURCE_FRAMES - _OPEN_OFFSET,
         length_samples=length_samples,
     )
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_clips([clip])
         engine.play()
         result = engine.bounce_offline(

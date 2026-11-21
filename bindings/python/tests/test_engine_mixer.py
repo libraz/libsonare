@@ -50,7 +50,7 @@ def test_a_track_monitor_mode_number_is_a_type_error(value: object) -> None:
 def test_engine_track_monitor_mode_pfl_and_afl() -> None:
     block = 64
     frames = block * 16
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=block) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -92,7 +92,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
 
 def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
     frames = 256 * 10
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -137,7 +137,7 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
 
 def test_engine_track_buses_route_lane_sends() -> None:
     frames = 256 * 40
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -238,7 +238,7 @@ def test_engine_track_buses_route_lane_sends() -> None:
 
 def test_engine_set_strip_routes_a_track_strip() -> None:
     frames = 256 * 4
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -304,7 +304,7 @@ _STRIP = '{"version":1,"strips":[{"id":"track-10",%s}],"buses":[],"connections":
 )
 def test_strip_scene_refuses_earlier_spellings(strip_fields: str, current: str) -> None:
     """Earlier spellings of a strip document are refused as an invalid document."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         with raises_coded(int(ErrorCode.INVALID_FORMAT), match=current):
             engine.set_strip(10, scene_strip(_STRIP % strip_fields))
@@ -319,12 +319,12 @@ def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() ->
             + '}}]}],"buses":[],"connections":[]}'
         )
 
-    with RealtimeEngine(sample_rate=96000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=96000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(10, scene_strip(strip_json(30000)))
         with pytest.raises(SonareError):
             engine.set_strip(10, scene_strip(strip_json(48000)))
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         with pytest.raises(SonareError):
             engine.set_strip(10, scene_strip(strip_json(30000)))
@@ -334,7 +334,7 @@ def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() ->
 def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
     frames = 256 * 16
     source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -375,7 +375,7 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
 def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
     frames = 256 * 16
     source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -420,7 +420,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
 
 def test_engine_set_strip_routes_the_master_strip() -> None:
     frames = 256 * 16
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -474,7 +474,7 @@ def test_engine_set_strip_routes_the_master_strip() -> None:
 
 
 def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 5}, {"track_id": 7}])
         points = [AutomationPoint(ppq=0.0, value=-6.0)]
         # The retired positional encoding, for the lane that now holds track 7.
@@ -498,7 +498,7 @@ def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
 def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
     frames = 256 * 16
     source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -540,7 +540,7 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
 
 
 def test_realtime_engine_process_monitor_returns_separate_bus() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=16) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=16) as engine:
         plain = engine.process([[0.25] * 16, [-0.25] * 16])
         assert isinstance(plain, list)
         assert not isinstance(plain, EngineProcessWithMonitorResult)
@@ -561,7 +561,7 @@ def test_realtime_engine_process_monitor_returns_separate_bus() -> None:
 def _fader_blocks(**set_kwargs: bool) -> list[float]:
     """Last sample of each block after one fader write, with the given set_parameter options."""
     frames = 256 * 12
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -590,7 +590,7 @@ def test_set_parameter_smoothed_flag_defaults_to_the_immediate_write() -> None:
 
 def test_engine_track_strip_pan_and_send_setters() -> None:
     frames = 256 * 4
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -658,7 +658,7 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
     def energy(channel: list[float]) -> float:
         return sum(sample * sample for sample in channel)
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=block) as engine:
         engine.set_clips([clip])
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_strip(
@@ -686,7 +686,7 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
 
 def test_engine_bus_strip_pan_and_send_setters() -> None:
     frames = 256 * 4
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -752,7 +752,7 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
 
 
 def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         # A 5.1 bus rejects every pan setter outright (unknown and surround
         # buses share one generic failure), but keeps its EQ available.
         engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
@@ -777,7 +777,7 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
 def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
     frames = 256 * 16
     source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -824,7 +824,7 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
 
 
 def test_engine_track_lane_send_timing_is_optional() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
         # A ``send_timing`` token and an omitted one are both accepted. The engine
         # exposes no readback for the effective send timing, so this only asserts
@@ -849,7 +849,7 @@ def test_engine_track_lane_send_timing_is_optional() -> None:
 
 def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
     frames = 256 * 8
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_clips(
             [
                 EngineClip(
@@ -885,7 +885,7 @@ def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
 
 
 def test_track_solo_mute_after_a_project_timeline_is_coded_invalid_state() -> None:
-    with Project() as project, RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with Project() as project, RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         result = project.compile(with_timeline=True)
         assert result.timeline is not None
         with result.timeline as timeline:

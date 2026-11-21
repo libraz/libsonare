@@ -287,7 +287,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.POINTER(SonareBpmAnalysisResult),
     ]
@@ -327,7 +327,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.POINTER(SonareRhythmResult),
     ]
 
@@ -337,7 +337,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.POINTER(SonareDynamicsResult),
     ]
@@ -348,7 +348,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
@@ -479,8 +479,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.POINTER(SonareAnalyzeMelodyOptions),
         ctypes.POINTER(SonareMelodyResult),
@@ -495,7 +495,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
@@ -507,7 +507,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
@@ -519,7 +519,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
@@ -531,7 +531,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
@@ -548,7 +548,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
@@ -562,7 +562,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_float,
@@ -596,7 +596,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
@@ -613,7 +613,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
@@ -641,7 +641,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
@@ -685,15 +685,15 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(SonareStreamFrames),
     ]
-    lib.sonare_stream_analyzer_read_frames_u8.restype = ctypes.c_int32
-    lib.sonare_stream_analyzer_read_frames_u8.argtypes = [
+    lib.sonare_stream_analyzer_read_quantized_frames_u8.restype = ctypes.c_int32
+    lib.sonare_stream_analyzer_read_quantized_frames_u8.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareStreamQuantizeConfig),
         ctypes.c_size_t,
         ctypes.POINTER(SonareStreamFramesU8),
     ]
-    lib.sonare_stream_analyzer_read_frames_i16.restype = ctypes.c_int32
-    lib.sonare_stream_analyzer_read_frames_i16.argtypes = [
+    lib.sonare_stream_analyzer_read_quantized_frames_i16.restype = ctypes.c_int32
+    lib.sonare_stream_analyzer_read_quantized_frames_i16.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareStreamQuantizeConfig),
         ctypes.c_size_t,
@@ -713,7 +713,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_stream_analyzer_frame_count.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_frame_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_stream_analyzer_current_time_sec.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_current_time_sec.argtypes = [

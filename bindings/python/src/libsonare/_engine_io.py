@@ -89,7 +89,7 @@ def _plane_arrays(arrays: Sequence[Any], frame_count: int) -> list[np.ndarray]:
 class _EngineIoMixin:
     _capture_arrays: list[ctypes.Array[ctypes.c_float]]
     _capture_ptrs: ctypes.Array[Any] | None
-    _sample_rate: float
+    _sample_rate: int
 
     if TYPE_CHECKING:
 
@@ -653,12 +653,12 @@ class _EngineIoMixin:
         engine). Returns the band count the engine actually applied.
         """
         lib = _get_lib()
-        applied = ctypes.c_uint()
+        applied = ctypes.c_size_t()
         _check(
             lib.sonare_engine_configure_scope_telemetry(
                 self._require_handle(),
                 _to_c_int(interval_frames, "interval_frames"),
-                _to_c_uint(band_count, "band_count"),
+                _to_c_size_t(band_count, "band_count"),
                 ctypes.byref(applied),
             )
         )

@@ -63,7 +63,7 @@ def test_project_ppq_arguments_refuse_non_finite(bad: float) -> None:
 def test_resolve_instrument_automation_id_is_destination_first_and_refuses_unknown_name() -> None:
     from libsonare import RealtimeEngine, SonareValueError, SynthPatch
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_synth_instrument(SynthPatch(), destination_id=3)
         first = engine.resolve_instrument_automation_id(3, "gain")
         assert engine.resolve_instrument_automation_id(3, "gain") == first
@@ -76,7 +76,7 @@ def test_resolve_master_unknown_name_is_a_value_error() -> None:
     from libsonare import RealtimeEngine, SonareValueError
 
     with (
-        RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine,
+        RealtimeEngine(sample_rate=48000, max_block_size=128) as engine,
         pytest.raises(SonareValueError),
     ):
         engine.resolve_strip_automation_id("master", "noSuchParameter")
@@ -85,7 +85,7 @@ def test_resolve_master_unknown_name_is_a_value_error() -> None:
 def test_bounce_and_render_results_are_float32_arrays() -> None:
     from libsonare import EngineBounceOptions, RealtimeEngine
 
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.play()
         bounced = engine.bounce_offline(
             EngineBounceOptions(total_frames=256, block_size=128, num_channels=2)
@@ -93,7 +93,7 @@ def test_bounce_and_render_results_are_float32_arrays() -> None:
         assert isinstance(bounced.interleaved, np.ndarray)
         assert bounced.interleaved.dtype == np.float32
         assert bounced.interleaved.size == 512
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.play()
         planes = engine.render_offline([[0.0] * 256, [0.0] * 256], block_size=128)
         assert all(isinstance(p, np.ndarray) and p.dtype == np.float32 for p in planes)

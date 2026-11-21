@@ -47,7 +47,7 @@ def test_a_wrapped_sample_rate_is_refused_rather_than_read_as_a_smaller_one() ->
 
 def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> None:
     """The engine's ``c_uint32`` lookup key: a wrap reads a different marker."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_markers(
             [EngineMarker(1.0, id=11, name="intro"), EngineMarker(2.0, id=12, name="out")]
         )
@@ -59,7 +59,7 @@ def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> N
 
 def test_a_wrapped_cc_number_is_refused_rather_than_replacing_another_binding() -> None:
     """The ``c_uint8`` half: 256 + n aliases onto n and silently replaces its binding."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
         engine.bind_midi_cc(MidiCcBinding(cc_number=2, channel=0, param_id=42))
         assert engine.midi_cc_binding_count == 2  # positive control
@@ -76,7 +76,7 @@ def test_a_wrapped_cc_number_is_refused_rather_than_replacing_another_binding() 
 
 def test_a_wrapped_bus_id_or_insert_index_is_refused_rather_than_resolving_another_insert() -> None:
     """Two mixer parameters at once: a ``c_uint32`` id and a ``c_uint`` index."""
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 2, "gain_db": 0.0}])
         engine.set_bus_strip(1, scene_bus(_BUS_STRIP.format(bus=1)))
         engine.set_bus_strip(2, scene_bus(_BUS_STRIP.format(bus=2)))

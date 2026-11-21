@@ -61,7 +61,7 @@ def _mix_option_value(raw: object) -> object:
 def test_shared_marker_transaction_corpus(case: dict[str, Any]) -> None:
     initial = [_marker_value(raw) for raw in _CORPUS["marker_transaction"]["initial"]]
     candidate = [_marker_value(raw) for raw in case["markers"]]
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_markers(initial)
         before = _snapshot(engine)
         if case["accepted"]:

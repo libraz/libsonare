@@ -260,7 +260,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_polyphonic_frame_count.restype = ctypes.c_int32
     lib.sonare_polyphonic_frame_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_int32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_polyphonic_notes.restype = ctypes.c_int32
     lib.sonare_polyphonic_notes.argtypes = [

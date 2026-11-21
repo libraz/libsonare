@@ -28,14 +28,14 @@ from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
-SAMPLE_RATE = 48000.0
+SAMPLE_RATE = 48000
 BLOCK = 128
 DESTINATION = 3
 
 
 def _synth_engine(engine_mode: str) -> RealtimeEngine:
     """An engine with a NativeSynth on DESTINATION running ``engine_mode``."""
-    engine = RealtimeEngine(sample_rate=48000.0)
+    engine = RealtimeEngine(sample_rate=48000)
     engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
     engine.set_synth_instrument(SynthPatch(engine_mode=engine_mode), destination_id=DESTINATION)
     return engine
