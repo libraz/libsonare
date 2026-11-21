@@ -374,15 +374,15 @@ struct StreamingMasteringChainOptions {
   /// provided"; in that case an enabled loudness stage still throws.
   float loudness_static_gain_db = std::numeric_limits<float>::quiet_NaN();
 
-  /// True peak (dBFS) of the loudness stage's input, measured offline with the
+  /// True peak (dBTP) of the loudness stage's input, measured offline with the
   /// static gain (@ref StreamingLoudnessGain::true_peak_db). When finite, the static gain is
   /// clamped to
-  /// `(loudness.ceiling_dbtp - loudness_static_gain_peak_db) +
+  /// `(loudness.ceiling_dbtp - loudness_static_gain_peak_dbtp) +
   /// max(loudness.max_limiter_gain_reduction_db, 0)` so the streaming preview
   /// does not drive the loudness limiter harder than the offline chain (which
   /// applies the same clamp via `bound_loudness_gain_db`).
   /// NaN (the default) applies the static gain verbatim.
-  float loudness_static_gain_peak_db = std::numeric_limits<float>::quiet_NaN();
+  float loudness_static_gain_peak_dbtp = std::numeric_limits<float>::quiet_NaN();
 };
 
 /// @brief What StreamingMasteringChain::prepare accepts as a channel count: mono or stereo.
@@ -528,7 +528,7 @@ class StreamingMasteringChain {
 ///          every earlier enabled stage, which is where the offline chain
 ///          measures. Pass @ref loudness_static_gain_db and @ref true_peak_db as
 ///          StreamingMasteringChainOptions::loudness_static_gain_db and
-///          loudness_static_gain_peak_db.
+///          loudness_static_gain_peak_dbtp.
 struct StreamingLoudnessGain {
   /// Static gain (dB) the offline loudness stage would apply, ceiling-headroom
   /// bound included; 0 when the stage input is silent or below the absolute gate.

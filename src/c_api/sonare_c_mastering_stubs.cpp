@@ -871,13 +871,13 @@ SonareError sonare_streaming_mastering_chain_create(const char* config_json,
 
 SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
                                                        float loudness_static_gain_db,
-                                                       float loudness_static_gain_peak_db,
+                                                       float loudness_static_gain_peak_dbtp,
                                                        SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   (void)config_json;
   (void)loudness_static_gain_db;
-  (void)loudness_static_gain_peak_db;
+  (void)loudness_static_gain_peak_dbtp;
   set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
   return SONARE_ERROR_NOT_SUPPORTED;
 }

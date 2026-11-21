@@ -3315,3 +3315,13 @@ old = "SonareProjectTempoSegment.start_sample"
 removed = "drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0"
 domain = "project"
 rule = "options-struct"
+
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_db)"
+to = "sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_dbtp)"
+changed = "the true peak the static gain was computed for is named in dBTP, its unit"
+domain = "mastering"
+rule = "unit-in-name"
+test = "tests/mastering/streaming_loudness_gain_test.cpp::loudness_static_gain_peak_dbtp"

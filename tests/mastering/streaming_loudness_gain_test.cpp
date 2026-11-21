@@ -60,7 +60,7 @@ std::vector<std::vector<float>> render_streaming(const MasteringChainConfig& con
                                                  std::vector<std::vector<float>> input) {
   StreamingMasteringChainOptions options;
   options.loudness_static_gain_db = gain.loudness_static_gain_db;
-  options.loudness_static_gain_peak_db = gain.true_peak_db;
+  options.loudness_static_gain_peak_dbtp = gain.true_peak_db;
   StreamingMasteringChain chain(config, options);
   const int channel_count = static_cast<int>(input.size());
   chain.prepare(kSampleRate, kBlockSize, channel_count);

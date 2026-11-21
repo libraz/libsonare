@@ -240,7 +240,7 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
         ErrorCode::InvalidParameter,
         "StreamingMasteringChain does not support loudness without a precomputed static gain "
         "(whole-signal LUFS required); construct with StreamingMasteringChainOptions and supply "
-        "loudness_static_gain_db and loudness_static_gain_peak_db as measured at the loudness "
+        "loudness_static_gain_db and loudness_static_gain_peak_dbtp as measured at the loudness "
         "stage's input (the streaming loudness gain helper returns both)");
   }
 }
@@ -263,7 +263,7 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
     // the offline chain's loudness stage (bound_loudness_gain_db).
     const float gain_db = detail::bound_loudness_gain_db(
         options.loudness_static_gain_db, config_.loudness.ceiling_dbtp,
-        options.loudness_static_gain_peak_db, config_.loudness.max_limiter_gain_reduction_db);
+        options.loudness_static_gain_peak_dbtp, config_.loudness.max_limiter_gain_reduction_db);
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
     if (!numeric::finite(loudness_static_gain_linear_)) {
       throw SonareException(ErrorCode::InvalidParameter,

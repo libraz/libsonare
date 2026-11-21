@@ -331,7 +331,7 @@ struct SonareStreamingMasteringChain {
 
 SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
                                                        float loudness_static_gain_db,
-                                                       float loudness_static_gain_peak_db,
+                                                       float loudness_static_gain_peak_dbtp,
                                                        SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
@@ -349,7 +349,7 @@ SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
   } else {
     sonare::mastering::api::StreamingMasteringChainOptions options;
     options.loudness_static_gain_db = loudness_static_gain_db;
-    options.loudness_static_gain_peak_db = loudness_static_gain_peak_db;
+    options.loudness_static_gain_peak_dbtp = loudness_static_gain_peak_dbtp;
     chain = sonare::util::check::under_member("config", [&] {
       return std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
                                                                                options);

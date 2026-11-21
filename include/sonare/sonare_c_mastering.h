@@ -783,7 +783,7 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
 /// stage and measures there, so @c loudness_static_gain_db equals the gain the
 /// offline chain applies (ceiling clamp included) and @c true_peak_dbtp is the
 /// peak that clamp used. Pass them as @p loudness_static_gain_db and
-/// @p loudness_static_gain_peak_db of
+/// @p loudness_static_gain_peak_dbtp of
 /// @ref sonare_streaming_mastering_chain_create_ex. The gain is computed from
 /// the @c loudness.* params whether or not the stage is enabled.
 /// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
@@ -1106,9 +1106,9 @@ SonareError sonare_streaming_mastering_chain_create(const char* config_json,
 /// @ref sonare_streaming_loudness_gain returns) is applied per block
 /// before the loudness stage's true-peak limiter instead of throwing.
 /// Pass NaN to reproduce the fail-on-loudness behaviour of the non-_ex create.
-/// @param loudness_static_gain_peak_db True peak (dBFS) of the loudness stage's
+/// @param loudness_static_gain_peak_dbtp True peak (dBTP) of the loudness stage's
 ///        input the static gain was computed for. When finite, the static gain
-///        is clamped to `(ceiling_dbtp - peak_db) +
+///        is clamped to `(ceiling_dbtp - peak_dbtp) +
 ///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
 ///        not overdrive the loudness limiter harder than the offline chain
 ///        (which applies the same clamp). Pass NaN to apply the static gain
@@ -1118,7 +1118,7 @@ SonareError sonare_streaming_mastering_chain_create(const char* config_json,
 /// @return SONARE_OK, or the error code describing the failure.
 SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
                                                        float loudness_static_gain_db,
-                                                       float loudness_static_gain_peak_db,
+                                                       float loudness_static_gain_peak_dbtp,
                                                        SonareStreamingMasteringChain** out);
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
