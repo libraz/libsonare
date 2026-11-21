@@ -80,7 +80,7 @@ describe('construction', () => {
 
   it('compiles a timeline that callers cannot construct and that exposes no native id', () => {
     withProject((project) => {
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       expect(timeline).not.toBeNull();
       try {
         expect('nativeId' in (timeline as object)).toBe(false);
@@ -369,7 +369,7 @@ describe('compile and bounce', () => {
       expect(diagnostic.severity).toBe('warning');
       expect(diagnostic.message).toContain('MIDI');
 
-      const compiled = project.compileTimeline();
+      const compiled = project.compile({ withTimeline: true });
       try {
         expect(Object.keys(compiled).sort()).toEqual(['diagnostics', 'timeline']);
         expect(compiled.diagnostics.map((d) => d.code)).toEqual(['midiClipNoInstrument']);
@@ -447,26 +447,25 @@ describe('compile and bounce', () => {
     }
   });
 
-  it('binds each instrument kind through one plural method taking destination and instrument pairs', () => {
+  it('binds each instrument kind through bounce options taking destination and instrument pairs', () => {
     withProject((project) => {
       for (const name of [
-        'bounceWithBuiltinInstrument',
-        'bounceWithSynthInstrument',
-        'bounceWithSf2Instrument',
-        'bounceWithInstrument',
+        'bounceWithBuiltinInstruments',
+        'bounceWithSynthInstruments',
+        'bounceWithSf2Instruments',
+        'bounceWithInstruments',
       ]) {
         expect(name in project).toBe(false);
       }
       const pair = { destinationId: 0, instrument: { waveform: 'saw' as const } };
+      expect(() => project.bounce({ totalFrames: 128, builtinInstruments: pair as never })).toThrow(
+        TypeError,
+      );
+      expect(() => project.bounce({ totalFrames: 128, builtinInstruments: [pair] })).not.toThrow();
       expect(() =>
-        project.bounceWithBuiltinInstruments(pair as never, { totalFrames: 128 }),
-      ).toThrow(TypeError);
-      expect(() =>
-        project.bounceWithBuiltinInstruments([pair], { totalFrames: 128 }),
-      ).not.toThrow();
-      expect(() =>
-        project.bounceWithBuiltinInstruments([pair, { destinationId: 1, instrument: {} }], {
+        project.bounce({
           totalFrames: 128,
+          builtinInstruments: [pair, { destinationId: 1, instrument: {} }],
         }),
       ).not.toThrow();
       const peak = (r: { channels: Float32Array[] }) =>
@@ -474,16 +473,16 @@ describe('compile and bounce', () => {
       const midi = addMidiNote(project);
       expect(midi).toBeGreaterThan(0);
       const options = { totalFrames: 4096, numChannels: 2 };
-      const builtin = project.bounceWithBuiltinInstruments([pair], options);
+      const builtin = project.bounce({ ...options, builtinInstruments: [pair] });
       expect(builtin.channels).toHaveLength(2);
       expect(peak(builtin)).toBeGreaterThan(0);
       expect(
-        peak(project.bounceWithSynthInstruments([{ instrument: {} }], options)),
+        peak(project.bounce({ ...options, synthInstruments: [{ instrument: {} }] })),
       ).toBeGreaterThan(0);
-      const sf2 = project.bounceWithSf2Instruments(
-        [{ destinationId: 0, instrument: { gain: 0.8 } }],
-        options,
-      );
+      const sf2 = project.bounce({
+        ...options,
+        sf2Instruments: [{ destinationId: 0, instrument: { gain: 0.8 } }],
+      });
       expect(sf2.channels).toHaveLength(2);
       const external = {
         prepare() {},
@@ -494,21 +493,23 @@ describe('compile and bounce', () => {
           }
         },
       };
-      const called = project.bounceWithInstruments(
-        [{ destinationId: 0, instrument: external }],
-        options,
-      );
+      const called = project.bounce({
+        ...options,
+        instruments: [{ destinationId: 0, instrument: external }],
+      });
       expect(called.channels).toHaveLength(2);
       expect(called.sampleRate).toBe(SR);
       expect(peak(called)).toBeCloseTo(0.25, 6);
       expect(() =>
-        project.bounceWithBuiltinInstruments(
-          [{ destinationId: 0, instrument: { destinationId: 1, waveform: 'saw' } }] as never,
-          { totalFrames: 128 },
-        ),
+        project.bounce({
+          totalFrames: 128,
+          builtinInstruments: [
+            { destinationId: 0, instrument: { destinationId: 1, waveform: 'saw' } },
+          ] as never,
+        }),
       ).toThrow(
         new TypeError(
-          'Project.bounceWithBuiltinInstruments: unknown key instruments[0].instrument.destinationId (expected instruments[0].destinationId)',
+          'Project.bounce: unknown key builtinInstruments[0].instrument.destinationId (expected builtinInstruments[0].destinationId)',
         ),
       );
     });

@@ -120,14 +120,12 @@ function engineBounce(engine: RealtimeEngine): Float32Array {
 }
 
 function projectBounce(project: Project): Float32Array {
-  const result = project.bounceWithBuiltinInstruments(
-    [{ destinationId: DESTINATION, instrument: SYNTH }],
-    {
-      totalFrames: FRAMES,
-      blockSize: BLOCK_SIZE,
-      numChannels: 2,
-    },
-  );
+  const result = project.bounce({
+    builtinInstruments: [{ destinationId: DESTINATION, instrument: SYNTH }],
+    totalFrames: FRAMES,
+    blockSize: BLOCK_SIZE,
+    numChannels: 2,
+  });
   expect(result.sampleRate).toBe(SAMPLE_RATE);
   return interleave(result.channels);
 }
@@ -143,7 +141,7 @@ function peak(data: Float32Array): number {
 /** Binds a fresh instrument (so voice state cannot leak), compiles and applies. */
 function applyProject(engine: RealtimeEngine, project: Project): void {
   engine.setBuiltinInstrument(DESTINATION, SYNTH);
-  const { timeline } = project.compileTimeline();
+  const { timeline } = project.compile({ withTimeline: true });
   expect(timeline).toBeInstanceOf(ProjectTimeline);
   engine.applyProjectTimeline(timeline as ProjectTimeline);
   (timeline as ProjectTimeline).destroy();
@@ -173,7 +171,7 @@ describe('project timeline', () => {
   it('dispose is idempotent and a disposed timeline cannot be applied', () => {
     const { project } = buildProject();
     const engine = preparedEngine();
-    const { timeline } = project.compileTimeline();
+    const { timeline } = project.compile({ withTimeline: true });
     expect(timeline).not.toBeNull();
     timeline?.destroy();
     timeline?.destroy();
@@ -187,7 +185,7 @@ describe('project timeline', () => {
   it('refuses an apply while playing and leaves the engine usable', () => {
     const { project } = buildProject();
     const engine = preparedEngine();
-    const { timeline } = project.compileTimeline();
+    const { timeline } = project.compile({ withTimeline: true });
     engine.play();
     processBlock(engine);
     expect(engine.transportState().playing).toBe(true);
@@ -208,13 +206,31 @@ describe('project timeline', () => {
     const trackId = project.addTrack({ kind: 'audio' });
     // A clip whose audio source was never supplied cannot be compiled.
     project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
-    const result = project.compileTimeline();
+    const result = project.compile({ withTimeline: true });
     expect(result).not.toHaveProperty('hasTimeline');
     expect(result).not.toHaveProperty('timeline');
     expect(result.diagnostics.length).toBeGreaterThan(0);
     expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
     const plain = project.compile();
     expect(result.diagnostics).toEqual(plain.diagnostics);
+    project.destroy();
+  });
+
+  it('compile carries the timeline only when withTimeline is set', () => {
+    const { project } = buildProject();
+    const plain = project.compile();
+    expect(plain).not.toHaveProperty('timeline');
+    const off = project.compile({ withTimeline: false });
+    expect(off).not.toHaveProperty('timeline');
+    expect(off.diagnostics).toEqual(plain.diagnostics);
+    const withTimeline = project.compile({ withTimeline: true });
+    expect(withTimeline.timeline).toBeInstanceOf(ProjectTimeline);
+    expect(withTimeline.diagnostics).toEqual(plain.diagnostics);
+    withTimeline.timeline?.destroy();
+    expect(() => project.compile({ withTimeline: 1 } as never)).toThrow(
+      new TypeError('Project.compile: withTimeline must be a boolean'),
+    );
+    expect(() => project.compile({ bogus: true } as never)).toThrow(TypeError);
     project.destroy();
   });
 

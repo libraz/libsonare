@@ -35,19 +35,35 @@ function sceneWithBusEq(gainDb: number): string {
 }
 
 describe('RealtimeEngine', () => {
-  it('processWithMonitor returns output and monitor buses', () => {
+  it('process takes withMonitor as an option', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
-      const result = engine.processWithMonitor([
-        new Float32Array(16).fill(0.25),
-        new Float32Array(16).fill(-0.25),
-      ]);
+      const result = engine.process(
+        [new Float32Array(16).fill(0.25), new Float32Array(16).fill(-0.25)],
+        { withMonitor: true },
+      );
       expect(result.output).toHaveLength(2);
       expect(result.monitor).toHaveLength(2);
       expect(result.output[0][0]).toBeCloseTo(0.25);
       expect(result.output[1][0]).toBeCloseTo(-0.25);
       expect(result.monitor[0][0]).toBeCloseTo(0);
       expect(result.monitor[1][0]).toBeCloseTo(0);
+
+      const planes = [new Float32Array(16).fill(0.25), new Float32Array(16).fill(-0.25)];
+      const plain = engine.process(planes);
+      expect(Array.isArray(plain)).toBe(true);
+      expect((plain as unknown as { monitor?: unknown }).monitor).toBeUndefined();
+      expect(plain[0][0]).toBeCloseTo(0.25);
+      const off = engine.process(planes, { withMonitor: false } as never);
+      expect(Array.isArray(off)).toBe(true);
+      expect(off).toHaveLength(2);
+      expect(() => engine.process(planes, { withMonitor: 1 } as never)).toThrow(
+        new TypeError('withMonitor must be a boolean'),
+      );
+      expect(() => engine.process(planes, { withMonitor: true, extra: 1 } as never)).toThrow(
+        TypeError,
+      );
+      expect(() => engine.process(planes, 'monitor' as never)).toThrow(TypeError);
     } finally {
       engine.destroy();
     }
@@ -70,7 +86,7 @@ describe('RealtimeEngine', () => {
       engine.play();
       engine.setTrackMonitorMode(10, 'pfl', blockSize / 2);
 
-      const result = engine.processWithMonitor([new Float32Array(blockSize)]);
+      const result = engine.process([new Float32Array(blockSize)], { withMonitor: true });
       expect(result.output).toHaveLength(1);
       expect(result.monitor).toHaveLength(1);
       for (let i = 0; i < blockSize; i += 1) {

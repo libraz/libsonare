@@ -110,7 +110,7 @@ function bounceSynth(
   options: ProjectBounceOptions,
 ): Float32Array[] {
   const instrument = typeof patch === 'string' ? { preset: patch } : patch;
-  return project.bounceWithSynthInstruments([{ instrument }], options).channels;
+  return project.bounce({ ...options, synthInstruments: [{ instrument }] }).channels;
 }
 
 function peak(audio: Float32Array | Float32Array[]): number {
@@ -302,7 +302,7 @@ describe('NativeSynth preset catalog', () => {
   });
 });
 
-describe('Project.bounceWithSynthInstrument', () => {
+describe('Project.bounce with synthInstruments', () => {
   it('renders preset patches deterministically', () => {
     const project = buildMidiOnlyProject();
     try {
@@ -526,10 +526,10 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildMidiOnlyProject();
     try {
       expect(() =>
-        project.bounceWithSynthInstruments('sawLead' as never, { totalFrames: 128 }),
+        project.bounce({ totalFrames: 128, synthInstruments: 'sawLead' as never }),
       ).toThrow(TypeError);
       expect(() =>
-        project.bounceWithSynthInstruments([{ preset: 'sawLead' }] as never, { totalFrames: 128 }),
+        project.bounce({ totalFrames: 128, synthInstruments: [{ preset: 'sawLead' }] as never }),
       ).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -807,8 +807,9 @@ describe('SynthPatch.engineParams', () => {
     // Several bindings each keep their own keys alive.
     const project = buildMidiOnlyProject();
     try {
-      const audio = project.bounceWithSynthInstruments(
-        [
+      const audio = project.bounce({
+        totalFrames: 24000,
+        synthInstruments: [
           {
             destinationId: 0,
             instrument: { engineMode: 'bowedString', engineParams: { bowForce: 0.9 } },
@@ -818,8 +819,7 @@ describe('SynthPatch.engineParams', () => {
             instrument: { engineMode: 'bowedString', engineParams: { bowForce: 0.2 } },
           },
         ],
-        { totalFrames: 24000 },
-      );
+      });
       expect(peak(audio.channels)).toBeGreaterThan(0);
     } finally {
       project.destroy();

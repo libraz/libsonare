@@ -10951,28 +10951,28 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.bounceWithBuiltinInstrument"
-new = "Project.bounceWithBuiltinInstruments"
+removed = "Call bounce({ ...options, builtinInstruments: [...] })."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSynthInstrument"
-new = "Project.bounceWithSynthInstruments"
+removed = "Call bounce({ ...options, synthInstruments: [...] })."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSf2Instrument"
-new = "Project.bounceWithSf2Instruments"
+removed = "Call bounce({ ...options, sf2Instruments: [...] })."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithInstrument"
-new = "Project.bounceWithInstruments"
+removed = "Call bounce({ ...options, instruments: [...] })."
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -11097,38 +11097,6 @@ test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
 
 [[entry]]
 kind = "method"
-old = "Project.bounceWithBuiltinInstruments"
-changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
-domain = "project"
-rule = "one-entry-per-operation"
-test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
-
-[[entry]]
-kind = "method"
-old = "Project.bounceWithSynthInstruments"
-changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
-domain = "project"
-rule = "one-entry-per-operation"
-test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
-
-[[entry]]
-kind = "method"
-old = "Project.bounceWithSf2Instruments"
-changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
-domain = "project"
-rule = "one-entry-per-operation"
-test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
-
-[[entry]]
-kind = "method"
-old = "Project.bounceWithInstruments"
-changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
-domain = "project"
-rule = "one-entry-per-operation"
-test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
-
-[[entry]]
-kind = "method"
 old = "Project.renameTrack"
 changed = "name is required"
 domain = "project"
@@ -11226,7 +11194,7 @@ test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp mo
 [[entry]]
 kind = "method"
 old = "Project.compile"
-changed = "returns { diagnostics } only, with named codes and severities"
+changed = "returns { diagnostics } with named codes and severities, plus timeline when withTimeline is set"
 domain = "project"
 rule = "typed-results"
 test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
@@ -11234,10 +11202,9 @@ test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics
 [[entry]]
 kind = "method"
 old = "Project.compileTimeline"
-changed = "returns { diagnostics, timeline } only"
+removed = "Call compile({ withTimeline: true }); the result then also carries timeline."
 domain = "project"
-rule = "typed-results"
-test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
@@ -11307,7 +11274,7 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "ProjectCompileResult.hasTimeline"
-removed = "Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compileTimeline() returns the timeline itself."
+removed = "Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself."
 domain = "project"
 rule = "typed-results"
 
@@ -11349,7 +11316,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "field"
 old = "ExternalInstrument.destinationId"
-removed = "Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none."
+removed = "Pass destinationId beside instrument in the pair given to bounce({ instruments }), { destinationId, instrument }; the instrument itself carries none."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -14755,7 +14722,7 @@ test = "bindings/node/tests/surface/engine.test.ts::takes one config object with
 [[entry]]
 kind = "method"
 old = "ProjectTimeline.constructor"
-removed = "not constructible; get a timeline from Project.compileTimeline() and install it with RealtimeEngine.applyProjectTimeline()"
+removed = "not constructible; get a timeline from Project.compile({ withTimeline: true }) and install it with RealtimeEngine.applyProjectTimeline()"
 domain = "project"
 rule = "construction"
 
@@ -14822,23 +14789,16 @@ rule = "individual"
 test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
 
 [[entry]]
-kind = "field"
-old = "ProjectCompileTimelineResult.hasTimeline"
-removed = "Test timeline !== null on the result."
+kind = "type"
+old = "ProjectCompileTimelineResult"
+removed = "Use ProjectCompileResult; compile({ withTimeline: true }) fills its timeline."
 domain = "project"
-rule = "typed-results"
-
-[[entry]]
-kind = "field"
-old = "ProjectCompileTimelineResult.messages"
-removed = "Read diagnostics, an array of ProjectDiagnostic, and use each entry's message."
-domain = "project"
-rule = "typed-results"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
 old = "BuiltinInstrumentConfig.destinationId"
-removed = "Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounceWithBuiltinInstruments or setBuiltinInstrument(destinationId, config)."
+removed = "Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounce({ builtinInstruments }) or setBuiltinInstrument(destinationId, config)."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -15333,14 +15293,6 @@ kind = "field"
 old = "SidechainCheck.reason"
 changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
 domain = "engine"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/result-absence-types.test.ts::the engine and project checks"
-
-[[entry]]
-kind = "field"
-old = "ProjectCompileTimelineResult.timeline"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
-domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/result-absence-types.test.ts::the engine and project checks"
 
@@ -18902,3 +18854,38 @@ changed = "renamed with realtimeVoiceChangerRender; the fields are unchanged"
 domain = "effects"
 rule = "type-names"
 test = "bindings/node/tests/surface/effects-voice.test.ts::realtimeVoiceChangerRender is request-only and planar"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.processWithMonitor"
+removed = "Call process(channels, { withMonitor: true })."
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithBuiltinInstruments"
+removed = "Call bounce({ ...options, builtinInstruments: [...] })."
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSynthInstruments"
+removed = "Call bounce({ ...options, synthInstruments: [...] })."
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSf2Instruments"
+removed = "Call bounce({ ...options, sf2Instruments: [...] })."
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithInstruments"
+removed = "Call bounce({ ...options, instruments: [...] })."
+domain = "project"
+rule = "one-entry-per-operation"

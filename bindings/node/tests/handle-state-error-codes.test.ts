@@ -133,7 +133,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
     try {
       const track = project.addTrack({ kind: 'midi' });
       project.addClip({ trackId: track, isMidi: true, startPpq: 0, lengthPpq: 4 });
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       expect(timeline).not.toBeNull();
       timeline?.destroy();
       const error = capture(() => engine.applyProjectTimeline(timeline as ProjectTimeline));

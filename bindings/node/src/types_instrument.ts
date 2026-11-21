@@ -14,7 +14,7 @@ export type SynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 
 /**
  * Patch for the built-in minimal polyphonic oscillator synth used by
- * {@link Project.bounceWithBuiltinInstruments}. An omitted field takes the library
+ * {@link ProjectBounceOptions.builtinInstruments}. An omitted field takes the library
  * default, so an empty object is the default sine patch; a given value is read
  * literally and refused outside its range, never clamped or replaced.
  */
@@ -58,7 +58,7 @@ export interface ExternalInstrumentEvent {
 }
 
 /**
- * A JavaScript instrument driven during {@link Project.bounceWithInstruments}.
+ * A JavaScript instrument driven during a {@link Project.bounce} with `instruments`.
  * Only `render` is required. Every callback runs synchronously on the calling
  * thread and must not return a Promise.
  */
@@ -87,7 +87,7 @@ export interface ExternalInstrument {
 
 /**
  * Patch for the GS-compatible SoundFont player used by
- * {@link Project.bounceWithSf2Instruments} and
+ * {@link ProjectBounceOptions.sf2Instruments} and
  * {@link RealtimeEngine.setSf2Instrument}. An omitted field takes the library
  * default; a given value is read literally and refused outside its range.
  */
@@ -550,7 +550,7 @@ export type MpeDimension = (typeof MPE_DIMENSIONS)[number];
 export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
 
 /**
- * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstruments} and
+ * Versioned NativeSynth patch for {@link ProjectBounceOptions.synthInstruments} and
  * {@link RealtimeEngine.setSynthInstrument}.
  *
  * The patch starts from a BASE — the named `preset` (see
@@ -581,7 +581,7 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
 export interface SynthPatch {
   /**
    * Follow incoming GM bank/program changes and route channel 10 through the
-   * GM drum map, for offline project bounces ({@link Project.bounceWithSynthInstruments})
+   * GM drum map, for offline project bounces ({@link ProjectBounceOptions.synthInstruments})
    * and for {@link RealtimeEngine.setSynthInstrument} alike. Defaults to
    * `false`, preserving the fixed-patch behavior. This is a binding option,
    * not a NativeSynth patch field.

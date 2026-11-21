@@ -22,7 +22,7 @@ import type {
   NoteSegmentsRequest,
   PitchCorrectOptions,
   PitchCorrectTimevaryingRequest,
-  ProjectCompileTimelineResult,
+  ProjectCompileResult,
   ProjectTimeline,
   RenderNotesRequest,
   SidechainCheck,
@@ -88,9 +88,7 @@ describe('result records type an unmeasured value as an absent field', () => {
 
   it('the engine and project checks', () => {
     expectTypeOf<SidechainCheck['reason']>().toEqualTypeOf<SidechainRefusal | undefined>();
-    expectTypeOf<ProjectCompileTimelineResult['timeline']>().toEqualTypeOf<
-      ProjectTimeline | undefined
-    >();
+    expectTypeOf<ProjectCompileResult['timeline']>().toEqualTypeOf<ProjectTimeline | undefined>();
   });
 });
 

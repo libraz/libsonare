@@ -1368,6 +1368,10 @@ const PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS = keySet(
   'blockSize',
   'numChannels',
   'instrumentLatencySamples',
+  'instruments',
+  'builtinInstruments',
+  'synthInstruments',
+  'sf2Instruments',
 );
 const PROJECT_TEMPO_OPTION_KEYS = [
   'adaptiveTempo',
@@ -1390,10 +1394,8 @@ export const REQUEST_KEYS = {
   partRig: PROJECT_PART_RIG_KEY_REQUEST_KEYS,
   clearPartRig: PROJECT_PART_RIG_KEY_REQUEST_KEYS,
   bounce: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
-  bounceWithBuiltinInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
-  bounceWithSynthInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
-  bounceWithSf2Instruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
-  bounceWithInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  compile: keySet('withTimeline'),
+  process: keySet('withMonitor'),
   addClip: keySet(
     'trackId',
     'isMidi',

@@ -30,10 +30,10 @@ type NativeSampleBank = InstanceType<typeof addon.SampleBank>;
  * const index = bank.addSample(samples, { rootKey: 60, sourceRate: 44100 });
  * bank.addZone({ sampleIndex: index });  // the whole keyboard
  *
- * const audio = project.bounceWithSynthInstruments(
- *   [{ instrument: { engineMode: 'sample', sampleSet: 0, sampleBank: bank } }],
- *   { totalFrames: 24000 },
- * );
+ * const audio = project.bounce({
+ *   totalFrames: 24000,
+ *   synthInstruments: [{ instrument: { engineMode: 'sample', sampleSet: 0, sampleBank: bank } }],
+ * });
  * ```
  */
 @entryClass('SampleBank')

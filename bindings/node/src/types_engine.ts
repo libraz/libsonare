@@ -543,7 +543,13 @@ export interface EngineCaptureStatus {
   recordOffsetSamples: number;
 }
 
-/** Program and monitor output from {@link RealtimeEngine.processWithMonitor}. */
+/** Options for {@link RealtimeEngine.process}. */
+export interface EngineProcessOptions {
+  /** Also return the monitor (cue/listen) bus. Default `false`. */
+  withMonitor?: boolean;
+}
+
+/** Program and monitor output from {@link RealtimeEngine.process} with `withMonitor: true`. */
 export interface EngineProcessWithMonitorResult {
   /** Program (main mix) output, one buffer per plane. */
   output: Float32Array[];

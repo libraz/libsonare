@@ -89,10 +89,11 @@ describe('Project SoundFont (SF2) binding', () => {
         midiNoteOn({ ppq: 0.05, group: 0, channel: 0, note: 52, velocity: 110 }),
         midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 52, velocity: 0 }),
       ]);
-      const out = project.bounceWithSf2Instruments(
-        [{ destinationId: 0, instrument: { gain: 1, clearBankRig } }],
-        { totalFrames: 48000, numChannels: 2 },
-      );
+      const out = project.bounce({
+        totalFrames: 48000,
+        numChannels: 2,
+        sf2Instruments: [{ destinationId: 0, instrument: { gain: 1, clearBankRig } }],
+      });
       project.destroy();
       return out.channels;
     };
@@ -107,40 +108,38 @@ describe('Project SoundFont (SF2) binding', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in
     // synthesizer GM fallback is the data-free floor.
-    const fallback = project.bounceWithSf2Instruments([{ instrument: {} }], {
+    const fallback = project.bounce({
       totalFrames: 4096,
       numChannels: 2,
+      sf2Instruments: [{ instrument: {} }],
     });
     expect(peak(fallback.channels)).toBeGreaterThan(0.01);
 
     project.loadSoundFont(sf2Bytes);
     const bound = { destinationId: 0, instrument: { gain: 1 } };
-    const rendered = project.bounceWithSf2Instruments([bound], {
-      totalFrames: 4096,
-      numChannels: 2,
-    });
+    const rendered = project.bounce({ totalFrames: 4096, numChannels: 2, sf2Instruments: [bound] });
     const audio = rendered.channels;
     expect(audio.map((plane) => plane.length)).toEqual([4096, 4096]);
     expect(peak(audio)).toBeGreaterThan(0.01);
 
     // Deterministic: a second bounce is bit-identical.
-    const again = project.bounceWithSf2Instruments([bound], { totalFrames: 4096, numChannels: 2 });
+    const again = project.bounce({ totalFrames: 4096, numChannels: 2, sf2Instruments: [bound] });
     expect(again.channels).toEqual(audio);
 
     // Program 0 is a dedicated piano model. The opt-in must bypass the
     // loaded Piano 1 preset, while the default above remains SF2-first.
-    const modeled = project.bounceWithSf2Instruments(
-      [{ destinationId: 0, instrument: { gain: 1, preferModelForModeledFamilies: true } }],
-      { totalFrames: 4096, numChannels: 2 },
-    );
+    const modeled = project.bounce({
+      totalFrames: 4096,
+      numChannels: 2,
+      sf2Instruments: [
+        { destinationId: 0, instrument: { gain: 1, preferModelForModeledFamilies: true } },
+      ],
+    });
     expect(peak(modeled.channels)).toBeGreaterThan(0.01);
     expect(modeled.channels).not.toEqual(audio);
 
     // An explicitly empty bindings array renders silence.
-    const silent = project.bounceWithSf2Instruments([], {
-      totalFrames: 2048,
-      numChannels: 2,
-    });
+    const silent = project.bounce({ totalFrames: 2048, numChannels: 2, sf2Instruments: [] });
     expect(peak(silent.channels)).toBe(0);
     project.destroy();
   });
@@ -222,9 +221,10 @@ describe('SF2 instrument gsEfxRealization', () => {
     engine.destroy();
     const project = new Project();
     expect(() =>
-      project.bounceWithSf2Instruments([{ instrument: { gsEfxRealization: 'vintage' as never } }], {
+      project.bounce({
         totalFrames: 128,
         numChannels: 2,
+        sf2Instruments: [{ instrument: { gsEfxRealization: 'vintage' as never } }],
       }),
     ).toThrow(/gsEfxRealization/);
     project.destroy();

@@ -161,7 +161,7 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     withEngine((engine) => engine.drainExternalMidi(v as number)),
   engine_process: (_s, v) =>
     withHandle(new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 }), (engine) =>
-      engine.processWithMonitor(v as Float32Array[]),
+      engine.process(v as Float32Array[], { withMonitor: true }),
     ),
   engine_resolve_master_automation_id: (_s, v) =>
     withEngine((engine) => engine.resolveStripAutomationId('master', v as never)),

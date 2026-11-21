@@ -27,8 +27,6 @@ import {
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type {
-  BuiltinSynthConfig,
-  ExternalInstrument,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   PartRigEntry,
@@ -53,8 +51,8 @@ import type {
   ProjectClipMoveOptions,
   ProjectClipTake,
   ProjectClipTakesOptions,
+  ProjectCompileOptions,
   ProjectCompileResult,
-  ProjectCompileTimelineResult,
   ProjectDiagnostic,
   ProjectInstrumentBinding,
   ProjectKeySegment,
@@ -81,7 +79,6 @@ import type {
   ProjectTrackKind,
   ProjectTranscribeRequest,
   ProjectWarpMode,
-  Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
 } from './types.js';
@@ -104,6 +101,7 @@ import {
   assertU32,
   C_INT_MAX,
   requestObject,
+  requireBoolean,
   sampleOneShot,
 } from './validation.js';
 import {
@@ -260,11 +258,7 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
 }
 
 /** Render settings the native bounce reads. */
-function bounceSettings(
-  requestName: BounceFn,
-  options: ProjectBounceOptions | undefined,
-): Record<string, unknown> {
-  const request = requestObject(requestName, options ?? {}, 'options', true);
+function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> {
   const native: Record<string, unknown> = {};
   const totalFrames = optionalNonZero(request.totalFrames, 'totalFrames', Number.MAX_SAFE_INTEGER);
   const blockSize = optionalNonZero(request.blockSize, 'blockSize', C_INT_MAX);
@@ -284,28 +278,22 @@ function bounceSettings(
   return native;
 }
 
-type BounceFn =
-  | 'bounce'
-  | 'bounceWithBuiltinInstruments'
-  | 'bounceWithSynthInstruments'
-  | 'bounceWithSf2Instruments'
-  | 'bounceWithInstruments';
-
 /**
- * Resolve the bindings of a `bounceWith*Instruments` call to the list the native
+ * Resolve one instrument list of a bounce to the list the native
  * layer reads: each pair's `destinationId` is folded into a copy of its instrument.
  * Anything but an array of pairs is a `TypeError`.
  */
 function bindInstruments<T extends object>(
+  list: string,
   value: readonly ProjectInstrumentBinding<T>[],
   entry: (instrument: T) => T,
   withDestination: (instrument: T, destinationId: number) => T,
 ): T[] {
   if (!Array.isArray(value)) {
-    throw refuseType(`instruments must be an array of { destinationId?, instrument } pairs`);
+    throw refuseType(`${list} must be an array of { destinationId?, instrument } pairs`);
   }
   return value.map((pair: unknown, index: number) => {
-    const label = `instruments[${index}]`;
+    const label = `${list}[${index}]`;
     const binding = instrumentBinding(pair, label);
     const instrument = binding.instrument as T;
     const resolved = entry(instrument);
@@ -507,7 +495,7 @@ let createTimeline: (native: InstanceType<typeof addon.ProjectTimeline>) => Proj
 
 /**
  * Immutable compiled playback snapshot of a {@link Project}, produced by
- * {@link Project.compileTimeline} and installed with
+ * {@link Project.compile} with `withTimeline: true` and installed with
  * {@link RealtimeEngine.applyProjectTimeline}. The native handle is not
  * garbage-collected, so release it with {@link destroy} (or `using`). It cannot
  * be constructed directly.
@@ -518,7 +506,9 @@ export class ProjectTimeline {
 
   private constructor(token: symbol, native: InstanceType<typeof addon.ProjectTimeline>) {
     if (token !== TIMELINE_TOKEN) {
-      throw refuseType('ProjectTimeline cannot be constructed; use Project.compileTimeline()');
+      throw refuseType(
+        'ProjectTimeline cannot be constructed; use Project.compile({ withTimeline: true })',
+      );
     }
     this.nativeTimeline = native;
     setTimelineHandle(this, native);
@@ -580,7 +570,7 @@ export class Project {
   private get native(): NativeProject {
     if (this.instrumentBounceActive) {
       throw invalidState(
-        'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
+        'Project is busy: it cannot be used from inside a bounce instrument callback',
       );
     }
     return this.handle;
@@ -1477,18 +1467,24 @@ export class Project {
 
   // -- compile / render --
 
-  /** Compile the project into an RT-readable timeline, surfacing diagnostics. */
-  compile(): ProjectCompileResult {
-    return { diagnostics: diagnosticsFromNative(this.native.compile().diagnostics) };
-  }
-
   /**
-   * Compile the project and keep the resulting timeline. Returns the same
-   * diagnostics as {@link compile} plus `timeline`, which is absent when
-   * compilation produced none. Install it with {@link RealtimeEngine.applyProjectTimeline};
-   * later project edits do not change an already compiled timeline.
+   * Compile the project into an RT-readable timeline, surfacing diagnostics.
+   *
+   * With `withTimeline: true` the result also carries `timeline`, absent when compilation
+   * produced none. Install it with {@link RealtimeEngine.applyProjectTimeline}; later project
+   * edits do not change an already compiled timeline.
    */
-  compileTimeline(): ProjectCompileTimelineResult {
+  compile(options?: ProjectCompileOptions): ProjectCompileResult {
+    if (options === undefined) {
+      return { diagnostics: diagnosticsFromNative(this.native.compile().diagnostics) };
+    }
+    const request = requestObject('compile', options, 'options', true);
+    const withTimeline = isAbsent(request.withTimeline)
+      ? false
+      : requireBoolean(request.withTimeline, 'withTimeline');
+    if (!withTimeline) {
+      return { diagnostics: diagnosticsFromNative(this.native.compile().diagnostics) };
+    }
     const raw = this.native.compile(true);
     const diagnostics = diagnosticsFromNative(raw.diagnostics);
     return raw.timeline === null
@@ -1518,107 +1514,68 @@ export class Project {
    * Omitting `options.totalFrames` derives the render length from the arrangement
    * rather than producing an empty render.
    *
-   * MIDI tracks routed to a destination render as silence here, because no
-   * instrument is bound. To audition MIDI through the built-in synth, use
-   * {@link bounceWithBuiltinInstruments}.
+   * MIDI tracks routed to a destination no instrument list binds render as
+   * silence. Bind instruments with `builtinInstruments` (built-in oscillator
+   * synth), `synthInstruments` (patch-driven NativeSynth), `sf2Instruments`
+   * (GS-compatible SoundFont players fed by {@link loadSoundFont}) or
+   * `instruments` (JavaScript instruments); an empty list
+   * renders silence. A destination bound twice, within one list or across
+   * lists, is refused.
+   *
+   * Every `instruments` callback runs synchronously on the calling thread while
+   * this method is blocked, so a callback that returns a Promise is refused with
+   * a `TypeError`. A callback that throws stops all further callbacks, and the
+   * bounce rethrows that first error once it returns (a native failure is
+   * reported ahead of it). While the bounce runs, using this project from inside
+   * a callback (a mutation, a nested bounce, or `destroy`) throws `InvalidState`.
+   * One instrument shared by tracks that feed different channel strips throws a
+   * `SonareError` with `NOT_SUPPORTED`; bind one destination per strip instead.
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
-    const native = bounceSettings('bounce', options);
-    return planarBounce(this.native.bounce(native), this.sampleRate);
-  }
-
-  /**
-   * Like {@link bounce}, but drives MIDI tracks routed to a destination through
-   * instruments you implement in JavaScript. Each pair binds an
-   * {@link ExternalInstrument} to its `destinationId` (default `0`).
-   *
-   * Every callback runs synchronously on the calling thread while this method
-   * is blocked, so there is no async instrument: a callback that returns a
-   * Promise is refused with a `TypeError`. A callback that throws stops all
-   * further callbacks, and the bounce rethrows that first error once it
-   * returns (a native failure is reported ahead of it). The `outputs` passed to
-   * `render` are zero-filled scratch arrays, added into the engine's buffers
-   * when `render` returns normally.
-   *
-   * While the bounce runs, using this project from inside a callback (a
-   * mutation, a nested bounce, or `destroy`) throws `InvalidState`.
-   *
-   * One instrument shared by tracks that feed different channel strips throws
-   * a `SonareError` with `NOT_SUPPORTED`, because callback audio carries no
-   * source-track attribution; bind one destination per strip instead.
-   */
-  bounceWithInstruments(
-    instruments: readonly ProjectInstrumentBinding<ExternalInstrument>[] = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const fnName = 'bounceWithInstruments';
-    const settings = bounceSettings(fnName, options);
-    const bindings = bindInstruments(instruments, (i) => i, withDestinationLayer);
+    const request = requestObject('bounce', options ?? {}, 'options', true);
+    const settings = bounceSettings(request);
+    const builtin =
+      request.builtinInstruments === undefined
+        ? undefined
+        : bindInstruments(
+            'builtinInstruments',
+            request.builtinInstruments,
+            (i) => {
+              refuseBuiltinSynthOrdinals(i);
+              return i;
+            },
+            withDestinationCopy,
+          );
+    const synth =
+      request.synthInstruments === undefined
+        ? undefined
+        : bindInstruments(
+            'synthInstruments',
+            request.synthInstruments,
+            (i) => normalizeSynthInstrument(i) as SynthPatch,
+            withDestinationCopy,
+          );
+    const sf2 =
+      request.sf2Instruments === undefined
+        ? undefined
+        : bindInstruments('sf2Instruments', request.sf2Instruments, (i) => i, withDestinationCopy);
+    const callbacks =
+      request.instruments === undefined
+        ? undefined
+        : bindInstruments('instruments', request.instruments, (i) => i, withDestinationLayer);
     const native = this.native;
+    if (callbacks === undefined) {
+      return planarBounce(native.bounce(settings, builtin, synth, sf2), native.getSampleRate());
+    }
     this.instrumentBounceActive = true;
     try {
       return planarBounce(
-        native.bounce(settings, undefined, undefined, undefined, bindings),
+        native.bounce(settings, builtin, synth, sf2, callbacks),
         native.getSampleRate(),
       );
     } finally {
       this.instrumentBounceActive = false;
     }
-  }
-
-  /**
-   * Like {@link bounce}, but renders MIDI tracks routed to a destination
-   * through the built-in oscillator synth so a MIDI-only arrangement bounces
-   * to audible audio. Each pair binds a {@link BuiltinSynthConfig} patch to a
-   * `destinationId` (default `0`). An empty
-   * array renders silence, identical to {@link bounce}.
-   */
-  bounceWithBuiltinInstruments(
-    instruments: readonly ProjectInstrumentBinding<BuiltinSynthConfig>[] = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const fnName = 'bounceWithBuiltinInstruments';
-    const settings = bounceSettings(fnName, options);
-    const bindings = bindInstruments(
-      instruments,
-      (i) => {
-        refuseBuiltinSynthOrdinals(i);
-        return i;
-      },
-      withDestinationCopy,
-    );
-    const native = this.native;
-    return planarBounce(native.bounce(settings, bindings), native.getSampleRate());
-  }
-
-  /**
-   * Like {@link bounce}, but renders MIDI tracks routed to a destination through
-   * the patch-driven NativeSynth — the full synthesizer (every
-   * {@link SynthEngineMode} engine plus the realism layer; the modes are
-   * enumerated by {@link SYNTH_ENGINE_MODES}). Each pair binds a {@link SynthPatch}
-   * to a `destinationId` (default `0`). Name a
-   * catalog preset with `preset` (see {@link synthPresetNames}). A patch may also
-   * set `useGmPrograms: true` to follow incoming GM bank/program changes (and use
-   * the GM drum map on channel 10); it defaults to `false`, preserving the
-   * fixed-patch behavior. An `engineMode: 'sample'` patch also takes a
-   * `sampleBank` ({@link SampleBank}) holding the PCM its keymap names.
-   * `useGmPrograms` and `sampleBank` are JS binding conveniences, not part of the
-   * NativeSynth patch itself. An empty array renders silence. Unknown preset names
-   * throw. Deterministic for a fixed project + options + patch.
-   */
-  bounceWithSynthInstruments(
-    instruments: readonly ProjectInstrumentBinding<SynthPatch>[] = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const fnName = 'bounceWithSynthInstruments';
-    const settings = bounceSettings(fnName, options);
-    const bindings = bindInstruments(
-      instruments,
-      (i) => normalizeSynthInstrument(i) as SynthPatch,
-      withDestinationCopy,
-    );
-    const native = this.native;
-    return planarBounce(native.bounce(settings, undefined, bindings), native.getSampleRate());
   }
 
   /**
@@ -1650,30 +1607,6 @@ export class Project {
    */
   soundFontManifest(): Sf2ProgramStatus[] {
     return this.native.soundFontManifest();
-  }
-
-  /**
-   * Like {@link bounceWithBuiltinInstruments}, but each bound destination
-   * renders through a GS-compatible SoundFont player fed by the project's
-   * loaded SoundFont ({@link loadSoundFont}): 16 MIDI channels per player,
-   * channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx resets
-   * honored. Programs the SoundFont does not cover — including bouncing with
-   * no SoundFont loaded at all — play through the built-in synthesizer GM
-   * fallback bank (the data-free floor; see {@link soundFontManifest} for the
-   * per-program backend). An empty array renders silence.
-   */
-  bounceWithSf2Instruments(
-    instruments: readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[] = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const fnName = 'bounceWithSf2Instruments';
-    const settings = bounceSettings(fnName, options);
-    const bindings = bindInstruments(instruments, (i) => i, withDestinationCopy);
-    const native = this.native;
-    return planarBounce(
-      native.bounce(settings, undefined, undefined, bindings),
-      native.getSampleRate(),
-    );
   }
 
   /** Release the underlying native project. Idempotent. */

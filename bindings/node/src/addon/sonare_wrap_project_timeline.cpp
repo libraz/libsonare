@@ -35,7 +35,8 @@ ProjectTimelineWrap::ProjectTimelineWrap(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsExternal()) {
-    Napi::TypeError::New(env, "ProjectTimeline is created by Project.compileTimeline()")
+    Napi::TypeError::New(env,
+                         "ProjectTimeline is created by Project.compile({ withTimeline: true })")
         .ThrowAsJavaScriptException();
     return;
   }

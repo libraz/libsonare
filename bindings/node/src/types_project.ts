@@ -2,6 +2,12 @@
 // below, and to the bank module, which names these types back.
 import type { ProjectTimeline } from './project.js';
 import type { MidiFxConfig } from './types_engine.js';
+import type {
+  BuiltinSynthConfig,
+  ExternalInstrument,
+  Sf2InstrumentConfig,
+  SynthPatch,
+} from './types_instrument.js';
 import type { AutomationCurve } from './types_mixing.js';
 
 /**
@@ -482,19 +488,22 @@ export interface ProjectDiagnostic {
   readonly message: string;
 }
 
+/** Options for {@link Project.compile}. */
+export interface ProjectCompileOptions {
+  /**
+   * Also keep the compiled timeline as `timeline` on the result. Default `false`, which
+   * leaves `timeline` absent.
+   */
+  withTimeline?: boolean;
+}
+
 /** Result of {@link Project.compile}. */
 export interface ProjectCompileResult {
   /** Every diagnostic the compile produced; empty when it was clean. */
   readonly diagnostics: readonly ProjectDiagnostic[];
-}
-
-/** Result of {@link Project.compileTimeline}. */
-export interface ProjectCompileTimelineResult {
-  /** Every diagnostic the compile produced; empty when it was clean. */
-  readonly diagnostics: readonly ProjectDiagnostic[];
   /**
-   * The compiled playback snapshot; absent when compilation produced none
-   * (see `diagnostics`). Owned by the caller: destroy it when done.
+   * The compiled playback snapshot. Present only when `withTimeline: true` was given and
+   * compilation produced one (see `diagnostics`). Owned by the caller: destroy it when done.
    */
   readonly timeline?: ProjectTimeline;
 }
@@ -604,9 +613,16 @@ export interface ProjectAutoTempoRequest extends ProjectAnalyzeTempoRequest {
 export type ProjectAutoTempoOptions = Omit<ProjectAutoTempoRequest, 'samples' | 'sampleRate'>;
 
 /**
- * Options for {@link Project.bounce} and the `bounceWith*Instruments` methods.
- * Omit a field for its default; an explicit `0` on `totalFrames`, `blockSize` or
- * `numChannels` is a `RangeError`.
+ * Options for {@link Project.bounce}. Omit a field for its default; an explicit `0` on
+ * `totalFrames`, `blockSize` or `numChannels` is a `RangeError`.
+ *
+ * Each instrument list binds instruments to MIDI destinations. MIDI tracks routed to a
+ * destination no list binds render as silence. A destination bound twice, within one list
+ * or across lists, is refused. Every callback of `instruments` runs synchronously on the
+ * calling thread while the bounce is blocked, so a callback that returns a Promise is
+ * refused with a `TypeError`; a callback that throws stops all further callbacks and the
+ * bounce rethrows that first error once it returns. While it runs, using the project from
+ * inside a callback (a mutation, a nested bounce, or `destroy`) throws `InvalidState`.
  */
 export interface ProjectBounceOptions {
   /**
@@ -626,6 +642,20 @@ export interface ProjectBounceOptions {
   numChannels?: number;
   /** Host-instrument plugin delay compensation, in samples, fed to the compiler. Default 0. */
   instrumentLatencySamples?: number;
+  /** Instruments you implement in JavaScript, one {@link ExternalInstrument} per destination. */
+  instruments?: readonly ProjectInstrumentBinding<ExternalInstrument>[];
+  /** Built-in oscillator synth patches ({@link BuiltinSynthConfig}), one per destination. */
+  builtinInstruments?: readonly ProjectInstrumentBinding<BuiltinSynthConfig>[];
+  /**
+   * Patch-driven NativeSynth patches ({@link SynthPatch}), one per destination. A patch names
+   * a catalog preset with `preset`, and may set `useGmPrograms` and `sampleBank`.
+   */
+  synthInstruments?: readonly ProjectInstrumentBinding<SynthPatch>[];
+  /**
+   * GS-compatible SoundFont players ({@link Sf2InstrumentConfig}) fed by the loaded SoundFont
+   * ({@link Project.loadSoundFont}), one per destination.
+   */
+  sf2Instruments?: readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[];
 }
 
 /** Planar audio rendered by {@link Project.bounce}. */
@@ -637,8 +667,8 @@ export interface ProjectBounceResult {
 }
 
 /**
- * One instrument bound to a MIDI destination for a `bounceWith*Instruments`
- * call. An omitted `destinationId` is destination `0`, which is a real id.
+ * One instrument bound to a MIDI destination for a {@link Project.bounce}
+ * instrument list. An omitted `destinationId` is destination `0`, which is a real id.
  */
 export interface ProjectInstrumentBinding<T> {
   /** MIDI destination id the instrument renders (see {@link Project.setTrackMidiDestination}). Default `0`. */

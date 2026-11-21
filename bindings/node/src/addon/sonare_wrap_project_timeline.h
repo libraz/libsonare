@@ -7,7 +7,7 @@
 /// @brief N-API ObjectWrap over the opaque compiled-timeline handle
 ///        (@ref SonareProjectTimeline).
 ///
-/// Only @c Project.compileTimeline() creates one (through @ref Wrap). The C
+/// Only @c Project.compile({ withTimeline: true }) creates one (through @ref Wrap). The C
 /// handle is not GC-aware: @ref Destroy is the deterministic release the facade
 /// exposes as `dispose()`, and the destructor is the finalizer backstop. An
 /// engine the timeline was applied to keeps its own reference, so disposing

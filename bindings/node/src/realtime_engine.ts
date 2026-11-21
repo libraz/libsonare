@@ -44,6 +44,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineProcessOptions,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineSetParameterOptions,
@@ -721,13 +722,7 @@ function requireName(value: unknown, argName: string): string {
  * `TypeError` / `RangeError`; every other failure is a coded {@link SonareError}.
  * A full command queue throws `SonareError` with `OutOfMemory`.
  */
-@entryClass('RealtimeEngine', [
-  'process',
-  'processWithMonitor',
-  'assertTrackSource',
-  'resolvePunch',
-  'laneIndexOf',
-])
+@entryClass('RealtimeEngine', ['process', 'assertTrackSource', 'resolvePunch', 'laneIndexOf'])
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
   private disposed = false;
@@ -1200,7 +1195,7 @@ export class RealtimeEngine {
   }
 
   /**
-   * Install a timeline compiled by {@link Project.compileTimeline}, all or
+   * Install a timeline compiled by {@link Project.compile} with `withTimeline: true`, all or
    * nothing. Stopped transport only: a playing engine throws and is left
    * unchanged, as does any validation failure. The timeline replaces tempo and
    * time-signature segments, markers, track lanes, automation lanes, clips and
@@ -1936,18 +1931,26 @@ export class RealtimeEngine {
    * buffers are never mutated: the addon copies each plane before adding engine
    * output. Pass zero-filled planes when the engine is the only audio source.
    */
-  process(channels: Float32Array[]): Float32Array[] {
-    return this.native.process(channels);
-  }
-
+  process(channels: Float32Array[]): Float32Array[];
   /**
-   * Renders one block in place like {@link process}, and also returns the monitor (cue/listen) bus output.
+   * Renders one block like the plain form, and also returns the monitor (cue/listen) bus output.
    * Audio thread only; each plane must not exceed the prepared block size.
    *
    * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
    */
-  processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
-    return this.native.process(channels, true);
+  process(channels: Float32Array[], options: { withMonitor: true }): EngineProcessWithMonitorResult;
+  process(
+    channels: Float32Array[],
+    options?: EngineProcessOptions,
+  ): Float32Array[] | EngineProcessWithMonitorResult {
+    if (options === undefined) {
+      return this.native.process(channels);
+    }
+    const request = requestObject('process', options, 'options', true);
+    const withMonitor = isAbsent(request.withMonitor)
+      ? false
+      : requireBoolean(request.withMonitor, 'withMonitor');
+    return withMonitor ? this.native.process(channels, true) : this.native.process(channels);
   }
 
   /**
@@ -2218,7 +2221,7 @@ export class RealtimeEngine {
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
    * is a {@link SynthPatch} (a preset is named by its `preset` field, e.g.
    * `{ preset: 'sawLead' }`; see {@link synthPresetNames}), resolving exactly
-   * like {@link Project.bounceWithSynthInstruments}. Live note/CC commands and
+   * like {@link ProjectBounceOptions.synthInstruments}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
    *

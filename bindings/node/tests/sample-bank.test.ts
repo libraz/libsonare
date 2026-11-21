@@ -67,10 +67,10 @@ function withBank<T>(body: (bank: SampleBank) => T): T {
 function renderNote(bank: SampleBank | undefined, note: number): Float32Array[] {
   const project = buildNoteProject(note);
   try {
-    return project.bounceWithSynthInstruments(
-      [{ instrument: { engineMode: 'sample', sampleBank: bank } }],
-      { totalFrames: TOTAL_FRAMES },
-    ).channels;
+    return project.bounce({
+      totalFrames: TOTAL_FRAMES,
+      synthInstruments: [{ instrument: { engineMode: 'sample', sampleBank: bank } }],
+    }).channels;
   } finally {
     project.destroy();
   }
@@ -306,11 +306,11 @@ describe('bouncing a project through a sample patch', () => {
     const project = buildNoteProject(60);
     try {
       expect(() =>
-        project.bounceWithSynthInstruments(
-          // @ts-expect-error the bank is deliberately the wrong type.
-          [{ instrument: { engineMode: 'sample', sampleBank: { addSample: () => 0 } } }],
-          { totalFrames: 128 },
-        ),
+        project.bounce({
+          totalFrames: 128,
+          synthInstruments: // @ts-expect-error the bank is deliberately the wrong type.
+            [{ instrument: { engineMode: 'sample', sampleBank: { addSample: () => 0 } } }],
+        }),
       ).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -357,28 +357,33 @@ describe('bouncing a project through a sample patch', () => {
       bank.addZone({ sampleIndex: 0 });
       const project = buildNoteProject(60);
       try {
-        const plain = project.bounceWithSynthInstruments(
-          [{ instrument: { engineMode: 'sample', sampleBank: bank } }],
-          { totalFrames: TOTAL_FRAMES },
-        ).channels;
-        const quiet = project.bounceWithSynthInstruments(
-          [{ instrument: { engineMode: 'sample', sampleBank: bank, sampleLevel: 0.1 } }],
-          { totalFrames: TOTAL_FRAMES },
-        ).channels;
+        const plain = project.bounce({
+          totalFrames: TOTAL_FRAMES,
+          synthInstruments: [{ instrument: { engineMode: 'sample', sampleBank: bank } }],
+        }).channels;
+        const quiet = project.bounce({
+          totalFrames: TOTAL_FRAMES,
+          synthInstruments: [
+            { instrument: { engineMode: 'sample', sampleBank: bank, sampleLevel: 0.1 } },
+          ],
+        }).channels;
         expect(peak(plain)).toBeGreaterThan(0);
         expect(peak(quiet)).toBeLessThan(peak(plain));
 
         // A keymap set the bank does not have is silent, not an error.
-        const missingSet = project.bounceWithSynthInstruments(
-          [{ instrument: { engineMode: 'sample', sampleBank: bank, sampleSet: 5 } }],
-          { totalFrames: TOTAL_FRAMES },
-        ).channels;
+        const missingSet = project.bounce({
+          totalFrames: TOTAL_FRAMES,
+          synthInstruments: [
+            { instrument: { engineMode: 'sample', sampleBank: bank, sampleSet: 5 } },
+          ],
+        }).channels;
         expect(peak(missingSet)).toBe(0);
 
         // The three enum spellings resolve; a bad one is rejected by name.
         for (const sampleLoop of ['default', 'none', 'continuous', 'keyDown'] as const) {
-          const audio = project.bounceWithSynthInstruments(
-            [
+          const audio = project.bounce({
+            totalFrames: TOTAL_FRAMES,
+            synthInstruments: [
               {
                 instrument: {
                   engineMode: 'sample',
@@ -388,16 +393,15 @@ describe('bouncing a project through a sample patch', () => {
                 },
               },
             ],
-            { totalFrames: TOTAL_FRAMES },
-          ).channels;
+          }).channels;
           expect(peak(audio)).toBeGreaterThan(0);
         }
         expect(() =>
-          project.bounceWithSynthInstruments(
-            // @ts-expect-error deliberately unknown loop mode name.
-            [{ instrument: { engineMode: 'sample', sampleBank: bank, sampleLoop: 'ping-pong' } }],
-            { totalFrames: 128 },
-          ),
+          project.bounce({
+            totalFrames: 128,
+            synthInstruments: // @ts-expect-error deliberately unknown loop mode name.
+              [{ instrument: { engineMode: 'sample', sampleBank: bank, sampleLoop: 'ping-pong' } }],
+          }),
         ).toThrow(/sample loop mode/);
       } finally {
         project.destroy();

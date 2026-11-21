@@ -1037,10 +1037,11 @@ describe('Project native binding', () => {
 
   it('bounces MIDI through the built-in synth to non-silent audio (instrument-first)', () => {
     const project = buildMidiOnlyProject();
-    const audio = project.bounceWithBuiltinInstruments(
-      [{ destinationId: 0, instrument: { waveform: 'saw', gain: 0.5 } }],
-      { totalFrames: 4096, numChannels: 2 },
-    );
+    const audio = project.bounce({
+      totalFrames: 4096,
+      numChannels: 2,
+      builtinInstruments: [{ destinationId: 0, instrument: { waveform: 'saw', gain: 0.5 } }],
+    });
     expect(audio.channels).toHaveLength(2);
     expect(audio.channels[0]).toHaveLength(4096);
     expect(peak(audio)).toBeGreaterThan(0);
@@ -1053,67 +1054,72 @@ describe('Project native binding', () => {
     // This facade binds the minimal oscillator synth. The NativeSynth patch
     // vocabulary (preset, ampSustain, filterSustain) is not read here, so only
     // the oscillator fields are exercised.
-    const base = project.bounceWithBuiltinInstruments(
-      [{ instrument: { waveform: 'saw' } }],
-      options,
-    );
+    const base = project.bounce({
+      ...options,
+      builtinInstruments: [{ instrument: { waveform: 'saw' } }],
+    });
     for (const field of ['gain', 'attackMs', 'decayMs', 'sustain', 'releaseMs']) {
       expect(() =>
-        project.bounceWithBuiltinInstruments(
-          [{ instrument: { waveform: 'saw', [field]: 0 } }],
-          options,
-        ),
+        project.bounce({
+          ...options,
+          builtinInstruments: [{ instrument: { waveform: 'saw', [field]: 0 } }],
+        }),
       ).toThrow(RangeError);
     }
     expect(() =>
-      project.bounceWithBuiltinInstruments(
-        [{ instrument: { waveform: 'saw', polyphony: 0 } }],
-        options,
-      ),
+      project.bounce({
+        ...options,
+        builtinInstruments: [{ instrument: { waveform: 'saw', polyphony: 0 } }],
+      }),
     ).toThrow(/polyphony must be an integer in \[1, 64\]/);
     // Guard against a vacuous pass: a non-default value must move the render,
     // otherwise the refusals above could hold for an unrelated reason.
-    const moved = project.bounceWithBuiltinInstruments(
-      [{ instrument: { waveform: 'saw', sustain: 0.1 } }],
-      options,
-    );
+    const moved = project.bounce({
+      ...options,
+      builtinInstruments: [{ instrument: { waveform: 'saw', sustain: 0.1 } }],
+    });
     expect(moved).not.toEqual(base);
     project.destroy();
   });
 
   it('accepts a waveform alias in a binding and an explicit bindings array', () => {
     const project = buildMidiOnlyProject();
-    const byName = project.bounceWithBuiltinInstruments([{ instrument: { waveform: 'sine' } }], {
+    const byName = project.bounce({
       totalFrames: 2048,
       numChannels: 1,
+      builtinInstruments: [{ instrument: { waveform: 'sine' } }],
     });
     expect(peak(byName)).toBeGreaterThan(0);
 
-    const byAlias = project.bounceWithBuiltinInstruments(
-      [{ instrument: { waveform: 'sawtooth' } }],
-      { totalFrames: 2048, numChannels: 1 },
-    );
+    const byAlias = project.bounce({
+      totalFrames: 2048,
+      numChannels: 1,
+      builtinInstruments: [{ instrument: { waveform: 'sawtooth' } }],
+    });
     expect(peak(byAlias)).toBeGreaterThan(0);
 
-    const byArray = project.bounceWithBuiltinInstruments(
-      [{ destinationId: 0, instrument: { waveform: 'square' } }],
-      { totalFrames: 2048, numChannels: 1 },
-    );
+    const byArray = project.bounce({
+      totalFrames: 2048,
+      numChannels: 1,
+      builtinInstruments: [{ destinationId: 0, instrument: { waveform: 'square' } }],
+    });
     expect(peak(byArray)).toBeGreaterThan(0);
 
     // A bare waveform name or a bare config is not a binding.
     const loose = project as unknown as {
-      bounceWithBuiltinInstruments(...args: unknown[]): unknown;
+      bounce(...args: unknown[]): unknown;
     };
-    expect(() => loose.bounceWithBuiltinInstruments('sine')).toThrow(TypeError);
-    expect(() => loose.bounceWithBuiltinInstruments([{ waveform: 'sine' }])).toThrow(TypeError);
+    expect(() => loose.bounce({ builtinInstruments: 'sine' })).toThrow(TypeError);
+    expect(() => loose.bounce({ builtinInstruments: [{ waveform: 'sine' }] })).toThrow(TypeError);
     project.destroy();
   });
 
   it('auto-derives the render length when options/totalFrames is omitted (instrument-first)', () => {
     const project = buildMidiOnlyProject();
     // Pass only the instrument; options defaults to {} and length auto-derives.
-    const audio = project.bounceWithBuiltinInstruments([{ instrument: { waveform: 'triangle' } }]);
+    const audio = project.bounce({
+      builtinInstruments: [{ instrument: { waveform: 'triangle' } }],
+    });
     expect(audio.channels[0].length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
@@ -1125,7 +1131,7 @@ describe('Project native binding', () => {
     // lets portable code share that name (tsc validates the alias accepts the
     // same shape as BuiltinInstrumentConfig).
     const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
-    const audio = project.bounceWithBuiltinInstruments([{ instrument: patch }]);
+    const audio = project.bounce({ builtinInstruments: [{ instrument: patch }] });
     expect(audio.channels[0].length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
@@ -1134,11 +1140,13 @@ describe('Project native binding', () => {
   it('rejects an unknown built-in synth waveform name', () => {
     const project = buildMidiOnlyProject();
     expect(() =>
-      project.bounceWithBuiltinInstruments([
-        {
-          instrument: { waveform: 'noise' as unknown as 'sine' },
-        },
-      ]),
+      project.bounce({
+        builtinInstruments: [
+          {
+            instrument: { waveform: 'noise' as unknown as 'sine' },
+          },
+        ],
+      }),
     ).toThrow(/sawtooth/);
     project.destroy();
   });
@@ -1159,12 +1167,14 @@ describe('Project native binding', () => {
     for (const waveform of [0, 3, 4, -1, Number.NaN]) {
       const project = buildMidiOnlyProject();
       expect(() =>
-        project.bounceWithBuiltinInstruments([
-          {
-            instrument: { waveform: waveform as unknown as 'sine' },
-          },
-        ]),
-      ).toThrow(new TypeError('Project.bounceWithBuiltinInstruments: waveform must be a name'));
+        project.bounce({
+          builtinInstruments: [
+            {
+              instrument: { waveform: waveform as unknown as 'sine' },
+            },
+          ],
+        }),
+      ).toThrow(new TypeError('Project.bounce: waveform must be a name'));
       project.destroy();
     }
   });

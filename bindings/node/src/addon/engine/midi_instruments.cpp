@@ -142,7 +142,7 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
 // Binds the patch-driven NativeSynth to a realtime MIDI destination:
 //   setSynthInstrument(destinationId, patch)
 // where `patch` is a SynthPatch object or a preset-name string ("sawLead" /
-// "va:sawLead"), resolving exactly like Project.bounceWithSynthInstruments. A
+// "va:sawLead"), resolving exactly like Project.bounce synthInstruments. A
 // sample patch carries its bank as the descriptor's `sampleBank`, the same key
 // the bounce reads; the engine takes a share of it. `useGmPrograms` follows
 // incoming GM bank/program changes and routes channel 10 through the GM drum
