@@ -64,7 +64,6 @@ import {
   assertInt32,
   assertInt64,
   assertPitchClass,
-  assertPositiveInteger,
   assertSampleRate,
   requestObject,
   requestOnly,
@@ -1273,8 +1272,6 @@ export function analyzeTimbre(...args: unknown[]): TimbreResult {
   return withEntry('analyzeTimbre', () => {
     const request = audioCall<AnalyzeTimbreRequest>('analyzeTimbre', args);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nMels ?? 128, 'nMels');
-    assertPositiveInteger(request.nMfcc ?? 13, 'nMfcc');
     return addon.analyzeTimbre(
       request.samples,
       request.sampleRate,

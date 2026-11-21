@@ -11,6 +11,7 @@
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
@@ -816,15 +817,18 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   int n_fft{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   int n_mels{};
-  if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   int n_mfcc{};
-  if (!OptionalIntArg(env, info, 5, "nMfcc", 13, &n_mfcc)) return env.Undefined();
   float window_sec{};
-  if (!OptionalFloatArg(env, info, 6, "windowSec", 0.5f, &window_sec)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "nFft", 2048, sonare::kTimbreCountDomain, &n_fft) ||
+      !OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kTimbreCountDomain, &hop_length) ||
+      !OptionalDomainArg(env, info, 4, "nMels", 128, sonare::kTimbreCountDomain, &n_mels) ||
+      !OptionalDomainArg(env, info, 5, "nMfcc", 13, sonare::kTimbreCountDomain, &n_mfcc) ||
+      !OptionalDomainArg(env, info, 6, "windowSec", 0.5f, sonare::kTimbreWindowSecDomain,
+                         &window_sec)) {
+    return env.Undefined();
+  }
 
   SonareTimbreResult timbre{};
   SonareError err = sonare_analyze_timbre(data, length, sample_rate, n_fft, hop_length, n_mels,

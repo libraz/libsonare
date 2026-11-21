@@ -137,11 +137,6 @@ const FLOAT_FIELDS: FloatField[] = [
     key: 'startBpm',
     run: (v) => analyzeRhythm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: 60, bpmMax: 200, startBpm: v }),
   },
-  {
-    entry: 'analyzeTimbre',
-    key: 'windowSec',
-    run: (v) => analyzeTimbre(REFUSAL_AUDIO, REFUSAL_SR, { windowSec: v }),
-  },
 ];
 
 /**
@@ -163,6 +158,13 @@ const DOMAIN_FIELDS: Array<FloatField & { domain: string; holds: (value: number)
     domain: 'must be finite and at least 0',
     holds: (value) => value >= 0,
   },
+  {
+    entry: 'analyzeTimbre',
+    key: 'windowSec',
+    run: (v) => analyzeTimbre(REFUSAL_AUDIO, REFUSAL_SR, { windowSec: v }),
+    domain: 'must be finite and greater than 0',
+    holds: (value) => value > 0,
+  },
 ];
 
 beforeAll(async () => {
@@ -173,7 +175,7 @@ describe('every converted quick-detailed float parameter refuses a value the flo
   it('covers one field per formerly-plain-float quick-detailed parameter', () => {
     // A field dropped from the table stops being covered without anything
     // going red, which is the one way this file could quietly shrink.
-    expect(FLOAT_FIELDS).toHaveLength(7);
+    expect(FLOAT_FIELDS).toHaveLength(6);
     const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
     expect(new Set(ids).size).toBe(ids.length);
   });

@@ -121,11 +121,12 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
 val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
                       const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val,
                       const val& window_sec_val) {
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
-  const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kTimbreCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kTimbreCountDomain);
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kTimbreCountDomain);
+  const int n_mfcc = domainNumberFromVal<int>(n_mfcc_val, "nMfcc", kTimbreCountDomain);
+  const float window_sec =
+      domainNumberFromVal<float>(window_sec_val, "windowSec", kTimbreWindowSecDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimbreConfig config;
