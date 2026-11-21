@@ -522,7 +522,7 @@ Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackI
   uint32_t destination_id = 0;
   bool external = false;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !RequiredBoolArg(env, info, 1, "external", &external)) {
+      !RequiredBoolArg(env, info, 1, "midiDestinationExternal", &external)) {
     return env.Undefined();
   }
   ThrowIfError(
@@ -536,7 +536,7 @@ Napi::Value RealtimeEngineWrap::SetExternalMidiClockEnabled(const Napi::Callback
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   bool enabled = false;
-  if (!RequiredBoolArg(env, info, 0, "enabled", &enabled)) return env.Undefined();
+  if (!RequiredBoolArg(env, info, 0, "externalMidiClockEnabled", &enabled)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_external_midi_clock_enabled(engine_, enabled ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

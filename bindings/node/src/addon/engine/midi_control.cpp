@@ -188,7 +188,7 @@ Napi::Value RealtimeEngineWrap::SetControllerVelocityMeaningful(const Napi::Call
   uint32_t destination_id = 0;
   bool meaningful = false;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !RequiredBoolArg(env, info, 1, "meaningful", &meaningful)) {
+      !RequiredBoolArg(env, info, 1, "controllerVelocityMeaningful", &meaningful)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_controller_velocity_meaningful(engine_, destination_id,

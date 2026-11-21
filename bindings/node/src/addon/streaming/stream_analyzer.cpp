@@ -292,7 +292,7 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   size_t offset = 0;
-  if (!NonNegativeSizeTArg(env, info, 1, "sampleOffset", &offset)) return env.Undefined();
+  if (!NonNegativeSizeTArg(env, info, 1, "startSample", &offset)) return env.Undefined();
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   analyzer_->process(typed.Data(), typed.ElementLength(), offset);
   return env.Undefined();
@@ -362,7 +362,7 @@ Napi::Value StreamAnalyzerWrap::Reset(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
   size_t base_offset = 0;
   if (info.Length() >= 1 && !info[0].IsUndefined() &&
-      !NonNegativeSizeTArg(env, info, 0, "baseOffset", &base_offset)) {
+      !NonNegativeSizeTArg(env, info, 0, "startSample", &base_offset)) {
     return env.Undefined();
   }
   analyzer_->reset(base_offset);

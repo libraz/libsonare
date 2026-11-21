@@ -1296,7 +1296,10 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badTransportArguments: [
       { argument: 'destinationId', call: (e) => e.setControllerVelocityMeaningful('x', true) },
-      { argument: 'meaningful', call: (e) => e.setControllerVelocityMeaningful(0, 'x') },
+      {
+        argument: 'controllerVelocityMeaningful',
+        call: (e) => e.setControllerVelocityMeaningful(0, 'x'),
+      },
     ],
   },
   {
@@ -1333,14 +1336,14 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badTransportArguments: [
       { argument: 'destinationId', call: (e) => e.setMidiDestinationExternal('x', true) },
-      { argument: 'external', call: (e) => e.setMidiDestinationExternal(0, 'x') },
+      { argument: 'midiDestinationExternal', call: (e) => e.setMidiDestinationExternal(0, 'x') },
     ],
   },
   {
     name: 'RealtimeEngine.setExternalMidiClockEnabled',
     missingRequired: [],
     badTransportArguments: [
-      { argument: 'enabled', call: (e) => e.setExternalMidiClockEnabled('x') },
+      { argument: 'externalMidiClockEnabled', call: (e) => e.setExternalMidiClockEnabled('x') },
     ],
   },
   {

@@ -136,11 +136,11 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (!info[0].IsArray()) {
-    Napi::TypeError::New(env, "leftChannels must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "leftInputs must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsArray()) {
-    Napi::TypeError::New(env, "rightChannels must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "rightInputs must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -148,7 +148,7 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Array right_input = info[1].As<Napi::Array>();
   const size_t count = left_input.Length();
   if (right_input.Length() != count) {
-    Napi::RangeError::New(env, "leftChannels and rightChannels must have the same length")
+    Napi::RangeError::New(env, "leftInputs and rightInputs must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -175,7 +175,10 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
     Napi::Value left_value = left_input.Get(index);
     Napi::Value right_value = right_input.Get(index);
     if (!IsFloat32Array(left_value) || !IsFloat32Array(right_value)) {
-      Napi::TypeError::New(env, "all channels must be Float32Array").ThrowAsJavaScriptException();
+      const char* side = IsFloat32Array(left_value) ? "rightInputs" : "leftInputs";
+      Napi::TypeError::New(
+          env, std::string(side) + "[" + std::to_string(index) + "] must be a Float32Array")
+          .ThrowAsJavaScriptException();
       return env.Undefined();
     }
     left_arrays.push_back(left_value.As<Napi::Float32Array>());
@@ -183,7 +186,7 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
     if (left_arrays.back().ElementLength() != right_arrays.back().ElementLength()) {
       const std::string at = "[" + std::to_string(index) + "]";
       Napi::RangeError::New(
-          env, "leftChannels" + at + " and rightChannels" + at + " must have the same length")
+          env, "leftInputs" + at + " and rightInputs" + at + " must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

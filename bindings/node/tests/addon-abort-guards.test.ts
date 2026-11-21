@@ -160,6 +160,10 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Instance method on PlaybackRenderer, which needs a configured renderer; its inChannels rejection is driven by playback.test.ts.',
   ],
   [
+    'processSilence',
+    'Instance method on PlaybackRenderer, which needs a configured renderer; its frames rejection is driven by playback.test.ts.',
+  ],
+  [
     'readGoniometerLatest',
     'Instance method on Mixer, which needs a configured strip and a running meter; covered by metering-and-scale.test.ts.',
   ],
