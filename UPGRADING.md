@@ -3010,13 +3010,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.resample(targetSr)` | `Audio.resample(targetSampleRate)` |
+| `Audio.timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
 | `Audio.timeStretch` | timeStretch(options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>) |
-
-#### Handles are released with destroy() and close()
-
-| 1.x | 2.0.0 |
-|---|---|
-| `Audio.destroy` | every read after destroy throws SonareError InvalidState |
 
 #### Seconds are spelled Sec and _sec
 
@@ -3101,6 +3096,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.chroma` | takes (options?: Omit<ChromaRequest,'samples'\|'sampleRate'>) |
 | `Audio.detectOnsets` | takes (options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>) |
 | `Audio.harmonic` | harmonic(options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>) |
+| `Audio.hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
+| `Audio.hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>) |
 | `Audio.melSpectrogram(fmax)` | removed: pass it as fmaxHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(fmin)` | removed: pass it as fminHz in MelSpectrogramRequest |
@@ -3116,6 +3113,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.mfcc(nMfcc)` | removed: pass nMfcc as a field of MfccRequest |
 | `Audio.mfcc` | takes (options?: Omit<MfccRequest,'samples'\|'sampleRate'>) |
 | `Audio.nnlsChroma` | takes (options?: Omit<NnlsChromaRequest,'samples'\|'sampleRate'>) |
+| `Audio.normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `Audio.normalize` | normalize(options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>) |
 | `Audio.noteMove` | noteMove(options?: NoteMoveOptions) |
 | `Audio.noteStretch` | noteStretch(options: NoteStretchOptions) |
@@ -3123,6 +3121,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.onsetEnvelope(nFft)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ nFft }). |
 | `Audio.onsetEnvelope(nMels)` | removed: the Matrix2D input carries it as rows / cols |
 | `Audio.percussive` | percussive(options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>) |
+| `Audio.pitchCorrectToMidi(currentMidi)` | removed: pass currentMidi as a field of PitchCorrectToMidiRequest |
+| `Audio.pitchCorrectToMidi(targetMidi)` | removed: pass targetMidi as a field of PitchCorrectToMidiRequest |
 | `Audio.pitchCorrectToMidi` | pitchCorrectToMidi({ currentMidi, targetMidi }) takes one options object replacing pitchCorrectToMidi(currentMidi = 69, targetMidi = 69) |
 | `Audio.pitchPyin(fmax)` | removed: Pass it as f0MaxHz in the options object: audio.pitchPyin({ f0MaxHz }). |
 | `Audio.pitchPyin(fmin)` | removed: Pass it as f0MinHz in the options object: audio.pitchPyin({ f0MinHz }). |
@@ -3158,6 +3158,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
 | `Audio.stftDb` | takes (options?: Omit<StftDbRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft` | takes (options?: Omit<StftRequest,'samples'\|'sampleRate'>) |
+| `Audio.trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `Audio.trim` | trim(options?: Omit<TrimRequest,'samples'\|'sampleRate'>) |
 | `Audio.voiceChange` | voiceChange(options?: VoiceChangeOptions) |
 | `Audio.zeroCrossingRate(frameLength)` | removed: pass frameLength as a field of ZeroCrossingRateRequest |
@@ -3210,6 +3211,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
+| `Audio.masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
+| `Audio.masterAudio(preset)` | removed: pass preset as a field of MasterAudioRequest |
 | `Audio.masterAudio` | masterAudio(options: OptionsOf<MasterAudioRequest>): MasteringChainResult; options must give preset or overrides |
 | `Audio.melSpectrogram(htk)` | removed: pass htk as a field of MelSpectrogramRequest |
 | `Audio.mfcc(htk)` | removed: pass htk as a field of MfccRequest |
@@ -3220,6 +3224,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `Audio.pitchShift` | pitchShift(options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>) |
 
 #### Historical aliases are removed
@@ -3745,7 +3750,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `segmentPathEnhance` | returns Matrix2D |
 | `segmentRecurrenceMatrix` | returns Matrix2D |
 | `segmentRecurrenceToLag` | returns Matrix2D |
-| `stftDb` | returns Matrix2D |
+| `stftDb` | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
 | `tonnetz` | returns Matrix2D |
 
 #### Public types never expose Wasm* names
@@ -3753,10 +3758,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `cyclicTempogram` | returns Matrix2D |
-| `frameSignal` | returns Matrix2D |
+| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
 | `nnlsChroma` | returns Matrix2D |
 | `tempogram` | returns Matrix2D |
-| `trimSilence` | returns TrimResult |
+| `trimSilence` | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
 
 #### Progress is an onProgress option, not a separate function
 
@@ -3764,7 +3769,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AnalyzeWithProgressRequest` | removed: use AnalyzeRequest, which carries onProgress |
 | `analyzeWithProgress` | removed: call analyze with onProgress in the request, for example analyze({ samples, sampleRate, onProgress }) |
-| `analyze` | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean |
+| `analyze` | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean; sampleRate is required (1.x defaulted to 22050) |
 
 #### librosa-mirror functions default to librosa's values
 
@@ -3793,8 +3798,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PlpRequest.tempoMax` | `PlpRequest.bpmMax` |
 | `PlpRequest.tempoMin` | `PlpRequest.bpmMin` |
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
-| `detectBeats` | searches 60-200 BPM (was 30-300) |
-| `detectBpm` | searches 60-200 BPM (was 30-300) |
+| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
 | `plp` | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 
 #### One-shot JavaScript calls take a request object
@@ -3879,7 +3884,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `dbToPower` | request-only: dbToPower(request: DbToPowerRequest) |
 | `deemphasis(coef)` | removed: pass coef as a field of DeemphasisRequest |
 | `deemphasis(zi)` | removed: pass zi as a field of DeemphasisRequest |
-| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest |
+| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectChords(chromaMethod)` | removed: pass chromaMethod as a field of DetectChordsRequest |
 | `detectChords(hmmBeamWidth)` | removed: pass hmmBeamWidth as a field of DetectChordsRequest |
@@ -4049,7 +4054,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `powerToDb` | request-only: powerToDb(request: PowerToDbRequest) |
 | `preemphasis(coef)` | removed: pass coef as a field of PreemphasisRequest |
 | `preemphasis(zi)` | removed: pass zi as a field of PreemphasisRequest |
-| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest |
+| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `pseudoCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(fmin)` | removed: pass it as fminHz in PseudoCqtRequest |
 | `pseudoCqt(hopLength)` | removed: pass hopLength as a field of PseudoCqtRequest |
@@ -4091,7 +4096,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `splitSilence(frameLength)` | removed: pass frameLength as a field of SplitSilenceRequest |
 | `splitSilence(hopLength)` | removed: pass hopLength as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` | removed: pass topDb as a field of SplitSilenceRequest |
-| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest |
+| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` | removed: pass nFft as a field of StftRequest |
 | `stftDb(hopLength)` | removed: pass hopLength as a field of StftDbRequest |
@@ -4144,7 +4149,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `zeroCrossingRate(hopLength)` | removed: pass hopLength as a field of ZeroCrossingRateRequest |
 | `zeroCrossingRate` | one positional form (zeroCrossingRate(samples, sampleRate, options?: Omit<ZeroCrossingRateRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingRateRequest |
 | `zeroCrossings(threshold)` | removed: pass threshold as a field of ZeroCrossingsRequest |
-| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest |
+| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -4532,12 +4537,29 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomGeometryFromEstimateOptions` | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
 | `VoiceChangeRealtimeOptions` | removed: Use VoiceChangeRealtimeRequest; the option fields are part of the request object. |
 | `autoTune` | one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult |
+| `decompose(beta)` | removed: pass beta as a field of DecomposeRequest |
+| `decompose(init)` | removed: pass init as a field of DecomposeRequest |
+| `decompose(nComponents)` | removed: pass nComponents as a field of DecomposeRequest |
+| `decompose(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nIter)` | removed: pass nIter as a field of DecomposeRequest |
+| `decompose(s)` | removed: pass s as a field of DecomposeRequest |
 | `decomposeStems` | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult |
 | `decompose` | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `estimateRoom` | one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult |
 | `extractNotes` | one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'\|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[] |
 | `extractPercussiveEvents` | one positional form (extractPercussiveEvents(samples, sampleRate, options?: Omit<ExtractPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes ExtractPercussiveEventsRequest; returns PercussiveEvent[] |
 | `harmonic` | one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array |
+| `hpss(hardMask)` | removed: pass hardMask as a field of HpssRequest |
+| `hpss(hopLength)` | removed: pass hopLength as a field of HpssRequest |
+| `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
+| `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
+| `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
+| `hpssWithResidual(hardMask)` | removed: pass hardMask as a field of HpssWithResidualRequest |
+| `hpssWithResidual(hopLength)` | removed: pass hopLength as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
+| `hpssWithResidual(nFft)` | removed: pass nFft as a field of HpssWithResidualRequest |
 | `hpssWithResidual` | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
 | `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
 | `masteringRepairDeclickStereo` | request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult |
@@ -4548,6 +4570,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringRepairDenoiseClassicalStereo` | request-only: masteringRepairDenoiseClassicalStereo(request: MasteringRepairDenoiseClassicalStereoRequest): MasteringRepairDenoiseClassicalResult |
 | `masteringRepairDereverbClassicalLinked` | request-only: masteringRepairDereverbClassicalLinked(request: MasteringRepairDereverbClassicalLinkedRequest): MasteringRepairDereverbClassicalResult |
 | `masteringRepairDereverbClassicalStereo` | request-only: masteringRepairDereverbClassicalStereo(request: MasteringRepairDereverbClassicalStereoRequest): MasteringRepairDereverbClassicalResult |
+| `masteringRepairDereverbConfigForRoom(estimate)` | removed: pass estimate as a field of MasteringRepairDereverbConfigForRoomRequest |
 | `masteringRepairDereverbConfigForRoom` | request-only: masteringRepairDereverbConfigForRoom(request: MasteringRepairDereverbConfigForRoomRequest): Required<DereverbClassicalOptions> |
 | `masteringRepairDetectClicks` | one positional form (masteringRepairDetectClicks(samples, sampleRate, options?: DeclickOptions)); request form takes MasteringRepairDetectClicksRequest; returns ClickDetection |
 | `masteringRepairDetectClipping` | one positional form (masteringRepairDetectClipping(samples, sampleRate, options?: DeclipOptions)); request form takes MasteringRepairDetectClippingRequest; returns ClipDetection |
@@ -4558,25 +4581,58 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringRepairDetectTrimRange` | one positional form (masteringRepairDetectTrimRange(samples, sampleRate, options?: TrimSilenceOptions)); request form takes MasteringRepairDetectTrimRangeRequest; returns TrimRange |
 | `masteringRepairTrimSilenceStereo` | request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult |
 | `mergeNotes` | one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'\|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[] |
+| `nnFilter(aggregate)` | removed: pass aggregate as a field of NnFilterRequest |
+| `nnFilter(k)` | removed: pass k as a field of NnFilterRequest |
+| `nnFilter(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(s)` | removed: pass s as a field of NnFilterRequest |
+| `nnFilter(width)` | removed: pass width as a field of NnFilterRequest |
 | `nnFilter` | request-only: nnFilter(request: NnFilterRequest): Matrix2D |
+| `normalize(mode)` | removed: pass mode as a field of NormalizeRequest |
+| `normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `normalize` | one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array |
 | `noteMove` | one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
 | `noteStretch` | one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array |
 | `percussive` | one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array |
+| `phaseVocoder(hopLength)` | removed: pass hopLength as a field of PhaseVocoderRequest |
+| `phaseVocoder(nFft)` | removed: pass nFft as a field of PhaseVocoderRequest |
+| `phaseVocoder(rate)` | removed: pass it as speedRatio in PhaseVocoderRequest |
 | `phaseVocoder` | one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'\|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array |
+| `pitchCorrectTimevarying(f0Hz)` | removed: pass f0Hz as a field of PitchCorrectOptions |
+| `pitchCorrectTimevarying(hopLength)` | removed: pass hopLength as a field of PitchCorrectOptions |
 | `pitchCorrectTimevarying` | one positional form (pitchCorrectTimevarying(samples, sampleRate, options: PitchCorrectOptions)); request form takes PitchCorrectTimevaryingRequest; returns Float32Array |
+| `pitchCorrectToMidi(currentMidi)` | removed: pass currentMidi as a field of PitchCorrectToMidiRequest |
+| `pitchCorrectToMidi(targetMidi)` | removed: pass targetMidi as a field of PitchCorrectToMidiRequest |
 | `pitchCorrectToMidi` | one positional form (pitchCorrectToMidi(samples, sampleRate, options: Omit<PitchCorrectToMidiRequest,'samples'\|'sampleRate'>)); request form takes PitchCorrectToMidiRequest; returns Float32Array |
+| `pitchShift(hopLength)` | removed: pass hopLength as a field of PitchShiftRequest |
+| `pitchShift(nFft)` | removed: pass nFft as a field of PitchShiftRequest |
+| `pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `pitchShift` | one positional form (pitchShift(samples, sampleRate, options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>)); request form takes PitchShiftRequest; returns Float32Array |
+| `remix(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
+| `remix(intervals)` | removed: pass intervals as a field of RemixRequest |
+| `remixAlignedIntervals(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
+| `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
+| `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
 | `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `spectralEdit(ops)` | removed: pass ops as a field of SpectralEditOptions |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
 | `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
 | `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `timeStretch(hopLength)` | removed: pass hopLength as a field of TimeStretchRequest |
+| `timeStretch(nFft)` | removed: pass nFft as a field of TimeStretchRequest |
+| `timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
 | `timeStretch` | one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array |
+| `trim(frameLength)` | removed: pass frameLength as a field of TrimRequest |
+| `trim(hopLength)` | removed: pass hopLength as a field of TrimRequest |
+| `trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
+| `voiceChangeRealtime(preset)` | removed: pass it as config in VoiceChangeRealtimeRequest |
+| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of VoiceChangeRealtimeRequest |
+| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in VoiceChangeRealtimeRequest |
 | `voiceChangeRealtime` | request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] |
 | `voiceChange` | one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array |
 
@@ -4907,7 +4963,23 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `WaveformPeakPyramidOptions` | removed: Set samplesPerBucketLevels in WaveformPeakPyramidRequest beside channels. |
 | `WaveformPeaksOptions` | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
 | `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
+| `masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
+| `masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
+| `masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
+| `masterAudioAsync(overrides)` | removed: pass overrides as a field of MasterAudioAsyncRequest |
+| `masterAudioAsync(presetName)` | removed: pass it as preset in MasterAudioAsyncRequest |
 | `masterAudioAsync` | one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text |
+| `masterAudioStereo(left)` | removed: pass left as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(onProgress)` | removed: pass onProgress as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(overrides)` | removed: pass overrides as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(presetName)` | removed: pass it as preset in MasterAudioStereoRequest |
+| `masterAudioStereo(right)` | removed: pass right as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoRequest |
+| `masterAudioStereoAsync(left)` | removed: pass left as a field of MasterAudioStereoAsyncRequest |
+| `masterAudioStereoAsync(overrides)` | removed: pass overrides as a field of MasterAudioStereoAsyncRequest |
+| `masterAudioStereoAsync(presetName)` | removed: pass it as preset in MasterAudioStereoAsyncRequest |
+| `masterAudioStereoAsync(right)` | removed: pass right as a field of MasterAudioStereoAsyncRequest |
+| `masterAudioStereoAsync(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoAsyncRequest |
 | `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text |
 | `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
@@ -4920,8 +4992,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringDynamicsCompressor` | one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsGate` | one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
+| `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
+| `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
+| `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
+| `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
+| `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
+| `masteringInsertTiming(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertTimingRequest |
 | `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported |
+| `masteringStreamingPreview(platforms)` | removed: pass platforms as a field of MasteringStreamingPreviewRequest |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
 | `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
 | `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
@@ -4930,18 +5009,40 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `meteringDetectClipping` | one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport |
 | `meteringDynamicRange` | one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport |
 | `meteringPeakDb` | one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number |
+| `meteringPhaseScope(left)` | removed: pass left as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(right)` | removed: pass right as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(sampleRate)` | removed: pass sampleRate as a field of MeteringPhaseScopeRequest |
 | `meteringPhaseScope` | request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport |
 | `meteringRmsDb` | one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number |
+| `meteringSilenceRatio(frameLength)` | removed: pass frameLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(hopLength)` | removed: pass hopLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(thresholdDb)` | removed: pass thresholdDb as a field of MeteringSilenceRatioRequest |
 | `meteringSilenceRatio` | one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number |
 | `meteringSpectrumFrame` | one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport |
 | `meteringSpectrum` | one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport |
+| `meteringStereoCorrelation(left)` | removed: pass left as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(right)` | removed: pass right as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
+| `meteringStereoWidth(left)` | removed: pass left as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(right)` | removed: pass right as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
 | `meteringTruePeakDb` | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
+| `meteringVectorscope(left)` | removed: pass left as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(right)` | removed: pass right as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(sampleRate)` | removed: pass sampleRate as a field of MeteringVectorscopeRequest |
 | `meteringVectorscope` | request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport |
+| `mixStereo(leftChannels)` | removed: pass leftChannels as a field of MixStereoRequest |
+| `mixStereo(rightChannels)` | removed: pass rightChannels as a field of MixStereoRequest |
+| `mixStereo(sampleRate)` | removed: pass sampleRate as a field of MixStereoRequest |
 | `mixStereo` | request-only: mixStereo(request: MixStereoRequest): MixResult |
 | `streamingLoudnessGain` | one positional form (streamingLoudnessGain(samples, sampleRate, options?: OptionsOf<StreamingLoudnessGainRequest>)); request form takes StreamingLoudnessGainRequest; returns StreamingLoudnessGainResult |
+| `waveformPeakPyramid(channels)` | removed: drop the count; the channel count is channels.length in WaveformPeakPyramidRequest |
+| `waveformPeakPyramid(samples)` | removed: pass planar channels: Float32Array[] as channels in WaveformPeakPyramidRequest |
 | `waveformPeakPyramid` | request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[] |
+| `waveformPeaks(channels)` | removed: drop the count; the channel count is channels.length in WaveformPeaksRequest |
+| `waveformPeaks(samples)` | removed: pass planar channels: Float32Array[] as channels in WaveformPeaksRequest |
 | `waveformPeaks` | request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport |
 
 #### C extends an operation through an Options struct
@@ -5338,6 +5439,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
 | `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
+| `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref. |
@@ -5348,24 +5450,52 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `MidiCcLearnOptions` | `MidiCcLearnRequest` |
+| `Mixer.addSend(destinationBusId)` | removed: pass destinationBusId as a field of MixerSend |
+| `Mixer.addSend(sendDb)` | removed: pass sendDb as a field of MixerSend |
+| `Mixer.addSend(sendId)` | removed: pass it as id in MixerSend |
+| `Mixer.addSend(timing)` | removed: pass timing as a field of MixerSend |
 | `Mixer.addSend` | addSend(strip, { id, destinationBusId, sendDb?, timing? }) replaces the positional list; a numeric timing is a TypeError |
+| `Mixer.scheduleFaderAutomation(curve)` | removed: pass curve as a field of FaderAutomationPoint |
+| `Mixer.scheduleFaderAutomation(faderDb)` | removed: pass faderDb as a field of FaderAutomationPoint |
+| `Mixer.scheduleFaderAutomation(samplePos)` | removed: pass samplePos as a field of FaderAutomationPoint |
 | `Mixer.scheduleFaderAutomation` | scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleInsertAutomation(curve)` | removed: pass curve as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(paramId)` | removed: pass paramId as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(samplePos)` | removed: pass samplePos as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(value)` | removed: pass value as a field of InsertAutomationPoint |
 | `Mixer.scheduleInsertAutomation` | scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? }) |
+| `Mixer.schedulePanAutomation(curve)` | removed: pass curve as a field of PanAutomationPoint |
+| `Mixer.schedulePanAutomation(pan)` | removed: pass pan as a field of PanAutomationPoint |
+| `Mixer.schedulePanAutomation(samplePos)` | removed: pass samplePos as a field of PanAutomationPoint |
 | `Mixer.schedulePanAutomation` | schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleSendAutomation(curve)` | removed: pass curve as a field of SendAutomationPoint |
+| `Mixer.scheduleSendAutomation(db)` | removed: pass it as sendDb in SendAutomationPoint |
+| `Mixer.scheduleSendAutomation(samplePos)` | removed: pass samplePos as a field of SendAutomationPoint |
 | `Mixer.scheduleSendAutomation` | scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb) |
+| `Mixer.scheduleWidthAutomation(curve)` | removed: pass curve as a field of WidthAutomationPoint |
+| `Mixer.scheduleWidthAutomation(samplePos)` | removed: pass samplePos as a field of WidthAutomationPoint |
+| `Mixer.scheduleWidthAutomation(width)` | removed: pass width as a field of WidthAutomationPoint |
 | `Mixer.scheduleWidthAutomation` | scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError |
 | `RealtimeEngine.applyBusStripInsertParamByNameNow` | `RealtimeEngine.applyBusInsertParamNow`: applyBusInsertParamNow(busId, insertIndex, { name, value }) replaces applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.applyMasterStripInsertParamByNameNow` | removed: Call applyStripInsertParamNow('master', insertIndex, { name, value }). |
 | `RealtimeEngine.applyTrackStripInsertParamByNameNow` | `RealtimeEngine.applyStripInsertParamNow`: applyStripInsertParamNow(ref (a track id or 'master'), insertIndex, { name, value }) replaces applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value) |
+| `RealtimeEngine.canSetBusSidechain(sourceId)` | removed: pass it as id in SidechainSource |
+| `RealtimeEngine.canSetBusSidechain(sourceKind)` | removed: pass it as kind in SidechainSource |
 | `RealtimeEngine.canSetBusSidechain` | canSetBusSidechain(busId, insertIndex, source: SidechainSource) |
 | `RealtimeEngine.renderOffline` | request-only renderOffline({ channels, blockSize?, finalize? }); the (channels, blockSize) overload is removed |
 | `RealtimeEngine.restoreBusStripInsertParamByName` | `RealtimeEngine.restoreBusInsertParam`: restoreBusInsertParam(busId, insertIndex, { name, value }) replaces restoreBusStripInsertParamByName(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.restoreMasterStripInsertParamByName` | removed: Call restoreStripInsertParam('master', insertIndex, { name, value }). |
 | `RealtimeEngine.restoreTrackStripInsertParamByName` | `RealtimeEngine.restoreStripInsertParam`: restoreStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
+| `RealtimeEngine.setBusSidechain(sourceId)` | removed: pass it as id in SidechainSource |
+| `RealtimeEngine.setBusSidechain(sourceKind)` | removed: pass it as kind in SidechainSource |
 | `RealtimeEngine.setBusSidechain` | setBusSidechain(busId, insertIndex, source: SidechainSource \| null); null removes the binding |
 | `RealtimeEngine.setBusStripInsertParamByName` | `RealtimeEngine.setBusInsertParam`: setBusInsertParam(busId, insertIndex, { name, value }) replaces setBusStripInsertParamByName(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.setLaneSidechain` | `RealtimeEngine.setStripSidechain` |
 | `RealtimeEngine.setMasterStripInsertParamByName` | removed: Call setStripInsertParam('master', insertIndex, { name, value }). |
+| `RealtimeEngine.setPartRig(destinationId)` | removed: pass destinationId as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is a TypeError |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
@@ -5424,6 +5554,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none. |
 | `MidiCcBindOptions` | removed: Use ProjectMidiCcBinding: minValue and maxValue now sit beside ccNumber and paramId in the one binding passed to bindMidiCc. |
 | `Mixer.meterTap` | `Mixer.stripMeter` |
+| `RealtimeEngine.bindMidiCc(channel)` | removed: pass channel as a field of ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(controller)` | removed: pass it as ccNumber in ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(options)` | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | `RealtimeEngine.bindMidiCc` |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
 | `SynthPatch.destinationId` | removed: Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
@@ -5433,7 +5567,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
-| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
+| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
 | `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
@@ -5442,6 +5576,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.createClipPageProvider` | removed: new ClipPageProvider({ numChannels, numSamples, pageFrames }) creates a provider no engine owns |
 | `RealtimeEngine.createFileClipPageProvider` | removed: new FileClipPageProvider({ path, ... }) creates the provider |
 | `RealtimeEngine.destroyClipPageProvider` | removed: call destroy() on the ClipPageProvider |
+| `RealtimeEngine.prepare(commandCapacity)` | removed: pass commandCapacity as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(maxBlockSize)` | removed: pass maxBlockSize as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(maxChannels)` | removed: pass maxChannels as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(sampleRate)` | removed: pass sampleRate as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(telemetryCapacity)` | removed: pass telemetryCapacity as a field of RealtimeEngineConfig |
 | `RealtimeEngine.prepare` | prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation |
 | `RealtimeEngine.supplyClipPage` | removed: call supply(pageIndex, channels) on the ClipPageProvider |
 
@@ -5449,9 +5588,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineBounceResult.frames` | removed: Read channels[0].length; the result is planar, with channels, numChannels and sampleRate. |
+| `EngineBounceResult.frames` | removed: Read channels[0].length; the result is planar, with channels and sampleRate. |
 | `EngineBounceResult.interleaved` | `EngineBounceResult.channels` |
-| `RealtimeEngine.bounceOffline` | returns planar { channels, numChannels, sampleRate, integratedLufs } |
+| `RealtimeEngine.bounceOffline` | returns planar { channels, sampleRate, integratedLufs } |
 
 #### Channel counts are numChannels
 
@@ -5626,6 +5765,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.moveClip` | the track is options.trackId, omitted to keep the track; an explicit 0 is a RangeError |
 | `Project.renameTrack` | name is required |
 | `Project.setClipTakes` | the active take is options.activeTakeId, omitted for the base source; an explicit 0 is a RangeError |
+| `Project.setMarker(markerId)` | removed: pass it as id in ProjectMarkerInput |
+| `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
+| `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
 | `Project.setMarker` | takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
@@ -5717,13 +5859,33 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.analyzeTempo` | also takes one request object |
+| `Project.bakeMidiFx(clipId)` | removed: pass clipId as a field of ProjectMidiFxBakeRequest |
+| `Project.bakeMidiFx(configJson)` | removed: pass it as config in ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx` | takes one request object and always returns a result; the positional form is gone; config is a MidiFxConfig object of camelCase keys, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
+| `Project.clearPartRig(destinationId)` | removed: pass destinationId as a field of PartRigKey |
+| `Project.clearPartRig(part)` | removed: pass part as a field of PartRigKey |
 | `Project.clearPartRig` | takes one key object; the positional form is gone |
 | `Project.setAssistSidecar` | takes one input object |
+| `Project.setAudioSourceMetadata(contentHash)` | removed: pass contentHash as a field of ProjectAudioSourceMetadataRequest |
+| `Project.setAudioSourceMetadata(externalStemRole)` | removed: pass externalStemRole as a field of ProjectAudioSourceMetadataRequest |
+| `Project.setAudioSourceMetadata(sourceId)` | removed: pass sourceId as a field of ProjectAudioSourceMetadataRequest |
 | `Project.setAudioSourceMetadata` | takes one { sourceId, contentHash, externalStemRole } object |
+| `Project.setClipFade(fadeIn)` | removed: pass it as fadeInPpq and fadeInCurve in ProjectClipFadeRequest |
+| `Project.setClipFade(fadeOut)` | removed: pass it as fadeOutPpq and fadeOutCurve in ProjectClipFadeRequest |
 | `Project.setClipFade` | takes one { fadeInPpq, fadeInCurve, fadeOutPpq, fadeOutCurve } object |
+| `Project.setClipLoop(loopCrossfadePpq)` | removed: pass loopCrossfadePpq as a field of ProjectClipLoopRequest |
+| `Project.setClipLoop(loopLengthPpq)` | removed: pass loopLengthPpq as a field of ProjectClipLoopRequest |
+| `Project.setClipLoop(loopMode)` | removed: pass loopMode as a field of ProjectClipLoopRequest |
 | `Project.setClipLoop` | takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object |
+| `Project.setPartRig(destinationId)` | removed: pass destinationId as a field of PartRigRequest |
+| `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
+| `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
+| `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `Project.setPartRig` | takes one request object; the positional form is gone |
+| `Project.setProgramOnChannel(bank)` | removed: pass bank as a field of ProjectProgramRequest |
+| `Project.setProgramOnChannel(channel)` | removed: pass channel as a field of ProjectProgramRequest |
+| `Project.setProgramOnChannel(group)` | removed: pass group as a field of ProjectProgramRequest |
+| `Project.setProgramOnChannel(program)` | removed: pass program as a field of ProjectProgramRequest |
 | `Project.setProgramOnChannel` | takes one { group, channel, program, bank } object with bank as { msb, lsb } |
 
 #### MIDI message packers and GM lookups are module functions
@@ -5849,8 +6011,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | audio comes as planar channels with sampleRate |
-| `Project.bounce` | returns planar { channels, sampleRate, numChannels }; blockSize, numChannels and totalFrames are omitted for the default |
+| `Project.bounce` | returns planar { channels, sampleRate }; blockSize, numChannels and totalFrames are omitted for the default |
 | `Project.importExternalStems` | each stem carries channels instead of planarSamples, and layout is a name |
+| `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioRequest |
+| `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioRequest |
+| `Project.setSourceAudio(sampleRate)` | removed: pass sampleRate as a field of ProjectSourceAudioRequest |
+| `Project.setSourceAudio(sourceId)` | removed: pass sourceId as a field of ProjectSourceAudioRequest |
 | `Project.setSourceAudio` | takes one { sourceId, channels, sampleRate } object with planar channels |
 | `ProjectClipDesc.audioChannels` | removed: Pass planar channels: Float32Array[] with sampleRate; the channel count is channels.length, so no count field is needed. |
 | `ProjectClipDesc.audio` | `ProjectClipDesc.channels` |
@@ -5866,6 +6032,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.autoTempo(applyTimeSignatures)` | removed: pass applyTimeSignatures as a field of ProjectAutoTempoOptions |
+| `Project.autoTempo(candidateIndex)` | removed: pass candidateIndex as a field of ProjectAutoTempoOptions |
 | `Project.autoTempo` | takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options |
 
 #### Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz
@@ -5952,6 +6120,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.resample(targetSr)` | `Audio.resample(targetSampleRate)` |
+| `Audio.timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
 | `Audio.timeStretch` | timeStretch(options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>) |
 
 #### Classes that wait on a worker destroy asynchronously
@@ -6117,6 +6286,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.chroma` | takes (options?: Omit<ChromaRequest,'samples'\|'sampleRate'>) |
 | `Audio.detectOnsets` | takes (options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>) |
 | `Audio.harmonic` | harmonic(options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>) |
+| `Audio.hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
+| `Audio.hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `Audio.hpss` | hpss(options?: Omit<HpssRequest,'samples'\|'sampleRate'>) |
 | `Audio.melSpectrogram(fmax)` | removed: pass it as fmaxHz in MelSpectrogramRequest |
 | `Audio.melSpectrogram(fmin)` | removed: pass it as fminHz in MelSpectrogramRequest |
@@ -6132,6 +6303,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.mfcc(nMfcc)` | removed: pass nMfcc as a field of MfccRequest |
 | `Audio.mfcc` | takes (options?: Omit<MfccRequest,'samples'\|'sampleRate'>) |
 | `Audio.nnlsChroma` | takes (options?: Omit<NnlsChromaRequest,'samples'\|'sampleRate'>) |
+| `Audio.normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `Audio.normalize` | normalize(options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>) |
 | `Audio.noteMove` | noteMove(options?: NoteMoveOptions) |
 | `Audio.noteStretch` | noteStretch(options: NoteStretchOptions) |
@@ -6139,6 +6311,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.onsetEnvelope(nFft)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ nFft }). |
 | `Audio.onsetEnvelope(nMels)` | removed: the Matrix2D input carries it as rows / cols |
 | `Audio.percussive` | percussive(options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>) |
+| `Audio.pitchCorrectToMidi(currentMidi)` | removed: pass currentMidi as a field of PitchCorrectToMidiRequest |
+| `Audio.pitchCorrectToMidi(targetMidi)` | removed: pass targetMidi as a field of PitchCorrectToMidiRequest |
 | `Audio.pitchCorrectToMidi` | pitchCorrectToMidi({ currentMidi, targetMidi }) takes one options object replacing pitchCorrectToMidi(currentMidi = 69, targetMidi = 69) |
 | `Audio.pitchPyin(fmax)` | removed: Pass it as f0MaxHz in the options object: audio.pitchPyin({ f0MaxHz }). |
 | `Audio.pitchPyin(fmin)` | removed: Pass it as f0MinHz in the options object: audio.pitchPyin({ f0MinHz }). |
@@ -6174,6 +6348,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
 | `Audio.stftDb` | takes (options?: Omit<StftDbRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft` | takes (options?: Omit<StftRequest,'samples'\|'sampleRate'>) |
+| `Audio.trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `Audio.trim` | trim(options?: Omit<TrimRequest,'samples'\|'sampleRate'>) |
 | `Audio.voiceChange` | voiceChange(options?: VoiceChangeOptions) |
 | `Audio.zeroCrossingRate(frameLength)` | removed: pass frameLength as a field of ZeroCrossingRateRequest |
@@ -6218,6 +6393,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
+| `Audio.masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
+| `Audio.masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
 | `Audio.masterAudio` | masterAudio(options: OptionsOf<MasterAudioRequest>): MasteringChainResult; options must give preset or overrides |
 | `Audio.melSpectrogram(htk)` | removed: pass htk as a field of MelSpectrogramRequest |
 | `Audio.mfcc(htk)` | removed: pass htk as a field of MfccRequest |
@@ -6228,6 +6406,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `Audio.pitchShift` | pitchShift(options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>) |
 
 #### One type name per record on every surface
@@ -7135,8 +7314,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `segmentRecurrenceMatrix` | returns Matrix2D |
 | `segmentRecurrenceToLag` (`./analysis`) | returns Matrix2D |
 | `segmentRecurrenceToLag` | returns Matrix2D |
-| `stftDb` (`./analysis`) | returns Matrix2D |
-| `stftDb` | returns Matrix2D |
+| `stftDb` (`./analysis`) | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
+| `stftDb` | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
 | `tonnetz` (`./analysis`) | returns Matrix2D |
 | `tonnetz` | returns Matrix2D |
 
@@ -7150,14 +7329,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `TempogramResult` | removed: removed; tempogram now returns a Matrix2D |
 | `cyclicTempogram` (`./analysis`) | returns Matrix2D |
 | `cyclicTempogram` | returns Matrix2D |
-| `frameSignal` (`./analysis`) | returns Matrix2D |
-| `frameSignal` | returns Matrix2D |
+| `frameSignal` (`./analysis`) | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
+| `frameSignal` | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
 | `nnlsChroma` (`./analysis`) | returns Matrix2D |
 | `nnlsChroma` | returns Matrix2D |
 | `tempogram` (`./analysis`) | returns Matrix2D |
 | `tempogram` | returns Matrix2D |
-| `trimSilence` (`./analysis`) | returns TrimResult |
-| `trimSilence` | returns TrimResult |
+| `trimSilence` (`./analysis`) | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
+| `trimSilence` | returns TrimResult; the second positional argument is sampleRate and sampleRate is required |
 
 #### Progress is an onProgress option, not a separate function
 
@@ -7167,8 +7346,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AnalyzeWithProgressRequest` | removed: use AnalyzeRequest, which carries onProgress |
 | `analyzeWithProgress` (`./analysis`) | removed: call analyze with onProgress in the request, for example analyze({ samples, sampleRate, onProgress }) |
 | `analyzeWithProgress` | removed: call analyze with onProgress in the request, for example analyze({ samples, sampleRate, onProgress }) |
-| `analyze` (`./analysis`) | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean |
-| `analyze` | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean |
+| `analyze` (`./analysis`) | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean; sampleRate is required (1.x defaulted to 22050) |
+| `analyze` | request gains onProgress?: (progress, stage) => void and cancel?: () => boolean; sampleRate is required (1.x defaulted to 22050) |
 
 #### librosa-mirror functions default to librosa's values
 
@@ -7204,10 +7383,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PlpRequest.tempoMin` | `PlpRequest.bpmMin` |
 | `analyzeBpm` (`./analysis`) | bpmMin/bpmMax default 60/200 (was 30/300) |
 | `analyzeBpm` | bpmMin/bpmMax default 60/200 (was 30/300) |
-| `detectBeats` (`./analysis`) | searches 60-200 BPM (was 30-300) |
-| `detectBeats` | searches 60-200 BPM (was 30-300) |
-| `detectBpm` (`./analysis`) | searches 60-200 BPM (was 30-300) |
-| `detectBpm` | searches 60-200 BPM (was 30-300) |
+| `detectBeats` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBeats` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBpm` (`./analysis`) | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
+| `detectBpm` | searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050) |
 | `plp` (`./analysis`) | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 | `plp` | tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300) |
 
@@ -7360,8 +7539,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `deemphasis(coef)` | removed: pass coef as a field of DeemphasisRequest |
 | `deemphasis(zi)` (`./analysis`) | removed: pass zi as a field of DeemphasisRequest |
 | `deemphasis(zi)` | removed: pass zi as a field of DeemphasisRequest |
-| `deemphasis` (`./analysis`) | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest |
-| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest |
+| `deemphasis` (`./analysis`) | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `deemphasis` | one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'\|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `detectAcoustic` (`./analysis`) | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectAcoustic` | one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'\|'sampleRate'>)); request form takes DetectAcousticRequest |
 | `detectChords` (`./analysis`) | one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'\|'sampleRate'>)); request form takes DetectChordsRequest |
@@ -7694,8 +7873,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `preemphasis(coef)` | removed: pass coef as a field of PreemphasisRequest |
 | `preemphasis(zi)` (`./analysis`) | removed: pass zi as a field of PreemphasisRequest |
 | `preemphasis(zi)` | removed: pass zi as a field of PreemphasisRequest |
-| `preemphasis` (`./analysis`) | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest |
-| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest |
+| `preemphasis` (`./analysis`) | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `preemphasis` | one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'\|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `pseudoCqt(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of PseudoCqtRequest |
 | `pseudoCqt(fmin)` (`./analysis`) | removed: pass it as fminHz in PseudoCqtRequest |
@@ -7778,8 +7957,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `splitSilence(hopLength)` | removed: pass hopLength as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` (`./analysis`) | removed: pass topDb as a field of SplitSilenceRequest |
 | `splitSilence(topDb)` | removed: pass topDb as a field of SplitSilenceRequest |
-| `splitSilence` (`./analysis`) | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest |
-| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest |
+| `splitSilence` (`./analysis`) | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `stft(hopLength)` (`./analysis`) | removed: pass hopLength as a field of StftRequest |
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` (`./analysis`) | removed: pass nFft as a field of StftRequest |
@@ -7888,8 +8067,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `zeroCrossingRate` | one positional form (zeroCrossingRate(samples, sampleRate, options?: Omit<ZeroCrossingRateRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingRateRequest |
 | `zeroCrossings(threshold)` (`./analysis`) | removed: pass threshold as a field of ZeroCrossingsRequest |
 | `zeroCrossings(threshold)` | removed: pass threshold as a field of ZeroCrossingsRequest |
-| `zeroCrossings` (`./analysis`) | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest |
-| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest |
+| `zeroCrossings` (`./analysis`) | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+| `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -8512,6 +8691,18 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryFromEstimateOptions` | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
 | `VoiceChangeRealtimeOptions` | removed: Use VoiceChangeRealtimeRequest; the option fields are part of the request object. |
 | `autoTune` | one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult |
+| `decompose(beta)` (`./analysis`) | removed: pass beta as a field of DecomposeRequest |
+| `decompose(beta)` | removed: pass beta as a field of DecomposeRequest |
+| `decompose(nComponents)` (`./analysis`) | removed: pass nComponents as a field of DecomposeRequest |
+| `decompose(nComponents)` | removed: pass nComponents as a field of DecomposeRequest |
+| `decompose(nFeatures)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nFrames)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
+| `decompose(nIter)` (`./analysis`) | removed: pass nIter as a field of DecomposeRequest |
+| `decompose(nIter)` | removed: pass nIter as a field of DecomposeRequest |
+| `decompose(s)` (`./analysis`) | removed: pass s as a field of DecomposeRequest |
+| `decompose(s)` | removed: pass s as a field of DecomposeRequest |
 | `decomposeStems` (`./analysis`) | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult |
 | `decomposeStems` | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult |
 | `decompose` (`./analysis`) | request-only: decompose(request: DecomposeRequest): DecomposeResult |
@@ -8520,17 +8711,63 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `extractNotes` | one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'\|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[] |
 | `extractPercussiveEvents` | one positional form (extractPercussiveEvents(samples, sampleRate, options?: Omit<ExtractPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes ExtractPercussiveEventsRequest; returns PercussiveEvent[] |
 | `harmonic` | one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'\|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array |
+| `hpss(hardMask)` | removed: pass hardMask as a field of HpssRequest |
+| `hpss(hopLength)` | removed: pass hopLength as a field of HpssRequest |
+| `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
+| `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
+| `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
+| `hpssWithResidual(hardMask)` (`./analysis`) | removed: pass hardMask as a field of HpssWithResidualRequest |
+| `hpssWithResidual(hardMask)` | removed: pass hardMask as a field of HpssWithResidualRequest |
+| `hpssWithResidual(hopLength)` (`./analysis`) | removed: pass hopLength as a field of HpssWithResidualRequest |
+| `hpssWithResidual(hopLength)` | removed: pass hopLength as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelHarmonic)` (`./analysis`) | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelPercussive)` (`./analysis`) | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
+| `hpssWithResidual(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
+| `hpssWithResidual(nFft)` (`./analysis`) | removed: pass nFft as a field of HpssWithResidualRequest |
+| `hpssWithResidual(nFft)` | removed: pass nFft as a field of HpssWithResidualRequest |
 | `hpssWithResidual` (`./analysis`) | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
 | `hpssWithResidual` | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
 | `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
+| `masteringRepairDeclickStereo(config)` | removed: pass config as a field of MasteringRepairDeclickStereoRequest |
+| `masteringRepairDeclickStereo(left)` | removed: pass left as a field of MasteringRepairDeclickStereoRequest |
+| `masteringRepairDeclickStereo(right)` | removed: pass right as a field of MasteringRepairDeclickStereoRequest |
+| `masteringRepairDeclickStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDeclickStereoRequest |
 | `masteringRepairDeclickStereo` | request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult |
+| `masteringRepairDeclipStereo(config)` | removed: pass config as a field of MasteringRepairDeclipStereoRequest |
+| `masteringRepairDeclipStereo(left)` | removed: pass left as a field of MasteringRepairDeclipStereoRequest |
+| `masteringRepairDeclipStereo(right)` | removed: pass right as a field of MasteringRepairDeclipStereoRequest |
+| `masteringRepairDeclipStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDeclipStereoRequest |
 | `masteringRepairDeclipStereo` | request-only: masteringRepairDeclipStereo(request: MasteringRepairDeclipStereoRequest): MasteringRepairDeclipResult |
+| `masteringRepairDecrackleStereo(config)` | removed: pass config as a field of MasteringRepairDecrackleStereoRequest |
+| `masteringRepairDecrackleStereo(left)` | removed: pass left as a field of MasteringRepairDecrackleStereoRequest |
+| `masteringRepairDecrackleStereo(right)` | removed: pass right as a field of MasteringRepairDecrackleStereoRequest |
+| `masteringRepairDecrackleStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDecrackleStereoRequest |
 | `masteringRepairDecrackleStereo` | request-only: masteringRepairDecrackleStereo(request: MasteringRepairDecrackleStereoRequest): MasteringRepairDecrackleResult |
+| `masteringRepairDehumStereo(config)` | removed: pass config as a field of MasteringRepairDehumStereoRequest |
+| `masteringRepairDehumStereo(left)` | removed: pass left as a field of MasteringRepairDehumStereoRequest |
+| `masteringRepairDehumStereo(right)` | removed: pass right as a field of MasteringRepairDehumStereoRequest |
+| `masteringRepairDehumStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDehumStereoRequest |
 | `masteringRepairDehumStereo` | request-only: masteringRepairDehumStereo(request: MasteringRepairDehumStereoRequest): MasteringRepairDehumResult |
+| `masteringRepairDenoiseClassicalLinked(channels)` | removed: pass channels as a field of MasteringRepairDenoiseClassicalLinkedRequest |
+| `masteringRepairDenoiseClassicalLinked(config)` | removed: pass config as a field of MasteringRepairDenoiseClassicalLinkedRequest |
+| `masteringRepairDenoiseClassicalLinked(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDenoiseClassicalLinkedRequest |
 | `masteringRepairDenoiseClassicalLinked` | request-only: masteringRepairDenoiseClassicalLinked(request: MasteringRepairDenoiseClassicalLinkedRequest): MasteringRepairDenoiseClassicalResult |
+| `masteringRepairDenoiseClassicalStereo(config)` | removed: pass config as a field of MasteringRepairDenoiseClassicalStereoRequest |
+| `masteringRepairDenoiseClassicalStereo(left)` | removed: pass left as a field of MasteringRepairDenoiseClassicalStereoRequest |
+| `masteringRepairDenoiseClassicalStereo(right)` | removed: pass right as a field of MasteringRepairDenoiseClassicalStereoRequest |
+| `masteringRepairDenoiseClassicalStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDenoiseClassicalStereoRequest |
 | `masteringRepairDenoiseClassicalStereo` | request-only: masteringRepairDenoiseClassicalStereo(request: MasteringRepairDenoiseClassicalStereoRequest): MasteringRepairDenoiseClassicalResult |
+| `masteringRepairDereverbClassicalLinked(channels)` | removed: pass channels as a field of MasteringRepairDereverbClassicalLinkedRequest |
+| `masteringRepairDereverbClassicalLinked(config)` | removed: pass config as a field of MasteringRepairDereverbClassicalLinkedRequest |
+| `masteringRepairDereverbClassicalLinked(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDereverbClassicalLinkedRequest |
 | `masteringRepairDereverbClassicalLinked` | request-only: masteringRepairDereverbClassicalLinked(request: MasteringRepairDereverbClassicalLinkedRequest): MasteringRepairDereverbClassicalResult |
+| `masteringRepairDereverbClassicalStereo(config)` | removed: pass config as a field of MasteringRepairDereverbClassicalStereoRequest |
+| `masteringRepairDereverbClassicalStereo(left)` | removed: pass left as a field of MasteringRepairDereverbClassicalStereoRequest |
+| `masteringRepairDereverbClassicalStereo(right)` | removed: pass right as a field of MasteringRepairDereverbClassicalStereoRequest |
+| `masteringRepairDereverbClassicalStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDereverbClassicalStereoRequest |
 | `masteringRepairDereverbClassicalStereo` | request-only: masteringRepairDereverbClassicalStereo(request: MasteringRepairDereverbClassicalStereoRequest): MasteringRepairDereverbClassicalResult |
+| `masteringRepairDereverbConfigForRoom(estimate)` | removed: pass estimate as a field of MasteringRepairDereverbConfigForRoomRequest |
 | `masteringRepairDereverbConfigForRoom` | request-only: masteringRepairDereverbConfigForRoom(request: MasteringRepairDereverbConfigForRoomRequest): Required<DereverbClassicalOptions> |
 | `masteringRepairDetectClicks` | one positional form (masteringRepairDetectClicks(samples, sampleRate, options?: DeclickOptions)); request form takes MasteringRepairDetectClicksRequest; returns ClickDetection |
 | `masteringRepairDetectClipping` | one positional form (masteringRepairDetectClipping(samples, sampleRate, options?: DeclipOptions)); request form takes MasteringRepairDetectClippingRequest; returns ClipDetection |
@@ -8538,35 +8775,94 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringRepairDetectHum` | one positional form (masteringRepairDetectHum(samples, sampleRate, options?: DehumOptions)); request form takes MasteringRepairDetectHumRequest; returns HumDetection |
 | `masteringRepairDetectNoiseFloor` | one positional form (masteringRepairDetectNoiseFloor(samples, sampleRate, options?: DenoiseClassicalOptions)); request form takes MasteringRepairDetectNoiseFloorRequest; returns NoiseDetection |
 | `masteringRepairDetectReverb` | one positional form (masteringRepairDetectReverb(samples, sampleRate, options?: DereverbClassicalOptions)); request form takes MasteringRepairDetectReverbRequest; returns ReverbDetection |
+| `masteringRepairDetectTrimRangeStereo(config)` | removed: pass config as a field of MasteringRepairDetectTrimRangeStereoRequest |
+| `masteringRepairDetectTrimRangeStereo(left)` | removed: pass left as a field of MasteringRepairDetectTrimRangeStereoRequest |
+| `masteringRepairDetectTrimRangeStereo(right)` | removed: pass right as a field of MasteringRepairDetectTrimRangeStereoRequest |
+| `masteringRepairDetectTrimRangeStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairDetectTrimRangeStereoRequest |
 | `masteringRepairDetectTrimRangeStereo` | request-only: masteringRepairDetectTrimRangeStereo(request: MasteringRepairDetectTrimRangeStereoRequest): TrimRange |
 | `masteringRepairDetectTrimRange` | one positional form (masteringRepairDetectTrimRange(samples, sampleRate, options?: TrimSilenceOptions)); request form takes MasteringRepairDetectTrimRangeRequest; returns TrimRange |
+| `masteringRepairNoiseBandBins(nFft)` | removed: pass nFft as a field of MasteringRepairNoiseBandBinsRequest |
+| `masteringRepairNoiseBandBins(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairNoiseBandBinsRequest |
 | `masteringRepairNoiseBandBins` | request-only: masteringRepairNoiseBandBins(request: MasteringRepairNoiseBandBinsRequest): Int32Array |
+| `masteringRepairTrimSilenceStereo(config)` | removed: pass config as a field of MasteringRepairTrimSilenceStereoRequest |
+| `masteringRepairTrimSilenceStereo(left)` | removed: pass left as a field of MasteringRepairTrimSilenceStereoRequest |
+| `masteringRepairTrimSilenceStereo(right)` | removed: pass right as a field of MasteringRepairTrimSilenceStereoRequest |
+| `masteringRepairTrimSilenceStereo(sampleRate)` | removed: pass sampleRate as a field of MasteringRepairTrimSilenceStereoRequest |
 | `masteringRepairTrimSilenceStereo` | request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult |
 | `mergeNotes` | one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'\|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[] |
+| `nnFilter(aggregate)` (`./analysis`) | removed: pass aggregate as a field of NnFilterRequest |
+| `nnFilter(aggregate)` | removed: pass aggregate as a field of NnFilterRequest |
+| `nnFilter(k)` (`./analysis`) | removed: pass k as a field of NnFilterRequest |
+| `nnFilter(k)` | removed: pass k as a field of NnFilterRequest |
+| `nnFilter(nFeatures)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(nFeatures)` | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(nFrames)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
+| `nnFilter(s)` (`./analysis`) | removed: pass s as a field of NnFilterRequest |
+| `nnFilter(s)` | removed: pass s as a field of NnFilterRequest |
+| `nnFilter(width)` (`./analysis`) | removed: pass width as a field of NnFilterRequest |
+| `nnFilter(width)` | removed: pass width as a field of NnFilterRequest |
 | `nnFilter` (`./analysis`) | request-only: nnFilter(request: NnFilterRequest): Matrix2D |
 | `nnFilter` | request-only: nnFilter(request: NnFilterRequest): Matrix2D; returns Matrix2D (rows = features, cols = frames) |
+| `normalize(mode)` | removed: pass mode as a field of NormalizeRequest |
+| `normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `normalize` | one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array |
 | `noteMove` | one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
 | `noteStretch` | one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array |
 | `percussive` | one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array |
+| `phaseVocoder(hopLength)` (`./analysis`) | removed: pass hopLength as a field of PhaseVocoderRequest |
+| `phaseVocoder(hopLength)` | removed: pass hopLength as a field of PhaseVocoderRequest |
+| `phaseVocoder(nFft)` (`./analysis`) | removed: pass nFft as a field of PhaseVocoderRequest |
+| `phaseVocoder(nFft)` | removed: pass nFft as a field of PhaseVocoderRequest |
+| `phaseVocoder(rate)` (`./analysis`) | removed: pass it as speedRatio in PhaseVocoderRequest |
+| `phaseVocoder(rate)` | removed: pass it as speedRatio in PhaseVocoderRequest |
 | `phaseVocoder` (`./analysis`) | one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'\|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array |
 | `phaseVocoder` | one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'\|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array |
+| `pitchCorrectTimevarying(f0Hz)` | removed: pass f0Hz as a field of PitchCorrectOptions |
+| `pitchCorrectTimevarying(hopLength)` | removed: pass hopLength as a field of PitchCorrectOptions |
 | `pitchCorrectTimevarying` | one positional form (pitchCorrectTimevarying(samples, sampleRate, options: PitchCorrectOptions)); request form takes PitchCorrectTimevaryingRequest; returns Float32Array |
+| `pitchCorrectToMidi(currentMidi)` | removed: pass currentMidi as a field of PitchCorrectToMidiRequest |
+| `pitchCorrectToMidi(targetMidi)` | removed: pass targetMidi as a field of PitchCorrectToMidiRequest |
 | `pitchCorrectToMidi` | one positional form (pitchCorrectToMidi(samples, sampleRate, options: Omit<PitchCorrectToMidiRequest,'samples'\|'sampleRate'>)); request form takes PitchCorrectToMidiRequest; returns Float32Array |
+| `pitchShift(hopLength)` | removed: pass hopLength as a field of PitchShiftRequest |
+| `pitchShift(nFft)` | removed: pass nFft as a field of PitchShiftRequest |
+| `pitchShift(semitones)` | removed: pass it as pitchSemitones in PitchShiftRequest |
 | `pitchShift` | one positional form (pitchShift(samples, sampleRate, options: Omit<PitchShiftRequest,'samples'\|'sampleRate'>)); request form takes PitchShiftRequest; returns Float32Array |
+| `remix(alignZeros)` (`./analysis`) | removed: pass alignZeros as a field of RemixRequest |
+| `remix(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
+| `remix(intervals)` (`./analysis`) | removed: pass intervals as a field of RemixRequest |
+| `remix(intervals)` | removed: pass intervals as a field of RemixRequest |
+| `remixAlignedIntervals(alignZeros)` (`./analysis`) | removed: pass alignZeros as a field of RemixRequest |
+| `remixAlignedIntervals(alignZeros)` | removed: pass alignZeros as a field of RemixRequest |
+| `remixAlignedIntervals(intervals)` (`./analysis`) | removed: pass intervals as a field of RemixRequest |
+| `remixAlignedIntervals(intervals)` | removed: pass intervals as a field of RemixRequest |
 | `remixAlignedIntervals` (`./analysis`) | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
 | `remixAlignedIntervals` | one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Int32Array |
 | `remix` (`./analysis`) | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
+| `roomGeometryFromEstimate(estimate)` | removed: pass estimate as a field of RoomGeometryFromEstimateRequest |
 | `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `spectralEdit(ops)` | removed: pass ops as a field of SpectralEditOptions |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
 | `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
 | `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
+| `timeStretch(hopLength)` | removed: pass hopLength as a field of TimeStretchRequest |
+| `timeStretch(nFft)` | removed: pass nFft as a field of TimeStretchRequest |
+| `timeStretch(rate)` | removed: pass it as speedRatio in TimeStretchRequest |
 | `timeStretch` | one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array |
+| `trim(frameLength)` (`./analysis`) | removed: pass frameLength as a field of TrimRequest |
+| `trim(frameLength)` | removed: pass frameLength as a field of TrimRequest |
+| `trim(hopLength)` (`./analysis`) | removed: pass hopLength as a field of TrimRequest |
+| `trim(hopLength)` | removed: pass hopLength as a field of TrimRequest |
+| `trim(thresholdDb)` (`./analysis`) | removed: pass thresholdDb as a field of TrimRequest |
+| `trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `trim` (`./analysis`) | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
+| `voiceChangeRealtime(preset)` | removed: pass it as config in VoiceChangeRealtimeRequest |
+| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of VoiceChangeRealtimeRequest |
+| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in VoiceChangeRealtimeRequest |
 | `voiceChangeRealtime` | request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] |
 | `voiceChange` | one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array |
 
@@ -9070,6 +9366,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `WaveformPeaksOptions` | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
 | `ebur128LoudnessRange` (`./analysis`) | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
 | `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
+| `masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
+| `masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
+| `masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
+| `masterAudioStereo(left)` | removed: pass left as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(onProgress)` | removed: pass onProgress as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(overrides)` | removed: pass overrides as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(presetName)` | removed: pass it as preset in MasterAudioStereoRequest |
+| `masterAudioStereo(right)` | removed: pass right as a field of MasterAudioStereoRequest |
+| `masterAudioStereo(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoRequest |
 | `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masteringAssistantSuggestChainStereo` | request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig |
@@ -9081,8 +9386,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringDynamicsCompressor` | one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsGate` | one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
+| `masteringInsertParamInfo(name)` | removed: pass it as insert in MasteringInsertParamInfoRequest |
+| `masteringInsertParamInfo(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertParamInfoRequest |
 | `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
+| `masteringInsertParamNames(name)` | removed: pass it as insert in MasteringInsertParamNamesRequest |
+| `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
+| `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
+| `masteringInsertTiming(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertTimingRequest |
 | `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported |
+| `masteringStreamingPreview(platforms)` | removed: pass platforms as a field of MasteringStreamingPreviewRequest |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
 | `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
 | `meteringCrestFactorDbStereo` (`./analysis`) | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
@@ -9097,28 +9409,69 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `meteringDynamicRange` | one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport |
 | `meteringPeakDb` (`./analysis`) | one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number |
 | `meteringPeakDb` | one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number |
+| `meteringPhaseScope(left)` (`./analysis`) | removed: pass left as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(left)` | removed: pass left as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(right)` (`./analysis`) | removed: pass right as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(right)` | removed: pass right as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringPhaseScopeRequest |
+| `meteringPhaseScope(sampleRate)` | removed: pass sampleRate as a field of MeteringPhaseScopeRequest |
 | `meteringPhaseScope` (`./analysis`) | request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport |
 | `meteringPhaseScope` | request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport |
 | `meteringRmsDb` (`./analysis`) | one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number |
 | `meteringRmsDb` | one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number |
+| `meteringSilenceRatio(frameLength)` (`./analysis`) | removed: pass frameLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(frameLength)` | removed: pass frameLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(hopLength)` (`./analysis`) | removed: pass hopLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(hopLength)` | removed: pass hopLength as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(thresholdDb)` (`./analysis`) | removed: pass thresholdDb as a field of MeteringSilenceRatioRequest |
+| `meteringSilenceRatio(thresholdDb)` | removed: pass thresholdDb as a field of MeteringSilenceRatioRequest |
 | `meteringSilenceRatio` (`./analysis`) | one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number |
 | `meteringSilenceRatio` | one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number |
 | `meteringSpectrumFrame` (`./analysis`) | one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport |
 | `meteringSpectrumFrame` | one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport |
 | `meteringSpectrum` (`./analysis`) | one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport |
 | `meteringSpectrum` | one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport |
+| `meteringStereoCorrelation(left)` (`./analysis`) | removed: pass left as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(left)` | removed: pass left as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(right)` (`./analysis`) | removed: pass right as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(right)` | removed: pass right as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
+| `meteringStereoCorrelation(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation` (`./analysis`) | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
 | `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
+| `meteringStereoWidth(left)` (`./analysis`) | removed: pass left as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(left)` | removed: pass left as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(right)` (`./analysis`) | removed: pass right as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(right)` | removed: pass right as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
+| `meteringStereoWidth(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth` (`./analysis`) | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
 | `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
 | `meteringTruePeakDb` (`./analysis`) | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
 | `meteringTruePeakDb` | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
+| `meteringVectorscope(left)` (`./analysis`) | removed: pass left as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(left)` | removed: pass left as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(right)` (`./analysis`) | removed: pass right as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(right)` | removed: pass right as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringVectorscopeRequest |
+| `meteringVectorscope(sampleRate)` | removed: pass sampleRate as a field of MeteringVectorscopeRequest |
 | `meteringVectorscope` (`./analysis`) | request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport |
 | `meteringVectorscope` | request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport |
+| `mixStereo(leftChannels)` | removed: pass leftChannels as a field of MixStereoRequest |
+| `mixStereo(rightChannels)` | removed: pass rightChannels as a field of MixStereoRequest |
+| `mixStereo(sampleRate)` | removed: pass sampleRate as a field of MixStereoRequest |
 | `mixStereo` | request-only: mixStereo(request: MixStereoRequest): MixResult |
 | `streamingLoudnessGain` | one positional form (streamingLoudnessGain(samples, sampleRate, options?: OptionsOf<StreamingLoudnessGainRequest>)); request form takes StreamingLoudnessGainRequest; returns StreamingLoudnessGainResult |
+| `waveformPeakPyramid(channels)` (`./analysis`) | removed: drop the count; the channel count is channels.length in WaveformPeakPyramidRequest |
+| `waveformPeakPyramid(channels)` | removed: drop the count; the channel count is channels.length in WaveformPeakPyramidRequest |
+| `waveformPeakPyramid(samples)` (`./analysis`) | removed: pass planar channels: Float32Array[] as channels in WaveformPeakPyramidRequest |
+| `waveformPeakPyramid(samples)` | removed: pass planar channels: Float32Array[] as channels in WaveformPeakPyramidRequest |
 | `waveformPeakPyramid` (`./analysis`) | request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[] |
 | `waveformPeakPyramid` | request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[] |
+| `waveformPeaks(channels)` (`./analysis`) | removed: drop the count; the channel count is channels.length in WaveformPeaksRequest |
+| `waveformPeaks(channels)` | removed: drop the count; the channel count is channels.length in WaveformPeaksRequest |
+| `waveformPeaks(samples)` (`./analysis`) | removed: pass planar channels: Float32Array[] as channels in WaveformPeaksRequest |
+| `waveformPeaks(samples)` | removed: pass planar channels: Float32Array[] as channels in WaveformPeaksRequest |
 | `waveformPeaks` (`./analysis`) | request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport |
 | `waveformPeaks` | request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport |
 
@@ -9655,12 +10008,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
 | `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
+| `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | `RealtimeEngine.setStripEqBand` |
 | `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip` |
 | `SonareEngine.setBusStripJson` (`./worklet`) | `SonareEngine.setBusStrip` |
 | `SonareEngine.setMasterStripJson` (`./worklet`) | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
+| `SonareEngine.setMidiFx(configJson)` (`./worklet`) | removed: pass it as config in MidiFxConfig |
 | `SonareEngine.setMidiFx` (`./worklet`) | takes a MidiFxConfig object instead of a JSON string; the worklet message still carries the serialized JSON |
 | `SonareEngine.setStripInserts` (`./worklet`) | removed: Call setStrip(target, strip) with a MixSceneStripInput object; target 'master' addresses the master strip. |
 | `SonareEngine.setTrackStripJson` (`./worklet`) | removed: Call setStrip(target, strip) with a MixSceneStripInput object; no JSON string. |
@@ -9677,30 +10032,65 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `MidiCcLearnOptions` | `MidiCcLearnRequest` |
+| `Mixer.addSend(destinationBusId)` | removed: pass destinationBusId as a field of MixerSend |
+| `Mixer.addSend(id)` | removed: pass id as a field of MixerSend |
+| `Mixer.addSend(sendDb)` | removed: pass sendDb as a field of MixerSend |
+| `Mixer.addSend(timing)` | removed: pass timing as a field of MixerSend |
 | `Mixer.addSend` | addSend(strip, { id, destinationBusId, sendDb?, timing? }) replaces the positional list; a numeric timing is a TypeError |
+| `Mixer.scheduleFaderAutomation(curve)` | removed: pass curve as a field of FaderAutomationPoint |
+| `Mixer.scheduleFaderAutomation(faderDb)` | removed: pass faderDb as a field of FaderAutomationPoint |
+| `Mixer.scheduleFaderAutomation(samplePos)` | removed: pass samplePos as a field of FaderAutomationPoint |
 | `Mixer.scheduleFaderAutomation` | scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleInsertAutomation(curve)` | removed: pass curve as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(paramId)` | removed: pass paramId as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(samplePos)` | removed: pass samplePos as a field of InsertAutomationPoint |
+| `Mixer.scheduleInsertAutomation(value)` | removed: pass value as a field of InsertAutomationPoint |
 | `Mixer.scheduleInsertAutomation` | scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? }) |
+| `Mixer.schedulePanAutomation(curve)` | removed: pass curve as a field of PanAutomationPoint |
+| `Mixer.schedulePanAutomation(pan)` | removed: pass pan as a field of PanAutomationPoint |
+| `Mixer.schedulePanAutomation(samplePos)` | removed: pass samplePos as a field of PanAutomationPoint |
 | `Mixer.schedulePanAutomation` | schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleSendAutomation(curve)` | removed: pass curve as a field of SendAutomationPoint |
+| `Mixer.scheduleSendAutomation(db)` | removed: pass it as sendDb in SendAutomationPoint |
+| `Mixer.scheduleSendAutomation(samplePos)` | removed: pass samplePos as a field of SendAutomationPoint |
 | `Mixer.scheduleSendAutomation` | scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb) |
+| `Mixer.scheduleWidthAutomation(curve)` | removed: pass curve as a field of WidthAutomationPoint |
+| `Mixer.scheduleWidthAutomation(samplePos)` | removed: pass samplePos as a field of WidthAutomationPoint |
+| `Mixer.scheduleWidthAutomation(width)` | removed: pass width as a field of WidthAutomationPoint |
 | `Mixer.scheduleWidthAutomation` | scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError |
 | `RealtimeEngine.applyBusStripInsertParamByNameNow` | `RealtimeEngine.applyBusInsertParamNow`: applyBusInsertParamNow(busId, insertIndex, { name, value }) replaces applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.applyMasterStripInsertParamByNameNow` | removed: Call applyStripInsertParamNow('master', insertIndex, { name, value }). |
 | `RealtimeEngine.applyTrackStripInsertParamByNameNow` | `RealtimeEngine.applyStripInsertParamNow`: applyStripInsertParamNow(ref (a track id or 'master'), insertIndex, { name, value }) replaces applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value) |
+| `RealtimeEngine.canSetBusSidechain(sourceId)` | removed: pass it as id in SidechainSource |
+| `RealtimeEngine.canSetBusSidechain(sourceKind)` | removed: pass it as kind in SidechainSource |
 | `RealtimeEngine.canSetBusSidechain` | canSetBusSidechain(busId, insertIndex, source: SidechainSource) |
 | `RealtimeEngine.renderOffline` | request-only renderOffline(request); the (channels, blockSize) overload is removed |
 | `RealtimeEngine.restoreBusStripInsertParamByName` | `RealtimeEngine.restoreBusInsertParam`: restoreBusInsertParam(busId, insertIndex, { name, value }) replaces restoreBusStripInsertParamByName(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.restoreMasterStripInsertParamByName` | removed: Call restoreStripInsertParam('master', insertIndex, { name, value }). |
 | `RealtimeEngine.restoreTrackStripInsertParamByName` | `RealtimeEngine.restoreStripInsertParam`: restoreStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
+| `RealtimeEngine.setBusSidechain(sourceId)` | removed: pass it as id in SidechainSource |
+| `RealtimeEngine.setBusSidechain(sourceKind)` | removed: pass it as kind in SidechainSource |
 | `RealtimeEngine.setBusSidechain` | setBusSidechain(busId, insertIndex, source: SidechainSource \| null); removal is null and a source id of 0 is a RangeError |
 | `RealtimeEngine.setBusStripInsertParamByName` | `RealtimeEngine.setBusInsertParam`: setBusInsertParam(busId, insertIndex, { name, value }) replaces setBusStripInsertParamByName(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.setLaneSidechain` | `RealtimeEngine.setStripSidechain` |
 | `RealtimeEngine.setMasterStripInsertParamByName` | removed: Call setStripInsertParam('master', insertIndex, { name, value }). |
+| `RealtimeEngine.setPartRig(destinationId)` | removed: pass destinationId as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
+| `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is removed |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
+| `SonareEngine.addClip(buffer)` (`./worklet`) | removed: pass it as channels or pageProvider in EngineClip |
+| `SonareEngine.addClip(opts)` (`./worklet`) | removed: pass it as the remaining clip fields in EngineClip |
+| `SonareEngine.addClip(startPpq)` (`./worklet`) | removed: pass startPpq as a field of EngineClip |
 | `SonareEngine.addClip` (`./worklet`) | addClip(trackId, clip: Omit<EngineClip, 'trackId'>) with exactly one of channels and pageProvider |
+| `SonareEngine.canSetBusSidechain(sourceId)` (`./worklet`) | removed: pass it as id in SidechainSource |
+| `SonareEngine.canSetBusSidechain(sourceKind)` (`./worklet`) | removed: pass it as kind in SidechainSource |
 | `SonareEngine.canSetBusSidechain` (`./worklet`) | canSetBusSidechain(busId, insertIndex, source: SidechainSource) |
 | `SonareEngine.renderOffline` (`./worklet`) | request-only renderOffline(request: SonareEngineRenderOfflineRequest); the frame-count number is a TypeError |
+| `SonareEngine.setBusSidechain(sourceId)` (`./worklet`) | removed: pass it as id in SidechainSource |
+| `SonareEngine.setBusSidechain(sourceKind)` (`./worklet`) | removed: pass it as kind in SidechainSource |
 | `SonareEngine.setBusSidechain` (`./worklet`) | setBusSidechain(busId, insertIndex, source: SidechainSource \| null); a source id of 0 is a RangeError |
 | `SonareEngine.setBusStripInsertParamByName` (`./worklet`) | `SonareEngine.setBusInsertParam`: setBusInsertParam(busId, insertIndex, { name, value }) replaces setBusStripInsertParamByName(busId, insertIndex, paramName, value) |
 | `SonareEngine.setLaneSidechain` (`./worklet`) | `SonareEngine.setStripSidechain` |
@@ -9775,8 +10165,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none. |
 | `MidiCcBindOptions` | removed: Use ProjectMidiCcBinding: minValue and maxValue now sit beside ccNumber and paramId in the one binding passed to bindMidiCc. |
 | `Mixer.meterTap` | `Mixer.stripMeter` |
+| `RealtimeEngine.bindMidiCc(channel)` | removed: pass channel as a field of ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(controller)` | removed: pass it as ccNumber in ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(options)` | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
+| `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | removed: Call bindMidiCc(binding) with a ProjectMidiCcBinding. |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `SonareEngine.bindMidiCc(channel)` (`./worklet`) | removed: pass channel as a field of ProjectMidiCcBinding |
+| `SonareEngine.bindMidiCc(controller)` (`./worklet`) | removed: pass it as ccNumber in ProjectMidiCcBinding |
+| `SonareEngine.bindMidiCc(options)` (`./worklet`) | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
+| `SonareEngine.bindMidiCc(paramId)` (`./worklet`) | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `SonareEngine.bindMidiCc` (`./worklet`) | bindMidiCc(binding: ProjectMidiCcBinding) takes one entry |
 | `SynthPatch.destinationId` | removed: Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 | `WebMidiCcBinding` | removed: Use ProjectMidiCcBinding in the ccBindings of BindWebMidiOptions; minValue and maxValue sit in the binding itself. |
@@ -9787,7 +10185,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineClip.pageProvider.id` | removed: pageProvider takes the ClipPageProvider instance; a number or { id } is refused |
-| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
+| `Mixer.fromSceneJson` | `Mixer.fromJson`: static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required |
 | `PlaybackLoudnessMeter.constructor(channels)` | removed: pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `PlaybackLoudnessMeter.constructor(sampleRate)` | removed: pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate }) |
 | `RealtimeEngine.clearClipPage` | removed: call clear(pageIndex) on the ClipPageProvider |
@@ -9795,6 +10193,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.constructor` | new RealtimeEngine({ sampleRate, maxBlockSize?, commandCapacity?, telemetryCapacity?, maxChannels? }) replaces new RealtimeEngine(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity, maxChannels); sampleRate is required |
 | `RealtimeEngine.createClipPageProvider` | removed: new ClipPageProvider({ numChannels, numSamples, pageFrames }) creates a provider no engine owns |
 | `RealtimeEngine.destroyClipPageProvider` | removed: call destroy() on the ClipPageProvider |
+| `RealtimeEngine.prepare(commandCapacity)` | removed: pass commandCapacity as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(maxBlockSize)` | removed: pass maxBlockSize as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(maxChannels)` | removed: pass maxChannels as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(sampleRate)` | removed: pass sampleRate as a field of RealtimeEngineConfig |
+| `RealtimeEngine.prepare(telemetryCapacity)` | removed: pass telemetryCapacity as a field of RealtimeEngineConfig |
 | `RealtimeEngine.prepare` | prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation |
 | `RealtimeEngine.supplyClipPage` | removed: call supply(pageIndex, channels) on the ClipPageProvider |
 | `SonarePlaybackWorkletProcessor.constructor(port)` (`./worklet`) | removed: pass port in the one options object: new SonarePlaybackWorkletProcessor({ ...processorOptions, port }), typed SonarePlaybackWorkletProcessorConstructorOptions; processorOptions itself still refuses port |
@@ -9806,10 +10209,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineBounceResult.frames` | removed: Read channels[0].length; the result is planar, with channels, numChannels and sampleRate. |
+| `EngineBounceResult.frames` | removed: Read channels[0].length; the result is planar, with channels and sampleRate. |
 | `EngineBounceResult.interleaved` | `EngineBounceResult.channels` |
-| `RealtimeEngine.bounceOffline` | bounceOffline returns { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer |
-| `SonareEngine.bounceOffline` (`./worklet`) | bounceOffline resolves to { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer |
+| `RealtimeEngine.bounceOffline` | bounceOffline returns { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer |
+| `SonareEngine.bounceOffline` (`./worklet`) | bounceOffline resolves to { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer |
 
 #### Channel counts are numChannels
 
@@ -10041,14 +10444,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngineTransportRequestMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive the engine through SonareEngine and SonareRealtimeEngineNode methods |
 | `SonareEngineTransportResponseMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive the engine through SonareEngine and SonareRealtimeEngineNode methods |
 | `SonareFailurePayload` (`./worklet`) | removed: a worklet and worker wire type, no longer exported; read the code and message from the SonareError a call throws or rejects with |
-| `SonarePlaybackConfigMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackDestroyMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackDiagnosticsReplyMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackDiagnosticsRequestMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackErrorMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackOrientationMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
-| `SonarePlaybackResetMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns |
+| `SonarePlaybackConfigMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackDestroyMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackDiagnosticsReplyMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackDiagnosticsRequestMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackErrorMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackOrientationMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
+| `SonarePlaybackResetMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns |
 | `SonareWorkletDestroyMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; configure the processor through SonareWorkletProcessorOptions |
 | `SonareWorkletMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; configure the processor through SonareWorkletProcessorOptions |
 | `SonareWorkletScheduleInsertAutomationMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; configure the processor through SonareWorkletProcessorOptions |
@@ -10262,6 +10665,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.setClipFade(fadeIn)` | removed: pass it as fadeInPpq and fadeInCurve in ProjectClipFadeInput |
+| `Project.setClipFade(fadeOut)` | removed: pass it as fadeOutPpq and fadeOutCurve in ProjectClipFadeInput |
 | `Project.setClipFade` | setClipFade takes one { fadeInPpq, fadeInCurve, fadeOutPpq, fadeOutCurve } object instead of two ProjectClipFade objects |
 | `ProjectClipFade` | removed: Call setClipFade(clipId, { fadeInPpq, fadeInCurve, fadeOutPpq, fadeOutCurve }) with one flat ProjectClipFadeInput. |
 
@@ -10271,6 +10676,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `Project.moveClip` | the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError |
 | `Project.setClipTakes` | the active take is options.activeTakeId; absent means the base source and an explicit 0 is a RangeError |
+| `Project.setMarker(markerId)` | removed: pass it as id in ProjectMarkerInput |
+| `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
+| `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
 | `Project.setMarker` | setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
@@ -10397,14 +10805,34 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.analyzeTempo` | analyzeTempo also takes one request object { samples, sampleRate, ...options } |
+| `Project.autoTempo(applyTimeSignatures)` | removed: pass applyTimeSignatures as a field of ProjectAutoTempoOptions |
+| `Project.autoTempo(candidateIndex)` | removed: pass candidateIndex as a field of ProjectAutoTempoOptions |
 | `Project.autoTempo` | autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments |
+| `Project.bakeMidiFx(clipId)` | removed: pass clipId as a field of ProjectMidiFxBakeRequest |
+| `Project.bakeMidiFx(configJson)` | removed: pass it as config in ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
+| `Project.clearPartRig(destinationId)` | removed: pass destinationId as a field of PartRigKey |
+| `Project.clearPartRig(part)` | removed: pass part as a field of PartRigKey |
 | `Project.clearPartRig` | clearPartRig takes one PartRigKey object instead of (destinationId, part) |
 | `Project.rehydrateVocalEdits` | the cancel predicate moves into an options object: rehydrateVocalEdits(originals, { cancel }) |
 | `Project.setAssistSidecar` | the six-argument positional form is gone; pass one ProjectAssistSidecarInput |
+| `Project.setAudioSourceMetadata(contentHash)` | removed: pass contentHash as a field of ProjectAudioSourceMetadataInput |
+| `Project.setAudioSourceMetadata(externalStemRole)` | removed: pass externalStemRole as a field of ProjectAudioSourceMetadataInput |
+| `Project.setAudioSourceMetadata(sourceId)` | removed: pass sourceId as a field of ProjectAudioSourceMetadataInput |
 | `Project.setAudioSourceMetadata` | setAudioSourceMetadata takes one { sourceId, contentHash, externalStemRole } object |
+| `Project.setClipLoop(loopCrossfadePpq)` | removed: pass loopCrossfadePpq as a field of ProjectClipLoopInput |
+| `Project.setClipLoop(loopLengthPpq)` | removed: pass loopLengthPpq as a field of ProjectClipLoopInput |
+| `Project.setClipLoop(loopMode)` | removed: pass loopMode as a field of ProjectClipLoopInput |
 | `Project.setClipLoop` | setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments |
+| `Project.setPartRig(destinationId)` | removed: pass destinationId as a field of PartRigRequest |
+| `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
+| `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
+| `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest |
+| `Project.setProgramOnChannel(bank)` | removed: pass bank as a field of ProjectProgramInput |
+| `Project.setProgramOnChannel(channel)` | removed: pass channel as a field of ProjectProgramInput |
+| `Project.setProgramOnChannel(group)` | removed: pass group as a field of ProjectProgramInput |
+| `Project.setProgramOnChannel(program)` | removed: pass program as a field of ProjectProgramInput |
 | `Project.setProgramOnChannel` | setProgramOnChannel takes one { group, channel, program, bank?: { msb, lsb } } object; bank is no longer a 14-bit number |
 | `VocalEditWorkerReadOptions` | removed: Read the committed state on VocalEditWorkerSession and the draft on the VocalEditWorkerDraft from beginEdit(). |
 | `VocalEditWorkerSession.destinationSampleToSourceSample(options)` | removed: Drop options. Call destinationSampleToSourceSample(noteId, destinationSample) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
@@ -10539,8 +10967,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `ExternalSeparatedStem.planarSamples` | `ExternalSeparatedStem.channels` |
 | `Project.addClip` | addClip takes planar channels plus sampleRate instead of audio, audioChannels and audioSampleRate |
-| `Project.bounce` | bounce returns { channels, sampleRate, numChannels } instead of an interleaved Float32Array; sampleRate is no longer an option |
+| `Project.bounce` | bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option |
 | `Project.importExternalStems` | each stem takes channels instead of planarSamples and layout is 'mono' \| 'stereo' |
+| `Project.setSourceAudio(audio)` | removed: pass it as channels in ProjectSourceAudioInput |
+| `Project.setSourceAudio(channels)` | removed: drop the count; the channel count is channels.length in ProjectSourceAudioInput |
+| `Project.setSourceAudio(sampleRate)` | removed: pass sampleRate as a field of ProjectSourceAudioInput |
+| `Project.setSourceAudio(sourceId)` | removed: pass sourceId as a field of ProjectSourceAudioInput |
 | `Project.setSourceAudio` | setSourceAudio takes { sourceId, channels, sampleRate } with planar channels instead of interleaved audio plus a channel count |
 | `ProjectClipDesc.audioChannels` | removed: Pass planar channels: Float32Array[] with sampleRate; the channel count is channels.length, so no count field is needed. |
 | `ProjectClipDesc.audioSampleRate` | `ProjectClipDesc.sampleRate` |
@@ -11279,7 +11711,7 @@ mixer.delete();
 WASM, 2.0.0:
 
 ```ts
-using mixer = new Mixer(scene);
+using mixer = Mixer.fromJson(json, { sampleRate: 48000 });
 // or: mixer.destroy();
 ```
 
@@ -11317,7 +11749,7 @@ await using client = new OfflineWorkerClient({ worker, terminateWorkerOnDestroy:
 
 ### Seconds are spelled Sec and _sec
 
-Time quantities in seconds end in `Sec` (`_sec` in Python and C, `-sec` in CLI flags); `Seconds` suffixes and unit-less names are renamed.
+Time quantities in seconds end in `Sec` (`_sec` in Python and C, `-sec` in CLI flags); `Seconds` suffixes and unit-less names are renamed. Where a call takes a position or length in seconds beside the sample form, a refused seconds value is named by the key the caller wrote (`paddingSec`, `range.endSec`) and its domain is stated in seconds at the call's sample rate.
 
 WASM, 1.x:
 
@@ -11892,7 +12324,7 @@ timeStretch(samples, 44100, 1.25, 2048, 512);
 WASM, 2.0.0:
 
 ```ts
-timeStretch({ samples, sampleRate: 44100, rate: 1.25, nFft: 2048, hopLength: 512 });
+timeStretch({ samples, sampleRate: 44100, speedRatio: 1.25, nFft: 2048, hopLength: 512 });
 ```
 
 ### MIDI message packers and GM lookups are module functions
@@ -12018,7 +12450,7 @@ SonareError err = sonare_frames_to_time(10, 0, 512, &t); /* INVALID_PARAMETER */
 
 ### Errors are coded by cause on every surface
 
-Worker and worklet failures are `SonareError` with a code: a missing Worker is `NotSupported`, an unreadable response `InvalidFormat`, and a response after destroy `InvalidState`. An unknown name or invalid conversion is a `RangeError` / `SonareValueError`, never `-1`, `null` or `false`.
+Worker and worklet failures are `SonareError` with a code: a missing Worker is `NotSupported`, an unreadable response `InvalidFormat`, and a response after destroy `InvalidState`. An unknown name or invalid conversion is a `RangeError` / `SonareValueError`, never `-1`, `null` or `false`. A request that is well-formed but names a mode the target cannot run (an upmix, a streaming insert mode that needs the whole signal) is `NotSupported`. On Node and WASM a key that a request object, options bag, config record or parameter bag does not declare is a `TypeError` reading `<entry>: unknown key <path> (expected a, b, c)`, the path running from the request root (`platforms[0].gain`, `params.ratio`), in place of the 1.x `unknown option` and `does not read parameter(s)` texts. On WASM a count or position option is an integer in [0, Number.MAX_SAFE_INTEGER]: a larger value is a `RangeError`, where 1.x let it wrap.
 
 WASM, 1.x:
 
@@ -12036,7 +12468,7 @@ try { new OfflineWorkerClient(); } catch (e) {
 
 ### A refusal names the public entry the caller invoked
 
-Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front.
+Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it.
 
 Python, 1.x:
 
@@ -12138,19 +12570,18 @@ for marker in project.markers():
 
 ### Each operation has exactly one entry point
 
-Duplicated entries are merged: `decompose` absorbs its warm-start variant, `normalize` takes `mode: 'rms'`, bounces have one method per kind, and `Project.fromJson` is the only loader with diagnostics from `project.loadDiagnostics()`. `compile()` returns `ProjectCompileResult`.
+Duplicated entries are merged: `decompose` absorbs its warm-start variant, `normalize` takes `mode: 'rms'`, and bounces have one method per kind. `compile()` returns `ProjectCompileResult`.
 
 WASM, 1.x:
 
 ```ts
-const { project, diagnostics } = Project.fromJsonWithDiagnostics(json);
+decomposeWithInit({ s, nFeatures, nFrames, nComponents, init: 'nndsvd' });
 ```
 
 WASM, 2.0.0:
 
 ```ts
-const project = Project.fromJson(json);
-const diagnostics = project.loadDiagnostics();
+decompose({ s: matrix2d, nComponents, init: 'nndsvd' });
 ```
 
 Python, 1.x:
@@ -12235,7 +12666,7 @@ WASM, 2.0.0:
 
 ```ts
 const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128, commandCapacity: 1024, telemetryCapacity: 1024, maxChannels: 64 });
-const mixer = new Mixer(scene);
+const mixer = new Mixer({ scene, sampleRate: 48000 });
 const project = new Project();
 ```
 
@@ -12246,13 +12677,13 @@ N-channel audio is `channels: Float32Array[]` with `sampleRate`, and Python uses
 WASM, 1.x:
 
 ```ts
-const out = renderPlayback({ samples: interleaved, channels: 6, sampleRate: 48000 });
+project.setSourceAudio(sourceId, interleaved, 2, 48000);
 ```
 
 WASM, 2.0.0:
 
 ```ts
-const out = renderPlayback({ channels: planes, sampleRate: 48000 });
+project.setSourceAudio({ sourceId, channels: [left, right], sampleRate: 48000 });
 ```
 
 ### Stereo-only algorithms take left and right
@@ -12661,7 +13092,7 @@ const config = { version: 2, lfeMixDb: -6 };
 
 ### Documents in a 1.x spelling are refused
 
-A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names.
+A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names. On Node and WASM the facade refuses only a document argument that is not an object, with `TypeError`; everything inside it (an unknown or snake_case key, a wrong-kind value, an unsupported version) is the core's `SonareError` coded `InvalidFormat`, so code that caught `TypeError` for a misspelt document key must test `codeName === 'InvalidFormat'`.
 
 WASM, 1.x:
 

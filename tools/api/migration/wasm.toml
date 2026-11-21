@@ -1011,7 +1011,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "deemphasis"
-changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1019,7 +1019,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "deemphasis"
-changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1079,7 +1079,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "frameSignal"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D; the second positional argument is sampleRate and sampleRate is required"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
@@ -1087,7 +1087,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "frameSignal"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D; the second positional argument is sampleRate and sampleRate is required"
 domain = "analysis"
 rule = "no-internal-types"
 entry = "./analysis"
@@ -1477,7 +1477,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "preemphasis"
-changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1485,7 +1485,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "preemphasis"
-changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1783,7 +1783,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "splitSilence"
-changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1791,7 +1791,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "splitSilence"
-changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1851,7 +1851,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "stftDb"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D; sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "matrix-2d"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
@@ -1859,7 +1859,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "stftDb"
-changed = "returns Matrix2D"
+changed = "returns Matrix2D; sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "matrix-2d"
 entry = "./analysis"
@@ -1936,7 +1936,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "trimSilence"
-changed = "returns TrimResult"
+changed = "returns TrimResult; the second positional argument is sampleRate and sampleRate is required"
 domain = "analysis"
 rule = "no-internal-types"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
@@ -1944,7 +1944,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "trimSilence"
-changed = "returns TrimResult"
+changed = "returns TrimResult; the second positional argument is sampleRate and sampleRate is required"
 domain = "analysis"
 rule = "no-internal-types"
 entry = "./analysis"
@@ -1987,7 +1987,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "zeroCrossings"
-changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
@@ -1995,7 +1995,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "zeroCrossings"
-changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -9144,7 +9144,7 @@ entry = "./analysis"
 [[entry]]
 kind = "function"
 old = "analyze"
-changed = "request gains onProgress?: (progress, stage) => void and cancel?: () => boolean"
+changed = "request gains onProgress?: (progress, stage) => void and cancel?: () => boolean; sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "progress-callback"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyze progress"
@@ -9152,7 +9152,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyze progress"
 [[entry]]
 kind = "function"
 old = "analyze"
-changed = "request gains onProgress?: (progress, stage) => void and cancel?: () => boolean"
+changed = "request gains onProgress?: (progress, stage) => void and cancel?: () => boolean; sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "progress-callback"
 entry = "./analysis"
@@ -9371,7 +9371,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBeats"
-changed = "searches 60-200 BPM (was 30-300)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9379,7 +9379,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBeats"
-changed = "searches 60-200 BPM (was 30-300)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -9388,7 +9388,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBpm"
-changed = "searches 60-200 BPM (was 30-300)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9396,7 +9396,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectBpm"
-changed = "searches 60-200 BPM (was 30-300)"
+changed = "searches 60-200 BPM (was 30-300); sampleRate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -16896,7 +16896,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry a
 kind = "method"
 old = "Mixer.fromSceneJson"
 to = "Mixer.fromJson"
-changed = "static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
+changed = "static fromJson(json, { sampleRate, maxBlockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
 domain = "engine"
 rule = "construction"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::fromJson builds from a scene JSON string"
@@ -21057,7 +21057,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics
 [[entry]]
 kind = "method"
 old = "Project.bounce"
-changed = "bounce returns { channels, sampleRate, numChannels } instead of an interleaved Float32Array; sampleRate is no longer an option"
+changed = "bounce returns { channels, sampleRate } instead of an interleaved Float32Array; sampleRate is not an option"
 domain = "project"
 rule = "planar-channels"
 test = "bindings/wasm/tests/surface/project.test.ts::bounces to planar channels"
@@ -21299,14 +21299,14 @@ rule = "planar-channels"
 [[entry]]
 kind = "field"
 old = "EngineBounceResult.frames"
-removed = "Read channels[0].length; the result is planar, with channels, numChannels and sampleRate."
+removed = "Read channels[0].length; the result is planar, with channels and sampleRate."
 domain = "engine"
 rule = "planar-channels"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.bounceOffline"
-changed = "bounceOffline returns { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer"
+changed = "bounceOffline returns { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer"
 domain = "engine"
 rule = "planar-channels"
 test = "bindings/wasm/tests/surface/engine.test.ts::bounces the timeline to planar channels"
@@ -21314,7 +21314,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::bounces the timeline to plan
 [[entry]]
 kind = "method"
 old = "SonareEngine.bounceOffline"
-changed = "bounceOffline resolves to { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer"
+changed = "bounceOffline resolves to { channels, sampleRate, integratedLufs } with planar channels instead of an interleaved buffer"
 domain = "engine"
 rule = "planar-channels"
 entry = "./worklet"
@@ -22441,7 +22441,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackConfigMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22449,7 +22449,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDestroyMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22457,7 +22457,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDiagnosticsReplyMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22465,7 +22465,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDiagnosticsRequestMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22473,7 +22473,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackErrorMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22481,7 +22481,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22489,7 +22489,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackOrientationMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22497,7 +22497,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackResetMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node SonarePlaybackNode.create returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -30370,3 +30370,1909 @@ domain = "analysis"
 rule = "individual"
 entry = "./analysis"
 test = "bindings/wasm/tests/empty-nan-guards.test.ts::analyzeBpm refuses a maxCandidates past the safe-integer range"
+
+[[entry]]
+kind = "option"
+old = "hpss(kernelHarmonic)"
+removed = "pass kernelHarmonic as a field of HpssRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpss(kernelPercussive)"
+removed = "pass kernelPercussive as a field of HpssRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpss(nFft)"
+removed = "pass nFft as a field of HpssRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpss(hopLength)"
+removed = "pass hopLength as a field of HpssRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpss(hardMask)"
+removed = "pass hardMask as a field of HpssRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(kernelHarmonic)"
+removed = "pass kernelHarmonic as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(kernelPercussive)"
+removed = "pass kernelPercussive as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(nFft)"
+removed = "pass nFft as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(hopLength)"
+removed = "pass hopLength as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(hardMask)"
+removed = "pass hardMask as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(kernelHarmonic)"
+removed = "pass kernelHarmonic as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(kernelPercussive)"
+removed = "pass kernelPercussive as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(nFft)"
+removed = "pass nFft as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(hopLength)"
+removed = "pass hopLength as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "hpssWithResidual(hardMask)"
+removed = "pass hardMask as a field of HpssWithResidualRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "spectralEdit(ops)"
+removed = "pass ops as a field of SpectralEditOptions"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "timeStretch(rate)"
+removed = "pass it as speedRatio in TimeStretchRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "timeStretch(nFft)"
+removed = "pass nFft as a field of TimeStretchRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "timeStretch(hopLength)"
+removed = "pass hopLength as a field of TimeStretchRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchShift(semitones)"
+removed = "pass it as pitchSemitones in PitchShiftRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchShift(nFft)"
+removed = "pass nFft as a field of PitchShiftRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchShift(hopLength)"
+removed = "pass hopLength as a field of PitchShiftRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(rate)"
+removed = "pass it as speedRatio in PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(nFft)"
+removed = "pass nFft as a field of PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(hopLength)"
+removed = "pass hopLength as a field of PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(rate)"
+removed = "pass it as speedRatio in PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(nFft)"
+removed = "pass nFft as a field of PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(hopLength)"
+removed = "pass hopLength as a field of PhaseVocoderRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "pitchCorrectToMidi(currentMidi)"
+removed = "pass currentMidi as a field of PitchCorrectToMidiRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchCorrectToMidi(targetMidi)"
+removed = "pass targetMidi as a field of PitchCorrectToMidiRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchCorrectTimevarying(f0Hz)"
+removed = "pass f0Hz as a field of PitchCorrectOptions"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchCorrectTimevarying(hopLength)"
+removed = "pass hopLength as a field of PitchCorrectOptions"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "remix(intervals)"
+removed = "pass intervals as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "remix(alignZeros)"
+removed = "pass alignZeros as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "remix(intervals)"
+removed = "pass intervals as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "remix(alignZeros)"
+removed = "pass alignZeros as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "remixAlignedIntervals(intervals)"
+removed = "pass intervals as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "remixAlignedIntervals(alignZeros)"
+removed = "pass alignZeros as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "remixAlignedIntervals(intervals)"
+removed = "pass intervals as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "remixAlignedIntervals(alignZeros)"
+removed = "pass alignZeros as a field of RemixRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "trim(thresholdDb)"
+removed = "pass thresholdDb as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trim(frameLength)"
+removed = "pass frameLength as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trim(hopLength)"
+removed = "pass hopLength as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trim(thresholdDb)"
+removed = "pass thresholdDb as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "trim(frameLength)"
+removed = "pass frameLength as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "trim(hopLength)"
+removed = "pass hopLength as a field of TrimRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "normalize(targetDb)"
+removed = "pass targetDb as a field of NormalizeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "normalize(mode)"
+removed = "pass mode as a field of NormalizeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(thresholdDb)"
+removed = "pass thresholdDb as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(frameLength)"
+removed = "pass frameLength as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(hopLength)"
+removed = "pass hopLength as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(thresholdDb)"
+removed = "pass thresholdDb as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(frameLength)"
+removed = "pass frameLength as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringSilenceRatio(hopLength)"
+removed = "pass hopLength as a field of MeteringSilenceRatioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "masteringStreamingPreview(platforms)"
+removed = "pass platforms as a field of MasteringStreamingPreviewRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertParamNames(name)"
+removed = "pass it as insert in MasteringInsertParamNamesRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertParamInfo(name)"
+removed = "pass it as insert in MasteringInsertParamInfoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertParamInfo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringInsertParamInfoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertTiming(name)"
+removed = "pass it as insert in MasteringInsertTimingRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertTiming(params)"
+removed = "pass params as a field of MasteringInsertTimingRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringInsertTiming(sampleRate)"
+removed = "pass sampleRate as a field of MasteringInsertTimingRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudio(presetName)"
+removed = "pass it as preset in MasterAudioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudio(overrides)"
+removed = "pass overrides as a field of MasterAudioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudio(onProgress)"
+removed = "pass onProgress as a field of MasterAudioRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(left)"
+removed = "pass left as a field of MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(right)"
+removed = "pass right as a field of MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(presetName)"
+removed = "pass it as preset in MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(overrides)"
+removed = "pass overrides as a field of MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masterAudioStereo(onProgress)"
+removed = "pass onProgress as a field of MasterAudioStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(left)"
+removed = "pass left as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(right)"
+removed = "pass right as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(sampleRate)"
+removed = "pass sampleRate as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(left)"
+removed = "pass left as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(right)"
+removed = "pass right as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoCorrelation(sampleRate)"
+removed = "pass sampleRate as a field of MeteringStereoCorrelationRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(left)"
+removed = "pass left as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(right)"
+removed = "pass right as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(sampleRate)"
+removed = "pass sampleRate as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(left)"
+removed = "pass left as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(right)"
+removed = "pass right as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringStereoWidth(sampleRate)"
+removed = "pass sampleRate as a field of MeteringStereoWidthRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(left)"
+removed = "pass left as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(right)"
+removed = "pass right as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(sampleRate)"
+removed = "pass sampleRate as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(left)"
+removed = "pass left as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(right)"
+removed = "pass right as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringPhaseScope(sampleRate)"
+removed = "pass sampleRate as a field of MeteringPhaseScopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(left)"
+removed = "pass left as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(right)"
+removed = "pass right as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(sampleRate)"
+removed = "pass sampleRate as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(left)"
+removed = "pass left as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(right)"
+removed = "pass right as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "meteringVectorscope(sampleRate)"
+removed = "pass sampleRate as a field of MeteringVectorscopeRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "waveformPeaks(samples)"
+removed = "pass planar channels: Float32Array[] as channels in WaveformPeaksRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "waveformPeaks(channels)"
+removed = "drop the count; the channel count is channels.length in WaveformPeaksRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "waveformPeaks(samples)"
+removed = "pass planar channels: Float32Array[] as channels in WaveformPeaksRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "waveformPeaks(channels)"
+removed = "drop the count; the channel count is channels.length in WaveformPeaksRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "waveformPeakPyramid(samples)"
+removed = "pass planar channels: Float32Array[] as channels in WaveformPeakPyramidRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "waveformPeakPyramid(channels)"
+removed = "drop the count; the channel count is channels.length in WaveformPeakPyramidRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "waveformPeakPyramid(samples)"
+removed = "pass planar channels: Float32Array[] as channels in WaveformPeakPyramidRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "waveformPeakPyramid(channels)"
+removed = "drop the count; the channel count is channels.length in WaveformPeakPyramidRequest"
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "mixStereo(leftChannels)"
+removed = "pass leftChannels as a field of MixStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mixStereo(rightChannels)"
+removed = "pass rightChannels as a field of MixStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mixStereo(sampleRate)"
+removed = "pass sampleRate as a field of MixStereoRequest"
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "voiceChangeRealtime(samples)"
+removed = "pass planar channels as channels in VoiceChangeRealtimeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "voiceChangeRealtime(sampleRate)"
+removed = "pass sampleRate as a field of VoiceChangeRealtimeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "voiceChangeRealtime(preset)"
+removed = "pass it as config in VoiceChangeRealtimeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "roomGeometryFromEstimate(estimate)"
+removed = "pass estimate as a field of RoomGeometryFromEstimateRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbConfigForRoom(estimate)"
+removed = "pass estimate as a field of MasteringRepairDereverbConfigForRoomRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairNoiseBandBins(nFft)"
+removed = "pass nFft as a field of MasteringRepairNoiseBandBinsRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairNoiseBandBins(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairNoiseBandBinsRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclickStereo(left)"
+removed = "pass left as a field of MasteringRepairDeclickStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclickStereo(right)"
+removed = "pass right as a field of MasteringRepairDeclickStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclickStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDeclickStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclickStereo(config)"
+removed = "pass config as a field of MasteringRepairDeclickStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclipStereo(left)"
+removed = "pass left as a field of MasteringRepairDeclipStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclipStereo(right)"
+removed = "pass right as a field of MasteringRepairDeclipStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclipStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDeclipStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDeclipStereo(config)"
+removed = "pass config as a field of MasteringRepairDeclipStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDecrackleStereo(left)"
+removed = "pass left as a field of MasteringRepairDecrackleStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDecrackleStereo(right)"
+removed = "pass right as a field of MasteringRepairDecrackleStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDecrackleStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDecrackleStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDecrackleStereo(config)"
+removed = "pass config as a field of MasteringRepairDecrackleStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDehumStereo(left)"
+removed = "pass left as a field of MasteringRepairDehumStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDehumStereo(right)"
+removed = "pass right as a field of MasteringRepairDehumStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDehumStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDehumStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDehumStereo(config)"
+removed = "pass config as a field of MasteringRepairDehumStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalStereo(left)"
+removed = "pass left as a field of MasteringRepairDenoiseClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalStereo(right)"
+removed = "pass right as a field of MasteringRepairDenoiseClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDenoiseClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalStereo(config)"
+removed = "pass config as a field of MasteringRepairDenoiseClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalStereo(left)"
+removed = "pass left as a field of MasteringRepairDereverbClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalStereo(right)"
+removed = "pass right as a field of MasteringRepairDereverbClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDereverbClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalStereo(config)"
+removed = "pass config as a field of MasteringRepairDereverbClassicalStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairTrimSilenceStereo(left)"
+removed = "pass left as a field of MasteringRepairTrimSilenceStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairTrimSilenceStereo(right)"
+removed = "pass right as a field of MasteringRepairTrimSilenceStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairTrimSilenceStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairTrimSilenceStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairTrimSilenceStereo(config)"
+removed = "pass config as a field of MasteringRepairTrimSilenceStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDetectTrimRangeStereo(left)"
+removed = "pass left as a field of MasteringRepairDetectTrimRangeStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDetectTrimRangeStereo(right)"
+removed = "pass right as a field of MasteringRepairDetectTrimRangeStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDetectTrimRangeStereo(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDetectTrimRangeStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDetectTrimRangeStereo(config)"
+removed = "pass config as a field of MasteringRepairDetectTrimRangeStereoRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalLinked(channels)"
+removed = "pass channels as a field of MasteringRepairDenoiseClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalLinked(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDenoiseClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDenoiseClassicalLinked(config)"
+removed = "pass config as a field of MasteringRepairDenoiseClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalLinked(channels)"
+removed = "pass channels as a field of MasteringRepairDereverbClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalLinked(sampleRate)"
+removed = "pass sampleRate as a field of MasteringRepairDereverbClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "masteringRepairDereverbClassicalLinked(config)"
+removed = "pass config as a field of MasteringRepairDereverbClassicalLinkedRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(s)"
+removed = "pass s as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(nFeatures)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(nFrames)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(nComponents)"
+removed = "pass nComponents as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(nIter)"
+removed = "pass nIter as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(beta)"
+removed = "pass beta as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "decompose(s)"
+removed = "pass s as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "decompose(nFeatures)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "decompose(nFrames)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "decompose(nComponents)"
+removed = "pass nComponents as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "decompose(nIter)"
+removed = "pass nIter as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "decompose(beta)"
+removed = "pass beta as a field of DecomposeRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(s)"
+removed = "pass s as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(nFeatures)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(nFrames)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(aggregate)"
+removed = "pass aggregate as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(k)"
+removed = "pass k as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(width)"
+removed = "pass width as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(s)"
+removed = "pass s as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(nFeatures)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(nFrames)"
+removed = "the Matrix2D input carries it as rows / cols"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(aggregate)"
+removed = "pass aggregate as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(k)"
+removed = "pass k as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "nnFilter(width)"
+removed = "pass width as a field of NnFilterRequest"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "Audio.hpss(kernelHarmonic)"
+removed = "pass kernelHarmonic as a field of HpssRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.hpss(kernelPercussive)"
+removed = "pass kernelPercussive as a field of HpssRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.timeStretch(rate)"
+removed = "pass it as speedRatio in TimeStretchRequest"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchShift(semitones)"
+removed = "pass it as pitchSemitones in PitchShiftRequest"
+domain = "core"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchCorrectToMidi(currentMidi)"
+removed = "pass currentMidi as a field of PitchCorrectToMidiRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchCorrectToMidi(targetMidi)"
+removed = "pass targetMidi as a field of PitchCorrectToMidiRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.normalize(targetDb)"
+removed = "pass targetDb as a field of NormalizeRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.trim(thresholdDb)"
+removed = "pass thresholdDb as a field of TrimRequest"
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.masterAudio(presetName)"
+removed = "pass it as preset in MasterAudioRequest"
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.masterAudio(overrides)"
+removed = "pass overrides as a field of MasterAudioRequest"
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.masterAudio(onProgress)"
+removed = "pass onProgress as a field of MasterAudioRequest"
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Mixer.addSend(id)"
+removed = "pass id as a field of MixerSend"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.addSend(destinationBusId)"
+removed = "pass destinationBusId as a field of MixerSend"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.addSend(sendDb)"
+removed = "pass sendDb as a field of MixerSend"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.addSend(timing)"
+removed = "pass timing as a field of MixerSend"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleFaderAutomation(samplePos)"
+removed = "pass samplePos as a field of FaderAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleFaderAutomation(faderDb)"
+removed = "pass faderDb as a field of FaderAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleFaderAutomation(curve)"
+removed = "pass curve as a field of FaderAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedulePanAutomation(samplePos)"
+removed = "pass samplePos as a field of PanAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedulePanAutomation(pan)"
+removed = "pass pan as a field of PanAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedulePanAutomation(curve)"
+removed = "pass curve as a field of PanAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleWidthAutomation(samplePos)"
+removed = "pass samplePos as a field of WidthAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleWidthAutomation(width)"
+removed = "pass width as a field of WidthAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleWidthAutomation(curve)"
+removed = "pass curve as a field of WidthAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(paramId)"
+removed = "pass paramId as a field of InsertAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(samplePos)"
+removed = "pass samplePos as a field of InsertAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(value)"
+removed = "pass value as a field of InsertAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(curve)"
+removed = "pass curve as a field of InsertAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleSendAutomation(samplePos)"
+removed = "pass samplePos as a field of SendAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleSendAutomation(db)"
+removed = "pass it as sendDb in SendAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleSendAutomation(curve)"
+removed = "pass curve as a field of SendAutomationPoint"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setClipLoop(loopMode)"
+removed = "pass loopMode as a field of ProjectClipLoopInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setClipLoop(loopLengthPpq)"
+removed = "pass loopLengthPpq as a field of ProjectClipLoopInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setClipLoop(loopCrossfadePpq)"
+removed = "pass loopCrossfadePpq as a field of ProjectClipLoopInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setClipFade(fadeIn)"
+removed = "pass it as fadeInPpq and fadeInCurve in ProjectClipFadeInput"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Project.setClipFade(fadeOut)"
+removed = "pass it as fadeOutPpq and fadeOutCurve in ProjectClipFadeInput"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Project.setSourceAudio(sourceId)"
+removed = "pass sourceId as a field of ProjectSourceAudioInput"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.setSourceAudio(audio)"
+removed = "pass it as channels in ProjectSourceAudioInput"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.setSourceAudio(channels)"
+removed = "drop the count; the channel count is channels.length in ProjectSourceAudioInput"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.setSourceAudio(sampleRate)"
+removed = "pass sampleRate as a field of ProjectSourceAudioInput"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.setAudioSourceMetadata(sourceId)"
+removed = "pass sourceId as a field of ProjectAudioSourceMetadataInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setAudioSourceMetadata(contentHash)"
+removed = "pass contentHash as a field of ProjectAudioSourceMetadataInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setAudioSourceMetadata(externalStemRole)"
+removed = "pass externalStemRole as a field of ProjectAudioSourceMetadataInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setPartRig(destinationId)"
+removed = "pass destinationId as a field of PartRigRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setPartRig(part)"
+removed = "pass part as a field of PartRigRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setPartRig(mode)"
+removed = "pass mode as a field of PartRigRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setPartRig(inserts)"
+removed = "pass inserts as a field of PartRigRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.clearPartRig(destinationId)"
+removed = "pass destinationId as a field of PartRigKey"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.clearPartRig(part)"
+removed = "pass part as a field of PartRigKey"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setProgramOnChannel(group)"
+removed = "pass group as a field of ProjectProgramInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setProgramOnChannel(channel)"
+removed = "pass channel as a field of ProjectProgramInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setProgramOnChannel(program)"
+removed = "pass program as a field of ProjectProgramInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setProgramOnChannel(bank)"
+removed = "pass bank as a field of ProjectProgramInput"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.bakeMidiFx(clipId)"
+removed = "pass clipId as a field of ProjectMidiFxBakeRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.bakeMidiFx(configJson)"
+removed = "pass it as config in ProjectMidiFxBakeRequest"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.autoTempo(candidateIndex)"
+removed = "pass candidateIndex as a field of ProjectAutoTempoOptions"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.autoTempo(applyTimeSignatures)"
+removed = "pass applyTimeSignatures as a field of ProjectAutoTempoOptions"
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Project.setMarker(markerId)"
+removed = "pass it as id in ProjectMarkerInput"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "option"
+old = "Project.setMarker(ppq)"
+removed = "pass ppq as a field of ProjectMarkerInput"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "option"
+old = "Project.setMarker(name)"
+removed = "pass name as a field of ProjectMarkerInput"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(sampleRate)"
+removed = "pass sampleRate as a field of RealtimeEngineConfig"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(maxBlockSize)"
+removed = "pass maxBlockSize as a field of RealtimeEngineConfig"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(commandCapacity)"
+removed = "pass commandCapacity as a field of RealtimeEngineConfig"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(telemetryCapacity)"
+removed = "pass telemetryCapacity as a field of RealtimeEngineConfig"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(maxChannels)"
+removed = "pass maxChannels as a field of RealtimeEngineConfig"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setBusSidechain(sourceKind)"
+removed = "pass it as kind in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setBusSidechain(sourceId)"
+removed = "pass it as id in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.canSetBusSidechain(sourceKind)"
+removed = "pass it as kind in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.canSetBusSidechain(sourceId)"
+removed = "pass it as id in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bindMidiCc(channel)"
+removed = "pass channel as a field of ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bindMidiCc(controller)"
+removed = "pass it as ccNumber in ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bindMidiCc(paramId)"
+removed = "pass paramId as a field of ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bindMidiCc(options)"
+removed = "pass it as minValue and maxValue in ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setPartRig(destinationId)"
+removed = "pass destinationId as a field of PartRigRequest"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setPartRig(part)"
+removed = "pass part as a field of PartRigRequest"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setPartRig(mode)"
+removed = "pass mode as a field of PartRigRequest"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setPartRig(inserts)"
+removed = "pass inserts as a field of PartRigRequest"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setMidiFx(configJson)"
+removed = "pass it as config in MidiFxConfig"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.setBusSidechain(sourceKind)"
+removed = "pass it as kind in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.setBusSidechain(sourceId)"
+removed = "pass it as id in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.canSetBusSidechain(sourceKind)"
+removed = "pass it as kind in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.canSetBusSidechain(sourceId)"
+removed = "pass it as id in SidechainSource"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.bindMidiCc(channel)"
+removed = "pass channel as a field of ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.bindMidiCc(controller)"
+removed = "pass it as ccNumber in ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.bindMidiCc(paramId)"
+removed = "pass paramId as a field of ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.bindMidiCc(options)"
+removed = "pass it as minValue and maxValue in ProjectMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.setMidiFx(configJson)"
+removed = "pass it as config in MidiFxConfig"
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.addClip(buffer)"
+removed = "pass it as channels or pageProvider in EngineClip"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.addClip(startPpq)"
+removed = "pass startPpq as a field of EngineClip"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.addClip(opts)"
+removed = "pass it as the remaining clip fields in EngineClip"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"

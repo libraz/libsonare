@@ -72,7 +72,7 @@ const mixer = Mixer.fromSceneJson(json);
 mixer.delete();
 '''
 after = '''
-using mixer = new Mixer(scene);
+using mixer = Mixer.fromJson(json, { sampleRate: 48000 });
 // or: mixer.destroy();
 '''
 [[rule.example]]
@@ -104,7 +104,7 @@ await using client = new OfflineWorkerClient({ worker, terminateWorkerOnDestroy:
 [[rule]]
 slug = "seconds-suffix"
 title = "Seconds are spelled Sec and _sec"
-summary = "Time quantities in seconds end in `Sec` (`_sec` in Python and C, `-sec` in CLI flags); `Seconds` suffixes and unit-less names are renamed."
+summary = "Time quantities in seconds end in `Sec` (`_sec` in Python and C, `-sec` in CLI flags); `Seconds` suffixes and unit-less names are renamed. Where a call takes a position or length in seconds beside the sample form, a refused seconds value is named by the key the caller wrote (`paddingSec`, `range.endSec`) and its domain is stated in seconds at the call's sample rate."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -544,7 +544,7 @@ before = '''
 timeStretch(samples, 44100, 1.25, 2048, 512);
 '''
 after = '''
-timeStretch({ samples, sampleRate: 44100, rate: 1.25, nFft: 2048, hopLength: 512 });
+timeStretch({ samples, sampleRate: 44100, speedRatio: 1.25, nFft: 2048, hopLength: 512 });
 '''
 
 [[rule]]
@@ -649,7 +649,7 @@ SonareError err = sonare_frames_to_time(10, 0, 512, &t); /* INVALID_PARAMETER */
 [[rule]]
 slug = "error-class-by-cause"
 title = "Errors are coded by cause on every surface"
-summary = "Worker and worklet failures are `SonareError` with a code: a missing Worker is `NotSupported`, an unreadable response `InvalidFormat`, and a response after destroy `InvalidState`. An unknown name or invalid conversion is a `RangeError` / `SonareValueError`, never `-1`, `null` or `false`."
+summary = "Worker and worklet failures are `SonareError` with a code: a missing Worker is `NotSupported`, an unreadable response `InvalidFormat`, and a response after destroy `InvalidState`. An unknown name or invalid conversion is a `RangeError` / `SonareValueError`, never `-1`, `null` or `false`. A request that is well-formed but names a mode the target cannot run (an upmix, a streaming insert mode that needs the whole signal) is `NotSupported`. On Node and WASM a key that a request object, options bag, config record or parameter bag does not declare is a `TypeError` reading `<entry>: unknown key <path> (expected a, b, c)`, the path running from the request root (`platforms[0].gain`, `params.ratio`), in place of the 1.x `unknown option` and `does not read parameter(s)` texts. On WASM a count or position option is an integer in [0, Number.MAX_SAFE_INTEGER]: a larger value is a `RangeError`, where 1.x let it wrap."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -664,7 +664,7 @@ try { new OfflineWorkerClient(); } catch (e) {
 [[rule]]
 slug = "entry-named-refusals"
 title = "A refusal names the public entry the caller invoked"
-summary = "Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front."
+summary = "Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it."
 [[rule.example]]
 surface = "python"
 before = '''
@@ -741,15 +741,14 @@ for marker in project.markers():
 [[rule]]
 slug = "one-entry-per-operation"
 title = "Each operation has exactly one entry point"
-summary = "Duplicated entries are merged: `decompose` absorbs its warm-start variant, `normalize` takes `mode: 'rms'`, bounces have one method per kind, and `Project.fromJson` is the only loader with diagnostics from `project.loadDiagnostics()`. `compile()` returns `ProjectCompileResult`."
+summary = "Duplicated entries are merged: `decompose` absorbs its warm-start variant, `normalize` takes `mode: 'rms'`, and bounces have one method per kind. `compile()` returns `ProjectCompileResult`."
 [[rule.example]]
 surface = "wasm"
 before = '''
-const { project, diagnostics } = Project.fromJsonWithDiagnostics(json);
+decomposeWithInit({ s, nFeatures, nFrames, nComponents, init: 'nndsvd' });
 '''
 after = '''
-const project = Project.fromJson(json);
-const diagnostics = project.loadDiagnostics();
+decompose({ s: matrix2d, nComponents, init: 'nndsvd' });
 '''
 [[rule.example]]
 surface = "python"
@@ -812,7 +811,7 @@ const project = Project.create();
 '''
 after = '''
 const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128, commandCapacity: 1024, telemetryCapacity: 1024, maxChannels: 64 });
-const mixer = new Mixer(scene);
+const mixer = new Mixer({ scene, sampleRate: 48000 });
 const project = new Project();
 '''
 
@@ -823,10 +822,10 @@ summary = "N-channel audio is `channels: Float32Array[]` with `sampleRate`, and 
 [[rule.example]]
 surface = "wasm"
 before = '''
-const out = renderPlayback({ samples: interleaved, channels: 6, sampleRate: 48000 });
+project.setSourceAudio(sourceId, interleaved, 2, 48000);
 '''
 after = '''
-const out = renderPlayback({ channels: planes, sampleRate: 48000 });
+project.setSourceAudio({ sourceId, channels: [left, right], sampleRate: 48000 });
 '''
 
 [[rule]]
@@ -1156,7 +1155,7 @@ const config = { version: 2, lfeMixDb: -6 };
 [[rule]]
 slug = "old-documents-refused"
 title = "Documents in a 1.x spelling are refused"
-summary = "A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names."
+summary = "A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names. On Node and WASM the facade refuses only a document argument that is not an object, with `TypeError`; everything inside it (an unknown or snake_case key, a wrong-kind value, an unsupported version) is the core's `SonareError` coded `InvalidFormat`, so code that caught `TypeError` for a misspelt document key must test `codeName === 'InvalidFormat'`."
 [[rule.example]]
 surface = "wasm"
 before = '''
