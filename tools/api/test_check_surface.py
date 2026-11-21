@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import copy
 import json
-import subprocess
 import sys
 import tempfile
 import types
@@ -375,19 +374,28 @@ class LedgerAgainstBaseline(CheckerCase):
         self.assertTrue(any("not compared: ledger old names against v1.10.0" in x for x in lines))
         self.assertTrue(any("not compared: v1.10.0 names gone with no row" in x for x in lines))
 
-    def test_a_default_run_without_the_tag_fails_naming_it(self):
-        repo = self.dir / "repo"
-        repo.mkdir()
-        subprocess.run(["git", "init", "-q", str(repo)], check=True)
-        argv = ["--root", str(repo), "--ledger-dir", str(TD / "ledgers")]
+    def test_a_default_run_without_the_baseline_file_fails_naming_it(self):
+        missing = self.dir / "baseline-missing.tsv"
+        argv = ["--ledger-dir", str(TD / "ledgers"), "--baseline-file", str(missing)]
         code, lines, report = check_surface.run(check_surface.parse_args(argv))
         self.assertEqual(code, 1)
-        expected = (
-            "baseline v1.10.0 cannot be compared: refs/tags/v1.10.0 is not in this clone;"
-            " fetch it with: git fetch origin tag v1.10.0"
-        )
+        expected = f"baseline {missing} is missing; regenerate it with --write-baseline"
         self.assertEqual(lines, [expected])
         self.assertEqual(report, {"error": lines[0]})
+
+    def test_the_baseline_file_round_trips_its_records(self):
+        records = [
+            _rec("python", "field", "bpm_legacy.window", owner="bpm_legacy", member="window"),
+            _rec("node", "class", "Timeline", ctor_private=True),
+            _rec("cli-native", "flag", "bpm --verbose", owner="bpm", member="verbose"),
+        ]
+        path = self.dir / "baseline.tsv"
+        check_surface.write_baseline(path, records + records[:1])
+        back = check_surface.read_baseline(path)
+        self.assertEqual(len(back), 3)
+        key = {(r["surface"], r["kind"], r["name"]): r for r in back}
+        self.assertTrue(key[("node", "class", "Timeline")]["ctor_private"])
+        self.assertEqual(key[("python", "field", "bpm_legacy.window")]["owner"], "bpm_legacy")
 
     def test_old_name_absent_from_the_base_release_fails(self):
         self.base["records"] = [r for r in self.base["records"] if r["name"] != "bpm_legacy"]
@@ -461,31 +469,73 @@ class LedgerAgainstBaseline(CheckerCase):
         self.assertEqual(code, 1)
         self.assertIn("  cli-native flag bpm --tempo", lines)
 
-    def test_a_plain_rename_claims_its_members_moved(self):
-        self.base["records"].append(_rec("wasm", "option", "getBpm(window)", owner="getBpm"))
+    def test_a_rename_covers_a_member_only_where_it_survived_under_the_new_name(self):
+        self.base["records"].append(
+            _rec("wasm", "field", "getBpm.window", owner="getBpm", member="window")
+        )
         code, lines = self.run_base()
         self.assertEqual(code, 1)
-        self.assertIn("  wasm option getBpm(window)", lines)
+        self.assertIn("  wasm field getBpm.window", lines)
+        self.inv["records"].append(
+            _rec("wasm", "field", "detectBpm.window", owner="detectBpm", member="window")
+        )
+        code, lines = self.run_base()
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertTrue(
+            any(x.startswith("  completeness wasm:") and "owner-verified=1" in x for x in lines)
+        )
 
-    def test_a_positional_parameter_rename_needs_no_row_while_the_count_survives(self):
-        self.base["records"] = [
-            r for r in self.base["records"] if (r["surface"], r["name"]) != ("wasm", "getBpm")
-        ]
+    def test_a_changed_owner_does_not_speak_for_a_vanished_keyword(self):
+        self.base["records"].append(
+            _rec("python", "option", "detect_bpm(hop_length)", owner="detect_bpm")
+        )
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertIn("  python option detect_bpm(hop_length)", lines)
+
+    def test_a_removed_owner_speaks_for_its_flags(self):
+        self.base["records"].append(
+            _rec("cli-native", "command", "bpm_old"),
+        )
+        self.base["records"].append(
+            _rec("cli-native", "flag", "bpm_old --fast", owner="bpm_old", member="fast")
+        )
+        fixture = (TD / "ledgers" / "cli.toml").read_text(encoding="utf-8")
+        row = (
+            '[[entry]]\nkind = "command"\nold = "bpm_old"\nremoved = "use bpm"\nfrontend = "native"\n'
+            'domain = "analysis"\nrule = "individual"\n'
+        )
+        led = self.ledgers(
+            wasm=(TD / "ledgers" / "wasm.toml").read_text(encoding="utf-8"),
+            node=(TD / "ledgers" / "node.toml").read_text(encoding="utf-8"),
+            python=(TD / "ledgers" / "python.toml").read_text(encoding="utf-8"),
+            cli=f"{fixture}\n{row}",
+        )
+        code, lines = self.run_base(ledger_dir=led)
+        self.assertEqual(code, 0, "\n".join(lines))
+
+    def test_positional_parameter_names_are_exempt_by_class_and_keywords_are_not(self):
         self.base["records"] += [
-            _sig_rec("wasm", "function", "getBpm", "input"),
             _rec("wasm", "option", "getBpm(input)", owner="getBpm"),
+            _rec("c", "option", "sonare_old_call(rate)", owner="sonare_old_call"),
         ]
         code, lines = self.run_base()
         self.assertEqual(code, 0, "\n".join(lines))
-        self.assertIn(
-            "  not compared: wasm option, 1 names (a TypeScript caller passes them by position"
-            " and the parameter count survived)",
-            lines,
-        )
-        self.base["records"][-2] = _sig_rec("wasm", "function", "getBpm", "input", "rate")
+        wasm = next(x for x in lines if x.startswith("  completeness wasm:"))
+        self.assertIn("exempt=1 (TypeScript parameter names)", wasm)
+        c = next(x for x in lines if x.startswith("  completeness c:"))
+        self.assertIn("exempt=1 (C parameter names)", c)
+        self.base["records"].append(_rec("python", "option", "bpm_new(window)", owner="bpm_new"))
         code, lines = self.run_base()
         self.assertEqual(code, 1)
-        self.assertIn("  wasm option getBpm(input)", lines)
+        self.assertIn("  python option bpm_new(window)", lines)
+
+    def test_a_surface_with_nothing_compared_fails(self):
+        self.base["records"] = [r for r in self.base["records"] if r["surface"] != "cli-python"]
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertTrue(any("completeness cli-python: compared=0" in x for x in lines))
+        self.assertTrue(any("no v1.10.0 name of this surface was compared" in x for x in lines))
 
 
 class Conventions(CheckerCase):

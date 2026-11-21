@@ -148,6 +148,19 @@ EXAMPLE_SURFACES = ("wasm", "node", "python", "c", "cli")
 DEFAULT_LEDGER_DIR = HERE / "migration"
 # The release the ledgers migrate from: every row's old name existed there.
 BASELINE_TAG = "v1.10.0"
+# Today's extractors run once over the BASELINE_TAG tree, frozen so an extractor change
+# cannot shrink the baseline along with the tip. Regenerate with --write-baseline.
+DEFAULT_BASELINE = HERE / "migration" / f"baseline-{BASELINE_TAG}.tsv"
+_BASELINE_COLUMNS = (
+    "surface",
+    "kind",
+    "name",
+    "entries",
+    "owner",
+    "member",
+    "domain",
+    "ctor_private",
+)
 DEFAULT_RULES = HERE / "migration" / "rules.toml"
 DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
@@ -752,21 +765,13 @@ def check_ledger(entries, lookup, selected, by_key=None, baseline=None):
     return failures, changed
 
 
-# Surfaces whose callers pass parameters by position: a renamed parameter breaks no call,
-# so its old name needs no row as long as the call shape (the parameter count) survives.
-POSITIONAL_SURFACES = {"c": "C", "wasm": "TypeScript", "node": "TypeScript"}
-
-
-def _arities(records) -> dict:
-    """(surface, callable, entry) -> the parameter counts of its signatures."""
-    out = collections.defaultdict(set)
-    for r in records:
-        if r["kind"] not in ("function", "method", "class") or not r.get("sigs"):
-            continue
-        name = f"{r['name']}.constructor" if r["kind"] == "class" else r["name"]
-        for e in (r["entries"] or ["."]) if r["surface"] == "wasm" else [None]:
-            out[(r["surface"], name, e)] |= {len(sig["params"]) for sig in r["sigs"]}
-    return out
+# Names a caller never spells: a C or TypeScript parameter is passed by position, so its
+# rename breaks no source. A Python parameter is a keyword and is never in this class.
+UNSPELLED_NAMES = {
+    ("c", "option"): "C parameter names",
+    ("node", "option"): "TypeScript parameter names",
+    ("wasm", "option"): "TypeScript parameter names",
+}
 
 
 def _owner_names(kind: str, name: str) -> list[str]:
@@ -787,13 +792,13 @@ def _owner_names(kind: str, name: str) -> list[str]:
     return out
 
 
-def check_completeness(entries, lookup, baseline, selected, base_records=(), records=()):
-    """Return (orphans, exempt): baseline names gone at tip that no row accounts for.
+def check_completeness(entries, lookup, baseline, selected):
+    """Return (orphans, tally): baseline names gone at tip that no row carries.
 
-    A name is accounted for by its own row of the same kind, or by a row on an owner:
-    a removed or changed owner speaks for its members, while a plain rename (new)
-    claims the members moved with it, so each must exist under the new owner. A
-    command's flags are independent options, so only a removed command speaks for them.
+    A gone name is carried by its own row of the same kind, by a removed owner, or by a
+    changed or renamed owner under whose current name the checker finds it again. A name no
+    caller spells (UNSPELLED_NAMES) is counted apart. ``tally`` maps (surface, bucket) to a
+    count, the buckets being compared, exempt, own, owner and uncovered.
     """
     rows = collections.defaultdict(list)
     for le in entries:
@@ -802,47 +807,44 @@ def check_completeness(entries, lookup, baseline, selected, base_records=(), rec
         for s in ledger_surfaces(le):
             rows[(s, le.data["old"])].append(le.data)
     present = {(s, n) for (s, _k, n, _e) in lookup}
-    was, now = _arities(base_records), _arities(records)
-    renamed = {
-        (s, le.data["old"]): le.data.get("new") or le.data.get("to")
-        for le in entries
-        if le.valid and (le.data.get("new") or le.data.get("to"))
-        for s in ledger_surfaces(le)
-    }
-    orphans, exempt = [], collections.Counter()
+    tally = collections.Counter()
+    for s, _k, _n, _e in baseline:
+        if s in selected:
+            tally[(s, "compared")] += 1
+    orphans = []
     for key in sorted(baseline - lookup, key=lambda k: (k[0], k[1], k[2], k[3] or "")):
         s, kind, name, entry = key
         if s not in selected:
             continue
-        m = re.match(r"^(.*)\((\w+)\)$", name) if kind == "option" else None
-        if m and s in POSITIONAL_SURFACES:
-            fn = m.group(1)
-            before = was.get((s, fn, entry), set())
-            after = now.get((s, renamed.get((s, fn), fn), entry), set())
-            if before and before <= after:
-                exempt[(s, kind)] += 1
-                continue
-        if any(r["kind"] == kind for r in rows[(s, name)]):
+        if (s, kind) in UNSPELLED_NAMES:
+            tally[(s, "exempt")] += 1
             continue
-        covered = False
-        for o in _owner_names(kind, name):
-            if not rows[(s, o)]:
-                continue
-            hit = rows[(s, o)][0]
-            if "new" in hit:
-                covered = (s, hit["new"] + name[len(o) :]) in present
-            else:
-                covered = kind != "flag" or "removed" in hit
-            break
-        if not covered:
-            orphans.append(
-                {
-                    "surface": s,
-                    "kind": kind,
-                    "name": name + (f" [{entry}]" if entry and entry != "." else ""),
-                }
-            )
-    return orphans, exempt
+        if any(r["kind"] == kind for r in rows[(s, name)]):
+            tally[(s, "own")] += 1
+            continue
+        if any(_owner_carries(s, o, name, rows[(s, o)], present) for o in _owner_names(kind, name)):
+            tally[(s, "owner")] += 1
+            continue
+        tally[(s, "uncovered")] += 1
+        orphans.append(
+            {
+                "surface": s,
+                "kind": kind,
+                "name": name + (f" [{entry}]" if entry and entry != "." else ""),
+            }
+        )
+    return orphans, tally
+
+
+def _owner_carries(surface, owner, name, owner_rows, present) -> bool:
+    """Whether a row on ``owner`` carries its member ``name``."""
+    for hit in owner_rows:
+        if "removed" in hit:
+            return True
+        current = hit.get("new") or hit.get("to") or owner
+        if (surface, current + name[len(owner) :]) in present:
+            return True
+    return False
 
 
 # ------------------------------------------------------------------ checks
@@ -2396,6 +2398,40 @@ _CATEGORY_FITS = {
 }
 
 
+def write_baseline(path: Path, records: list[dict]) -> None:
+    """Write the baseline names the completeness and old-name checks read, one per line."""
+    lines = ["\t".join(_BASELINE_COLUMNS)]
+    for r in records:
+        cells = [
+            r["surface"],
+            r["kind"],
+            r["name"],
+            ",".join(r["entries"] or []),
+            r.get("owner") or "",
+            r.get("member") or "",
+            r.get("domain") or "",
+            "1" if r.get("ctor_private") else "",
+        ]
+        if any("\t" in c or "\n" in c for c in cells):
+            raise ValueError(f"baseline name cannot be written as a line: {cells!r}")
+        lines.append("\t".join(cells))
+    lines[1:] = sorted(set(lines[1:]))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def read_baseline(path: Path) -> list[dict]:
+    rows = path.read_text(encoding="utf-8").splitlines()
+    if not rows or tuple(rows[0].split("\t")) != _BASELINE_COLUMNS:
+        raise SystemExit(f"{path}: header is not {chr(9).join(_BASELINE_COLUMNS)!r}")
+    out = []
+    for line in rows[1:]:
+        r = dict(zip(_BASELINE_COLUMNS, line.split("\t")))
+        r["entries"] = r["entries"].split(",") if r["entries"] else []
+        r["ctor_private"] = r["ctor_private"] == "1"
+        out.append(r)
+    return out
+
+
 def run(args) -> tuple[int, list[str], dict]:
     root = args.root
     if args.baseline_inventory_file:
@@ -2403,14 +2439,22 @@ def run(args) -> tuple[int, list[str], dict]:
         why = ""
     elif args.inventory_file:
         base_inv, why = None, "the inventory was read from a file; pass --baseline-inventory-file"
-    else:
+    elif args.write_baseline:
         import inventory
 
-        # A default run compares against the release; one that cannot is a failure, not a pass.
         base_inv, why = inventory.build_at_tag(root, BASELINE_TAG)
         if base_inv is None:
-            line = f"baseline {BASELINE_TAG} cannot be compared: {why}"
+            line = f"baseline {BASELINE_TAG} cannot be built: {why}"
             return 1, [line], {"error": line}
+        write_baseline(args.baseline_file, base_inv["records"])
+        line = f"wrote {len(base_inv['records'])} {BASELINE_TAG} names to {args.baseline_file}"
+        return 0, [line], {"written": line}
+    else:
+        # A default run compares against the release; one that cannot is a failure, not a pass.
+        if not args.baseline_file.is_file():
+            line = f"baseline {args.baseline_file} is missing; regenerate it with --write-baseline"
+            return 1, [line], {"error": line}
+        base_inv, why = {"records": read_baseline(args.baseline_file)}, ""
     out: list[str] = []
     failed = False
     if args.inventory_file:
@@ -2536,16 +2580,31 @@ def run(args) -> tuple[int, list[str], dict]:
         out.append(f"  not compared: {BASELINE_TAG} names gone with no row (--domain / --match)")
         orphans = []
     else:
-        orphans, exempt = check_completeness(
-            entries, lookup, baseline, selected, base_inv["records"], records
-        )
+        orphans, tally = check_completeness(entries, lookup, baseline, selected)
         out.append(f"{BASELINE_TAG} names gone with no ledger row: {len(orphans)}")
         out += [f"  {o['surface']} {o['kind']} {o['name']}" for o in orphans]
-        for (s, k), n in sorted(exempt.items()):
-            out.append(
-                f"  not compared: {s} {k}, {n} names (a {POSITIONAL_SURFACES[s]} caller passes"
-                " them by position and the parameter count survived)"
+        for s in sorted(selected):
+            exempt = ", ".join(
+                sorted({why for (es, _k), why in UNSPELLED_NAMES.items() if es == s})
             )
+            out.append(
+                f"  completeness {s}: compared={tally[(s, 'compared')]}"
+                f" exempt={tally[(s, 'exempt')]}{f' ({exempt})' if exempt else ''}"
+                f" own-row={tally[(s, 'own')]} owner-verified={tally[(s, 'owner')]}"
+                f" uncovered={tally[(s, 'uncovered')]}"
+            )
+            if not tally[(s, "compared")]:
+                # An extractor that stopped reading the baseline agrees with every ledger.
+                out.append(f"    FAIL {s}: no {BASELINE_TAG} name of this surface was compared")
+                lfail.append(
+                    {
+                        "surface": s,
+                        "kind": "",
+                        "name": "",
+                        "domain": "",
+                        "message": f"no {BASELINE_TAG} name of this surface was compared",
+                    }
+                )
         dom = {(r["surface"], r["kind"], r["name"]): r["domain"] for r in base_inv["records"]}
         for o in orphans:
             d = dom.get((o["surface"], o["kind"], o["name"].split(" [")[0]), "")
@@ -2723,7 +2782,13 @@ def parse_args(argv):
     ap.add_argument(
         "--baseline-inventory-file",
         type=Path,
-        help=f"the {BASELINE_TAG} inventory as JSON, instead of building it from the tag",
+        help=f"the {BASELINE_TAG} inventory as JSON, instead of --baseline-file",
+    )
+    ap.add_argument("--baseline-file", type=Path, default=DEFAULT_BASELINE)
+    ap.add_argument(
+        "--write-baseline",
+        action="store_true",
+        help=f"rebuild --baseline-file from the {BASELINE_TAG} tree with today's extractors and exit",
     )
     ap.add_argument("--ledger-dir", type=Path, default=DEFAULT_LEDGER_DIR)
     ap.add_argument("--rules-file", type=Path, default=DEFAULT_RULES)
