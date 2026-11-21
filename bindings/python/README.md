@@ -71,8 +71,9 @@ The whole surface is listed in the [Python API reference](https://libsonare.libr
 The `sonare` command exposes the analysis, mastering, mixing, effects and project surfaces.
 
 ```bash
-sonare analyze song.mp3                              # BPM + key summary
-sonare master song.wav -o mastered.wav --preset pop  # preset mastering
+sonare analyze song.mp3                                  # BPM, key and meter summary
+sonare mastering song.wav -o mastered.wav --preset pop   # preset mastering
+sonare project import-smf song.mid -o project.json       # MIDI file to project JSON
 sonare project bounce project.json -o out.wav --synth sawLead
 ```
 
