@@ -622,7 +622,7 @@ TEST_CASE("sonare_split_silence_common keeps what any one signal sounds through"
     int* flat = nullptr;
     size_t count = 7;
     REQUIRE(sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), 60.0f, 2048,
-                                        512, &flat, &count) == SONARE_OK);
+                                        512, &flat, &count, nullptr) == SONARE_OK);
     std::vector<int> out(flat, flat + count);
     if (flat != nullptr) sonare_free_ints(flat);
     return out;
@@ -664,15 +664,15 @@ TEST_CASE("sonare_split_silence_common keeps what any one signal sounds through"
     int* flat = nullptr;
     size_t count = 7;
     REQUIRE(sonare_split_silence_common(with_empty.data(), with_empty.size(), lengths.data(), 60.0f,
-                                        2048, 512, &flat,
-                                        &count) == SONARE_ERROR_INVALID_PARAMETER);
+                                        2048, 512, &flat, &count,
+                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
-    REQUIRE(sonare_split_silence_common(nullptr, 0, nullptr, 60.0f, 2048, 512, &flat, &count) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_split_silence_common(nullptr, 0, nullptr, 60.0f, 2048, 512, &flat, &count,
+                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
-TEST_CASE("sonare_split_silence_common_ex separates the three ways one interval happens",
+TEST_CASE("sonare_split_silence_common report separates the three ways one interval happens",
           "[c_api][features]") {
   // One interval covering everything is the answer to three different
   // situations. Each section builds one of them and reads the pair of figures
@@ -683,8 +683,8 @@ TEST_CASE("sonare_split_silence_common_ex separates the three ways one interval 
     int* flat = nullptr;
     size_t count = 7;
     SonareSilenceCommonReport report{};
-    REQUIRE(sonare_split_silence_common_ex(signals.data(), signals.size(), lengths.data(), top_db,
-                                           2048, 512, &flat, &count, &report) == SONARE_OK);
+    REQUIRE(sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), top_db,
+                                        2048, 512, &flat, &count, &report) == SONARE_OK);
     const size_t intervals = count / 2;
     if (flat != nullptr) sonare_free_ints(flat);
     return std::make_pair(intervals, report);
@@ -759,16 +759,16 @@ TEST_CASE("sonare_split_silence_common_ex separates the three ways one interval 
     size_t plain_count = 0;
     const float* signal = take.data();
     const size_t length = take.size();
-    REQUIRE(sonare_split_silence_common(&signal, 1, &length, 60.0f, 2048, 512, &plain,
-                                        &plain_count) == SONARE_OK);
+    REQUIRE(sonare_split_silence_common(&signal, 1, &length, 60.0f, 2048, 512, &plain, &plain_count,
+                                        nullptr) == SONARE_OK);
     const std::vector<int> expected(plain, plain + plain_count);
     if (plain != nullptr) sonare_free_ints(plain);
 
     int* with_report = nullptr;
     size_t with_report_count = 0;
     SonareSilenceCommonReport report{};
-    REQUIRE(sonare_split_silence_common_ex(&signal, 1, &length, 60.0f, 2048, 512, &with_report,
-                                           &with_report_count, &report) == SONARE_OK);
+    REQUIRE(sonare_split_silence_common(&signal, 1, &length, 60.0f, 2048, 512, &with_report,
+                                        &with_report_count, &report) == SONARE_OK);
     const std::vector<int> got(with_report, with_report + with_report_count);
     if (with_report != nullptr) sonare_free_ints(with_report);
     REQUIRE(got == expected);

@@ -223,18 +223,8 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
 SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
                                         const size_t* lengths, float top_db, int frame_length,
                                         int hop_length, int** out_intervals,
-                                        size_t* out_interval_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_intervals, out_interval_count);
-  return sonare_split_silence_common_ex(signals, signal_count, lengths, top_db, frame_length,
-                                        hop_length, out_intervals, out_interval_count, nullptr);
-}
-
-SonareError sonare_split_silence_common_ex(const float* const* signals, size_t signal_count,
-                                           const size_t* lengths, float top_db, int frame_length,
-                                           int hop_length, int** out_intervals,
-                                           size_t* out_interval_count,
-                                           SonareSilenceCommonReport* out_report) {
+                                        size_t* out_interval_count,
+                                        SonareSilenceCommonReport* out_report) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_intervals, out_interval_count, out_report);
   SONARE_C_REQUIRE_NONNULL(signals);

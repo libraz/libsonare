@@ -23,8 +23,8 @@ TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
   }
 
   SonareAcousticResult result = {};
-  SonareError err =
-      sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6, &result);
+  SonareError err = sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+                                                    nullptr, &result);
 
   REQUIRE(err == SONARE_OK);
   REQUIRE(std::isfinite(result.rt60));
@@ -41,13 +41,17 @@ TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
   REQUIRE(result.rt60_bands == nullptr);
   REQUIRE(result.band_count == 0);
 
-  SECTION("explicit default preserves the legacy impulse-response result") {
+  SECTION("explicit default matches the NULL-options impulse-response result") {
     SonareAcousticResult legacy = {};
     SonareAcousticResult explicit_default = {};
-    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+    SonareAnalyzeImpulseResponseOptions options = {};
+    sonare_analyze_impulse_response_options_init(&options);
+    REQUIRE(options.struct_size == sizeof(SonareAnalyzeImpulseResponseOptions));
+    REQUIRE(options.min_decay_db == 30.0f);
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6, nullptr,
                                             &legacy) == SONARE_OK);
-    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
-                                               30.0f, &explicit_default) == SONARE_OK);
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+                                            &options, &explicit_default) == SONARE_OK);
     REQUIRE(legacy.band_count == explicit_default.band_count);
     REQUIRE(legacy.rt60 == explicit_default.rt60);
     REQUIRE(legacy.edt == explicit_default.edt);
@@ -57,15 +61,18 @@ TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
 
   SECTION("explicit decay range is accepted and invalid values reset outputs") {
     SonareAcousticResult result = {};
-    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
-                                               20.0f, &result) == SONARE_OK);
+    SonareAnalyzeImpulseResponseOptions options = {};
+    sonare_analyze_impulse_response_options_init(&options);
+    options.min_decay_db = 20.0f;
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+                                            &options, &result) == SONARE_OK);
     REQUIRE(result.band_count == 6);
     sonare_free_acoustic_result(&result);
 
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
-                                               std::numeric_limits<float>::infinity(),
-                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    options.min_decay_db = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+                                            &options, &result) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_acoustic_result(&result);
     REQUIRE(result.rt60_bands == nullptr);
     REQUIRE(result.band_count == 0);
@@ -219,12 +226,28 @@ TEST_CASE("sonare_analyze_timbre", "[c_api]") {
 }
 
 TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
+  // The options a caller spells positionally: everything else stays at the defaults.
+  const auto chord_options = [](float min_duration_sec, float smoothing_window_sec, float threshold,
+                                int use_triads_only, int n_fft, int hop_length) {
+    SonareChordDetectionOptions options;
+    sonare_chord_detection_options_init(&options);
+    options.min_duration_sec = min_duration_sec;
+    options.smoothing_window_sec = smoothing_window_sec;
+    options.threshold = threshold;
+    options.use_triads_only = use_triads_only;
+    options.n_fft = n_fft;
+    options.hop_length = hop_length;
+    options.use_beat_sync = 0;
+    return options;
+  };
+
   SECTION("returns chord segments for a simple C major chord") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
     SonareChordAnalysisResult result = {};
+    const SonareChordDetectionOptions options = chord_options(0.3f, 2.0f, 0.5f, 1, 2048, 512);
 
-    SonareError err = sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f,
-                                           1, 2048, 512, 0, &result);
+    SonareError err =
+        sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(result.chord_count > 0);
@@ -244,39 +267,42 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
   SECTION("rejects invalid parameters") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult result = {};
+    const auto detect = [&](const SonareChordDetectionOptions& options) {
+      return sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result);
+    };
 
-    REQUIRE(sonare_detect_chords(nullptr, samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048, 512, 0,
-                                 &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, -1.0f, 0.5f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 1.01f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 0, 512,
-                                 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
-                                 0, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
-                                 512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    const SonareChordDetectionOptions valid = chord_options(0.3f, 2.0f, 0.5f, 0, 2048, 512);
+    REQUIRE(sonare_detect_chords(nullptr, samples.size(), 22050, &valid, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(-0.1f, 2.0f, 0.5f, 0, 2048, 512)) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, -1.0f, 0.5f, 0, 2048, 512)) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, 2.0f, -0.1f, 0, 2048, 512)) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, 2.0f, 1.01f, 0, 2048, 512)) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, 2.0f, 0.5f, 0, 0, 512)) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, 2.0f, 0.5f, 0, 2048, 0)) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, &valid, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const float inf = std::numeric_limits<float>::infinity();
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, nan, 0.5f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, inf, 0.5f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, nan, 0.5f, 0, 2048, 512)) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(detect(chord_options(0.3f, inf, 0.5f, 0, 2048, 512)) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("threshold changes ambiguous input to an explicit N.C. segment") {
     std::vector<float> silence(4096, 0.0f);
     SonareChordAnalysisResult low{};
     SonareChordAnalysisResult high{};
-    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, 0.0f, 0.01f, 0.0f, 1, 2048,
-                                 512, 0, &low) == SONARE_OK);
-    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, 0.0f, 0.01f, 0.99f, 1, 2048,
-                                 512, 0, &high) == SONARE_OK);
+    const SonareChordDetectionOptions low_options = chord_options(0.0f, 0.01f, 0.0f, 1, 2048, 512);
+    const SonareChordDetectionOptions high_options =
+        chord_options(0.0f, 0.01f, 0.99f, 1, 2048, 512);
+    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, &low_options, &low) ==
+            SONARE_OK);
+    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, &high_options, &high) ==
+            SONARE_OK);
     REQUIRE(low.chord_count == 1);
     REQUIRE(low.chords[0].quality != SONARE_CHORD_UNKNOWN);
     REQUIRE(high.chord_count == 1);
@@ -287,7 +313,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     sonare_free_chord_analysis_result(&high);
   }
 
-  SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {
+  SECTION("extended options enable HMM and inversion detection") {
     auto samples = generate_harmonic_chord({82.41f, 261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult result = {};
     SonareChordDetectionOptions options;
@@ -308,7 +334,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     options.chroma_method = SONARE_CHROMA_METHOD_NNLS;
 
     SonareError err =
-        sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result);
+        sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(result.chord_count > 0);
@@ -332,7 +358,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
   }
 }
 
-TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
+TEST_CASE("sonare_detect_chords chroma_method range", "[c_api]") {
   auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
   SonareChordDetectionOptions options;
   sonare_chord_detection_options_init(&options);
@@ -350,7 +376,7 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
   SECTION("CQT is accepted and returns chords") {
     options.chroma_method = SONARE_CHROMA_METHOD_CQT;
     SonareChordAnalysisResult result = {};
-    REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_OK);
     REQUIRE(result.chord_count > 0);
     sonare_free_chord_analysis_result(&result);
@@ -360,7 +386,7 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
     for (int method : {3, -1}) {
       options.chroma_method = static_cast<SonareChromaMethod>(method);
       SonareChordAnalysisResult result = {};
-      REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+      REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
               SONARE_ERROR_INVALID_PARAMETER);
     }
   }
@@ -389,7 +415,7 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
 
     // Detection count for the same options, to cross-check the label count.
     SonareChordAnalysisResult chords = {};
-    REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &chords) ==
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &chords) ==
             SONARE_OK);
     const size_t expected = chords.chord_count;
     sonare_free_chord_analysis_result(&chords);
@@ -554,8 +580,8 @@ TEST_CASE(
   SECTION("sonare_analyze_impulse_response") {
     SonareAcousticResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), 22050, -1, &result) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), 22050, -1, nullptr,
+                                            &result) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_acoustic_result(&result);
     REQUIRE(result.rt60_bands == nullptr);
     REQUIRE(result.band_count == 0);
@@ -607,16 +633,6 @@ TEST_CASE(
   SECTION("sonare_detect_chords") {
     SonareChordAnalysisResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0, 2048,
-                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    sonare_free_chord_analysis_result(&result);
-    REQUIRE(result.chords == nullptr);
-    REQUIRE(result.chord_count == 0);
-  }
-
-  SECTION("sonare_detect_chords_ex") {
-    SonareChordAnalysisResult result;
-    std::memset(&result, 0xAA, sizeof(result));
     SonareChordDetectionOptions options;
     sonare_chord_detection_options_init(&options);
     options.min_duration_sec = 0.3f;
@@ -624,7 +640,7 @@ TEST_CASE(
     options.threshold = 0.5f;
     options.n_fft = 0;  // invalid
     options.hop_length = 512;
-    REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_chord_analysis_result(&result);
     REQUIRE(result.chords == nullptr);
@@ -670,11 +686,11 @@ TEST_CASE(
     REQUIRE(result.form == nullptr);
   }
 
-  SECTION("sonare_analyze_melody_ex") {
+  SECTION("sonare_analyze_melody") {
     SonareMelodyResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 0.0f, 800.0f, 2048, 512,
-                                     0.1f, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 0.0f, 800.0f, 2048, 512,
+                                  0.1f, nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_melody_result(&result);
     REQUIRE(result.points == nullptr);
     REQUIRE(result.point_count == 0);
@@ -903,7 +919,7 @@ TEST_CASE("analysis option structs are refused until their init sets struct_size
 
   SonareMusicAnalyzeOptions music{};
   char* json = nullptr;
-  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &music, &json) ==
+  CHECK(sonare_analyze_json(samples.data(), samples.size(), 22050, &music, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.struct_size must be set by sonare_music_analyze_options_init");
 
@@ -915,7 +931,7 @@ TEST_CASE("analysis option structs are refused until their init sets struct_size
 
   SonareChordDetectionOptions chord{};
   SonareChordAnalysisResult chords{};
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &chord, &chords) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &chord, &chords) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.struct_size must be set by sonare_chord_detection_options_init");
 }
@@ -994,12 +1010,12 @@ TEST_CASE("quick detection entries name the refused argument", "[c_api][quick][r
   CHECK(sonare_detect_downbeats(samples.data(), samples.size(), 22050, nullptr, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_times must not be NULL");
-  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, &times, nullptr) ==
+  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, nullptr, &times, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_count must not be NULL");
 
   SonareKey key = {};
-  CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, nullptr) ==
+  CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, nullptr, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_key must not be NULL");
 
@@ -1020,9 +1036,12 @@ TEST_CASE("key detection entries name the refused mode list and profile",
   const SonareMode bad[] = {SONARE_MODE_MAJOR, static_cast<SonareMode>(7)};
   const auto detect = [&](const SonareMode* modes, size_t mode_count, SonareKeyProfileType profile,
                           SonareKey* out_key) {
-    return sonare_detect_key_with_tuning(samples.data(), samples.size(), 22050, 2048, 512, 0, 0,
-                                         0.0f, modes, mode_count, profile, nullptr, 0.0f, 1,
-                                         out_key, nullptr);
+    SonareDetectKeyOptions options;
+    sonare_detect_key_options_init(&options);
+    options.modes = modes;
+    options.mode_count = mode_count;
+    options.profile_type = profile;
+    return sonare_detect_key(samples.data(), samples.size(), 22050, &options, out_key, nullptr);
   };
 
   CHECK(detect(nullptr, 2, SONARE_KEY_PROFILE_AUTO, &key) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1043,20 +1062,19 @@ TEST_CASE("key detection entries name the refused mode list and profile",
 
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
-                                                 0, 0, 0.0f, bad, 2, SONARE_KEY_PROFILE_AUTO,
-                                                 nullptr, 0.0f, 1, &candidates, &count,
-                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareDetectKeyOptions options;
+  sonare_detect_key_options_init(&options);
+  options.modes = bad;
+  options.mode_count = 2;
+  CHECK(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options, &candidates,
+                                     &count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "modes[1] must be an integer in [0, 6]");
-  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
-                                                 0, 0, 0.0f, good, 2, SONARE_KEY_PROFILE_AUTO,
-                                                 nullptr, 0.0f, 1, nullptr, nullptr,
-                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  options.modes = good;
+  CHECK(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options, nullptr,
+                                     nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_candidates must not be NULL");
-  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
-                                                 0, 0, 0.0f, good, 2, SONARE_KEY_PROFILE_AUTO,
-                                                 nullptr, 0.0f, 1, &candidates, nullptr,
-                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options, &candidates,
+                                     nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_count must not be NULL");
 }
 
@@ -1067,38 +1085,38 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
   float* times = nullptr;
   size_t count = 0;
 
-  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, nullptr, &times, &count) ==
+  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, nullptr, nullptr, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "config must not be NULL");
+  CHECK(message() == "out_times must not be NULL");
   SonareOnsetDetectConfig config;
   sonare_onset_detect_config_init(&config);
   config.backtrack = 2;
-  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "config.backtrack must be an integer in [0, 1]");
   config.backtrack = 0;
-  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, nullptr, nullptr) ==
+  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_times must not be NULL");
 
   char* json = nullptr;
-  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, nullptr, &json) ==
+  CHECK(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "options must not be NULL");
+  CHECK(message() == "out_json must not be NULL");
   SonareMusicAnalyzeOptions options;
   sonare_music_analyze_options_init(&options);
   options.struct_size = 0;
-  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+  CHECK(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.struct_size must be set by sonare_music_analyze_options_init");
   sonare_music_analyze_options_init(&options);
   options.meter_candidate_numerator_count = SONARE_MAX_METER_CANDIDATE_NUMERATORS + 1;
-  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+  CHECK(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.meter_candidate_numerator_count must be an integer in [0, " +
                          std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
   sonare_music_analyze_options_init(&options);
-  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, nullptr) ==
+  CHECK(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_json must not be NULL");
 

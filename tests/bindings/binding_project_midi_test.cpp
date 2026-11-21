@@ -676,7 +676,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(serialize(project) == before);
 
   double snapped = 0.0;
-  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 1.5, &snapped) ==
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 1.5, nullptr, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
@@ -829,7 +829,7 @@ TEST_CASE("project C surface imports SMF text-class meta with structured kinds",
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project C surface set_marker_ex stores kind and key signature", "[project]") {
+TEST_CASE("project C surface set_marker stores kind and key signature", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
 
@@ -844,7 +844,7 @@ TEST_CASE("project C surface set_marker_ex stores kind and key signature", "[pro
   in.name[key_name.size()] = '\0';
 
   uint32_t out_id = 0;
-  REQUIRE(sonare_project_set_marker_ex(project, &in, &out_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &in, &out_id) == SONARE_OK);
   REQUIRE(out_id != 0);
 
   SonareProjectMarker got{};
@@ -879,13 +879,13 @@ TEST_CASE("project C surface set_marker_ex stores kind and key signature", "[pro
   bad.id = 0;
   bad.key_fifths = 8;
   uint32_t bad_id = 0;
-  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
   bad.key_fifths = -8;
-  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
   // The same out-of-range fifths is accepted on a non-key-signature kind, where
   // the field is unused.
   bad.kind = SONARE_MARKER_KIND_MARKER;
-  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_OK);
 
   sonare_project_destroy(round);
   sonare_project_destroy(project);
@@ -1213,7 +1213,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   const char* config =
       "{\"transposeSemitones\":12,\"quantizePpq\":0.25,\"quantizeStrength\":1.0,"
       "\"velocityScale\":0.5,\"chordIntervals\":[0,7]}";
-  REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, config, nullptr, 0, nullptr) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
@@ -1240,7 +1240,8 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{\"quantizePpq\":0}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", nullptr, 0, nullptr) ==
+          SONARE_ERROR_INVALID_FORMAT);
 
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);
@@ -1279,12 +1280,12 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
 
     std::vector<int32_t> map(predicted, -2);
     size_t written = 0;
-    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{}", map.data(), map.size(), &written) ==
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}", map.data(), map.size(), &written) ==
             SONARE_OK);
     REQUIRE(written == 4);
     REQUIRE(map == std::vector<int32_t>{0, 1, 2, 3});
 
-    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, "{}") == SONARE_OK);
+    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, "{}", nullptr, 0, nullptr) == SONARE_OK);
     REQUIRE(project->history.midi_content().events.at(clip) ==
             plain->history.midi_content().events.at(plain_clip));
   }
@@ -1297,8 +1298,8 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
 
     std::vector<int32_t> map(predicted, -2);
     size_t written = 0;
-    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, config, map.data(), map.size(),
-                                           &written) == SONARE_OK);
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, config, map.data(), map.size(), &written) ==
+            SONARE_OK);
     REQUIRE(written == predicted);
     // Every entry names a real input, and each input contributes three events.
     std::array<int, 4> per_input{};
@@ -1309,7 +1310,8 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
     }
     REQUIRE(per_input == std::array<int, 4>{3, 3, 3, 3});
 
-    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, config) == SONARE_OK);
+    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, config, nullptr, 0, nullptr) ==
+            SONARE_OK);
     REQUIRE(project->history.midi_content().events.at(clip) ==
             plain->history.midi_content().events.at(plain_clip));
   }
@@ -1329,8 +1331,8 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
 
     std::vector<int32_t> map(predicted, -2);
     size_t written = 0;
-    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, config, map.data(), map.size(),
-                                           &written) == SONARE_OK);
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, config, map.data(), map.size(), &written) ==
+            SONARE_OK);
     REQUIRE(written == predicted);
     for (const int32_t source : map) {
       INFO("source index " << source);
@@ -1342,7 +1344,7 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
   SECTION("a short buffer still reports the full count") {
     std::vector<int32_t> map(2, -2);
     size_t written = 0;
-    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{}", map.data(), map.size(), &written) ==
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}", map.data(), map.size(), &written) ==
             SONARE_OK);
     REQUIRE(written == 4);
     REQUIRE(map == std::vector<int32_t>{0, 1});
@@ -1352,7 +1354,7 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
 
   SECTION("invalid input is rejected before anything is written") {
     size_t written = 12345;
-    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{bad json", nullptr, 0, &written) ==
+    REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", nullptr, 0, &written) ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(written == 12345);
     size_t count = 999;
@@ -1385,7 +1387,7 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
                            static_cast<uint8_t>((i * 3) % 128), &events[i]) == SONARE_OK);
   }
   REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
-  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}") == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}", nullptr, 0, nullptr) == SONARE_OK);
 
   const auto& baked = project->history.midi_content().events.at(clip);
   REQUIRE(baked.size() == events.size());
@@ -1403,7 +1405,7 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
   uint32_t round_clip = 0;
   REQUIRE(sonare_project_import_smf(round, smf_bytes, smf_len, &round_clip) == SONARE_OK);
   sonare_free_bytes(smf_bytes);
-  REQUIRE(sonare_project_bake_midi_fx(round, round_clip, "{}") == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(round, round_clip, "{}", nullptr, 0, nullptr) == SONARE_OK);
   REQUIRE(sonare_project_export_smf(round, &smf_bytes, &smf_len) == SONARE_OK);
   const auto roundtrip = sonare::midi::import_smf(smf_bytes, smf_len);
   REQUIRE(roundtrip.ok());
@@ -1418,7 +1420,7 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
   REQUIRE(sonare_midi_cc(1.0, 0, 0, 32, 3, &same_time[2]) == SONARE_OK);
   REQUIRE(sonare_midi_cc(1.0, 0, 0, 0, 121, &same_time[3]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, same_time, 4) == SONARE_OK);
-  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}") == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}", nullptr, 0, nullptr) == SONARE_OK);
 
   const auto& ordered = project->history.midi_content().events.at(clip);
   REQUIRE(ordered.size() == 4);
@@ -1447,8 +1449,9 @@ TEST_CASE("project MIDI-FX quantize bake keeps short notes paired through SMF ex
   REQUIRE(sonare_midi_note_on(0.10, 0, 0, 60, 100, &events[0]) == SONARE_OK);
   REQUIRE(sonare_midi_note_off(0.20, 0, 0, 60, 0, &events[1]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
-  REQUIRE(sonare_project_bake_midi_fx(
-              project, clip, "{\"quantizePpq\":1.0,\"quantizeStrength\":1.0}") == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip,
+                                      "{\"quantizePpq\":1.0,\"quantizeStrength\":1.0}", nullptr, 0,
+                                      nullptr) == SONARE_OK);
 
   SonareNotePairValidation validation{};
   REQUIRE(sonare_project_validate_midi_notes(project, clip, &validation) == SONARE_OK);
@@ -1524,7 +1527,7 @@ TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]"
   const char* config =
       "{\"arpeggiatorIntervals\":[0,12],\"arpeggiatorStepPpq\":0.25,"
       "\"arpeggiatorGatePpq\":0.125}";
-  REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, config, nullptr, 0, nullptr) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
@@ -2184,7 +2187,7 @@ TEST_CASE("project C surface MIDI refusals name the parameter", "[project][midi]
   REQUIRE(sonare_project_validate_midi_notes(project, clip + 100, &validation) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "clip_id must be the id of a MIDI clip in this project");
-  REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, nullptr, nullptr, 0, nullptr) ==
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, nullptr, nullptr, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "config_json must not be NULL");
 

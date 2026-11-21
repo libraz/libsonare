@@ -1,6 +1,7 @@
 /// @file sonare_c_features_metering_test.cpp
 /// @brief Feature and metering C API tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -88,7 +89,8 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   auto samples = generate_sine(110.0f, 22050, 1.0f);
   SonareChromaResult result{};
 
-  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
+  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 512, 12, nullptr, &result) ==
+          SONARE_OK);
   REQUIRE(result.n_chroma == 12);
   REQUIRE(result.n_frames > 0);
   REQUIRE(result.features != nullptr);
@@ -96,19 +98,29 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   sonare_free_chroma_result(&result);
   REQUIRE(result.features == nullptr);
 
-  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, nullptr, &result) ==
+          SONARE_OK);
   REQUIRE(result.n_chroma == 12);
   REQUIRE(result.n_frames > 0);
   REQUIRE(result.features != nullptr);
   REQUIRE(result.mean_energy != nullptr);
   sonare_free_chroma_result(&result);
 
-  REQUIRE(sonare_chroma_cqt_ex(samples.data(), samples.size(), 22050, 512, 12, 12, &result) ==
-          SONARE_OK);
+  SonareChromaCqtOptions cqt_options{};
+  sonare_chroma_cqt_options_init(&cqt_options);
+  REQUIRE(cqt_options.bins_per_octave == 36);
+  cqt_options.bins_per_octave = 12;
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, &cqt_options,
+                            &result) == SONARE_OK);
   REQUIRE(result.n_chroma == 12);
   sonare_free_chroma_result(&result);
-  REQUIRE(sonare_chroma_cqt_ex(samples.data(), samples.size(), 22050, 512, 12, 13, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  cqt_options.bins_per_octave = 13;
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, &cqt_options,
+                            &result) == SONARE_ERROR_INVALID_PARAMETER);
+  cqt_options.bins_per_octave = 36;
+  cqt_options.struct_size = 0;
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, &cqt_options,
+                            &result) == SONARE_ERROR_INVALID_PARAMETER);
 
   REQUIRE(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
   REQUIRE(result.n_chroma == 12);
@@ -116,9 +128,9 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   REQUIRE(result.features != nullptr);
   sonare_free_chroma_result(&result);
 
-  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 0, 12, &result) ==
+  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 0, 12, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, &result) ==
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
 }
 
@@ -151,16 +163,16 @@ TEST_CASE("chroma C API defines the whole out-struct on rejected input", "[c_api
     require_defined(result);
   }
 
-  SECTION("sonare_chroma_cens_ex") {
+  SECTION("sonare_chroma_cens") {
     poison(result);
-    REQUIRE(sonare_chroma_cens_ex(nullptr, 0, 22050, 512, 12, 36, &result) ==
+    REQUIRE(sonare_chroma_cens(nullptr, 0, 22050, 512, 12, nullptr, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     require_defined(result);
   }
 
-  SECTION("sonare_chroma_cqt_ex") {
+  SECTION("sonare_chroma_cqt") {
     poison(result);
-    REQUIRE(sonare_chroma_cqt_ex(nullptr, 0, 22050, 512, 12, 36, &result) ==
+    REQUIRE(sonare_chroma_cqt(nullptr, 0, 22050, 512, 12, nullptr, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     require_defined(result);
   }
@@ -456,8 +468,8 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     size_t out_length = 0;
     int n_frames = 0;
 
-    SonareError err =
-        sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length, &n_frames);
+    SonareError err = sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &data,
+                                         &out_length, &n_frames);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(data != nullptr);
@@ -476,18 +488,27 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     size_t out_length = 0;
     int n_frames = 0;
 
-    REQUIRE(sonare_nnls_chroma(nullptr, samples.size(), 22050, &data, &out_length, &n_frames) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &out_length,
+    REQUIRE(sonare_nnls_chroma(nullptr, samples.size(), 22050, nullptr, &data, &out_length,
                                &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, nullptr, &n_frames) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length,
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, nullptr, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &data, nullptr,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &data, &out_length,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, -0.1f, 4096, &data,
-                                  &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, 0.5f, 4095, &data,
-                                  &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareNnlsChromaOptions options{};
+    sonare_nnls_chroma_options_init(&options);
+    options.stft_blend_weight = -0.1f;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &data, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    options.stft_blend_weight = 0.5f;
+    options.stft_blend_n_fft = 4095;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &data, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    options.stft_blend_n_fft = 4096;
+    options.struct_size = 0;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &data, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("exposes the optional STFT blend") {
@@ -495,14 +516,19 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     float* data = nullptr;
     size_t out_length = 0;
     int n_frames = 0;
-    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 0, 0.0f, 2048, &data,
-                                  &out_length, &n_frames) == SONARE_OK);
+    SonareNnlsChromaOptions options{};
+    sonare_nnls_chroma_options_init(&options);
+    options.enable_stft_blend = 0;
+    options.stft_blend_weight = 0.0f;
+    options.stft_blend_n_fft = 2048;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &data, &out_length,
+                               &n_frames) == SONARE_OK);
     REQUIRE(data != nullptr);
     REQUIRE(out_length == 12u * static_cast<size_t>(n_frames));
     sonare_free_floats(data);
   }
 
-  SECTION("ex2 preserves the legacy 512-sample hop and exposes another hop") {
+  SECTION("the defaults use a 512-sample hop and options expose another hop") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     float* legacy = nullptr;
     float* explicit_default = nullptr;
@@ -514,17 +540,23 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     int explicit_frames = 0;
     int custom_frames = 0;
 
-    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, &legacy,
-                                  &legacy_length, &legacy_frames) == SONARE_OK);
-    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 512,
-                                   &explicit_default, &explicit_length,
-                                   &explicit_frames) == SONARE_OK);
+    SonareNnlsChromaOptions options{};
+    sonare_nnls_chroma_options_init(&options);
+    REQUIRE(options.enable_stft_blend == 1);
+    REQUIRE(options.stft_blend_weight == 0.55f);
+    REQUIRE(options.stft_blend_n_fft == 4096);
+    REQUIRE(options.hop_length == 512);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &legacy,
+                               &legacy_length, &legacy_frames) == SONARE_OK);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &explicit_default,
+                               &explicit_length, &explicit_frames) == SONARE_OK);
     REQUIRE(legacy_length == explicit_length);
     REQUIRE(legacy_frames == explicit_frames);
     REQUIRE(std::memcmp(legacy, explicit_default, legacy_length * sizeof(float)) == 0);
 
-    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 256,
-                                   &custom, &custom_length, &custom_frames) == SONARE_OK);
+    options.hop_length = 256;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &custom,
+                               &custom_length, &custom_frames) == SONARE_OK);
     REQUIRE(custom_length == 12u * static_cast<size_t>(custom_frames));
     REQUIRE(custom_frames > legacy_frames);
 
@@ -533,13 +565,16 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     sonare_free_floats(custom);
   }
 
-  SECTION("ex2 resets outputs before rejecting its hop") {
+  SECTION("outputs are reset before the hop is rejected") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     float* data = samples.data();
     size_t out_length = 123;
     int n_frames = 456;
-    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 0, &data,
-                                   &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareNnlsChromaOptions options{};
+    sonare_nnls_chroma_options_init(&options);
+    options.hop_length = 0;
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &options, &data, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(data == nullptr);
     REQUIRE(out_length == 0);
     REQUIRE(n_frames == 0);
@@ -1138,8 +1173,12 @@ TEST_CASE("sonare mel range is applied or refused rather than defaulted", "[c_ap
 
   auto mel_power = [&](float fmin, float fmax, SonareError* err) {
     SonareMelResult result{};
-    *err = sonare_mel_spectrogram_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, fmin,
-                                     fmax, 0, &result);
+    SonareMelSpectrogramOptions options{};
+    sonare_mel_spectrogram_options_init(&options);
+    options.fmin_hz = fmin;
+    options.fmax_hz = fmax;
+    *err = sonare_mel_spectrogram(samples.data(), samples.size(), 22050, 2048, 512, 40, &options,
+                                  &result);
     std::vector<float> power;
     if (*err == SONARE_OK) {
       const size_t total = static_cast<size_t>(result.n_mels) * result.n_frames;
@@ -1182,23 +1221,35 @@ TEST_CASE("sonare mel range is applied or refused rather than defaulted", "[c_ap
     for (float bad : {-1.0f, -11025.0f, nan, inf, -inf}) {
       mel_power(bad, 0.0f, &err);
       REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK_THAT(std::string(sonare_last_error_message()),
+                 Catch::Matchers::StartsWith("options.fmin_hz"));
       mel_power(0.0f, bad, &err);
       REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK_THAT(std::string(sonare_last_error_message()),
+                 Catch::Matchers::StartsWith("options.fmax_hz"));
     }
   }
 
   SECTION("the MFCC entry point carries the same contract") {
     SonareMfccResult result{};
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f, 0.0f, 0,
-                           0.0f, &result) == SONARE_OK);
+    SonareMfccOptions options{};
+    sonare_mfcc_options_init(&options);
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, &options,
+                        &result) == SONARE_OK);
     REQUIRE(result.n_frames > 0);
     sonare_free_mfcc_result(&result);
 
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, -1.0f, 0.0f, 0,
-                           0.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f,
-                           std::numeric_limits<float>::quiet_NaN(), 0, 0.0f,
-                           &result) == SONARE_ERROR_INVALID_PARAMETER);
+    options.fmin_hz = -1.0f;
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, &options,
+                        &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(std::string(sonare_last_error_message()),
+               Catch::Matchers::StartsWith("options.fmin_hz"));
+    options.fmin_hz = 0.0f;
+    options.fmax_hz = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, &options,
+                        &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(std::string(sonare_last_error_message()),
+               Catch::Matchers::StartsWith("options.fmax_hz"));
   }
 }
 
@@ -1207,8 +1258,12 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
 
   SECTION("the Mel result reports the transform it came from, with fmax resolved") {
     SonareMelResult mel{};
-    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 100.0f,
-                                      0.0f, 1, &mel) == SONARE_OK);
+    SonareMelSpectrogramOptions mel_options{};
+    sonare_mel_spectrogram_options_init(&mel_options);
+    mel_options.fmin_hz = 100.0f;
+    mel_options.htk = 1;
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), 22050, 2048, 512, 40,
+                                   &mel_options, &mel) == SONARE_OK);
     CHECK(mel.n_mels == 40);
     CHECK(mel.sample_rate == 22050);
     CHECK(mel.hop_length == 512);
@@ -1218,16 +1273,20 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     CHECK(mel.htk == 1);
     CHECK(mel.is_db == 0);
 
-    // The carried values are the inverse's arguments: the checked inverse over them is
+    // The carried values are the inverse's arguments: the inverse over them is
     // bit-identical to the same call with the values spelled out as the forward request.
     const size_t total = static_cast<size_t>(mel.n_mels) * mel.n_frames;
     SonareInverseResult from_result{};
     SonareInverseResult from_request{};
-    REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, mel.n_mels, mel.n_frames,
-                                          mel.sample_rate, mel.n_fft, mel.fmin_hz, mel.fmax_hz,
-                                          mel.htk, &from_result) == SONARE_OK);
-    REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, 40, mel.n_frames, 22050, 2048, 100.0f,
-                                          0.0f, 1, &from_request) == SONARE_OK);
+    SonareMelToStftOptions inverse_options{};
+    sonare_mel_to_stft_options_init(&inverse_options);
+    inverse_options.htk = mel.htk;
+    REQUIRE(sonare_mel_to_stft(mel.power, total, mel.n_mels, mel.n_frames, mel.sample_rate,
+                               mel.n_fft, mel.fmin_hz, mel.fmax_hz, &inverse_options,
+                               &from_result) == SONARE_OK);
+    inverse_options.htk = 1;
+    REQUIRE(sonare_mel_to_stft(mel.power, total, 40, mel.n_frames, 22050, 2048, 100.0f, 0.0f,
+                               &inverse_options, &from_request) == SONARE_OK);
     REQUIRE(from_result.rows == from_request.rows);
     for (size_t i = 0; i < static_cast<size_t>(from_result.rows) * from_result.n_frames; ++i) {
       REQUIRE(from_result.data[i] == from_request.data[i]);
@@ -1238,11 +1297,15 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
   }
 
   SECTION(
-      "the MFCC result reports its Mel parameters and lifter, and the checked lifter inverse "
+      "the MFCC result reports its Mel parameters and lifter, and the lifter inverse "
       "undoes it") {
     SonareMfccResult mfcc{};
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f, 8000.0f,
-                           0, 22.0f, &mfcc) == SONARE_OK);
+    SonareMfccOptions mfcc_options{};
+    sonare_mfcc_options_init(&mfcc_options);
+    mfcc_options.fmax_hz = 8000.0f;
+    mfcc_options.lifter = 22.0f;
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, &mfcc_options,
+                        &mfcc) == SONARE_OK);
     CHECK(mfcc.n_mfcc == 13);
     CHECK(mfcc.n_mels == 40);
     CHECK(mfcc.sample_rate == 22050);
@@ -1256,41 +1319,40 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
 
     const size_t total = static_cast<size_t>(mfcc.n_mfcc) * mfcc.n_frames;
     SonareInverseResult checked{};
-    SonareInverseResult unchecked{};
-    REQUIRE(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
-                                          mfcc.n_mels, mfcc.lifter, &checked) == SONARE_OK);
-    REQUIRE(sonare_mfcc_to_mel_ex(mfcc.coefficients, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
-                                  mfcc.lifter, &unchecked) == SONARE_OK);
-    for (size_t i = 0; i < static_cast<size_t>(checked.rows) * checked.n_frames; ++i) {
-      REQUIRE(checked.data[i] == unchecked.data[i]);
-    }
+    SonareMfccToMelOptions inverse_options{};
+    sonare_mfcc_to_mel_options_init(&inverse_options);
+    inverse_options.lifter = mfcc.lifter;
+    REQUIRE(sonare_mfcc_to_mel(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+                               &inverse_options, &checked) == SONARE_OK);
     // The lifter changes the answer, so an inverse that dropped it would differ.
     SonareInverseResult unlifted{};
-    REQUIRE(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
-                                          mfcc.n_mels, 0.0f, &unlifted) == SONARE_OK);
+    REQUIRE(sonare_mfcc_to_mel(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+                               nullptr, &unlifted) == SONARE_OK);
     bool differs = false;
     for (size_t i = 0; i < static_cast<size_t>(checked.rows) * checked.n_frames && !differs; ++i) {
       differs = checked.data[i] != unlifted.data[i];
     }
     CHECK(differs);
-    CHECK(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total - 1, mfcc.n_mfcc, mfcc.n_frames,
-                                        mfcc.n_mels, mfcc.lifter,
-                                        &unlifted) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_mfcc_to_mel(mfcc.coefficients, total - 1, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+                             &inverse_options, &unlifted) == SONARE_ERROR_INVALID_PARAMETER);
 
     float* audio = nullptr;
     size_t audio_length = 0;
-    REQUIRE(sonare_mfcc_to_audio_checked_ex2(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
-                                             mfcc.n_mels, mfcc.sample_rate, mfcc.n_fft,
-                                             mfcc.hop_length, mfcc.fmin_hz, mfcc.fmax_hz, mfcc.htk,
-                                             mfcc.lifter, 2, &audio, &audio_length) == SONARE_OK);
+    SonareMfccToAudioOptions audio_options{};
+    sonare_mfcc_to_audio_options_init(&audio_options);
+    audio_options.htk = mfcc.htk;
+    audio_options.lifter = mfcc.lifter;
+    REQUIRE(sonare_mfcc_to_audio(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+                                 mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length, mfcc.fmin_hz,
+                                 mfcc.fmax_hz, 2, &audio_options, &audio,
+                                 &audio_length) == SONARE_OK);
     CHECK(audio_length > 0);
     sonare_free_floats(audio);
-    CHECK(sonare_mfcc_to_audio_checked_ex2(
-              mfcc.coefficients, total + 1, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
-              mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length, mfcc.fmin_hz, mfcc.fmax_hz, mfcc.htk,
-              mfcc.lifter, 2, &audio, &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_mfcc_to_audio(mfcc.coefficients, total + 1, mfcc.n_mfcc, mfcc.n_frames,
+                               mfcc.n_mels, mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length,
+                               mfcc.fmin_hz, mfcc.fmax_hz, 2, &audio_options, &audio,
+                               &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_inverse_result(&checked);
-    sonare_free_inverse_result(&unchecked);
     sonare_free_inverse_result(&unlifted);
     sonare_free_mfcc_result(&mfcc);
   }
@@ -1532,22 +1594,22 @@ TEST_CASE("every constant-Q entry bounds its hop at the CQT's maximum on both si
   for (const int hop : {0, -1, 65537}) {
     INFO("hop_length " << hop);
     SonareChromaResult chroma{};
-    CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, hop, 12, &chroma) ==
+    CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, hop, 12, nullptr, &chroma) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) ==
           "hop_length must be an integer in [1, 65536]");
-    CHECK(sonare_chroma_cens(samples.data(), samples.size(), 22050, hop, 12, &chroma) ==
+    CHECK(sonare_chroma_cens(samples.data(), samples.size(), 22050, hop, 12, nullptr, &chroma) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) ==
           "hop_length must be an integer in [1, 65536]");
     float* out = nullptr;
     size_t out_length = 0;
-    CHECK(sonare_cqt_to_audio(magnitude.data(), 84, 4, 22050, hop, 32.70f, 12, 2, &out,
-                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_cqt_to_audio(magnitude.data(), magnitude.size(), 84, 4, 22050, hop, 32.70f, 12, 2,
+                              &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) ==
           "hop_length must be an integer in [1, 65536]");
-    CHECK(sonare_vqt_to_audio(magnitude.data(), 84, 4, 22050, hop, 32.70f, 12, 0.0f, 2, &out,
-                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 84, 4, 22050, hop, 32.70f, 12,
+                              0.0f, 2, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) ==
           "hop_length must be an integer in [1, 65536]");
   }

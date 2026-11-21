@@ -33,24 +33,19 @@ typedef enum SONARE_ENUM_BASE {
 
 /// @brief Project tempo segment descriptor for @ref sonare_project_set_tempo_segments.
 ///
-/// @p start_sample is an output/derived timeline value kept in this POD for ABI
-/// compatibility with compile/import surfaces. The setter ignores it and
-/// derives sample positions from @p start_ppq / @p bpm during tempo-map
-/// normalization.
+/// A project keeps musical positions only; sample positions are derived by
+/// tempo-map normalization when the project is compiled.
 typedef struct {
-  double start_ppq;     ///< Segment start in quarter notes, [0, 1e12].
-  double bpm;           ///< Tempo in beats per minute, in (0, 100000].
-  double start_sample;  ///< Derived timeline sample position; ignored by the setter, 0 when read.
-  double end_bpm;       ///< Tempo reached at the segment end in BPM; 0 = constant tempo.
+  double start_ppq;  ///< Segment start in quarter notes, [0, 1e12].
+  double bpm;        ///< Tempo in beats per minute, in (0, 100000].
+  double end_bpm;    ///< Tempo reached at the segment end in BPM; 0 = constant tempo.
 } SonareProjectTempoSegment;
 
 #ifdef __cplusplus
 static_assert(offsetof(SonareProjectTempoSegment, start_ppq) == 0, "TempoSegment.start_ppq offset");
 static_assert(offsetof(SonareProjectTempoSegment, bpm) == 8, "TempoSegment.bpm offset");
-static_assert(offsetof(SonareProjectTempoSegment, start_sample) == 16,
-              "TempoSegment.start_sample offset");
-static_assert(offsetof(SonareProjectTempoSegment, end_bpm) == 24, "TempoSegment.end_bpm offset");
-static_assert(sizeof(SonareProjectTempoSegment) == 4u * sizeof(double),
+static_assert(offsetof(SonareProjectTempoSegment, end_bpm) == 16, "TempoSegment.end_bpm offset");
+static_assert(sizeof(SonareProjectTempoSegment) == 3u * sizeof(double),
               "SonareProjectTempoSegment layout drift");
 #endif
 
@@ -285,11 +280,8 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
 ///          only way to learn the valid index range; an index at or past that
 ///          count yields SONARE_ERROR_INVALID_PARAMETER.
 ///
-///          @p start_sample comes back as the project stores it, which is 0 for
-///          every segment: a project keeps musical positions only, and sample
-///          positions are derived by tempo-map normalization when the project is
-///          compiled. Read @p start_ppq and @p bpm; a caller that needs sample
-///          positions has to run them through the tempo map itself.
+///          A project keeps musical positions only; a caller that needs sample
+///          positions has to run @p start_ppq and @p bpm through the tempo map.
 SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, size_t index,
                                                   SonareProjectTempoSegment* out);
 
@@ -318,27 +310,18 @@ static_assert(offsetof(SonareProjectMarker, ppq) == 8u, "SonareProjectMarker ppq
 static_assert(offsetof(SonareProjectMarker, name) == 16u, "SonareProjectMarker name offset");
 #endif
 
-/// @brief Adds or replaces a marker. @p marker_id 0 allocates a new id. The
-///        marker is created with the default (Marker) kind; use
-///        sonare_project_set_marker_ex to set a text / lyric / cue / key
-///        signature kind. An explicit @p marker_id of UINT32_MAX is reserved and
-///        yields SONARE_ERROR_INVALID_PARAMETER: a project holding one would
-///        serialize but could never be deserialized again.
-SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
-                                      const char* name, uint32_t* out_marker_id);
-
-/// @brief Adds or replaces a marker from a full SonareProjectMarker, including
+/// @brief Adds or replaces a marker from a SonareProjectMarker, including
 ///        its kind and key signature. @p marker->id 0 allocates a new id and
 ///        UINT32_MAX is reserved (SONARE_ERROR_INVALID_PARAMETER); the
 ///        allocated / affected id is returned via @p out_marker_id. For the
 ///        key-signature kind @p marker->key_fifths must be in -7..7 (the SMF
 ///        `sf` range); an out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
-SonareError sonare_project_set_marker_ex(SonareProject* project, const SonareProjectMarker* marker,
-                                         uint32_t* out_marker_id);
+SonareError sonare_project_set_marker(SonareProject* project, const SonareProjectMarker* marker,
+                                      uint32_t* out_marker_id);
 
 /// @brief Adds or replaces a full marker while accepting an unbounded UTF-8 name.
 /// @details @p marker supplies the non-name fields, under the same id rules as
-///          sonare_project_set_marker_ex. @p name is copied verbatim; use this
+///          sonare_project_set_marker. @p name is copied verbatim; use this
 ///          API when the fixed 64-byte compatibility field is too small.
 SonareError sonare_project_set_marker_ex_name(SonareProject* project,
                                               const SonareProjectMarker* marker, const char* name,

@@ -118,31 +118,30 @@ TEST_CASE("sonare_split_silence_common refuses its arguments in header order", "
   size_t interval_count = 0;
 
   REQUIRE(sonare_split_silence_common(nullptr, 2, lengths, 60.0f, 2048, 512, &intervals,
-                                      &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+                                      &interval_count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "signals must not be NULL");
   REQUIRE(sonare_split_silence_common(signals, 0, lengths, 60.0f, 2048, 512, &intervals,
-                                      &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+                                      &interval_count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "signal_count must be an integer of at least 1");
   REQUIRE(sonare_split_silence_common(signals, 2, nullptr, 60.0f, 2048, 512, &intervals,
-                                      &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+                                      &interval_count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "lengths must not be NULL");
 
   const float* null_second[2] = {take.data(), nullptr};
   REQUIRE(sonare_split_silence_common(null_second, 2, lengths, 60.0f, 2048, 512, &intervals,
-                                      &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+                                      &interval_count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "signals[1] must not be NULL when lengths[1] is not 0");
   const float* nan_second[2] = {take.data(), nan_take.data()};
   REQUIRE(sonare_split_silence_common(nan_second, 2, lengths, 60.0f, 2048, 512, &intervals,
-                                      &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+                                      &interval_count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "signals[1] contains a non-finite sample at index 2");
 
   SonareSilenceCommonReport report{};
-  REQUIRE(sonare_split_silence_common_ex(signals, 2, lengths, 60.0f, 2048, 512, nullptr,
-                                         &interval_count,
-                                         &report) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_split_silence_common(signals, 2, lengths, 60.0f, 2048, 512, nullptr,
+                                      &interval_count, &report) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "out_intervals must not be NULL");
-  REQUIRE(sonare_split_silence_common_ex(signals, 2, lengths, 60.0f, 2048, 512, &intervals, nullptr,
-                                         &report) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_split_silence_common(signals, 2, lengths, 60.0f, 2048, 512, &intervals, nullptr,
+                                      &report) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "out_interval_count must not be NULL");
 }
 

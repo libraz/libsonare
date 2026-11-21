@@ -1285,7 +1285,7 @@ TEST_CASE("C-ABI staging-vector setters keep exceptions inside the ABI", "[proje
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
 
-  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0}};
   REQUIRE(
       sonare_project_set_tempo_segments(project, one_tempo, std::numeric_limits<size_t>::max()) ==
       SONARE_ERROR_INVALID_PARAMETER);
@@ -1298,7 +1298,7 @@ TEST_CASE("C-ABI staging-vector setters keep exceptions inside the ABI", "[proje
   const size_t large_count = 100000;
   std::vector<SonareProjectTempoSegment> tempo(large_count);
   for (size_t i = 0; i < large_count; ++i) {
-    tempo[i] = {static_cast<double>(i), 120.0, 0.0, 0.0};
+    tempo[i] = {static_cast<double>(i), 120.0, 0.0};
   }
   REQUIRE(sonare_project_set_tempo_segments(project, tempo.data(), tempo.size()) == SONARE_OK);
   tempo[large_count / 2].bpm = -1.0;
@@ -1344,7 +1344,7 @@ TEST_CASE("C-ABI automation lane refuses out-of-domain pan and width breakpoints
   SonareAutomationPoint point{};
   point.ppq = 0.0;
   point.curve_to_next = SONARE_CURVE_LINEAR;
-  SonareAutomationLaneDescEx desc{};
+  SonareAutomationLaneDesc desc{};
   desc.target_param_id = 7;
   desc.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   desc.points = &point;
@@ -1352,12 +1352,12 @@ TEST_CASE("C-ABI automation lane refuses out-of-domain pan and width breakpoints
   uint32_t out_id = 0;
 
   point.value = 1.5f;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &desc, &out_id) ==
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &out_id) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == before);
 
   point.value = 1.0f;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &desc, &out_id) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &out_id) == SONARE_OK);
 
   sonare_project_destroy(project);
 }
@@ -1482,35 +1482,36 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   sonare_project_destroy(project);
 }
 
-TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
+TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
           "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   AudioFixture fx = add_audio_track_clip(project, 0.0, 8.0);
 
   SonareAutomationPoint points[1] = {{0.0, -3.0f, SONARE_CURVE_LINEAR}};
-  SonareAutomationLaneDescEx fader{};
+  SonareAutomationLaneDesc fader{};
   fader.target_param_id = 100;
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = points;
   fader.point_count = 1;
   uint32_t out_target = 0;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &fader, &out_target) ==
-          SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &fader, &out_target) == SONARE_OK);
   REQUIRE(out_target == 100);
   const std::string with_fader = serialize(project);
   REQUIRE(with_fader.find("\"version\":7") != std::string::npos);
   REQUIRE(with_fader.find("\"targetKind\":1") != std::string::npos);
 
-  // The legacy edit descriptor has no kind and must retain the typed target.
+  // An edit that restates the kind keeps the lane typed.
   SonareAutomationPoint edited[1] = {{0.0, -6.0f, SONARE_CURVE_HOLD}};
-  SonareAutomationLaneDesc legacy_edit{};
-  legacy_edit.target_param_id = 100;
-  legacy_edit.points = edited;
-  legacy_edit.point_count = 1;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &legacy_edit) == SONARE_OK);
-  const std::string after_legacy_edit = serialize(project);
-  REQUIRE(after_legacy_edit.find("\"targetKind\":1") != std::string::npos);
+  SonareAutomationLaneDesc kept_kind_edit{};
+  kept_kind_edit.target_param_id = 100;
+  kept_kind_edit.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
+  kept_kind_edit.points = edited;
+  kept_kind_edit.point_count = 1;
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &kept_kind_edit) ==
+          SONARE_OK);
+  const std::string after_edit = serialize(project);
+  REQUIRE(after_edit.find("\"targetKind\":1") != std::string::npos);
 
   // Opaque lanes continue to coexist with typed mixer lanes.
   SonareAutomationLaneDesc opaque{};
@@ -1521,33 +1522,33 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
 
   // Pan breakpoints are refused outside [-1, 1], so the pan lanes carry a value of their own.
   SonareAutomationPoint pan_points[1] = {{0.0, 0.25f, SONARE_CURVE_LINEAR}};
-  SonareAutomationLaneDescEx pan = fader;
+  SonareAutomationLaneDesc pan = fader;
   pan.target_param_id = 101;
   pan.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   pan.points = pan_points;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &pan, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &pan, nullptr) == SONARE_OK);
   const std::string with_fader_and_pan = serialize(project);
 
   // A second lane of the same typed kind is a command conflict and must not
   // partially mutate the project or history.
-  SonareAutomationLaneDescEx duplicate_fader = fader;
+  SonareAutomationLaneDesc duplicate_fader = fader;
   duplicate_fader.target_param_id = 102;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &duplicate_fader, nullptr) ==
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &duplicate_fader, nullptr) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(serialize(project) == with_fader_and_pan);
 
-  SonareAutomationLaneDescEx unknown = fader;
+  SonareAutomationLaneDesc unknown = fader;
   unknown.target_param_id = 103;
   unknown.target_kind = static_cast<SonareAutomationTargetKind>(3);
-  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &unknown, nullptr) ==
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &unknown, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == with_fader_and_pan);
 
   // Editing the fader into the already occupied pan slot is also atomic.
-  SonareAutomationLaneDescEx conflicting_edit = fader;
+  SonareAutomationLaneDesc conflicting_edit = fader;
   conflicting_edit.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   conflicting_edit.points = pan_points;
-  REQUIRE(sonare_project_edit_automation_lane_ex(project, fx.track, 100, &conflicting_edit) ==
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &conflicting_edit) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(serialize(project) == with_fader_and_pan);
 
@@ -1556,14 +1557,13 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   track_desc.kind = SONARE_TRACK_AUDIO;
   uint32_t second_track = 0;
   REQUIRE(sonare_project_add_track(project, &track_desc, &second_track) == SONARE_OK);
-  REQUIRE(sonare_project_add_automation_lane_ex(project, second_track, &fader, nullptr) ==
-          SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, second_track, &fader, nullptr) == SONARE_OK);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo second-track lane
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo second track
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo pan lane
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo opaque lane
-  REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo legacy edit
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo edit
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo fader add
   REQUIRE(serialize(project).find("\"automationLanes\":[]") != std::string::npos);
 
@@ -1741,7 +1741,7 @@ TEST_CASE("C ABI take alignment produces anchors the project warp map accepts", 
   SonareProjectWarpAnchor* anchors = nullptr;
   size_t anchor_count = 0;
   SonareTakeAlignment alignment{};
-  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), sr, take.data(),
                                          take.size(), sr, nullptr, &anchors, &anchor_count,
                                          &alignment) == SONARE_OK);
   REQUIRE(anchors != nullptr);
@@ -1801,8 +1801,8 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
   const auto align = [&](const SonareTakeAlignConfig* config, size_t* count) {
     SonareProjectWarpAnchor* anchors = nullptr;
     const SonareError code =
-        sonare_align_take_to_reference(reference.data(), reference.size(), take.data(), take.size(),
-                                       sr, config, &anchors, count, nullptr);
+        sonare_align_take_to_reference(reference.data(), reference.size(), sr, take.data(),
+                                       take.size(), sr, config, &anchors, count, nullptr);
     sonare_free_project_warp_anchors(anchors);
     return code;
   };
@@ -1881,13 +1881,13 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
   SECTION("unusable input is an invalid parameter rather than an empty answer") {
     size_t count = 0;
     SonareProjectWarpAnchor* anchors = nullptr;
-    REQUIRE(sonare_align_take_to_reference(nullptr, 0, take.data(), take.size(), sr, nullptr,
+    REQUIRE(sonare_align_take_to_reference(nullptr, 0, sr, take.data(), take.size(), sr, nullptr,
                                            &anchors, &count,
                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), nullptr, 0, sr,
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), sr, nullptr, 0, sr,
                                            nullptr, &anchors, &count,
                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), 0, take.data(),
                                            take.size(), 0, nullptr, &anchors, &count,
                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     // Out-params are cleared on every refusal, so a caller reading them after a
@@ -1896,43 +1896,11 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     REQUIRE(count == 0);
     SonareTakeAlignment alignment{};
     alignment.reference_frames = 7;
-    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), -1, take.data(),
                                            take.size(), -1, nullptr, &anchors, &count,
                                            &alignment) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(alignment.reference_frames == 0);
   }
-}
-
-TEST_CASE("C ABI two-rate take alignment at equal rates is the single-rate call", "[c_api][mir]") {
-  const int sr = 22050;
-  const std::vector<float> reference = make_glide(sr, 261.63, 11.0, 0.5);
-  const std::vector<float> take = make_glide(sr, 261.63, 11.0, 0.75);
-
-  SonareProjectWarpAnchor* single = nullptr;
-  size_t single_count = 0;
-  SonareTakeAlignment single_alignment{};
-  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
-                                         take.size(), sr, nullptr, &single, &single_count,
-                                         &single_alignment) == SONARE_OK);
-  SonareProjectWarpAnchor* two_rate = nullptr;
-  size_t two_rate_count = 0;
-  SonareTakeAlignment two_rate_alignment{};
-  REQUIRE(sonare_align_take_to_reference_ex(reference.data(), reference.size(), sr, take.data(),
-                                            take.size(), sr, nullptr, &two_rate, &two_rate_count,
-                                            &two_rate_alignment) == SONARE_OK);
-
-  REQUIRE(two_rate_count == single_count);
-  for (size_t i = 0; i < single_count; ++i) {
-    CAPTURE(i);
-    REQUIRE(two_rate[i].warp_sample == single[i].warp_sample);
-    REQUIRE(two_rate[i].source_sample == single[i].source_sample);
-  }
-  REQUIRE(two_rate_alignment.reference_frames == single_alignment.reference_frames);
-  REQUIRE(two_rate_alignment.take_frames == single_alignment.take_frames);
-  REQUIRE(two_rate_alignment.mean_residual_frames == single_alignment.mean_residual_frames);
-
-  sonare_free_project_warp_anchors(single);
-  sonare_free_project_warp_anchors(two_rate);
 }
 
 TEST_CASE("C ABI two-rate take alignment measures the take on the reference's grid",
@@ -1953,9 +1921,9 @@ TEST_CASE("C ABI two-rate take alignment measures the take on the reference's gr
                          SonareTakeAlignment* alignment) {
     SonareProjectWarpAnchor* rows = nullptr;
     size_t count = 0;
-    REQUIRE(sonare_align_take_to_reference_ex(reference.data(), reference.size(), reference_rate,
-                                              take.data(), take.size(), declared_take_rate, nullptr,
-                                              &rows, &count, alignment) == SONARE_OK);
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), reference_rate,
+                                           take.data(), take.size(), declared_take_rate, nullptr,
+                                           &rows, &count, alignment) == SONARE_OK);
     anchors->assign(rows, rows + count);
     sonare_free_project_warp_anchors(rows);
   };
@@ -2021,7 +1989,7 @@ TEST_CASE("C ABI two-rate take alignment refuses an oversized resampled take bef
   const auto align = [&](int declared_take_rate, std::string* message) {
     SonareProjectWarpAnchor* anchors = nullptr;
     size_t count = 0;
-    const SonareError code = sonare_align_take_to_reference_ex(
+    const SonareError code = sonare_align_take_to_reference(
         reference.data(), reference.size(), reference_rate, take.data(), take.size(),
         declared_take_rate, &refused_by_core, &anchors, &count, nullptr);
     const char* text = sonare_last_error_message();

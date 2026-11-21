@@ -5,6 +5,18 @@
 
 #include "binding_project_parity_test_helpers.h"
 
+namespace {
+
+SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, const char* name,
+                             uint32_t* out_id) {
+  SonareProjectMarker marker{};
+  marker.id = id;
+  marker.ppq = ppq;
+  return sonare_project_set_marker_ex_name(project, &marker, name, out_id);
+}
+
+}  // namespace
+
 TEST_CASE("project ABI version is positive and matches the macro", "[project]") {
   REQUIRE(sonare_project_abi_version() == SONARE_PROJECT_ABI_VERSION);
   REQUIRE(sonare_project_abi_version() > 0u);
@@ -76,7 +88,6 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   tempos[0].bpm = 120.0;
   tempos[1].start_ppq = 960.0;
   tempos[1].bpm = 132.0;
-  tempos[1].start_sample = -123.0;  // input is ignored; start samples are derived.
   tempos[1].end_bpm = 144.0;
   REQUIRE(sonare_project_set_tempo_segments(project, tempos, 2) == SONARE_OK);
   REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
@@ -93,9 +104,6 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(read_tempo.start_ppq == tempos[1].start_ppq);
   CHECK(read_tempo.bpm == tempos[1].bpm);
   CHECK(read_tempo.end_bpm == tempos[1].end_bpm);
-  // The setter ignored the -123 it was handed, and the getter reports what the
-  // project holds rather than echoing the input back.
-  CHECK(read_tempo.start_sample == 0.0);
   CHECK(sonare_project_tempo_segment_by_index(project, 2, &read_tempo) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_tempo_segment_by_index(project, 0, nullptr) ==
@@ -122,12 +130,12 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
         SONARE_ERROR_INVALID_PARAMETER);
 
   uint32_t marker_id = 0;
-  REQUIRE(sonare_project_set_marker(project, 0, 12.0, "Verse", &marker_id) == SONARE_OK);
+  REQUIRE(set_marker_named(project, 0, 12.0, "Verse", &marker_id) == SONARE_OK);
   REQUIRE(marker_id != 0);
   REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
   CHECK(count == 1);
   uint32_t replaced_id = 0;
-  REQUIRE(sonare_project_set_marker(project, marker_id, 16.0, "Chorus", &replaced_id) == SONARE_OK);
+  REQUIRE(set_marker_named(project, marker_id, 16.0, "Chorus", &replaced_id) == SONARE_OK);
   CHECK(replaced_id == marker_id);
   REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
   CHECK(count == 1);
@@ -155,8 +163,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(sonare_project_set_tempo_segments(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
   tempos[0].bpm = 0.0;
   CHECK(sonare_project_set_tempo_segments(project, tempos, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  const SonareProjectTempoSegment non_monotonic[] = {{8.0, 120.0, 0.0, 0.0},
-                                                     {4.0, 120.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment non_monotonic[] = {{8.0, 120.0, 0.0}, {4.0, 120.0, 0.0}};
   CHECK(sonare_project_set_tempo_segments(project, non_monotonic, 2) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_time_signatures(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
@@ -166,10 +173,10 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   // tempo or a position past the public bound is rejected here too, because the
   // project's own MIR and loop helpers build a raw tempo map from what is
   // stored and would otherwise compute clamped, meaningless sample positions.
-  const SonareProjectTempoSegment over_range_bpm[] = {{0.0, 1.0e9, 0.0, 0.0}};
+  const SonareProjectTempoSegment over_range_bpm[] = {{0.0, 1.0e9, 0.0}};
   CHECK(sonare_project_set_tempo_segments(project, over_range_bpm, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  const SonareProjectTempoSegment over_range_ppq[] = {{1.0e30, 120.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment over_range_ppq[] = {{1.0e30, 120.0, 0.0}};
   CHECK(sonare_project_set_tempo_segments(project, over_range_ppq, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
   // ... and the time-signature setter rejects the same malformed shapes its
@@ -183,8 +190,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   const SonareProjectTimeSignatureSegment over_range_sig[] = {{1.0e30, 4, 4}};
   CHECK(sonare_project_set_time_signatures(project, over_range_sig, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_project_set_marker(project, 0, -1.0, "bad", &marker_id) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(set_marker_named(project, 0, -1.0, "bad", &marker_id) == SONARE_ERROR_INVALID_PARAMETER);
 
   const std::string json = serialize(project);
   CHECK(json.find("\"overlapPolicy\":1") != std::string::npos);
@@ -208,7 +214,7 @@ TEST_CASE("marker setters reject the reserved entity id", "[project]") {
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
 
   uint32_t out_id = 99;
-  CHECK(sonare_project_set_marker(project, kReserved, 1.0, "reserved", &out_id) ==
+  CHECK(set_marker_named(project, kReserved, 1.0, "reserved", &out_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out_id == 0u);
 
@@ -218,7 +224,7 @@ TEST_CASE("marker setters reject the reserved entity id", "[project]") {
   marker.ppq = 1.0;
   std::copy(marker_name.begin(), marker_name.end(), marker.name);
   out_id = 99;
-  CHECK(sonare_project_set_marker_ex(project, &marker, &out_id) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_marker(project, &marker, &out_id) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out_id == 0u);
   out_id = 99;
   CHECK(sonare_project_set_marker_ex_name(project, &marker, "reserved", &out_id) ==
@@ -232,12 +238,12 @@ TEST_CASE("marker setters reject the reserved entity id", "[project]") {
   // Every id the setters do accept survives a serialize / deserialize round
   // trip, including the largest usable one. Allocate before pinning the id
   // counter to its top: an explicit id of UINT32_MAX-1 exhausts the allocator.
-  REQUIRE(sonare_project_set_marker(project, 0, 2.0, "allocated", &out_id) == SONARE_OK);
+  REQUIRE(set_marker_named(project, 0, 2.0, "allocated", &out_id) == SONARE_OK);
   CHECK(out_id != 0u);
   CHECK(out_id != kReserved);
   marker.id = kReserved - 1u;
   out_id = 0;
-  REQUIRE(sonare_project_set_marker_ex(project, &marker, &out_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &marker, &out_id) == SONARE_OK);
   CHECK(out_id == kReserved - 1u);
 
   const std::string json = serialize(project);
@@ -853,7 +859,7 @@ TEST_CASE("project track edit entries refuse by the parameter the header spells"
   CHECK(sonare_project_remove_warp_map(project, 5) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "warp_ref_id must be the id of a warp map in this project");
 
-  SonareProjectTempoSegment segments[2] = {{0.0, 120.0, 0.0, 0.0}, {0.0, 120.0, 0.0, 0.0}};
+  SonareProjectTempoSegment segments[2] = {{0.0, 120.0, 0.0}, {0.0, 120.0, 0.0}};
   CHECK(sonare_project_set_tempo_segments(project, nullptr, 2) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "segments must not be NULL when segment_count is not 0");
   CHECK(sonare_project_set_tempo_segments(project, segments, 2) == SONARE_ERROR_INVALID_PARAMETER);
@@ -865,14 +871,13 @@ TEST_CASE("project track edit entries refuse by the parameter the header spells"
   CHECK(last_refusal() == "segments[0].numerator must be an integer in [1, 2147483647]");
 
   uint32_t marker_id = 0;
-  CHECK(sonare_project_set_marker(project, 0, -1.0, "m", &marker_id) ==
+  CHECK(set_marker_named(project, 0, -1.0, "m", &marker_id) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "marker.ppq must be finite and at least 0");
+  CHECK(set_marker_named(project, 0xFFFFFFFFu, 1.0, "m", &marker_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "ppq must be finite and at least 0");
-  CHECK(sonare_project_set_marker(project, 0xFFFFFFFFu, 1.0, "m", &marker_id) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "marker_id must be an integer in [0, 4294967294]");
+  CHECK(last_refusal() == "marker.id must be an integer in [0, 4294967294]");
 
-  SonareAutomationLaneDesc lane{0, nullptr, 0};
+  SonareAutomationLaneDesc lane{0, SONARE_AUTOMATION_TARGET_OPAQUE, nullptr, 0};
   uint32_t lane_param = 0;
   CHECK(sonare_project_add_automation_lane(project, track_id, &lane, &lane_param) ==
         SONARE_ERROR_INVALID_PARAMETER);

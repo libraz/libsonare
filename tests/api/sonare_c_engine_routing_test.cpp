@@ -124,10 +124,10 @@ InsertGainReduction render_and_read_insert_gr(SonareEngine* engine, uint32_t tar
   for (int b = 0; b < blocks; ++b) {
     block.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
-    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
-    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
-                                                   &written) == SONARE_OK);
+    REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
+            SONARE_OK);
     for (size_t i = 0; i < written; ++i) {
       if (records[i].target_id == target_id) result.record_db = records[i].gain_reduction_db;
     }
@@ -575,15 +575,15 @@ TEST_CASE("C engine master meter carries pre-trim input and compressor reduction
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   std::array<float, kRoutingBlock> samples{};
   float* channels[] = {samples.data()};
-  SonareMeterTelemetryRecordV2 master{};
+  SonareMeterTelemetryRecord master{};
   bool found = false;
   for (int block = 0; block < 20; ++block) {
     samples.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
-    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
-    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
-                                                   &written) == SONARE_OK);
+    REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
+            SONARE_OK);
     for (size_t index = 0; index < written; ++index) {
       if (records[index].target_id == 0) {
         master = records[index];
@@ -611,28 +611,28 @@ TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
       SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  SonareMeterTelemetryRecordWideV2 scratch{};
+  SonareMeterTelemetryRecordWide scratch{};
   size_t count = 99;
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(nullptr, &scratch, 1, &count) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(nullptr, &scratch, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, &scratch, 1, nullptr) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, &scratch, 1, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, nullptr, 1, &count) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, nullptr, 0, &count) == SONARE_OK);
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 0, &count) == SONARE_OK);
   REQUIRE(count == 0);
 
   std::array<float, kRoutingBlock> samples{};
   float* channels[] = {samples.data()};
-  SonareMeterTelemetryRecordWideV2 master{};
+  SonareMeterTelemetryRecordWide master{};
   bool found = false;
   for (int block = 0; block < 20; ++block) {
     samples.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
-    std::array<SonareMeterTelemetryRecordWideV2, 16> records{};
+    std::array<SonareMeterTelemetryRecordWide, 16> records{};
     size_t written = 0;
-    REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, records.data(), records.size(),
-                                                        &written) == SONARE_OK);
+    REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, records.data(), records.size(),
+                                                     &written) == SONARE_OK);
     for (size_t index = 0; index < written; ++index) {
       if (records[index].target_id == 0) {
         master = records[index];
@@ -715,10 +715,10 @@ TEST_CASE("per-insert gain reduction folds a split block like the meter record",
   std::array<float, kRoutingBlock> block{};
   float* io[] = {block.data()};
   REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
-  std::array<SonareMeterTelemetryRecordV2, 16> records{};
+  std::array<SonareMeterTelemetryRecord, 16> records{};
   size_t written = 0;
-  REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
-                                                 &written) == SONARE_OK);
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
+          SONARE_OK);
   float record_db = 1.0f;
   for (size_t i = 0; i < written; ++i) {
     if (records[i].target_id == 1) record_db = records[i].gain_reduction_db;
@@ -780,10 +780,10 @@ TEST_CASE("per-insert gain reduction covers the master and a bus",
   for (int b = 0; b < 30; ++b) {
     block.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
-    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
-    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
-                                                   &written) == SONARE_OK);
+    REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
+            SONARE_OK);
     for (size_t i = 0; i < written; ++i) {
       if (records[i].target_id == 0) master_record = records[i].gain_reduction_db;
       if (records[i].target_id == kBusTarget) bus_record = records[i].gain_reduction_db;

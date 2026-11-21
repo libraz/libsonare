@@ -116,8 +116,8 @@ std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) 
                                          std::vector<float>(static_cast<size_t>(kTotalFrames)));
   std::vector<float*> ptrs;
   for (auto& plane : planes) ptrs.push_back(plane.data());
-  REQUIRE(sonare_engine_render_offline(engine, ptrs.data(), channels, kTotalFrames, kBlockSize) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, ptrs.data(), channels, kTotalFrames, kBlockSize,
+                                       nullptr) == SONARE_OK);
   sonare_engine_destroy(engine);
   std::vector<float> interleaved(static_cast<size_t>(kTotalFrames * channels));
   for (int64_t f = 0; f < kTotalFrames; ++f) {

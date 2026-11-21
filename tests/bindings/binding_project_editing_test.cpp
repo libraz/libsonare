@@ -75,14 +75,26 @@ TEST_CASE("snap_to_grid snaps a near-beat coordinate to the beat line", "[projec
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   double snapped = -1.0;
-  REQUIRE(sonare_project_snap_to_grid(project, 1.02, 1.0, &snapped) == SONARE_OK);
+  REQUIRE(sonare_project_snap_to_grid(project, 1.02, 1.0, nullptr, &snapped) == SONARE_OK);
   REQUIRE(snapped == 1.0);
 
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 0.27, 1.0, 4, &snapped) == SONARE_OK);
+  SonareProjectSnapToGridOptions options;
+  sonare_project_snap_to_grid_options_init(&options);
+  CHECK(options.struct_size == sizeof(SonareProjectSnapToGridOptions));
+  CHECK(options.division == 1);
+  REQUIRE(sonare_project_snap_to_grid(project, 1.02, 1.0, &options, &snapped) == SONARE_OK);
+  REQUIRE(snapped == 1.0);
+  options.division = 4;
+  REQUIRE(sonare_project_snap_to_grid(project, 0.27, 1.0, &options, &snapped) == SONARE_OK);
   REQUIRE(snapped == 0.25);
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 4.02, 1.0, 0, &snapped) == SONARE_OK);
+  options.division = 0;
+  REQUIRE(sonare_project_snap_to_grid(project, 4.02, 1.0, &options, &snapped) == SONARE_OK);
   REQUIRE(snapped == 4.0);
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 1.0, -1, &snapped) ==
+  options.division = -1;
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 1.0, &options, &snapped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  SonareProjectSnapToGridOptions zeroed{};
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 1.0, &zeroed, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
@@ -100,8 +112,8 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
 
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
-  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, candidates,
-                                       std::size(candidates), &count) == SONARE_OK);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, nullptr,
+                                       candidates, std::size(candidates), &count) == SONARE_OK);
   REQUIRE(count > 0);
   REQUIRE(candidates[0].bpm > 0.0f);
   REQUIRE(candidates[0].confidence >= 0.0f);
@@ -109,15 +121,14 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
   REQUIRE(candidates[0].first_time_signature.denominator > 0);
 
   float applied_bpm = 0.0f;
-  REQUIRE(sonare_project_auto_tempo_ex(project, audio.data(), audio.size(), kSampleRate, 0, 1,
-                                       &applied_bpm) == SONARE_OK);
+  REQUIRE(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, nullptr, 0, 1,
+                                    &applied_bpm) == SONARE_OK);
   REQUIRE(applied_bpm == candidates[0].bpm);
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project tempo options reach the bridge and default to the fixed-signature calls",
-          "[project]") {
-  // A tempo that moves across the take. The fixed-signature entry points fit one
+TEST_CASE("project tempo options reach the bridge and default to one tempo per take", "[project]") {
+  // A tempo that moves across the take. The default fits one
   // tempo to the whole thing and emit a map that says so; the options are how a
   // caller asks the tracker to follow it.
   constexpr int kSampleRate = 22050;
@@ -145,8 +156,8 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     float bpm = 0.0f;
-    REQUIRE(sonare_project_auto_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
-                                                   options, 0, 0, &bpm) == SONARE_OK);
+    REQUIRE(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, options, 0,
+                                      0, &bpm) == SONARE_OK);
     size_t count = 0;
     REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
     sonare_project_destroy(project);
@@ -154,12 +165,12 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
   };
 
   // Passing the defaults, and passing nothing, must both reproduce the
-  // fixed-signature behaviour rather than quietly enabling anything.
+  // one-tempo-per-take behaviour rather than quietly enabling anything.
   SonareProject* legacy = nullptr;
   REQUIRE(sonare_project_create(&legacy) == SONARE_OK);
   float legacy_bpm = 0.0f;
-  REQUIRE(sonare_project_auto_tempo_ex(legacy, audio.data(), audio.size(), kSampleRate, 0, 0,
-                                       &legacy_bpm) == SONARE_OK);
+  REQUIRE(sonare_project_auto_tempo(legacy, audio.data(), audio.size(), kSampleRate, nullptr, 0, 0,
+                                    &legacy_bpm) == SONARE_OK);
   size_t legacy_count = 0;
   REQUIRE(sonare_project_tempo_segment_count(legacy, &legacy_count) == SONARE_OK);
   sonare_project_destroy(legacy);
@@ -186,17 +197,15 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   SonareProjectTempoOptions zeroed{};
   float bpm = 0.0f;
-  CHECK(sonare_project_auto_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
-                                               &zeroed, 0, 0,
-                                               &bpm) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_auto_tempo(project, audio.data(), audio.size(), kSampleRate, &zeroed, 0, 0,
+                                  &bpm) == SONARE_ERROR_INVALID_PARAMETER);
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
-  CHECK(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
-                                                  &zeroed, candidates, std::size(candidates),
-                                                  &count) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(),
-                                                    kSampleRate, &adaptive, candidates,
-                                                    std::size(candidates), &count) == SONARE_OK);
+  CHECK(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, &zeroed,
+                                     candidates, std::size(candidates),
+                                     &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, &adaptive,
+                                       candidates, std::size(candidates), &count) == SONARE_OK);
   CHECK(count > 0);
   sonare_project_destroy(project);
 }
@@ -348,48 +357,48 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
   }
 
   // Two NULL pointers: the first one in header order is named.
-  REQUIRE(sonare_project_snap_to_grid_ex(nullptr, 0.0, 0.5, 1, nullptr) ==
+  REQUIRE(sonare_project_snap_to_grid(nullptr, 0.0, 0.5, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "project must not be NULL");
 
   double snapped = 0.0;
-  REQUIRE(sonare_project_snap_to_grid_ex(project, -1.0, 0.5, 1, &snapped) ==
+  REQUIRE(sonare_project_snap_to_grid(project, -1.0, 0.5, nullptr, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "ppq must be finite and at least 0");
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 2.0, 1, &snapped) ==
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 2.0, nullptr, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "strength must be finite and in [0, 1]");
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 0.5, 2000, &snapped) ==
+  SonareProjectSnapToGridOptions snap_options;
+  sonare_project_snap_to_grid_options_init(&snap_options);
+  snap_options.division = 2000;
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 0.5, &snap_options, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "division must be an integer in [0, 1024]");
-  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 0.5, 1, nullptr) ==
+  REQUIRE(sonare_project_snap_to_grid(project, 1.0, 0.5, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_ppq must not be NULL");
 
   size_t count = 0;
-  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, nullptr, 2,
-                                       &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, nullptr, nullptr,
+                                       2, &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "candidates must not be NULL when capacity is not 0");
 
   SonareProjectTempoOptions options;
   sonare_project_tempo_options_init(&options);
   options.tempo_update_interval_beats = 0;
   SonareProjectTempoCandidate candidates[4];
-  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
-                                                    &options, candidates, 4,
-                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, &options,
+                                       candidates, 4, &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.tempo_update_interval_beats must be an integer in [1, 2147483647]");
   sonare_project_tempo_options_init(&options);
   options.ramp_threshold = -0.5f;
-  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
-                                                    &options, candidates, 4,
-                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, &options,
+                                       candidates, 4, &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.ramp_threshold must be finite and at least 0");
   sonare_project_tempo_options_init(&options);
   options.struct_size = sizeof(options) - 1;
-  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
-                                                    &options, candidates, 4,
-                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, &options,
+                                       candidates, 4, &count) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.struct_size must be set by sonare_project_tempo_options_init");
 
   SonareProjectKeySegment key{0.0, 4.0, 12u, 1u};
@@ -436,9 +445,9 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_mode must not be NULL");
 
-  REQUIRE(sonare_align_take_to_reference_ex(audio.data(), audio.size(), kRate, audio.data(),
-                                            audio.size(), kRate, nullptr, nullptr, nullptr,
-                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_align_take_to_reference(audio.data(), audio.size(), kRate, audio.data(),
+                                         audio.size(), kRate, nullptr, nullptr, nullptr,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_anchors must not be NULL");
 
   sonare_project_destroy(project);

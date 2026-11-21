@@ -425,8 +425,8 @@ OfflineRender render_offline(const Row& row, const EngineOptions& options = {}) 
                                          std::vector<float>(static_cast<size_t>(kTotalFrames)));
   std::vector<float*> ptrs;
   for (auto& plane : planes) ptrs.push_back(plane.data());
-  REQUIRE(sonare_engine_render_offline(engine, ptrs.data(), channels, kTotalFrames, kBlockSize) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, ptrs.data(), channels, kTotalFrames, kBlockSize,
+                                       nullptr) == SONARE_OK);
   sonare_engine_destroy(engine);
   result.samples = interleave(planes);
   return result;

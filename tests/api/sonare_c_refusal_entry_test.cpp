@@ -34,11 +34,11 @@ TEST_CASE("sonare_last_refusal_entry names the refused entry without its prefix"
   CHECK(std::string(sonare_last_refusal_entry()) == "fade");
 }
 
-TEST_CASE("sonare_last_refusal_entry folds a second form into its base key",
+TEST_CASE("sonare_last_refusal_entry names the entry of a Mel inverse refusal",
           "[c_api][refusal_entry]") {
   const std::vector<float> mel(16 * 4, 1.0f);
   SonareInverseResult result{};
-  REQUIRE(sonare_mel_to_stft_ex(mel.data(), 16, 4, 0, 512, 0.0f, 0.0f, 0, &result) ==
+  REQUIRE(sonare_mel_to_stft(mel.data(), mel.size(), 16, 4, 0, 512, 0.0f, 0.0f, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_last_refusal_subject_count() > 0);
   REQUIRE(sonare_last_refusal_entry() != nullptr);
@@ -68,7 +68,7 @@ TEST_CASE("an offline buffer entry records its sample_rate refusal with the shar
           "[c_api][refusal_entry]") {
   const std::vector<float> samples = tone();
   SonareChromaResult chroma{};
-  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 0, 512, 12, &chroma) ==
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 0, 512, 12, nullptr, &chroma) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_last_refusal_subject_count() == 1);
   CHECK(std::string(sonare_last_refusal_subject(0)) == "sample_rate");

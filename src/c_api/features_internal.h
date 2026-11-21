@@ -33,6 +33,9 @@ using namespace sonare_c_detail;
 
 /// The core spells the mel range "fmin" / "fmax"; every mel entry takes them as fmin_hz / fmax_hz.
 inline const std::array<CName, 2> kMelRangeNames{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
+/// The forward mel entries take the range in their options struct, so they refuse it under it.
+inline const std::array<CName, 2> kMelOptionsRangeNames{
+    {{"fmin", "options.fmin_hz"}, {"fmax", "options.fmax_hz"}}};
 
 SonareError fill_inverse_result(const std::vector<float>& data, int rows, int n_frames,
                                 SonareInverseResult* out);

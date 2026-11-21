@@ -159,79 +159,51 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
 ///        public tempo entries default to.
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                               float bpm_max, float* out_bpm);
-/// @brief Detects the key, measuring the recording's tuning first. The key entry points that take
-///   no tuning all measure it; @ref sonare_detect_key_with_tuning and
-///   @ref sonare_detect_key_candidates_with_tuning take a given one (0 is concert A440).
-SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
-                              SonareKey* out_key);
-/// @brief Detects the key with explicit chroma settings, measuring the tuning first.
-/// @param n_fft FFT size in samples at 22050 Hz, rescaled to the analysis rate.
-/// @param hop_length Hop in samples of the analysed signal: the input resampled to 22050 Hz
-///   when its rate is above 22050 Hz, the input itself otherwise.
-/// @param use_hpss Non-zero applies harmonic-percussive separation before the chroma.
-/// @param loudness_weighted Non-zero weights chroma frames by loudness.
-/// @param chroma_high_pass_hz High-pass cutoff for the chroma in Hz; 0 disables it.
-SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
-                                           int n_fft, int hop_length, int use_hpss,
-                                           int loudness_weighted, float chroma_high_pass_hz,
-                                           SonareKey* out_key);
-/// @brief Detects the key with explicit chroma settings and a restricted mode set.
-/// @details Chroma parameters follow @ref sonare_detect_key_with_options.
-/// @param modes Modes the key may take, @p mode_count entries.
-SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_t length,
-                                                     int sample_rate, int n_fft, int hop_length,
-                                                     int use_hpss, int loudness_weighted,
-                                                     float chroma_high_pass_hz,
-                                                     const SonareMode* modes, size_t mode_count,
-                                                     SonareKey* out_key);
-/// @brief Detects the key with a mode set, a key-profile family and an optional genre hint.
-/// @details Chroma parameters and @p modes follow
-///   @ref sonare_detect_key_with_options_and_modes.
-/// @param profile_type Key-profile family the chroma is correlated against.
-/// @param genre_hint Optional genre name biasing the profile choice; may be NULL.
-SonareError sonare_detect_key_with_extended_options(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key);
-/// @brief Extended key detection with a recording tuning.
-/// @details Same as @ref sonare_detect_key_with_extended_options, with the chroma shifted by
-///   @p tuning_cents, in [-50, 50) where 0 is concert A440. A non-zero
-///   @p tuning_auto measures the tuning from the audio instead of reading @p tuning_cents.
+/// @brief Options for sonare_detect_key and sonare_detect_key_candidates. Boolean fields are 0/1.
+/// @details Start from sonare_detect_key_options_init; its values are the defaults named below.
+typedef struct {
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_detect_key_options_init.
+  /// FFT size in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.
+  int n_fft;
+  /// Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
+  /// 22050 Hz, the input itself otherwise. Default 512.
+  int hop_length;
+  /// Non-zero applies harmonic-percussive separation before the chroma. Default 0.
+  int use_hpss;
+  /// Non-zero weights chroma frames by loudness. Default 0.
+  int loudness_weighted;
+  /// High-pass cutoff for the chroma in Hz; 0 disables it. Default 80.
+  float chroma_high_pass_hz;
+  /// Modes the key may take, @c mode_count entries; NULL with 0 selects major and minor.
+  const SonareMode* modes;
+  size_t mode_count;  ///< Number of entries of @c modes. Default 0.
+  /// Key-profile family the chroma is correlated against. Default SONARE_KEY_PROFILE_AUTO.
+  SonareKeyProfileType profile_type;
+  /// Optional genre name biasing the profile choice; NULL or empty means automatic.
+  const char* genre_hint;
+  /// Recording tuning in cents, in [-50, 50) where 0 is concert A440; read only when
+  /// @c tuning_auto is 0. Default 0.
+  float tuning_cents;
+  /// Non-zero measures the tuning from the audio instead of reading @c tuning_cents. Default 1.
+  int tuning_auto;
+} SonareDetectKeyOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_detect_key_options_init(SonareDetectKeyOptions* options);
+
+/// @brief Detects the key.
+/// @param options NULL selects the defaults of @ref sonare_detect_key_options_init.
 /// @param out_tuning_cents Optional; receives the tuning used, given or measured, in cents.
-SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, int sample_rate,
-                                          int n_fft, int hop_length, int use_hpss,
-                                          int loudness_weighted, float chroma_high_pass_hz,
-                                          const SonareMode* modes, size_t mode_count,
-                                          SonareKeyProfileType profile_type, const char* genre_hint,
-                                          float tuning_cents, int tuning_auto, SonareKey* out_key,
-                                          float* out_tuning_cents);
+SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
+                              const SonareDetectKeyOptions* options, SonareKey* out_key,
+                              float* out_tuning_cents);
+/// @brief Lists the key candidates, best first.
+/// @details @p options and @p out_tuning_cents follow @ref sonare_detect_key.
 /// @note Free @p out_candidates with @ref sonare_free_key_candidates.
 SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
-                                         int n_fft, int hop_length, int use_hpss,
-                                         int loudness_weighted, float chroma_high_pass_hz,
-                                         SonareKeyCandidate** out_candidates, size_t* out_count);
-/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
-SonareError sonare_detect_key_candidates_with_modes(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyCandidate** out_candidates, size_t* out_count);
-/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
-SonareError sonare_detect_key_candidates_with_extended_options(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
-    size_t* out_count);
-/// @brief Extended key candidates with a recording tuning.
-/// @details Same as @ref sonare_detect_key_candidates_with_extended_options, with the tuning
-///   taken as @ref sonare_detect_key_with_tuning takes it: @p tuning_cents, in [-50, 50) where 0 is
-///   concert A440, or measured from the audio when @p tuning_auto is non-zero.
-/// @param out_tuning_cents Optional; receives the tuning used, given or measured, in cents.
-/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
-SonareError sonare_detect_key_candidates_with_tuning(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, float tuning_cents, int tuning_auto,
-    SonareKeyCandidate** out_candidates, size_t* out_count, float* out_tuning_cents);
+                                         const SonareDetectKeyOptions* options,
+                                         SonareKeyCandidate** out_candidates, size_t* out_count,
+                                         float* out_tuning_cents);
 /// @brief Detects beat times within a tempo search range.
 /// @details @p bpm_min and @p bpm_max follow @ref sonare_detect_bpm.
 /// @note Free @p out_times with @ref sonare_free_floats.
@@ -240,21 +212,15 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
 /// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
                                     float** out_times, size_t* out_count);
-/// @note Free @p out_times with @ref sonare_free_floats.
-SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
-                                 float** out_times, size_t* out_count);
-
-/// @brief Controls peak-picking for @ref sonare_detect_onsets_ex.
-/// @details Start from @ref sonare_onset_detect_config_init, then set the fields to change;
-///          the legacy @ref sonare_detect_onsets function retains its defaults.
+/// @brief Controls peak-picking for @ref sonare_detect_onsets.
+/// @details Start from @ref sonare_onset_detect_config_init, then set the fields to change.
 ///
 ///          @p pre_max, @p post_max, @p pre_avg, @p post_avg, @p wait and
 ///          @p backtrack_range are FRAME counts, and a frame is @p hop_length
 ///          divided by the analysis rate. That rate is 22050 Hz on both entry
 ///          points -- input above it is resampled down before detection -- so a
 ///          field means the same span of audio whatever rate the caller's buffer
-///          carries, and filling this struct with the values listed as defaults
-///          reproduces @ref sonare_detect_onsets exactly.
+///          carries.
 typedef struct {
   uint32_t struct_size;  ///< sizeof of this struct; set by sonare_onset_detect_config_init.
   /// FFT window length in samples at 22050 Hz, rescaled to the input rate. Default 2048.
@@ -305,11 +271,12 @@ static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 44u,
 ///        (adaptive). A NULL @p config is ignored.
 void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config);
 
-/// @brief Detect onsets with explicit FFT, peak-picking, and backtracking settings.
+/// @brief Detects onset times.
+/// @param config NULL selects the defaults of @ref sonare_onset_detect_config_init.
 /// @note Free @p out_times with @ref sonare_free_floats.
-SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
-                                    const SonareOnsetDetectConfig* config, float** out_times,
-                                    size_t* out_count);
+SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
+                                 const SonareOnsetDetectConfig* config, float** out_times,
+                                 size_t* out_count);
 
 /// @brief Runs the full quick analysis pipeline and fills the flat C result.
 /// @details Use the single-purpose sonare_detect_* helpers for cheaper queries.
@@ -317,7 +284,7 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
-/// Progress callback for the JSON analysis variants: progress in [0,1] plus a
+/// Progress callback for the JSON analysis: progress in [0,1] plus a
 /// stage label. user_data is the opaque pointer passed to the analyze call.
 typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
 
@@ -325,19 +292,12 @@ typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage,
 /// Return nonzero to stop after the current progress-report boundary.
 typedef int (*SonareCancelCallback)(void* user_data);
 
-/// @brief Full analysis serialized to a camelCase JSON object.
-/// @details Unlike sonare_analyze (which fills only the flat bpm/key/beats struct), this returns
-///   the complete result: chords, sections, timbre, dynamics, rhythm, melody and form, with
-///   per-beat strength.
-/// @param out_json Receives a heap-allocated string; release it with @ref sonare_free_string.
-SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
-                                char** out_json);
 /// Capacity of SonareMusicAnalyzeOptions::meter_candidate_numerators. Part of
 /// the public contract: a caller cannot request more numerators than this, and
 /// every binding rejects an over-long list rather than truncating it.
 #define SONARE_MAX_METER_CANDIDATE_NUMERATORS 16
 
-/// @brief Options for sonare_analyze_json_ex. Boolean fields are 0/1 ints.
+/// @brief Options for sonare_analyze_json. Boolean fields are 0/1 ints.
 /// @details Start from sonare_music_analyze_options_init(): a zeroed
 ///   meter_candidate_numerator_count is rejected, not treated as "use the default set".
 ///   Defaults below are those of that function.
@@ -405,13 +365,28 @@ typedef struct {
   /// tuning_cents. Default 1. The value used, given or measured, is
   /// the result's "tuningCents".
   int tuning_auto;
+  /// Per-stage progress report; NULL for none. Default NULL.
+  SonareAnalyzeProgressCallback progress_callback;
+  /// Passed back to @c progress_callback unchanged. Default NULL.
+  void* progress_user_data;
+  /// Polled at progress boundaries; a non-zero return stops the analysis with
+  /// SONARE_ERROR_CANCELLED and leaves the output NULL. NULL for none. Default NULL.
+  SonareCancelCallback cancel_callback;
+  /// Passed back to @c cancel_callback unchanged. Default NULL.
+  void* cancel_user_data;
 } SonareMusicAnalyzeOptions;
 
 /// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
 void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options);
-/// @note Free @p out_json with @ref sonare_free_string.
-SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
-                                   const SonareMusicAnalyzeOptions* options, char** out_json);
+/// @brief Full analysis serialized to a camelCase JSON object.
+/// @details Unlike sonare_analyze (which fills only the flat bpm/key/beats struct), this returns
+///   the complete result: chords, sections, timbre, dynamics, rhythm, melody and form, with
+///   per-beat strength.
+/// @param options NULL selects the defaults of @ref sonare_music_analyze_options_init. No
+///   callback or user pointer in it is retained past the call.
+/// @param out_json Receives a heap-allocated string; release it with @ref sonare_free_string.
+SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
+                                const SonareMusicAnalyzeOptions* options, char** out_json);
 
 /// @brief Scoring options for sonare_estimate_meter_json.
 /// @details Start from sonare_meter_options_init(): a zeroed candidate_numerator_count is
@@ -475,17 +450,6 @@ void sonare_meter_options_init(SonareMeterOptions* options);
 SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
                                        size_t beat_count, const SonareMeterOptions* options,
                                        char** out_json);
-
-/* sonare_analyze_json_ex with per-stage progress and cancellation. Either
-   callback may be null. When cancelled, returns SONARE_ERROR_CANCELLED and
-   leaves *out_json NULL. */
-/// @note Free @p out_json with @ref sonare_free_string.
-/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
-///   @p cancel_cb. No callback or user pointer is retained past this call.
-SonareError sonare_analyze_json_ex_with_progress(
-    const float* samples, size_t length, int sample_rate, const SonareMusicAnalyzeOptions* options,
-    SonareAnalyzeProgressCallback callback, void* user_data, char** out_json,
-    SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief Releases a float buffer the library allocated; NULL is ignored.
 void sonare_free_floats(float* ptr);
@@ -623,8 +587,7 @@ size_t sonare_last_refusal_subject_count(void);
 const char* sonare_last_refusal_subject(size_t index);
 
 /// @brief Key of the C entry that recorded the last parameter refusal: its name without the
-///        "sonare_" prefix, a second form folded into its base (sonare_mel_to_stft_ex ->
-///        "mel_to_stft").
+///        "sonare_" prefix (sonare_mel_to_stft -> "mel_to_stft").
 /// @details NULL exactly when @ref sonare_last_refusal_subject_count is 0. A binding looks up its
 ///   own spelling of each subject by (entry, subject). Borrowed and thread-local, valid until the
 ///   next API call that records or clears an error on the same thread, like the subjects; like

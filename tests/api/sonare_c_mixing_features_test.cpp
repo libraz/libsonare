@@ -134,28 +134,45 @@ TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing
   }
 }
 
-TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[c_api][features]") {
+TEST_CASE("sonare_mel_spectrogram exposes a custom Mel range from pure C", "[c_api][features]") {
   const int sr = 22050;
   const int n_fft = 1024;
   const int hop = 256;
   const int n_mels = 40;
   auto samples = generate_sine(440.0f, sr, 1.0f);
 
+  const auto mel_options = [](float fmin, float fmax, int htk) {
+    SonareMelSpectrogramOptions options;
+    sonare_mel_spectrogram_options_init(&options);
+    options.fmin_hz = fmin;
+    options.fmax_hz = fmax;
+    options.htk = htk;
+    return options;
+  };
+  const auto to_stft_options = [](int htk) {
+    SonareMelToStftOptions options;
+    sonare_mel_to_stft_options_init(&options);
+    options.htk = htk;
+    return options;
+  };
+
   SECTION("custom fmin/fmax forward transform round-trips with the inverse API") {
-    // The forward _ex transform and the inverse sonare_mel_to_stft now share the
-    // same fmin/fmax, so a custom-range round-trip is possible from pure C.
+    // The forward transform and the inverse sonare_mel_to_stft share the same
+    // fmin/fmax, so a custom-range round-trip is possible from pure C.
     const float fmin = 100.0f;
     const float fmax = 8000.0f;
     SonareMelResult mel = {};
-    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, fmin,
-                                      fmax, 0, &mel) == SONARE_OK);
+    const SonareMelSpectrogramOptions options = mel_options(fmin, fmax, 0);
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &options,
+                                   &mel) == SONARE_OK);
     REQUIRE(mel.power != nullptr);
     REQUIRE(mel.n_mels == n_mels);
     REQUIRE(mel.n_frames > 0);
 
     SonareInverseResult stft = {};
-    REQUIRE(sonare_mel_to_stft(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, fmin, fmax, &stft) ==
-            SONARE_OK);
+    const size_t mel_total = static_cast<size_t>(mel.n_mels) * mel.n_frames;
+    REQUIRE(sonare_mel_to_stft(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, fmin,
+                               fmax, nullptr, &stft) == SONARE_OK);
     REQUIRE(stft.data != nullptr);
     REQUIRE(stft.rows == n_fft / 2 + 1);
     REQUIRE(stft.n_frames == mel.n_frames);
@@ -167,10 +184,11 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
   SECTION("a non-default range yields a different forward result than the default") {
     SonareMelResult def = {};
     SonareMelResult ranged = {};
-    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &def) ==
-            SONARE_OK);
-    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
-                                      500.0f, 4000.0f, 0, &ranged) == SONARE_OK);
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, nullptr,
+                                   &def) == SONARE_OK);
+    const SonareMelSpectrogramOptions options = mel_options(500.0f, 4000.0f, 0);
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &options,
+                                   &ranged) == SONARE_OK);
     const size_t total = static_cast<size_t>(n_mels) * def.n_frames;
     bool differs = false;
     for (size_t i = 0; i < total && !differs; ++i) {
@@ -183,15 +201,18 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
 
   SECTION("HTK forward transform can be inverted with an HTK-aware inverse API") {
     SonareMelResult mel = {};
-    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 0.0f,
-                                      0.0f, 1, &mel) == SONARE_OK);
+    const SonareMelSpectrogramOptions forward_options = mel_options(0.0f, 0.0f, 1);
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
+                                   &forward_options, &mel) == SONARE_OK);
 
     SonareInverseResult slaney = {};
     SonareInverseResult htk = {};
-    REQUIRE(sonare_mel_to_stft(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f,
-                               &slaney) == SONARE_OK);
-    REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f, 1,
-                                  &htk) == SONARE_OK);
+    const size_t mel_total = static_cast<size_t>(mel.n_mels) * mel.n_frames;
+    REQUIRE(sonare_mel_to_stft(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f,
+                               0.0f, nullptr, &slaney) == SONARE_OK);
+    const SonareMelToStftOptions htk_options = to_stft_options(1);
+    REQUIRE(sonare_mel_to_stft(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f,
+                               0.0f, &htk_options, &htk) == SONARE_OK);
     REQUIRE(slaney.rows == htk.rows);
     REQUIRE(slaney.n_frames == htk.n_frames);
 
@@ -207,57 +228,65 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
     sonare_free_mel_result(&mel);
   }
 
-  SECTION("sonare_mfcc_ex accepts the range and a null out is rejected") {
+  SECTION("sonare_mfcc accepts the range and a null out is rejected") {
+    SonareMfccOptions options;
+    sonare_mfcc_options_init(&options);
+    options.fmin_hz = 100.0f;
+    options.fmax_hz = 8000.0f;
     SonareMfccResult mfcc = {};
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,
-                           8000.0f, 0, 0.0f, &mfcc) == SONARE_OK);
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, &options,
+                        &mfcc) == SONARE_OK);
     REQUIRE(mfcc.coefficients != nullptr);
     REQUIRE(mfcc.n_mfcc == 13);
     sonare_free_mfcc_result(&mfcc);
 
     // A non-zero lifter is accepted and changes the coefficients.
+    options.lifter = 22.0f;
     SonareMfccResult liftered = {};
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,
-                           8000.0f, 0, 22.0f, &liftered) == SONARE_OK);
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, &options,
+                        &liftered) == SONARE_OK);
     REQUIRE(liftered.coefficients != nullptr);
     sonare_free_mfcc_result(&liftered);
 
-    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 0.0f, 0.0f,
-                           0, 0.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, nullptr,
+                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("every inverse entry refuses the band edges the forward transform refuses") {
     SonareMelResult mel = {};
-    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &mel) ==
-            SONARE_OK);
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, nullptr,
+                                   &mel) == SONARE_OK);
     SonareMfccResult mfcc = {};
-    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, &mfcc) ==
-            SONARE_OK);
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, nullptr,
+                        &mfcc) == SONARE_OK);
+    const size_t mel_total = static_cast<size_t>(mel.n_mels) * mel.n_frames;
+    const size_t mfcc_total = static_cast<size_t>(mfcc.n_mfcc) * mfcc.n_frames;
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const std::vector<std::pair<float, float>> bad = {
         {-1.0f, 0.0f}, {0.0f, -1.0f}, {nan, 0.0f}, {0.0f, nan}};
     for (const auto& [fmin, fmax] : bad) {
       INFO("fmin " << fmin << " fmax " << fmax);
       SonareMelResult forward = {};
-      REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
-                                        fmin, fmax, 0, &forward) == SONARE_ERROR_INVALID_PARAMETER);
+      const SonareMelSpectrogramOptions options = mel_options(fmin, fmax, 0);
+      REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
+                                     &options, &forward) == SONARE_ERROR_INVALID_PARAMETER);
       SonareInverseResult stft = {};
-      REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, fmin, fmax, 0,
-                                    &stft) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_mel_to_stft(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, fmin,
+                                 fmax, nullptr, &stft) == SONARE_ERROR_INVALID_PARAMETER);
       float* audio = nullptr;
       size_t audio_length = 0;
-      REQUIRE(sonare_mel_to_audio_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, hop, fmin,
-                                     fmax, 0, 1, &audio,
-                                     &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_mel_to_audio(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, hop,
+                                  fmin, fmax, 1, nullptr, &audio,
+                                  &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(audio == nullptr);
-      REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.coefficients, mfcc.n_mfcc, mfcc.n_frames, n_mels, sr,
-                                       n_fft, hop, fmin, fmax, 0, 0.0f, 1, &audio,
-                                       &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_mfcc_to_audio(mfcc.coefficients, mfcc_total, mfcc.n_mfcc, mfcc.n_frames,
+                                   n_mels, sr, n_fft, hop, fmin, fmax, 1, nullptr, &audio,
+                                   &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(audio == nullptr);
     }
     SonareInverseResult stft = {};
-    REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f, 0,
-                                  &stft) == SONARE_OK);
+    REQUIRE(sonare_mel_to_stft(mel.power, mel_total, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f,
+                               0.0f, nullptr, &stft) == SONARE_OK);
     sonare_free_inverse_result(&stft);
     sonare_free_mfcc_result(&mfcc);
     sonare_free_mel_result(&mel);
@@ -473,15 +502,19 @@ TEST_CASE("the segment C APIs refuse a feature matrix they cannot order",
   sonare_free_segment_indices(&indices);
 }
 
-TEST_CASE("sonare_spectral_bandwidth_ex accepts the Minkowski exponent", "[c_api][features]") {
+TEST_CASE("sonare_spectral_bandwidth accepts the Minkowski exponent", "[c_api][features]") {
   const auto samples = generate_sine(440.0f, 22050, 1.0f);
   float* p1 = nullptr;
   float* p2 = nullptr;
   size_t count1 = 0;
   size_t count2 = 0;
-  REQUIRE(sonare_spectral_bandwidth_ex(samples.data(), samples.size(), 22050, 1024, 256, 1.0f, &p1,
-                                       &count1) == SONARE_OK);
-  REQUIRE(sonare_spectral_bandwidth(samples.data(), samples.size(), 22050, 1024, 256, &p2,
+  SonareSpectralBandwidthOptions options;
+  sonare_spectral_bandwidth_options_init(&options);
+  REQUIRE(options.p == 2.0f);
+  options.p = 1.0f;
+  REQUIRE(sonare_spectral_bandwidth(samples.data(), samples.size(), 22050, 1024, 256, &options, &p1,
+                                    &count1) == SONARE_OK);
+  REQUIRE(sonare_spectral_bandwidth(samples.data(), samples.size(), 22050, 1024, 256, nullptr, &p2,
                                     &count2) == SONARE_OK);
   REQUIRE(count1 == count2);
   REQUIRE(count1 > 0);

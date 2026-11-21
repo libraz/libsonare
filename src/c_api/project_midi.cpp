@@ -1288,14 +1288,8 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
 }
 
 SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
-                                        const char* config_json) {
-  SONARE_C_API_ENTRY;
-  return sonare_project_bake_midi_fx_ex(project, clip_id, config_json, nullptr, 0, nullptr);
-}
-
-SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip_id,
-                                           const char* config_json, int32_t* out_source_index,
-                                           size_t out_capacity, size_t* out_count) {
+                                        const char* config_json, int32_t* out_source_index,
+                                        size_t out_capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
@@ -1368,5 +1362,5 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
 SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
                                        const char* config_json) {
   SONARE_C_API_ENTRY;
-  return sonare_project_bake_midi_fx(project, clip_id, config_json);
+  return sonare_project_bake_midi_fx(project, clip_id, config_json, nullptr, 0, nullptr);
 }

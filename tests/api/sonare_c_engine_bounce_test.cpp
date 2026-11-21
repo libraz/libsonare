@@ -220,15 +220,18 @@ TEST_CASE("an offline render's last meter record holds the true peak of its fina
     REQUIRE(sonare_engine_set_clips(engine, &source, 1) == SONARE_OK);
     std::vector<float> out(kFrames, 0.0f);
     float* io[] = {out.data()};
-    REQUIRE(sonare_engine_render_offline_ex(engine, io, 1, kFrames, 128, chunked ? 0 : 1) ==
+    SonareEngineRenderOfflineOptions render_options;
+    sonare_engine_render_offline_options_init(&render_options);
+    render_options.finalize = chunked ? 0 : 1;
+    REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, 128, &render_options) ==
             SONARE_OK);
     const auto reported = [&] {
       float max_true_peak = -1000.0f;
-      std::array<SonareMeterTelemetryRecordV2, 64> records{};
+      std::array<SonareMeterTelemetryRecord, 64> records{};
       size_t count = 0;
       do {
-        REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
-                                                       &count) == SONARE_OK);
+        REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(),
+                                                    &count) == SONARE_OK);
         for (size_t i = 0; i < count; ++i) {
           if (records[i].target_id == 0) {
             max_true_peak = std::max(max_true_peak, records[i].max_true_peak_dbtp);
@@ -389,7 +392,7 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
   std::array<float, kFrames> left{};
   std::array<float, kFrames> right{};
   std::array<float*, 2> channels{left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) ==
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128, nullptr) ==
           SONARE_ERROR_INVALID_STATE);
 
   SonareEngineBounceOptions bounce;
@@ -415,7 +418,8 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
 
   // After prepare() the telemetry ring is reserved and the same render succeeds.
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128, nullptr) ==
+          SONARE_OK);
 
   sonare_engine_destroy(engine);
 }
@@ -445,11 +449,12 @@ TEST_CASE("sonare_engine_prepare bounds the command and telemetry capacities", "
   std::array<float, kFrames> left{};
   std::array<float, kFrames> right{};
   std::array<float*, 2> channels{left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) ==
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128, nullptr) ==
           SONARE_ERROR_INVALID_STATE);
 
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128, nullptr) ==
+          SONARE_OK);
   sonare_engine_destroy(engine);
 }
 
@@ -474,10 +479,11 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
   std::array<float*, 6> channels{ch0.data(), ch1.data(), ch2.data(),
                                  ch3.data(), ch4.data(), ch5.data()};
 
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 6, kFrames, 128) ==
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 6, kFrames, 128, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Exactly at the prepared bound still succeeds.
-  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128, nullptr) ==
+          SONARE_OK);
 
   SonareEngineBounceOptions bounce;
   sonare_engine_bounce_options_init(&bounce);
@@ -513,14 +519,17 @@ TEST_CASE("offline render/bounce/freeze/prime reject a block size above the prep
   std::vector<float> left(kFrames), right(kFrames);
   float* channels[] = {left.data(), right.data()};
 
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 129) ==
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 129, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_render_offline_ex(engine, channels, 2, kFrames, 4096, 0) ==
+  SonareEngineRenderOfflineOptions chunk_options;
+  sonare_engine_render_offline_options_init(&chunk_options);
+  chunk_options.finalize = 0;
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 4096, &chunk_options) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_prime_offline_parameters(engine, 2, 129) == SONARE_ERROR_INVALID_PARAMETER);
   // The prepared block itself, and anything smaller, still renders.
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 128) == SONARE_OK);
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 128, nullptr) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 64, nullptr) == SONARE_OK);
 
   SonareEngineBounceOptions bounce;
   sonare_engine_bounce_options_init(&bounce);
@@ -585,7 +594,7 @@ TEST_CASE(
   REQUIRE(after.loop_end_ppq == before.loop_end_ppq);
   REQUIRE(after.sample_rate == before.sample_rate);
   REQUIRE(after.bar_start_ppq == before.bar_start_ppq);
-  REQUIRE(after.bar_count == before.bar_count);
+  REQUIRE(after.bar_index == before.bar_index);
   REQUIRE(after.time_signature.numerator == before.time_signature.numerator);
   REQUIRE(after.time_signature.denominator == before.time_signature.denominator);
   REQUIRE(after.time_signature.confidence == before.time_signature.confidence);
@@ -764,7 +773,7 @@ TEST_CASE("sonare_engine_bounce_offline aligns the mix to the timeline under rep
   REQUIRE(engine->engine.push_command(seek));
   std::vector<float> plain(kFrames, 0.0f);
   float* io[] = {plain.data()};
-  REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, 128, nullptr) == SONARE_OK);
   REQUIRE(peak_index(plain.data(), plain.size()) == static_cast<size_t>(kLatency));
 
   sonare_engine_destroy(engine);
@@ -821,7 +830,8 @@ TEST_CASE("an aligned bounce does not need pages past the span it was asked for"
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   std::array<float, 12> plain{};
   float* io[] = {plain.data()};
-  REQUIRE(sonare_engine_render_offline(engine, io, 1, 12, 4) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_render_offline(engine, io, 1, 12, 4, nullptr) ==
+          SONARE_ERROR_INVALID_STATE);
 
   sonare_engine_destroy(engine);
   sonare_clip_page_provider_destroy(provider);

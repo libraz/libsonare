@@ -1010,7 +1010,7 @@ TEST_CASE("sonare_engine_upsert_clip and remove_clip change one clip and keep th
     REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
     std::array<float, kFrames> out{};
     float* io[] = {out.data()};
-    REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, kFrames) == SONARE_OK);
+    REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, kFrames, nullptr) == SONARE_OK);
     return out[0];
   };
   REQUIRE(first_sample() == Catch::Approx(0.75f));
@@ -1065,11 +1065,12 @@ TEST_CASE(
   std::vector<std::vector<float>> storage(kChannels, std::vector<float>(256, 0.0f));
   std::vector<float*> planes;
   for (auto& plane : storage) planes.push_back(plane.data());
-  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 128, 128) == SONARE_OK);
-  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 129, 129) ==
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 128, 128, nullptr) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 129, 129, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   planes.push_back(nullptr);
-  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels + 1, 128, 128) ==
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels + 1, 128, 128, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   // A negative block or channel count is still refused.

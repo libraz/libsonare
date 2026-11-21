@@ -394,11 +394,6 @@ SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, 
   const sonare::transport::TempoSegment& seg = segments[index];
   out->start_ppq = seg.start_ppq;
   out->bpm = seg.bpm;
-  // Reported as stored. A project holds musical positions only; the sample
-  // position is derived by tempo-map normalization at compile time, and the
-  // core's own end_ppq is normalization state that the C struct has no field
-  // for, so neither is invented here.
-  out->start_sample = seg.start_sample;
   out->end_bpm = seg.end_bpm;
   return SONARE_OK;
 #else

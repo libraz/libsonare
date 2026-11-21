@@ -249,19 +249,19 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
   // Valid tempo ramp: constant 120 then ramp to 140.
-  const SonareProjectTempoSegment tempo[] = {{0.0, 120.0, 0.0, 0.0}, {1920.0, 120.0, 0.0, 140.0}};
+  const SonareProjectTempoSegment tempo[] = {{0.0, 120.0, 0.0}, {1920.0, 120.0, 140.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, tempo, 2) == SONARE_OK);
   // Empty clears the map.
   REQUIRE(sonare_engine_set_tempo_segments(engine, nullptr, 0) == SONARE_OK);
   // Non-finite start_ppq, non-positive bpm, and negative end_bpm are rejected.
   const SonareProjectTempoSegment nan_start[] = {
-      {std::numeric_limits<double>::quiet_NaN(), 120.0, 0.0, 0.0}};
+      {std::numeric_limits<double>::quiet_NaN(), 120.0, 0.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, nan_start, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  const SonareProjectTempoSegment zero_bpm[] = {{0.0, 0.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment zero_bpm[] = {{0.0, 0.0, 0.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, zero_bpm, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  const SonareProjectTempoSegment huge_bpm[] = {{0.0, 100000.1, 0.0, 0.0}};
+  const SonareProjectTempoSegment huge_bpm[] = {{0.0, 100000.1, 0.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, huge_bpm, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  const SonareProjectTempoSegment huge_end_bpm[] = {{0.0, 120.0, 0.0, 100000.1}};
+  const SonareProjectTempoSegment huge_end_bpm[] = {{0.0, 120.0, 100000.1}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, huge_end_bpm, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_tempo(engine, 100000.0) == SONARE_OK);
@@ -284,9 +284,9 @@ TEST_CASE("of two tempo segments at one start_ppq the later-supplied one takes e
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   // 120 BPM up to ppq 4 is 96000 samples; four more quarters take 48000 at 240 BPM, 192000 at 60.
   const SonareProjectTempoSegment slow_then_fast[] = {
-      {0.0, 120.0, 0.0, 0.0}, {4.0, 60.0, 0.0, 0.0}, {4.0, 240.0, 0.0, 0.0}};
+      {0.0, 120.0, 0.0}, {4.0, 60.0, 0.0}, {4.0, 240.0, 0.0}};
   const SonareProjectTempoSegment fast_then_slow[] = {
-      {0.0, 120.0, 0.0, 0.0}, {4.0, 240.0, 0.0, 0.0}, {4.0, 60.0, 0.0, 0.0}};
+      {0.0, 120.0, 0.0}, {4.0, 240.0, 0.0}, {4.0, 60.0, 0.0}};
   int64_t at_four = -1;
   int64_t at_eight = -1;
   REQUIRE(sonare_engine_set_tempo_segments(engine, slow_then_fast, 3) == SONARE_OK);
@@ -332,7 +332,7 @@ TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C
 
   // An above-bound count is refused by the non-throwing guard, so the staging
   // vector is never sized from it.
-  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, one_tempo, std::numeric_limits<size_t>::max()) ==
           SONARE_ERROR_INVALID_PARAMETER);
   const SonareProjectTimeSignatureSegment one_sig[] = {{0.0, 4, 4}};
@@ -347,7 +347,7 @@ TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C
   const size_t large_count = 100000;
   std::vector<SonareProjectTempoSegment> tempo(large_count);
   for (size_t i = 0; i < large_count; ++i) {
-    tempo[i] = {static_cast<double>(i), 120.0, 0.0, 0.0};
+    tempo[i] = {static_cast<double>(i), 120.0, 0.0};
   }
   REQUIRE(sonare_engine_set_tempo_segments(engine, tempo.data(), tempo.size()) == SONARE_OK);
   tempo[large_count / 2].bpm = -1.0;

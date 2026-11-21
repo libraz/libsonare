@@ -294,8 +294,8 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   std::array<float, kPreRollFrames> left{};
   std::array<float, kPreRollFrames> right{};
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(freeze_engine, channels, 2, kPreRollFrames, kPreRollBlock) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(freeze_engine, channels, 2, kPreRollFrames, kPreRollBlock,
+                                       nullptr) == SONARE_OK);
   const float frozen_steady = left[kPreRollFrames - 1];
   REQUIRE(frozen_steady > 0.0f);
   float frozen_head_peak = 0.0f;
@@ -370,8 +370,8 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
     std::array<float, kPreRollFrames> left{};
     std::array<float, kPreRollFrames> right{};
     float* channels[] = {left.data(), right.data()};
-    REQUIRE(sonare_engine_render_offline(render_engine, channels, 2, kPreRollFrames,
-                                         kPreRollBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_render_offline(render_engine, channels, 2, kPreRollFrames, kPreRollBlock,
+                                         nullptr) == SONARE_OK);
     sonare_engine_destroy(render_engine);
 
     SonareEngine* bounce_engine = make_tape_bias_engine(clip_channels, bias);

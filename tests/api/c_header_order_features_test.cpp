@@ -22,15 +22,15 @@ T* garbage_pointer() {
 }  // namespace
 
 TEST_CASE("inverse entries name the input before the outputs", "[c_api][header_order]") {
-  SECTION("mel_to_audio_ex names mel before out") {
-    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 0,
-                                   4, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  SECTION("mel_to_audio names mel before out") {
+    REQUIRE(sonare_mel_to_audio(nullptr, 16, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 4,
+                                nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "mel must not be NULL");
 
     float* out = garbage_pointer<float>();
     size_t out_length = 7;
-    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 0,
-                                   4, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mel_to_audio(nullptr, 16, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 4,
+                                nullptr, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "mel must not be NULL");
     CHECK(out == nullptr);
     CHECK(out_length == 0);
@@ -49,8 +49,8 @@ TEST_CASE("inverse entries name the input before the outputs", "[c_api][header_o
     CHECK(out_length == 0);
   }
 
-  SECTION("mfcc_to_mel_ex names coefficients before out") {
-    REQUIRE(sonare_mfcc_to_mel_ex(nullptr, 4, 4, 8, 0.0f, nullptr) ==
+  SECTION("mfcc_to_mel names coefficients before out") {
+    REQUIRE(sonare_mfcc_to_mel(nullptr, 16, 4, 4, 8, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "coefficients must not be NULL");
 
@@ -58,7 +58,7 @@ TEST_CASE("inverse entries name the input before the outputs", "[c_api][header_o
     result.rows = 5;
     result.n_frames = 5;
     result.data = garbage_pointer<float>();
-    REQUIRE(sonare_mfcc_to_mel_ex(nullptr, 4, 4, 8, 0.0f, &result) ==
+    REQUIRE(sonare_mfcc_to_mel(nullptr, 16, 4, 4, 8, nullptr, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     CHECK(result.rows == 0);
     CHECK(result.n_frames == 0);

@@ -16,12 +16,6 @@ namespace check = sonare::util::check;
 // MIR
 // ============================================================================
 
-SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
-                                      int sample_rate, float* out_bpm) {
-  SONARE_C_API_ENTRY;
-  return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
-}
-
 void sonare_project_tempo_options_init(SonareProjectTempoOptions* out) {
   if (out == nullptr) return;
   SonareProjectTempoOptions options = {};
@@ -81,13 +75,6 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(
                                      bridge_config);
 }
 
-std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* audio, size_t len,
-                                                                 int sample_rate) {
-  SonareProjectTempoOptions defaults;
-  sonare_project_tempo_options_init(&defaults);
-  return analyze_tempo_candidates(audio, len, sample_rate, defaults);
-}
-
 // The values are checked rather than clamped.
 void check_tempo_options(const SonareProjectTempoOptions& options) {
   sonare_c_detail::require_struct_size(options.struct_size, sizeof(SonareProjectTempoOptions),
@@ -110,6 +97,7 @@ void check_tempo_candidate(const std::vector<sonare::mir::TempoEstimate>& estima
 
 SonareError sonare_project_analyze_tempo(const SonareProject* project, const float* audio,
                                          size_t len, int sample_rate,
+                                         const SonareProjectTempoOptions* options,
                                          SonareProjectTempoCandidate* candidates, size_t capacity,
                                          size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -118,35 +106,6 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   SONARE_C_REQUIRE_NONNULL(project);
   SonareError err =
       validate_audio_params("project_analyze_tempo", "audio", audio, len, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(candidates, capacity);
-  SONARE_C_TRY
-  const std::vector<sonare::mir::TempoEstimate> estimates =
-      analyze_tempo_candidates(audio, len, sample_rate);
-  if (estimates.empty()) return SONARE_ERROR_INVALID_STATE;
-  if (out_count) *out_count = estimates.size();
-  const size_t emitted = std::min(capacity, estimates.size());
-  for (size_t i = 0; i < emitted; ++i) fill_tempo_candidate(estimates[i], &candidates[i]);
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidates, capacity, out_count);
-#endif
-}
-
-SonareError sonare_project_analyze_tempo_with_options(const SonareProject* project,
-                                                      const float* audio, size_t len,
-                                                      int sample_rate,
-                                                      const SonareProjectTempoOptions* options,
-                                                      SonareProjectTempoCandidate* candidates,
-                                                      size_t capacity, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_count) *out_count = 0;
-  SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err =
-      validate_audio_params("project_analyze_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SonareProjectTempoOptions resolved;
   if (options) {
@@ -172,17 +131,15 @@ SonareError sonare_project_analyze_tempo_with_options(const SonareProject* proje
 #endif
 }
 
-SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const float* audio,
-                                                   size_t len, int sample_rate,
-                                                   const SonareProjectTempoOptions* options,
-                                                   size_t candidate_index,
-                                                   uint8_t apply_time_signatures, float* out_bpm) {
+SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
+                                      int sample_rate, const SonareProjectTempoOptions* options,
+                                      size_t candidate_index, uint8_t apply_time_signatures,
+                                      float* out_bpm) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
   SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err =
-      validate_audio_params("project_auto_tempo_with_options", "audio", audio, len, sample_rate);
+  SonareError err = validate_audio_params("project_auto_tempo", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SonareProjectTempoOptions resolved;
   if (options) {
@@ -214,51 +171,32 @@ SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const
 #endif
 }
 
-SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* audio, size_t len,
-                                         int sample_rate, size_t candidate_index,
-                                         uint8_t apply_time_signatures, float* out_bpm) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_bpm) *out_bpm = 0.0f;
-  SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err =
-      validate_audio_params("project_auto_tempo_ex", "audio", audio, len, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  const std::vector<sonare::mir::TempoEstimate> estimates =
-      analyze_tempo_candidates(audio, len, sample_rate);
-  check_tempo_candidate(estimates, candidate_index);
-  const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
-  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
-    auto time_signature_command =
-        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
-    if (!project->history.apply(std::move(time_signature_command)))
-      return SONARE_ERROR_INVALID_STATE;
-  }
-  if (out_bpm) *out_bpm = static_cast<float>(selected.segments.front().bpm);
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  if (out_bpm) *out_bpm = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidate_index,
-                              apply_time_signatures, out_bpm);
-#endif
+void sonare_project_snap_to_grid_options_init(SonareProjectSnapToGridOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->division = 1;
 }
 
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
+                                        const SonareProjectSnapToGridOptions* options,
                                         double* out_ppq) {
-  SONARE_C_API_ENTRY;
-  return sonare_project_snap_to_grid_ex(project, ppq, strength, 1, out_ppq);
-}
-
-SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double ppq,
-                                           double strength, int division, double* out_ppq) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_ppq) *out_ppq = ppq;
   SONARE_C_REQUIRE_NONNULL(project);
+  int division = 1;
+  if (options != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          sonare_c_detail::require_struct_size(options->struct_size,
+                                               sizeof(SonareProjectSnapToGridOptions), "options",
+                                               "sonare_project_snap_to_grid_options_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+    division = options->division;
+  }
   if (const SonareError err = run_validation([&] {
         check::at_least(ppq, 0.0, "ppq");
         check::in_range(strength, 0.0, 1.0, "strength");
@@ -283,7 +221,7 @@ SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double 
   SONARE_C_CATCH
 #else
   if (out_ppq) *out_ppq = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, division, out_ppq);
+  SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, options, out_ppq);
 #endif
 }
 
@@ -523,32 +461,22 @@ void sonare_take_align_config_init(SonareTakeAlignConfig* config) {
 }
 
 SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
-                                           const float* take, size_t take_len, int sample_rate,
+                                           int reference_sample_rate, const float* take,
+                                           size_t take_len, int take_sample_rate,
                                            const SonareTakeAlignConfig* config,
                                            SonareProjectWarpAnchor** out_anchors, size_t* out_count,
                                            SonareTakeAlignment* out_alignment) {
-  SONARE_C_API_ENTRY;
-  return sonare_align_take_to_reference_ex(reference, reference_len, sample_rate, take, take_len,
-                                           sample_rate, config, out_anchors, out_count,
-                                           out_alignment);
-}
-
-SonareError sonare_align_take_to_reference_ex(
-    const float* reference, size_t reference_len, int reference_sample_rate, const float* take,
-    size_t take_len, int take_sample_rate, const SonareTakeAlignConfig* config,
-    SonareProjectWarpAnchor** out_anchors, size_t* out_count, SonareTakeAlignment* out_alignment) {
   SONARE_C_API_ENTRY;
   if (out_anchors != nullptr) *out_anchors = nullptr;
   if (out_count != nullptr) *out_count = 0;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (const SonareError err =
-          validate_audio_params("align_take_to_reference_ex", "reference", reference, reference_len,
-                                reference_sample_rate);
+  if (const SonareError err = validate_audio_params(
+          "align_take_to_reference", "reference", reference, reference_len, reference_sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = validate_audio_params("align_take_to_reference_ex", "take", take,
+  if (const SonareError err = validate_audio_params("align_take_to_reference", "take", take,
                                                     take_len, take_sample_rate);
       err != SONARE_OK) {
     return err;

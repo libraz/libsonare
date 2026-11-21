@@ -255,22 +255,9 @@ SonareError probe_split_silence_common(const std::string& param, double value) {
   const size_t lengths[1] = {analysis_samples().size()};
   int* intervals = nullptr;
   size_t count = 0;
-  const SonareError err = sonare_split_silence_common(
-      signals, 1, lengths, 60.0f, framing.frame_length, framing.hop_length, &intervals, &count);
-  if (err == SONARE_OK) sonare_free_ints(intervals);
-  return err;
-}
-
-SonareError probe_split_silence_common_ex(const std::string& param, double value) {
-  const SilenceFraming framing = silence_framing(param, value);
-  const float* signals[1] = {analysis_samples().data()};
-  const size_t lengths[1] = {analysis_samples().size()};
-  int* intervals = nullptr;
-  size_t count = 0;
-  SonareSilenceCommonReport report{};
   const SonareError err =
-      sonare_split_silence_common_ex(signals, 1, lengths, 60.0f, framing.frame_length,
-                                     framing.hop_length, &intervals, &count, &report);
+      sonare_split_silence_common(signals, 1, lengths, 60.0f, framing.frame_length,
+                                  framing.hop_length, &intervals, &count, nullptr);
   if (err == SONARE_OK) sonare_free_ints(intervals);
   return err;
 }
@@ -423,20 +410,6 @@ SonareError probe_engine_bind_midi_cc_binding(const std::string& param, double v
   return sonare_engine_bind_midi_cc_binding(engine.get(), &binding);
 }
 
-SonareError probe_engine_render_offline_ex(const std::string& param, double value) {
-  PreparedEngine engine;
-  int num_channels = 1;
-  std::int64_t total_frames = 16;
-  int block_size = 0;
-  if (is_param(param, "num_channels")) num_channels = static_cast<int>(value);
-  if (is_param(param, "total_frames")) total_frames = as_i64(value);
-  if (is_param(param, "block_size")) block_size = static_cast<int>(value);
-  std::array<float, 64> plane{};
-  float* out[1] = {plane.data()};
-  return sonare_engine_render_offline_ex(engine.get(), out, num_channels, total_frames, block_size,
-                                         1);
-}
-
 SonareError probe_engine_render_offline(const std::string& param, double value) {
   PreparedEngine engine;
   int num_channels = 1;
@@ -447,7 +420,8 @@ SonareError probe_engine_render_offline(const std::string& param, double value) 
   if (is_param(param, "block_size")) block_size = static_cast<int>(value);
   std::array<float, 64> plane{};
   float* out[1] = {plane.data()};
-  return sonare_engine_render_offline(engine.get(), out, num_channels, total_frames, block_size);
+  return sonare_engine_render_offline(engine.get(), out, num_channels, total_frames, block_size,
+                                      nullptr);
 }
 
 SonareError probe_engine_bounce_offline(const std::string& param, double value) {
@@ -558,7 +532,7 @@ SonareError probe_engine_set_time_signature(const std::string& param, double val
 
 SonareError probe_engine_set_tempo_segments(const std::string& param, double value) {
   PreparedEngine engine;
-  const SonareProjectTempoSegment segment{0.0, 120.0, 0.0, 0.0};
+  const SonareProjectTempoSegment segment{0.0, 120.0, 0.0};
   const std::size_t count = is_param(param, "segment_count") ? as_size(value) : 1;
   return sonare_engine_set_tempo_segments(engine.get(), &segment, count);
 }
@@ -963,7 +937,6 @@ const std::map<std::string, Probe>& probes() {
       {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},
       {"engine_render_offline", probe_engine_render_offline},
-      {"engine_render_offline_ex", probe_engine_render_offline_ex},
       {"engine_seek_sample", probe_engine_seek_sample},
       {"engine_set_articulation", probe_engine_set_articulation},
       {"engine_set_capture_buffer", probe_engine_set_capture_buffer},
@@ -987,7 +960,6 @@ const std::map<std::string, Probe>& probes() {
       {"spectral_edit", probe_spectral_edit},
       {"split_silence", probe_split_silence},
       {"split_silence_common", probe_split_silence_common},
-      {"split_silence_common_ex", probe_split_silence_common_ex},
       {"time_stretch_ex", probe_time_stretch_ex},
       {"trim_ex", probe_trim_ex},
       {"trim_silence", probe_trim_silence},

@@ -117,16 +117,17 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
       });
 }
 
-SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
-                                            int n_octave_bands, SonareAcousticResult* out) {
-  SONARE_C_API_ENTRY;
-  return sonare_analyze_impulse_response_ex(samples, length, sample_rate, n_octave_bands, 30.0f,
-                                            out);
+void sonare_analyze_impulse_response_options_init(SonareAnalyzeImpulseResponseOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->min_decay_db = 30.0f;
 }
 
-SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t length, int sample_rate,
-                                               int n_octave_bands, float min_decay_db,
-                                               SonareAcousticResult* out) {
+SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
+                                            int n_octave_bands,
+                                            const SonareAnalyzeImpulseResponseOptions* options,
+                                            SonareAcousticResult* out) {
   SONARE_C_API_ENTRY;
 
   // Zero the whole struct up front, BEFORE any validating early-return (this
@@ -137,16 +138,28 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
   SONARE_C_ZERO_OUTS(out);
+  SonareAnalyzeImpulseResponseOptions resolved;
+  sonare_analyze_impulse_response_options_init(&resolved);
+  if (options != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(options->struct_size, sizeof(SonareAnalyzeImpulseResponseOptions),
+                              "options", "sonare_analyze_impulse_response_options_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+    resolved = *options;
+  }
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
-  config.min_decay_db = min_decay_db;
+  config.min_decay_db = resolved.min_decay_db;
   if (const SonareError err = run_validation([&] { validate_acoustic_config(config); });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_impulse_response_ex", "samples", samples, length, sample_rate,
+  return run_offline("analyze_impulse_response", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
                        return SONARE_OK;
@@ -354,9 +367,8 @@ void sonare_chord_detection_options_init(SonareChordDetectionOptions* options) {
 }
 
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
-                                 float min_duration_sec, float smoothing_window_sec,
-                                 float threshold, int use_triads_only, int n_fft, int hop_length,
-                                 int use_beat_sync, SonareChordAnalysisResult* out) {
+                                 const SonareChordDetectionOptions* options,
+                                 SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
@@ -364,47 +376,19 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
   if (out != nullptr) *out = {};
-  ChordConfig config;
-  config.min_duration = min_duration_sec;
-  config.smoothing_window = smoothing_window_sec;
-  config.threshold = threshold;
-  config.use_triads_only = use_triads_only != 0;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.use_beat_sync = use_beat_sync != 0;
-  if (const SonareError err = run_validation([&] { validate_chord_config(config); });
-      err != SONARE_OK) {
-    return err;
+  SonareChordDetectionOptions resolved;
+  sonare_chord_detection_options_init(&resolved);
+  if (options != nullptr) {
+    if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
+      return err;
+    }
+    resolved = *options;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("detect_chords", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
-                       ChordAnalyzer analyzer(audio, config);
-                       fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
-                       return SONARE_OK;
-                     });
-}
-
-SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
-                                    const SonareChordDetectionOptions* options,
-                                    SonareChordAnalysisResult* out) {
-  SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointer BEFORE any validating early-return so a
-  // rejected input always leaves a NULL owned pointer; otherwise
-  // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
-  // pointer.
-  if (out != nullptr) *out = {};
-  SONARE_C_REQUIRE_NONNULL(options);
-  if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  return run_offline("detect_chords_ex", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       const ChordConfig config = chord_config_from_options(*options);
+                       const ChordConfig config = chord_config_from_options(resolved);
 
                        ChordAnalyzer analyzer(audio, config);
                        fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
@@ -717,41 +701,52 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
                      });
 }
 
-SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
-                                  float f0_min_hz, float f0_max_hz, int frame_length,
-                                  int hop_length, float threshold, SonareMelodyResult* out) {
-  SONARE_C_API_ENTRY;
-  // Preserve the historical default contour: plain per-frame YIN, left-aligned
-  // (use_pyin = 0). center is irrelevant when use_pyin is 0.
-  return sonare_analyze_melody_ex(samples, length, sample_rate, f0_min_hz, f0_max_hz, frame_length,
-                                  hop_length, threshold, /*use_pyin=*/0, /*center=*/1, out);
+void sonare_analyze_melody_options_init(SonareAnalyzeMelodyOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->use_pyin = 0;
+  options->center = 1;
 }
 
-SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sample_rate,
-                                     float f0_min_hz, float f0_max_hz, int frame_length,
-                                     int hop_length, float threshold, int use_pyin, int center,
-                                     SonareMelodyResult* out) {
+SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
+                                  float f0_min_hz, float f0_max_hz, int frame_length,
+                                  int hop_length, float threshold,
+                                  const SonareAnalyzeMelodyOptions* options,
+                                  SonareMelodyResult* out) {
   SONARE_C_API_ENTRY;
 
   // Zero the whole struct BEFORE any validating early-return so a rejected
   // input always leaves a NULL owned pointer; otherwise
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
   SONARE_C_ZERO_OUTS(out);
+  SonareAnalyzeMelodyOptions resolved;
+  sonare_analyze_melody_options_init(&resolved);
+  if (options != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(options->struct_size, sizeof(SonareAnalyzeMelodyOptions), "options",
+                              "sonare_analyze_melody_options_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+    resolved = *options;
+  }
   MelodyConfig config;
   config.fmin = f0_min_hz;
   config.fmax = f0_max_hz;
   config.frame_length = frame_length;
   config.hop_length = hop_length;
   config.threshold = threshold;
-  config.use_pyin = use_pyin != 0;
-  config.center = center != 0;
+  config.use_pyin = resolved.use_pyin != 0;
+  config.center = resolved.center != 0;
   if (const SonareError err = run_validation([&] { validate_melody_config(config); });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_melody_ex", "samples", samples, length, sample_rate,
+  return run_offline("analyze_melody", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        MelodyAnalyzer analyzer(audio, config);
                        const MelodyContour& contour = analyzer.contour();

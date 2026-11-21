@@ -302,15 +302,9 @@ void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config) {
   config->centroid_max = q.centroid_max;
 }
 
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
-                                                  SonareStreamFramesU8* out) {
-  SONARE_C_API_ENTRY;
-  return sonare_stream_analyzer_read_frames_u8_ex(analyzer, nullptr, max_frames, out);
-}
-
-SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analyzer,
-                                                     const SonareStreamQuantizeConfig* config,
-                                                     size_t max_frames, SonareStreamFramesU8* out) {
+SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
+                                                  const SonareStreamQuantizeConfig* config,
+                                                  size_t max_frames, SonareStreamFramesU8* out) {
   SONARE_C_API_ENTRY;
 
   SONARE_C_ZERO_OUTS(out);
@@ -326,15 +320,8 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
 }
 
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
+                                                   const SonareStreamQuantizeConfig* config,
                                                    size_t max_frames, SonareStreamFramesI16* out) {
-  SONARE_C_API_ENTRY;
-  return sonare_stream_analyzer_read_frames_i16_ex(analyzer, nullptr, max_frames, out);
-}
-
-SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* analyzer,
-                                                      const SonareStreamQuantizeConfig* config,
-                                                      size_t max_frames,
-                                                      SonareStreamFramesI16* out) {
   SONARE_C_API_ENTRY;
 
   SONARE_C_ZERO_OUTS(out);

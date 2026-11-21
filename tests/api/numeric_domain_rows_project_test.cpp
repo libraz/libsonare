@@ -438,18 +438,9 @@ SonareError probe_add_automation_lane(const std::string&, double value) {
   const uint32_t track = project.add_audio_track();
   SonareAutomationLaneDesc desc{};
   desc.target_param_id = to_u32(value);
-  uint32_t out = 0;
-  return sonare_project_add_automation_lane(project.handle, track, &desc, &out);
-}
-
-SonareError probe_add_automation_lane_ex(const std::string&, double value) {
-  Project project;
-  const uint32_t track = project.add_audio_track();
-  SonareAutomationLaneDescEx desc{};
-  desc.target_param_id = to_u32(value);
   desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
   uint32_t out = 0;
-  return sonare_project_add_automation_lane_ex(project.handle, track, &desc, &out);
+  return sonare_project_add_automation_lane(project.handle, track, &desc, &out);
 }
 
 SonareError probe_edit_automation_lane(const std::string&, double value) {
@@ -457,26 +448,13 @@ SonareError probe_edit_automation_lane(const std::string&, double value) {
   const uint32_t track = project.add_audio_track();
   SonareAutomationLaneDesc existing{};
   existing.target_param_id = 1;
+  existing.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
   uint32_t out = 0;
   REQUIRE(sonare_project_add_automation_lane(project.handle, track, &existing, &out) == SONARE_OK);
   SonareAutomationLaneDesc desc{};
   desc.target_param_id = to_u32(value);
-  return sonare_project_edit_automation_lane(project.handle, track, 1, &desc);
-}
-
-SonareError probe_edit_automation_lane_ex(const std::string&, double value) {
-  Project project;
-  const uint32_t track = project.add_audio_track();
-  SonareAutomationLaneDescEx existing{};
-  existing.target_param_id = 1;
-  existing.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
-  uint32_t out = 0;
-  REQUIRE(sonare_project_add_automation_lane_ex(project.handle, track, &existing, &out) ==
-          SONARE_OK);
-  SonareAutomationLaneDescEx desc{};
-  desc.target_param_id = to_u32(value);
   desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
-  return sonare_project_edit_automation_lane_ex(project.handle, track, 1, &desc);
+  return sonare_project_edit_automation_lane(project.handle, track, 1, &desc);
 }
 
 /// Four frames of mono silence the audio-payload probes point at.
@@ -543,16 +521,13 @@ SonareError probe_annotate_keys(const std::string&, double value) {
   return sonare_project_annotate_keys(project.handle, &key, to_count(value));
 }
 
-SonareError probe_snap_to_grid_ex(const std::string&, double value) {
+SonareError probe_snap_to_grid(const std::string&, double value) {
   Project project;
+  SonareProjectSnapToGridOptions options;
+  sonare_project_snap_to_grid_options_init(&options);
+  options.division = static_cast<int>(value);
   double out = 0.0;
-  return sonare_project_snap_to_grid_ex(project.handle, 0.0, 1.0, static_cast<int>(value), &out);
-}
-
-SonareError probe_set_marker(const std::string&, double value) {
-  Project project;
-  uint32_t out = 0;
-  return sonare_project_set_marker(project.handle, to_u32(value), 0.0, "marker", &out);
+  return sonare_project_snap_to_grid(project.handle, 0.0, 1.0, &options, &out);
 }
 
 SonareProjectMarker marker_for(const std::string& param, double value) {
@@ -567,11 +542,11 @@ SonareProjectMarker marker_for(const std::string& param, double value) {
   return marker;
 }
 
-SonareError probe_set_marker_ex(const std::string& param, double value) {
+SonareError probe_set_marker(const std::string& param, double value) {
   Project project;
   const SonareProjectMarker marker = marker_for(param, value);
   uint32_t out = 0;
-  return sonare_project_set_marker_ex(project.handle, &marker, &out);
+  return sonare_project_set_marker(project.handle, &marker, &out);
 }
 
 SonareError probe_set_marker_ex_name(const std::string& param, double value) {
@@ -850,7 +825,6 @@ const std::map<std::string, Probe>& probes() {
       {"midi2_relative_assignable_controller", probe_midi2_relative_assignable_controller},
       {"midi2_relative_registered_controller", probe_midi2_relative_registered_controller},
       {"project_add_automation_lane", probe_add_automation_lane},
-      {"project_add_automation_lane_ex", probe_add_automation_lane_ex},
       {"project_add_clip", probe_add_clip},
       {"project_add_loop_recording_takes", probe_add_loop_recording_takes},
       {"project_annotate_chords", probe_annotate_chords},
@@ -861,10 +835,8 @@ const std::map<std::string, Probe>& probes() {
       {"project_bounce_with_sf2_instruments", probe_bounce_sf2_options},
       {"project_bounce_with_synth_instruments", probe_bounce_synth},
       {"project_edit_automation_lane", probe_edit_automation_lane},
-      {"project_edit_automation_lane_ex", probe_edit_automation_lane_ex},
       {"project_import_external_stems", probe_import_external_stems},
       {"project_set_marker", probe_set_marker},
-      {"project_set_marker_ex", probe_set_marker_ex},
       {"project_set_marker_ex_name", probe_set_marker_ex_name},
       {"project_set_midi_events", probe_project_set_midi_events},
       {"project_set_program", probe_project_set_program},
@@ -872,7 +844,7 @@ const std::map<std::string, Probe>& probes() {
       {"project_set_source_audio", probe_set_source_audio},
       {"project_set_time_signatures", probe_set_time_signatures},
       {"project_set_warp_map", probe_set_warp_map},
-      {"project_snap_to_grid_ex", probe_snap_to_grid_ex},
+      {"project_snap_to_grid", probe_snap_to_grid},
 #if defined(SONARE_WITH_PITCH_EDITOR)
       {"project_apply_vocal_edit", probe_apply_vocal_edit},
       {"project_rehydrate_vocal_edits", probe_rehydrate_vocal_edits},

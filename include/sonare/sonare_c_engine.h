@@ -230,8 +230,7 @@ SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator
 ///   thread only). Each segment needs a finite non-negative @c start_ppq and a
 ///   @c bpm in (0, 100000]; a non-zero @c end_bpm ramps to a value in the same
 ///   range. Passing zero segments clears the map back to the single-tempo
-///   value. @c start_sample and @c end_ppq of the descriptor are ignored
-///   (derived internally). Of two segments at one @c start_ppq, the
+///   value. Sample positions are derived internally. Of two segments at one @c start_ppq, the
 ///   later-supplied one takes effect.
 SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
                                              const SonareProjectTempoSegment* segments,
@@ -977,26 +976,22 @@ SonareError sonare_engine_process(SonareEngine* engine, float* const* channels, 
 SonareError sonare_engine_process_with_monitor(SonareEngine* engine, float* const* channels,
                                                float* const* monitor_out, int num_channels,
                                                int num_frames);
-/// @brief Renders @p total_frames offline from the current transport position,
-///        ending the timeline: notes still sounding are released and the PDC /
-///        alignment delay lines are flushed before returning.
-/// @details Equivalent to sonare_engine_render_offline_ex with @c finalize 1.
-///   @p block_size 0 selects the default offline block: 128, capped at the prepared maximum block
-///   size; a negative value is refused.
-SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
-                                         int64_t total_frames, int block_size);
-/// @brief sonare_engine_render_offline with explicit control over whether this
-///        call ends the timeline.
+/// @brief Fills @p options with sizeof and the defaults for sonare_engine_render_offline
+///        (@c finalize 1). A NULL @p options is ignored.
+void sonare_engine_render_offline_options_init(SonareEngineRenderOfflineOptions* options);
+/// @brief Renders @p total_frames offline from the current transport position; by default
+///        ends the timeline: notes still sounding are released and the PDC / alignment delay
+///        lines are flushed before returning.
 /// @details @p block_size 0 selects the default offline block: 128, capped at the prepared maximum
-/// block size; a negative value is refused.
+///   block size; a negative value is refused. A NULL @p options renders with the defaults of
+///   @ref sonare_engine_render_offline_options_init.
 ///
-///   @p finalize 0 renders one CHUNK of a longer timeline: a note held
+///   @c options->finalize 0 renders one CHUNK of a longer timeline: a note held
 ///   across the chunk boundary keeps sounding into the next call and the delay
 ///   lines carry their history over, so consecutive chunks concatenate to
 ///   exactly what one continuous render of the same span produces. Non-zero
-///   ends the timeline, which is what a one-shot bounce wants and what
-///   sonare_engine_render_offline does. A chunked caller passes 0 for every
-///   chunk and calls sonare_engine_finish_offline_render once at the end.
+///   ends the timeline, which is what a one-shot bounce wants. A chunked caller
+///   passes 0 for every chunk and calls sonare_engine_finish_offline_render once at the end.
 ///
 ///   Sample-exact concatenation requires every chunk to use the same
 ///   @p block_size and a @p total_frames that is a whole number of blocks. Each
@@ -1007,21 +1002,21 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
 ///   renders continuous audio -- no note is cut and no delay line is cleared --
 ///   but it is not bit-identical to the one-call result.
 ///
-///   A @p total_frames of 0 renders nothing; with @p finalize non-zero it still
+///   A @p total_frames of 0 renders nothing; with @c finalize non-zero it still
 ///   ends the timeline, exactly as sonare_engine_finish_offline_render does.
 ///
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @p block_size exceeds the
 ///   block size the engine was prepared with, or @p num_channels exceeds the
 ///   prepared channel count; @c SONARE_ERROR_INVALID_STATE when the engine was
 ///   never prepared.
-SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* out,
-                                            int num_channels, int64_t total_frames, int block_size,
-                                            int finalize);
+SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
+                                         int64_t total_frames, int block_size,
+                                         const SonareEngineRenderOfflineOptions* options);
 /// @brief Ends an offline render: releases every note the sequencer still holds,
 ///        flushes the PDC / alignment delay lines, and ends the signal for the
 ///        track, bus and master meters, publishing one master meter record whose
 ///        true peak includes the render's last samples.
-/// @details Required after a chunked render (sonare_engine_render_offline_ex
+/// @details Required after a chunked render (sonare_engine_render_offline
 ///   with @c finalize 0); the finalizing forms run it themselves, so a one-shot
 ///   bounce never calls it. Idempotent.
 ///
@@ -1063,7 +1058,7 @@ SonareError sonare_engine_finish_offline_render(SonareEngine* engine);
 ///   counts are 15 min 32 s and 11 min 39 s at 48 kHz, and half that at 96 kHz.
 ///   When the rates differ both the source and the resampled length are checked,
 ///   so the longer of the two is what binds. Longer material renders in chunks
-///   through sonare_engine_render_offline_ex.
+///   through sonare_engine_render_offline with @c finalize 0.
 /// @param out Receives a heap-owned interleaved buffer; free with sonare_free_engine_bounce_result.
 /// @param options Started from @ref sonare_engine_bounce_options_init.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when the requested span exceeds the
@@ -1116,11 +1111,12 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 /// @param written Receives the number of records written; set to 0 on entry.
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
-/// @brief Drains pending meter telemetry records published by the engine.
-/// @details Compatibility drain: it consumes the same queue as
-///   @ref sonare_engine_drain_meter_telemetry_wide_v2, which is the one drain to
-///   use. Do not mix drains on one engine.
-/// @param out Caller-owned array receiving up to @p max_records entries.
+/// @brief Drains meter telemetry records published by the engine, with pre-trim input peaks
+///        appended to each record.
+/// @details Every meter drain pops from one shared queue and consumes the records of all targets,
+///   so an engine reads its meters through one drain only. This is the stereo form; use
+///   @ref sonare_engine_drain_meter_telemetry_wide for surround targets.
+/// @param out Caller-owned array receiving up to @p max_records entries; written only on success.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
 ///   nothing is copied or drained and @p out_count is always set to 0. This
 ///   does NOT report the number of pending records — draining is destructive
@@ -1131,41 +1127,14 @@ SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTele
 SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
-/// @brief Drains pending meter telemetry as per-plane (wide) records for
-///   surround targets. Compatibility drain: it consumes the same queue as
-///   @ref sonare_engine_drain_meter_telemetry_wide_v2, which is the one drain to
-///   use. Each record carries num_channels valid planes in
-///   peak_db/rms_db/true_peak_dbtp.
-/// @param out Caller-owned array receiving up to @p max_records entries.
-/// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
-///   nothing is copied or drained and @p out_count is always set to 0. This
-///   does NOT report the number of pending records — draining is destructive
-///   (each returned record is removed from the queue), so there is no way to
-///   learn the backlog size without consuming it; drain into a buffer sized
-///   for the expected batch instead of probing with max_records == 0.
-/// @param out_count Receives the number of records written.
+/// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
+/// @details Every target's record carries all its num_channels planes, and a stereo target's L/R
+///   are planes 0 and 1. It consumes the same shared queue as
+///   @ref sonare_engine_drain_meter_telemetry, so an engine reads its meters through one drain
+///   only. @p out, @p max_records and @p out_count follow that function.
 SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count);
-/// @brief Drains meter telemetry with pre-trim input peaks appended to each record.
-/// @details Compatibility drain for stereo records. Every meter drain pops from
-///   one shared queue and consumes the records of all targets, so an engine reads
-///   its meters through one drain only. Prefer
-///   @ref sonare_engine_drain_meter_telemetry_wide_v2.
-/// @param out Receives up to @p max_records records; written only on success.
-SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
-                                                   SonareMeterTelemetryRecordV2* out,
-                                                   size_t max_records, size_t* out_count);
-/// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
-/// @details This is the one meter drain: every target's record carries all its
-///   num_channels planes, and a stereo target's L/R are planes 0 and 1. Use it
-///   alone. The other three drains consume the same shared queue (all targets'
-///   records) and remain for compatibility, so an engine reads its meters through
-///   one drain only.
-/// @param out Receives up to @p max_records records; written only on success.
-SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
-                                                        SonareMeterTelemetryRecordWideV2* out,
-                                                        size_t max_records, size_t* out_count);
 /// Upper bound on the inserts one meter target's strip carries: a track or master
 /// strip's pre-fader plus post-fader inserts. A bus strip carries at most half.
 #define SONARE_METER_MAX_INSERTS 128u

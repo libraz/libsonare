@@ -217,7 +217,8 @@ std::vector<float> render_offline(const BusStripCase& c, uint32_t track_id) {
   std::vector<float> left(static_cast<size_t>(kTotalFrames));
   std::vector<float> right(static_cast<size_t>(kTotalFrames));
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kTotalFrames, kBlockSize) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kTotalFrames, kBlockSize, nullptr) ==
+          SONARE_OK);
   sonare_engine_destroy(engine);
 
   std::vector<float> interleaved(static_cast<size_t>(kTotalFrames) * 2);

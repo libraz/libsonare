@@ -1296,8 +1296,8 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
   // refuse differently.
   SonareSilenceCommonReport report{};
   const SonareError err =
-      sonare_split_silence_common_ex(signals.data(), signals.size(), lengths.data(), top_db,
-                                     frame_length, hop_length, &flat, &flat_count, &report);
+      sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), top_db,
+                                  frame_length, hop_length, &flat, &flat_count, &report);
   if (err != SONARE_OK) {
     // Mapped rather than raised as a plain runtime error, so the failure keeps
     // the class it carries out to the exit code the two front-ends publish for

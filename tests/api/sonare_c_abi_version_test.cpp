@@ -207,14 +207,14 @@ TEST_CASE("length-checked inverse transforms reject a short input buffer", "[c_a
 
   SonareInverseResult result{};
   // Correct length succeeds.
-  REQUIRE(sonare_mfcc_to_mel_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_mfcc_to_mel(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, nullptr,
+                             &result) == SONARE_OK);
   sonare_free_inverse_result(&result);
 
   // A buffer one element too short is rejected instead of over-reading.
   SonareInverseResult bad{};
-  REQUIRE(sonare_mfcc_to_mel_checked(mfcc.data(), mfcc.size() - 1, n_mfcc, n_frames, n_mels,
-                                     &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mfcc_to_mel(mfcc.data(), mfcc.size() - 1, n_mfcc, n_frames, n_mels, nullptr,
+                             &bad) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("MFCC inverse C API accepts the forward lifter", "[c_api][abi][inverse_features]") {
@@ -232,10 +232,20 @@ TEST_CASE("MFCC inverse C API accepts the forward lifter", "[c_api][abi][inverse
 
   SonareInverseResult with_lifter{};
   SonareInverseResult without_lifter{};
-  REQUIRE(sonare_mfcc_to_mel_ex(lifted.data(), n_mfcc, n_frames, n_mels, 22.0f, &with_lifter) ==
-          SONARE_OK);
-  REQUIRE(sonare_mfcc_to_mel(lifted.data(), n_mfcc, n_frames, n_mels, &without_lifter) ==
-          SONARE_OK);
+  SonareMfccToMelOptions options{};
+  sonare_mfcc_to_mel_options_init(&options);
+  REQUIRE(options.struct_size == sizeof(SonareMfccToMelOptions));
+  REQUIRE(options.lifter == 0.0f);
+  options.lifter = 22.0f;
+  REQUIRE(sonare_mfcc_to_mel(lifted.data(), lifted.size(), n_mfcc, n_frames, n_mels, &options,
+                             &with_lifter) == SONARE_OK);
+  REQUIRE(sonare_mfcc_to_mel(lifted.data(), lifted.size(), n_mfcc, n_frames, n_mels, nullptr,
+                             &without_lifter) == SONARE_OK);
+  options.struct_size = 0;
+  SonareInverseResult refused{};
+  REQUIRE(sonare_mfcc_to_mel(lifted.data(), lifted.size(), n_mfcc, n_frames, n_mels, &options,
+                             &refused) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(refused.data == nullptr);
   REQUIRE(with_lifter.rows == without_lifter.rows);
   REQUIRE(with_lifter.n_frames == without_lifter.n_frames);
   const size_t length = static_cast<size_t>(with_lifter.rows) * with_lifter.n_frames;
@@ -260,28 +270,28 @@ TEST_CASE("inverse transforms reject non-finite input uniformly", "[c_api][abi]"
   std::vector<float> mel(static_cast<size_t>(n_mels) * n_frames, 0.1f);
   mel[3] = std::nanf("");
   SonareInverseResult stft{};
-  REQUIRE(sonare_mel_to_stft_checked(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft,
-                                     0.0f, 0.0f, &stft) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mel_to_stft(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft, 0.0f,
+                             0.0f, nullptr, &stft) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(stft.data == nullptr);
 
   float* audio = nullptr;
   size_t audio_len = 0;
-  REQUIRE(sonare_mel_to_audio_checked(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft,
-                                      hop_length, 0.0f, 0.0f, 2, &audio,
-                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft,
+                              hop_length, 0.0f, 0.0f, 2, nullptr, &audio,
+                              &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(audio == nullptr);
   REQUIRE(audio_len == 0);
 
   std::vector<float> mfcc(static_cast<size_t>(n_mfcc) * n_frames, 0.1f);
   mfcc[7] = INFINITY;
   SonareInverseResult out_mel{};
-  REQUIRE(sonare_mfcc_to_mel_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels,
-                                     &out_mel) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mfcc_to_mel(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, nullptr,
+                             &out_mel) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out_mel.data == nullptr);
 
-  REQUIRE(sonare_mfcc_to_audio_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels,
-                                       sample_rate, n_fft, hop_length, 0.0f, 0.0f, 2, &audio,
-                                       &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, sample_rate,
+                               n_fft, hop_length, 0.0f, 0.0f, 2, nullptr, &audio,
+                               &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(audio == nullptr);
   REQUIRE(audio_len == 0);
 
@@ -321,16 +331,16 @@ TEST_CASE("Griffin-Lim inverse entry points reject non-finite input uniformly", 
   cq_magnitude[5] = INFINITY;
   audio = nullptr;
   audio_len = 0;
-  REQUIRE(sonare_cqt_to_audio_checked(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames,
-                                      cq_sr, 128, 130.8128f, 12, 1, &audio,
-                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_cqt_to_audio(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames, cq_sr,
+                              128, 130.8128f, 12, 1, &audio,
+                              &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(audio == nullptr);
 
   audio = nullptr;
   audio_len = 0;
-  REQUIRE(sonare_vqt_to_audio_checked(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames,
-                                      cq_sr, 128, 130.8128f, 12, 24.0f, 1, &audio,
-                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_vqt_to_audio(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames, cq_sr,
+                              128, 130.8128f, 12, 24.0f, 1, &audio,
+                              &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(audio == nullptr);
   REQUIRE(audio_len == 0);
 }
@@ -532,8 +542,12 @@ TEST_CASE("sonare_detect_key_candidates publishes its count only with the array"
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
   const auto detect = [&] {
-    return sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
-                                        0.0f, &candidates, &count);
+    SonareDetectKeyOptions options;
+    sonare_detect_key_options_init(&options);
+    options.n_fft = 4096;
+    options.chroma_high_pass_hz = 0.0f;
+    return sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                        &candidates, &count, nullptr);
   };
   REQUIRE(detect() == SONARE_OK);
   REQUIRE(count > 0);

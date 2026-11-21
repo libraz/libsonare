@@ -63,14 +63,8 @@ mastering::final::DitherType dither_type_from_int(int value) {
 #endif
 
 #if defined(SONARE_WITH_MIXING)
-// Each legacy record is a byte prefix of its V2 record, which only appends input peaks.
-static_assert(offsetof(SonareMeterTelemetryRecordV2, input_peak_db_l) ==
-              sizeof(SonareMeterTelemetryRecord));
-static_assert(offsetof(SonareMeterTelemetryRecordWideV2, input_peak_db) ==
-              offsetof(SonareMeterTelemetryRecordWide, dropped_records) + sizeof(uint32_t));
-
-SonareMeterTelemetryRecordV2 meter_record_v2(const engine::MeterTelemetryRecord& record) {
-  SonareMeterTelemetryRecordV2 out{};
+SonareMeterTelemetryRecord meter_record(const engine::MeterTelemetryRecord& record) {
+  SonareMeterTelemetryRecord out{};
   out.target_id = record.target_id;
   out.render_frame = record.render_frame;
   out.seq = record.seq;
@@ -93,8 +87,8 @@ SonareMeterTelemetryRecordV2 meter_record_v2(const engine::MeterTelemetryRecord&
   return out;
 }
 
-SonareMeterTelemetryRecordWideV2 meter_record_wide_v2(const engine::MeterTelemetryRecord& record) {
-  SonareMeterTelemetryRecordWideV2 out{};
+SonareMeterTelemetryRecordWide meter_record_wide(const engine::MeterTelemetryRecord& record) {
+  SonareMeterTelemetryRecordWide out{};
   out.target_id = record.target_id;
   out.render_frame = record.render_frame;
   out.seq = record.seq;
@@ -141,13 +135,31 @@ SonareError sonare_engine_process_with_monitor(SonareEngine* engine, float* cons
   return SONARE_OK;
 }
 
-SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* out,
-                                            int num_channels, int64_t total_frames, int block_size,
-                                            int finalize) {
+void sonare_engine_render_offline_options_init(SonareEngineRenderOfflineOptions* options) {
+  if (options == nullptr) return;
+  *options = SonareEngineRenderOfflineOptions{};
+  options->struct_size = sizeof(SonareEngineRenderOfflineOptions);
+  options->finalize = 1;
+}
+
+SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
+                                         int64_t total_frames, int block_size,
+                                         const SonareEngineRenderOfflineOptions* options) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out);
+  int finalize = 1;
+  if (options != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(options->struct_size, sizeof(SonareEngineRenderOfflineOptions),
+                              "options", "sonare_engine_render_offline_options_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+    finalize = options->finalize;
+  }
   if (const SonareError err = run_validation([&] {
         util::check::integer_within(num_channels, kEngineRenderChannelsDomain, "num_channels");
       });
@@ -194,14 +206,6 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
   }
   engine->engine.render_offline(out, num_channels, total_frames, block_size, finalize != 0);
   return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
-                                         int64_t total_frames, int block_size) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_TRY
-  return sonare_engine_render_offline_ex(engine, out, num_channels, total_frames, block_size, 1);
   SONARE_C_CATCH
 }
 
@@ -522,8 +526,7 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
   size_t count = 0;
   engine::MeterTelemetryRecord record{};
   while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    const SonareMeterTelemetryRecordV2 full = meter_record_v2(record);
-    std::memcpy(&out[count], &full, sizeof(SonareMeterTelemetryRecord));
+    out[count] = meter_record(record);
     ++count;
   }
   *out_count = count;
@@ -548,58 +551,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
   size_t count = 0;
   engine::MeterTelemetryRecord record{};
   while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    const SonareMeterTelemetryRecordWideV2 full = meter_record_wide_v2(record);
-    std::memcpy(&out[count], &full, offsetof(SonareMeterTelemetryRecordWideV2, input_peak_db));
-    ++count;
-  }
-  *out_count = count;
-  return SONARE_OK;
-#else
-  *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
-#endif
-}
-
-SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
-                                                   SonareMeterTelemetryRecordV2* out,
-                                                   size_t max_records, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_count);
-  SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
-  SONARE_C_REQUIRE_NONNULL(out_count);
-
-#if defined(SONARE_WITH_MIXING)
-  size_t count = 0;
-  engine::MeterTelemetryRecord record{};
-  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    out[count] = meter_record_v2(record);
-    ++count;
-  }
-  *out_count = count;
-  return SONARE_OK;
-#else
-  *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
-#endif
-}
-
-SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
-                                                        SonareMeterTelemetryRecordWideV2* out,
-                                                        size_t max_records, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_count);
-  SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
-  SONARE_C_REQUIRE_NONNULL(out_count);
-
-#if defined(SONARE_WITH_MIXING)
-  size_t count = 0;
-  engine::MeterTelemetryRecord record{};
-  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    out[count] = meter_record_wide_v2(record);
+    out[count] = meter_record_wide(record);
     ++count;
   }
   *out_count = count;

@@ -248,8 +248,8 @@ Planar freeze_and_read_back(SonareEngine* engine) {
   out.left.assign(static_cast<size_t>(kRenderFrames), 0.0f);
   out.right.assign(static_cast<size_t>(kRenderFrames), 0.0f);
   float* channels[] = {out.left.data(), out.right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels, kChannels, kRenderFrames, kBlock) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, kChannels, kRenderFrames, kBlock,
+                                       nullptr) == SONARE_OK);
   return out;
 }
 

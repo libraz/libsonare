@@ -86,50 +86,50 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
   SonareTakeAlignment alignment{};
 
   take[100] = std::numeric_limits<float>::infinity();
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                          take.size(), 22050, nullptr, &anchors, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                       take.size(), 22050, nullptr, &anchors, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::StartsWith("take "));
 
   reference[5] = std::numeric_limits<float>::quiet_NaN();
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                          take.size(), 22050, nullptr, &anchors, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                       take.size(), 22050, nullptr, &anchors, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::StartsWith("reference "));
 
   reference[5] = 0.0f;
   take[100] = 0.0f;
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                          take.size(), 22050, nullptr, nullptr, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                       take.size(), 22050, nullptr, nullptr, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_anchors must not be NULL");
 
   SonareTakeAlignConfig config;
   sonare_take_align_config_init(&config);
   config.bins_per_octave = 18;
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                          take.size(), 22050, &config, nullptr, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                       take.size(), 22050, &config, nullptr, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.bins_per_octave must be a multiple of 12");
   config.bins_per_octave = -12;
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                          take.size(), 22050, &config, &anchors, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                       take.size(), 22050, &config, &anchors, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.bins_per_octave must be an integer in [1, 2147483647]");
   sonare_take_align_config_init(&config);
   for (const int hop : {0, -256, 65537}) {
     config.hop_length = hop;
-    CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
-                                            take.size(), 22050, &config, &anchors, &count,
-                                            &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 22050, take.data(),
+                                         take.size(), 22050, &config, &anchors, &count,
+                                         &alignment) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "config.hop_length must be an integer in [1, 65536]");
   }
   // The CQT's fmin and n_bins are derived from these two, so its Nyquist refusal names them.
   sonare_take_align_config_init(&config);
   config.bins_per_octave = 24;
-  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 8000, take.data(),
-                                          take.size(), 8000, &config, &anchors, &count,
-                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_align_take_to_reference(reference.data(), reference.size(), 8000, take.data(),
+                                       take.size(), 8000, &config, &anchors, &count,
+                                       &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         "config.bins_per_octave puts the top chroma bin at or above half of "
         "reference_sample_rate");
@@ -167,18 +167,27 @@ TEST_CASE("the chroma-from-CQT entries restate the derived grid in their own arg
           "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   SonareChromaResult out{};
-  using Entry = SonareError (*)(const float*, size_t, int, int, int, int, SonareChromaResult*);
-  for (const Entry entry : {Entry{sonare_chroma_cqt_ex}, Entry{sonare_chroma_cens_ex}}) {
-    CHECK(entry(samples.data(), samples.size(), 8000, 512, 12, 36, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  const auto run = [&](bool cens, int sample_rate, int bins_per_octave) {
+    if (cens) {
+      SonareChromaCensOptions options;
+      sonare_chroma_cens_options_init(&options);
+      options.bins_per_octave = bins_per_octave;
+      return sonare_chroma_cens(samples.data(), samples.size(), sample_rate, 512, 12, &options,
+                                &out);
+    }
+    SonareChromaCqtOptions options;
+    sonare_chroma_cqt_options_init(&options);
+    options.bins_per_octave = bins_per_octave;
+    return sonare_chroma_cqt(samples.data(), samples.size(), sample_rate, 512, 12, &options, &out);
+  };
+  for (const bool cens : {false, true}) {
+    CHECK(run(cens, 8000, 36) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
           "bins_per_octave puts the top chroma bin at or above half of sample_rate");
-    CHECK(entry(samples.data(), samples.size(), 22050, 512, 12, 96, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(run(cens, 22050, 96) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
           "bins_per_octave puts more bins in the CQT kernel than fit at sample_rate");
-    CHECK(entry(samples.data(), samples.size(), 22050, 512, 12, 1200, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(run(cens, 22050, 1200) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
           "bins_per_octave must keep every filter at most 131072 samples long at sample_rate");
   }
@@ -190,9 +199,9 @@ TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][featu
   size_t out_length = 0;
   const auto message = [&](int n_bins, int n_frames, int sample_rate, int hop, float fmin, int bpo,
                            int n_iter) {
-    CHECK(sonare_cqt_to_audio_checked(magnitude.data(), magnitude.size(), n_bins, n_frames,
-                                      sample_rate, hop, fmin, bpo, n_iter, &out,
-                                      &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_cqt_to_audio(magnitude.data(), magnitude.size(), n_bins, n_frames, sample_rate,
+                              hop, fmin, bpo, n_iter, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     return last_message();
   };
   CHECK(message(0, 4, 22050, 512, 32.7f, 12, 4) == "n_bins must be an integer in [1, 2147483647]");
@@ -212,9 +221,8 @@ TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][featu
   CHECK(message(24, 4, 22050, 512, 0.01f, 12, 4) ==
         "fmin_hz and bins_per_octave must keep every filter at most 131072 samples long at "
         "sample_rate");
-  CHECK(sonare_vqt_to_audio_checked(magnitude.data(), magnitude.size(), 24, 4, 22050, 512, 0.01f,
-                                    12, 0.0f, 4, &out,
-                                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 24, 4, 22050, 512, 0.01f, 12, 0.0f,
+                            4, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         "fmin_hz, bins_per_octave and gamma must keep every filter at most 131072 samples long at "
         "sample_rate");
@@ -257,10 +265,13 @@ TEST_CASE("the music feature entries refuse their own members", "[c_api][feature
 
   SonareMelodyResult melody{};
   CHECK(sonare_analyze_melody(samples.data(), samples.size(), 22050, 0.0f, 2093.0f, 2048, 256, 0.1f,
-                              &melody) == SONARE_ERROR_INVALID_PARAMETER);
+                              nullptr, &melody) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "f0_min_hz must be finite and greater than 0");
-  CHECK(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 100.0f, 100.0f, 2048, 256,
-                                 0.1f, 1, 1, &melody) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareAnalyzeMelodyOptions melody_options;
+  sonare_analyze_melody_options_init(&melody_options);
+  melody_options.use_pyin = 1;
+  CHECK(sonare_analyze_melody(samples.data(), samples.size(), 22050, 100.0f, 100.0f, 2048, 256,
+                              0.1f, &melody_options, &melody) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "f0_max_hz must be finite and greater than f0_min_hz");
 
   SonarePitchResult pitch{};
@@ -361,28 +372,27 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
   options.n_fft = 2048;
   options.hop_length = 512;
   SonareChordAnalysisResult result{};
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, &result) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "options must not be NULL");
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, nullptr, &result) == SONARE_OK);
+  sonare_free_chord_analysis_result(&result);
   const uint32_t options_size = options.struct_size;
   options.struct_size = 0;
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.struct_size must be set by sonare_chord_detection_options_init");
   options.struct_size = options_size;
   options.use_key_context = 1;
   options.key_root = static_cast<SonarePitchClass>(12);
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.key_root must be an integer in [0, 11]");
   options.key_root = SONARE_PITCH_C;
   options.key_mode = static_cast<SonareMode>(7);
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.key_mode must be an integer in [0, 6]");
   options.key_mode = SONARE_MODE_MAJOR;
   options.chroma_method = static_cast<SonareChromaMethod>(3);
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.chroma_method must be an integer in [0, 2]");
   options.chroma_method = SONARE_CHROMA_METHOD_STFT;
@@ -497,7 +507,7 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
           "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   const std::vector<float> features(4 * 9, 0.5f);
-  CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, nullptr) ==
+  CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "hop_length must be an integer in [1, 65536]");
   CHECK(sonare_mel_delta(nullptr, 4, 9, 9, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
@@ -507,9 +517,9 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
   CHECK(last_message() == "x must not be NULL");
   CHECK(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "data must not be NULL when length is not 0");
-  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "options must not be NULL");
+  CHECK(last_message() == "out must not be NULL");
   SonareStreamConfig config;
   sonare_stream_config_init(&config);
   config.sample_rate = 0;
@@ -653,8 +663,8 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          config.bins_per_octave = 60;
          SonareProjectWarpAnchor* anchors = nullptr;
          size_t count = 0;
-         sonare_align_take_to_reference_ex(audio.data(), audio.size(), 8000, audio.data(),
-                                           audio.size(), 8000, &config, &anchors, &count, nullptr);
+         sonare_align_take_to_reference(audio.data(), audio.size(), 8000, audio.data(),
+                                        audio.size(), 8000, &config, &anchors, &count, nullptr);
        }}},
       // Every offset is accepted (one past the end reads silence), so no refusal names it.
       {"audio_spectrum_frame.frame_offset", {nullptr}},
@@ -697,11 +707,12 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       {"mel_to_audio.mel", {[] {
          float* out = nullptr;
          size_t out_length = 0;
-         sonare_mel_to_audio(nullptr, 2, 2, 22050, 2048, 512, 0.0f, 0.0f, 1, &out, &out_length);
+         sonare_mel_to_audio(nullptr, 4, 2, 2, 22050, 2048, 512, 0.0f, 0.0f, 1, nullptr, &out,
+                             &out_length);
        }}},
       {"mel_to_stft.mel", {[] {
          SonareInverseResult out{};
-         sonare_mel_to_stft(nullptr, 2, 2, 22050, 2048, 0.0f, 0.0f, &out);
+         sonare_mel_to_stft(nullptr, 4, 2, 2, 22050, 2048, 0.0f, 0.0f, nullptr, &out);
        }}},
       // The entry passes the three metering flags as constants; only the _ex form takes them.
       {"mixer_add_strip.enable_metering", {nullptr}},
@@ -771,11 +782,12 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          REQUIRE(sonare_project_add_midi_clip(project.get(), 0.0, 2.0, &track, &clip) == SONARE_OK);
          sonare_project_move_clip(project.get(), clip, 0.0, track + 1000);
        }}},
-      {"project_set_marker.marker_id", {[] {
+      {"project_set_marker.marker.id", {[] {
          const ProjectPtr project = new_project();
+         SonareProjectMarker marker{};
+         marker.id = std::numeric_limits<uint32_t>::max();
          uint32_t marker_id = 0;
-         sonare_project_set_marker(project.get(), std::numeric_limits<uint32_t>::max(), 0.0, "m",
-                                   &marker_id);
+         sonare_project_set_marker(project.get(), &marker, &marker_id);
        }}},
       {"project_set_overlap_policy.overlap_policy", {[] {
          const ProjectPtr project = new_project();

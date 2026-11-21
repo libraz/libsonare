@@ -102,20 +102,28 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
       });
 }
 
-SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
-                                      int n_fft, int hop_length, float** out, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  return sonare_spectral_bandwidth_ex(samples, length, sample_rate, n_fft, hop_length, 2.0f, out,
-                                      out_count);
+void sonare_spectral_bandwidth_options_init(SonareSpectralBandwidthOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->p = 2.0f;
 }
 
-SonareError sonare_spectral_bandwidth_ex(const float* samples, size_t length, int sample_rate,
-                                         int n_fft, int hop_length, float p, float** out,
-                                         size_t* out_count) {
+SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
+                                      int n_fft, int hop_length,
+                                      const SonareSpectralBandwidthOptions* options, float** out,
+                                      size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
+  SonareSpectralBandwidthOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_spectral_bandwidth_options_init,
+                                              "sonare_spectral_bandwidth_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  const float p = resolved.p;
   if (const SonareError err =
-          validate_audio_params("spectral_bandwidth_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("spectral_bandwidth", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }

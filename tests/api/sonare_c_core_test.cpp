@@ -28,7 +28,7 @@ namespace {
 
 using sonare::test::collect_schema_paths;
 
-TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
+TEST_CASE("sonare_detect_onsets with a configuration", "[c_api]") {
   const auto samples = generate_clicks(120.0f, 22050, 2.0f);
   SonareOnsetDetectConfig config;
   sonare_onset_detect_config_init(&config);
@@ -44,42 +44,42 @@ TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
   config.backtrack_range = 10;
   float* times = nullptr;
   size_t count = 0;
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_OK);
   REQUIRE((count == 0 || times != nullptr));
   sonare_free_floats(times);
 
   config.hop_length = 0;
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   // A given threshold is a real minimum strength: 0 and negatives are refused by name, NaN is
   // the adaptive path.
   config.hop_length = 64;
   config.threshold = 0.0f;
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()).find("config.threshold") != std::string::npos);
   config.threshold = -1.0f;
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
   config.threshold = 0.5f;
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_OK);
   sonare_free_floats(times);
   config.threshold = std::numeric_limits<float>::quiet_NaN();
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_OK);
   sonare_free_floats(times);
 
   SonareOnsetDetectConfig zeroed{};
-  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &zeroed, &times, &count) ==
+  REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 22050, &zeroed, &times, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()) ==
           "config.struct_size must be set by sonare_onset_detect_config_init");
 }
 
-TEST_CASE("the configured onset entry agrees with the plain one at every rate", "[c_api][onsets]") {
+TEST_CASE("a configured onset entry agrees with the default one at every rate", "[c_api][onsets]") {
   // The two are documented as the same quantity with and without a configuration,
   // and every field of the config defaults to the core default, so a
   // default-filled config reads as a no-op. It has to BE one: every peak-picking
@@ -110,12 +110,12 @@ TEST_CASE("the configured onset entry agrees with the plain one at every rate", 
 
     float* plain = nullptr;
     size_t plain_count = 0;
-    REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), rate, &plain, &plain_count) ==
-            SONARE_OK);
+    REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), rate, nullptr, &plain,
+                                 &plain_count) == SONARE_OK);
     float* configured = nullptr;
     size_t configured_count = 0;
-    REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), rate, &config, &configured,
-                                    &configured_count) == SONARE_OK);
+    REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), rate, &config, &configured,
+                                 &configured_count) == SONARE_OK);
 
     // Element by element: a count comparison passes while the positions differ.
     CHECK(configured_count == plain_count);
@@ -151,7 +151,7 @@ TEST_CASE("a configured onset detector still answers to its configuration", "[c_
   const auto onset_count = [&samples](const SonareOnsetDetectConfig& cfg) {
     float* times = nullptr;
     size_t count = 0;
-    REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 44100, &cfg, &times, &count) ==
+    REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), 44100, &cfg, &times, &count) ==
             SONARE_OK);
     sonare_free_floats(times);
     return count;
@@ -619,9 +619,9 @@ TEST_CASE("C API reconstructs CQT and VQT magnitude with checked ownership",
 
   float* output = nullptr;
   size_t output_length = 0;
-  REQUIRE(sonare_cqt_to_audio(cqt_result.magnitude, cqt_result.n_bins, cqt_result.n_frames,
-                              sample_rate, hop_length, fmin, bins_per_octave, 2, &output,
-                              &output_length) == SONARE_OK);
+  REQUIRE(sonare_cqt_to_audio(cqt_result.magnitude, matrix_length, cqt_result.n_bins,
+                              cqt_result.n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                              2, &output, &output_length) == SONARE_OK);
   REQUIRE(output != nullptr);
   REQUIRE(output_length > 0);
   for (size_t i = 0; i < output_length; ++i) REQUIRE(std::isfinite(output[i]));
@@ -629,21 +629,20 @@ TEST_CASE("C API reconstructs CQT and VQT magnitude with checked ownership",
 
   output = nullptr;
   output_length = 0;
-  REQUIRE(sonare_vqt_to_audio(cqt_result.magnitude, cqt_result.n_bins, cqt_result.n_frames,
-                              sample_rate, hop_length, fmin, bins_per_octave, 0.0f, 2, &output,
-                              &output_length) == SONARE_OK);
+  REQUIRE(sonare_vqt_to_audio(cqt_result.magnitude, matrix_length, cqt_result.n_bins,
+                              cqt_result.n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                              0.0f, 2, &output, &output_length) == SONARE_OK);
   REQUIRE(output != nullptr);
   REQUIRE(output_length > 0);
   sonare_free_floats(output);
 
-  REQUIRE(sonare_cqt_to_audio_checked(cqt_result.magnitude, matrix_length - 1, cqt_result.n_bins,
-                                      cqt_result.n_frames, sample_rate, hop_length, fmin,
-                                      bins_per_octave, 2, &output,
-                                      &output_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_vqt_to_audio_checked(cqt_result.magnitude, matrix_length, cqt_result.n_bins,
-                                      cqt_result.n_frames, sample_rate, hop_length, fmin,
-                                      bins_per_octave, 0.0f, 257, &output,
-                                      &output_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_cqt_to_audio(cqt_result.magnitude, matrix_length - 1, cqt_result.n_bins,
+                              cqt_result.n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                              2, &output, &output_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_vqt_to_audio(cqt_result.magnitude, matrix_length, cqt_result.n_bins,
+                              cqt_result.n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                              0.0f, 257, &output,
+                              &output_length) == SONARE_ERROR_INVALID_PARAMETER);
   sonare_free_cqt_result(&cqt_result);
 }
 
@@ -747,12 +746,25 @@ TEST_CASE("sonare_detect_bpm", "[c_api]") {
   }
 }
 
+static SonareDetectKeyOptions key_options(int n_fft, int hop_length, int use_hpss,
+                                          int loudness_weighted, float chroma_high_pass_hz) {
+  SonareDetectKeyOptions options;
+  sonare_detect_key_options_init(&options);
+  options.n_fft = n_fft;
+  options.hop_length = hop_length;
+  options.use_hpss = use_hpss;
+  options.loudness_weighted = loudness_weighted;
+  options.chroma_high_pass_hz = chroma_high_pass_hz;
+  return options;
+}
+
 TEST_CASE("sonare_detect_key", "[c_api]") {
   SECTION("detects key from samples") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKey key = {};
 
-    SonareError err = sonare_detect_key(samples.data(), samples.size(), 22050, &key);
+    SonareError err =
+        sonare_detect_key(samples.data(), samples.size(), 22050, nullptr, &key, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(key.root >= SONARE_PITCH_C);
@@ -764,16 +776,17 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
 
   SECTION("returns error for null samples") {
     SonareKey key = {};
-    SonareError err = sonare_detect_key(nullptr, 100, 22050, &key);
+    SonareError err = sonare_detect_key(nullptr, 100, 22050, nullptr, &key, nullptr);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("detects key with explicit analysis options") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKey key = {};
+    const SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 80.0f);
 
-    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 4096,
-                                                     512, 0, 0, 80.0f, &key);
+    SonareError err =
+        sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(key.root >= SONARE_PITCH_C);
@@ -785,20 +798,38 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
   SECTION("returns error for invalid explicit key options") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKey key = {};
+    const SonareDetectKeyOptions options = key_options(0, 512, 0, 0, 0.0f);
 
-    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 0, 512,
-                                                     0, 0, 0.0f, &key);
+    SonareError err =
+        sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr);
 
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("refuses options not made by the init function") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKey key = {};
+    SonareDetectKeyOptions options = {};
+
+    REQUIRE(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "options.struct_size must be set by sonare_detect_key_options_init");
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                         &candidates, &count,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("returns sorted key candidates with correlations") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
+    const SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
 
-    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512,
-                                                   0, 0, 0.0f, &candidates, &count);
+    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                                   &candidates, &count, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(candidates != nullptr);
@@ -819,10 +850,12 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
                                 SONARE_MODE_LYDIAN};
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
+    SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
+    options.modes = modes;
+    options.mode_count = 4;
 
-    SonareError err =
-        sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096, 512, 0,
-                                                0, 0.0f, modes, 4, &candidates, &count);
+    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                                   &candidates, &count, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(candidates != nullptr);
@@ -842,9 +875,12 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR, SONARE_MODE_DORIAN};
     SonareKey key = {};
+    SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
+    options.modes = modes;
+    options.mode_count = 3;
 
-    SonareError err = sonare_detect_key_with_options_and_modes(
-        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, modes, 3, &key);
+    SonareError err =
+        sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(key.root >= SONARE_PITCH_C);
@@ -857,10 +893,14 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR};
     SonareKey key = {};
+    SonareDetectKeyOptions options = key_options(4096, 512, 1, 1, 80.0f);
+    options.modes = modes;
+    options.mode_count = 2;
+    options.profile_type = SONARE_KEY_PROFILE_FARALDO_EDMA;
+    options.genre_hint = "edm";
 
-    SonareError err = sonare_detect_key_with_extended_options(
-        samples.data(), samples.size(), 22050, 4096, 512, 1, 1, 80.0f, modes, 2,
-        SONARE_KEY_PROFILE_FARALDO_EDMA, "edm", &key);
+    SonareError err =
+        sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(key.root >= SONARE_PITCH_C);
@@ -872,10 +912,12 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
+    SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
+    options.profile_type = SONARE_KEY_PROFILE_TEMPERLEY;
+    options.genre_hint = "pop";
 
-    SonareError err = sonare_detect_key_candidates_with_extended_options(
-        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, nullptr, 0,
-        SONARE_KEY_PROFILE_TEMPERLEY, "pop", &candidates, &count);
+    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                                   &candidates, &count, nullptr);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(candidates != nullptr);
@@ -887,11 +929,12 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     auto samples = generate_sine(440.0f, 22050, 2.0f);
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
+    const SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
 
-    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
-                                         0.0f, nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
-                                         0.0f, &candidates,
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options, nullptr,
+                                         &count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                         &candidates, nullptr,
                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -901,17 +944,20 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     SonareKey key = {};
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
+    SonareDetectKeyOptions options = key_options(4096, 512, 0, 0, 0.0f);
+    options.modes = bad_modes;
+    options.mode_count = 1;
 
-    REQUIRE(sonare_detect_key_with_options_and_modes(samples.data(), samples.size(), 22050, 4096,
-                                                     512, 0, 0, 0.0f, bad_modes, 1,
-                                                     &key) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096,
-                                                    512, 0, 0, 0.0f, bad_modes, 1, &candidates,
-                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_key_with_extended_options(samples.data(), samples.size(), 22050, 4096,
-                                                    512, 0, 0, 0.0f, nullptr, 0,
-                                                    static_cast<SonareKeyProfileType>(99), nullptr,
-                                                    &key) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, &options,
+                                         &candidates, &count,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    options.modes = nullptr;
+    options.mode_count = 0;
+    options.profile_type = static_cast<SonareKeyProfileType>(99);
+    REQUIRE(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -976,7 +1022,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
               SONARE_OK);
       SonareStreamFramesU8 u8{};
-      REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, 1, &u8) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 1, &u8) == SONARE_OK);
       REQUIRE(u8.n_frames == 1);
       REQUIRE(u8.feature_flags == mask);
       REQUIRE(u8.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
@@ -994,7 +1040,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
               SONARE_OK);
       SonareStreamFramesI16 i16{};
-      REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 1, &i16) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 1, &i16) == SONARE_OK);
       REQUIRE(i16.n_frames == 1);
       REQUIRE(i16.feature_flags == mask);
       REQUIRE(i16.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
@@ -1092,7 +1138,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
     SonareStreamQuantizeConfig quantize{};
     SonareStreamFramesU8 frames{};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()) ==
             "config.struct_size must be set by sonare_stream_quantize_config_init");
@@ -1142,11 +1188,11 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     sonare_stream_quantize_config_init(&quantize);
     quantize.rms_max = inf;
     SonareStreamFramesU8 frames{};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_stream_quantize_config_init(&quantize);
     quantize.mel_db_min = quantize.mel_db_max;
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_stream_analyzer_destroy(analyzer);
   }
@@ -1160,7 +1206,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
 
     SonareStreamFramesU8 u8 = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, 4, &u8) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 4, &u8) == SONARE_OK);
     REQUIRE(u8.n_frames > 0);
     REQUIRE(u8.n_frames <= 4);
     REQUIRE(u8.n_mels == config.n_mels);
@@ -1174,7 +1220,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
     SonareStreamFramesI16 i16 = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 4, &i16) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 4, &i16) == SONARE_OK);
     REQUIRE(i16.n_frames > 0);
     REQUIRE(i16.n_mels == config.n_mels);
     REQUIRE(i16.n_chroma == 12);
@@ -1240,8 +1286,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     SonareStreamQuantizeConfig narrow = qdefault;
     narrow.centroid_max = 1.0f;
     SonareStreamFramesU8 tight_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(tight, &narrow, 4, &tight_frames) ==
-            SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(tight, &narrow, 4, &tight_frames) == SONARE_OK);
     REQUIRE(tight_frames.n_frames > 0);
 
     SonareStreamAnalyzer* wide = nullptr;
@@ -1250,7 +1295,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     SonareStreamQuantizeConfig broad = qdefault;
     broad.centroid_max = 1.0e9f;
     SonareStreamFramesU8 wide_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(wide, &broad, 4, &wide_frames) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(wide, &broad, 4, &wide_frames) == SONARE_OK);
     REQUIRE(wide_frames.n_frames == tight_frames.n_frames);
 
     bool centroid_differs = false;
@@ -1265,7 +1310,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     // A null config is identical to the default-range read.
     SonareStreamFramesU8 null_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(wide, nullptr, 4, &null_frames) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(wide, nullptr, 4, &null_frames) == SONARE_OK);
     sonare_free_stream_frames_u8(&null_frames);
 
     sonare_free_stream_frames_u8(&tight_frames);
@@ -1472,7 +1517,8 @@ TEST_CASE("sonare_detect_onsets", "[c_api]") {
     float* times = nullptr;
     size_t count = 0;
 
-    SonareError err = sonare_detect_onsets(samples.data(), samples.size(), 22050, &times, &count);
+    SonareError err =
+        sonare_detect_onsets(samples.data(), samples.size(), 22050, nullptr, &times, &count);
 
     REQUIRE(err == SONARE_OK);
     if (count > 0) {
@@ -1537,7 +1583,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
   SECTION("serializes the full analysis result") {
     char* json = nullptr;
-    SonareError err = sonare_analyze_json(samples.data(), samples.size(), 22050, &json);
+    SonareError err = sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr, &json);
     REQUIRE(err == SONARE_OK);
     REQUIRE(json != nullptr);
 
@@ -1609,9 +1655,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     SonareMusicAnalyzeOptions defaults;
 
     sonare_music_analyze_options_init(&defaults);
+    defaults.progress_callback = cb;
+    defaults.progress_user_data = &state;
     char* json = nullptr;
-    SonareError err = sonare_analyze_json_ex_with_progress(
-        samples.data(), samples.size(), 22050, &defaults, cb, &state, &json, nullptr, nullptr);
+    SonareError err = sonare_analyze_json(samples.data(), samples.size(), 22050, &defaults, &json);
     REQUIRE(err == SONARE_OK);
     REQUIRE(json != nullptr);
     REQUIRE(state.calls > 0);
@@ -1621,9 +1668,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
     // A null callback runs silently and still produces output.
     char* json2 = nullptr;
-    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
-                                                 nullptr, nullptr, &json2, nullptr,
-                                                 nullptr) == SONARE_OK);
+    defaults.progress_callback = nullptr;
+    defaults.progress_user_data = nullptr;
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &defaults, &json2) ==
+            SONARE_OK);
     REQUIRE(json2 != nullptr);
     sonare_free_string(json2);
   }
@@ -1649,9 +1697,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     auto count_only = [](float, const char*, void* user_data) {
       ++static_cast<MutateState*>(user_data)->calls;
     };
-    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
-                                                 count_only, &quiet, &reference_json, nullptr,
-                                                 nullptr) == SONARE_OK);
+    defaults.progress_callback = count_only;
+    defaults.progress_user_data = &quiet;
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &defaults,
+                                &reference_json) == SONARE_OK);
     REQUIRE(reference_json != nullptr);
     REQUIRE(quiet.calls > 0);
     const std::string reference(reference_json);
@@ -1665,9 +1714,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       std::fill(s->buffer->begin(), s->buffer->end(), -1.0f);
     };
     char* mutated_json = nullptr;
-    REQUIRE(sonare_analyze_json_ex_with_progress(victim.data(), victim.size(), 22050, &defaults,
-                                                 mutate, &state, &mutated_json, nullptr,
-                                                 nullptr) == SONARE_OK);
+    defaults.progress_callback = mutate;
+    defaults.progress_user_data = &state;
+    REQUIRE(sonare_analyze_json(victim.data(), victim.size(), 22050, &defaults, &mutated_json) ==
+            SONARE_OK);
     REQUIRE(mutated_json != nullptr);
     const std::string mutated(mutated_json);
     sonare_free_string(mutated_json);
@@ -1678,8 +1728,8 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     // different result, so equality above is evidence rather than a tautology.
     std::vector<float> overwritten(samples.size(), -1.0f);
     char* overwritten_json = nullptr;
-    REQUIRE(sonare_analyze_json(overwritten.data(), overwritten.size(), 22050, &overwritten_json) ==
-            SONARE_OK);
+    REQUIRE(sonare_analyze_json(overwritten.data(), overwritten.size(), 22050, nullptr,
+                                &overwritten_json) == SONARE_OK);
     const std::string different(overwritten_json);
     sonare_free_string(overwritten_json);
     CHECK(different != reference);
@@ -1705,16 +1755,19 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
     sonare_music_analyze_options_init(&defaults);
     char* json = nullptr;
-    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
-                                                 progress, &state, &json, cancel,
-                                                 &state) == SONARE_ERROR_CANCELLED);
+    defaults.progress_callback = progress;
+    defaults.progress_user_data = &state;
+    defaults.cancel_callback = cancel;
+    defaults.cancel_user_data = &state;
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &defaults, &json) ==
+            SONARE_ERROR_CANCELLED);
     REQUIRE(state.progress_calls > 0);
     REQUIRE(state.last_progress > 0.5f);
     REQUIRE(json == nullptr);
   }
 
   SECTION("rejects a null out pointer") {
-    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr) ==
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -1728,7 +1781,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     options.use_chord_hmm = 1;
     options.detect_chord_inversions = 1;
     char* json = nullptr;
-    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_OK);
     REQUIRE(json != nullptr);
     const auto root = sonare::util::json::parse(json);
@@ -1737,7 +1790,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     sonare_free_string(json);
 
     options.bpm_max = options.bpm_min - 1.0f;
-    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -1747,7 +1800,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     REQUIRE(options.compute_tempo_curve == 0);
 
     char* json = nullptr;
-    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_OK);
     const auto without = sonare::util::json::parse(json);
     // The key is always present; it is the array that is empty, so a reader
@@ -1758,7 +1811,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     json = nullptr;
 
     options.compute_tempo_curve = 1;
-    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_OK);
     const auto with = sonare::util::json::parse(json);
     const auto& curve = with["beatLocalBpm"].as_array();
@@ -2146,38 +2199,55 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_analyze_melody_ex", "[c_api]") {
+TEST_CASE("sonare_analyze_melody", "[c_api]") {
   auto samples = generate_sine(440.0f, 22050, 1.0f);
 
   SECTION("pYIN center contour differs from the plain-YIN default") {
+    SonareAnalyzeMelodyOptions options;
+    sonare_analyze_melody_options_init(&options);
+    REQUIRE(options.struct_size == sizeof(SonareAnalyzeMelodyOptions));
+    REQUIRE(options.use_pyin == 0);
+    REQUIRE(options.center == 1);
     SonareMelodyResult plain = {};
     SonareMelodyResult pyin = {};
-    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
-                                     256, 0.1f, /*use_pyin=*/0, /*center=*/1, &plain) == SONARE_OK);
-    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
-                                     256, 0.1f, /*use_pyin=*/1, /*center=*/1, &pyin) == SONARE_OK);
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                  0.1f, &options, &plain) == SONARE_OK);
+    options.use_pyin = 1;
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                  0.1f, &options, &pyin) == SONARE_OK);
     // Both produce a usable contour; the pYIN path is genuinely reachable.
     REQUIRE(pyin.mean_frequency_hz >= 0.0f);
     sonare_free_melody_result(&plain);
     sonare_free_melody_result(&pyin);
   }
 
-  SECTION("the legacy entry point delegates to the plain-YIN default") {
-    SonareMelodyResult legacy = {};
-    SonareMelodyResult ex = {};
+  SECTION("NULL options take the plain-YIN default") {
+    SonareAnalyzeMelodyOptions options;
+    sonare_analyze_melody_options_init(&options);
+    SonareMelodyResult defaults = {};
+    SonareMelodyResult explicit_defaults = {};
     REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
-                                  0.1f, &legacy) == SONARE_OK);
-    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
-                                     256, 0.1f, 0, 1, &ex) == SONARE_OK);
-    REQUIRE(legacy.point_count == ex.point_count);
-    sonare_free_melody_result(&legacy);
-    sonare_free_melody_result(&ex);
+                                  0.1f, nullptr, &defaults) == SONARE_OK);
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                  0.1f, &options, &explicit_defaults) == SONARE_OK);
+    REQUIRE(defaults.point_count == explicit_defaults.point_count);
+    sonare_free_melody_result(&defaults);
+    sonare_free_melody_result(&explicit_defaults);
+  }
+
+  SECTION("rejects a too-small options struct_size") {
+    SonareAnalyzeMelodyOptions options;
+    sonare_analyze_melody_options_init(&options);
+    options.struct_size = 0;
+    SonareMelodyResult out = {};
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                  0.1f, &options, &out) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("rejects invalid parameters") {
     SonareMelodyResult out = {};
-    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 0.0f, 2093.0f, 2048,
-                                     256, 0.1f, 1, 1, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 0.0f, 2093.0f, 2048, 256,
+                                  0.1f, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -2306,30 +2376,30 @@ TEST_CASE("C analysis ranges reject non-finite bounds", "[c_api][validation]") {
     REQUIRE(result.beat_intervals == nullptr);
   }
 
-  SECTION("sonare_analyze_melody_ex") {
+  SECTION("sonare_analyze_melody") {
     SonareMelodyResult result = {};
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
-                                     0.1f, 0, 1, &result) == SONARE_OK);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_OK);
     sonare_free_melody_result(&result);
 
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, nan, 2093.0f, 2048, 256, 0.1f,
-                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, nan, 2048, 256, 0.1f,
-                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, inf, 2093.0f, 2048, 256, 0.1f,
-                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, inf, 2048, 256, 0.1f,
-                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, -inf, 2093.0f, 2048, 256,
-                                     0.1f, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 2093.0f, 65.0f, 2048, 256,
-                                     0.1f, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
-                                     nan, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
-                                     inf, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
-                                     -inf, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, nan, 2093.0f, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, nan, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, inf, 2093.0f, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, inf, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, -inf, 2093.0f, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 2093.0f, 65.0f, 2048, 256, 0.1f,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256, nan,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256, inf,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256, -inf,
+                                  nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(result.points == nullptr);
   }
 }
@@ -2410,33 +2480,34 @@ TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][v
 
   SECTION("key detection rejects a non-finite high-pass corner") {
     SonareKey key = {};
-    REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0, 80.0f,
-                                           &key) == SONARE_OK);
+    SonareDetectKeyOptions options = key_options(2048, 512, 0, 0, 80.0f);
+    REQUIRE(sonare_detect_key(tone.data(), tone.size(), 22050, &options, &key, nullptr) ==
+            SONARE_OK);
 
     for (float chroma_high_pass_hz : {nan, inf, -inf}) {
-      REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
-                                             chroma_high_pass_hz,
-                                             &key) == SONARE_ERROR_INVALID_PARAMETER);
-      REQUIRE(sonare_detect_key_with_extended_options(
-                  tone.data(), tone.size(), 22050, 2048, 512, 0, 0, chroma_high_pass_hz, nullptr, 0,
-                  SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr,
-                  &key) == SONARE_ERROR_INVALID_PARAMETER);
+      options.chroma_high_pass_hz = chroma_high_pass_hz;
+      REQUIRE(sonare_detect_key(tone.data(), tone.size(), 22050, &options, &key, nullptr) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      options.profile_type = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+      REQUIRE(sonare_detect_key(tone.data(), tone.size(), 22050, &options, &key, nullptr) ==
+              SONARE_ERROR_INVALID_PARAMETER);
     }
   }
 
   SECTION("key candidates reject a non-finite high-pass corner") {
     SonareKeyCandidate* candidates = nullptr;
     size_t count = 0;
-    REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, 2048, 512, 0, 0, 80.0f,
-                                         &candidates, &count) == SONARE_OK);
+    SonareDetectKeyOptions options = key_options(2048, 512, 0, 0, 80.0f);
+    REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, &options, &candidates,
+                                         &count, nullptr) == SONARE_OK);
     sonare_free_key_candidates(candidates);
 
     for (float chroma_high_pass_hz : {nan, inf, -inf}) {
       candidates = nullptr;
       count = 0;
-      REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
-                                           chroma_high_pass_hz, &candidates,
-                                           &count) == SONARE_ERROR_INVALID_PARAMETER);
+      options.chroma_high_pass_hz = chroma_high_pass_hz;
+      REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, &options, &candidates,
+                                           &count, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(candidates == nullptr);
       REQUIRE(count == 0);
     }
@@ -2536,12 +2607,15 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
 
   SECTION("acoustic bands") {
     SonareAcousticResult r{};
-    sweep([&] { return sonare_analyze_impulse_response(decay.data(), decay.size(), rate, 6, &r); },
-          [&] {
-            return r.rt60_bands == nullptr && r.edt_bands == nullptr && r.c50_bands == nullptr &&
-                   r.c80_bands == nullptr && r.band_count == 0;
-          },
-          [&] { sonare_free_acoustic_result(&r); });
+    sweep(
+        [&] {
+          return sonare_analyze_impulse_response(decay.data(), decay.size(), rate, 6, nullptr, &r);
+        },
+        [&] {
+          return r.rt60_bands == nullptr && r.edt_bands == nullptr && r.c50_bands == nullptr &&
+                 r.c80_bands == nullptr && r.band_count == 0;
+        },
+        [&] { sonare_free_acoustic_result(&r); });
   }
 
   SECTION("mastering chain tail allocations") {

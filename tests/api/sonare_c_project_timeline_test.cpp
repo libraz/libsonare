@@ -21,6 +21,14 @@ namespace {
 
 using sonare::constants::kTwoPiD;
 
+SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, const char* name,
+                             uint32_t* out_id) {
+  SonareProjectMarker marker{};
+  marker.id = id;
+  marker.ppq = ppq;
+  return sonare_project_set_marker_ex_name(project, &marker, name, out_id);
+}
+
 constexpr int kSampleRate = 48000;
 constexpr int kBlockSize = 128;
 constexpr int64_t kFrames = kBlockSize * 500;
@@ -256,7 +264,7 @@ TEST_CASE("applied timeline renders bit-identically to project bounce across edi
   const std::vector<float> trimmed = require_match("trim clip");
   REQUIRE(trimmed != moved);
 
-  const SonareProjectTempoSegment slower[] = {{0.0, 90.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment slower[] = {{0.0, 90.0, 0.0}};
   REQUIRE(sonare_project_set_tempo_segments(built.project, slower, 1) == SONARE_OK);
   const std::vector<float> retimed = require_match("tempo change");
   REQUIRE(retimed != trimmed);
@@ -276,7 +284,7 @@ TEST_CASE(
   TestProject base = build_project(tone);
   TestProject mismatch = build_project(tone, 44100);
   uint32_t marker_id = 0;
-  REQUIRE(sonare_project_set_marker(base.project, 0, 2.0, "base", &marker_id) == SONARE_OK);
+  REQUIRE(set_marker_named(base.project, 0, 2.0, "base", &marker_id) == SONARE_OK);
 
   SonareEngine* engine = prepared_engine();
   apply_project(engine, base.project);
@@ -342,7 +350,7 @@ TEST_CASE("marker names outlive a destroyed timeline handle", "[timeline-apply][
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
   uint32_t marker_id = 0;
-  REQUIRE(sonare_project_set_marker(project, 0, 2.0, kLongMarkerName, &marker_id) == SONARE_OK);
+  REQUIRE(set_marker_named(project, 0, 2.0, kLongMarkerName, &marker_id) == SONARE_OK);
 
   SonareEngine* engine = prepared_engine();
   SonareProjectTimeline* timeline = compile_timeline(project);
@@ -354,7 +362,7 @@ TEST_CASE("marker names outlive a destroyed timeline handle", "[timeline-apply][
   SonareProject* other = nullptr;
   REQUIRE(sonare_project_create(&other) == SONARE_OK);
   uint32_t other_marker = 0;
-  REQUIRE(sonare_project_set_marker(other, 0, 1.0, "another-marker-name-past-sso", &other_marker) ==
+  REQUIRE(set_marker_named(other, 0, 1.0, "another-marker-name-past-sso", &other_marker) ==
           SONARE_OK);
   sonare_project_timeline_destroy(compile_timeline(other));
   sonare_project_destroy(other);
@@ -386,13 +394,13 @@ TEST_CASE("automation set after apply keeps the applied lanes audible", "[timeli
   // A ramp, so a lost lane is audible: the fader would hold its value at the moment of loss.
   const SonareAutomationPoint ramp[] = {{0.0, 0.0f, SONARE_CURVE_LINEAR},
                                         {1.5, -24.0f, SONARE_CURVE_LINEAR}};
-  SonareAutomationLaneDescEx fader{};
+  SonareAutomationLaneDesc fader{};
   fader.target_param_id = 1;
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = ramp;
   fader.point_count = std::size(ramp);
-  REQUIRE(sonare_project_add_automation_lane_ex(built.project, built.audio_track, &fader,
-                                                nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(built.project, built.audio_track, &fader, nullptr) ==
+          SONARE_OK);
   const std::vector<float> bounced = project_bounce(built.project);
 
   SonareEngine* engine = prepared_engine();
@@ -433,7 +441,7 @@ TEST_CASE("apply is refused while the transport is playing", "[timeline-apply][c
   TestProject second = build_project(tone);
   REQUIRE(sonare_project_move_clip(second.project, second.audio_clip, 1.0, 0) == SONARE_OK);
   uint32_t second_marker = 0;
-  REQUIRE(sonare_project_set_marker(second.project, 0, 1.0, "second", &second_marker) == SONARE_OK);
+  REQUIRE(set_marker_named(second.project, 0, 1.0, "second", &second_marker) == SONARE_OK);
 
   const auto run = [&](bool attempt_while_playing) {
     SonareEngine* engine = prepared_engine();

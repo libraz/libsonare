@@ -1,7 +1,7 @@
 {
   "rows": [
     {
-      "entry": "align_take_to_reference_ex",
+      "entry": "align_take_to_reference",
       "param": "config.bins_per_octave",
       "kind": "integer",
       "lo": 1,
@@ -12,7 +12,7 @@
       "sentinel": null
     },
     {
-      "entry": "align_take_to_reference_ex",
+      "entry": "align_take_to_reference",
       "param": "config.hop_length",
       "kind": "integer",
       "lo": 1,
@@ -79,17 +79,6 @@
     },
     {
       "entry": "analyze_impulse_response",
-      "param": "n_octave_bands",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_impulse_response_ex",
       "param": "min_decay_db",
       "kind": "real",
       "lo": 0,
@@ -100,7 +89,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_impulse_response_ex",
+      "entry": "analyze_impulse_response",
       "param": "n_octave_bands",
       "kind": "integer",
       "lo": 0,
@@ -111,7 +100,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
+      "entry": "analyze_json",
       "param": "options.chord_hmm_beam_width",
       "kind": "integer",
       "lo": 1,
@@ -122,7 +111,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
+      "entry": "analyze_json",
       "param": "options.chroma_hop_multiplier",
       "kind": "integer",
       "lo": 1,
@@ -133,7 +122,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
+      "entry": "analyze_json",
       "param": "options.hop_length",
       "kind": "integer",
       "lo": 1,
@@ -144,7 +133,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
+      "entry": "analyze_json",
       "param": "options.meter_denominator",
       "kind": "integer",
       "lo": 1,
@@ -155,7 +144,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
+      "entry": "analyze_json",
       "param": "options.n_fft",
       "kind": "integer",
       "lo": 2,
@@ -166,73 +155,7 @@
       "sentinel": null
     },
     {
-      "entry": "analyze_json_ex",
-      "param": "options.tempo_update_interval_beats",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
-      "param": "options.chord_hmm_beam_width",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
-      "param": "options.chroma_hop_multiplier",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
-      "param": "options.hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
-      "param": "options.meter_denominator",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 32,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "power_of_two",
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
-      "param": "options.n_fft",
-      "kind": "integer",
-      "lo": 2,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_json_ex_with_progress",
+      "entry": "analyze_json",
       "param": "options.tempo_update_interval_beats",
       "kind": "integer",
       "lo": 1,
@@ -277,50 +200,6 @@
     },
     {
       "entry": "analyze_melody",
-      "param": "threshold",
-      "kind": "real",
-      "lo": 0,
-      "hi": null,
-      "lo_included": false,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_melody_ex",
-      "param": "f0_min_hz",
-      "kind": "real",
-      "lo": 0,
-      "hi": null,
-      "lo_included": false,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_melody_ex",
-      "param": "frame_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_melody_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "analyze_melody_ex",
       "param": "threshold",
       "kind": "real",
       "lo": 0,
@@ -596,6 +475,17 @@
     },
     {
       "entry": "chroma_cens",
+      "param": "bins_per_octave",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 306783378,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "chroma_cens",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -617,33 +507,11 @@
       "sentinel": null
     },
     {
-      "entry": "chroma_cens_ex",
+      "entry": "chroma_cqt",
       "param": "bins_per_octave",
       "kind": "integer",
       "lo": 1,
       "hi": 306783378,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cens_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 65536,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cens_ex",
-      "param": "n_chroma",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -662,39 +530,6 @@
     },
     {
       "entry": "chroma_cqt",
-      "param": "n_chroma",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cqt_ex",
-      "param": "bins_per_octave",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 306783378,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cqt_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 65536,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cqt_ex",
       "param": "n_chroma",
       "kind": "integer",
       "lo": 1,
@@ -849,72 +684,6 @@
     },
     {
       "entry": "cqt_to_audio",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
-      "param": "bins_per_octave",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 65536,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
-      "param": "n_bins",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 256,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "cqt_to_audio_checked",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 8000,
@@ -1245,6 +1014,17 @@
     },
     {
       "entry": "detect_chords",
+      "param": "hmm_beam_width",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "detect_chords",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -1266,18 +1046,7 @@
       "sentinel": null
     },
     {
-      "entry": "detect_chords_ex",
-      "param": "hmm_beam_width",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_chords_ex",
+      "entry": "detect_key",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -1288,7 +1057,7 @@
       "sentinel": null
     },
     {
-      "entry": "detect_chords_ex",
+      "entry": "detect_key",
       "param": "n_fft",
       "kind": "integer",
       "lo": 1,
@@ -1311,160 +1080,6 @@
     },
     {
       "entry": "detect_key_candidates",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_extended_options",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_extended_options",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_modes",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_modes",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_tuning",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_candidates_with_tuning",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_extended_options",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_extended_options",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_options",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_options",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_options_and_modes",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_options_and_modes",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_tuning",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "detect_key_with_tuning",
       "param": "n_fft",
       "kind": "integer",
       "lo": 1,
@@ -1839,39 +1454,6 @@
     },
     {
       "entry": "engine_render_offline",
-      "param": "total_frames",
-      "kind": "integer",
-      "lo": 0,
-      "hi": null,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "engine_render_offline_ex",
-      "param": "block_size",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": 0
-    },
-    {
-      "entry": "engine_render_offline_ex",
-      "param": "num_channels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "engine_render_offline_ex",
       "param": "total_frames",
       "kind": "integer",
       "lo": 0,
@@ -3499,39 +3081,6 @@
       "sentinel": null
     },
     {
-      "entry": "mel_spectrogram_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_spectrogram_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 2,
-      "hi": 524288,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mel_spectrogram_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "mel_to_audio",
       "param": "n_fft",
       "kind": "integer",
@@ -3587,171 +3136,6 @@
       "sentinel": null
     },
     {
-      "entry": "mel_to_audio_checked",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked_ex",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_checked_ex",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_ex",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_audio_ex",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "mel_to_stft",
       "param": "n_fft",
       "kind": "integer",
@@ -3786,138 +3170,6 @@
     },
     {
       "entry": "mel_to_stft",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_checked_ex",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mel_to_stft_ex",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 1,
@@ -4016,50 +3268,6 @@
       "sentinel": null
     },
     {
-      "entry": "mfcc_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 2,
-      "hi": 524288,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_ex",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "mfcc_to_audio",
       "param": "n_fft",
       "kind": "integer",
@@ -4116,336 +3324,6 @@
     },
     {
       "entry": "mfcc_to_audio",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_checked_ex2",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 4,
-      "hi": 8192,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4096,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_audio_ex2",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 8000,
@@ -4479,105 +3357,6 @@
     },
     {
       "entry": "mfcc_to_mel",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_checked_ex",
-      "param": "n_mfcc",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_ex",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_ex",
-      "param": "n_mels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "mfcc_to_mel_ex",
       "param": "n_mfcc",
       "kind": "integer",
       "lo": 1,
@@ -5633,18 +4412,7 @@
       "sentinel": null
     },
     {
-      "entry": "nnls_chroma_ex",
-      "param": "stft_blend_n_fft",
-      "kind": "integer",
-      "lo": 2,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
-      "entry": "nnls_chroma_ex2",
+      "entry": "nnls_chroma",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -5655,7 +4423,7 @@
       "sentinel": null
     },
     {
-      "entry": "nnls_chroma_ex2",
+      "entry": "nnls_chroma",
       "param": "stft_blend_n_fft",
       "kind": "integer",
       "lo": 2,
@@ -6051,17 +4819,6 @@
       "sentinel": null
     },
     {
-      "entry": "project_add_automation_lane_ex",
-      "param": "desc.target_param_id",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4294967295,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "project_add_clip",
       "param": "desc.audio_channels",
       "kind": "integer",
@@ -6128,7 +4885,7 @@
       "sentinel": null
     },
     {
-      "entry": "project_analyze_tempo_with_options",
+      "entry": "project_analyze_tempo",
       "param": "options.tempo_update_interval_beats",
       "kind": "integer",
       "lo": 1,
@@ -6205,7 +4962,7 @@
       "sentinel": 0
     },
     {
-      "entry": "project_auto_tempo_with_options",
+      "entry": "project_auto_tempo",
       "param": "options.tempo_update_interval_beats",
       "kind": "integer",
       "lo": 1,
@@ -6623,17 +5380,6 @@
       "sentinel": null
     },
     {
-      "entry": "project_edit_automation_lane_ex",
-      "param": "desc.target_param_id",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 4294967295,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "project_import_external_stems",
       "param": "request.sample_rate",
       "kind": "integer",
@@ -6690,17 +5436,6 @@
     },
     {
       "entry": "project_set_marker",
-      "param": "marker_id",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 4294967294,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "project_set_marker_ex",
       "param": "marker.id",
       "kind": "integer",
       "lo": 0,
@@ -6711,7 +5446,7 @@
       "sentinel": null
     },
     {
-      "entry": "project_set_marker_ex",
+      "entry": "project_set_marker",
       "param": "marker.key_fifths",
       "kind": "integer",
       "lo": -7,
@@ -6865,7 +5600,7 @@
       "sentinel": null
     },
     {
-      "entry": "project_snap_to_grid_ex",
+      "entry": "project_snap_to_grid",
       "param": "division",
       "kind": "integer",
       "lo": 0,
@@ -7602,28 +6337,6 @@
       "sentinel": null
     },
     {
-      "entry": "spectral_bandwidth_ex",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "spectral_bandwidth_ex",
-      "param": "n_fft",
-      "kind": "integer",
-      "lo": 2,
-      "hi": 524288,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": "even",
-      "sentinel": null
-    },
-    {
       "entry": "spectral_centroid",
       "param": "hop_length",
       "kind": "integer",
@@ -7856,28 +6569,6 @@
     },
     {
       "entry": "split_silence_common",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "split_silence_common_ex",
-      "param": "frame_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "split_silence_common_ex",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -8571,72 +7262,6 @@
     },
     {
       "entry": "vqt_to_audio",
-      "param": "sample_rate",
-      "kind": "integer",
-      "lo": 8000,
-      "hi": 384000,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
-      "param": "bins_per_octave",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
-      "param": "hop_length",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 65536,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
-      "param": "n_bins",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 256,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "vqt_to_audio_checked",
       "param": "sample_rate",
       "kind": "integer",
       "lo": 8000,

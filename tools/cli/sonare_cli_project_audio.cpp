@@ -550,7 +550,7 @@ int cmd_project_align_takes(const CliArgs& args) {
     SonareProjectWarpAnchor* anchors = nullptr;
     size_t anchor_count = 0;
     SonareTakeAlignment alignment{};
-    SonareError err = sonare_align_take_to_reference_ex(
+    SonareError err = sonare_align_take_to_reference(
         reference_samples.data(), reference_samples.size(), reference_rate, take_samples.data(),
         take_samples.size(), take_rate, &config, &anchors, &anchor_count, &alignment);
     if (err != SONARE_OK) {

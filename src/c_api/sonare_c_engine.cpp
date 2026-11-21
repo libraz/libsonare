@@ -890,7 +890,7 @@ SonareError sonare_engine_get_transport_state(SonareEngine* engine, SonareTransp
   out->loop_end_ppq = state.loop_end_ppq;
   out->sample_rate = state.sample_rate;
   out->bar_start_ppq = state.bar_start_ppq;
-  out->bar_count = state.bar_count;
+  out->bar_index = state.bar_count;
   out->time_signature.numerator = state.time_sig.numerator;
   out->time_signature.denominator = state.time_sig.denominator;
   out->time_signature.confidence = 1.0f;

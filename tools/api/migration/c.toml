@@ -448,50 +448,8 @@ rule = "high-pass"
 
 [[entry]]
 kind = "option"
-old = "sonare_detect_key_with_options(high_pass_hz)"
-new = "sonare_detect_key_with_options(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_with_options_and_modes(high_pass_hz)"
-new = "sonare_detect_key_with_options_and_modes(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_with_extended_options(high_pass_hz)"
-new = "sonare_detect_key_with_extended_options(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_with_tuning(high_pass_hz)"
-new = "sonare_detect_key_with_tuning(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
 old = "sonare_detect_key_candidates(high_pass_hz)"
-new = "sonare_detect_key_candidates(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_candidates_with_modes(high_pass_hz)"
-new = "sonare_detect_key_candidates_with_modes(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_candidates_with_extended_options(high_pass_hz)"
-new = "sonare_detect_key_candidates_with_extended_options(chroma_high_pass_hz)"
+removed = "set SonareDetectKeyOptions.chroma_high_pass_hz"
 domain = "analysis"
 rule = "high-pass"
 
@@ -555,7 +513,7 @@ test = "tests/analysis/analysis_tuning_test.cpp::C ABI auto tuning, tuning conve
 [[entry]]
 kind = "function"
 old = "sonare_analyze_json"
-changed = "the document's \"tuning\" key (a fraction of a semitone) is \"tuningCents\", in cents"
+changed = "the document's \"tuning\" key (a fraction of a semitone) is \"tuningCents\", in cents; takes const SonareMusicAnalyzeOptions* options (NULL = defaults) after sample_rate; progress and cancel callbacks are options fields"
 domain = "analysis"
 rule = "pitch-semitones"
 test = "tests/analysis/analysis_tuning_test.cpp::MusicAnalyzer by default re-centres a detuned recording"
@@ -591,20 +549,6 @@ rule = "pitch-semitones"
 
 [[entry]]
 kind = "option"
-old = "sonare_detect_key_with_tuning(tuning)"
-new = "sonare_detect_key_with_tuning(tuning_cents)"
-domain = "analysis"
-rule = "pitch-semitones"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_with_tuning(out_tuning)"
-new = "sonare_detect_key_with_tuning(out_tuning_cents)"
-domain = "analysis"
-rule = "pitch-semitones"
-
-[[entry]]
-kind = "option"
 old = "sonare_vector_normalize(norm_type)"
 to = "sonare_vector_normalize(norm)"
 changed = "norm_type is a SonareNormType (SONARE_NORM_MAX, _L1, _L2, _POWER); the ordinals are unchanged"
@@ -618,7 +562,7 @@ old = "SonareChordDetectionOptions.chroma_method"
 changed = "chroma_method is a SonareChromaMethod (SONARE_CHROMA_METHOD_STFT, _NNLS, _CQT); the ordinals are unchanged"
 domain = "analysis"
 rule = "string-closed-sets"
-test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords_ex chroma_method range"
+test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords chroma_method range"
 
 [[entry]]
 kind = "field"
@@ -651,14 +595,14 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_analyze_json_with_progress"
-removed = "call sonare_analyze_json_ex_with_progress with options NULL and cancel_cb NULL"
+removed = "call sonare_analyze_json with options NULL, or with SonareMusicAnalyzeOptions carrying progress_callback"
 domain = "analysis"
 rule = "progress-callback"
 
 [[entry]]
 kind = "function"
 old = "sonare_analyze_json_with_progress_ex"
-removed = "call sonare_analyze_json_ex_with_progress with options NULL, passing the same cancel_cb and cancel_user_data"
+removed = "call sonare_analyze_json with SonareMusicAnalyzeOptions carrying progress_callback, cancel_callback and their user data"
 domain = "analysis"
 rule = "progress-callback"
 
@@ -1201,27 +1145,6 @@ rule = "loudness-names"
 
 [[entry]]
 kind = "field"
-old = "SonareMeterTelemetryRecordV2.max_true_peak_db"
-new = "SonareMeterTelemetryRecordV2.max_true_peak_dbtp"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordV2.true_peak_db_l"
-new = "SonareMeterTelemetryRecordV2.true_peak_dbtp_l"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordV2.true_peak_db_r"
-new = "SonareMeterTelemetryRecordV2.true_peak_dbtp_r"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
 old = "SonareMixMeterSnapshot.max_true_peak_db"
 new = "SonareMixMeterSnapshot.max_true_peak_dbtp"
 domain = "mastering"
@@ -1259,27 +1182,6 @@ rule = "loudness-names"
 kind = "field"
 old = "SonareMeterTelemetryRecordWide.channel_count"
 new = "SonareMeterTelemetryRecordWide.num_channels"
-domain = "engine"
-rule = "num-channels"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWideV2.max_true_peak_db"
-new = "SonareMeterTelemetryRecordWideV2.max_true_peak_dbtp"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWideV2.true_peak_db"
-new = "SonareMeterTelemetryRecordWideV2.true_peak_dbtp"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWideV2.channel_count"
-new = "SonareMeterTelemetryRecordWideV2.num_channels"
 domain = "engine"
 rule = "num-channels"
 
@@ -2242,31 +2144,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::griffin_lim derives
 [[entry]]
 kind = "function"
 old = "sonare_mel_to_audio"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mel_to_audio_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mel_to_audio_checked"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mel_to_audio_checked_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
@@ -2274,47 +2152,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusa
 [[entry]]
 kind = "function"
 old = "sonare_mfcc_to_audio"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mfcc_to_audio_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mfcc_to_audio_ex2"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mfcc_to_audio_checked"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mfcc_to_audio_checked_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
-
-[[entry]]
-kind = "function"
-old = "sonare_mfcc_to_audio_checked_ex2"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
@@ -2831,3 +2669,649 @@ changed = "the sample rate is an int instead of a double"
 domain = "effects"
 rule = "c-count-types"
 test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_impulse_response_ex"
+removed = "call sonare_analyze_impulse_response with SonareAnalyzeImpulseResponseOptions min_decay_db set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_melody_ex"
+removed = "call sonare_analyze_melody with SonareAnalyzeMelodyOptions use_pyin and center set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_chroma_cens_ex"
+removed = "call sonare_chroma_cens with SonareChromaCensOptions bins_per_octave set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_chroma_cqt_ex"
+removed = "call sonare_chroma_cqt with SonareChromaCqtOptions bins_per_octave set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_cqt_to_audio_checked"
+removed = "call sonare_cqt_to_audio, which now takes input_length after magnitude"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_vqt_to_audio_checked"
+removed = "call sonare_vqt_to_audio, which now takes input_length after magnitude"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_chords_ex"
+removed = "call sonare_detect_chords, which takes the const SonareChordDetectionOptions* options"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_spectrogram_ex"
+removed = "call sonare_mel_spectrogram with SonareMelSpectrogramOptions fmin_hz, fmax_hz and htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_ex"
+removed = "call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_checked"
+removed = "call sonare_mel_to_audio, which now takes input_length after mel"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_checked_ex"
+removed = "call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_stft_ex"
+removed = "call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_stft_checked"
+removed = "call sonare_mel_to_stft, which now takes input_length after mel"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_stft_checked_ex"
+removed = "call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_ex"
+removed = "call sonare_mfcc with SonareMfccOptions fmin_hz, fmax_hz, htk and lifter set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_ex"
+removed = "call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_ex2"
+removed = "call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk and lifter set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked"
+removed = "call sonare_mfcc_to_audio, which now takes input_length after coefficients"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked_ex"
+removed = "call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked_ex2"
+removed = "call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk and lifter set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_mel_ex"
+removed = "call sonare_mfcc_to_mel with input_length and SonareMfccToMelOptions lifter set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_mel_checked"
+removed = "call sonare_mfcc_to_mel, which now takes input_length after coefficients"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_mel_checked_ex"
+removed = "call sonare_mfcc_to_mel with input_length and SonareMfccToMelOptions lifter set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_nnls_chroma_ex"
+removed = "call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight and stft_blend_n_fft set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_nnls_chroma_ex2"
+removed = "call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight, stft_blend_n_fft and hop_length set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_spectral_bandwidth_ex"
+removed = "call sonare_spectral_bandwidth with SonareSpectralBandwidthOptions p set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_split_silence_common_ex"
+removed = "call sonare_split_silence_common, which takes the nullable out_report"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_impulse_response"
+changed = "takes const SonareAnalyzeImpulseResponseOptions* options (NULL = defaults; sonare_analyze_impulse_response_options_init) before out; min_decay_db moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_impulse_response"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_melody"
+changed = "takes const SonareAnalyzeMelodyOptions* options (NULL = defaults; sonare_analyze_melody_options_init) before out; use_pyin and center moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_analyze_melody"
+
+[[entry]]
+kind = "function"
+old = "sonare_chroma_cens"
+changed = "takes const SonareChromaCensOptions* options (NULL = defaults; sonare_chroma_cens_options_init) before out; bins_per_octave moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_features_metering_test.cpp::chroma C API defines the whole out-struct on rejected input"
+
+[[entry]]
+kind = "function"
+old = "sonare_chroma_cqt"
+changed = "takes const SonareChromaCqtOptions* options (NULL = defaults; sonare_chroma_cqt_options_init) before out; bins_per_octave moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_features_metering_test.cpp::chroma C API defines the whole out-struct on rejected input"
+
+[[entry]]
+kind = "function"
+old = "sonare_cqt_to_audio"
+changed = "takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_cqt_to_audio_checked is the only behaviour"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::C API reconstructs CQT and VQT magnitude with checked ownership"
+
+[[entry]]
+kind = "function"
+old = "sonare_vqt_to_audio"
+changed = "takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_vqt_to_audio_checked is the only behaviour"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::C API reconstructs CQT and VQT magnitude with checked ownership"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_chords"
+changed = "takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords chroma_method range"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_spectrogram"
+changed = "takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_mel_spectrogram exposes a custom Mel range from pure C"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_stft"
+changed = "takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_features_metering_test.cpp::mel and MFCC results carry the parameters that invert them"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc"
+changed = "takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare mel range is applied or refused rather than defaulted"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_mel"
+changed = "takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToMelOptions* options (NULL = defaults; sonare_mfcc_to_mel_options_init) before out; lifter moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_abi_version_test.cpp::MFCC inverse C API accepts the forward lifter"
+
+[[entry]]
+kind = "function"
+old = "sonare_nnls_chroma"
+changed = "takes const SonareNnlsChromaOptions* options (NULL = defaults; sonare_nnls_chroma_options_init) before out; enable_stft_blend, stft_blend_weight, stft_blend_n_fft and hop_length moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/feature/nnls_chroma_test.cpp::sonare_nnls_chroma runs the shared fast profile"
+
+[[entry]]
+kind = "function"
+old = "sonare_spectral_bandwidth"
+changed = "takes const SonareSpectralBandwidthOptions* options (NULL = defaults; sonare_spectral_bandwidth_options_init) before out; p moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_spectral_bandwidth accepts the Minkowski exponent"
+
+[[entry]]
+kind = "function"
+old = "sonare_split_silence_common"
+changed = "takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_split_silence_common report separates the three ways one interval happens"
+[[entry]]
+kind = "function"
+old = "sonare_detect_key"
+changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_detect_key"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_candidates"
+changed = "takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_detect_key"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_onsets"
+changed = "takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_detect_onsets with a configuration"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_with_options"
+removed = "call sonare_detect_key with SonareDetectKeyOptions n_fft, hop_length, use_hpss, loudness_weighted and chroma_high_pass_hz set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_with_options_and_modes"
+removed = "call sonare_detect_key with SonareDetectKeyOptions modes and mode_count set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_with_extended_options"
+removed = "call sonare_detect_key with SonareDetectKeyOptions profile_type and genre_hint set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_with_tuning"
+removed = "call sonare_detect_key with SonareDetectKeyOptions tuning_cents and tuning_auto set, and out_tuning_cents"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_candidates_with_modes"
+removed = "call sonare_detect_key_candidates with SonareDetectKeyOptions modes and mode_count set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_key_candidates_with_extended_options"
+removed = "call sonare_detect_key_candidates with SonareDetectKeyOptions profile_type and genre_hint set"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_onsets_ex"
+removed = "call sonare_detect_onsets, which takes the SonareOnsetDetectConfig"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_json_ex"
+removed = "call sonare_analyze_json, which takes the SonareMusicAnalyzeOptions"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_json_ex_with_progress"
+removed = "call sonare_analyze_json with progress_callback, progress_user_data, cancel_callback and cancel_user_data set in SonareMusicAnalyzeOptions"
+domain = "analysis"
+rule = "progress-callback"
+[[entry]]
+kind = "function"
+old = "sonare_engine_drain_meter_telemetry"
+changed = "fills SonareMeterTelemetryRecord, which now carries input_peak_db_l and input_peak_db_r after dropped_records (88 bytes); this is the former sonare_engine_drain_meter_telemetry_v2 under the unsuffixed name"
+domain = "engine"
+rule = "options-struct"
+test = "tests/api/sonare_c_engine_routing_test.cpp::C engine master meter carries pre-trim input and compressor reduction"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_drain_meter_telemetry_v2"
+removed = "call sonare_engine_drain_meter_telemetry, which now fills the record with the input peaks"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_drain_meter_telemetry_wide"
+changed = "fills SonareMeterTelemetryRecordWide, which now carries input_peak_db[] after dropped_records (192 bytes); this is the former sonare_engine_drain_meter_telemetry_wide_v2 under the unsuffixed name"
+domain = "engine"
+rule = "options-struct"
+test = "tests/api/sonare_c_engine_routing_test.cpp::C engine wide meter carries pre-trim input and compressor reduction"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_drain_meter_telemetry_wide_v2"
+removed = "call sonare_engine_drain_meter_telemetry_wide, which now fills the record with the input peaks"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterTelemetryRecord"
+changed = "the record is 88 bytes and ends with input_peak_db_l and input_peak_db_r; it replaces SonareMeterTelemetryRecordV2"
+domain = "engine"
+rule = "options-struct"
+test = "tests/api/sonare_c_engine_routing_test.cpp::C engine master meter carries pre-trim input and compressor reduction"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterTelemetryRecordWide"
+changed = "the record is 192 bytes and ends with input_peak_db[SONARE_METER_MAX_CHANNELS]; it replaces SonareMeterTelemetryRecordWideV2"
+domain = "engine"
+rule = "options-struct"
+test = "tests/api/sonare_c_engine_routing_test.cpp::C engine wide meter carries pre-trim input and compressor reduction"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterTelemetryRecordV2"
+removed = "use SonareMeterTelemetryRecord, which carries the same fields"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterTelemetryRecordWideV2"
+removed = "use SonareMeterTelemetryRecordWide, which carries the same fields"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_render_offline"
+changed = "takes a trailing const SonareEngineRenderOfflineOptions* (NULL renders and finalizes as before); initialise the options with sonare_engine_render_offline_options_init and set finalize to 0 for a chunk"
+domain = "engine"
+rule = "options-struct"
+test = "tests/api/sonare_c_engine_bounce_test.cpp::offline render/bounce/freeze reject a never-prepared engine"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_render_offline_ex"
+removed = "call sonare_engine_render_offline with a SonareEngineRenderOfflineOptions filled by sonare_engine_render_offline_options_init, setting finalize there"
+domain = "engine"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_read_frames_u8"
+changed = "takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults)"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_read_frames_u8_ex"
+removed = "call sonare_stream_analyzer_read_frames_u8, which now takes the config"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_read_frames_i16"
+changed = "takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults)"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_read_frames_i16_ex"
+removed = "call sonare_stream_analyzer_read_frames_i16, which now takes the config"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareTransportState.bar_count"
+new = "SonareTransportState.bar_index"
+domain = "engine"
+rule = "individual"
+[[entry]]
+kind = "function"
+old = "sonare_align_take_to_reference"
+changed = "takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice"
+domain = "project"
+rule = "options-struct"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C ABI take alignment produces anchors the project warp map accepts"
+
+[[entry]]
+kind = "function"
+old = "sonare_align_take_to_reference_ex"
+removed = "call sonare_align_take_to_reference, which now takes the reference and take sample rates"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_add_automation_lane"
+changed = "takes the descriptor that carries target_kind; set target_kind to SONARE_AUTOMATION_TARGET_OPAQUE for a host-defined lane"
+domain = "project"
+rule = "options-struct"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI automation lane add / edit / remove with undo"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_add_automation_lane_ex"
+removed = "call sonare_project_add_automation_lane with the SonareAutomationLaneDesc that carries target_kind"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_edit_automation_lane"
+changed = "takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor"
+domain = "project"
+rule = "options-struct"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI typed automation lane add/edit applies the descriptor kind"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_edit_automation_lane_ex"
+removed = "call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareAutomationLaneDescEx"
+removed = "use SonareAutomationLaneDesc, which now carries target_kind"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "SonareAutomationLaneDesc"
+changed = "gains target_kind between target_param_id and points; the layout is the former SonareAutomationLaneDescEx"
+domain = "project"
+rule = "options-struct"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI typed automation lane add/edit applies the descriptor kind"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_analyze_tempo"
+changed = "takes a const SonareProjectTempoOptions* (NULL for defaults) before candidates; initialise the options with sonare_project_tempo_options_init"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_editing_test.cpp::project tempo analysis exposes ranked candidates and applies detected meter"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_analyze_tempo_with_options"
+removed = "call sonare_project_analyze_tempo, which takes the options"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_auto_tempo"
+changed = "takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_editing_test.cpp::project tempo options reach the bridge and default to one tempo per take"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_auto_tempo_ex"
+removed = "call sonare_project_auto_tempo with NULL options, candidate_index and apply_time_signatures"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_auto_tempo_with_options"
+removed = "call sonare_project_auto_tempo, which takes the options"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bake_midi_fx"
+changed = "takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface MIDI-FX bake reports per-event provenance"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bake_midi_fx_ex"
+removed = "call sonare_project_bake_midi_fx, which takes the provenance outputs"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_marker"
+changed = "takes a const SonareProjectMarker* (id, kind, key signature, ppq, name) and out_marker_id; set marker.id to 0 to allocate a new id"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface set_marker stores kind and key signature"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_marker_ex"
+removed = "call sonare_project_set_marker, which takes the SonareProjectMarker"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_snap_to_grid"
+changed = "takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_editing_test.cpp::snap_to_grid snaps a near-beat coordinate to the beat line"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_snap_to_grid_ex"
+removed = "call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectTempoSegment.start_sample"
+removed = "drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0"
+domain = "project"
+rule = "options-struct"

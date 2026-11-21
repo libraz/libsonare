@@ -305,7 +305,7 @@ TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time sign
   REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
   REQUIRE(state.time_signature.numerator == 3);
   REQUIRE(state.time_signature.denominator == 4);
-  REQUIRE(state.bar_count >= 0);
+  REQUIRE(state.bar_index >= 0);
   REQUIRE(std::isfinite(state.bar_start_ppq));
 
   sonare_engine_destroy(engine);
@@ -821,7 +821,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(telemetry[written - 1].render_frame == 0);
   REQUIRE(telemetry[written - 1].timeline_sample == 48000 + 128);
 
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128, nullptr) == SONARE_OK);
   SonareEngineBounceOptions bounce_options;
   sonare_engine_bounce_options_init(&bounce_options);
   bounce_options.total_frames = 128;
@@ -1092,7 +1092,7 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
   std::array<float, 128> left{};
   std::array<float, 128> right{};
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128, nullptr) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.125f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
   REQUIRE(left[127] == Catch::Approx(0.125f).margin(0.0001f));
@@ -1479,7 +1479,7 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   std::array<float, 8> frozen_out{};
   float* channels[] = {frozen_out.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels, 1, 8, 4) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 1, 8, 4, nullptr) == SONARE_OK);
   for (size_t i = 0; i < frozen_out.size(); ++i) {
     REQUIRE(frozen_out[i] == Catch::Approx(static_cast<float>(i + 1)).margin(0.0001f));
   }
@@ -1524,7 +1524,7 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[
   std::array<float, 128> left{};
   std::array<float, 128> right{};
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128, nullptr) == SONARE_OK);
   for (size_t i = 0; i < left.size(); ++i) {
     REQUIRE(left[i] == Catch::Approx(0.0f).margin(0.0001f));
     REQUIRE(right[i] == Catch::Approx(0.0f).margin(0.0001f));

@@ -79,7 +79,8 @@ TEST_CASE("mfcc_to_mel refusals are owned by the core function", "[conformance][
     CHECK(sonare::mfcc_to_mel(mfcc.data(), n_mfcc, n_frames, n_mels).size() ==
           static_cast<size_t>(n_mels) * n_frames);
     SonareInverseResult out{};
-    REQUIRE(sonare_mfcc_to_mel_ex(mfcc.data(), n_mfcc, n_frames, n_mels, 0.0f, &out) == SONARE_OK);
+    REQUIRE(sonare_mfcc_to_mel(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, nullptr, &out) ==
+            SONARE_OK);
     sonare_free_inverse_result(&out);
   }
 
@@ -97,14 +98,14 @@ TEST_CASE("mfcc_to_mel refusals are owned by the core function", "[conformance][
         [&] { sonare::mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, config, 1, 22050); }, message);
 
     SonareInverseResult out{};
-    CHECK(sonare_mfcc_to_mel_ex(mfcc.data(), n_mfcc, n_frames, n_mels, 0.0f, &out) ==
+    CHECK(sonare_mfcc_to_mel(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
     float* audio = nullptr;
     size_t audio_length = 0;
-    CHECK(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, 22050, 2048, 512, 0.0f,
-                                   0.0f, 0, 0.0f, 1, &audio,
-                                   &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, 22050, 2048, 512,
+                               0.0f, 0.0f, 1, nullptr, &audio,
+                               &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }
@@ -130,8 +131,8 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
     CHECK(sonare::mel_to_audio(mel.data(), n_mels, n_frames, config, n_iter, kRate).size() > 0);
     float* audio = nullptr;
     size_t audio_length = 0;
-    REQUIRE(sonare_mel_to_audio_ex(mel.data(), n_mels, n_frames, kRate, kFft, kHop, 0.0f, 0.0f, 0,
-                                   n_iter, &audio, &audio_length) == SONARE_OK);
+    REQUIRE(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, kRate, kFft, kHop, 0.0f,
+                                0.0f, n_iter, nullptr, &audio, &audio_length) == SONARE_OK);
     sonare_free_floats(audio);
   }
 
@@ -146,16 +147,17 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
         message);
     float* audio = nullptr;
     size_t audio_length = 0;
-    CHECK(sonare_mel_to_audio_ex(mel.data(), n_mels, n_frames, kRate, kFft, kHop, 0.0f, 0.0f, 0,
-                                 n_iter, &audio, &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, kRate, kFft, kHop, 0.0f,
+                              0.0f, n_iter, nullptr, &audio,
+                              &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 
   const auto run = [&](int n_fft, int hop, SonareError expected) {
     float* audio = nullptr;
     size_t audio_length = 0;
-    REQUIRE(sonare_mel_to_audio_ex(mel.data(), n_mels, n_frames, kRate, n_fft, hop, 0.0f, 0.0f, 0,
-                                   1, &audio, &audio_length) == expected);
+    REQUIRE(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, kRate, n_fft, hop, 0.0f,
+                                0.0f, 1, nullptr, &audio, &audio_length) == expected);
     std::vector<float> result(audio, audio + audio_length);
     sonare_free_floats(audio);
     return result;
@@ -198,8 +200,9 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
     CHECK(sonare::mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, config, n_iter, kRate).size() > 0);
     float* audio = nullptr;
     size_t audio_length = 0;
-    REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, 2048, 512, 0.0f,
-                                     0.0f, 0, 0.0f, n_iter, &audio, &audio_length) == SONARE_OK);
+    REQUIRE(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, kRate, 2048,
+                                 512, 0.0f, 0.0f, n_iter, nullptr, &audio,
+                                 &audio_length) == SONARE_OK);
     sonare_free_floats(audio);
   }
 
@@ -214,17 +217,17 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
         message);
     float* audio = nullptr;
     size_t audio_length = 0;
-    CHECK(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, 2048, 512, 0.0f,
-                                   0.0f, 0, 0.0f, n_iter, &audio,
-                                   &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, kRate, 2048, 512,
+                               0.0f, 0.0f, n_iter, nullptr, &audio,
+                               &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 
   const auto run = [&](int n_fft, int hop, SonareError expected) {
     float* audio = nullptr;
     size_t audio_length = 0;
-    REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, n_fft, hop, 0.0f,
-                                     0.0f, 0, 0.0f, 1, &audio, &audio_length) == expected);
+    REQUIRE(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, kRate, n_fft,
+                                 hop, 0.0f, 0.0f, 1, nullptr, &audio, &audio_length) == expected);
     std::vector<float> result(audio, audio + audio_length);
     sonare_free_floats(audio);
     return result;

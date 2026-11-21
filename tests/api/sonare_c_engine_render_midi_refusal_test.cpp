@@ -57,25 +57,25 @@ TEST_CASE("engine offline render refuses a NULL argument and an out-of-domain co
   float right[16] = {};
   float* planes[] = {left, right};
 
-  CHECK(sonare_engine_render_offline_ex(nullptr, planes, 2, 16, 0, 1) ==
+  CHECK(sonare_engine_render_offline(nullptr, planes, 2, 16, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "engine must not be NULL");
-  CHECK(sonare_engine_render_offline_ex(engine, nullptr, 2, 16, 0, 1) ==
+  CHECK(sonare_engine_render_offline(engine, nullptr, 2, 16, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL");
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 0, 16, 0, 1) ==
+  CHECK(sonare_engine_render_offline(engine, planes, 0, 16, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "num_channels must be an integer in [1, 2147483647]");
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 2, -1, 0, 1) ==
+  CHECK(sonare_engine_render_offline(engine, planes, 2, -1, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "total_frames must be an integer of at least 0");
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 2, 16, -1, 1) ==
+  CHECK(sonare_engine_render_offline(engine, planes, 2, 16, -1, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "block_size must be an integer in [0, 2147483647]");
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 3, 16, 0, 1) ==
+  CHECK(sonare_engine_render_offline(engine, planes, 3, 16, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "num_channels must be an integer in [1, 2]");
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 2, 16, 256, 1) ==
+  CHECK(sonare_engine_render_offline(engine, planes, 2, 16, 256, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "block_size must be an integer in [1, 128]");
 
@@ -226,7 +226,8 @@ TEST_CASE("engine offline entries on an unprepared engine record a text without 
   float* planes[] = {left};
   const std::string not_prepared = "the engine has not been prepared";
 
-  CHECK(sonare_engine_render_offline_ex(engine, planes, 1, 16, 0, 1) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_render_offline(engine, planes, 1, 16, 0, nullptr) ==
+        SONARE_ERROR_INVALID_STATE);
   CHECK(last_error() == not_prepared);
   CHECK(sonare_engine_finish_offline_render(engine) == SONARE_ERROR_INVALID_STATE);
   CHECK(last_error() == not_prepared);
@@ -270,12 +271,6 @@ TEST_CASE("engine telemetry drains refuse a NULL buffer by name", "[c_api][engin
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL when max_records is not 0");
   CHECK(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 1, &count) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "out must not be NULL when max_records is not 0");
-  CHECK(sonare_engine_drain_meter_telemetry_v2(engine, nullptr, 1, &count) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "out must not be NULL when max_records is not 0");
-  CHECK(sonare_engine_drain_meter_telemetry_wide_v2(engine, nullptr, 1, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL when max_records is not 0");
   CHECK(sonare_engine_drain_scope_telemetry(engine, nullptr, 1, &count) ==

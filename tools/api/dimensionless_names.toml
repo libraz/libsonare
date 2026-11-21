@@ -49,7 +49,6 @@ names = [
   "Audio.pitch_yin(threshold)",
   "PitchYinRequest.threshold",
   "analyze_melody(threshold)",
-  "analyze_melody_ex(threshold)",
   "AnalyzeMelodyRequest.threshold",
   "MelodyOptions.threshold",
   "pitch --threshold",

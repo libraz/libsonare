@@ -401,22 +401,22 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
   pan_a_point.ppq = 0.0;
   pan_a_point.value = -1.0f;
   pan_a_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDescEx pan_a{};
+  SonareAutomationLaneDesc pan_a{};
   // Persistent ids intentionally use the legacy mixer values. The typed kind,
   // not this edit-time id, selects the reserved per-track playback route.
   pan_a.target_param_id = 2;  // TrackMixerRuntime::kPan
   pan_a.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   pan_a.points = &pan_a_point;
   pan_a.point_count = 1;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, track_a, &pan_a, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, track_a, &pan_a, nullptr) == SONARE_OK);
 
   SonareAutomationPoint pan_b_point{};
   pan_b_point.ppq = 0.0;
   pan_b_point.value = 1.0f;
   pan_b_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDescEx pan_b = pan_a;
+  SonareAutomationLaneDesc pan_b = pan_a;
   pan_b.points = &pan_b_point;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, track_b, &pan_b, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, track_b, &pan_b, nullptr) == SONARE_OK);
 
   // First establish the asymmetric, hard-panned per-owner baseline. A lane
   // accidentally applied to the opposite source would exchange these planes.
@@ -428,12 +428,12 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
   fader_point.ppq = 0.0;
   fader_point.value = -6.0206f;
   fader_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDescEx fader{};
+  SonareAutomationLaneDesc fader{};
   fader.target_param_id = 1;  // TrackMixerRuntime::kFaderDb
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = &fader_point;
   fader.point_count = 1;
-  REQUIRE(sonare_project_add_automation_lane_ex(project, track_a, &fader, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_add_automation_lane(project, track_a, &fader, nullptr) == SONARE_OK);
 
   const StereoEnergy fader_a_once = bounce_energy();
   const double left_ratio = fader_a_once.left / panned.left;
@@ -2932,12 +2932,12 @@ TEST_CASE("typed track fader automation remains a single gain stage in bounce",
 
     if (with_typed_lane) {
       const SonareAutomationPoint point = {0.0, -6.0206f, SONARE_CURVE_HOLD};
-      SonareAutomationLaneDescEx lane{};
+      SonareAutomationLaneDesc lane{};
       lane.target_param_id = 1;  // TrackMixerRuntime::kFaderDb.
       lane.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
       lane.points = &point;
       lane.point_count = 1;
-      REQUIRE(sonare_project_add_automation_lane_ex(project, track, &lane, nullptr) == SONARE_OK);
+      REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
     }
 
     SonareProjectBounceOptions options;

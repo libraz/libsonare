@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the node facade binds under another name, sorted.
-inline constexpr std::array<Override, 40> kOverrides = {{
+inline constexpr std::array<Override, 39> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"downmix", "num_channels", "channels"},
@@ -50,7 +50,6 @@ inline constexpr std::array<Override, 40> kOverrides = {{
     {"project_import_clip_file", "bytes", "data"},
     {"project_import_smf", "bytes", "data"},
     {"project_move_clip", "new_track_id", "trackId"},
-    {"project_set_marker", "marker_id", "id"},
     {"project_set_overlap_policy", "overlap_policy", "policy"},
     {"realtime_voice_changer_process_mono", "input", "samples"},
     {"realtime_voice_changer_process_mono_with_carrier", "input", "samples"},

@@ -110,16 +110,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonarePolyphonicConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_polyphonic_config_init, after which every field is read literally and range-checked (a 0 is a 0, so min_frame_peak_ratio, min_separation_cents, min_ridge_peak_ratio and min_ridge_duration_ms take 0 directly and refuse a negative); reattack_ratio moves beside the other tracking fields; win_length 0 (n_fft), max_refine_hz 0 (derived) and reattack_ratio 0 (no split) keep their named meanings |
 | `SonareTranscribeConfig.reattack_ratio` | 0 now means no split (1.x: 0 was the default 2.0 and a negative value meant no split); a non-zero value must be finite and above 1 |
 | `sonare_griffin_lim` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mel_to_audio_checked_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mel_to_audio_checked` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mel_to_audio_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mel_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio_checked_ex2` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio_checked_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio_checked` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio_ex2` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mfcc_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
+| `sonare_mel_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct |
+| `sonare_mfcc_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct |
 | `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced_flags, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced_flags is non-NULL, and voiced flags read as 0/1 probabilities |
 
 #### Closed sets are string unions, not numbers or IntEnums
@@ -133,8 +125,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_analyze_json_with_progress_ex` | removed: call sonare_analyze_json_ex_with_progress with options NULL, passing the same cancel_cb and cancel_user_data |
-| `sonare_analyze_json_with_progress` | removed: call sonare_analyze_json_ex_with_progress with options NULL and cancel_cb NULL |
+| `sonare_analyze_json_ex_with_progress` | removed: call sonare_analyze_json with progress_callback, progress_user_data, cancel_callback and cancel_user_data set in SonareMusicAnalyzeOptions |
+| `sonare_analyze_json_with_progress_ex` | removed: call sonare_analyze_json with SonareMusicAnalyzeOptions carrying progress_callback, cancel_callback and their user data |
+| `sonare_analyze_json_with_progress` | removed: call sonare_analyze_json with options NULL, or with SonareMusicAnalyzeOptions carrying progress_callback |
 
 #### Public tempo searches default to 60-200 BPM
 
@@ -163,18 +156,74 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonarePolyphonicConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_polyphonic_config_init |
 | `SonareTranscribeConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_transcribe_config_init |
 | `SonareTranscribeResult.struct_version` | removed: the field is gone; read the result's other fields directly |
+| `sonare_analyze_impulse_response_ex` | removed: call sonare_analyze_impulse_response with SonareAnalyzeImpulseResponseOptions min_decay_db set |
+| `sonare_analyze_impulse_response` | takes const SonareAnalyzeImpulseResponseOptions* options (NULL = defaults; sonare_analyze_impulse_response_options_init) before out; min_decay_db moved into the struct |
+| `sonare_analyze_json_ex` | removed: call sonare_analyze_json, which takes the SonareMusicAnalyzeOptions |
+| `sonare_analyze_melody_ex` | removed: call sonare_analyze_melody with SonareAnalyzeMelodyOptions use_pyin and center set |
+| `sonare_analyze_melody` | takes const SonareAnalyzeMelodyOptions* options (NULL = defaults; sonare_analyze_melody_options_init) before out; use_pyin and center moved into the struct |
 | `sonare_analyze_sections(hop_length)` | removed: set SonareSectionOptions.hop_length on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(min_section_sec)` | removed: set SonareSectionOptions.min_section_sec on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections(n_fft)` | removed: set SonareSectionOptions.n_fft on the options passed to sonare_analyze_sections |
 | `sonare_analyze_sections` | takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold |
 | `sonare_boundary_options_default` | removed: call sonare_boundary_options_init(&config) on a caller-owned struct instead |
+| `sonare_chroma_cens_ex` | removed: call sonare_chroma_cens with SonareChromaCensOptions bins_per_octave set |
+| `sonare_chroma_cens` | takes const SonareChromaCensOptions* options (NULL = defaults; sonare_chroma_cens_options_init) before out; bins_per_octave moved into the struct |
+| `sonare_chroma_cqt_ex` | removed: call sonare_chroma_cqt with SonareChromaCqtOptions bins_per_octave set |
+| `sonare_chroma_cqt` | takes const SonareChromaCqtOptions* options (NULL = defaults; sonare_chroma_cqt_options_init) before out; bins_per_octave moved into the struct |
+| `sonare_cqt_to_audio_checked` | removed: call sonare_cqt_to_audio, which now takes input_length after magnitude |
+| `sonare_cqt_to_audio` | takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_cqt_to_audio_checked is the only behaviour |
+| `sonare_detect_chords_ex` | removed: call sonare_detect_chords, which takes the const SonareChordDetectionOptions* options |
+| `sonare_detect_chords` | takes const SonareChordDetectionOptions* options (NULL = defaults; sonare_chord_detection_options_init) in place of min_duration_sec, smoothing_window_sec, threshold, use_triads_only, n_fft, hop_length and use_beat_sync |
+| `sonare_detect_key_candidates_with_extended_options` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions profile_type and genre_hint set |
+| `sonare_detect_key_candidates_with_modes` | removed: call sonare_detect_key_candidates with SonareDetectKeyOptions modes and mode_count set |
+| `sonare_detect_key_candidates` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) after sample_rate, plus a nullable out_tuning_cents after out_count; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
+| `sonare_detect_key_with_extended_options` | removed: call sonare_detect_key with SonareDetectKeyOptions profile_type and genre_hint set |
+| `sonare_detect_key_with_options_and_modes` | removed: call sonare_detect_key with SonareDetectKeyOptions modes and mode_count set |
+| `sonare_detect_key_with_options` | removed: call sonare_detect_key with SonareDetectKeyOptions n_fft, hop_length, use_hpss, loudness_weighted and chroma_high_pass_hz set |
+| `sonare_detect_key_with_tuning` | removed: call sonare_detect_key with SonareDetectKeyOptions tuning_cents and tuning_auto set, and out_tuning_cents |
+| `sonare_detect_key` | takes const SonareDetectKeyOptions* options (NULL = defaults; sonare_detect_key_options_init) before out_key, plus a nullable out_tuning_cents after it; the chroma settings, mode set, profile, genre hint and tuning moved into the struct |
+| `sonare_detect_onsets_ex` | removed: call sonare_detect_onsets, which takes the SonareOnsetDetectConfig |
+| `sonare_detect_onsets` | takes const SonareOnsetDetectConfig* config (NULL = defaults; sonare_onset_detect_config_init) after sample_rate |
 | `sonare_downmix_ex` | removed: call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there |
 | `sonare_downmix` | takes num_channels as size_t and a const SonareDownmixOptions* (NULL for defaults) before out_samples; initialise the options with sonare_downmix_options_init |
+| `sonare_mel_spectrogram_ex` | removed: call sonare_mel_spectrogram with SonareMelSpectrogramOptions fmin_hz, fmax_hz and htk set |
+| `sonare_mel_spectrogram` | takes const SonareMelSpectrogramOptions* options (NULL = defaults; sonare_mel_spectrogram_options_init) before out; fmin_hz, fmax_hz and htk moved into the struct |
+| `sonare_mel_to_audio_checked_ex` | removed: call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set |
+| `sonare_mel_to_audio_checked` | removed: call sonare_mel_to_audio, which now takes input_length after mel |
+| `sonare_mel_to_audio_ex` | removed: call sonare_mel_to_audio with input_length and SonareMelToAudioOptions htk set |
+| `sonare_mel_to_stft_checked_ex` | removed: call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set |
+| `sonare_mel_to_stft_checked` | removed: call sonare_mel_to_stft, which now takes input_length after mel |
+| `sonare_mel_to_stft_ex` | removed: call sonare_mel_to_stft with input_length and SonareMelToStftOptions htk set |
+| `sonare_mel_to_stft` | takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToStftOptions* options (NULL = defaults; sonare_mel_to_stft_options_init) before out; htk moved into the struct |
 | `sonare_meter_options_default` | removed: call sonare_meter_options_init(&config) on a caller-owned struct instead |
+| `sonare_mfcc_ex` | removed: call sonare_mfcc with SonareMfccOptions fmin_hz, fmax_hz, htk and lifter set |
+| `sonare_mfcc_to_audio_checked_ex2` | removed: call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk and lifter set |
+| `sonare_mfcc_to_audio_checked_ex` | removed: call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk set |
+| `sonare_mfcc_to_audio_checked` | removed: call sonare_mfcc_to_audio, which now takes input_length after coefficients |
+| `sonare_mfcc_to_audio_ex2` | removed: call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk and lifter set |
+| `sonare_mfcc_to_audio_ex` | removed: call sonare_mfcc_to_audio with input_length and SonareMfccToAudioOptions htk set |
+| `sonare_mfcc_to_mel_checked_ex` | removed: call sonare_mfcc_to_mel with input_length and SonareMfccToMelOptions lifter set |
+| `sonare_mfcc_to_mel_checked` | removed: call sonare_mfcc_to_mel, which now takes input_length after coefficients |
+| `sonare_mfcc_to_mel_ex` | removed: call sonare_mfcc_to_mel with input_length and SonareMfccToMelOptions lifter set |
+| `sonare_mfcc_to_mel` | takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToMelOptions* options (NULL = defaults; sonare_mfcc_to_mel_options_init) before out; lifter moved into the struct |
+| `sonare_mfcc` | takes const SonareMfccOptions* options (NULL = defaults; sonare_mfcc_options_init) before out; fmin_hz, fmax_hz, htk and lifter moved into the struct |
 | `sonare_music_analyze_options_default` | removed: call sonare_music_analyze_options_init(&config) on a caller-owned struct instead |
+| `sonare_nnls_chroma_ex2` | removed: call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight, stft_blend_n_fft and hop_length set |
+| `sonare_nnls_chroma_ex` | removed: call sonare_nnls_chroma with SonareNnlsChromaOptions enable_stft_blend, stft_blend_weight and stft_blend_n_fft set |
+| `sonare_nnls_chroma` | takes const SonareNnlsChromaOptions* options (NULL = defaults; sonare_nnls_chroma_options_init) before out; enable_stft_blend, stft_blend_weight, stft_blend_n_fft and hop_length moved into the struct |
+| `sonare_spectral_bandwidth_ex` | removed: call sonare_spectral_bandwidth with SonareSpectralBandwidthOptions p set |
+| `sonare_spectral_bandwidth` | takes const SonareSpectralBandwidthOptions* options (NULL = defaults; sonare_spectral_bandwidth_options_init) before out; p moved into the struct |
+| `sonare_split_silence_common_ex` | removed: call sonare_split_silence_common, which takes the nullable out_report |
+| `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added |
 | `sonare_stream_analyzer_config_default` | removed: call sonare_stream_config_init(&config) on a caller-owned struct instead |
+| `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_frames_i16, which now takes the config |
+| `sonare_stream_analyzer_read_frames_i16` | takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
+| `sonare_stream_analyzer_read_frames_u8_ex` | removed: call sonare_stream_analyzer_read_frames_u8, which now takes the config |
+| `sonare_stream_analyzer_read_frames_u8` | takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
 | `sonare_stream_quantize_config_default` | removed: call sonare_stream_quantize_config_init(&config) on a caller-owned struct instead |
 | `sonare_transcribe_config_default` | removed: call sonare_transcribe_config_init(&config) on a caller-owned struct instead |
+| `sonare_vqt_to_audio_checked` | removed: call sonare_vqt_to_audio, which now takes input_length after magnitude |
+| `sonare_vqt_to_audio` | takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_vqt_to_audio_checked is the only behaviour |
 
 #### C results are released by a function named after the result
 
@@ -206,13 +255,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMusicAnalyzeOptions.chroma_highpass_hz` | `SonareMusicAnalyzeOptions.chroma_high_pass_hz` |
-| `sonare_detect_key_candidates(high_pass_hz)` | `sonare_detect_key_candidates(chroma_high_pass_hz)` |
-| `sonare_detect_key_candidates_with_extended_options(high_pass_hz)` | `sonare_detect_key_candidates_with_extended_options(chroma_high_pass_hz)` |
-| `sonare_detect_key_candidates_with_modes(high_pass_hz)` | `sonare_detect_key_candidates_with_modes(chroma_high_pass_hz)` |
-| `sonare_detect_key_with_extended_options(high_pass_hz)` | `sonare_detect_key_with_extended_options(chroma_high_pass_hz)` |
-| `sonare_detect_key_with_options(high_pass_hz)` | `sonare_detect_key_with_options(chroma_high_pass_hz)` |
-| `sonare_detect_key_with_options_and_modes(high_pass_hz)` | `sonare_detect_key_with_options_and_modes(chroma_high_pass_hz)` |
-| `sonare_detect_key_with_tuning(high_pass_hz)` | `sonare_detect_key_with_tuning(chroma_high_pass_hz)` |
+| `sonare_detect_key_candidates(high_pass_hz)` | removed: set SonareDetectKeyOptions.chroma_high_pass_hz |
 
 #### Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz
 
@@ -237,9 +280,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareChordDetectionOptions.tuning` | `SonareChordDetectionOptions.tuning_cents` |
 | `SonareMusicAnalyzeOptions.tuning` | `SonareMusicAnalyzeOptions.tuning_cents` |
 | `SonareTranscribeResult.tuning` | `SonareTranscribeResult.tuning_cents` |
-| `sonare_analyze_json` | the document's "tuning" key (a fraction of a semitone) is "tuningCents", in cents |
-| `sonare_detect_key_with_tuning(out_tuning)` | `sonare_detect_key_with_tuning(out_tuning_cents)` |
-| `sonare_detect_key_with_tuning(tuning)` | `sonare_detect_key_with_tuning(tuning_cents)` |
+| `sonare_analyze_json` | the document's "tuning" key (a fraction of a semitone) is "tuningCents", in cents; takes const SonareMusicAnalyzeOptions* options (NULL = defaults) after sample_rate; progress and cancel callbacks are options fields |
 | `sonare_reference_hz_to_tuning` | out_tuning_cents is in cents (1.x: a fraction of a semitone) |
 | `sonare_tuning_to_reference_hz(tuning)` | `sonare_tuning_to_reference_hz(tuning_cents)` |
 | `sonare_tuning_to_reference_hz` | tuning_cents is in cents (1.x: a fraction of a semitone) |
@@ -547,13 +588,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMeterTelemetryRecord.max_true_peak_db` | `SonareMeterTelemetryRecord.max_true_peak_dbtp` |
 | `SonareMeterTelemetryRecord.true_peak_db_l` | `SonareMeterTelemetryRecord.true_peak_dbtp_l` |
 | `SonareMeterTelemetryRecord.true_peak_db_r` | `SonareMeterTelemetryRecord.true_peak_dbtp_r` |
-| `SonareMeterTelemetryRecordV2.max_true_peak_db` | `SonareMeterTelemetryRecordV2.max_true_peak_dbtp` |
-| `SonareMeterTelemetryRecordV2.true_peak_db_l` | `SonareMeterTelemetryRecordV2.true_peak_dbtp_l` |
-| `SonareMeterTelemetryRecordV2.true_peak_db_r` | `SonareMeterTelemetryRecordV2.true_peak_dbtp_r` |
 | `SonareMeterTelemetryRecordWide.max_true_peak_db` | `SonareMeterTelemetryRecordWide.max_true_peak_dbtp` |
 | `SonareMeterTelemetryRecordWide.true_peak_db` | `SonareMeterTelemetryRecordWide.true_peak_dbtp` |
-| `SonareMeterTelemetryRecordWideV2.max_true_peak_db` | `SonareMeterTelemetryRecordWideV2.max_true_peak_dbtp` |
-| `SonareMeterTelemetryRecordWideV2.true_peak_db` | `SonareMeterTelemetryRecordWideV2.true_peak_dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -583,7 +619,17 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SONARE_SYNTH_PATCH_STRUCT_VERSION` | removed: the macro is gone; initialise the struct with sonare_synth_patch_init, which sets struct_size |
 | `SonareEngineSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_engine_sf2_instrument_config_init |
+| `SonareMeterTelemetryRecordV2` | removed: use SonareMeterTelemetryRecord, which carries the same fields |
+| `SonareMeterTelemetryRecordWideV2` | removed: use SonareMeterTelemetryRecordWide, which carries the same fields |
+| `SonareMeterTelemetryRecordWide` | the record is 192 bytes and ends with input_peak_db[SONARE_METER_MAX_CHANNELS]; it replaces SonareMeterTelemetryRecordWideV2 |
+| `SonareMeterTelemetryRecord` | the record is 88 bytes and ends with input_peak_db_l and input_peak_db_r; it replaces SonareMeterTelemetryRecordV2 |
 | `SonareSynthPatch.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_synth_patch_init |
+| `sonare_engine_drain_meter_telemetry_v2` | removed: call sonare_engine_drain_meter_telemetry, which now fills the record with the input peaks |
+| `sonare_engine_drain_meter_telemetry_wide_v2` | removed: call sonare_engine_drain_meter_telemetry_wide, which now fills the record with the input peaks |
+| `sonare_engine_drain_meter_telemetry_wide` | fills SonareMeterTelemetryRecordWide, which now carries input_peak_db[] after dropped_records (192 bytes); this is the former sonare_engine_drain_meter_telemetry_wide_v2 under the unsuffixed name |
+| `sonare_engine_drain_meter_telemetry` | fills SonareMeterTelemetryRecord, which now carries input_peak_db_l and input_peak_db_r after dropped_records (88 bytes); this is the former sonare_engine_drain_meter_telemetry_v2 under the unsuffixed name |
+| `sonare_engine_render_offline_ex` | removed: call sonare_engine_render_offline with a SonareEngineRenderOfflineOptions filled by sonare_engine_render_offline_options_init, setting finalize there |
+| `sonare_engine_render_offline` | takes a trailing const SonareEngineRenderOfflineOptions* (NULL renders and finalizes as before); initialise the options with sonare_engine_render_offline_options_init and set finalize to 0 for a chunk |
 
 #### C constructors return SonareError and an out pointer
 
@@ -606,12 +652,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMeterTelemetryRecordWide.channel_count` | `SonareMeterTelemetryRecordWide.num_channels` |
-| `SonareMeterTelemetryRecordWideV2.channel_count` | `SonareMeterTelemetryRecordWideV2.num_channels` |
 
 #### Other individual changes
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareTransportState.bar_count` | `SonareTransportState.bar_index` |
 | `sonare_playback_renderer_input_channel_count` | `sonare_playback_renderer_num_input_channels` |
 | `sonare_playback_renderer_output_channel_count` | `sonare_playback_renderer_num_output_channels` |
 
@@ -641,7 +687,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareAutomationLaneDescEx` | removed: use SonareAutomationLaneDesc, which now carries target_kind |
+| `SonareAutomationLaneDesc` | gains target_kind between target_param_id and points; the layout is the former SonareAutomationLaneDescEx |
 | `SonareExternalStemImportRequest.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init |
+| `SonareProjectTempoSegment.start_sample` | removed: drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0 |
 | `SonareProjectVocalEditApplyDesc.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareProjectVocalEditApplyResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareProjectVocalEditDependenciesResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
@@ -665,6 +714,23 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareVocalRestoreOptions.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareVocalStateBytes.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareVocalTransition.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
+| `sonare_align_take_to_reference_ex` | removed: call sonare_align_take_to_reference, which now takes the reference and take sample rates |
+| `sonare_align_take_to_reference` | takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice |
+| `sonare_project_add_automation_lane_ex` | removed: call sonare_project_add_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
+| `sonare_project_add_automation_lane` | takes the descriptor that carries target_kind; set target_kind to SONARE_AUTOMATION_TARGET_OPAQUE for a host-defined lane |
+| `sonare_project_analyze_tempo_with_options` | removed: call sonare_project_analyze_tempo, which takes the options |
+| `sonare_project_analyze_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults) before candidates; initialise the options with sonare_project_tempo_options_init |
+| `sonare_project_auto_tempo_ex` | removed: call sonare_project_auto_tempo with NULL options, candidate_index and apply_time_signatures |
+| `sonare_project_auto_tempo_with_options` | removed: call sonare_project_auto_tempo, which takes the options |
+| `sonare_project_auto_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour |
+| `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
+| `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted |
+| `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
+| `sonare_project_edit_automation_lane` | takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor |
+| `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
+| `sonare_project_set_marker` | takes a const SonareProjectMarker* (id, kind, key signature, ppq, name) and out_marker_id; set marker.id to 0 to allocate a new id |
+| `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
+| `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init |
 
 #### C constructors return SonareError and an out pointer
 

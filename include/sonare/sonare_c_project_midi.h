@@ -506,11 +506,9 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 /// canonical timestamp order or the original clip remains unchanged. Malformed JSON returns
 /// SONARE_ERROR_INVALID_FORMAT; invalid values return
 /// SONARE_ERROR_INVALID_PARAMETER.
-SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
-                                        const char* config_json);
-
-/// @brief @ref sonare_project_bake_midi_fx plus per-event provenance, so a host
-///        can carry a selection or an editorial annotation across the bake.
+/// @brief Bakes the MIDI-FX chain into the clip, optionally reporting per-event
+///        provenance so a host can carry a selection or an editorial annotation
+///        across the bake.
 ///
 /// @param out_source_index Optional. Receives, for each transformed event in
 ///        canonical order, the index of the input event it derives from. Every
@@ -533,15 +531,15 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 /// @ref sonare_project_preview_midi_fx_count is for: the transform is
 /// deterministic, so the count it reports is the count this call produces for
 /// the same clip and configuration.
-SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip_id,
-                                           const char* config_json, int32_t* out_source_index,
-                                           size_t out_capacity, size_t* out_count);
+SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
+                                        const char* config_json, int32_t* out_source_index,
+                                        size_t out_capacity, size_t* out_count);
 
-/// @brief Reports how many events @ref sonare_project_bake_midi_fx_ex would
+/// @brief Reports how many events @ref sonare_project_bake_midi_fx would
 ///        produce for @p clip_id under @p config_json, without mutating the
 ///        project. Intended for sizing the provenance buffer.
 /// @param out_count Written only on success and untouched on failure, matching
-///        @ref sonare_project_bake_midi_fx_ex.
+///        @ref sonare_project_bake_midi_fx.
 SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
                                                  const char* config_json, size_t* out_count);
 

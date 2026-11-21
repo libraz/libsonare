@@ -144,7 +144,7 @@ static_assert(sizeof(SonareProjectLoopRecordingDesc) == 6u * sizeof(double),
 ///
 /// Both fields are sample positions at the PROJECT's sample rate: @c warp_sample
 /// on the warped timeline, @c source_sample in the clip's source as the project
-/// resamples it. @ref sonare_align_take_to_reference_ex returns anchors in
+/// resamples it. @ref sonare_align_take_to_reference returns anchors in
 /// reference-rate samples instead; scale both fields by
 /// project_rate / reference_rate before passing them here.
 typedef struct {
@@ -224,7 +224,7 @@ void sonare_take_align_config_init(SonareTakeAlignConfig* config);
 /// caller deciding what is acceptable supplies its own threshold.
 ///
 /// Every count is in chroma hop frames at the REFERENCE sample rate; under
-/// @ref sonare_align_take_to_reference_ex @c take_frames counts the take after
+/// @ref sonare_align_take_to_reference @c take_frames counts the take after
 /// it was resampled to that rate.
 typedef struct {
   /// Mean absolute frame residual of the path around its diagonal trend. A
@@ -234,7 +234,7 @@ typedef struct {
   /// Chroma frames the reference and the take each produced. Their ratio is the
   /// overall rate difference the anchors encode.
   int32_t reference_frames;
-  /// Chroma frames the take produced (after resampling in the _ex call).
+  /// Chroma frames the take produced (after resampling to the reference rate).
   int32_t take_frames;
 } SonareTakeAlignment;
 
@@ -376,53 +376,33 @@ static_assert(sizeof(SonareProjectClipCompSegment) == 4u * sizeof(double),
 ///
 /// @p target_param_id identifies the parameter the lane drives (host-defined,
 /// e.g. a mixer-strip volume parameter id) and must be non-zero; zero is
-/// reserved as the invalid / unset id. @p points is an array of
-/// @p point_count breakpoints (the shared @ref SonareAutomationPoint POD whose
+/// reserved as the invalid / unset id. @p target_kind must be one of
+/// @ref SonareAutomationTargetKind. @p points is an array of @p point_count
+/// breakpoints (the shared @ref SonareAutomationPoint POD whose
 /// @c curve_to_next uses the @ref SonareProjectAutomationCurve ordinals). It may
 /// be NULL only when @p point_count is 0. The breakpoints are copied; the core
 /// does not require them pre-sorted but stores them verbatim.
-typedef struct {
-  uint32_t target_param_id;             ///< Host-defined target parameter id; non-zero.
-  const SonareAutomationPoint* points;  ///< Breakpoints, copied; may be NULL only when count is 0.
-  size_t point_count;                   ///< Number of entries in @p points.
-} SonareAutomationLaneDesc;
-
-#ifdef __cplusplus
-static_assert(offsetof(SonareAutomationLaneDesc, target_param_id) == 0,
-              "AutomationLaneDesc.target_param_id offset");
-static_assert(offsetof(SonareAutomationLaneDesc, points) == sizeof(void*),
-              "AutomationLaneDesc.points offset");
-static_assert(offsetof(SonareAutomationLaneDesc, point_count) == 2u * sizeof(void*),
-              "AutomationLaneDesc.point_count offset");
-static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(void*) + sizeof(size_t),
-              "SonareAutomationLaneDesc layout drift");
-#endif
-
-/// @brief Extended automation lane descriptor carrying a typed target kind.
-///        The target id must be non-zero, and @p target_kind must be one of
-///        @ref SonareAutomationTargetKind. The points contract is identical to
-///        @ref SonareAutomationLaneDesc.
 typedef struct {
   uint32_t target_param_id;                ///< Target parameter id; non-zero.
   SonareAutomationTargetKind target_kind;  ///< A @ref SonareAutomationTargetKind.
   const SonareAutomationPoint* points;  ///< Breakpoints, copied; may be NULL only when count is 0.
   size_t point_count;                   ///< Number of entries in @p points.
-} SonareAutomationLaneDescEx;
+} SonareAutomationLaneDesc;
 
 #ifdef __cplusplus
 static_assert(sizeof(SonareAutomationTargetKind) == sizeof(uint32_t),
               "SonareAutomationTargetKind ABI width drift");
-static_assert(offsetof(SonareAutomationLaneDescEx, target_param_id) == 0,
-              "AutomationLaneDescEx.target_param_id offset");
-static_assert(offsetof(SonareAutomationLaneDescEx, target_kind) == sizeof(uint32_t),
-              "AutomationLaneDescEx.target_kind offset");
-static_assert(offsetof(SonareAutomationLaneDescEx, points) == 2u * sizeof(uint32_t),
-              "AutomationLaneDescEx.points offset");
-static_assert(offsetof(SonareAutomationLaneDescEx, point_count) ==
+static_assert(offsetof(SonareAutomationLaneDesc, target_param_id) == 0,
+              "AutomationLaneDesc.target_param_id offset");
+static_assert(offsetof(SonareAutomationLaneDesc, target_kind) == sizeof(uint32_t),
+              "AutomationLaneDesc.target_kind offset");
+static_assert(offsetof(SonareAutomationLaneDesc, points) == 2u * sizeof(uint32_t),
+              "AutomationLaneDesc.points offset");
+static_assert(offsetof(SonareAutomationLaneDesc, point_count) ==
                   2u * sizeof(uint32_t) + sizeof(void*),
-              "AutomationLaneDescEx.point_count offset");
-static_assert(sizeof(SonareAutomationLaneDescEx) == 2u * sizeof(uint32_t) + 2u * sizeof(void*),
-              "SonareAutomationLaneDescEx layout drift");
+              "AutomationLaneDesc.point_count offset");
+static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(uint32_t) + 2u * sizeof(void*),
+              "SonareAutomationLaneDesc layout drift");
 #endif
 
 // ============================================================================
@@ -525,40 +505,9 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 ///   hand: that one names its arguments the other way round, so passing the
 ///   reference as its reference yields the inverse map and nothing reports it.
 ///
-///   Both signals are read at @p sample_rate, and both anchor axes are in samples
-///   at that rate. A take recorded at another rate goes through
-///   @ref sonare_align_take_to_reference_ex, which this call equals with
-///   @p sample_rate given for both signals.
-/// @param reference The reference timeline -- the guide take, or the backing
-///   track the takes were sung against.
-/// @param take The signal to be placed under it.
-/// @param sample_rate Sample rate of both buffers; must be > 0.
-/// @param config Optional; NULL selects the @ref sonare_take_align_config_init values.
-/// @param out_anchors Receives a heap-owned array of @p out_count anchors,
-///   released with @ref sonare_free_project_warp_anchors. Written on success only.
-/// @param out_alignment Optional; receives how well the alignment was
-///   conditioned. Zeroed on entry, so a caller may read it after any return code.
-/// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, the rate is
-///   not positive, a config field is outside its domain, or the two signals
-///   produce no pair of distinct anchors -- the last of which is what an
-///   unalignable pair looks like, and is reported rather than answered with a map
-///   a caller cannot use.
-/// @note The chroma grid does not shrink with the sample rate, so rates under
-///   roughly 8 kHz cannot carry it and are refused by the measurement rather than
-///   by a bound stated here.
-SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
-                                           const float* take, size_t take_len, int sample_rate,
-                                           const SonareTakeAlignConfig* config,
-                                           SonareProjectWarpAnchor** out_anchors, size_t* out_count,
-                                           SonareTakeAlignment* out_alignment);
-
-/// @brief @ref sonare_align_take_to_reference for a take recorded at a different
-///        sample rate from the reference.
-/// @details When the rates differ the take is resampled to
-///   @p reference_sample_rate first, so both chromagrams share one hop grid; with
-///   equal rates no resampling happens and the result is exactly the single-rate
-///   call's. Anchors keep the single-rate call's orientation (@c warp_sample on
-///   the reference timeline, @c source_sample in the take).
+///   When the rates differ the take is resampled to @p reference_sample_rate
+///   first, so both chromagrams share one hop grid; with equal rates no
+///   resampling happens.
 ///
 ///   **Both anchor axes are in samples at @p reference_sample_rate**, including
 ///   @c source_sample, which therefore indexes the resampled take rather than the
@@ -567,7 +516,8 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 ///   @ref sonare_project_set_warp_map. @c hop_length is in reference-rate samples
 ///   too, and the roughly 8 kHz floor on the chroma grid applies to
 ///   @p reference_sample_rate.
-/// @param reference The reference timeline.
+/// @param reference The reference timeline -- the guide take, or the backing
+///   track the takes were sung against.
 /// @param reference_sample_rate Sample rate of @p reference; must be > 0.
 /// @param take The signal to be placed under it.
 /// @param take_sample_rate Sample rate of @p take; must be > 0.
@@ -577,17 +527,23 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 /// @param out_alignment Optional; receives how well the alignment was
 ///   conditioned, in hop frames at @p reference_sample_rate. Zeroed on entry, so
 ///   a caller may read it after any return code.
-/// @return ::SONARE_ERROR_INVALID_PARAMETER for every refusal of
-///   @ref sonare_align_take_to_reference, for a non-positive rate on either
-///   signal, and when the take resampled to @p reference_sample_rate would exceed
-///   the buffer size limit -- checked before anything is copied.
-SonareError sonare_align_take_to_reference_ex(
-    const float* reference, size_t reference_len, int reference_sample_rate, const float* take,
-    size_t take_len, int take_sample_rate, const SonareTakeAlignConfig* config,
-    SonareProjectWarpAnchor** out_anchors, size_t* out_count, SonareTakeAlignment* out_alignment);
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, a rate is
+///   not positive, a config field is outside its domain, the take resampled to
+///   @p reference_sample_rate would exceed the buffer size limit (checked before
+///   anything is copied), or the two signals produce no pair of distinct anchors
+///   -- the last of which is what an unalignable pair looks like, and is reported
+///   rather than answered with a map a caller cannot use.
+/// @note The chroma grid does not shrink with the sample rate, so rates under
+///   roughly 8 kHz cannot carry it and are refused by the measurement rather than
+///   by a bound stated here.
+SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
+                                           int reference_sample_rate, const float* take,
+                                           size_t take_len, int take_sample_rate,
+                                           const SonareTakeAlignConfig* config,
+                                           SonareProjectWarpAnchor** out_anchors, size_t* out_count,
+                                           SonareTakeAlignment* out_alignment);
 
-/// @brief Releases an anchor array from @ref sonare_align_take_to_reference or
-///        @ref sonare_align_take_to_reference_ex.
+/// @brief Releases an anchor array from @ref sonare_align_take_to_reference.
 void sonare_free_project_warp_anchors(SonareProjectWarpAnchor* anchors);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
@@ -737,27 +693,15 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
                                                const SonareAutomationLaneDesc* desc,
                                                uint32_t* out_target_param_id);
 
-/// @brief Extended form of @ref sonare_project_add_automation_lane carrying a
-/// typed automation target. Legacy add calls create opaque lanes.
-SonareError sonare_project_add_automation_lane_ex(SonareProject* project, uint32_t track_id,
-                                                  const SonareAutomationLaneDescEx* desc,
-                                                  uint32_t* out_target_param_id);
-
 /// @brief Replaces an existing automation lane in place via an undoable edit
 ///        command. @p track_id must reference an existing track and
 ///        @p target_param_id identifies an existing lane on it. The descriptor
 ///        must retain the same target id; changing a lane's identity requires
-///        remove then add.
+///        remove then add. The descriptor's target kind is applied and
+///        typed-target conflicts are rejected atomically.
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
                                                 uint32_t target_param_id,
                                                 const SonareAutomationLaneDesc* desc);
-
-/// @brief Extended form of @ref sonare_project_edit_automation_lane. The
-/// descriptor's target kind is applied and typed-target conflicts are rejected
-/// atomically. The legacy edit form retains the existing lane's kind.
-SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint32_t track_id,
-                                                   uint32_t target_param_id,
-                                                   const SonareAutomationLaneDescEx* desc);
 
 /// @brief Removes an automation lane from a track via an undoable edit command.
 ///        @p track_id must reference an existing track and @p target_param_id

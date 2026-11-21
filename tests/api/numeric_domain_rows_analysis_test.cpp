@@ -36,20 +36,12 @@ SonareError probe_dynamics(const std::string& param, double value) {
 
 SonareError probe_impulse_response(const std::string& param, double value) {
   const int bands = is_param(param, "n_octave_bands") ? static_cast<int>(value) : 6;
+  SonareAnalyzeImpulseResponseOptions options{};
+  sonare_analyze_impulse_response_options_init(&options);
+  if (is_param(param, "min_decay_db")) options.min_decay_db = static_cast<float>(value);
   SonareAcousticResult out{};
   const SonareError err = sonare_analyze_impulse_response(
-      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, bands, &out);
-  if (err == SONARE_OK) sonare_free_acoustic_result(&out);
-  return err;
-}
-
-SonareError probe_impulse_response_ex(const std::string& param, double value) {
-  const int bands = is_param(param, "n_octave_bands") ? static_cast<int>(value) : 6;
-  const float min_decay_db = is_param(param, "min_decay_db") ? static_cast<float>(value) : 30.0f;
-  SonareAcousticResult out{};
-  const SonareError err =
-      sonare_analyze_impulse_response_ex(analysis_samples().data(), analysis_samples().size(),
-                                         kAnalysisRate, bands, min_decay_db, &out);
+      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, bands, &options, &out);
   if (err == SONARE_OK) sonare_free_acoustic_result(&out);
   return err;
 }
@@ -109,20 +101,12 @@ MelodyArguments melody_arguments(const std::string& param, double value) {
 
 SonareError probe_melody(const std::string& param, double value) {
   const MelodyArguments a = melody_arguments(param, value);
+  SonareAnalyzeMelodyOptions options{};
+  sonare_analyze_melody_options_init(&options);
   SonareMelodyResult out{};
   const SonareError err = sonare_analyze_melody(
       analysis_samples().data(), analysis_samples().size(), kAnalysisRate, a.f0_min_hz, a.f0_max_hz,
-      a.frame_length, a.hop_length, a.threshold, &out);
-  if (err == SONARE_OK) sonare_free_melody_result(&out);
-  return err;
-}
-
-SonareError probe_melody_ex(const std::string& param, double value) {
-  const MelodyArguments a = melody_arguments(param, value);
-  SonareMelodyResult out{};
-  const SonareError err = sonare_analyze_melody_ex(
-      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, a.f0_min_hz, a.f0_max_hz,
-      a.frame_length, a.hop_length, a.threshold, 0, 1, &out);
+      a.frame_length, a.hop_length, a.threshold, &options, &out);
   if (err == SONARE_OK) sonare_free_melody_result(&out);
   return err;
 }
@@ -176,87 +160,28 @@ SonareError probe_analyze_rhythm(const std::string& param, double value) {
   return err;
 }
 
-// The key entries share one set of working defaults; each differs only in the trailing arguments.
-SonareError probe_detect_key_with_options(const std::string& param, double value) {
+// The key entries share one options struct; the frame fields are set from the probed value.
+SonareError probe_detect_key(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
+  SonareDetectKeyOptions o;
+  sonare_detect_key_options_init(&o);
+  o.n_fft = f.n_fft;
+  o.hop_length = f.hop_length;
   SonareKey key{};
-  return sonare_detect_key_with_options(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length,
-                                        0, 0, 0.0f, &key);
-}
-
-SonareError probe_detect_key_with_options_and_modes(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareKey key{};
-  return sonare_detect_key_with_options_and_modes(pcm(), pcm_length(), kAnalysisRate, f.n_fft,
-                                                  f.hop_length, 0, 0, 0.0f, nullptr, 0, &key);
-}
-
-SonareError probe_detect_key_with_extended_options(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareKey key{};
-  return sonare_detect_key_with_extended_options(pcm(), pcm_length(), kAnalysisRate, f.n_fft,
-                                                 f.hop_length, 0, 0, 0.0f, nullptr, 0,
-                                                 SONARE_KEY_PROFILE_AUTO, nullptr, &key);
-}
-
-SonareError probe_detect_key_with_tuning(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareKey key{};
-  return sonare_detect_key_with_tuning(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 0,
-                                       0, 0.0f, nullptr, 0, SONARE_KEY_PROFILE_AUTO, nullptr, 0.0f,
-                                       0, &key, nullptr);
+  return sonare_detect_key(pcm(), pcm_length(), kAnalysisRate, &o, &key, nullptr);
 }
 
 SonareError probe_detect_key_candidates(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
+  SonareDetectKeyOptions o;
+  sonare_detect_key_options_init(&o);
+  o.n_fft = f.n_fft;
+  o.hop_length = f.hop_length;
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  const SonareError err = sonare_detect_key_candidates(
-      pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 0, 0, 0.0f, &candidates, &count);
+  const SonareError err = sonare_detect_key_candidates(pcm(), pcm_length(), kAnalysisRate, &o,
+                                                       &candidates, &count, nullptr);
   if (err == SONARE_OK) sonare_free_key_candidates(candidates);
-  return err;
-}
-
-SonareError probe_detect_key_candidates_with_modes(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareKeyCandidate* candidates = nullptr;
-  size_t count = 0;
-  const SonareError err = sonare_detect_key_candidates_with_modes(
-      pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 0, 0, 0.0f, nullptr, 0,
-      &candidates, &count);
-  if (err == SONARE_OK) sonare_free_key_candidates(candidates);
-  return err;
-}
-
-SonareError probe_detect_key_candidates_with_extended_options(const std::string& param,
-                                                              double value) {
-  const Frame f = frame_of(param, value);
-  SonareKeyCandidate* candidates = nullptr;
-  size_t count = 0;
-  const SonareError err = sonare_detect_key_candidates_with_extended_options(
-      pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 0, 0, 0.0f, nullptr, 0,
-      SONARE_KEY_PROFILE_AUTO, nullptr, &candidates, &count);
-  if (err == SONARE_OK) sonare_free_key_candidates(candidates);
-  return err;
-}
-
-SonareError probe_detect_key_candidates_with_tuning(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareKeyCandidate* candidates = nullptr;
-  size_t count = 0;
-  const SonareError err = sonare_detect_key_candidates_with_tuning(
-      pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 0, 0, 0.0f, nullptr, 0,
-      SONARE_KEY_PROFILE_AUTO, nullptr, 0.0f, 0, &candidates, &count, nullptr);
-  if (err == SONARE_OK) sonare_free_key_candidates(candidates);
-  return err;
-}
-
-SonareError probe_detect_chords(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  SonareChordAnalysisResult out{};
-  const SonareError err = sonare_detect_chords(pcm(), pcm_length(), kAnalysisRate, 0.3f, 0.5f, 0.5f,
-                                               1, f.n_fft, f.hop_length, 0, &out);
-  if (err == SONARE_OK) sonare_free_chord_analysis_result(&out);
   return err;
 }
 
@@ -270,11 +195,10 @@ SonareChordDetectionOptions chord_options(const std::string& param, double value
   return options;
 }
 
-SonareError probe_detect_chords_ex(const std::string& param, double value) {
+SonareError probe_detect_chords(const std::string& param, double value) {
   const SonareChordDetectionOptions options = chord_options(param, value);
   SonareChordAnalysisResult out{};
-  const SonareError err =
-      sonare_detect_chords_ex(pcm(), pcm_length(), kAnalysisRate, &options, &out);
+  const SonareError err = sonare_detect_chords(pcm(), pcm_length(), kAnalysisRate, &options, &out);
   if (err == SONARE_OK) sonare_free_chord_analysis_result(&out);
   return err;
 }
@@ -337,20 +261,10 @@ SonareMusicAnalyzeOptions music_options(const std::string& param, double value) 
   return options;
 }
 
-SonareError probe_analyze_json_ex(const std::string& param, double value) {
+SonareError probe_analyze_json(const std::string& param, double value) {
   const SonareMusicAnalyzeOptions options = music_options(param, value);
   char* json = nullptr;
-  const SonareError err =
-      sonare_analyze_json_ex(pcm(), pcm_length(), kAnalysisRate, &options, &json);
-  if (err == SONARE_OK) sonare_free_string(json);
-  return err;
-}
-
-SonareError probe_analyze_json_ex_with_progress(const std::string& param, double value) {
-  const SonareMusicAnalyzeOptions options = music_options(param, value);
-  char* json = nullptr;
-  const SonareError err = sonare_analyze_json_ex_with_progress(
-      pcm(), pcm_length(), kAnalysisRate, &options, nullptr, nullptr, &json, nullptr, nullptr);
+  const SonareError err = sonare_analyze_json(pcm(), pcm_length(), kAnalysisRate, &options, &json);
   if (err == SONARE_OK) sonare_free_string(json);
   return err;
 }
@@ -398,31 +312,23 @@ SonareError finish_chroma(SonareError err, SonareChromaResult* out) {
 
 SonareError probe_chroma_cqt(const std::string& param, double value) {
   const ChromaCqt c = chroma_cqt_of(param, value);
+  SonareChromaCqtOptions options{};
+  sonare_chroma_cqt_options_init(&options);
+  options.bins_per_octave = c.bins_per_octave;
   SonareChromaResult out{};
-  return finish_chroma(
-      sonare_chroma_cqt(pcm(), pcm_length(), kAnalysisRate, c.hop_length, c.n_chroma, &out), &out);
-}
-
-SonareError probe_chroma_cqt_ex(const std::string& param, double value) {
-  const ChromaCqt c = chroma_cqt_of(param, value);
-  SonareChromaResult out{};
-  return finish_chroma(sonare_chroma_cqt_ex(pcm(), pcm_length(), kAnalysisRate, c.hop_length,
-                                            c.n_chroma, c.bins_per_octave, &out),
+  return finish_chroma(sonare_chroma_cqt(pcm(), pcm_length(), kAnalysisRate, c.hop_length,
+                                         c.n_chroma, &options, &out),
                        &out);
 }
 
 SonareError probe_chroma_cens(const std::string& param, double value) {
   const ChromaCqt c = chroma_cqt_of(param, value);
+  SonareChromaCensOptions options{};
+  sonare_chroma_cens_options_init(&options);
+  options.bins_per_octave = c.bins_per_octave;
   SonareChromaResult out{};
-  return finish_chroma(
-      sonare_chroma_cens(pcm(), pcm_length(), kAnalysisRate, c.hop_length, c.n_chroma, &out), &out);
-}
-
-SonareError probe_chroma_cens_ex(const std::string& param, double value) {
-  const ChromaCqt c = chroma_cqt_of(param, value);
-  SonareChromaResult out{};
-  return finish_chroma(sonare_chroma_cens_ex(pcm(), pcm_length(), kAnalysisRate, c.hop_length,
-                                             c.n_chroma, c.bins_per_octave, &out),
+  return finish_chroma(sonare_chroma_cens(pcm(), pcm_length(), kAnalysisRate, c.hop_length,
+                                          c.n_chroma, &options, &out),
                        &out);
 }
 
@@ -495,20 +401,10 @@ SonareError probe_cqt_to_audio(const std::string& param, double value) {
   const Cqt c = cqt_of(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_floats(
-      sonare_cqt_to_audio(planes().data(), c.n_bins, 4, kAnalysisRate, c.hop_length, 130.81f,
-                          c.bins_per_octave, 1, &out, &out_length),
-      out);
-}
-
-SonareError probe_cqt_to_audio_checked(const std::string& param, double value) {
-  const Cqt c = cqt_of(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
   const size_t input_length = c.n_bins > 0 ? static_cast<size_t>(c.n_bins) * 4 : 0;
   return finish_floats(
-      sonare_cqt_to_audio_checked(planes().data(), input_length, c.n_bins, 4, kAnalysisRate,
-                                  c.hop_length, 130.81f, c.bins_per_octave, 1, &out, &out_length),
+      sonare_cqt_to_audio(planes().data(), input_length, c.n_bins, 4, kAnalysisRate, c.hop_length,
+                          130.81f, c.bins_per_octave, 1, &out, &out_length),
       out);
 }
 
@@ -516,21 +412,11 @@ SonareError probe_vqt_to_audio(const std::string& param, double value) {
   const Cqt c = cqt_of(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_floats(
-      sonare_vqt_to_audio(planes().data(), c.n_bins, 4, kAnalysisRate, c.hop_length, 130.81f,
-                          c.bins_per_octave, 0.0f, 1, &out, &out_length),
-      out);
-}
-
-SonareError probe_vqt_to_audio_checked(const std::string& param, double value) {
-  const Cqt c = cqt_of(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
   const size_t input_length = c.n_bins > 0 ? static_cast<size_t>(c.n_bins) * 4 : 0;
-  return finish_floats(sonare_vqt_to_audio_checked(planes().data(), input_length, c.n_bins, 4,
-                                                   kAnalysisRate, c.hop_length, 130.81f,
-                                                   c.bins_per_octave, 0.0f, 1, &out, &out_length),
-                       out);
+  return finish_floats(
+      sonare_vqt_to_audio(planes().data(), input_length, c.n_bins, 4, kAnalysisRate, c.hop_length,
+                          130.81f, c.bins_per_octave, 0.0f, 1, &out, &out_length),
+      out);
 }
 
 SonareError probe_stft(const std::string& param, double value) {
@@ -569,38 +455,22 @@ Mel mel_of(const std::string& param, double value) {
 
 SonareError probe_mel_spectrogram(const std::string& param, double value) {
   const Mel m = mel_of(param, value);
+  SonareMelSpectrogramOptions options{};
+  sonare_mel_spectrogram_options_init(&options);
   SonareMelResult out{};
   const SonareError err = sonare_mel_spectrogram(pcm(), pcm_length(), kAnalysisRate, m.frame.n_fft,
-                                                 m.frame.hop_length, m.n_mels, &out);
-  if (err == SONARE_OK) sonare_free_mel_result(&out);
-  return err;
-}
-
-SonareError probe_mel_spectrogram_ex(const std::string& param, double value) {
-  const Mel m = mel_of(param, value);
-  SonareMelResult out{};
-  const SonareError err =
-      sonare_mel_spectrogram_ex(pcm(), pcm_length(), kAnalysisRate, m.frame.n_fft,
-                                m.frame.hop_length, m.n_mels, 0.0f, 0.0f, 0, &out);
+                                                 m.frame.hop_length, m.n_mels, &options, &out);
   if (err == SONARE_OK) sonare_free_mel_result(&out);
   return err;
 }
 
 SonareError probe_mfcc(const std::string& param, double value) {
   const Mel m = mel_of(param, value);
+  SonareMfccOptions options{};
+  sonare_mfcc_options_init(&options);
   SonareMfccResult out{};
   const SonareError err = sonare_mfcc(pcm(), pcm_length(), kAnalysisRate, m.frame.n_fft,
-                                      m.frame.hop_length, m.n_mels, m.n_mfcc, &out);
-  if (err == SONARE_OK) sonare_free_mfcc_result(&out);
-  return err;
-}
-
-SonareError probe_mfcc_ex(const std::string& param, double value) {
-  const Mel m = mel_of(param, value);
-  SonareMfccResult out{};
-  const SonareError err =
-      sonare_mfcc_ex(pcm(), pcm_length(), kAnalysisRate, m.frame.n_fft, m.frame.hop_length,
-                     m.n_mels, m.n_mfcc, 0.0f, 0.0f, 0, 0.0f, &out);
+                                      m.frame.hop_length, m.n_mels, m.n_mfcc, &options, &out);
   if (err == SONARE_OK) sonare_free_mfcc_result(&out);
   return err;
 }
@@ -823,27 +693,18 @@ SonareError probe_tempogram_ratio(const std::string& param, double value) {
 
 SonareError finish_nnls(SonareError err, float* out) { return finish_floats(err, out); }
 
-SonareError probe_nnls_chroma_ex(const std::string& param, double value) {
-  int blend_n_fft = 2048;
-  if (is_param(param, "stft_blend_n_fft")) blend_n_fft = static_cast<int>(value);
+SonareError probe_nnls_chroma(const std::string& param, double value) {
+  SonareNnlsChromaOptions options{};
+  sonare_nnls_chroma_options_init(&options);
+  options.stft_blend_weight = 0.5f;
+  options.stft_blend_n_fft = 2048;
+  if (is_param(param, "stft_blend_n_fft")) options.stft_blend_n_fft = static_cast<int>(value);
+  if (is_param(param, "hop_length")) options.hop_length = static_cast<int>(value);
   float* out = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
-  return finish_nnls(sonare_nnls_chroma_ex(pcm(), pcm_length(), kAnalysisRate, 1, 0.5f, blend_n_fft,
-                                           &out, &out_length, &n_frames),
-                     out);
-}
-
-SonareError probe_nnls_chroma_ex2(const std::string& param, double value) {
-  int blend_n_fft = 2048;
-  int hop_length = 512;
-  if (is_param(param, "stft_blend_n_fft")) blend_n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  int n_frames = 0;
-  return finish_nnls(sonare_nnls_chroma_ex2(pcm(), pcm_length(), kAnalysisRate, 1, 0.5f,
-                                            blend_n_fft, hop_length, &out, &out_length, &n_frames),
+  return finish_nnls(sonare_nnls_chroma(pcm(), pcm_length(), kAnalysisRate, &options, &out,
+                                        &out_length, &n_frames),
                      out);
 }
 
@@ -956,19 +817,12 @@ SonareError probe_spectral_centroid(const std::string& param, double value) {
 
 SonareError probe_spectral_bandwidth(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
+  SonareSpectralBandwidthOptions options{};
+  sonare_spectral_bandwidth_options_init(&options);
   float* out = nullptr;
   size_t count = 0;
   return finish_spectral(sonare_spectral_bandwidth(pcm(), pcm_length(), kAnalysisRate, f.n_fft,
-                                                   f.hop_length, &out, &count),
-                         out);
-}
-
-SonareError probe_spectral_bandwidth_ex(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  float* out = nullptr;
-  size_t count = 0;
-  return finish_spectral(sonare_spectral_bandwidth_ex(pcm(), pcm_length(), kAnalysisRate, f.n_fft,
-                                                      f.hop_length, 2.0f, &out, &count),
+                                                   f.hop_length, &options, &out, &count),
                          out);
 }
 
@@ -1054,7 +908,7 @@ SonareError probe_polyphonic_analyze(const std::string& param, double value) {
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-SonareError probe_align_take_to_reference_ex(const std::string& param, double value) {
+SonareError probe_align_take_to_reference(const std::string& param, double value) {
   SonareTakeAlignConfig config{};
   sonare_take_align_config_init(&config);
   if (is_param(param, "config.hop_length")) config.hop_length = static_cast<int32_t>(value);
@@ -1065,8 +919,8 @@ SonareError probe_align_take_to_reference_ex(const std::string& param, double va
   size_t count = 0;
   SonareTakeAlignment alignment{};
   const SonareError err =
-      sonare_align_take_to_reference_ex(pcm(), pcm_length(), kAnalysisRate, pcm(), pcm_length(),
-                                        kAnalysisRate, &config, &anchors, &count, &alignment);
+      sonare_align_take_to_reference(pcm(), pcm_length(), kAnalysisRate, pcm(), pcm_length(),
+                                     kAnalysisRate, &config, &anchors, &count, &alignment);
   if (err == SONARE_OK) sonare_free_project_warp_anchors(anchors);
   return err;
 }
@@ -1080,26 +934,26 @@ SonareProjectTempoOptions tempo_options(const std::string& param, double value) 
   return options;
 }
 
-SonareError probe_project_analyze_tempo_with_options(const std::string& param, double value) {
+SonareError probe_project_analyze_tempo(const std::string& param, double value) {
   SonareProject* project = nullptr;
   if (sonare_project_create(&project) != SONARE_OK) return SONARE_ERROR_INVALID_STATE;
   const SonareProjectTempoOptions options = tempo_options(param, value);
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES] = {};
   size_t count = 0;
-  const SonareError err = sonare_project_analyze_tempo_with_options(
-      project, pcm(), pcm_length(), kAnalysisRate, &options, candidates,
-      SONARE_PROJECT_MAX_TEMPO_CANDIDATES, &count);
+  const SonareError err =
+      sonare_project_analyze_tempo(project, pcm(), pcm_length(), kAnalysisRate, &options,
+                                   candidates, SONARE_PROJECT_MAX_TEMPO_CANDIDATES, &count);
   sonare_project_destroy(project);
   return err;
 }
 
-SonareError probe_project_auto_tempo_with_options(const std::string& param, double value) {
+SonareError probe_project_auto_tempo(const std::string& param, double value) {
   SonareProject* project = nullptr;
   if (sonare_project_create(&project) != SONARE_OK) return SONARE_ERROR_INVALID_STATE;
   const SonareProjectTempoOptions options = tempo_options(param, value);
   float bpm = 0.0f;
-  const SonareError err = sonare_project_auto_tempo_with_options(
-      project, pcm(), pcm_length(), kAnalysisRate, &options, 0, 0, &bpm);
+  const SonareError err =
+      sonare_project_auto_tempo(project, pcm(), pcm_length(), kAnalysisRate, &options, 0, 0, &bpm);
   sonare_project_destroy(project);
   return err;
 }
@@ -1109,50 +963,33 @@ const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"analyze_dynamics", probe_dynamics},
       {"analyze_impulse_response", probe_impulse_response},
-      {"analyze_impulse_response_ex", probe_impulse_response_ex},
       {"analyze_melody", probe_melody},
-      {"analyze_melody_ex", probe_melody_ex},
       {"analyze_timbre", probe_timbre},
       {"detect_acoustic", probe_detect_acoustic},
       {"analyze_bpm", probe_analyze_bpm},
       {"analyze_rhythm", probe_analyze_rhythm},
-      {"detect_key_with_options", probe_detect_key_with_options},
-      {"detect_key_with_options_and_modes", probe_detect_key_with_options_and_modes},
-      {"detect_key_with_extended_options", probe_detect_key_with_extended_options},
-      {"detect_key_with_tuning", probe_detect_key_with_tuning},
+      {"detect_key", probe_detect_key},
       {"detect_key_candidates", probe_detect_key_candidates},
-      {"detect_key_candidates_with_modes", probe_detect_key_candidates_with_modes},
-      {"detect_key_candidates_with_extended_options",
-       probe_detect_key_candidates_with_extended_options},
-      {"detect_key_candidates_with_tuning", probe_detect_key_candidates_with_tuning},
       {"detect_chords", probe_detect_chords},
-      {"detect_chords_ex", probe_detect_chords_ex},
       {"chord_functional_analysis", probe_chord_functional_analysis},
       {"analyze_sections", probe_analyze_sections},
       {"detect_boundaries", probe_detect_boundaries},
-      {"analyze_json_ex", probe_analyze_json_ex},
-      {"analyze_json_ex_with_progress", probe_analyze_json_ex_with_progress},
+      {"analyze_json", probe_analyze_json},
       {"estimate_meter_json", probe_estimate_meter_json},
       {"chroma", probe_chroma},
       {"chroma_cqt", probe_chroma_cqt},
-      {"chroma_cqt_ex", probe_chroma_cqt_ex},
       {"chroma_cens", probe_chroma_cens},
-      {"chroma_cens_ex", probe_chroma_cens_ex},
       {"bass_chroma", probe_bass_chroma},
       {"cqt", probe_cqt},
       {"pseudo_cqt", probe_pseudo_cqt},
       {"hybrid_cqt", probe_hybrid_cqt},
       {"vqt", probe_vqt},
       {"cqt_to_audio", probe_cqt_to_audio},
-      {"cqt_to_audio_checked", probe_cqt_to_audio_checked},
       {"vqt_to_audio", probe_vqt_to_audio},
-      {"vqt_to_audio_checked", probe_vqt_to_audio_checked},
       {"stft", probe_stft},
       {"stft_db", probe_stft_db},
       {"mel_spectrogram", probe_mel_spectrogram},
-      {"mel_spectrogram_ex", probe_mel_spectrogram_ex},
       {"mfcc", probe_mfcc},
-      {"mfcc_ex", probe_mfcc_ex},
       {"mel_delta", probe_mel_delta},
       {"onset_strength_multi", probe_onset_strength_multi},
       {"spectral_flux", probe_spectral_flux},
@@ -1170,8 +1007,7 @@ const std::map<std::string, Probe>& probes() {
       {"cyclic_tempogram", probe_cyclic_tempogram},
       {"plp", probe_plp},
       {"tempogram_ratio", probe_tempogram_ratio},
-      {"nnls_chroma_ex", probe_nnls_chroma_ex},
-      {"nnls_chroma_ex2", probe_nnls_chroma_ex2},
+      {"nnls_chroma", probe_nnls_chroma},
       {"griffin_lim", probe_griffin_lim},
       {"tone", probe_tone},
       {"chirp", probe_chirp},
@@ -1184,7 +1020,6 @@ const std::map<std::string, Probe>& probes() {
 #endif
       {"spectral_centroid", probe_spectral_centroid},
       {"spectral_bandwidth", probe_spectral_bandwidth},
-      {"spectral_bandwidth_ex", probe_spectral_bandwidth_ex},
       {"spectral_rolloff", probe_spectral_rolloff},
       {"spectral_flatness", probe_spectral_flatness},
       {"zero_crossing_rate", probe_zero_crossing_rate},
@@ -1196,9 +1031,9 @@ const std::map<std::string, Probe>& probes() {
       {"polyphonic_analyze", probe_polyphonic_analyze},
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
-      {"align_take_to_reference_ex", probe_align_take_to_reference_ex},
-      {"project_analyze_tempo_with_options", probe_project_analyze_tempo_with_options},
-      {"project_auto_tempo_with_options", probe_project_auto_tempo_with_options},
+      {"align_take_to_reference", probe_align_take_to_reference},
+      {"project_analyze_tempo", probe_project_analyze_tempo},
+      {"project_auto_tempo", probe_project_auto_tempo},
 #endif
   };
   return table;

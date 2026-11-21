@@ -142,7 +142,7 @@ typedef struct {
   int n_chroma;              ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFrames;
 
-/// @brief 8-bit quantized frame buffer from sonare_stream_analyzer_read_frames_u8[_ex].
+/// @brief 8-bit quantized frame buffer from sonare_stream_analyzer_read_frames_u8.
 ///
 /// Every array holds values scaled to 0..255 over the quantization range noted per field. Free
 /// with sonare_free_stream_frames_u8.
@@ -161,7 +161,7 @@ typedef struct {
   int n_chroma;                ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFramesU8;
 
-/// @brief 16-bit quantized frame buffer from sonare_stream_analyzer_read_frames_i16[_ex].
+/// @brief 16-bit quantized frame buffer from sonare_stream_analyzer_read_frames_i16.
 ///
 /// Same layout and quantization ranges as SonareStreamFramesU8 with int16 samples. Free with
 /// sonare_free_stream_frames_i16.
@@ -311,31 +311,22 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
                                                SonareStreamFrames* out);
 
 /// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
-///        using the default quantization ranges.
+///        using caller-supplied quantization ranges.
+/// @param config Quantization ranges; started from @ref sonare_stream_quantize_config_init.
+///        NULL = those defaults.
 /// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_u8).
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
-                                                  SonareStreamFramesU8* out);
+SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
+                                                  const SonareStreamQuantizeConfig* config,
+                                                  size_t max_frames, SonareStreamFramesU8* out);
 
 /// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
-///        using the default quantization ranges.
+///        using caller-supplied quantization ranges.
+/// @param config Quantization ranges; started from @ref sonare_stream_quantize_config_init.
+///        NULL = those defaults.
 /// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
+                                                   const SonareStreamQuantizeConfig* config,
                                                    size_t max_frames, SonareStreamFramesI16* out);
-
-/// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
-///        using caller-supplied quantization ranges (NULL @p config = defaults).
-/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_u8).
-SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analyzer,
-                                                     const SonareStreamQuantizeConfig* config,
-                                                     size_t max_frames, SonareStreamFramesU8* out);
-
-/// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
-///        using caller-supplied quantization ranges (NULL @p config = defaults).
-/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
-SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* analyzer,
-                                                      const SonareStreamQuantizeConfig* config,
-                                                      size_t max_frames,
-                                                      SonareStreamFramesI16* out);
 
 /// @brief Resets analyzer state for a new stream.
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer, size_t base_sample_offset);

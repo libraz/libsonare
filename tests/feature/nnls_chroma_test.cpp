@@ -126,8 +126,8 @@ TEST_CASE("sonare_nnls_chroma runs the shared fast profile", "[nnls_chroma][c_ap
   float* data = nullptr;
   size_t length = 0;
   int n_frames = 0;
-  REQUIRE(sonare_nnls_chroma(audio.data(), audio.size(), audio.sample_rate(), &data, &length,
-                             &n_frames) == SONARE_OK);
+  REQUIRE(sonare_nnls_chroma(audio.data(), audio.size(), audio.sample_rate(), nullptr, &data,
+                             &length, &n_frames) == SONARE_OK);
   REQUIRE(n_frames == expected.n_frames());
   REQUIRE(length == static_cast<size_t>(expected.n_chroma()) * expected.n_frames());
   for (size_t i = 0; i < length; ++i) {

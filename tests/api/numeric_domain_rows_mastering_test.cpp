@@ -186,34 +186,9 @@ SonareError finish_audio(SonareError err, float* out) {
 SonareError probe_mel_to_stft(const std::string& param, double value) {
   const InverseArguments a = inverse_arguments(param, value);
   SonareInverseResult out{};
-  return finish_inverse(sonare_mel_to_stft(values().data(), a.n_mels, a.n_frames, a.sample_rate,
-                                           a.n_fft, 0.0f, 0.0f, &out),
-                        &out);
-}
-
-SonareError probe_mel_to_stft_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
-  return finish_inverse(sonare_mel_to_stft_ex(values().data(), a.n_mels, a.n_frames, a.sample_rate,
-                                              a.n_fft, 0.0f, 0.0f, 0, &out),
-                        &out);
-}
-
-SonareError probe_mel_to_stft_checked(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
   return finish_inverse(
-      sonare_mel_to_stft_checked(values().data(), product(a.n_mels, a.n_frames), a.n_mels,
-                                 a.n_frames, a.sample_rate, a.n_fft, 0.0f, 0.0f, &out),
-      &out);
-}
-
-SonareError probe_mel_to_stft_checked_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
-  return finish_inverse(
-      sonare_mel_to_stft_checked_ex(values().data(), product(a.n_mels, a.n_frames), a.n_mels,
-                                    a.n_frames, a.sample_rate, a.n_fft, 0.0f, 0.0f, 0, &out),
+      sonare_mel_to_stft(values().data(), product(a.n_mels, a.n_frames), a.n_mels, a.n_frames,
+                         a.sample_rate, a.n_fft, 0.0f, 0.0f, nullptr, &out),
       &out);
 }
 
@@ -221,73 +196,18 @@ SonareError probe_mel_to_audio(const std::string& param, double value) {
   const InverseArguments a = inverse_arguments(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_audio(
-      sonare_mel_to_audio(values().data(), a.n_mels, a.n_frames, a.sample_rate, a.n_fft,
-                          a.hop_length, 0.0f, 0.0f, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mel_to_audio_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mel_to_audio_ex(values().data(), a.n_mels, a.n_frames, a.sample_rate, a.n_fft,
-                             a.hop_length, 0.0f, 0.0f, 0, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mel_to_audio_checked(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mel_to_audio_checked(values().data(), product(a.n_mels, a.n_frames), a.n_mels,
-                                  a.n_frames, a.sample_rate, a.n_fft, a.hop_length, 0.0f, 0.0f,
-                                  a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mel_to_audio_checked_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mel_to_audio_checked_ex(values().data(), product(a.n_mels, a.n_frames), a.n_mels,
-                                     a.n_frames, a.sample_rate, a.n_fft, a.hop_length, 0.0f, 0.0f,
-                                     0, a.n_iter, &out, &out_length),
-      out);
+  return finish_audio(sonare_mel_to_audio(values().data(), product(a.n_mels, a.n_frames), a.n_mels,
+                                          a.n_frames, a.sample_rate, a.n_fft, a.hop_length, 0.0f,
+                                          0.0f, a.n_iter, nullptr, &out, &out_length),
+                      out);
 }
 
 SonareError probe_mfcc_to_mel(const std::string& param, double value) {
   const InverseArguments a = inverse_arguments(param, value);
   SonareInverseResult out{};
-  return finish_inverse(sonare_mfcc_to_mel(values().data(), a.n_mfcc, a.n_frames, a.n_mels, &out),
+  return finish_inverse(sonare_mfcc_to_mel(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
+                                           a.n_frames, a.n_mels, nullptr, &out),
                         &out);
-}
-
-SonareError probe_mfcc_to_mel_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
-  return finish_inverse(
-      sonare_mfcc_to_mel_ex(values().data(), a.n_mfcc, a.n_frames, a.n_mels, 0.0f, &out), &out);
-}
-
-SonareError probe_mfcc_to_mel_checked(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
-  return finish_inverse(sonare_mfcc_to_mel_checked(values().data(), product(a.n_mfcc, a.n_frames),
-                                                   a.n_mfcc, a.n_frames, a.n_mels, &out),
-                        &out);
-}
-
-SonareError probe_mfcc_to_mel_checked_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  SonareInverseResult out{};
-  return finish_inverse(
-      sonare_mfcc_to_mel_checked_ex(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
-                                    a.n_frames, a.n_mels, 0.0f, &out),
-      &out);
 }
 
 SonareError probe_mfcc_to_audio(const std::string& param, double value) {
@@ -295,61 +215,9 @@ SonareError probe_mfcc_to_audio(const std::string& param, double value) {
   float* out = nullptr;
   size_t out_length = 0;
   return finish_audio(
-      sonare_mfcc_to_audio(values().data(), a.n_mfcc, a.n_frames, a.n_mels, a.sample_rate, a.n_fft,
-                           a.hop_length, 0.0f, 0.0f, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mfcc_to_audio_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mfcc_to_audio_ex(values().data(), a.n_mfcc, a.n_frames, a.n_mels, a.sample_rate,
-                              a.n_fft, a.hop_length, 0.0f, 0.0f, 0, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mfcc_to_audio_ex2(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(sonare_mfcc_to_audio_ex2(values().data(), a.n_mfcc, a.n_frames, a.n_mels,
-                                               a.sample_rate, a.n_fft, a.hop_length, 0.0f, 0.0f, 0,
-                                               0.0f, a.n_iter, &out, &out_length),
-                      out);
-}
-
-SonareError probe_mfcc_to_audio_checked(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mfcc_to_audio_checked(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
-                                   a.n_frames, a.n_mels, a.sample_rate, a.n_fft, a.hop_length, 0.0f,
-                                   0.0f, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mfcc_to_audio_checked_ex(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mfcc_to_audio_checked_ex(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
-                                      a.n_frames, a.n_mels, a.sample_rate, a.n_fft, a.hop_length,
-                                      0.0f, 0.0f, 0, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_mfcc_to_audio_checked_ex2(const std::string& param, double value) {
-  const InverseArguments a = inverse_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_mfcc_to_audio_checked_ex2(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc,
-                                       a.n_frames, a.n_mels, a.sample_rate, a.n_fft, a.hop_length,
-                                       0.0f, 0.0f, 0, 0.0f, a.n_iter, &out, &out_length),
+      sonare_mfcc_to_audio(values().data(), product(a.n_mfcc, a.n_frames), a.n_mfcc, a.n_frames,
+                           a.n_mels, a.sample_rate, a.n_fft, a.hop_length, 0.0f, 0.0f, a.n_iter,
+                           nullptr, &out, &out_length),
       out);
 }
 
@@ -374,42 +242,20 @@ SonareError probe_cqt_to_audio(const std::string& param, double value) {
   const SpectrogramArguments a = spectrogram_arguments(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_audio(
-      sonare_cqt_to_audio(values().data(), a.n_bins, a.n_frames, a.sample_rate, a.hop_length, 32.7f,
-                          a.bins_per_octave, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_cqt_to_audio_checked(const std::string& param, double value) {
-  const SpectrogramArguments a = spectrogram_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_cqt_to_audio_checked(values().data(), product(a.n_bins, a.n_frames), a.n_bins,
-                                  a.n_frames, a.sample_rate, a.hop_length, 32.7f, a.bins_per_octave,
-                                  a.n_iter, &out, &out_length),
-      out);
+  return finish_audio(sonare_cqt_to_audio(values().data(), product(a.n_bins, a.n_frames), a.n_bins,
+                                          a.n_frames, a.sample_rate, a.hop_length, 32.7f,
+                                          a.bins_per_octave, a.n_iter, &out, &out_length),
+                      out);
 }
 
 SonareError probe_vqt_to_audio(const std::string& param, double value) {
   const SpectrogramArguments a = spectrogram_arguments(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  return finish_audio(
-      sonare_vqt_to_audio(values().data(), a.n_bins, a.n_frames, a.sample_rate, a.hop_length, 32.7f,
-                          a.bins_per_octave, 0.0f, a.n_iter, &out, &out_length),
-      out);
-}
-
-SonareError probe_vqt_to_audio_checked(const std::string& param, double value) {
-  const SpectrogramArguments a = spectrogram_arguments(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  return finish_audio(
-      sonare_vqt_to_audio_checked(values().data(), product(a.n_bins, a.n_frames), a.n_bins,
-                                  a.n_frames, a.sample_rate, a.hop_length, 32.7f, a.bins_per_octave,
-                                  0.0f, a.n_iter, &out, &out_length),
-      out);
+  return finish_audio(sonare_vqt_to_audio(values().data(), product(a.n_bins, a.n_frames), a.n_bins,
+                                          a.n_frames, a.sample_rate, a.hop_length, 32.7f,
+                                          a.bins_per_octave, 0.0f, a.n_iter, &out, &out_length),
+                      out);
 }
 
 SonareError probe_griffin_lim(const std::string& param, double value) {
@@ -977,30 +823,15 @@ const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"audio_silence_ratio", probe_audio_silence_ratio},
       {"cqt_to_audio", probe_cqt_to_audio},
-      {"cqt_to_audio_checked", probe_cqt_to_audio_checked},
       {"frame_signal", probe_frame_signal},
       {"griffin_lim", probe_griffin_lim},
       {"lufs_interleaved", probe_lufs_interleaved},
       {"lufs_series_interleaved", probe_lufs_series_interleaved},
       {"mel_to_audio", probe_mel_to_audio},
-      {"mel_to_audio_checked", probe_mel_to_audio_checked},
-      {"mel_to_audio_checked_ex", probe_mel_to_audio_checked_ex},
-      {"mel_to_audio_ex", probe_mel_to_audio_ex},
       {"mel_to_stft", probe_mel_to_stft},
-      {"mel_to_stft_checked", probe_mel_to_stft_checked},
-      {"mel_to_stft_checked_ex", probe_mel_to_stft_checked_ex},
-      {"mel_to_stft_ex", probe_mel_to_stft_ex},
       {"metering_silence_ratio", probe_metering_silence_ratio},
       {"mfcc_to_audio", probe_mfcc_to_audio},
-      {"mfcc_to_audio_checked", probe_mfcc_to_audio_checked},
-      {"mfcc_to_audio_checked_ex", probe_mfcc_to_audio_checked_ex},
-      {"mfcc_to_audio_checked_ex2", probe_mfcc_to_audio_checked_ex2},
-      {"mfcc_to_audio_ex", probe_mfcc_to_audio_ex},
-      {"mfcc_to_audio_ex2", probe_mfcc_to_audio_ex2},
       {"mfcc_to_mel", probe_mfcc_to_mel},
-      {"mfcc_to_mel_checked", probe_mfcc_to_mel_checked},
-      {"mfcc_to_mel_checked_ex", probe_mfcc_to_mel_checked_ex},
-      {"mfcc_to_mel_ex", probe_mfcc_to_mel_ex},
       {"pcen", probe_pcen},
       {"segment_agglomerative", probe_segment_agglomerative},
       {"segment_cross_similarity", probe_segment_cross_similarity},
@@ -1012,7 +843,6 @@ const std::map<std::string, Probe>& probes() {
       {"stream_analyzer_create", probe_stream_analyzer_create},
       {"tonnetz", probe_tonnetz},
       {"vqt_to_audio", probe_vqt_to_audio},
-      {"vqt_to_audio_checked", probe_vqt_to_audio_checked},
       {"waveform_peak_pyramid", probe_waveform_peak_pyramid},
       {"waveform_peaks", probe_waveform_peaks},
 #if defined(SONARE_WITH_ACOUSTIC_SIM)

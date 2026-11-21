@@ -656,4 +656,17 @@ SonareError run_validation_under(const char* root, Fn check) {
   SONARE_C_CATCH
 }
 
+/// Resolves an entry's options: NULL gives the values @p init writes; a non-NULL struct must carry
+/// at least the size @p init_name records and is copied over them.
+template <typename Options>
+SonareError resolve_options(const Options* options, void (*init)(Options*), const char* init_name,
+                            Options* resolved) {
+  init(resolved);
+  if (options == nullptr) return SONARE_OK;
+  const SonareError err = run_validation(
+      [&] { require_struct_size(options->struct_size, sizeof(Options), "options", init_name); });
+  if (err == SONARE_OK) *resolved = *options;
+  return err;
+}
+
 }  // namespace sonare_c_detail

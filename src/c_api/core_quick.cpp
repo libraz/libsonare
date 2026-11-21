@@ -95,75 +95,58 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
       });
 }
 
+void sonare_detect_key_options_init(SonareDetectKeyOptions* options) {
+  if (options == nullptr) return;
+  const KeyConfig config;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = config.n_fft;
+  options->hop_length = config.hop_length;
+  options->use_hpss = config.use_hpss ? 1 : 0;
+  options->loudness_weighted = config.loudness_weighted ? 1 : 0;
+  options->chroma_high_pass_hz = config.high_pass_hz;
+  options->profile_type = SONARE_KEY_PROFILE_AUTO;
+  options->tuning_auto = 1;
+}
+
+namespace {
+
+// The options a key entry reads: the caller's after the layout check, else the defaults.
+SonareError resolve_key_options(const SonareDetectKeyOptions* options,
+                                SonareDetectKeyOptions* defaults,
+                                const SonareDetectKeyOptions** out) {
+  if (options == nullptr) {
+    sonare_detect_key_options_init(defaults);
+    *out = defaults;
+    return SONARE_OK;
+  }
+  *out = options;
+  return run_validation([&] {
+    sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareDetectKeyOptions),
+                                         "options", "sonare_detect_key_options_init");
+  });
+}
+
+}  // namespace
+
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
-                              SonareKey* out_key) {
+                              const SonareDetectKeyOptions* options, SonareKey* out_key,
+                              float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_key);
+  SONARE_C_ZERO_OUTS(out_key, out_tuning_cents);
   if (const SonareError err =
           validate_audio_params("detect_key", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_REQUIRE_NONNULL(out_key);
-
-  return run_prevalidated_offline(
-      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate());
-        out_key->root = static_cast<SonarePitchClass>(key.root);
-        out_key->mode = static_cast<SonareMode>(key.mode);
-        out_key->confidence = key.confidence;
-        return SONARE_OK;
-      });
-}
-
-SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
-                                           int n_fft, int hop_length, int use_hpss,
-                                           int loudness_weighted, float chroma_high_pass_hz,
-                                           SonareKey* out_key) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_with_options_and_modes(samples, length, sample_rate, n_fft, hop_length,
-                                                  use_hpss, loudness_weighted, chroma_high_pass_hz,
-                                                  nullptr, 0, out_key);
-}
-
-SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_t length,
-                                                     int sample_rate, int n_fft, int hop_length,
-                                                     int use_hpss, int loudness_weighted,
-                                                     float chroma_high_pass_hz,
-                                                     const SonareMode* modes, size_t mode_count,
-                                                     SonareKey* out_key) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_with_extended_options(
-      samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted,
-      chroma_high_pass_hz, modes, mode_count, SONARE_KEY_PROFILE_AUTO, nullptr, out_key);
-}
-
-SonareError sonare_detect_key_with_extended_options(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_with_tuning(samples, length, sample_rate, n_fft, hop_length, use_hpss,
-                                       loudness_weighted, chroma_high_pass_hz, modes, mode_count,
-                                       profile_type, genre_hint, 0.0f, 1, out_key, nullptr);
-}
-
-SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, int sample_rate,
-                                          int n_fft, int hop_length, int use_hpss,
-                                          int loudness_weighted, float chroma_high_pass_hz,
-                                          const SonareMode* modes, size_t mode_count,
-                                          SonareKeyProfileType profile_type, const char* genre_hint,
-                                          float tuning_cents, int tuning_auto, SonareKey* out_key,
-                                          float* out_tuning_cents) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_key, out_tuning_cents);
-  if (const SonareError err =
-          validate_audio_params("detect_key_with_tuning", "samples", samples, length, sample_rate);
-      err != SONARE_OK) {
+  SonareDetectKeyOptions defaults;
+  const SonareDetectKeyOptions* opt = nullptr;
+  if (const SonareError err = resolve_key_options(options, &defaults, &opt); err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = validate_key_arguments(
-          n_fft, hop_length, use_hpss, chroma_high_pass_hz, modes, mode_count, profile_type);
+  if (const SonareError err = validate_key_arguments(opt->n_fft, opt->hop_length, opt->use_hpss,
+                                                     opt->chroma_high_pass_hz, opt->modes,
+                                                     opt->mode_count, opt->profile_type);
       err != SONARE_OK) {
     return err;
   }
@@ -172,9 +155,10 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         KeyConfig config;
-        make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz, modes,
-                        mode_count, profile_type, genre_hint, &config);
-        config.tuning = tuning_from_c(tuning_cents, tuning_auto);
+        make_key_config(opt->n_fft, opt->hop_length, opt->use_hpss, opt->loudness_weighted,
+                        opt->chroma_high_pass_hz, opt->modes, opt->mode_count, opt->profile_type,
+                        opt->genre_hint, &config);
+        config.tuning = tuning_from_c(opt->tuning_cents, opt->tuning_auto);
         float used = 0.0f;
         Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
         out_key->root = static_cast<SonarePitchClass>(key.root);
@@ -186,52 +170,24 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
 }
 
 SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
-                                         int n_fft, int hop_length, int use_hpss,
-                                         int loudness_weighted, float chroma_high_pass_hz,
-                                         SonareKeyCandidate** out_candidates, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_candidates_with_modes(samples, length, sample_rate, n_fft, hop_length,
-                                                 use_hpss, loudness_weighted, chroma_high_pass_hz,
-                                                 nullptr, 0, out_candidates, out_count);
-}
-
-SonareError sonare_detect_key_candidates_with_modes(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyCandidate** out_candidates, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_candidates_with_extended_options(
-      samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted,
-      chroma_high_pass_hz, modes, mode_count, SONARE_KEY_PROFILE_AUTO, nullptr, out_candidates,
-      out_count);
-}
-
-SonareError sonare_detect_key_candidates_with_extended_options(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
-    size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  return sonare_detect_key_candidates_with_tuning(samples, length, sample_rate, n_fft, hop_length,
-                                                  use_hpss, loudness_weighted, chroma_high_pass_hz,
-                                                  modes, mode_count, profile_type, genre_hint, 0.0f,
-                                                  1, out_candidates, out_count, nullptr);
-}
-
-SonareError sonare_detect_key_candidates_with_tuning(
-    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
-    int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
-    SonareKeyProfileType profile_type, const char* genre_hint, float tuning_cents, int tuning_auto,
-    SonareKeyCandidate** out_candidates, size_t* out_count, float* out_tuning_cents) {
+                                         const SonareDetectKeyOptions* options,
+                                         SonareKeyCandidate** out_candidates, size_t* out_count,
+                                         float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_candidates, out_count, out_tuning_cents);
-  if (const SonareError err = validate_audio_params("detect_key_candidates_with_tuning", "samples",
-                                                    samples, length, sample_rate);
+  if (const SonareError err =
+          validate_audio_params("detect_key_candidates", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = validate_key_arguments(
-          n_fft, hop_length, use_hpss, chroma_high_pass_hz, modes, mode_count, profile_type);
+  SonareDetectKeyOptions defaults;
+  const SonareDetectKeyOptions* opt = nullptr;
+  if (const SonareError err = resolve_key_options(options, &defaults, &opt); err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = validate_key_arguments(opt->n_fft, opt->hop_length, opt->use_hpss,
+                                                     opt->chroma_high_pass_hz, opt->modes,
+                                                     opt->mode_count, opt->profile_type);
       err != SONARE_OK) {
     return err;
   }
@@ -241,10 +197,12 @@ SonareError sonare_detect_key_candidates_with_tuning(
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         KeyConfig config;
-        make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz, modes,
-                        mode_count, profile_type, genre_hint, &config);
+        make_key_config(opt->n_fft, opt->hop_length, opt->use_hpss, opt->loudness_weighted,
+                        opt->chroma_high_pass_hz, opt->modes, opt->mode_count, opt->profile_type,
+                        opt->genre_hint, &config);
         // Resolved here so the value used can be reported; measure_tuning reads the analysis rate.
-        config.tuning = tuning_auto != 0 ? measure_tuning(audio) : tuning_from_cents(tuning_cents);
+        config.tuning =
+            opt->tuning_auto != 0 ? measure_tuning(audio) : tuning_from_cents(opt->tuning_cents);
 
         const auto candidates =
             quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
@@ -317,26 +275,6 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
       });
 }
 
-SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
-                                 float** out_times, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_times, out_count);
-  if (const SonareError err =
-          validate_audio_params("detect_onsets", "samples", samples, length, sample_rate);
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out_times);
-  SONARE_C_REQUIRE_NONNULL(out_count);
-
-  return run_prevalidated_offline(
-      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        std::vector<float> onsets =
-            quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate());
-        return copy_vector(onsets, out_times, out_count);
-      });
-}
-
 void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config) {
   if (config == nullptr) return;
   const sonare::OnsetDetectConfig native;
@@ -355,17 +293,26 @@ void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config) {
   config->backtrack_range = native.backtrack_range;
 }
 
-SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
-                                    const SonareOnsetDetectConfig* config, float** out_times,
-                                    size_t* out_count) {
+SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
+                                 const SonareOnsetDetectConfig* config, float** out_times,
+                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_times, out_count);
   if (const SonareError err =
-          validate_audio_params("detect_onsets_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("detect_onsets", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_REQUIRE_NONNULL(config);
+  if (config == nullptr) {
+    SONARE_C_REQUIRE_NONNULL(out_times);
+    SONARE_C_REQUIRE_NONNULL(out_count);
+    return run_prevalidated_offline(
+        samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+          std::vector<float> onsets =
+              quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate());
+          return copy_vector(onsets, out_times, out_count);
+        });
+  }
   // backtrack is a C byte standing in for a bool, so its range is this layer's own. A NaN
   // threshold is the adaptive path; a given one is a real minimum strength, above 0.
   if (const SonareError err = run_validation([&] {
@@ -400,9 +347,8 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
   SONARE_C_REQUIRE_NONNULL(out_count);
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        // Through quick:: rather than the core, so this differs from
-        // sonare_detect_onsets only in the configuration. Going direct also dropped
-        // the resample, which reinterprets every frame-counted field in the config.
+        // Through quick:: rather than the core: going direct dropped the resample, which
+        // reinterprets every frame-counted field in the config.
         std::vector<float> onsets =
             quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate(), native);
         return copy_vector(onsets, out_times, out_count);
@@ -534,28 +480,23 @@ const std::array<CName, 6> kMeterOptionNames{
 
 }  // namespace
 
-SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
-                                   const SonareMusicAnalyzeOptions* options, char** out_json) {
-  SONARE_C_API_ENTRY;
-  return sonare_analyze_json_ex_with_progress(samples, length, sample_rate, options, nullptr,
-                                              nullptr, out_json, nullptr, nullptr);
-}
-
-SonareError sonare_analyze_json_ex_with_progress(
-    const float* samples, size_t length, int sample_rate, const SonareMusicAnalyzeOptions* options,
-    SonareAnalyzeProgressCallback callback, void* user_data, char** out_json,
-    SonareCancelCallback cancel_cb, void* cancel_user_data) {
+SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
+                                const SonareMusicAnalyzeOptions* options, char** out_json) {
   SONARE_C_API_ENTRY;
   // Field rules live in validate_config, which MusicAnalyzer's constructor
   // applies below; this entry point only checks what the core cannot see (the
   // pointers, the layout version and the length of the flat candidate array).
   SONARE_C_ZERO_OUTS(out_json);
-  if (const SonareError err = validate_audio_params("analyze_json_ex_with_progress", "samples",
-                                                    samples, length, sample_rate);
+  if (const SonareError err =
+          validate_audio_params("analyze_json", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_REQUIRE_NONNULL(options);
+  SonareMusicAnalyzeOptions defaults;
+  if (options == nullptr) {
+    sonare_music_analyze_options_init(&defaults);
+    options = &defaults;
+  }
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(options->struct_size,
                                              sizeof(SonareMusicAnalyzeOptions), "options",
@@ -574,6 +515,10 @@ SonareError sonare_analyze_json_ex_with_progress(
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         MusicAnalyzer analyzer(audio, music_analyzer_config_from_options(*options));
+        const SonareAnalyzeProgressCallback callback = options->progress_callback;
+        void* const user_data = options->progress_user_data;
+        const SonareCancelCallback cancel_cb = options->cancel_callback;
+        void* const cancel_user_data = options->cancel_user_data;
         if (callback != nullptr) {
           analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
             callback(progress, stage, user_data);
@@ -660,12 +605,4 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
       kMeterOptionNames, [&] { return estimate_meter_from_beats(times, strengths, config); })));
   return SONARE_OK;
   SONARE_C_CATCH
-}
-
-SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
-                                char** out_json) {
-  SONARE_C_API_ENTRY;
-  SonareMusicAnalyzeOptions options;
-  sonare_music_analyze_options_init(&options);
-  return sonare_analyze_json_ex(samples, length, sample_rate, &options, out_json);
 }

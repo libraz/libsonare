@@ -134,7 +134,8 @@ TEST_CASE("sonare_auto_tune with no key equals passing the detected key", "[c_ap
                            &detected_length, &detected) == SONARE_OK);
 
   SonareKey reference{};
-  REQUIRE(sonare_detect_key(input.data(), input.size(), kSampleRate, &reference) == SONARE_OK);
+  REQUIRE(sonare_detect_key(input.data(), input.size(), kSampleRate, nullptr, &reference,
+                            nullptr) == SONARE_OK);
   REQUIRE(detected.root == reference.root);
   REQUIRE(detected.mode == reference.mode);
   REQUIRE(detected.confidence == reference.confidence);
