@@ -68,7 +68,7 @@ import libsonare
 audio = libsonare.Audio.from_file("song.mp3")
 print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
 
-result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
+result = audio.mastering(target_lufs=-14.0, ceiling_dbtp=-1.0)
 print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 ```
 
