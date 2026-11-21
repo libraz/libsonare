@@ -244,9 +244,11 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   if (info.Length() >= 4 && info[3].IsObject()) {
     params = ParamsFromObject(info[3].As<Napi::Object>());
   }
-  auto result = sonare::mastering::api::apply_named_processor(
-      name, typed.Data(), typed.ElementLength(), node_narrow_int(env, info[2], "sampleRate"),
-      params);
+  const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
+  auto result = sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::api::apply_named_processor(name, typed.Data(), typed.ElementLength(),
+                                                         sample_rate, params);
+  });
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -297,8 +299,10 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   if (info.Length() >= 5 && info[4].IsObject()) {
     params = ParamsFromObject(info[4].As<Napi::Object>());
   }
-  auto result = sonare::mastering::api::apply_named_processor_stereo(
-      name, left.Data(), right.Data(), left.ElementLength(), sr, params);
+  auto result = sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::api::apply_named_processor_stereo(name, left.Data(), right.Data(),
+                                                                left.ElementLength(), sr, params);
+  });
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));

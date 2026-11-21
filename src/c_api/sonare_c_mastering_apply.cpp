@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cstring>
 #include <memory>
 #include <new>
@@ -66,6 +67,13 @@ void set_stereo_result(const sonare::mastering::api::StereoResult& result,
   out->right = release_array(right);
 }
 
+// The core's loudness config member names, as SonareMasteringConfig spells them.
+const std::array<CName, 4> kMasteringConfigNames{
+    {{"target_lufs", "config.target_lufs"},
+     {"ceiling_dbtp", "config.ceiling_dbtp"},
+     {"release_ms", "config.release_ms"},
+     {"true_peak_oversample", "config.true_peak_oversample"}}};
+
 }  // namespace
 
 void sonare_mastering_config_init(SonareMasteringConfig* config) {
@@ -96,7 +104,10 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        auto result = sonare::mastering::maximizer::loudness_optimize(audio, to_cpp_config(config));
+        const auto cpp_config = to_cpp_config(config);
+        auto result = with_c_names(kMasteringConfigNames, [&] {
+          return sonare::mastering::maximizer::loudness_optimize(audio, cpp_config);
+        });
 
         out->length = result.audio.size();
         out->sample_rate = result.audio.sample_rate();
@@ -134,8 +145,10 @@ SonareError sonare_mastering_apply_processor(const char* processor, const float*
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  auto result = sonare::mastering::api::apply_named_processor(
-      processor, samples, length, sample_rate, to_params(params, param_count));
+  auto result = sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::api::apply_named_processor(processor, samples, length, sample_rate,
+                                                         to_params(params, param_count));
+  });
   set_mastering_result(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -163,8 +176,10 @@ SonareError sonare_mastering_apply_processor_stereo(
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  auto result = sonare::mastering::api::apply_named_processor_stereo(
-      processor, left, right, length, sample_rate, to_params(params, param_count));
+  auto result = sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::api::apply_named_processor_stereo(
+        processor, left, right, length, sample_rate, to_params(params, param_count));
+  });
   out->sample_rate = result.sample_rate;
   out->input_lufs = result.input_lufs;
   out->output_lufs = result.output_lufs;
@@ -476,8 +491,10 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
   SONARE_C_REQUIRE_NONNULL(out_latency_samples);
   SONARE_C_REQUIRE_NONNULL(out_tail_samples);
 
-  const auto timing = sonare::mastering::api::insert_timing(
-      insert != nullptr ? insert : "", params != nullptr ? params : "{}", sample_rate);
+  const auto timing = sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::api::insert_timing(insert != nullptr ? insert : "",
+                                                 params != nullptr ? params : "{}", sample_rate);
+  });
   *out_latency_samples = timing.latency_samples;
   *out_tail_samples = timing.tail_samples;
   return SONARE_OK;

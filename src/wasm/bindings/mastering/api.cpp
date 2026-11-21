@@ -16,6 +16,7 @@
 #include "playback/config.h"
 #include "sonare.h"
 #include "util/json.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
@@ -79,8 +80,9 @@ std::string js_mastering_insert_param_info_at_rate(std::string name, double samp
 // sonare_mastering_insert_timing for the exact error text.
 val js_mastering_insert_timing(std::string name, std::string json_params, double sample_rate) {
   wasmRefuseEmbeddedNul(name, "name");
-  const mastering::api::InsertTiming timing =
-      mastering::api::insert_timing(name, json_params, sample_rate);
+  // The parameter bag is refused under `params`, as the Node addon reports it through the C entry.
+  const mastering::api::InsertTiming timing = sonare::util::check::under_member(
+      "params", [&] { return mastering::api::insert_timing(name, json_params, sample_rate); });
   val out = val::object();
   out.set("latencySamples", timing.latency_samples);
   out.set("tailSamples", timing.tail_samples);
@@ -314,8 +316,11 @@ val js_mastering_process(std::string processor_name, val samples, const val& sam
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
-  auto result = mastering::api::apply_named_processor(
-      processor_name, data.data(), data.size(), sample_rate, masteringParamsFromObject(params));
+  const auto parsed = masteringParamsFromObject(params);
+  auto result = sonare::util::check::under_member("params", [&] {
+    return mastering::api::apply_named_processor(processor_name, data.data(), data.size(),
+                                                 sample_rate, parsed);
+  });
   val out = val::object();
   out.set("samples", vectorToFloat32Array(result.samples));
   out.set("sampleRate", result.sample_rate);
@@ -337,9 +342,11 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
   std::vector<float> right = float32ArrayToVector(right_samples);
   validate_offline_audio_input("left", left.data(), left.size(), sample_rate);
   validate_offline_audio_input("right", right.data(), right.size(), sample_rate);
-  auto result = mastering::api::apply_named_processor_stereo(processor_name, left.data(),
-                                                             right.data(), left.size(), sample_rate,
-                                                             masteringParamsFromObject(params));
+  const auto parsed = masteringParamsFromObject(params);
+  auto result = sonare::util::check::under_member("params", [&] {
+    return mastering::api::apply_named_processor_stereo(processor_name, left.data(), right.data(),
+                                                        left.size(), sample_rate, parsed);
+  });
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left));
   out.set("right", vectorToFloat32Array(result.right));

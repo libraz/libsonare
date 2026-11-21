@@ -102,7 +102,7 @@ def test_insert_timing_rejects_an_unknown_key() -> None:
     with pytest.raises(libsonare.SonareValueError) as caught:
         libsonare.mastering_insert_timing("saturation.softClipper", {"bogus": 1.0}, 48000)
     assert str(caught.value) == (
-        "mastering_insert_timing: unknown key bogus (expected aliasing, ceiling, driveDb, mix)"
+        "mastering_insert_timing: unknown key params.bogus (expected aliasing, ceiling, driveDb, mix)"
     )
 
 
@@ -159,7 +159,8 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
     assert [choice.name for choice in mode.choices or []] == ["median"]
     # A whole-signal stage is unsupported in an insert, not a wrong argument.
     with pytest.raises(
-        libsonare.SonareError, match=r"^\[6\] mastering_insert_timing: wpeEnabled is not supported "
+        libsonare.SonareError,
+        match=r"^\[6\] mastering_insert_timing: params\.wpeEnabled is not supported ",
     ) as excinfo:
         libsonare.mastering_insert_timing("repair.dereverbClassical", {"wpeEnabled": True}, 48000)
     assert not isinstance(excinfo.value, libsonare.SonareValueError)
@@ -167,7 +168,7 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
     # The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     with pytest.raises(
         libsonare.SonareError,
-        match=r"^\[6\] mastering_insert_timing: noiseEstimator quantile is not supported ",
+        match=r"^\[6\] mastering_insert_timing: params\.noiseEstimator quantile is not supported ",
     ) as excinfo:
         libsonare.mastering_insert_timing("repair.denoiseClassical", {"noiseEstimator": 0}, 48000)
     assert not isinstance(excinfo.value, libsonare.SonareValueError)

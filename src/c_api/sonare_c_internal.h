@@ -118,10 +118,12 @@ inline void check_stft_hop(int hop_length, const char* subject) {
 inline int core_stft_hop(int hop_length) noexcept {
   return hop_length == SONARE_STFT_HOP_AUTO ? 0 : hop_length;
 }
-/// @brief A core refusal subject and the C parameter that spells it ("sr" -> "sample_rate").
+/// @brief A core refusal subject path and the C parameter path that spells it ("sr" ->
+///        "sample_rate", "air.humidity_percent" -> "config.air_humidity_percent").
 using CName = std::pair<const char*, const char*>;
-/// @brief Runs @p call, rethrowing a refusal whose subject root @p names lists under that C
-///        parameter's name, so a core keeping its librosa-style names refuses in the entry's.
+/// @brief Runs @p call, rethrowing a refusal whose subject begins with a path @p names lists
+///        (up to a '.' or '[' boundary) under that C spelling, so a core keeping its
+///        librosa-style names refuses in the entry's. The rest of the path is kept.
 template <std::size_t N, typename Call>
 auto with_c_names(const std::array<CName, N>& names, Call&& call) -> decltype(call()) {
   try {
@@ -130,12 +132,11 @@ auto with_c_names(const std::array<CName, N>& names, Call&& call) -> decltype(ca
     throw e.respelled(
         e.code(),
         [&names](const std::string& subject) {
-          const size_t end = subject.find_first_of(".[");
-          const std::string root = subject.substr(0, end);
           for (const CName& row : names) {
-            if (root == row.first) {
-              return std::string(row.second) +
-                     (end == std::string::npos ? std::string() : subject.substr(end));
+            const std::size_t n = std::strlen(row.first);
+            if (subject.compare(0, n, row.first) == 0 &&
+                (subject.size() == n || subject[n] == '.' || subject[n] == '[')) {
+              return std::string(row.second) + subject.substr(n);
             }
           }
           return subject;

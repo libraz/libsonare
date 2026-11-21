@@ -93,7 +93,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
       }),
     ).toThrowError(
       new TypeError(
-        'masteringInsertTiming: unknown key notAKey (expected aliasing, ceiling, driveDb, mix)',
+        'masteringInsertTiming: unknown key params.notAKey (expected aliasing, ceiling, driveDb, mix)',
       ),
     );
   });
@@ -198,7 +198,7 @@ describe('the causal repair stages reach the generic insert path', () => {
     ).toThrow(
       expect.objectContaining({
         codeName: 'NotSupported',
-        message: `masteringInsertTiming: wpeEnabled is not supported for a streaming dereverb: the WPE predictor is fitted over the whole signal`,
+        message: `masteringInsertTiming: params.wpeEnabled is not supported for a streaming dereverb: the WPE predictor is fitted over the whole signal`,
       }),
     );
     // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
@@ -211,7 +211,7 @@ describe('the causal repair stages reach the generic insert path', () => {
     ).toThrow(
       expect.objectContaining({
         codeName: 'NotSupported',
-        message: `masteringInsertTiming: noiseEstimator quantile is not supported for a streaming denoise: it ranks every frame of the whole signal by energy; spp, mcra and imcra track recursively`,
+        message: `masteringInsertTiming: params.noiseEstimator quantile is not supported for a streaming denoise: it ranks every frame of the whole signal by energy; spp, mcra and imcra track recursively`,
       }),
     );
     const estimator = masteringInsertParamInfo({ insert: 'repair.denoiseClassical' }).find(

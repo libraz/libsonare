@@ -196,7 +196,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
     [
       'a negative chroma highpass',
       { chromaHighPassHz: -1 },
-      'chromaHighpassHz must be finite and at least 0',
+      'chromaHighPassHz must be finite and at least 0',
     ],
     [
       'a non-positive chord HMM beam width',

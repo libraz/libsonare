@@ -509,6 +509,29 @@ MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeO
   return config;
 }
 
+// The core config member names, as the options structs spell them.
+const std::array<CName, 12> kMusicAnalyzeOptionNames{
+    {{"n_fft", "options.n_fft"},
+     {"hop_length", "options.hop_length"},
+     {"bpm_min", "options.bpm_min"},
+     {"bpm_max", "options.bpm_max"},
+     {"start_bpm", "options.start_bpm"},
+     {"chroma_highpass_hz", "options.chroma_high_pass_hz"},
+     {"chroma_hop_multiplier", "options.chroma_hop_multiplier"},
+     {"tuning", "options.tuning_cents"},
+     {"chord_hmm_beam_width", "options.chord_hmm_beam_width"},
+     {"tempo_update_interval_beats", "options.tempo_update_interval_beats"},
+     {"meter_candidate_numerators", "options.meter_candidate_numerators"},
+     {"meter_denominator", "options.meter_denominator"}}};
+
+const std::array<CName, 6> kMeterOptionNames{
+    {{"candidate_numerators", "options.candidate_numerators"},
+     {"denominator", "options.denominator"},
+     {"downbeat_weight", "options.downbeat_weight"},
+     {"measure_weight", "options.measure_weight"},
+     {"subdivision_weight", "options.subdivision_weight"},
+     {"compound_subdivision_threshold", "options.compound_subdivision_threshold"}}};
+
 }  // namespace
 
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
@@ -540,6 +563,8 @@ SonareError sonare_analyze_json_ex_with_progress(
         util::check::integer_in_range(options->meter_candidate_numerator_count, 0,
                                       SONARE_MAX_METER_CANDIDATE_NUMERATORS,
                                       "options.meter_candidate_numerator_count");
+        with_c_names(kMusicAnalyzeOptionNames,
+                     [&] { validate_config(music_analyzer_config_from_options(*options)); });
       });
       err != SONARE_OK) {
     return err;
@@ -631,8 +656,8 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
     times.assign(beat_times, beat_times + beat_count);
     strengths.assign(beat_strengths, beat_strengths + beat_count);
   }
-  *out_json =
-      copy_string(meter_result_to_json(estimate_meter_from_beats(times, strengths, config)));
+  *out_json = copy_string(meter_result_to_json(with_c_names(
+      kMeterOptionNames, [&] { return estimate_meter_from_beats(times, strengths, config); })));
   return SONARE_OK;
   SONARE_C_CATCH
 }

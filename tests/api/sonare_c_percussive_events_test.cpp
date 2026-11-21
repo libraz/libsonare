@@ -707,7 +707,7 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
       return extract_at(samples, &negative_wait, out);
     });
     CHECK(std::string(sonare_last_error_message()) ==
-          "onset_wait must be an integer in [0, 2147483647]");
+          "config.onset_wait must be an integer in [0, 2147483647]");
 
     for (const float outside : {-0.01f, -1.0f, 1.01f, 2.0f}) {
       SonarePercussiveEventConfig ratio = event_config();

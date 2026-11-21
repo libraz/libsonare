@@ -30,7 +30,7 @@ const RENAMED: readonly (readonly [MasteringInsertName, string, string])[] = [
 ];
 
 /** The refusal of an undeclared key: the accepted list, never a pointer to a successor. */
-function unknownKeyRefusal(call: () => unknown, key: string, current: string): void {
+function unknownKeyRefusal(call: () => unknown, key: string, current: string, root = ''): void {
   let caught: unknown;
   try {
     call();
@@ -38,9 +38,11 @@ function unknownKeyRefusal(call: () => unknown, key: string, current: string): v
     caught = error;
   }
   const message = (caught as Error | undefined)?.message ?? '';
-  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   expect(message).toMatch(
-    new RegExp(`unknown key ${escape(key)} \\(expected [^)]*\\b${escape(current)}\\b`),
+    new RegExp(
+      `unknown key ${escapeRegExp(root)}${escapeRegExp(key)} \\(expected [^)]*\\b${escapeRegExp(current)}\\b`,
+    ),
   );
   expect(message).not.toMatch(/renamed to/);
 }
@@ -54,6 +56,7 @@ describe('insert key spellings', () => {
       () => masteringInsertTiming({ insert, params: { [old]: 1 } as never, sampleRate: 48000 }),
       old,
       current,
+      'params.',
     );
   });
 
@@ -77,6 +80,7 @@ describe('insert key spellings', () => {
         }),
       'threshold',
       'thresholdDb',
+      'params.',
     );
   });
 

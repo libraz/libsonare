@@ -128,7 +128,9 @@ describe('equalizer ceiling', () => {
       masteringApplyProcessor({ processor: 'eq.parametric', samples: x, sampleRate, params });
     expect(() => apply(96000)).not.toThrow();
     expect(() => apply(SR)).toThrow(
-      new RangeError('masteringApplyProcessor: band0.frequencyHz must be finite and in (0, 24000)'),
+      new RangeError(
+        'masteringApplyProcessor: params.band0.frequencyHz must be finite and in (0, 24000)',
+      ),
     );
   });
 });

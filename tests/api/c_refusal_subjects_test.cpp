@@ -122,6 +122,15 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
                                             &alignment) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "config.hop_length must be an integer in [0, 65536]");
   }
+  // The CQT's fmin and n_bins are derived from these two, so its Nyquist refusal names them.
+  config = SonareTakeAlignConfig{};
+  config.bins_per_octave = 24;
+  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 8000, take.data(),
+                                          take.size(), 8000, &config, &anchors, &count,
+                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "config.bins_per_octave puts the top chroma bin at or above half of "
+        "reference_sample_rate");
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 

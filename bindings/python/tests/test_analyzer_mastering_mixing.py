@@ -245,7 +245,7 @@ def test_a_renamed_insert_key_is_refused_with_the_keys_the_insert_reads(
     """The old spelling is refused rather than read, listing the accepted keys, new one included."""
     import libsonare
 
-    listed = rf"unknown key {re.escape(old)} \(expected [^)]*\b{re.escape(new)}\b"
+    listed = rf"unknown key params\.{re.escape(old)} \(expected [^)]*\b{re.escape(new)}\b"
     with pytest.raises(libsonare.SonareValueError, match=listed) as caught:
         libsonare.mastering_apply_processor(processor, np.zeros(4800, np.float32), 48000, {old: 1})
     assert "renamed" not in str(caught.value)
@@ -259,7 +259,7 @@ def test_a_key_renamed_only_on_another_insert_lists_that_inserts_keys() -> None:
             "effects.reverb.velvet", np.zeros(4800, np.float32), 48000, {"semitones": 1.0}
         )
     assert str(caught.value) == (
-        "mastering_apply_processor: unknown key semitones "
+        "mastering_apply_processor: unknown key params.semitones "
         "(expected decay, decaySec, densityHz, dryWet, enableShelf, reverbTimeSec)"
     )
 

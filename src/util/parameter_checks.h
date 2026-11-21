@@ -230,11 +230,23 @@ inline void non_empty(std::string_view value, const char* subject) {
   throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, std::move(subjects), text);
 }
 
-/// @brief Rethrows @p e with each subject placed under the member path @p parent.
+/// @brief Rethrows @p e with each subject placed under the member path @p parent; a subject the
+///        caller spelled stays the caller's spelling.
 [[noreturn]] inline void rethrow_under_member(const SonareParameterRefusal& e,
                                               const std::string& parent) {
   throw e.respelled(
-      e.code(), [&parent](const std::string& subject) { return parent + "." + subject; }, false);
+      e.code(), [&parent](const std::string& subject) { return parent + "." + subject; },
+      e.caller_spelled());
+}
+
+/// @brief Runs @p call, placing the subjects of a parameter refusal under @p parent.
+template <typename Call>
+auto under_member(const std::string& parent, Call&& call) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const SonareParameterRefusal& e) {
+    rethrow_under_member(e, parent);
+  }
 }
 
 /// @brief @p number as the float a domain check reads: a finite value past the float range

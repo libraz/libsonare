@@ -339,15 +339,21 @@ SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
   SONARE_C_TRY
   auto config = streaming_chain_config(config_json);
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
+  // The constructor refuses the stages a stream cannot run by their config paths, which the
+  // config document reader above already roots under `config`.
   if (std::isnan(loudness_static_gain_db)) {
     // Reproduce the throw-on-loudness behaviour of the non-_ex create.
-    chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    chain = sonare::util::check::under_member("config", [&] {
+      return std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    });
   } else {
     sonare::mastering::api::StreamingMasteringChainOptions options;
     options.loudness_static_gain_db = loudness_static_gain_db;
     options.loudness_static_gain_peak_db = loudness_static_gain_peak_db;
-    chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
-                                                                              options);
+    chain = sonare::util::check::under_member("config", [&] {
+      return std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
+                                                                               options);
+    });
   }
   auto* handle = new SonareStreamingMasteringChain;
   handle->chain = std::move(chain);

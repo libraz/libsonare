@@ -90,6 +90,18 @@ SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
   return SONARE_OK;
 }
 
+// The core's percussive config member names, as the C config structs spell them.
+const std::array<CName, 6> kPercussiveEventNames{
+    {{"n_fft", "config.n_fft"},
+     {"hop_length", "config.hop_length"},
+     {"onset_wait", "config.onset_wait"},
+     {"onset_delta", "config.onset_delta"},
+     {"max_event_ms", "config.max_event_ms"},
+     {"min_percussive_ratio", "config.min_percussive_ratio"}}};
+const std::array<CName, 3> kPercussiveRenderNames{{{"n_fft", "config.n_fft"},
+                                                   {"hop_length", "config.hop_length"},
+                                                   {"fade_ms", "config.fade_ms"}}};
+
 SonareError fill_percussive_events_result(
     const std::vector<editing::event_model::PercussiveEvent>& events,
     SonarePercussiveEventsResult* out) {
@@ -1239,9 +1251,11 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
 
     if (const SonareError err = run_validation([&] {
           util::check::greater_than(config->max_event_ms, 0.0, "config.max_event_ms");
-          editing::event_model::check_percussive_extract_controls(
-              config->onset_wait, config->onset_delta, config->max_event_ms,
-              config->min_percussive_ratio);
+          with_c_names(kPercussiveEventNames, [&] {
+            editing::event_model::check_percussive_extract_controls(
+                config->onset_wait, config->onset_delta, config->max_event_ms,
+                config->min_percussive_ratio);
+          });
         });
         err != SONARE_OK) {
       return err;
@@ -1255,7 +1269,11 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
   return run_offline("extract_percussive_events", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return fill_percussive_events_result(
-                           editing::event_model::extract_percussive_events(audio, extractor_config),
+                           with_c_names(kPercussiveEventNames,
+                                        [&] {
+                                          return editing::event_model::extract_percussive_events(
+                                              audio, extractor_config);
+                                        }),
                            out);
                      });
 }
@@ -1314,8 +1332,10 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
 
   return run_offline("render_percussive_events", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
-                       Audio result = editing::event_model::render_percussive_events(
-                           audio, core_events, render_config);
+                       Audio result = with_c_names(kPercussiveRenderNames, [&] {
+                         return editing::event_model::render_percussive_events(audio, core_events,
+                                                                               render_config);
+                       });
                        return copy_audio_result(result, out, out_length);
                      });
   SONARE_C_CATCH

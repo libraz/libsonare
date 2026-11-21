@@ -702,6 +702,22 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
     config.meter_candidate_numerators =
         meterCandidateNumeratorsFromVal(meter_numerators, "meterCandidateNumerators");
   }
+  // The request keys, as the Node addon reports them through the C entry.
+  sonare::util::check::with_camel_paths(
+      [&] { sonare::validate_config(config); },
+      std::array<sonare::util::check::MemberKey, 12>{
+          {{"n_fft", "nFft"},
+           {"hop_length", "hopLength"},
+           {"bpm_min", "bpmMin"},
+           {"bpm_max", "bpmMax"},
+           {"start_bpm", "startBpm"},
+           {"chroma_highpass_hz", "chromaHighPassHz"},
+           {"chroma_hop_multiplier", "chromaHopMultiplier"},
+           {"tuning", "tuningCents"},
+           {"chord_hmm_beam_width", "chordHmmBeamWidth"},
+           {"tempo_update_interval_beats", "tempoUpdateIntervalBeats"},
+           {"meter_candidate_numerators", "meterCandidateNumerators"},
+           {"meter_denominator", "meterDenominator"}}});
   return config;
 }
 
@@ -736,8 +752,19 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   // validate_meter_config runs inside estimate_meter_from_beats, so the empty
   // candidate list, the per-entry range, the denominator rule, and the weight
   // finiteness are all rejected by the core rather than re-checked here.
-  const MeterResult result = estimate_meter_from_beats(
-      float32ArrayToVector(beat_times), float32ArrayToVector(beat_strengths), config);
+  // The request keys, as the Node addon reports them through the C entry.
+  const MeterResult result = sonare::util::check::with_camel_paths(
+      [&] {
+        return estimate_meter_from_beats(float32ArrayToVector(beat_times),
+                                         float32ArrayToVector(beat_strengths), config);
+      },
+      std::array<sonare::util::check::MemberKey, 6>{
+          {{"candidate_numerators", "candidateNumerators"},
+           {"denominator", "denominator"},
+           {"downbeat_weight", "downbeatWeight"},
+           {"measure_weight", "measureWeight"},
+           {"subdivision_weight", "subdivisionWeight"},
+           {"compound_subdivision_threshold", "compoundSubdivisionThreshold"}}});
 
   // Field names and order mirror meter_result_to_json.
   val out = val::object();

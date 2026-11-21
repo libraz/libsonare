@@ -287,7 +287,7 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   SonareError err = sonare_estimate_meter_json(beat_times.Data(), beat_strengths.Data(),
                                                beat_times.ElementLength(), &options, &json_str);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
     return env.Undefined();
   }
   return ParseJsonObjectAndFree(env, json_str, "Failed to parse meter estimation JSON");
@@ -396,8 +396,8 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
     if (err != SONARE_OK) {
       error_code_ = err;
       shape_refusal_ = LastRefusalIsShape();
-      refusal_ = sonare_node::ShownLastRefusal();
-      SetError(ErrorMessageForCode(err));
+      refusal_ = sonare_node::ShownLastRefusal("options");
+      SetError(ErrorMessageForCode(err, "options"));
       return;
     }
     if (json_ptr != nullptr) {

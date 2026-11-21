@@ -19,7 +19,7 @@ namespace sonare_node {
 /// @brief The calling thread's last C-ABI failure as a JS message: a recorded parameter refusal
 ///        rendered in request keys, else the flat detail without its C-entry prefix, else the
 ///        generic text for @p err.
-std::string ErrorMessageForCode(SonareError err);
+std::string ErrorMessageForCode(SonareError err, const char* c_root = nullptr);
 
 /// The exception text without a leading C-entry prefix, which the public entry replaces; a
 /// parameter refusal is rendered in request keys from its subjects.
@@ -30,7 +30,7 @@ std::string ExceptionMessage(const std::exception& e);
 bool IsShapeRefusal(const std::exception& e);
 
 /// @brief The last C-ABI parameter refusal as the caller reads it (in request keys), or none.
-std::optional<sonare::SonareParameterRefusal> ShownLastRefusal();
+std::optional<sonare::SonareParameterRefusal> ShownLastRefusal(const char* c_root = nullptr);
 
 /// @brief Carries @p shown, the refusal whose text @p error's message ends with, on @p error as
 ///        plain parts under Symbol.for('libsonare.refusal'), so a facade that converted an

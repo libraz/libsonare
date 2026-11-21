@@ -620,7 +620,7 @@ def room_morph(
         ctypes.byref(out),
         ctypes.byref(out_length),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         # Read before any later C ABI call can overwrite the thread-local list,
         # exactly as synthesize_rir does.
@@ -724,7 +724,7 @@ def room_morph_stereo(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         # Read before any later C ABI call can overwrite the thread-local list.
         diagnostics = _read_diagnostics()

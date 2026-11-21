@@ -28,9 +28,11 @@
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 using sonare::Audio;
+using sonare_c_detail::CName;
 using sonare_c_detail::require_struct_size;
 using sonare_c_detail::run_mono_offline;
 using sonare_c_detail::run_offline;
+using sonare_c_detail::with_c_names;
 #endif
 
 namespace {
@@ -413,6 +415,24 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   return cfg;
 }
 
+// The core morph config's member paths, as SonareRoomMorphConfig spells them.
+const std::array<CName, 15> kRoomMorphNames{
+    {{"target.dims.length", "config.length_m"},
+     {"target.dims.width", "config.width_m"},
+     {"target.dims.height", "config.height_m"},
+     {"placement.source", "config.source"},
+     {"placement.listener", "config.listener"},
+     {"source_tail_suppression", "config.source_tail_suppression"},
+     {"wet", "config.wet"},
+     {"ism_order", "config.ism_order"},
+     {"max_seconds", "config.max_sec"},
+     {"mixing_time_ms", "config.mixing_time_ms"},
+     {"crossfade_ms", "config.crossfade_ms"},
+     {"air.temperature_c", "config.air_temperature_c"},
+     {"air.humidity_percent", "config.air_humidity_percent"},
+     {"receiver_spacing_m", "config.receiver_spacing_m"},
+     {"seed", "config.seed"}}};
+
 }  // namespace
 #endif
 
@@ -430,17 +450,18 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   check_room_morph_config(*config);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  return run_mono_offline("room_morph", "samples", samples, length, sample_rate, out, out_length,
-                          [&](const Audio& audio) -> Audio {
-                            sonare::effects::acoustic::RoomMorphResult result =
-                                sonare::effects::acoustic::room_morph(
-                                    audio, room_morph_config_from(*config));
-                            // Published the way synthesize_rir publishes its own: the target RIR is
-                            // synthesized by the same code, and a clamp there means this morph used
-                            // a room the caller did not request.
-                            publish_rir_diagnostics(result.diagnostics);
-                            return std::move(result.audio);
-                          });
+  return run_mono_offline(
+      "room_morph", "samples", samples, length, sample_rate, out, out_length,
+      [&](const Audio& audio) -> Audio {
+        sonare::effects::acoustic::RoomMorphResult result = with_c_names(kRoomMorphNames, [&] {
+          return sonare::effects::acoustic::room_morph(audio, room_morph_config_from(*config));
+        });
+        // Published the way synthesize_rir publishes its own: the target RIR is
+        // synthesized by the same code, and a clamp there means this morph used
+        // a room the caller did not request.
+        publish_rir_diagnostics(result.diagnostics);
+        return std::move(result.audio);
+      });
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out);
@@ -469,9 +490,11 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   check_room_morph_config(*config);
   SONARE_C_REQUIRE_NONNULL(out);
   const sonare::effects::acoustic::RoomMorphStereoResult result =
-      sonare::effects::acoustic::room_morph_stereo(Audio::from_buffer(left, length, sample_rate),
-                                                   Audio::from_buffer(right, length, sample_rate),
-                                                   room_morph_config_from(*config));
+      with_c_names(kRoomMorphNames, [&] {
+        return sonare::effects::acoustic::room_morph_stereo(
+            Audio::from_buffer(left, length, sample_rate),
+            Audio::from_buffer(right, length, sample_rate), room_morph_config_from(*config));
+      });
   publish_rir_diagnostics(result.diagnostics);
   const size_t n = result.left.size();
   std::unique_ptr<float[]> left_out(new float[n]);

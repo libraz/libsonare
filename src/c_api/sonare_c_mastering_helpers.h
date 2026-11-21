@@ -15,6 +15,7 @@
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_mastering_detail {
 
@@ -57,14 +58,18 @@ inline std::vector<sonare::mastering::api::Param> to_params(const SonareMasterin
 inline sonare::mastering::assistant::AssistantConfig to_assistant_config(
     const SonareMasteringParam* params, size_t count) {
   const std::vector<sonare::mastering::api::Param> parsed = to_params(params, count);
-  return sonare::mastering::assistant::assistant_config_from_params(parsed.data(), parsed.size());
+  return sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::assistant::assistant_config_from_params(parsed.data(), parsed.size());
+  });
 }
 
 inline sonare::mastering::assistant::AudioProfileConfig to_audio_profile_config(
     const SonareMasteringParam* params, size_t count) {
   const std::vector<sonare::mastering::api::Param> parsed = to_params(params, count);
-  return sonare::mastering::assistant::audio_profile_config_from_params(parsed.data(),
-                                                                        parsed.size());
+  return sonare::util::check::under_member("params", [&] {
+    return sonare::mastering::assistant::audio_profile_config_from_params(parsed.data(),
+                                                                          parsed.size());
+  });
 }
 
 inline void set_mastering_result(const sonare::mastering::api::MonoResult& result,

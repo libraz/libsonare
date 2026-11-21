@@ -254,7 +254,7 @@ describe('argument refusal classes shared with the Node surface', () => {
       }),
     );
     expect(error).toEqual(
-      new TypeError('masteringApplyProcessor: unknown key gainDb (expected levelDb)'),
+      new TypeError('masteringApplyProcessor: unknown key params.gainDb (expected levelDb)'),
     );
     expect(isSonareError(error)).toBe(false);
   });
@@ -291,7 +291,7 @@ describe('argument refusal classes shared with the Node surface', () => {
       }),
     );
     expect(error).toEqual(
-      new TypeError('masteringInsertTiming: unknown key bogus (expected levelDb)'),
+      new TypeError('masteringInsertTiming: unknown key params.bogus (expected levelDb)'),
     );
     expect(isSonareError(error)).toBe(false);
   });

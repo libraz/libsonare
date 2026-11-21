@@ -363,7 +363,7 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
 
     with pytest.raises(
         SonareError,
-        match=r"^\[6\] StreamingMasteringChain: repair\.denoise\.noiseEstimator quantile is not "
+        match=r"^\[6\] StreamingMasteringChain: config\.repair\.denoise\.noiseEstimator quantile is not "
         r"supported for a streaming chain: ",
     ) as refused:
         StreamingMasteringChain(
@@ -385,7 +385,7 @@ def test_streaming_mastering_chain_refuses_a_whole_signal_repair_stage(stage: st
 
     with pytest.raises(
         SonareError,
-        match=rf"^\[6\] StreamingMasteringChain: repair\.{stage} is not supported for a "
+        match=rf"^\[6\] StreamingMasteringChain: config\.repair\.{stage} is not supported for a "
         r"streaming chain: it needs the whole signal$",
     ) as refused:
         StreamingMasteringChain(

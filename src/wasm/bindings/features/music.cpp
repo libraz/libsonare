@@ -147,13 +147,13 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   }
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // The options bag's spelling, as the Node addon reports it through the C entry.
+  // The request keys, as the Node addon reports them through the C entry.
   sonare::util::check::with_camel_paths(
       [&] { validate_section_config(config); },
-      std::array<sonare::util::check::MemberKey, 4>{{{"n_fft", "options.nFft"},
-                                                     {"hop_length", "options.hopLength"},
-                                                     {"min_section_sec", "options.minSectionSec"},
-                                                     {"boundary_threshold", "options.threshold"}}});
+      std::array<sonare::util::check::MemberKey, 4>{{{"n_fft", "nFft"},
+                                                     {"hop_length", "hopLength"},
+                                                     {"min_section_sec", "minSectionSec"},
+                                                     {"boundary_threshold", "threshold"}}});
 
   SectionAnalyzer analyzer(audio, config);
 
@@ -199,20 +199,20 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
     config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
   }
   // The detector does not refuse these itself; checked before the audio is loaded, in the
-  // options bag's spelling as the Node addon reports it through the C entry.
-  sonare::util::check::with_camel_paths([&] { validate_boundary_config(config); },
-                                        std::array<sonare::util::check::MemberKey, 11>{
-                                            {{"n_fft", "options.nFft"},
-                                             {"hop_length", "options.hopLength"},
-                                             {"kernel_size", "options.kernelSize"},
-                                             {"n_mfcc", "options.nMfcc"},
-                                             {"n_chroma", "options.nChroma"},
-                                             {"threshold", "options.threshold"},
-                                             {"absolute_threshold", "options.absoluteThreshold"},
-                                             {"peak_distance", "options.peakDistanceSec"},
-                                             {"reference_window", "options.referenceWindowSec"},
-                                             {"use_mfcc", "options.useMfcc"},
-                                             {"use_chroma", "options.useChroma"}}});
+  // request keys the Node addon reports through the C entry.
+  sonare::util::check::with_camel_paths(
+      [&] { validate_boundary_config(config); },
+      std::array<sonare::util::check::MemberKey, 11>{{{"n_fft", "nFft"},
+                                                      {"hop_length", "hopLength"},
+                                                      {"kernel_size", "kernelSize"},
+                                                      {"n_mfcc", "nMfcc"},
+                                                      {"n_chroma", "nChroma"},
+                                                      {"threshold", "threshold"},
+                                                      {"absolute_threshold", "absoluteThreshold"},
+                                                      {"peak_distance", "peakDistanceSec"},
+                                                      {"reference_window", "referenceWindowSec"},
+                                                      {"use_mfcc", "useMfcc"},
+                                                      {"use_chroma", "useChroma"}}});
 
   Audio audio = loadValidatedAudio("samples", samples, sr);
   BoundaryDetector detector(audio, config);

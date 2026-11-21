@@ -416,10 +416,10 @@
     "samples": 4800,
     "error": {"node": "TypeError", "wasm": "TypeError", "python": "SonareValueError"},
     "cases": [
-      { "id": "single_unknown", "processor": "saturation.softClipper", "params": {"notAKey": 1.0}, "message": "unknown key notAKey (expected aliasing, ceiling, driveDb, mix)" },
-      { "id": "first_unknown_in_byte_order", "processor": "saturation.softClipper", "params": {"zeta": 1.0, "alpha": 2.0}, "message": "unknown key alpha (expected aliasing, ceiling, driveDb, mix)" },
-      { "id": "unknown_beside_a_known_key", "processor": "saturation.softClipper", "params": {"driveDb": 1.0, "notAKey": 1.0}, "message": "unknown key notAKey (expected aliasing, ceiling, driveDb, mix)" },
-      { "id": "unknown_band_field_lists_the_templates", "processor": "eq.parametric", "params": {"band0.nope": 1.0}, "message": "unknown key band0.nope (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)" }
+      { "id": "single_unknown", "processor": "saturation.softClipper", "params": {"notAKey": 1.0}, "message": "unknown key params.notAKey (expected aliasing, ceiling, driveDb, mix)" },
+      { "id": "first_unknown_in_byte_order", "processor": "saturation.softClipper", "params": {"zeta": 1.0, "alpha": 2.0}, "message": "unknown key params.alpha (expected aliasing, ceiling, driveDb, mix)" },
+      { "id": "unknown_beside_a_known_key", "processor": "saturation.softClipper", "params": {"driveDb": 1.0, "notAKey": 1.0}, "message": "unknown key params.notAKey (expected aliasing, ceiling, driveDb, mix)" },
+      { "id": "unknown_band_field_lists_the_templates", "processor": "eq.parametric", "params": {"band0.nope": 1.0}, "message": "unknown key params.band0.nope (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)" }
     ]
   },
   "cqt_family": {
