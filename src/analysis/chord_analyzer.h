@@ -165,6 +165,13 @@ struct ChordConfig {
   std::optional<float> tuning;
 };
 
+/// @brief Domain of the ChordConfig members n_fft and hop_length.
+inline constexpr util::check::NumericDomain kChordCountDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief Domain of ChordConfig::hmm_beam_width.
+inline constexpr util::check::NumericDomain kChordBeamWidthDomain =
+    util::check::integer_domain_of<int>(0);
+
 /// @brief Refuses a ChordConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless min_duration is finite and at least 0,
 ///         smoothing_window is finite and at least 0 (one hop or less, 0 included, smooths
@@ -174,9 +181,9 @@ inline void validate_chord_config(const ChordConfig& config) {
   util::check::at_least(config.min_duration, 0.0, "min_duration");
   util::check::at_least(config.smoothing_window, 0.0, "smoothing_window");
   util::check::in_range(config.threshold, 0.0, 1.0, "threshold");
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::integer_at_least(config.hmm_beam_width, 0, "hmm_beam_width");
+  util::check::integer_within<int>(config.n_fft, kChordCountDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kChordCountDomain, "hop_length");
+  util::check::integer_within<int>(config.hmm_beam_width, kChordBeamWidthDomain, "hmm_beam_width");
 }
 
 /// @brief Chord analyzer for detecting chords from audio.

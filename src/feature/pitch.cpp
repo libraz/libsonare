@@ -326,8 +326,8 @@ void check_yin_rate_params(int sr, const PitchConfig& config) {
 
 int validate_yin_track_input(const Audio& audio, const PitchConfig& config) {
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(config.frame_length, 1, "frame_length");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.frame_length, kPitchCountDomain, "frame_length");
+  util::check::integer_within<int>(config.hop_length, kPitchCountDomain, "hop_length");
   util::check::in_interval(config.threshold, 0.0, false, 1.0, true, "threshold");
   // The same domain the piptrack front-end already enforces on these two
   // fields. Both engines are reachable from one public entry point (the pitch
@@ -702,8 +702,8 @@ float midi_to_freq(float midi) { return midi_to_hz(midi); }
 PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmin, float fmax,
                         float threshold) {
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(n_fft, 1, "n_fft");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within<int>(n_fft, kPitchCountDomain, "n_fft");
+  util::check::integer_within<int>(hop_length, kPitchCountDomain, "hop_length");
   util::check::greater_than(fmin, 0.0, "fmin");
   if (!(numeric::finite(fmax) && fmax > fmin)) {
     util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");
@@ -808,7 +808,7 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
 
 void validate_tuning_params(float resolution, int bins_per_octave) {
   util::check::in_interval(resolution, 0.0, false, 1.0, false, "resolution");
-  util::check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+  util::check::integer_within<int>(bins_per_octave, kPitchCountDomain, "bins_per_octave");
 }
 
 float pitch_tuning(const std::vector<float>& frequencies, float resolution, int bins_per_octave) {

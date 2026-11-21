@@ -101,8 +101,8 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   // hop/window config; sr is kept only for API symmetry with the BPM-axis
   // helpers (tempogram_ratio, plp) that do need it.
   (void)sr;
-  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
+  util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   if (onset_envelope.empty()) return {};
 
   const int win = config.win_length;
@@ -177,8 +177,8 @@ namespace detail {
 
 std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset_envelope,
                                                  const TempogramConfig& config) {
-  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
+  util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   if (onset_envelope.empty()) return {};
 
   const auto spec = fourier_tempogram_complex(onset_envelope, config);
@@ -208,12 +208,12 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
 
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
                                     const TempogramConfig& config, float bpm_min, int n_bins) {
-  util::check::integer_at_least(sr, 1, "sr");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(sr, kRhythmCountDomain, "sr");
+  util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
   // Finite, not merely positive: a non-finite bpm_min makes the phase below NaN, and
   // the cast to a bin index is undefined before std::clamp ever sees the value.
   util::check::greater_than(bpm_min, 0.0, "bpm_min");
-  util::check::integer_at_least(n_bins, 1, "n_bins");
+  util::check::integer_within<int>(n_bins, kRhythmCountDomain, "n_bins");
   if (onset_envelope.empty()) return {};
 
   // NOTE: custom / approximate phase-fold, NOT librosa-compatible. Each Fourier
@@ -258,9 +258,9 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 }
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
-  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::integer_at_least(config.sr, 1, "sr");
+  util::check::integer_within<int>(config.win_length, kTempogramWinLengthDomain, "win_length");
+  util::check::integer_within<int>(config.hop_length, kRhythmCountDomain, "hop_length");
+  util::check::integer_within<int>(config.sr, kRhythmCountDomain, "sr");
   // The band test below is the only reader of these, and it is a pair of relational
   // comparisons: a NaN bound fails both, so the band silently stops restricting.
   util::check::greater_than(config.tempo_min, 0.0, "tempo_min");
@@ -382,8 +382,8 @@ std::vector<float> plp(const Audio& audio, const PlpConfig& config) {
 
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length, const std::vector<float>& factors) {
-  util::check::integer_at_least(win_length, 1, "win_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within<int>(win_length, kRhythmCountDomain, "win_length");
+  util::check::integer_within<int>(hop_length, kRhythmCountDomain, "hop_length");
   // Every rejection below used to be answered with a zero-filled vector, which
   // reads as a genuine "no energy at this ratio" measurement. Reject instead so
   // a caller can never mistake an unanswerable call for a result.

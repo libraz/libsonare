@@ -8,8 +8,18 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
+
+/// @brief The positive counts of the spectral descriptors (n_bins, n_frames, sr, n_fft, n_bands,
+///        frame_length, hop_length).
+inline constexpr util::check::NumericDomain kSpectralCountDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The polynomial orders of poly_features.
+inline constexpr util::check::NumericDomain kSpectralOrderDomain =
+    util::check::integer_domain_of<int>(0);
 
 /// @brief Computes spectral centroid (center of mass of spectrum).
 /// @param spec Spectrogram

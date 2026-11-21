@@ -51,7 +51,7 @@ Chroma Chroma::compute(const Audio& audio, const ChromaConfig& config) {
 Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
                                 const ChromaFilterConfig& chroma_config) {
   if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within<int>(sr, kChromaCountDomain, "sr");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -232,7 +232,7 @@ std::vector<float> smooth_rows_hann(const std::vector<float>& m, int rows, int c
 
 Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  util::check::integer_within<int>(config.n_chroma, kChromaCountDomain, "n_chroma");
   if (config.cqt.bins_per_octave % config.n_chroma != 0) {
     util::check::refuse_relation({"cqt.bins_per_octave", "n_chroma"},
                                  "{0} must be a multiple of {1}");
@@ -274,7 +274,7 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
 void validate_bass_chroma_config(const BassChromaConfig& config) {
   // Unprefixed: every surface passes the CQT's hop as the call's own hop_length.
   validate_cqt_config(config.cqt);
-  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  util::check::integer_within<int>(config.n_chroma, kChromaCountDomain, "n_chroma");
   if (config.cqt.bins_per_octave % config.n_chroma != 0) {
     util::check::refuse_relation({"bins_per_octave", "n_chroma"}, "{0} must be a multiple of {1}");
   }

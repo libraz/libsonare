@@ -28,6 +28,10 @@ constexpr int kMaxMeterCandidateNumerator = 32;
 ///          refused.
 constexpr int kMaxMeterDenominator = 32;
 
+/// @brief Domain of MeterConfig::denominator, a power of two in [1, kMaxMeterDenominator].
+inline constexpr util::check::NumericDomain kMeterDenominatorDomain =
+    util::check::integer_domain(1, kMaxMeterDenominator);
+
 /// @brief Widest numerator whose internal grouping is searched.
 /// @details A bar is split into groups of two and three beats, and the number
 ///          of ways to do that grows quickly enough that beyond this width the

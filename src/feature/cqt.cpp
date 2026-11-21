@@ -241,10 +241,10 @@ void validate_longest_filter(const CqtConfig& config, int sr) {
 void validate_cqt_fmin(float fmin) { util::check::greater_than(fmin, 0.0, "fmin"); }
 
 void validate_cqt_config(const CqtConfig& config) {
-  util::check::integer_in_range(config.hop_length, 1, kMaxCqtHopLength, "hop_length");
+  util::check::integer_within<int>(config.hop_length, kCqtHopLengthDomain, "hop_length");
   validate_cqt_fmin(config.fmin);
-  util::check::integer_at_least(config.n_bins, 1, "n_bins");
-  util::check::integer_at_least(config.bins_per_octave, 1, "bins_per_octave");
+  util::check::integer_within<int>(config.n_bins, kCqtCountDomain, "n_bins");
+  util::check::integer_within<int>(config.bins_per_octave, kCqtCountDomain, "bins_per_octave");
   util::check::greater_than(config.filter_scale, 0.0, "filter_scale");
 }
 

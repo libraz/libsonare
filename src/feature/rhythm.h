@@ -12,6 +12,7 @@
 
 #include "core/audio.h"
 #include "core/window.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -27,6 +28,15 @@ enum class TempogramMode {
 /// and linear in the frame count -- 16384 frames already costs 5 s over one second of
 /// audio -- so an unbounded window does not finish rather than failing.
 inline constexpr int kMaxTempogramWinLength = 384 * 32;
+
+/// @brief The tempogram windows in onset frames: [2, @ref kMaxTempogramWinLength].
+inline constexpr util::check::NumericDomain kTempogramWinLengthDomain =
+    util::check::integer_domain(2, kMaxTempogramWinLength);
+
+/// @brief The positive counts of the rhythm functions (hop_length, sr, n_bins, win_length of the
+///        tempogram ratio).
+inline constexpr util::check::NumericDomain kRhythmCountDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Configuration for tempogram / fourier_tempogram.
 struct TempogramConfig {

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -48,6 +49,10 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
                                          float window_param = 1.0f, bool is_cqt = true,
                                          bool pad_fft = false, float Q = 0.0f,
                                          int* n_fft_out = nullptr);
+
+/// @brief What the sample rate of wavelet_lengths accepts.
+inline constexpr util::check::NumericDomain kWaveletSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Lengths of each wavelet kernel computed in @ref wavelet.
 /// @details Returns the RAW fractional lengths to match librosa exactly (no

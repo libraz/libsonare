@@ -1,6 +1,7 @@
 #include <array>
 
 #include "c_api/core_internal.h"
+#include "c_api/feature_input_domains.h"
 #include "util/parameter_checks.h"
 
 namespace {
@@ -524,8 +525,7 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
     functions->count = 0;
   }
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(chords, count);
-  util::check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize), "count");
+  util::check::integer_within(count, sonare_c_detail::kChordLabelCountDomain, "count");
   PitchClass label_root = PitchClass::C;
   Mode label_mode = Mode::Major;
   if (!from_c_pitch_class(key_root, &label_root)) {

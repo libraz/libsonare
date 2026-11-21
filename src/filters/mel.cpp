@@ -48,7 +48,7 @@ constexpr size_t kMaxMelCacheSize = 8;
 }  // namespace
 
 std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk) {
-  util::check::integer_at_least(n_mels, 1, "n_mels");
+  util::check::integer_within<int>(n_mels, kMelFrequencyCountDomain, "n_mels");
   SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
                    "mel_frequencies: fmax must be greater than fmin");
 
@@ -71,7 +71,7 @@ std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk)
 std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfig& config) {
   SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_fft > 0, ErrorCode::InvalidParameter);
-  util::check::integer_in_range(config.n_mels, 1, kMaxMelBands, "n_mels");
+  util::check::integer_within<int>(config.n_mels, kMelBandsDomain, "n_mels");
 
   int n_bins = n_fft / 2 + 1;
   const float nyquist = static_cast<float>(sr) / 2.0f;

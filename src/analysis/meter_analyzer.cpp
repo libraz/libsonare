@@ -563,7 +563,7 @@ void validate_meter_config(const MeterConfig& config) {
   // when it resolves a compound meter, so a non-power-of-two could never
   // round-trip through the reported signature. The ceiling is a separate
   // question, on kMaxMeterDenominator.
-  util::check::power_of_two_in_range(config.denominator, 1, kMaxMeterDenominator, "denominator");
+  util::check::power_of_two_within(config.denominator, kMeterDenominatorDomain, "denominator");
   util::check::at_least(config.downbeat_weight, 0.0, "downbeat_weight");
   util::check::at_least(config.measure_weight, 0.0, "measure_weight");
   util::check::at_least(config.subdivision_weight, 0.0, "subdivision_weight");

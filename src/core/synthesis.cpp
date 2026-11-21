@@ -35,7 +35,7 @@ size_t checked_sample_count(float duration, int sample_rate, const char* subject
 }  // namespace
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
   // Reject non-finite duration explicitly: `duration < 0` is false for NaN, so a
   // NaN (or +Inf) would slip past the sign check and cast to a huge/garbage size_t,
   // triggering a runaway allocation.
@@ -53,7 +53,7 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 }
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
   // See tone(): NaN/Inf duration must be rejected before the size_t cast.
   util::check::at_least(duration, 0.0, "duration");
 
@@ -103,11 +103,10 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
 
 Audio clicks(const std::vector<float>& times, int sr, int length, float frequency,
              float click_duration) {
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within<int>(sr, kSynthesisSampleRateDomain, "sr");
   util::check::greater_than(click_duration, 0.0, "click_duration");
   util::check::greater_than(frequency, 0.0, "frequency");
-  util::check::integer_in_range(
-      length, 0, static_cast<long long>(resource::kMaxOfflineAudioSamples), "length");
+  util::check::integer_within<int>(length, kClicksLengthDomain, "length");
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
   const size_t click_count = checked_sample_count(click_duration, sr, "click_duration");

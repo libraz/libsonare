@@ -1,5 +1,6 @@
 #include <limits>
 
+#include "c_api/feature_input_domains.h"
 #include "c_api/features_internal.h"
 #include "util/parameter_checks.h"
 
@@ -186,14 +187,14 @@ SonareError sonare_mel_delta(const float* features, int n_features, int n_frames
   if (const SonareError err = run_validation([&] {
         namespace check = sonare::util::check;
         constexpr int kIntMax = std::numeric_limits<int>::max();
-        check::integer_at_least(n_features, 1, "n_features");
-        check::integer_at_least(n_frames, 1, "n_frames");
+        check::integer_within(n_features, sonare_c_detail::kMelDeltaShapeDomain, "n_features");
+        check::integer_within(n_frames, sonare_c_detail::kMelDeltaShapeDomain, "n_frames");
         if (n_features > kIntMax / n_frames) {
           check::refuse_relation(
               {"n_features", "n_frames"},
               "{0} * {1} must be at most " + sonare::util::refusal::integer_bound_text(kIntMax));
         }
-        check::odd_integer_in_range(width, 3, kIntMax, "width");
+        check::odd_within(width, sonare::kMelDeltaWidthDomain, "width");
       });
       err != SONARE_OK) {
     return err;

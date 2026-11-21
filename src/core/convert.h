@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare {
 
 /// @brief Converts Hz to mel frequency (Slaney formula).
@@ -56,6 +58,13 @@ std::string hz_to_note(float hz);
 /// @throws SonareException (InvalidParameter) for a name that does not parse
 ///         or whose octave is outside -1..9 (the MIDI note range's octaves).
 float note_to_hz(const std::string& note);
+
+/// @brief What the sample rate of a frame/time conversion accepts.
+inline constexpr util::check::NumericDomain kFrameTimeSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the hop length of a frame/time conversion accepts.
+inline constexpr util::check::NumericDomain kFrameTimeHopDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Converts frame index to time in seconds.
 /// @param frames Frame index

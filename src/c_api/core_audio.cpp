@@ -1,6 +1,7 @@
 #include <array>
 
 #include "c_api/core_internal.h"
+#include "c_api/feature_input_domains.h"
 #include "core/audio_io.h"
 #include "mixing/downmix.h"
 #include "util/parameter_checks.h"
@@ -71,9 +72,9 @@ SonareError downmix_planar(const float* channels, size_t frames, size_t num_chan
   SONARE_C_REQUIRE_NONNULL(channels);
   ChannelLayout to{};
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(frames, 1, "frames");
-        util::check::integer_in_range(static_cast<long long>(num_channels), 1,
-                                      std::numeric_limits<int>::max(), "num_channels");
+        util::check::integer_within(frames, sonare_c_detail::kDownmixFramesDomain, "frames");
+        util::check::integer_within(num_channels, sonare_c_detail::kDownmixChannelCountDomain,
+                                    "num_channels");
         util::check::integer_in_range(target_layout, 0, kMaxChannelLayoutValue, "target_layout");
       });
       err != SONARE_OK) {
@@ -173,8 +174,10 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(path);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(channel_index, 0, "channel_index"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(channel_index, sonare_c_detail::kAudioChannelIndexDomain,
+                                    "channel_index");
+      });
       err != SONARE_OK) {
     return err;
   }

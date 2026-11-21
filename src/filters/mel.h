@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare {
 
 /// @brief Mel filterbank normalization type.
@@ -21,6 +23,13 @@ enum class MelNorm {
 /// for an allocation no machine can serve. The extent is computed in `size_t` so the
 /// product cannot wrap before this ceiling sees it.
 inline constexpr int kMaxMelBands = 4096;
+
+/// @brief What the band count of mel_frequencies accepts.
+inline constexpr util::check::NumericDomain kMelFrequencyCountDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What MelFilterConfig::n_mels accepts.
+inline constexpr util::check::NumericDomain kMelBandsDomain =
+    util::check::integer_domain(1, kMaxMelBands);
 
 /// @brief Configuration for Mel filterbank.
 struct MelFilterConfig {

@@ -1199,7 +1199,7 @@ TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral
   MelConfig bad_fft = config;
   bad_fft.n_fft = 0;
   CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, bad_fft, 22050),
-                    "n_fft must be an integer in [1, 2147483647]");
+                    "n_fft must be an integer in [1, 8192]");
   CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, config, 0),
                     "sr must be an integer in [1, 2147483647]");
   std::vector<float> mel_nan = mel;

@@ -57,12 +57,16 @@ struct SectionConfig {
   float tuning = 0.0f;
 };
 
+/// @brief Domain of the SectionConfig members n_fft and hop_length.
+inline constexpr util::check::NumericDomain kSectionCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Refuses a SectionConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless n_fft and hop_length are positive and
 ///         min_section_sec and boundary_threshold are finite and non-negative.
 inline void validate_section_config(const SectionConfig& config) {
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.n_fft, kSectionCountDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kSectionCountDomain, "hop_length");
   util::check::at_least(config.min_section_sec, 0.0, "min_section_sec");
   util::check::at_least(config.boundary_threshold, 0.0, "boundary_threshold");
 }

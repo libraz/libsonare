@@ -47,7 +47,7 @@ std::vector<float> shift_onset_frames(std::vector<float> onset_env, int frame_of
 std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
                                           const OnsetConfig& config) {
   SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
-  util::check::integer_at_least(config.lag, 1, "lag");
+  util::check::integer_within<int>(config.lag, kOnsetCountDomain, "lag");
 
   int n_mels = mel_spec.n_mels();
   int n_frames = mel_spec.n_frames();
@@ -131,13 +131,15 @@ std::vector<float> center_onset_strength(std::vector<float> onset_env, const Stf
   return shift_onset_frames(std::move(onset_env), onset_center_shift_frames(geometry, center));
 }
 
-void validate_onset_n_bands(int n_bands) { util::check::integer_at_least(n_bands, 1, "n_bands"); }
+void validate_onset_n_bands(int n_bands) {
+  util::check::integer_within<int>(n_bands, kOnsetCountDomain, "n_bands");
+}
 
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,
                                         const OnsetConfig& config) {
   SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
   validate_onset_n_bands(n_bands);
-  util::check::integer_at_least(config.lag, 1, "lag");
+  util::check::integer_within<int>(config.lag, kOnsetCountDomain, "lag");
 
   int n_mels = mel_spec.n_mels();
   int n_frames = mel_spec.n_frames();
@@ -244,7 +246,7 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  util::check::integer_at_least(lag, 1, "lag");
+  util::check::integer_within<int>(lag, kOnsetCountDomain, "lag");
 
   std::vector<float> flux(n_frames, 0.0f);
 

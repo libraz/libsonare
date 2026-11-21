@@ -14,6 +14,7 @@
 #include "core/audio.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -181,6 +182,14 @@ inline constexpr int kMaxCqtFftLength = 131072;
 
 /// @brief The largest hop a CQT-family transform takes, half its largest FFT.
 inline constexpr int kMaxCqtHopLength = 65536;
+
+/// @brief The hops a CQT-family transform takes: [1, @ref kMaxCqtHopLength].
+inline constexpr util::check::NumericDomain kCqtHopLengthDomain =
+    util::check::integer_domain(1, kMaxCqtHopLength);
+
+/// @brief The positive counts of a CqtConfig (n_bins, bins_per_octave).
+inline constexpr util::check::NumericDomain kCqtCountDomain =
+    util::check::integer_domain_of<int>(1);
 
 namespace detail {
 

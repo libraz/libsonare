@@ -3,6 +3,7 @@
 /// @file mel_spectrogram.h
 /// @brief Mel spectrogram and MFCC computation.
 
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -18,6 +19,14 @@ namespace sonare {
 
 /// @brief Default MFCC coefficient count of @ref MelSpectrogram::mfcc.
 inline constexpr int kMfccDefaultCount = 20;
+
+/// @brief The delta smoothing widths of @ref MelSpectrogram::delta: odd integers from 3.
+inline constexpr util::check::NumericDomain kMelDeltaWidthDomain =
+    util::check::integer_domain(3, std::numeric_limits<int>::max());
+
+/// @brief The MFCC coefficient counts of @ref MelSpectrogram::mfcc.
+inline constexpr util::check::NumericDomain kMfccCountDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Configuration for Mel spectrogram computation.
 struct MelConfig {

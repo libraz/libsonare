@@ -107,16 +107,20 @@ struct BoundaryConfig {
   bool use_chroma = true;  ///< Use chroma features
 };
 
+/// @brief Domain of the BoundaryConfig counts n_fft, hop_length, kernel_size, n_mfcc and n_chroma.
+inline constexpr util::check::NumericDomain kBoundaryCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Refuses a BoundaryConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless n_fft, hop_length, kernel_size, n_mfcc and
 ///         n_chroma are positive, threshold, absolute_threshold, peak_distance and
 ///         reference_window are finite and non-negative, and at least one feature stream is on.
 inline void validate_boundary_config(const BoundaryConfig& config) {
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::integer_at_least(config.kernel_size, 1, "kernel_size");
-  util::check::integer_at_least(config.n_mfcc, 1, "n_mfcc");
-  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  util::check::integer_within<int>(config.n_fft, kBoundaryCountDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kBoundaryCountDomain, "hop_length");
+  util::check::integer_within<int>(config.kernel_size, kBoundaryCountDomain, "kernel_size");
+  util::check::integer_within<int>(config.n_mfcc, kBoundaryCountDomain, "n_mfcc");
+  util::check::integer_within<int>(config.n_chroma, kBoundaryCountDomain, "n_chroma");
   // Each is compared against measured values, so a non-finite one accepts or rejects every peak.
   util::check::at_least(config.threshold, 0.0, "threshold");
   util::check::at_least(config.absolute_threshold, 0.0, "absolute_threshold");

@@ -4,6 +4,7 @@
 /// @brief Unified music analysis facade.
 
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -183,6 +184,17 @@ struct MusicAnalyzerConfig {
 
 // The meter candidate and denominator limits live in analysis/meter_analyzer.h
 // alongside the estimator that enforces them.
+
+/// @brief Domain of the MusicAnalyzerConfig members hop_length, chroma_hop_multiplier and
+/// tempo_update_interval_beats.
+inline constexpr util::check::NumericDomain kMusicCountDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief Domain of MusicAnalyzerConfig::n_fft, an even integer.
+inline constexpr util::check::NumericDomain kMusicNfftDomain =
+    util::check::integer_domain(2, std::numeric_limits<int>::max());
+/// @brief Domain of MusicAnalyzerConfig::chord_hmm_beam_width.
+inline constexpr util::check::NumericDomain kMusicChordBeamWidthDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Validation rules for @ref MusicAnalyzerConfig.
 /// @details Found by argument-dependent lookup from @ref Validated, which is the

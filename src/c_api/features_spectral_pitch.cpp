@@ -1,9 +1,11 @@
 #include <limits>
 #include <string>
 
+#include "c_api/feature_input_domains.h"
 #include "c_api/features_internal.h"
 #include "core/synthesis.h"
 #include "feature/chroma.h"
+#include "feature/onset.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -188,7 +190,8 @@ SonareError sonare_spectral_flux(const float* samples, size_t length, int sample
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { check::integer_at_least(lag, 1, "lag"); });
+  if (const SonareError err =
+          run_validation([&] { check::integer_within(lag, sonare::kOnsetCountDomain, "lag"); });
       err != SONARE_OK) {
     return err;
   }
@@ -512,8 +515,8 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        check::integer_at_least(n_fft, 1, "n_fft");
-        check::integer_at_least(hop_length, 1, "hop_length");
+        check::integer_within(n_fft, sonare::kStftNFftDomain, "n_fft");
+        check::integer_within(hop_length, sonare::kStftHopDomain, "hop_length");
         check::at_least(ref_power, 0.0, "ref_power");
         check::integer_in_range(fill_nan, 0, 1, "fill_nan");
       });
@@ -657,11 +660,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (const SonareError err = run_validation([&] {
-        constexpr int kMaxFrames = std::numeric_limits<int>::max();
-        check::integer_in_range(n_frames > static_cast<size_t>(kMaxFrames)
-                                    ? static_cast<long long>(kMaxFrames) + 1
-                                    : static_cast<long long>(n_frames),
-                                1, kMaxFrames, "n_frames");
+        check::integer_within(n_frames, sonare_c_detail::kNoteSegmentFrameCountDomain, "n_frames");
         check::greater_than(frame_rate, 0.0, "frame_rate");
       });
       err != SONARE_OK) {

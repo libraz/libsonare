@@ -12,6 +12,10 @@ namespace sonare {
 /// @brief Default band count of @ref onset_strength_multi.
 inline constexpr int kOnsetStrengthMultiDefaultBands = 3;
 
+/// @brief The positive counts of the onset functions (lag, n_bands).
+inline constexpr util::check::NumericDomain kOnsetCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Configuration for onset strength computation.
 struct OnsetConfig {
   int lag = 1;           ///< Time lag for computing differences (frames)

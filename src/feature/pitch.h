@@ -8,8 +8,14 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
+
+/// @brief The positive counts of the pitch functions (frame_length, n_fft, hop_length,
+///        bins_per_octave).
+inline constexpr util::check::NumericDomain kPitchCountDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief The core names yin/pyin refuse under, as their JS requests spell them.
 inline constexpr std::array<std::pair<const char*, const char*>, 3> kPitchTrackRequestKeys{

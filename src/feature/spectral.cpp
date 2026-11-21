@@ -23,10 +23,10 @@ namespace {
 /// @details Hoisted so the four descriptors sharing this shape pay one copy of
 ///          each message; the test order matches the conjunction it replaced.
 void check_spectrogram_shape(int n_bins, int n_frames, int sr, int n_fft) {
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
-  util::check::integer_at_least(sr, 1, "sr");
-  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_within<int>(n_bins, kSpectralCountDomain, "n_bins");
+  util::check::integer_within<int>(n_frames, kSpectralCountDomain, "n_frames");
+  util::check::integer_within<int>(sr, kSpectralCountDomain, "sr");
+  util::check::integer_within<int>(n_fft, kSpectralCountDomain, "n_fft");
 }
 
 std::vector<float> pad_for_centered_frames(const float* samples, size_t n_samples,
@@ -214,8 +214,8 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
   util::check::non_null(magnitude, "magnitude");
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_within<int>(n_bins, kSpectralCountDomain, "n_bins");
+  util::check::integer_within<int>(n_frames, kSpectralCountDomain, "n_frames");
 
   constexpr double kAmin = static_cast<double>(constants::kEpsilon);
 
@@ -271,19 +271,19 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
 
 std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_bands, float fmin,
                                      float quantile) {
-  util::check::integer_at_least(n_bands, 1, "n_bands");
+  util::check::integer_within<int>(n_bands, kSpectralCountDomain, "n_bands");
   util::check::in_interval(quantile, 0.0, false, 1.0, false, "quantile");
   // An infinite fmin is refused here by its own domain instead of at the Nyquist relation.
   util::check::greater_than(fmin, 0.0, "fmin");
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within<int>(sr, kSpectralCountDomain, "sr");
 
   const std::vector<float>& magnitude = spec.magnitude();
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
   int n_fft = spec.n_fft();
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
-  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_within<int>(n_bins, kSpectralCountDomain, "n_bins");
+  util::check::integer_within<int>(n_frames, kSpectralCountDomain, "n_frames");
+  util::check::integer_within<int>(n_fft, kSpectralCountDomain, "n_fft");
 
   float nyquist = 0.5f * static_cast<float>(sr);
   if (!(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist)) {
@@ -420,7 +420,7 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
                                  int n_fft, int order) {
   util::check::non_null(magnitude, "magnitude");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
-  util::check::integer_at_least(order, 0, "order");
+  util::check::integer_within<int>(order, kSpectralOrderDomain, "order");
 
   // librosa.feature.poly_features computes np.polyfit(freqs, S[:, t], order).
   // Output is [order + 1, n_frames] with coefficients ordered highest-degree first.
@@ -503,8 +503,8 @@ std::vector<float> zero_crossing_rate(const Audio& audio, int frame_length, int 
 
 std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, int frame_length,
                                       int hop_length) {
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within<int>(frame_length, kSpectralCountDomain, "frame_length");
+  util::check::integer_within<int>(hop_length, kSpectralCountDomain, "hop_length");
   util::check::non_null_when_count(samples, n_samples, "samples", "n_samples");
 
   // Empty input: no zero crossings to count. Return a single zero-rate frame so
@@ -554,8 +554,8 @@ std::vector<float> rms_energy(const Audio& audio, int frame_length, int hop_leng
 std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_length,
                               int hop_length) {
   util::check::non_null_when_count(samples, n_samples, "samples", "n_samples");
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within<int>(frame_length, kSpectralCountDomain, "frame_length");
+  util::check::integer_within<int>(hop_length, kSpectralCountDomain, "hop_length");
 
   if (n_samples == 0) {
     return std::vector<float>(1, 0.0f);

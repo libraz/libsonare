@@ -23,21 +23,23 @@ namespace sonare {
 void validate_config(const MusicAnalyzerConfig& config) {
   // A real-valued FFT of an odd size has no n_fft/2 + 1 bin layout, so an odd
   // size is rejected rather than silently rounded.
-  util::check::even_integer_in_range(config.n_fft, 2, std::numeric_limits<int>::max(), "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::even_within(config.n_fft, kMusicNfftDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kMusicCountDomain, "hop_length");
   util::check::greater_than(config.bpm_min, 0.0, "bpm_min");
   if (!(numeric::finite(config.bpm_max) && config.bpm_max >= config.bpm_min)) {
     util::check::refuse_relation({"bpm_max", "bpm_min"}, "{0} must be finite and at least {1}");
   }
   util::check::greater_than(config.start_bpm, 0.0, "start_bpm");
   util::check::at_least(config.chroma_highpass_hz, 0.0, "chroma_highpass_hz");
-  util::check::integer_at_least(config.chroma_hop_multiplier, 1, "chroma_hop_multiplier");
+  util::check::integer_within<int>(config.chroma_hop_multiplier, kMusicCountDomain,
+                                   "chroma_hop_multiplier");
   if (config.tuning) util::check::in_interval(*config.tuning, -0.5, true, 0.5, false, "tuning");
   // A non-positive beam width disables the HMM beam cut instead of erroring,
   // which turns chord smoothing into an order-of-magnitude slower full search.
-  util::check::integer_at_least(config.chord_hmm_beam_width, 1, "chord_hmm_beam_width");
-  util::check::integer_at_least(config.tempo_update_interval_beats, 1,
-                                "tempo_update_interval_beats");
+  util::check::integer_within<int>(config.chord_hmm_beam_width, kMusicChordBeamWidthDomain,
+                                   "chord_hmm_beam_width");
+  util::check::integer_within<int>(config.tempo_update_interval_beats, kMusicCountDomain,
+                                   "tempo_update_interval_beats");
   // An empty candidate set makes the meter estimator return a fixed
   // low-confidence 4/4 rather than searching, which reads as a detection
   // result. Reject it instead so a caller who cleared the list is told.
@@ -63,8 +65,8 @@ void validate_config(const MusicAnalyzerConfig& config) {
   // when it resolves a compound meter, so a non-power-of-two could never
   // round-trip through the reported signature. The ceiling is a separate
   // question, on kMaxMeterDenominator.
-  util::check::power_of_two_in_range(config.meter_denominator, 1, kMaxMeterDenominator,
-                                     "meter_denominator");
+  util::check::power_of_two_within(config.meter_denominator, kMeterDenominatorDomain,
+                                   "meter_denominator");
 }
 
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)

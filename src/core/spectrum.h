@@ -7,11 +7,13 @@
 #include <complex>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -96,6 +98,21 @@ std::vector<float> build_padded_window(WindowType window, int win_length, int n_
 ///         framing loop allocates; reaching the allocator instead reports the failure
 ///         as OutOfMemory, which names nothing the caller passed.
 void validate_config(const StftConfig& config);
+
+/// @brief What StftConfig::n_fft accepts.
+inline constexpr util::check::NumericDomain kStftNFftDomain =
+    util::check::integer_domain(1, kMaxStftNFft);
+/// @brief What n_fft of a COLA geometry accepts: even, at least 4.
+inline constexpr util::check::NumericDomain kColaNFftDomain =
+    util::check::integer_domain(4, std::numeric_limits<int>::max());
+/// @brief What the hop length of an STFT or COLA geometry accepts.
+inline constexpr util::check::NumericDomain kStftHopDomain = util::check::integer_domain_of<int>(1);
+/// @brief What StftConfig::win_length accepts; 0 selects n_fft.
+inline constexpr util::check::NumericDomain kStftWinLengthDomain =
+    util::check::integer_domain_of<int>(0);
+/// @brief What an explicit window length of a COLA geometry accepts.
+inline constexpr util::check::NumericDomain kColaWinLengthDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Validates an analysis geometry whose spectrum is resynthesized to audio.
 /// @details The single source of truth for the STFT geometry the spectral

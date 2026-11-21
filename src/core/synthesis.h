@@ -7,8 +7,17 @@
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
+
+/// @brief What the sample rate of tone, chirp and clicks accepts.
+inline constexpr util::check::NumericDomain kSynthesisSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the output length of clicks accepts, in samples; 0 sizes it to the last click.
+inline constexpr util::check::NumericDomain kClicksLengthDomain =
+    util::check::integer_domain(0, static_cast<long long>(resource::kMaxOfflineAudioSamples));
 
 /// Length of a generated signal when a caller gives none, in seconds.
 inline constexpr float kDefaultSynthesisDurationSec = 1.0f;

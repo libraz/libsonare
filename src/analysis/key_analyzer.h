@@ -90,13 +90,17 @@ struct KeyConfig {
 ///          check alone does not ensure: at the 2048-point default a hop of 8 passes it.
 constexpr int kMinKeyHpssHopLength = 16;
 
+/// @brief Domain of the KeyConfig members n_fft and hop_length.
+inline constexpr util::check::NumericDomain kKeyCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Refuses a KeyConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) for a non-positive n_fft or hop_length, a
 ///         hop_length below @ref kMinKeyHpssHopLength with use_hpss, or a negative or
 ///         non-finite high_pass_hz.
 inline void validate_key_config(const KeyConfig& config) {
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.n_fft, kKeyCountDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kKeyCountDomain, "hop_length");
   if (config.use_hpss && config.hop_length < kMinKeyHpssHopLength) {
     util::check::refuse_relation(
         {"hop_length", "use_hpss"},

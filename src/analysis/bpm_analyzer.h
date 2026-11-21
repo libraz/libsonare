@@ -102,6 +102,10 @@ struct BpmConfig {
   int hop_length = 512;      ///< Hop length in samples of the input buffer
 };
 
+/// @brief Domain of the tempo search members n_fft and hop_length.
+inline constexpr util::check::NumericDomain kBpmCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Refuses a tempo search outside the argument domain every public surface shares.
 /// @details The rule @ref validate_bpm_config and validate_rhythm_config both apply.
 /// @throws SonareParameterRefusal(InvalidParameter) unless bpm_min is finite and positive, bpm_max
@@ -114,8 +118,8 @@ inline void validate_tempo_search(float bpm_min, float bpm_max, float start_bpm,
     util::check::refuse_relation({"bpm_max", "bpm_min"}, "{0} must be finite and greater than {1}");
   }
   util::check::greater_than(start_bpm, 0.0, "start_bpm");
-  util::check::integer_at_least(n_fft, 1, "n_fft");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within<int>(n_fft, kBpmCountDomain, "n_fft");
+  util::check::integer_within<int>(hop_length, kBpmCountDomain, "hop_length");
 }
 
 /// @brief Refuses a BpmConfig outside the argument domain every public surface shares.

@@ -125,16 +125,24 @@ struct ChromaCensConfig {
 /// @brief Octaves the public chroma-from-CQT entry points analyse.
 constexpr int kChromaCqtOctaves = 7;
 
+/// @brief The positive counts of the chroma entry points (n_chroma, sr).
+inline constexpr util::check::NumericDomain kChromaCountDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The bins per octave of a public chroma-from-CQT entry point, whose octave span fits an
+///        int.
+inline constexpr util::check::NumericDomain kChromaBinsPerOctaveDomain =
+    util::check::integer_domain(1, std::numeric_limits<int>::max() / kChromaCqtOctaves);
+
 /// @brief The ChromaCqtConfig a public chroma_cqt / chroma_cens entry point runs with.
 /// @details Spans @ref kChromaCqtOctaves octaves at @p bins_per_octave.
 /// @throws SonareParameterRefusal(InvalidParameter) unless hop_length is in [1, kMaxCqtHopLength],
 ///         n_chroma is positive and bins_per_octave is a positive multiple of n_chroma whose octave
 ///         span fits an int.
 inline ChromaCqtConfig make_chroma_cqt_config(int hop_length, int n_chroma, int bins_per_octave) {
-  util::check::integer_in_range(hop_length, 1, kMaxCqtHopLength, "hop_length");
-  util::check::integer_at_least(n_chroma, 1, "n_chroma");
-  util::check::integer_in_range(
-      bins_per_octave, 1, std::numeric_limits<int>::max() / kChromaCqtOctaves, "bins_per_octave");
+  util::check::integer_within<int>(hop_length, kCqtHopLengthDomain, "hop_length");
+  util::check::integer_within<int>(n_chroma, kChromaCountDomain, "n_chroma");
+  util::check::integer_within<int>(bins_per_octave, kChromaBinsPerOctaveDomain, "bins_per_octave");
   if (bins_per_octave % n_chroma != 0) {
     util::check::refuse_relation({"bins_per_octave", "n_chroma"}, "{0} must be a multiple of {1}");
   }

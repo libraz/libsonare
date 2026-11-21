@@ -297,19 +297,19 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
 }
 
 void validate_config(const StftConfig& config) {
-  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within<int>(config.n_fft, kStftNFftDomain, "n_fft");
+  util::check::integer_within<int>(config.hop_length, kStftHopDomain, "hop_length");
   // 0 is the documented "use nFft" sentinel; a negative value would take the
   // same branch and silently read as that default.
-  util::check::integer_at_least(config.win_length, 0, "win_length");
+  util::check::integer_within<int>(config.win_length, kStftWinLengthDomain, "win_length");
   if (config.actual_win_length() > config.n_fft) {
     util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
   }
 }
 
 void validate_cola_geometry(int n_fft, int hop_length) {
-  util::check::even_integer_in_range(n_fft, 4, std::numeric_limits<int>::max(), "n_fft");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::even_within(n_fft, kColaNFftDomain, "n_fft");
+  util::check::integer_within<int>(hop_length, kStftHopDomain, "hop_length");
   if (hop_length > n_fft / 2) {
     util::check::refuse_relation({"hop_length", "n_fft"}, "{0} must be at most {1} / 2");
   }
@@ -317,7 +317,7 @@ void validate_cola_geometry(int n_fft, int hop_length) {
 
 void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int win_length) {
   validate_cola_geometry(n_fft, hop_length);
-  util::check::integer_at_least(win_length, 1, "win_length");
+  util::check::integer_within<int>(win_length, kColaWinLengthDomain, "win_length");
   if (win_length > n_fft) {
     util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
   }

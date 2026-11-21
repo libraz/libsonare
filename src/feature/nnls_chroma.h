@@ -3,6 +3,7 @@
 /// @file nnls_chroma.h
 /// @brief NNLS chroma feature extraction for chord recognition.
 
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -57,6 +58,14 @@ struct NnlsChromaConfig {
   }
 };
 
+/// @brief The STFT blend FFT sizes of an NnlsChromaConfig: even integers from 2.
+inline constexpr util::check::NumericDomain kNnlsBlendNfftDomain =
+    util::check::integer_domain(2, std::numeric_limits<int>::max());
+
+/// @brief The positive hop of an NnlsChromaConfig.
+inline constexpr util::check::NumericDomain kNnlsHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Refuses the caller-settable NnlsChromaConfig fields outside the argument domain every
 ///        public surface shares.
 /// @throws SonareException(InvalidParameter) unless stft_blend_weight is finite in [0, 1],
@@ -64,9 +73,8 @@ struct NnlsChromaConfig {
 ///         fields are checked whether or not enable_stft_blend is set.
 inline void validate_nnls_chroma_config(const NnlsChromaConfig& config) {
   util::check::in_range(config.stft_blend_weight, 0.0, 1.0, "stft_blend_weight");
-  util::check::even_integer_in_range(config.stft_blend_n_fft, 2, std::numeric_limits<int>::max(),
-                                     "stft_blend_n_fft");
-  util::check::integer_at_least(config.cqt.hop_length, 1, "hop_length");
+  util::check::even_within(config.stft_blend_n_fft, kNnlsBlendNfftDomain, "stft_blend_n_fft");
+  util::check::integer_within<int>(config.cqt.hop_length, kNnlsHopLengthDomain, "hop_length");
 }
 
 /// @brief Builds a log-frequency harmonic template matrix for NNLS.

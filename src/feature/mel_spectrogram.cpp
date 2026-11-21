@@ -82,7 +82,7 @@ std::vector<float> MelSpectrogram::to_db(float ref, float amin, float top_db) co
 }
 
 std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
-  util::check::integer_at_least(n_mfcc, 1, "n_mfcc");
+  util::check::integer_within<int>(n_mfcc, kMfccCountDomain, "n_mfcc");
   if (n_mfcc > n_mels_)
     util::check::refuse_relation({"n_mfcc", "n_mels"}, "{0} must be at most {1}");
 
@@ -133,7 +133,7 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
                                          int width) {
   SONARE_CHECK(features != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_features > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  util::check::odd_integer_in_range(width, 3, std::numeric_limits<int>::max(), "width");
+  util::check::odd_within(width, kMelDeltaWidthDomain, "width");
   // The regression below spreads one non-finite element across every frame
   // whose window covers it, so a NaN input yields a mostly-NaN delta that is
   // indistinguishable from a valid result by shape. Rejected here rather than
