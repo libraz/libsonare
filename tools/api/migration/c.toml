@@ -806,13 +806,6 @@ rule = "pitch-semitones"
 
 [[entry]]
 kind = "option"
-old = "sonare_pitch_shift_ex(semitones)"
-new = "sonare_pitch_shift_ex(pitch_semitones)"
-domain = "effects"
-rule = "pitch-semitones"
-
-[[entry]]
-kind = "option"
 old = "sonare_scale_quantize_midi(reference_midi)"
 new = "sonare_scale_quantize_midi(scale_reference_midi)"
 domain = "effects"
@@ -1635,18 +1628,17 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create r
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create"
-changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields, NaN when not given"
 domain = "mastering"
 rule = "c-create"
-test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming"
 
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create_ex"
-changed = "SonareError sonare_streaming_mastering_chain_create_ex(config_json, loudness_static_gain_db, loudness_static_gain_peak_db, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+removed = "call sonare_streaming_mastering_chain_create with SonareStreamingMasteringChainOptions loudness_static_gain_db and loudness_static_gain_peak_dbtp set"
 domain = "mastering"
-rule = "c-create"
-test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -1730,50 +1722,46 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_master_audio"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
 domain = "mastering"
 rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_master_audio"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_stereo"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields"
 domain = "mastering"
 rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_master_audio"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_with_progress"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+removed = "call sonare_master_audio with SonareMasterAudioOptions progress_callback and progress_user_data set"
 domain = "mastering"
-rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_with_progress_ex"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+removed = "call sonare_master_audio with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data"
 domain = "mastering"
-rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_stereo_with_progress"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+removed = "call sonare_master_audio_stereo with SonareMasterAudioOptions progress_callback and progress_user_data set"
 domain = "mastering"
-rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_master_audio_stereo_with_progress_ex"
-changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+removed = "call sonare_master_audio_stereo with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data"
 domain = "mastering"
-rule = "typed-results"
-test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -2145,26 +2133,23 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_hpss_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+removed = "call sonare_hpss with SonareHpssOptions n_fft, hop_length and use_soft_mask set; pass a non-NULL out_residual for the residual"
 domain = "effects"
-rule = "absent-not-sentinel"
-test = "tests/api/sonare_c_effects_extra_test.cpp::C effects _ex options reach their native processing paths"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_time_stretch_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+removed = "call sonare_time_stretch with SonareTimeStretchOptions n_fft and hop_length set"
 domain = "effects"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::native spectral stretch geometry refusals"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_pitch_shift_ex"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+removed = "call sonare_pitch_shift with SonarePitchShiftOptions n_fft and hop_length set"
 domain = "effects"
-rule = "absent-not-sentinel"
-test = "tests/conformance/core_validation_refusals_test.cpp::native spectral stretch geometry refusals"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -2448,7 +2433,7 @@ old = "SonareVoiceChangeConfig"
 changed = "leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change_ex selects the formant mode"
+test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change selects the formant mode"
 
 [[entry]]
 kind = "type"
@@ -2534,22 +2519,6 @@ changed = "the hop is a size_t instead of an int; a value above 2147483647 is re
 domain = "effects"
 rule = "c-count-types"
 test = "tests/api/sonare_c_daw_refusal_test.cpp::the time-varying correction entries refuse the track arguments by name"
-
-[[entry]]
-kind = "option"
-old = "sonare_trim_ex(frame_length)"
-changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
-domain = "effects"
-rule = "c-count-types"
-test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim_ex uses custom framing"
-
-[[entry]]
-kind = "option"
-old = "sonare_trim_ex(hop_length)"
-changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
-domain = "effects"
-rule = "c-count-types"
-test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim_ex uses custom framing"
 
 [[entry]]
 kind = "field"
@@ -3011,6 +2980,7 @@ changed = "takes a trailing nullable SonareSilenceCommonReport* out_report (NULL
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_features_extra_test.cpp::sonare_split_silence_common report separates the three ways one interval happens"
+
 [[entry]]
 kind = "function"
 old = "sonare_detect_key"
@@ -3097,6 +3067,7 @@ old = "sonare_analyze_json_ex_with_progress"
 removed = "call sonare_analyze_json with progress_callback, progress_user_data, cancel_callback and cancel_user_data set in SonareMusicAnalyzeOptions"
 domain = "analysis"
 rule = "progress-callback"
+
 [[entry]]
 kind = "function"
 old = "sonare_engine_drain_meter_telemetry"
@@ -3208,6 +3179,7 @@ old = "SonareTransportState.bar_count"
 new = "SonareTransportState.bar_index"
 domain = "engine"
 rule = "individual"
+
 [[entry]]
 kind = "function"
 old = "sonare_align_take_to_reference"
@@ -3357,12 +3329,334 @@ removed = "drop the member; a project holds musical positions only, so the sette
 domain = "project"
 rule = "options-struct"
 
+[[entry]]
+kind = "function"
+old = "sonare_hpss_with_residual"
+removed = "call sonare_hpss with a non-NULL out_residual; harmonic, percussive, length and sample rate arrive in SonareHpssResult"
+domain = "effects"
+rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "option"
-old = "sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_db)"
-to = "sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_dbtp)"
-changed = "the true peak the static gain was computed for is named in dBTP, its unit"
+kind = "function"
+old = "sonare_hpss"
+changed = "takes const SonareHpssOptions* options (NULL = defaults; sonare_hpss_options_init) before out, and a trailing nullable float** out_residual"
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_hpss with a residual output"
+
+[[entry]]
+kind = "function"
+old = "sonare_time_stretch"
+changed = "takes const SonareTimeStretchOptions* options (NULL = defaults; sonare_time_stretch_options_init) before out"
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_effects_extra_test.cpp::C effect options initialise to the defaults and NULL options mean the defaults"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_shift"
+changed = "takes const SonarePitchShiftOptions* options (NULL = defaults; sonare_pitch_shift_options_init) before out"
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_effects_extra_test.cpp::C effects options reach their native processing paths"
+
+[[entry]]
+kind = "function"
+old = "sonare_trim_ex"
+removed = "call sonare_trim with SonareTrimOptions frame_length and hop_length set"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_trim"
+changed = "takes const SonareTrimOptions* options (NULL = defaults; sonare_trim_options_init) before out"
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim uses custom framing"
+
+[[entry]]
+kind = "function"
+old = "sonare_voice_change_ex"
+removed = "call sonare_voice_change, which takes the SonareVoiceChangeConfig"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_voice_change"
+changed = "takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor"
+domain = "effects"
+rule = "options-struct"
+test = "tests/editing/voice_changer_formant_mode_test.cpp::sonare_voice_change selects the formant mode"
+
+[[entry]]
+kind = "function"
+old = "sonare_decompose_with_init"
+removed = "call sonare_decompose with SonareDecomposeOptions init set"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_decompose"
+changed = "takes const SonareDecomposeOptions* options (NULL = defaults; sonare_decompose_options_init) before out_w; an unknown init is refused as options.init"
+domain = "effects"
+rule = "options-struct"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_decompose names an unknown init and a wrong struct_size"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_apply_pair_processor"
+changed = "takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate"
 domain = "mastering"
-rule = "unit-in-name"
-test = "tests/mastering/streaming_loudness_gain_test.cpp::loudness_static_gain_peak_dbtp"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_test.cpp::pair"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_apply_pair_processor_ex"
+removed = "call sonare_mastering_apply_pair_processor, which takes the independent lengths and reference rate"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_apply_pair_processor_stereo"
+changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_test.cpp::pair"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_apply_pair_processor_stereo_ex"
+removed = "call sonare_mastering_apply_pair_processor_stereo, which takes the independent lengths and reference rate"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_analyze_pair"
+changed = "takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_test.cpp::pair"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_analyze_pair_ex"
+removed = "call sonare_mastering_analyze_pair, which takes the independent lengths and reference rate"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_match"
+changed = "takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_test.cpp::eq_match"
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_match_ex"
+removed = "call sonare_eq_match, which takes the independent lengths and reference rate"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixer_add_strip"
+changed = "takes const SonareMixerAddStripOptions* options (NULL = defaults; sonare_mixer_add_strip_options_init) after id; the channel layout and oversample factor are options fields, and an oversample of 0 is refused"
+domain = "mastering"
+rule = "options-struct"
+test = "tests/mixing/routing_capi_test.cpp::add_strip"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixer_add_strip_ex"
+removed = "call sonare_mixer_add_strip with SonareMixerAddStripOptions set"
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_process_mono"
+changed = "takes const float* carrier after input (NULL = none); a NULL carrier while an external carrier is configured is SONARE_ERROR_INVALID_STATE"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_voice_transform_test.cpp::carrier"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_process_interleaved"
+changed = "takes const float* carrier after input (NULL = none), mono and shared by every channel"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_voice_transform_test.cpp::carrier"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_process_planar_stereo"
+changed = "takes const float* carrier after right (NULL = none), mono and shared by both channels"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_voice_transform_test.cpp::carrier"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_create_json"
+removed = "parse with sonare_realtime_voice_changer_config_from_json, then call sonare_realtime_voice_changer_create"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_set_config_json"
+removed = "parse with sonare_realtime_voice_changer_config_from_json, then call sonare_realtime_voice_changer_set_config"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_voice_change_realtime"
+removed = "call sonare_realtime_voice_changer_render with a SonareRealtimeVoiceChangerConfig (NULL for neutralMonitor; parse a preset id or JSON with sonare_realtime_voice_changer_config_from_json)"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_normalize_stereo"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_effects_extra_test.cpp::normalize_stereo"
+
+[[entry]]
+kind = "function"
+old = "sonare_normalize_rms_stereo"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_effects_extra_test.cpp::normalize_rms_stereo"
+
+[[entry]]
+kind = "type"
+old = "SonareNormalizeStereoResult"
+removed = "sonare_normalize_stereo and sonare_normalize_rms_stereo return out_left, out_right and out_length"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_decompose_stems_linked"
+changed = "out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_effects_extra_test.cpp::decompose_stems_linked"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_ab_match_loudness_stereo"
+changed = "returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_test.cpp::ab_match"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_denoise_classical_linked"
+changed = "returns SonareDenoiseLinkedResult* out (channels and the SonareDenoiseReport), freed with sonare_free_denoise_linked_result, in place of caller channel buffers and a report"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::linked"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_dereverb_classical_linked"
+changed = "returns SonareDereverbLinkedResult* out (channels and the SonareDereverbReport), freed with sonare_free_dereverb_linked_result, in place of caller channel buffers and a report"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::linked"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_assistant_suggest_chain_json"
+removed = "read the chainConfig block of sonare_mastering_assistant_suggest's document"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_assistant_suggest_chain_json_stereo"
+removed = "read the chainConfig block of sonare_mastering_assistant_suggest_stereo's document"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_phase_scope"
+changed = "takes size_t max_points before out: 0 (or at least length) for one point per sample, otherwise the point cloud is decimated to at most max_points"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_features_metering_test.cpp::phase_scope"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_phase_scope_decimated"
+removed = "call sonare_metering_phase_scope, which takes max_points"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_vectorscope"
+changed = "takes size_t max_points before out: 0 (or at least length) for one point per sample, otherwise the point cloud is decimated to at most max_points"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_features_metering_test.cpp::vectorscope"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_vectorscope_decimated"
+removed = "call sonare_metering_vectorscope, which takes max_points"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_strip_meter"
+changed = "takes int tap (SonareMeterTap) after strip; SONARE_METER_TAP_POST_FADER reads the snapshot the two-argument form read, and an unknown tap is refused"
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "tests/mixing/routing_capi_test.cpp::tap"
+
+[[entry]]
+kind = "function"
+old = "sonare_strip_meter_tap"
+removed = "call sonare_strip_meter, which takes the tap"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_room_morph_stereo"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_room_morph returns its buffer"
+domain = "effects"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_acoustic_test.cpp::room_morph_stereo"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_room_morph_stereo_result"
+removed = "free each room_morph_stereo buffer with sonare_free_floats"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "SonareRoomMorphStereoResult"
+removed = "sonare_room_morph_stereo returns out_left, out_right and out_length"
+domain = "effects"
+rule = "one-entry-per-operation"
