@@ -3,8 +3,7 @@
  * their input checks.
  */
 
-import { refuse, withEntry } from './internal/entry.js';
-import { validatePositiveIntegers } from './internal/feature_validation.js';
+import { withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -20,7 +19,6 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
-  assertCqtHopLength,
   assertFiniteScalar,
   assertFloat32Array,
   assertFloatFields,
@@ -404,11 +402,6 @@ export function chromaCens(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
-    assertCqtHopLength(hopLength);
-    validatePositiveIntegers({ nChroma, binsPerOctave });
-    if (binsPerOctave % nChroma !== 0) {
-      throw refuse('binsPerOctave must be a multiple of nChroma');
-    }
     return chromaResult(
       requireModule().chromaCens(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
     );
@@ -433,11 +426,6 @@ export function chromaCqt(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
-    assertCqtHopLength(hopLength);
-    validatePositiveIntegers({ nChroma, binsPerOctave });
-    if (binsPerOctave % nChroma !== 0) {
-      throw refuse('binsPerOctave must be a multiple of nChroma');
-    }
     return chromaResult(
       requireModule().chromaCqt(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
     );
@@ -461,8 +449,6 @@ export function bassChroma(...args: unknown[]): ChromaResult {
     assertAudioInput(r.samples, r.sampleRate, r);
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
-    assertCqtHopLength(hopLength);
-    validatePositiveIntegers({ nChroma });
     return chromaResult(requireModule().bassChroma(r.samples, r.sampleRate, hopLength, nChroma));
   });
 }
@@ -490,7 +476,6 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
     assertAudioInput(r.samples, r.sampleRate, r);
     const fft = resolveFftOptions(r.nFft, r.hopLength);
     const nMels = r.nMels ?? 128;
-    validatePositiveIntegers({ nMels });
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -539,7 +524,6 @@ export function mfcc(...args: unknown[]): MfccResult {
     const fft = resolveFftOptions(r.nFft, r.hopLength);
     const nMels = r.nMels ?? 128;
     const nMfcc = r.nMfcc ?? 20;
-    validatePositiveIntegers({ nMels, nMfcc });
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -584,10 +568,6 @@ export function melDelta(...args: unknown[]): Matrix2D {
     const r = requestOnly<MelDeltaRequest>('melDelta', args);
     const features = assertMatrix2D(r.features, 'features');
     const width = r.width ?? 9;
-    assertPositiveInteger(width, 'width');
-    if (width < 3 || width % 2 === 0) {
-      throw refuse('width must be an odd integer of at least 3');
-    }
     const out = requireModule().melDelta(features.data, features.rows, features.cols, width);
     return toMatrix2D(out, features.rows, features.cols);
   });
@@ -613,8 +593,6 @@ export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogram
     const nFft = r.nFft ?? 2048;
     const hopLength = r.hopLength ?? 512;
     const refPower = r.refPower ?? 1e-6;
-    assertPositiveInteger(nFft, 'nFft');
-    assertPositiveInteger(hopLength, 'hopLength');
     assertNonNegativeScalar(refPower, 'refPower');
     const native = requireModule().reassignedSpectrogram(
       r.samples,

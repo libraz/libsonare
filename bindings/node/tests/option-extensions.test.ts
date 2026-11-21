@@ -6,6 +6,7 @@ import {
   nnlsChroma,
   phaseVocoder,
   pitchShift,
+  stft,
   timeStretch,
 } from '../src/index.js';
 
@@ -168,5 +169,18 @@ describe('STFT entry points share one nFft rule', () => {
     });
     expect(Array.from(omitted)).toEqual(Array.from(quarter));
     expect(() => phaseVocoder({ samples, sampleRate, speedRatio: 1.5, nFft: 8 })).not.toThrow();
+  });
+});
+
+// One bound on every surface: the core's STFT n_fft rule, refused under the caller's key.
+describe('stft takes the core nFft rule', () => {
+  const refusal = new RangeError('stft: nFft must be an even integer in [2, 524288]');
+  const call = (nFft: number) => stft({ samples, sampleRate, nFft, hopLength: 1 });
+  it('accepts the smallest even nFft', () => {
+    expect(() => call(2)).not.toThrow();
+  });
+
+  it.each([0, 1, 2049, 524290])('refuses nFft %d in the core text', (nFft) => {
+    expect(() => call(nFft)).toThrow(refusal);
   });
 });

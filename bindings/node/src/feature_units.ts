@@ -115,10 +115,7 @@ export function noteToHz(note: string): number {
  */
 export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512): number {
   return withEntry('framesToTime', () => {
-    // The conversion requires a positive hop, so positivity is the domain; a
-    // fraction has to be refused here because the addon narrowing truncates it.
-    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
-    return addon.framesToTime(frames, sampleRate, resolvedHopLength);
+    return addon.framesToTime(frames, sampleRate, hopLength);
   });
 }
 
@@ -131,9 +128,7 @@ export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512
  */
 export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 512): number {
   return withEntry('timeToFrames', () => {
-    // Positive hop, as framesToTime: the same conversion in the other direction.
-    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
-    return addon.timeToFrames(timeSec, sampleRate, resolvedHopLength);
+    return addon.timeToFrames(timeSec, sampleRate, hopLength);
   });
 }
 

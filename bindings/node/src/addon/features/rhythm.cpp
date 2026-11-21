@@ -11,10 +11,12 @@
 #include "feature/chroma.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/nnls_chroma.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "features/common.h"
+#include "filters/mel.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -63,9 +65,13 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+    return env.Undefined();
+  }
   int win{};
-  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
+    return env.Undefined();
+  }
   const int mode =
       info.Length() >= 5 ? TempogramModeFromValue(info[4]) : SONARE_TEMPOGRAM_AUTOCORRELATION;
   bool center = true;
@@ -99,16 +105,24 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kRhythmCountDomain, &sr)) {
+    return env.Undefined();
+  }
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+    return env.Undefined();
+  }
   int win{};
-  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
+    return env.Undefined();
+  }
   float bpm_min = sonare::kCyclicTempogramBpmMin;
   if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
   int n_bins{};
-  if (!OptionalIntArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins, &n_bins))
+  if (!OptionalDomainArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins,
+                         sonare::kRhythmCountDomain, &n_bins)) {
     return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
@@ -132,9 +146,13 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 1, "sampleRate", 22050, sonare::kRhythmCountDomain, &sr)) {
+    return env.Undefined();
+  }
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+    return env.Undefined();
+  }
   const sonare::PlpConfig plp_defaults;
   float bpm_min{};
   if (!OptionalFiniteFloatArg(env, info, 3, "bpmMin", plp_defaults.tempo_min, &bpm_min))
@@ -143,7 +161,9 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 4, "bpmMax", plp_defaults.tempo_max, &bpm_max))
     return env.Undefined();
   int win{};
-  if (!OptionalIntArg(env, info, 5, "win", 384, &win)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -166,9 +186,13 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop)) {
+    return env.Undefined();
+  }
   int n_mels{};
-  if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nMels", 128, sonare::kMelBandsDomain, &n_mels)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -191,11 +215,16 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop)) {
+    return env.Undefined();
+  }
   int n_mels{};
-  if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nMels", 128, sonare::kMelBandsDomain, &n_mels)) {
+    return env.Undefined();
+  }
   int n_bands{};
-  if (!OptionalIntArg(env, info, 5, "nBands", sonare::kOnsetStrengthMultiDefaultBands, &n_bands)) {
+  if (!OptionalDomainArg(env, info, 5, "nBands", sonare::kOnsetStrengthMultiDefaultBands,
+                         sonare::kOnsetCountDomain, &n_bands)) {
     return env.Undefined();
   }
   float* out = nullptr;
@@ -223,9 +252,13 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+    return env.Undefined();
+  }
   int win{};
-  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
+    return env.Undefined();
+  }
   bool center = true;
   if (!OptionalBoolArg(env, info, 4, "center", true, &center)) {
     return env.Undefined();
@@ -258,11 +291,15 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int win{};
-  if (!RequiredIntArg(env, info, 1, "win", &win)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 1, "win", sonare::kRhythmCountDomain, &win)) {
+    return env.Undefined();
+  }
   int sr{};
   if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!RequiredIntArg(env, info, 3, "hopLength", &hop)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 3, "hopLength", sonare::kRhythmCountDomain, &hop)) {
+    return env.Undefined();
+  }
   std::vector<float> factors;
   if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
     factors = FloatVectorFromValue(info[4], "factors");
@@ -299,9 +336,11 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 3, "blendWeight", 0.55f, &blend_weight))
     return env.Undefined();
   int blend_n_fft{};
-  if (!OptionalIntArg(env, info, 4, "blendNFft", 4096, &blend_n_fft)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 4, "stftBlendNFft", 4096, &blend_n_fft)) return env.Undefined();
   int hop_length{};
-  if (!RequiredIntArg(env, info, 5, "hopLength", &hop_length)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 5, "hopLength", sonare::kNnlsHopLengthDomain, &hop_length)) {
+    return env.Undefined();
+  }
   SonareError err =
       sonare_nnls_chroma_ex2(arr.Data(), arr.ElementLength(), sr, enable_blend ? 1 : 0,
                              blend_weight, blend_n_fft, hop_length, &out, &count, &n_frames);

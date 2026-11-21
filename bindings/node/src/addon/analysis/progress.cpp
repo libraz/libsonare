@@ -2,7 +2,9 @@
 #include <optional>
 #include <string>
 
+#include "analysis/boundary_detector.h"
 #include "analysis/melody_analyzer.h"
+#include "analysis/section_analyzer.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -162,8 +164,10 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   SonareSectionOptions options;
   sonare_section_options_init(&options);
-  if (!OptionalIntArg(env, info, 2, "nFft", options.n_fft, &options.n_fft) ||
-      !OptionalIntArg(env, info, 3, "hopLength", options.hop_length, &options.hop_length) ||
+  if (!OptionalDomainArg(env, info, 2, "nFft", options.n_fft, sonare::kSectionCountDomain,
+                         &options.n_fft) ||
+      !OptionalDomainArg(env, info, 3, "hopLength", options.hop_length, sonare::kSectionCountDomain,
+                         &options.hop_length) ||
       !OptionalFiniteFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
                               &options.min_section_sec) ||
       !OptionalFiniteFloatArg(env, info, 5, "threshold", options.threshold, &options.threshold)) {
@@ -219,14 +223,18 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   sonare_boundary_options_init(&options);
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object bag = info[2].As<Napi::Object>();
-    options.n_fft = IntProperty(bag, "nFft", options.n_fft);
-    options.hop_length = IntProperty(bag, "hopLength", options.hop_length);
-    options.kernel_size = IntProperty(bag, "kernelSize", options.kernel_size);
+    options.n_fft = DomainProperty<int>(bag, "nFft", options.n_fft, sonare::kBoundaryCountDomain);
+    options.hop_length =
+        DomainProperty<int>(bag, "hopLength", options.hop_length, sonare::kBoundaryCountDomain);
+    options.kernel_size =
+        DomainProperty<int>(bag, "kernelSize", options.kernel_size, sonare::kBoundaryCountDomain);
     options.threshold = FiniteFloatProperty(bag, "threshold", options.threshold);
     options.absolute_threshold =
         FiniteFloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
-    options.n_mfcc = IntProperty(bag, "nMfcc", options.n_mfcc);
-    options.n_chroma = IntProperty(bag, "nChroma", options.n_chroma);
+    options.n_mfcc =
+        DomainProperty<int>(bag, "nMfcc", options.n_mfcc, sonare::kBoundaryCountDomain);
+    options.n_chroma =
+        DomainProperty<int>(bag, "nChroma", options.n_chroma, sonare::kBoundaryCountDomain);
     options.peak_distance_sec =
         FiniteFloatProperty(bag, "peakDistanceSec", options.peak_distance_sec);
     options.reference_window_sec =

@@ -11,6 +11,8 @@
 #include <type_traits>
 
 #include "analysis/analysis_json.h"
+#include "analysis/chord_analyzer.h"
+#include "analysis/key_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
@@ -387,8 +389,8 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
                                const val& high_pass_hz_val, val modes, const val& profile_type_val,
                                std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kKeyCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyCountDomain);
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -413,8 +415,8 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
                              const val& high_pass_hz_val, val modes, const val& profile_type_val,
                              std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kKeyCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyCountDomain);
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -535,9 +537,10 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
                      bool use_key_context, const val& key_root_val, const val& key_mode_val,
                      bool detect_inversions, const val& chroma_method_val, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int hmm_beam_width = checkedIntFromVal(hmm_beam_width_val, "hmmBeamWidth");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kChordCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kChordCountDomain);
+  const int hmm_beam_width =
+      domainNumberFromVal<int>(hmm_beam_width_val, "hmmBeamWidth", kChordBeamWidthDomain);
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
   const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
   const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
@@ -578,9 +581,10 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
   const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int hmm_beam_width = checkedIntFromVal(hmm_beam_width_val, "hmmBeamWidth");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kChordCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kChordCountDomain);
+  const int hmm_beam_width =
+      domainNumberFromVal<int>(hmm_beam_width_val, "hmmBeamWidth", kChordBeamWidthDomain);
   const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
   const float min_duration = checkedFloatFromVal(min_duration_val, "minDuration");
   const float smoothing_window = checkedFloatFromVal(smoothing_window_val, "smoothingWindow");
@@ -672,8 +676,12 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   MusicAnalyzerConfig config;
   auto set_number = [&](const char* key, auto& field) { setNumberOption(options, key, &field); };
   auto set_bool = [&](const char* key, bool& field) { field = boolProperty(options, key, field); };
+  // The integer members the core states a domain for are read against it.
+  auto set_domain = [&](const char* key, int& field, const sonare::util::check::NumericDomain& d) {
+    field = optionalDomainValue<int>(options[key], key, d).value_or(field);
+  };
   set_number("nFft", config.n_fft);
-  set_number("hopLength", config.hop_length);
+  set_domain("hopLength", config.hop_length, kMusicCountDomain);
   set_number("bpmMin", config.bpm_min);
   set_number("bpmMax", config.bpm_max);
   set_number("startBpm", config.start_bpm);
@@ -681,13 +689,13 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_bool("useHpss", config.use_hpss);
   set_number("chromaHighPassHz", config.chroma_highpass_hz);
   set_bool("useBassWeighted", config.use_bass_weighted);
-  set_number("chromaHopMultiplier", config.chroma_hop_multiplier);
+  set_domain("chromaHopMultiplier", config.chroma_hop_multiplier, kMusicCountDomain);
   set_bool("useChordHmm", config.use_chord_hmm);
   set_bool("useChordKeyContext", config.use_chord_key_context);
-  set_number("chordHmmBeamWidth", config.chord_hmm_beam_width);
+  set_domain("chordHmmBeamWidth", config.chord_hmm_beam_width, kMusicChordBeamWidthDomain);
   set_bool("detectChordInversions", config.detect_chord_inversions);
   set_bool("adaptiveTempo", config.adaptive_tempo);
-  set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
+  set_domain("tempoUpdateIntervalBeats", config.tempo_update_interval_beats, kMusicCountDomain);
   set_bool("computeTempoCurve", config.compute_tempo_curve);
   set_number("meterDenominator", config.meter_denominator);
   const val tuning = options["tuningCents"];

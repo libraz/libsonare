@@ -102,13 +102,17 @@ Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (!RequireNumberValue(env, info[0], "frames")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
-  if (!RequireNumberValue(env, info[2], "hopLength")) return env.Undefined();
 
   SONARE_NODE_TRY
   int frames = node_narrow_int(env, info[0], "frames");
-  int sr = node_narrow_int(env, info[1], "sampleRate");
-  int hop_length = node_narrow_int(env, info[2], "hopLength");
+  int sr{};
+  if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kFrameTimeSampleRateDomain, &sr)) {
+    return env.Undefined();
+  }
+  int hop_length{};
+  if (!RequiredDomainArg(env, info, 2, "hopLength", sonare::kFrameTimeHopDomain, &hop_length)) {
+    return env.Undefined();
+  }
 
   return Napi::Number::New(env,
                            static_cast<double>(sonare::frames_to_time(frames, sr, hop_length)));
@@ -119,13 +123,17 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (!RequireNumberValue(env, info[0], "time")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
-  if (!RequireNumberValue(env, info[2], "hopLength")) return env.Undefined();
 
   SONARE_NODE_TRY
   float time = node_narrow_finite_float(env, info[0], "time");
-  int sr = node_narrow_int(env, info[1], "sampleRate");
-  int hop_length = node_narrow_int(env, info[2], "hopLength");
+  int sr{};
+  if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kFrameTimeSampleRateDomain, &sr)) {
+    return env.Undefined();
+  }
+  int hop_length{};
+  if (!RequiredDomainArg(env, info, 2, "hopLength", sonare::kFrameTimeHopDomain, &hop_length)) {
+    return env.Undefined();
+  }
 
   return Napi::Number::New(env, sonare::time_to_frames(time, sr, hop_length));
   SONARE_NODE_CATCH(env)

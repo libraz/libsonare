@@ -21,7 +21,6 @@ import {
   assertMatrix2D,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSampleRate,
   assertSamples,
   optionalBoolean,
@@ -188,10 +187,6 @@ export function nnlsChroma(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
-    assertPositiveInteger(hopLength, 'hopLength');
-    if (hopLength > 2 ** 31 - 1) {
-      throw refuse('hopLength must fit in a signed 32-bit integer');
-    }
     const result = requireModule().nnlsChromaEx(
       request.samples,
       request.sampleRate,
@@ -221,8 +216,6 @@ function cqtFamily<R extends CqtRequest>(
   const hopLength = request.hopLength ?? 512;
   const nBins = request.nBins ?? 84;
   const binsPerOctave = request.binsPerOctave ?? 12;
-  assertCqtHopLength(hopLength);
-  validatePositiveIntegers({ nBins, binsPerOctave });
   const fminHz = request.fminHz ?? 32.70319566257483;
   assertPositiveFloatValue(fminHz, 'fminHz');
   const native = call(request, hopLength, fminHz, nBins, binsPerOctave);
@@ -407,10 +400,6 @@ export function analyzeSections(...args: unknown[]): SectionAnalysis {
   return withEntry('analyzeSections', () => {
     const request = sampleOneShot<AnalyzeSectionsRequest>('analyzeSections', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    validatePositiveIntegers({
-      nFft: request.nFft ?? 2048,
-      hopLength: request.hopLength ?? 512,
-    });
     assertNonNegativeScalar(request.minSectionSec ?? 4.0, 'minSectionSec');
     // The embind value marshalling returns an array whose constructor is not this
     // realm's Array; chaining .map() onto it propagates that constructor via
@@ -469,14 +458,6 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
     // Only the fields the caller set reach the embind wrapper, so an omitted one
     // takes BoundaryConfig's own default; restating the defaults here would make
     // them the effective ones on npm and leave the core's unreachable.
-    const sizes: Record<string, number> = {};
-    for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
-      const value = request[name];
-      if (value != null) {
-        sizes[name] = value;
-      }
-    }
-    validatePositiveIntegers(sizes);
     for (const name of [
       'threshold',
       'absoluteThreshold',
@@ -603,7 +584,6 @@ export function onsetStrength(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
-    validatePositiveIntegers({ nMels });
     return requireModule().onsetEnvelope(
       request.samples,
       request.sampleRate,
@@ -635,7 +615,6 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
     const nBands = request.nBands ?? 3;
-    validatePositiveIntegers({ nMels, nBands });
     const result = requireModule().onsetStrengthMulti(
       request.samples,
       request.sampleRate,
@@ -665,7 +644,6 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
     }
     assertSampleRate(sampleRate);
     assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
-    validatePositiveIntegers({ hopLength, winLength });
     // Native takes a `norm` flag; the normalised form is the only one exposed.
     const result = requireModule().fourierTempogram(
       r.onsetEnvelope,
@@ -693,7 +671,6 @@ export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
     const sampleRate = r.sampleRate ?? 22050;
     const hopLength = r.hopLength ?? 512;
     assertSampleRate(sampleRate);
-    validatePositiveIntegers({ hopLength });
     return requireModule().tempogramRatio(
       tempogram.data,
       tempogram.rows,

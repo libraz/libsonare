@@ -10,6 +10,7 @@
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
+#include "effects/silence.h"
 #include "effects/time_stretch.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
@@ -704,35 +705,14 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   float threshold_db{};
   if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -60.0f, &threshold_db))
     return env.Undefined();
-  auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {
-    if (info.Length() <= index || info[index].IsUndefined()) {
-      *output = fallback;
-      return true;
-    }
-    if (!info[index].IsNumber()) {
-      Napi::TypeError::New(env, std::string(name) + " must be an integer")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    const double value = info[index].As<Napi::Number>().DoubleValue();
-    if (!std::isfinite(value) || std::floor(value) != value) {
-      Napi::RangeError::New(env, std::string(name) + " must be an integer")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    if (value <= 0 || value > std::numeric_limits<int>::max()) {
-      Napi::RangeError::New(env, std::string(name) + " must be an integer in [1, " +
-                                     std::to_string(std::numeric_limits<int>::max()) + "]")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    *output = static_cast<int>(value);
-    return true;
-  };
-  int frame_length = sonare::constants::kDefaultNFft;
-  int hop_length = sonare::constants::kDefaultHopLength;
-  if (!parse_frame_option(3, "frameLength", sonare::constants::kDefaultNFft, &frame_length) ||
-      !parse_frame_option(4, "hopLength", sonare::constants::kDefaultHopLength, &hop_length)) {
+  int frame_length{};
+  if (!OptionalDomainArg(env, info, 3, "frameLength", sonare::constants::kDefaultNFft,
+                         sonare::kSilenceFrameLengthDomain, &frame_length)) {
+    return env.Undefined();
+  }
+  int hop_length{};
+  if (!OptionalDomainArg(env, info, 4, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kSilenceHopLengthDomain, &hop_length)) {
     return env.Undefined();
   }
 

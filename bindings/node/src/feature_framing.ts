@@ -1,6 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
-import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import type {
   Matrix2D,
@@ -16,7 +15,6 @@ import {
   assertFiniteScalar,
   assertFloat32Array,
   assertIntegerValue,
-  assertPositiveInteger,
   requestOnly,
   requireBoolean,
   resolveOptionalNonNegative,
@@ -160,9 +158,13 @@ export function trim(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const thresholdDb = request.thresholdDb ?? -60.0;
     assertFiniteScalar(thresholdDb, 'thresholdDb');
-    const frameLength = resolvePositiveIntegerOption('frameLength', request.frameLength, 2048);
-    const hopLength = resolvePositiveIntegerOption('hopLength', request.hopLength, 512);
-    return addon.trim(request.samples, request.sampleRate, thresholdDb, frameLength, hopLength);
+    return addon.trim(
+      request.samples,
+      request.sampleRate,
+      thresholdDb,
+      request.frameLength ?? 2048,
+      request.hopLength ?? 512,
+    );
   });
 }
 
@@ -281,14 +283,14 @@ export function deemphasis(...args: unknown[]): Float32Array {
   });
 }
 
-// Framing rule every silence entry shares: both positive, no other domain.
+// Framing defaults every silence entry shares; the addon reads both against the core's domains.
 function resolveSilenceFraming(
   frameLength: number | undefined,
   hopLength: number | undefined,
 ): { frameLength: number; hopLength: number } {
   return {
-    frameLength: resolvePositiveIntegerOption('frameLength', frameLength, 2048),
-    hopLength: resolvePositiveIntegerOption('hopLength', hopLength, 512),
+    frameLength: frameLength ?? 2048,
+    hopLength: hopLength ?? 512,
   };
 }
 
@@ -423,9 +425,6 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    // Both positive, as the sibling framing entries; neither has a default.
-    assertPositiveInteger(request.frameLength, 'frameLength');
-    assertPositiveInteger(request.hopLength, 'hopLength');
     const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
     return toMatrix2D(r.frames, request.frameLength, r.nFrames);
   });

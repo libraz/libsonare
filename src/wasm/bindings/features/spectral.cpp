@@ -3,6 +3,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "feature/spectral.h"
+
+#include "core/spectrum.h"
+#include "feature/onset.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -46,7 +50,7 @@ val js_spectral_centroid(val samples, const val& sample_rate_val, const val& n_f
                          const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -63,7 +67,7 @@ val js_spectral_bandwidth(val samples, const val& sample_rate_val, const val& n_
                           const val& hop_length_val, const val& p_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const float p = checkedFloatFromVal(p_val, "p");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
@@ -81,7 +85,7 @@ val js_spectral_rolloff(val samples, const val& sample_rate_val, const val& n_ff
                         const val& hop_length_val, const val& roll_percent_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const float roll_percent = checkedFloatFromVal(roll_percent_val, "rollPercent");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
@@ -99,7 +103,7 @@ val js_spectral_flatness(val samples, const val& sample_rate_val, const val& n_f
                          const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -116,8 +120,8 @@ val js_spectral_flux(val samples, const val& sample_rate_val, const val& n_fft_v
                      const val& hop_length_val, const val& lag_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int lag = checkedIntFromVal(lag_val, "lag");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int lag = domainNumberFromVal<int>(lag_val, "lag", kOnsetCountDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   StftConfig config;
   config.n_fft = n_fft;
@@ -128,8 +132,10 @@ val js_spectral_flux(val samples, const val& sample_rate_val, const val& n_fft_v
 val js_zero_crossing_rate(val samples, const val& sample_rate_val, const val& frame_length_val,
                           const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int frame_length =
+      domainNumberFromVal<int>(frame_length_val, "frameLength", kSpectralCountDomain);
+  const int hop_length =
+      domainNumberFromVal<int>(hop_length_val, "hopLength", kSpectralCountDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> zcr = zero_crossing_rate(audio, frame_length, hop_length);
   return vectorToFloat32Array(zcr);
@@ -138,8 +144,10 @@ val js_zero_crossing_rate(val samples, const val& sample_rate_val, const val& fr
 val js_rms_energy(val samples, const val& sample_rate_val, const val& frame_length_val,
                   const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int frame_length =
+      domainNumberFromVal<int>(frame_length_val, "frameLength", kSpectralCountDomain);
+  const int hop_length =
+      domainNumberFromVal<int>(hop_length_val, "hopLength", kSpectralCountDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
   return vectorToFloat32Array(rms);
@@ -154,8 +162,8 @@ val js_spectral_contrast(val samples, const val& sample_rate_val, const val& n_f
                          const val& quantile_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int n_bands = domainNumberFromVal<int>(n_bands_val, "nBands", kSpectralCountDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float quantile = checkedFloatFromVal(quantile_val, "quantile");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -185,8 +193,8 @@ val js_poly_features(val samples, const val& sample_rate_val, const val& n_fft_v
                      const val& hop_length_val, const val& order_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int order = checkedIntFromVal(order_val, "order");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int order = domainNumberFromVal<int>(order_val, "order", kSpectralOrderDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;

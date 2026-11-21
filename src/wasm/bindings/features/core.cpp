@@ -3,7 +3,12 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "core/convert.h"
+#include "core/spectrum.h"
 #include "core/synthesis.h"
+#include "feature/onset.h"
+#include "feature/rhythm.h"
+#include "filters/mel.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -57,15 +62,17 @@ float js_note_to_hz(const std::string& note) {
   return note_to_hz(note);
 }
 float js_frames_to_time(const val& frames, const val& sr, const val& hop_length) {
-  return frames_to_time(checkedIntFromVal(frames, "frames"), checkedIntFromVal(sr, "sr"),
-                        checkedIntFromVal(hop_length, "hopLength"));
+  return frames_to_time(checkedIntFromVal(frames, "frames"),
+                        domainNumberFromVal<int>(sr, "sr", kFrameTimeSampleRateDomain),
+                        domainNumberFromVal<int>(hop_length, "hopLength", kFrameTimeHopDomain));
 }
 int js_time_to_frames(const val& time_val, const val& sr, const val& hop_length) {
   // time_to_frames saturates a non-finite result to INT_MAX, so a value the f32
   // parameter turned into an infinity returns a frame index nothing downstream
   // can tell from a real one.
-  return time_to_frames(checkedFloatFromVal(time_val, "time"), checkedIntFromVal(sr, "sr"),
-                        checkedIntFromVal(hop_length, "hopLength"));
+  return time_to_frames(checkedFloatFromVal(time_val, "time"),
+                        domainNumberFromVal<int>(sr, "sr", kFrameTimeSampleRateDomain),
+                        domainNumberFromVal<int>(hop_length, "hopLength", kFrameTimeHopDomain));
 }
 int js_frames_to_samples(const val& frames, const val& hop_length, const val& n_fft) {
   return frames_to_samples(checkedIntFromVal(frames, "frames"),
@@ -243,8 +250,9 @@ val js_tone(const val& frequency_val, const val& sample_rate, const val& duratio
   const float duration = checkedFloatFromVal(duration_val, "duration");
   const float phase = checkedFloatFromVal(phase_val, "phase");
   const float amplitude = checkedFloatFromVal(amplitude_val, "amplitude");
-  const Audio audio =
-      tone(frequency, checkedIntFromVal(sample_rate, "sampleRate"), duration, phase, amplitude);
+  const Audio audio = tone(
+      frequency, domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain),
+      duration, phase, amplitude);
   return vectorToFloat32Array(audio.data(), audio.size());
 }
 
@@ -253,14 +261,16 @@ val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate,
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float duration = checkedFloatFromVal(duration_val, "duration");
-  const Audio audio =
-      chirp(fmin, fmax, checkedIntFromVal(sample_rate, "sampleRate"), duration, linear);
+  const Audio audio = chirp(
+      fmin, fmax, domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain),
+      duration, linear);
   return vectorToFloat32Array(audio.data(), audio.size());
 }
 
 val js_clicks(val times, const val& sample_rate_val, const val& length_val,
               const val& frequency_val, const val& click_duration_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kSynthesisSampleRateDomain);
   const int length = checkedIntFromVal(length_val, "length");
   const float frequency = checkedFloatFromVal(frequency_val, "frequency");
   const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
@@ -389,8 +399,9 @@ TempogramMode tempogramModeFromValue(val mode) {
 val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
                  const val& win_length_val, val mode, bool center, bool norm) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
+  const int win_length =
+      domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "onsetEnvelope");
   validatePositiveSampleRate(sample_rate);
@@ -410,17 +421,18 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
 
 val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
                         const val& win_length_val, const val& bpm_min_val, const val& n_bins_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kRhythmCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
+  const int win_length =
+      domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   float bpm_min = kCyclicTempogramBpmMin;
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) bpm_min = *v;
   const int n_bins = n_bins_val.isUndefined() || n_bins_val.isNull()
                          ? kCyclicTempogramBins
-                         : checkedIntFromVal(n_bins_val, "nBins");
+                         : domainNumberFromVal<int>(n_bins_val, "nBins", kRhythmCountDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "onsetEnvelope");
-  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -436,15 +448,16 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
 
 val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
            const val& bpm_min_val, const val& bpm_max_val, const val& win_length_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kRhythmCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
   PlpConfig config;
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.tempo_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.tempo_max = *v;
-  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int win_length =
+      domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "onsetEnvelope");
-  validatePositiveSampleRate(sample_rate);
   config.sr = sample_rate;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -455,8 +468,8 @@ val js_onset_envelope(val samples, const val& sample_rate_val, const val& n_fft_
                       const val& hop_length_val, const val& n_mels_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
@@ -470,9 +483,9 @@ val js_onset_strength_multi(val samples, const val& sample_rate_val, const val& 
                             const val& n_bands_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
+  const int n_bands = domainNumberFromVal<int>(n_bands_val, "nBands", kOnsetCountDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
@@ -491,8 +504,9 @@ val js_onset_strength_multi(val samples, const val& sample_rate_val, const val& 
 val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
                          const val& win_length_val, bool center, bool norm) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
+  const int win_length =
+      domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
@@ -510,9 +524,9 @@ val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const v
 
 val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val& sample_rate_val,
                        const val& hop_length_val, val factors) {
-  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int win_length = domainNumberFromVal<int>(win_length_val, "winLength", kRhythmCountDomain);
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
   const bool has_factors = !factors.isUndefined() && !factors.isNull();
   if (has_factors) {
     validateWasmFloat32ArrayPair(tempogram_data, "tempogram data", factors, "factors", false);

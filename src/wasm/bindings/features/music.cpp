@@ -8,6 +8,12 @@
 #include <limits>
 #include <optional>
 
+#include "analysis/boundary_detector.h"
+#include "analysis/section_analyzer.h"
+#include "core/spectrum.h"
+#include "feature/chroma.h"
+#include "feature/cqt.h"
+#include "feature/nnls_chroma.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
@@ -22,7 +28,7 @@ val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& 
 
   ChromaConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kStftHopDomain);
 
   Chroma chroma = Chroma::compute(audio, config);
 
@@ -65,25 +71,28 @@ val chromaToVal(const Chroma& chroma) {
 
 val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
                    const val& bins_per_octave_val) {
-  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const int bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave_val, "binsPerOctave", kChromaBinsPerOctaveDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   ChromaCensConfig config;
-  config.base = make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
-                                       checkedIntFromVal(n_chroma, "nChroma"), bins_per_octave);
+  config.base = make_chroma_cqt_config(
+      domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain),
+      domainNumberFromVal<int>(n_chroma, "nChroma", kChromaCountDomain), bins_per_octave);
   return chromaToVal(chroma_cens(audio, config));
 }
 
 val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
                   const val& bins_per_octave_val) {
-  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const int bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave_val, "binsPerOctave", kChromaBinsPerOctaveDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
-  const ChromaCqtConfig config =
-      make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
-                             checkedIntFromVal(n_chroma, "nChroma"), bins_per_octave);
+  const ChromaCqtConfig config = make_chroma_cqt_config(
+      domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain),
+      domainNumberFromVal<int>(n_chroma, "nChroma", kChromaCountDomain), bins_per_octave);
   return chromaToVal(chroma_cqt(audio, config));
 }
 
@@ -93,8 +102,8 @@ val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   BassChromaConfig config;
-  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
-  config.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
+  config.cqt.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain);
+  config.n_chroma = domainNumberFromVal<int>(n_chroma, "nChroma", kChromaCountDomain);
   return chromaToVal(bass_chroma(audio, config));
 }
 
@@ -105,7 +114,8 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
-  NnlsChromaConfig config = NnlsChromaConfig::fast(checkedIntFromVal(hop_length, "hopLength"));
+  NnlsChromaConfig config = NnlsChromaConfig::fast(
+      domainNumberFromVal<int>(hop_length, "hopLength", kNnlsHopLengthDomain));
   config.enable_stft_blend = enable_stft_blend;
   config.stft_blend_weight = stft_blend_weight;
   config.stft_blend_n_fft = checkedIntFromVal(stft_blend_n_fft, "stftBlendNFft");
@@ -138,8 +148,8 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
                         const val& hop_length_val, const val& min_section_sec_val,
                         const val& threshold_val) {
   SectionConfig config;
-  config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  config.hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  config.n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kSectionCountDomain);
+  config.hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kSectionCountDomain);
   config.min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
   // An absent threshold is the library default, not a value the facade restates.
   if (!threshold_val.isUndefined() && !threshold_val.isNull()) {
@@ -185,14 +195,24 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
 
   BoundaryConfig config;
   if (!options.isUndefined() && !options.isNull()) {
-    config.n_fft = intProperty(options, "nFft", config.n_fft);
-    config.hop_length = intProperty(options, "hopLength", config.hop_length);
-    config.kernel_size = intProperty(options, "kernelSize", config.kernel_size);
+    config.n_fft =
+        optionalDomainValue<int>(objectProperty(options, "nFft"), "nFft", kBoundaryCountDomain)
+            .value_or(config.n_fft);
+    config.hop_length = optionalDomainValue<int>(objectProperty(options, "hopLength"), "hopLength",
+                                                 kBoundaryCountDomain)
+                            .value_or(config.hop_length);
+    config.kernel_size = optionalDomainValue<int>(objectProperty(options, "kernelSize"),
+                                                  "kernelSize", kBoundaryCountDomain)
+                             .value_or(config.kernel_size);
     config.threshold = floatProperty(options, "threshold", config.threshold);
     config.absolute_threshold =
         floatProperty(options, "absoluteThreshold", config.absolute_threshold);
-    config.n_mfcc = intProperty(options, "nMfcc", config.n_mfcc);
-    config.n_chroma = intProperty(options, "nChroma", config.n_chroma);
+    config.n_mfcc =
+        optionalDomainValue<int>(objectProperty(options, "nMfcc"), "nMfcc", kBoundaryCountDomain)
+            .value_or(config.n_mfcc);
+    config.n_chroma = optionalDomainValue<int>(objectProperty(options, "nChroma"), "nChroma",
+                                               kBoundaryCountDomain)
+                          .value_or(config.n_chroma);
     config.peak_distance = floatProperty(options, "peakDistanceSec", config.peak_distance);
     config.reference_window = floatProperty(options, "referenceWindowSec", config.reference_window);
     config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
@@ -315,10 +335,11 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain);
   config.fmin = fmin;
-  config.n_bins = checkedIntFromVal(n_bins, "nBins");
-  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.n_bins = domainNumberFromVal<int>(n_bins, "nBins", kCqtCountDomain);
+  config.bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave, "binsPerOctave", kCqtCountDomain);
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
@@ -333,10 +354,11 @@ val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, co
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain);
   config.fmin = fmin;
-  config.n_bins = checkedIntFromVal(n_bins, "nBins");
-  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.n_bins = domainNumberFromVal<int>(n_bins, "nBins", kCqtCountDomain);
+  config.bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave, "binsPerOctave", kCqtCountDomain);
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
@@ -351,10 +373,11 @@ val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, co
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain);
   config.fmin = fmin;
-  config.n_bins = checkedIntFromVal(n_bins, "nBins");
-  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.n_bins = domainNumberFromVal<int>(n_bins, "nBins", kCqtCountDomain);
+  config.bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave, "binsPerOctave", kCqtCountDomain);
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
@@ -370,10 +393,11 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   VqtConfig config;
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain);
   config.fmin = fmin;
-  config.n_bins = checkedIntFromVal(n_bins, "nBins");
-  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.n_bins = domainNumberFromVal<int>(n_bins, "nBins", kCqtCountDomain);
+  config.bins_per_octave =
+      domainNumberFromVal<int>(bins_per_octave, "binsPerOctave", kCqtCountDomain);
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
   // Absent or NaN is the automatic ERB-derived bandwidth, as on the C ABI; a given value is an

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "core/spectrum.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -17,23 +18,37 @@ struct FrameAnalysisArgs {
   int hop_length{};
 };
 
-/// @brief Read a feature call's sample rate, frame size, and hop length.
+/// @brief Read a feature call's sample rate, frame size, and hop length, the frame and hop
+///        against the core's domains for that call.
 /// @details The frame argument is named by the public entry point: STFT-based
 ///   functions use @c nFft, while frame-statistics functions use @c frameLength.
-///   Reading the fields in one place keeps their defaults and strict narrowing
-///   aligned without changing the order in which argument errors are reported.
 inline bool ReadFrameAnalysisArgs(Napi::Env env, const Napi::CallbackInfo& info,
-                                  FrameAnalysisArgs* out, const char* frame_name = "nFft") {
+                                  FrameAnalysisArgs* out,
+                                  const sonare::util::check::NumericDomain& frame_domain,
+                                  const sonare::util::check::NumericDomain& hop_domain,
+                                  const char* frame_name = "nFft") {
   if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate,
                       &out->sample_rate))
     return false;
-  if (!OptionalIntArg(env, info, 2, frame_name, sonare::constants::kDefaultNFft,
-                      &out->frame_length))
+  if (!OptionalDomainArg(env, info, 2, frame_name, sonare::constants::kDefaultNFft, frame_domain,
+                         &out->frame_length))
     return false;
-  if (!OptionalIntArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
-                      &out->hop_length))
+  return OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                           hop_domain, &out->hop_length);
+}
+
+/// @brief Read an STFT-backed call's sample rate, nFft and hop length.
+/// @details nFft is read for its type only: the core's STFT check states its whole rule (an even
+///   size within the STFT bound), which a domain read here would state without the evenness.
+inline bool ReadStftFrameArgs(Napi::Env env, const Napi::CallbackInfo& info,
+                              FrameAnalysisArgs* out) {
+  if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate,
+                      &out->sample_rate))
     return false;
-  return true;
+  if (!OptionalIntArg(env, info, 2, "nFft", sonare::constants::kDefaultNFft, &out->frame_length))
+    return false;
+  return OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                           sonare::kStftHopDomain, &out->hop_length);
 }
 
 inline Napi::Float32Array FloatResult(Napi::Env env, float* data, size_t count) {

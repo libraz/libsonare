@@ -588,7 +588,6 @@ export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512
   return withEntry('framesToTime', () => {
     assertNumber(frames, 'frames');
     assertNumber(sampleRate, 'sampleRate');
-    assertPositiveInteger(hopLength, 'hopLength');
     return requireModule().framesToTime(frames, sampleRate, hopLength);
   });
 }
@@ -605,7 +604,6 @@ export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 51
   return withEntry('timeToFrames', () => {
     assertNumber(timeSec, 'timeSec');
     assertNumber(sampleRate, 'sampleRate');
-    assertPositiveInteger(hopLength, 'hopLength');
     return requireModule().timeToFrames(timeSec, sampleRate, hopLength);
   });
 }

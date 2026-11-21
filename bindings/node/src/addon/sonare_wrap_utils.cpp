@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/music_analyzer.h"
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_refusal_record.h"
@@ -414,7 +415,8 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   // "unspecified" -- so all of them belong on the refuse-by-name *Property
   // family, matching nFft/hopLength rather than diverging from them.
   options->n_fft = IntProperty(object, "nFft", options->n_fft);
-  options->hop_length = IntProperty(object, "hopLength", options->hop_length);
+  options->hop_length =
+      DomainProperty(object, "hopLength", options->hop_length, sonare::kMusicCountDomain);
   options->bpm_min = FiniteFloatProperty(object, "bpmMin", options->bpm_min);
   options->bpm_max = FiniteFloatProperty(object, "bpmMax", options->bpm_max);
   options->start_bpm = FiniteFloatProperty(object, "startBpm", options->start_bpm);
@@ -425,19 +427,21 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
       FiniteFloatProperty(object, "chromaHighPassHz", options->chroma_high_pass_hz);
   options->use_bass_weighted =
       BoolProperty(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
-  options->chroma_hop_multiplier =
-      IntProperty(object, "chromaHopMultiplier", options->chroma_hop_multiplier);
+  options->chroma_hop_multiplier = DomainProperty(
+      object, "chromaHopMultiplier", options->chroma_hop_multiplier, sonare::kMusicCountDomain);
   options->use_chord_hmm = BoolProperty(object, "useChordHmm", options->use_chord_hmm != 0) ? 1 : 0;
   options->use_chord_key_context =
       BoolProperty(object, "useChordKeyContext", options->use_chord_key_context != 0) ? 1 : 0;
   options->chord_hmm_beam_width =
-      IntProperty(object, "chordHmmBeamWidth", options->chord_hmm_beam_width);
+      DomainProperty(object, "chordHmmBeamWidth", options->chord_hmm_beam_width,
+                     sonare::kMusicChordBeamWidthDomain);
   options->detect_chord_inversions =
       BoolProperty(object, "detectChordInversions", options->detect_chord_inversions != 0) ? 1 : 0;
   options->adaptive_tempo =
       BoolProperty(object, "adaptiveTempo", options->adaptive_tempo != 0) ? 1 : 0;
   options->tempo_update_interval_beats =
-      IntProperty(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats);
+      DomainProperty(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats,
+                     sonare::kMusicCountDomain);
   options->compute_tempo_curve =
       BoolProperty(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
   options->meter_denominator = IntProperty(object, "meterDenominator", options->meter_denominator);

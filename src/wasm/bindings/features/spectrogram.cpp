@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "core/spectrum.h"
+#include "feature/mel_spectrogram.h"
+#include "filters/mel.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 #include "wasm/bindings/common/common.h"
@@ -55,7 +58,7 @@ val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
             const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -80,7 +83,7 @@ val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
                const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -106,8 +109,8 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
                        const val& fmax_val, bool htk) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_mel_bounds(fmin, fmax);
@@ -149,9 +152,9 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
             const val& fmin_val, const val& fmax_val, bool htk, const val& lifter_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
+  const int n_mfcc = domainNumberFromVal<int>(n_mfcc_val, "nMfcc", kMfccCountDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
@@ -193,9 +196,6 @@ val js_mel_delta(val features, const val& n_features_val, const val& n_frames_va
   const int width = checkedIntFromVal(width_val, "width");
   std::vector<float> data =
       load_validated_matrix(features, n_features, n_frames, "features", "nFeatures");
-  if (width < 3 || width % 2 == 0) {
-    throw WasmRangeError("width must be an odd integer of at least 3");
-  }
   return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
 }
 
@@ -203,11 +203,9 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
                               const val& hop_length_val, const val& ref_power_val, bool fill_nan) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const float ref_power = checkedFloatFromVal(ref_power_val, "refPower");
   const Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  validate_positive(n_fft, "nFft");
-  validate_positive(hop_length, "hopLength");
   if (ref_power < 0.0f) {
     throw WasmRangeError("refPower must be at least 0");
   }

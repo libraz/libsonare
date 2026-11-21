@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "analysis/bpm_analyzer.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -19,8 +20,8 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   if (const auto v = optionalNumber(start_bpm_val, "startBpm")) config.start_bpm = *v;
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kBpmCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kBpmCountDomain);
   const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -59,8 +60,8 @@ val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_va
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   if (const auto v = optionalNumber(start_bpm_val, "startBpm")) config.start_bpm = *v;
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kBpmCountDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kBpmCountDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   config.n_fft = n_fft;

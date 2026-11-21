@@ -10,7 +10,6 @@ import {
   assertFloat32Array,
   assertFloatValue,
   assertNonNegativeSafeInteger,
-  assertPositiveInteger,
   assertSampleRate,
   requestOnly,
   sampleOneShot,
@@ -226,8 +225,6 @@ export function tempogram(...args: unknown[]): Matrix2D {
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate ?? 22050;
     assertSampleRate(sampleRate);
-    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
-    assertPositiveInteger(r.winLength ?? 384, 'winLength');
     const out = addon.tempogram(
       r.onsetEnvelope,
       sampleRate,
@@ -249,11 +246,6 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate;
     assertSampleRate(sampleRate);
-    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
-    assertPositiveInteger(r.winLength ?? 384, 'winLength');
-    if (r.nBins !== undefined) {
-      assertPositiveInteger(r.nBins, 'nBins');
-    }
     const out = addon.cyclicTempogram(
       r.onsetEnvelope,
       sampleRate,
@@ -274,8 +266,6 @@ export function plp(...args: unknown[]): Float32Array {
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate ?? 22050;
     assertSampleRate(sampleRate);
-    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
-    assertPositiveInteger(r.winLength ?? 384, 'winLength');
     return addon.plp(
       r.onsetEnvelope,
       sampleRate,
@@ -299,7 +289,6 @@ export function onsetStrength(...args: unknown[]): Float32Array {
     const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nMels ?? 128, 'nMels');
     return addon.onsetEnvelope(
       request.samples,
       request.sampleRate,
@@ -322,8 +311,6 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nMels ?? 128, 'nMels');
-    assertPositiveInteger(request.nBands ?? 3, 'nBands');
     const out = addon.onsetStrengthMulti(
       request.samples,
       request.sampleRate,
@@ -344,8 +331,6 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const sampleRate = r.sampleRate ?? 22050;
     assertSampleRate(sampleRate);
-    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
-    assertPositiveInteger(r.winLength ?? 384, 'winLength');
     assertFiniteSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     const out = addon.fourierTempogram(
       r.onsetEnvelope,
@@ -367,7 +352,6 @@ export function tempogramRatio(...args: unknown[]): Float32Array {
     const sampleRate = r.sampleRate ?? 22050;
     assertSampleRate(sampleRate);
     assertMatrix2D(r.tempogram, 'tempogram');
-    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
     return addon.tempogramRatio(
       r.tempogram.data,
       r.tempogram.rows,

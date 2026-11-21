@@ -7,6 +7,7 @@
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
+#include "feature/cqt.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"
@@ -62,13 +63,20 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop_length{};
-  if (!RequiredIntArg(env, info, 2, "hopLength", &hop_length)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 2, "hopLength", sonare::kCqtHopLengthDomain, &hop_length)) {
+    return env.Undefined();
+  }
   float fmin{};
   if (!RequiredFiniteFloatValue(env, info[3], "fmin", &fmin)) return env.Undefined();
   int n_bins{};
-  if (!RequiredIntArg(env, info, 4, "nBins", &n_bins)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 4, "nBins", sonare::kCqtCountDomain, &n_bins)) {
+    return env.Undefined();
+  }
   int bins_per_octave{};
-  if (!RequiredIntArg(env, info, 5, "binsPerOctave", &bins_per_octave)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 5, "binsPerOctave", sonare::kCqtCountDomain,
+                         &bins_per_octave)) {
+    return env.Undefined();
+  }
   float filter_scale{};
   if (!OptionalFiniteFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale))
     return env.Undefined();
@@ -120,14 +128,22 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kCqtHopLengthDomain,
+                         &hop_length)) {
+    return env.Undefined();
+  }
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 3, "fmin", sonare::constants::kC1Hz, &fmin))
     return env.Undefined();
   int n_bins{};
-  if (!OptionalIntArg(env, info, 4, "nBins", 84, &n_bins)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nBins", 84, sonare::kCqtCountDomain, &n_bins)) {
+    return env.Undefined();
+  }
   int bins_per_octave{};
-  if (!OptionalIntArg(env, info, 5, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "binsPerOctave", 12, sonare::kCqtCountDomain,
+                         &bins_per_octave)) {
+    return env.Undefined();
+  }
   float filter_scale{};
   if (!OptionalFiniteFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale))
     return env.Undefined();
@@ -461,9 +477,13 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop_length)) {
+    return env.Undefined();
+  }
   int n_bands{};
-  if (!OptionalIntArg(env, info, 4, "nBands", 6, &n_bands)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nBands", 6, sonare::kSpectralCountDomain, &n_bands)) {
+    return env.Undefined();
+  }
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 5, "fmin", 200.0f, &fmin)) return env.Undefined();
   float quantile{};
@@ -496,9 +516,13 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop_length)) {
+    return env.Undefined();
+  }
   int order{};
-  if (!RequiredIntArg(env, info, 4, "order", &order)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 4, "order", sonare::kSpectralOrderDomain, &order)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   int out_rows = 0;
   int out_cols = 0;
@@ -558,7 +582,10 @@ Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 1, "resolution", 0.01f, &resolution))
     return env.Undefined();
   int bins_per_octave{};
-  if (!OptionalIntArg(env, info, 2, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "binsPerOctave", 12, sonare::kPitchCountDomain,
+                         &bins_per_octave)) {
+    return env.Undefined();
+  }
   float out_tuning = 0.0f;
   SonareError err = sonare_pitch_tuning(arr.Data(), arr.ElementLength(), resolution,
                                         bins_per_octave, &out_tuning);
@@ -606,14 +633,21 @@ Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "nFft", 2048, sonare::kPitchCountDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kPitchCountDomain, &hop_length)) {
+    return env.Undefined();
+  }
   float resolution{};
   if (!OptionalFiniteFloatArg(env, info, 4, "resolution", 0.01f, &resolution))
     return env.Undefined();
   int bins_per_octave{};
-  if (!OptionalIntArg(env, info, 5, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "binsPerOctave", 12, sonare::kPitchCountDomain,
+                         &bins_per_octave)) {
+    return env.Undefined();
+  }
   float out_tuning = 0.0f;
   SonareError err = sonare_estimate_tuning(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
                                            resolution, bins_per_octave, &out_tuning);

@@ -294,9 +294,12 @@ export function melToAudio(...args: unknown[]): Float32Array {
   });
 }
 
-/** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
+/**
+ * A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them.
+ * The relation is asked only of an even size: the core refuses any other by its own rule first.
+ */
 function assertGriffinLimFftSize(nBins: number, nFft: number): void {
-  if (nFft !== (nBins - 1) * 2) {
+  if (nFft % 2 === 0 && nFft !== (nBins - 1) * 2) {
     throw refuse(`nFft must equal (magnitude.rows - 1) * 2, which is ${(nBins - 1) * 2}`);
   }
 }

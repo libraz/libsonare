@@ -1092,9 +1092,6 @@ export function detectBoundaries(
 export function detectBoundaries(...args: unknown[]): BoundaryResult {
   return withEntry('detectBoundaries', () => {
     const request = audioCall<DetectBoundariesRequest>('detectBoundaries', args);
-    // Validation only: the addon seeds every default from the C ABI, so the
-    // resolved pair is deliberately not passed on.
-    resolveFftOptions(request.nFft, request.hopLength);
     const raw: Native = addon.detectBoundaries(
       request.samples,
       request.sampleRate,
@@ -1304,9 +1301,7 @@ function resolveChordParams(request: ChordDetectionOptions): {
   tuningAuto: boolean;
 } {
   const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
-  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
   const hmmBeamWidth = request.hmmBeamWidth ?? 24;
-  assertInt32(hmmBeamWidth, 'hmmBeamWidth');
   const keyRoot = request.keyRoot ?? 0;
   assertPitchClass(keyRoot, 'keyRoot');
   const keyMode = request.keyMode ?? 'major';

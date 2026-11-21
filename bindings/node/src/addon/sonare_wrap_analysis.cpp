@@ -8,7 +8,9 @@
 
 #include "analysis/acoustic_analyzer.h"
 #include "analysis/bpm_analyzer.h"
+#include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
+#include "analysis/key_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/timbre_analyzer.h"
@@ -95,8 +97,8 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = IntProperty(options, "nFft", n_fft);
-    hop_length = IntProperty(options, "hopLength", hop_length);
+    n_fft = DomainProperty<int>(options, "nFft", n_fft, sonare::kKeyCountDomain);
+    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyCountDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
     chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
@@ -145,8 +147,8 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = IntProperty(options, "nFft", n_fft);
-    hop_length = IntProperty(options, "hopLength", hop_length);
+    n_fft = DomainProperty<int>(options, "nFft", n_fft, sonare::kKeyCountDomain);
+    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyCountDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
     chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
@@ -508,9 +510,13 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::BpmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kBpmCountDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 6, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "hopLength", 512, sonare::kBpmCountDomain, &hop_length)) {
+    return env.Undefined();
+  }
   int max_candidates{};
   if (!RequiredIntArg(env, info, 7, "maxCandidates", &max_candidates)) return env.Undefined();
 
@@ -711,9 +717,13 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::RhythmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kBpmCountDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 6, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "hopLength", 512, sonare::kBpmCountDomain, &hop_length)) {
+    return env.Undefined();
+  }
 
   SonareRhythmResult rhythm{};
   SonareError err = sonare_analyze_rhythm(data, length, sample_rate, bpm_min, bpm_max, start_bpm,
@@ -991,16 +1001,23 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 6, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "nFft", 2048, sonare::kChordCountDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 7, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 7, "hopLength", 512, sonare::kChordCountDomain, &hop_length)) {
+    return env.Undefined();
+  }
   bool use_beat_sync{};
   if (!OptionalBoolArg(env, info, 8, "useBeatSync", true, &use_beat_sync)) return env.Undefined();
   bool use_hmm{};
   if (!OptionalBoolArg(env, info, 9, "useHmm", chord_defaults.use_hmm, &use_hmm))
     return env.Undefined();
   int hmm_beam_width{};
-  if (!OptionalIntArg(env, info, 10, "hmmBeamWidth", 24, &hmm_beam_width)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 10, "hmmBeamWidth", 24, sonare::kChordBeamWidthDomain,
+                         &hmm_beam_width)) {
+    return env.Undefined();
+  }
   bool use_key_context{};
   if (!OptionalBoolArg(env, info, 11, "useKeyContext", false, &use_key_context))
     return env.Undefined();
@@ -1089,16 +1106,23 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 8, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 8, "nFft", 2048, sonare::kChordCountDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 9, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 9, "hopLength", 512, sonare::kChordCountDomain, &hop_length)) {
+    return env.Undefined();
+  }
   bool use_beat_sync{};
   if (!OptionalBoolArg(env, info, 10, "useBeatSync", true, &use_beat_sync)) return env.Undefined();
   bool use_hmm{};
   if (!OptionalBoolArg(env, info, 11, "useHmm", chord_defaults.use_hmm, &use_hmm))
     return env.Undefined();
   int hmm_beam_width{};
-  if (!OptionalIntArg(env, info, 12, "hmmBeamWidth", 24, &hmm_beam_width)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 12, "hmmBeamWidth", 24, sonare::kChordBeamWidthDomain,
+                         &hmm_beam_width)) {
+    return env.Undefined();
+  }
   bool use_key_context{};
   if (!OptionalBoolArg(env, info, 13, "useKeyContext", false, &use_key_context))
     return env.Undefined();

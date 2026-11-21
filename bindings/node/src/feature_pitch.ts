@@ -1,7 +1,6 @@
 import { toVoicedInt32 } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
-import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { nativeTuningToCents } from './internal/tuning_units.js';
 import { addon } from './native.js';
@@ -17,11 +16,9 @@ import type { VoicedFlags } from './types_notes.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertCqtHopLength,
   assertFloat32Array,
   assertFrequencyBounds,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -277,12 +274,10 @@ function toCqtResult(r: NativeCqt): CqtResult {
 
 const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
 
-// Shared guard of the CQT family: audio, the hop bound, then the two counts refused at zero.
+// Shared guard of the CQT family: audio and the frequency floor; the addon reads the hop and
+// the two counts against the core's domains.
 function checkCqtRequest(request: CqtRequest): void {
   assertAudioInput(request.samples, request.sampleRate, request);
-  assertCqtHopLength(request.hopLength ?? 512);
-  assertPositiveInteger(request.nBins ?? 84, 'nBins');
-  assertPositiveInteger(request.binsPerOctave ?? 12, 'binsPerOctave');
   assertPositiveFloatValue(request.fminHz ?? DEFAULT_CQT_FMIN_HZ, 'fminHz');
 }
 
@@ -325,9 +320,6 @@ export function chromaCens(...args: unknown[]): ChromaResult {
   return withEntry('chromaCens', () => {
     const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertCqtHopLength(request.hopLength ?? 512);
-    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
-    assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
     return toChromaResult(
       addon.chromaCens(
         request.samples,
@@ -351,9 +343,6 @@ export function chromaCqt(...args: unknown[]): ChromaResult {
   return withEntry('chromaCqt', () => {
     const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertCqtHopLength(request.hopLength ?? 512);
-    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
-    assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
     return toChromaResult(
       addon.chromaCqt(
         request.samples,
@@ -377,8 +366,6 @@ export function bassChroma(...args: unknown[]): ChromaResult {
   return withEntry('bassChroma', () => {
     const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertCqtHopLength(request.hopLength ?? 512);
-    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
     return toChromaResult(
       addon.bassChroma(
         request.samples,
@@ -502,7 +489,6 @@ export function pitchTuning(...args: unknown[]): number {
     const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
     assertFloat32Array(r.frequencies, 'frequencies');
     const binsPerOctave = r.binsPerOctave ?? 12;
-    assertPositiveInteger(binsPerOctave, 'binsPerOctave');
     return nativeTuningToCents(
       addon.pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave),
       binsPerOctave,
@@ -528,7 +514,6 @@ export function estimateTuning(...args: unknown[]): number {
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
     const binsPerOctave = request.binsPerOctave ?? 12;
-    assertPositiveInteger(binsPerOctave, 'binsPerOctave');
     return nativeTuningToCents(
       addon.estimateTuning(
         request.samples,
@@ -605,9 +590,6 @@ export function piptrack(...args: unknown[]): PiptrackResult {
 function pitchTrack(requestName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchResult {
   const request = sampleOneShot<PitchPyinRequest>(requestName, args);
   assertAudioInput(request.samples, request.sampleRate, request);
-  // frameLength is a framing window, not a transform size, so it carries no evenness rule.
-  assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
   const f0MinHz = request.f0MinHz ?? 65;
   const f0MaxHz = request.f0MaxHz ?? 2093;
   assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
@@ -711,15 +693,13 @@ export function nnlsChroma(...args: unknown[]): Matrix2D {
   return withEntry('nnlsChroma', () => {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.
-    assertPositiveInteger(request.stftBlendNFft ?? 4096, 'stftBlendNFft');
     const r = addon.nnlsChroma(
       request.samples,
       request.sampleRate,
       request.enableStftBlend ?? true,
       request.stftBlendWeight ?? 0.55,
       request.stftBlendNFft ?? 4096,
-      resolvePositiveIntegerOption('hopLength', request.hopLength, 512),
+      request.hopLength ?? 512,
     );
     return toMatrix2D(r.data, r.nChroma, r.nFrames);
   });

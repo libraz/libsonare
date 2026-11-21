@@ -6,6 +6,8 @@
 #include "core/convert.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
+#include "core/synthesis.h"
+#include "effects/silence.h"
 #include "feature/chroma.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
@@ -16,6 +18,7 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
+#include "util/frame.h"
 
 using namespace sonare_node;
 using namespace sonare_node::features;
@@ -26,7 +29,10 @@ Napi::Value SonareWrap::Tone(const Napi::CallbackInfo& info) {
   float frequency{};
   if (!RequiredFloatArg(env, info, 0, "frequency", &frequency)) return env.Undefined();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 1, "sampleRate", 22050, sonare::kSynthesisSampleRateDomain,
+                         &sample_rate)) {
+    return env.Undefined();
+  }
   float duration{};
   if (!OptionalFloatArg(env, info, 2, "duration", 1.0f, &duration)) return env.Undefined();
   float phase{};
@@ -50,7 +56,10 @@ Napi::Value SonareWrap::Chirp(const Napi::CallbackInfo& info) {
   float fmax{};
   if (!RequiredFloatArg(env, info, 1, "fmax", &fmax)) return env.Undefined();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "sampleRate", 22050, sonare::kSynthesisSampleRateDomain,
+                         &sample_rate)) {
+    return env.Undefined();
+  }
   float duration{};
   if (!OptionalFloatArg(env, info, 3, "duration", 1.0f, &duration)) return env.Undefined();
   bool linear{};
@@ -73,9 +82,14 @@ Napi::Value SonareWrap::Clicks(const Napi::CallbackInfo& info) {
   }
   const auto times = info[0].As<Napi::Float32Array>();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 1, "sampleRate", 22050, sonare::kSynthesisSampleRateDomain,
+                         &sample_rate)) {
+    return env.Undefined();
+  }
   int length{};
-  if (!OptionalIntArg(env, info, 2, "length", 0, &length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "length", 0, sonare::kClicksLengthDomain, &length)) {
+    return env.Undefined();
+  }
   float frequency{};
   if (!OptionalFloatArg(env, info, 3, "frequency", 1000.0f, &frequency)) return env.Undefined();
   float duration{};
@@ -100,9 +114,15 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
   float top_db{};
   if (!RequiredFiniteFloatValue(env, info[1], "topDb", &top_db)) return env.Undefined();
   int frame_length{};
-  if (!RequiredIntArg(env, info, 2, "frameLength", &frame_length)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 2, "frameLength", sonare::kSilenceFrameLengthDomain,
+                         &frame_length)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kSilenceHopLengthDomain,
+                         &hop_length)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int start = 0;
@@ -129,9 +149,15 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   float top_db{};
   if (!RequiredFiniteFloatValue(env, info[1], "topDb", &top_db)) return env.Undefined();
   int frame_length{};
-  if (!RequiredIntArg(env, info, 2, "frameLength", &frame_length)) return env.Undefined();
+  if (!RequiredDomainArg(env, info, 2, "frameLength", sonare::kSilenceFrameLengthDomain,
+                         &frame_length)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kSilenceHopLengthDomain,
+                         &hop_length)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_split_silence(arr.Data(), arr.ElementLength(), top_db, frame_length,
@@ -182,9 +208,15 @@ Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_rep
   float top_db{};
   if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
   int frame_length{};
-  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "frameLength", 2048, sonare::kSilenceFrameLengthDomain,
+                         &frame_length)) {
+    return env.Undefined();
+  }
   int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kSilenceHopLengthDomain,
+                         &hop_length)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t out_count = 0;
   SonareSilenceCommonReport report{};
@@ -231,21 +263,20 @@ Napi::Value SonareWrap::FrameSignal(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "frameLength must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "hopLength must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   auto arr = info[0].As<Napi::Float32Array>();
+  int frame_length{};
+  if (!RequiredDomainArg(env, info, 1, "frameLength", sonare::kFrameLengthDomain, &frame_length)) {
+    return env.Undefined();
+  }
+  int hop_length{};
+  if (!RequiredDomainArg(env, info, 2, "hopLength", sonare::kFrameHopLengthDomain, &hop_length)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_frame_signal(
-      arr.Data(), arr.ElementLength(), node_narrow_int(env, info[1], "frameLength"),
-      node_narrow_int(env, info[2], "hopLength"), &out, &count, &n_frames);
+  SonareError err = sonare_frame_signal(arr.Data(), arr.ElementLength(), frame_length, hop_length,
+                                        &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);

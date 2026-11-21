@@ -1,4 +1,4 @@
-import { refuse, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -287,7 +287,6 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
     const request = sampleOneShot<MelSpectrogramRequest>('melSpectrogram', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nMels ?? 128, 'nMels');
     const fminHz = request.fminHz ?? 0;
     const fmaxHz = request.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -330,8 +329,6 @@ export function mfcc(...args: unknown[]): MfccResult {
     const request = sampleOneShot<MfccRequest>('mfcc', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nMels ?? 128, 'nMels');
-    assertPositiveInteger(request.nMfcc ?? 20, 'nMfcc');
     const fminHz = request.fminHz ?? 0;
     const fmaxHz = request.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -372,10 +369,6 @@ export function melDelta(...args: unknown[]): Matrix2D {
     const r = requestOnly<MelDeltaRequest>('melDelta', args);
     assertMatrix2D(r.features, 'features');
     const width = r.width ?? 9;
-    assertPositiveInteger(width, 'width');
-    if (width < 3 || width % 2 === 0) {
-      throw refuse('width must be an odd integer of at least 3');
-    }
     const out = addon.melDelta(r.features.data, r.features.rows, r.features.cols, width);
     return toMatrix2D(out, r.features.rows, r.features.cols);
   });
@@ -451,7 +444,6 @@ export function spectralContrast(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.nBands ?? 6, 'nBands');
     const fminHz = request.fminHz ?? 200;
     assertPositiveFloatValue(fminHz, 'fminHz');
     const r = addon.spectralContrast(
@@ -583,7 +575,6 @@ export function spectralFlux(...args: unknown[]): Float32Array {
     const request = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    assertPositiveInteger(request.lag ?? 1, 'lag');
     return addon.spectralFlux(
       request.samples,
       request.sampleRate,
@@ -605,10 +596,6 @@ export function zeroCrossingRate(...args: unknown[]): Float32Array {
   return withEntry('zeroCrossingRate', () => {
     const request = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    // A framing window is not a transform size, so the evenness rule the FFT
-    // resolver carries does not apply to it.
-    assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
     return addon.zeroCrossingRate(
       request.samples,
       request.sampleRate,
@@ -629,8 +616,6 @@ export function rmsEnergy(...args: unknown[]): Float32Array {
   return withEntry('rmsEnergy', () => {
     const request = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
     return addon.rmsEnergy(
       request.samples,
       request.sampleRate,
