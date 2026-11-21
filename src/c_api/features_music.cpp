@@ -46,11 +46,12 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline(fn, name, samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       Chroma chroma = transform(audio, config);
-                       return fill_chroma_result(chroma, out);
-                     });
+  return run_offline(
+      fn, name, samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        Chroma chroma = sonare::detail::with_derived_cqt_grid(
+            "bins_per_octave", "sample_rate", [&] { return transform(audio, config); });
+        return fill_chroma_result(chroma, out);
+      });
 }
 
 }  // namespace

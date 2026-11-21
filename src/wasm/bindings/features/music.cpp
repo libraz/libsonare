@@ -80,7 +80,8 @@ val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, c
   config.base = make_chroma_cqt_config(
       domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain),
       domainNumberFromVal<int>(n_chroma, "nChroma", kChromaCountDomain), bins_per_octave);
-  return chromaToVal(chroma_cens(audio, config));
+  return chromaToVal(sonare::detail::with_derived_cqt_grid(
+      "bins_per_octave", "sample_rate", [&] { return chroma_cens(audio, config); }));
 }
 
 val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
@@ -93,7 +94,8 @@ val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, co
   const ChromaCqtConfig config = make_chroma_cqt_config(
       domainNumberFromVal<int>(hop_length, "hopLength", kCqtHopLengthDomain),
       domainNumberFromVal<int>(n_chroma, "nChroma", kChromaCountDomain), bins_per_octave);
-  return chromaToVal(chroma_cqt(audio, config));
+  return chromaToVal(sonare::detail::with_derived_cqt_grid(
+      "bins_per_octave", "sample_rate", [&] { return chroma_cqt(audio, config); }));
 }
 
 val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,

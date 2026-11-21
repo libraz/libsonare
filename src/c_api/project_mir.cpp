@@ -608,18 +608,9 @@ SonareError sonare_align_take_to_reference_ex(
   // the signal that lands on the SOURCE axis its `reference`, while a clip needs
   // its own recording there. Passing the take as the core's reference is what puts
   // the reference timeline on the warp axis.
-  const sonare::mir::ChromaDtwResult aligned = [&] {
-    try {
-      return sonare::mir::chroma_dtw_align(take_audio, reference_audio, dtw_config);
-    } catch (const sonare::SonareParameterRefusal& e) {
-      // The CQT grid's fmin and n_bins are derived, so its Nyquist refusal is restated in the
-      // two arguments a caller can move.
-      const std::vector<std::string>& subjects = e.subjects();
-      if (std::find(subjects.begin(), subjects.end(), "n_bins") == subjects.end()) throw;
-      check::refuse_relation({"config.bins_per_octave", "reference_sample_rate"},
-                             "{0} puts the top chroma bin at or above half of {1}");
-    }
-  }();
+  const sonare::mir::ChromaDtwResult aligned = sonare::detail::with_derived_cqt_grid(
+      "config.bins_per_octave", "reference_sample_rate",
+      [&] { return sonare::mir::chroma_dtw_align(take_audio, reference_audio, dtw_config); });
 
   const std::vector<sonare::mir::WarpAnchor> anchors =
       sonare::mir::strictly_increasing_anchors(aligned.anchors);

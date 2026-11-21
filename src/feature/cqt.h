@@ -220,6 +220,34 @@ auto with_fixed_filter_scale(std::vector<std::string> subjects, std::string rate
   }
 }
 
+/// @brief Runs @p call for an entry whose fmin, n_bins and filter_scale are derived from its
+///        bins per octave, restating a top-bin, filter-length or kernel-size refusal in
+///        @p bins_per_octave and @p rate, the arguments such a caller can move.
+template <typename Call>
+auto with_derived_cqt_grid(std::string bins_per_octave, std::string rate,
+                           Call&& call) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const SonareParameterRefusal& e) {
+    const std::vector<std::string>& named = e.subjects();
+    const auto names = [&](const char* subject) {
+      return std::find(named.begin(), named.end(), subject) != named.end();
+    };
+    if (names("n_bins") && names("sr")) {
+      util::check::refuse_relation({std::move(bins_per_octave), std::move(rate)},
+                                   "{0} puts the top chroma bin at or above half of {1}");
+    }
+    if (names("filter_scale")) {
+      refuse_cqt_filter_length(kMaxCqtFftLength, {std::move(bins_per_octave)}, std::move(rate));
+    }
+    if (named.size() == 1 && named.front() == "n_bins") {
+      util::check::refuse_relation({std::move(bins_per_octave), std::move(rate)},
+                                   "{0} puts more bins in the CQT kernel than fit at {1}");
+    }
+    throw;
+  }
+}
+
 /// @brief Refuses an @p n_bins whose kernel at @p fft_length exceeds @p max_elements, stating
 ///        the largest n_bins that fits.
 void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements);
