@@ -228,11 +228,13 @@ SonareError sonare_nnls_chroma(const float* samples, size_t length, int sample_r
   }
   NnlsChromaConfig config;
   if (const SonareError err = run_validation([&] {
-        config = NnlsChromaConfig::fast(core_length(resolved.hop_length));
-        config.enable_stft_blend = resolved.enable_stft_blend != 0;
-        config.stft_blend_weight = resolved.stft_blend_weight;
-        config.stft_blend_n_fft = resolved.stft_blend_n_fft;
-        with_c_names(kNnlsChromaOptionNames, [&] { validate_nnls_chroma_config(config); });
+        with_c_names(kNnlsChromaOptionNames, [&] {
+          config = NnlsChromaConfig::fast(core_length(resolved.hop_length));
+          config.enable_stft_blend = resolved.enable_stft_blend != 0;
+          config.stft_blend_weight = resolved.stft_blend_weight;
+          config.stft_blend_n_fft = resolved.stft_blend_n_fft;
+          validate_nnls_chroma_config(config);
+        });
       });
       err != SONARE_OK) {
     return err;

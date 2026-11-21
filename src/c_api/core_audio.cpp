@@ -165,6 +165,10 @@ void sonare_audio_file_options_init(SonareAudioFileOptions* options) {
   options->channel_index = SONARE_AUDIO_CHANNEL_DOWNMIX;
 }
 
+namespace {
+const std::array<CName, 1> kAudioFileOptionNames{{{"channel_index", "options.channel_index"}}};
+}  // namespace
+
 SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOptions* options,
                                    SonareAudio** out) {
   SONARE_C_API_ENTRY;
@@ -192,7 +196,9 @@ SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOption
   if (resolved.channel_index == SONARE_AUDIO_CHANNEL_DOWNMIX) {
     *out = new SonareAudio{Audio::from_file(path)};
   } else {
-    *out = new SonareAudio{Audio::from_file_channel(path, resolved.channel_index)};
+    *out = new SonareAudio{with_c_names(kAudioFileOptionNames, [&] {
+      return Audio::from_file_channel(path, resolved.channel_index);
+    })};
   }
   return SONARE_OK;
   SONARE_C_CATCH

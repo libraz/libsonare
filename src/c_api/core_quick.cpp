@@ -34,8 +34,9 @@ std::optional<float> tuning_from_c(float tuning_cents, int tuning_auto) {
   return tuning_auto != 0 ? std::nullopt : std::optional<float>(tuning_from_cents(tuning_cents));
 }
 
-const std::array<CName, 2> kKeyOptionNames{
-    {{"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
+const std::array<CName, 3> kKeyOptionNames{{{"n_fft", "options.n_fft"},
+                                            {"hop_length", "options.hop_length"},
+                                            {"high_pass_hz", "options.chroma_high_pass_hz"}}};
 
 // The key arguments in header order: the scalars through the core's rule for them, then the mode
 // list and the profile selector, which are this layer's own.
@@ -163,7 +164,9 @@ SonareError sonare_detect_key(const float* samples, size_t length, int sample_ra
                         opt->genre_hint, &config);
         config.tuning = tuning_from_c(opt->tuning_cents, opt->tuning_auto);
         float used = 0.0f;
-        Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
+        Key key = with_c_names(kKeyOptionNames, [&] {
+          return quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
+        });
         out_key->root = static_cast<SonarePitchClass>(key.root);
         out_key->mode = static_cast<SonareMode>(key.mode);
         out_key->confidence = key.confidence;
@@ -207,8 +210,10 @@ SonareError sonare_detect_key_candidates(const float* samples, size_t length, in
         config.tuning =
             opt->tuning_auto != 0 ? measure_tuning(audio) : tuning_from_cents(opt->tuning_cents);
 
-        const auto candidates =
-            quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
+        const auto candidates = with_c_names(kKeyOptionNames, [&] {
+          return quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(),
+                                              config);
+        });
         if (out_tuning_cents != nullptr) *out_tuning_cents = tuning_to_cents(*config.tuning);
         if (candidates.empty()) {
           return SONARE_OK;

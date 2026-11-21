@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <climits>
 #include <cmath>
 #include <limits>
 
@@ -163,12 +162,9 @@ KeyProfileType resolve_profile_type(const KeyConfig& config) {
 
 void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
   if (config.tuning) util::check::in_interval(*config.tuning, -0.5, true, 0.5, false, "tuning");
-  SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0 &&
-                   config.hop_length <= INT_MAX / (2 * chord_constants::kChordChromaHopMultiplier),
-               ErrorCode::InvalidParameter);
+  if (config.high_pass_hz >= static_cast<float>(audio.sample_rate()) * 0.5f) {
+    util::check::refuse_relation({"high_pass_hz", "sample_rate"}, "{0} must be below half of {1}");
+  }
 }
 
 }  // namespace

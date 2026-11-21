@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/chord_analyzer.h"
 #include "analysis/key_profiles.h"
 #include "core/audio.h"
 #include "feature/chroma.h"
@@ -90,9 +91,12 @@ struct KeyConfig {
 ///          check alone does not ensure: at the 2048-point default a hop of 8 passes it.
 constexpr int kMinKeyHpssHopLength = 16;
 
-/// @brief Domain of the KeyConfig members n_fft and hop_length.
+/// @brief Domain of KeyConfig::n_fft.
 inline constexpr util::check::NumericDomain kKeyCountDomain =
     util::check::integer_domain_of<int>(1);
+/// @brief Domain of KeyConfig::hop_length, which feeds the chord chroma the same way
+///        ChordConfig::hop_length does.
+inline constexpr util::check::NumericDomain kKeyHopLengthDomain = kChordHopLengthDomain;
 
 /// @brief Refuses a KeyConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) for a non-positive n_fft or hop_length, a
@@ -100,7 +104,7 @@ inline constexpr util::check::NumericDomain kKeyCountDomain =
 ///         non-finite high_pass_hz.
 inline void validate_key_config(const KeyConfig& config) {
   util::check::integer_within<int>(config.n_fft, kKeyCountDomain, "n_fft");
-  util::check::integer_within<int>(config.hop_length, kKeyCountDomain, "hop_length");
+  util::check::integer_within<int>(config.hop_length, kKeyHopLengthDomain, "hop_length");
   if (config.use_hpss && config.hop_length < kMinKeyHpssHopLength) {
     util::check::refuse_relation(
         {"hop_length", "use_hpss"},

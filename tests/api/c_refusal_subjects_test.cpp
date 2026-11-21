@@ -404,6 +404,12 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message().rfind("options.hmm_beam_width ", 0) == 0);
   options.hmm_beam_width = 0;
+  // The chord chroma runs at four times the hop, which has to stay a constant-Q hop.
+  options.hop_length = 16385;
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.hop_length must be an integer in [1, 16384]");
+  options.hop_length = 512;
 
   SonareStringArray roman{};
   SonareStringArray functions{};
@@ -436,6 +442,23 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
   CHECK(sonare_chord_functions(chords, 2, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman, &functions) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "chords[1].quality must be an integer in [0, 24]");
+}
+
+TEST_CASE("the key entries refuse their hop and high-pass options by their names",
+          "[c_api][feature]") {
+  const std::vector<float> samples(22050, 0.1f);
+  SonareDetectKeyOptions options;
+  sonare_detect_key_options_init(&options);
+  SonareKey key{};
+  options.hop_length = 16385;
+  CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.hop_length must be an integer in [1, 16384]");
+  options.hop_length = 512;
+  options.chroma_high_pass_hz = 11025.0f;
+  CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.chroma_high_pass_hz must be below half of sample_rate");
 }
 
 TEST_CASE("the segment entries refuse each matrix argument by its name", "[c_api][feature]") {

@@ -165,9 +165,14 @@ struct ChordConfig {
   std::optional<float> tuning;
 };
 
-/// @brief Domain of the ChordConfig members n_fft and hop_length.
+/// @brief Domain of ChordConfig::n_fft.
 inline constexpr util::check::NumericDomain kChordCountDomain =
     util::check::integer_domain_of<int>(1);
+/// @brief Domain of ChordConfig::hop_length: the chord chroma runs at
+///        @ref chord_constants::kChordChromaHopMultiplier times it, which has to stay a constant-Q
+///        hop.
+inline constexpr util::check::NumericDomain kChordHopLengthDomain =
+    util::check::integer_domain(1, kMaxCqtHopLength / chord_constants::kChordChromaHopMultiplier);
 /// @brief Domain of ChordConfig::hmm_beam_width.
 inline constexpr util::check::NumericDomain kChordBeamWidthDomain =
     util::check::integer_domain_of<int>(0);
@@ -182,7 +187,7 @@ inline void validate_chord_config(const ChordConfig& config) {
   util::check::at_least(config.smoothing_window, 0.0, "smoothing_window");
   util::check::in_range(config.threshold, 0.0, 1.0, "threshold");
   util::check::integer_within<int>(config.n_fft, kChordCountDomain, "n_fft");
-  util::check::integer_within<int>(config.hop_length, kChordCountDomain, "hop_length");
+  util::check::integer_within<int>(config.hop_length, kChordHopLengthDomain, "hop_length");
   util::check::integer_within<int>(config.hmm_beam_width, kChordBeamWidthDomain, "hmm_beam_width");
 }
 

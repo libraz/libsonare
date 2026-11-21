@@ -2835,6 +2835,8 @@ TEST_CASE("sonare_audio_from_file downmixes by default and loads one channel on 
   SonareAudio* missing = nullptr;
   CHECK(sonare_audio_from_file(path.string().c_str(), &options, &missing) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.channel_index must be an integer in [0, 1]");
   options.channel_index = -2;
   CHECK(sonare_audio_from_file(path.string().c_str(), &options, &missing) ==
         SONARE_ERROR_INVALID_PARAMETER);
