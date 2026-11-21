@@ -47,20 +47,6 @@ category = "hot-path"
 reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
 
 [[allow]]
-check = "one-positional-form"
-surface = "node"
-name = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
-category = "hot-path"
-reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
-
-[[allow]]
-check = "one-positional-form"
-surface = "wasm"
-name = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
-category = "hot-path"
-reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
-
-[[allow]]
 check = "token-case"
 surface = "node"
 name = "MasteringInsertParamUnit='Hz'"
@@ -199,55 +185,6 @@ surface = "wasm"
 name = "scaleCorrectionSemitones"
 category = "scalar"
 reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_bpm"
-category = "distinct-operation"
-reason = "Tempo analysis alone with its own search range; sonare_analyze runs the whole quick pipeline."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_dynamics"
-category = "distinct-operation"
-reason = "Dynamics analysis alone; sonare_analyze runs the whole quick pipeline."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_impulse_response"
-category = "distinct-operation"
-reason = "Measures an impulse response, not a music analysis."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_melody"
-category = "distinct-operation"
-reason = "Melody contour extraction alone; sonare_analyze runs the whole quick pipeline."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_rhythm"
-category = "distinct-operation"
-reason = "Rhythm analysis alone; sonare_analyze runs the whole quick pipeline."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_sections"
-category = "distinct-operation"
-reason = "Song-structure section detection alone; sonare_analyze runs the whole quick pipeline."
-
-[[allow]]
-check = "options-struct:suffix"
-surface = "c"
-name = "sonare_analyze_timbre"
-category = "distinct-operation"
-reason = "Timbre analysis alone; sonare_analyze runs the whole quick pipeline."
 
 [[allow]]
 check = "options-struct:suffix"
