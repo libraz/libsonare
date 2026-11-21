@@ -26,6 +26,16 @@ val vectorToInt16Array(const std::vector<int16_t>& vec) {
   return result;
 }
 
+/// @brief Helper to convert int8 vector to Int8Array.
+val vectorToInt8Array(const std::vector<int8_t>& vec) {
+  const size_t n = vec.size();
+  val result = val::global("Int8Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
+  return result;
+}
+
 /// @brief Reads an optional quantization-range config from a JS value.
 /// @details An undefined/null value (or a missing field) keeps the library
 ///          default for that range, so a partial object overrides only the
@@ -198,6 +208,9 @@ class StreamAnalyzerWrapper {
     out.set("rmsEnergy", vectorToUint8Array(buffer.rms_energy));
     out.set("spectralCentroid", vectorToUint8Array(buffer.spectral_centroid));
     out.set("spectralFlatness", vectorToUint8Array(buffer.spectral_flatness));
+    out.set("chordRoot", vectorToInt8Array(buffer.chord_root));
+    out.set("chordQuality", vectorToInt8Array(buffer.chord_quality));
+    out.set("chordConfidence", vectorToUint8Array(buffer.chord_confidence));
     return out;
   }
 
@@ -223,6 +236,9 @@ class StreamAnalyzerWrapper {
     out.set("rmsEnergy", vectorToInt16Array(buffer.rms_energy));
     out.set("spectralCentroid", vectorToInt16Array(buffer.spectral_centroid));
     out.set("spectralFlatness", vectorToInt16Array(buffer.spectral_flatness));
+    out.set("chordRoot", vectorToInt8Array(buffer.chord_root));
+    out.set("chordQuality", vectorToInt8Array(buffer.chord_quality));
+    out.set("chordConfidence", vectorToInt16Array(buffer.chord_confidence));
     return out;
   }
 

@@ -4066,6 +4066,9 @@ export interface WasmStreamFramesU8 {
   rmsEnergy: Uint8Array;
   spectralCentroid: Uint8Array;
   spectralFlatness: Uint8Array;
+  chordRoot: Int8Array;
+  chordQuality: Int8Array;
+  chordConfidence: Uint8Array;
 }
 
 export interface WasmStreamFramesI16 {
@@ -4080,6 +4083,9 @@ export interface WasmStreamFramesI16 {
   rmsEnergy: Int16Array;
   spectralCentroid: Int16Array;
   spectralFlatness: Int16Array;
+  chordRoot: Int8Array;
+  chordQuality: Int8Array;
+  chordConfidence: Int16Array;
 }
 
 export interface WasmStreamAnalyzer {

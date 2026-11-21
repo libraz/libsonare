@@ -223,6 +223,56 @@ describe('stream analyzer surface', () => {
     }
   });
 
+  it('carries the frame chords through the quantized read paths', () => {
+    const audio = triad(3);
+    const float = analyzer({ computeChroma: true });
+    const u8Reader = analyzer({ computeChroma: true });
+    const i16Reader = analyzer({ computeChroma: true });
+    try {
+      float.process(audio);
+      u8Reader.process(audio);
+      i16Reader.process(audio);
+      const frames = float.readFrames(float.availableFrames);
+      const u8 = u8Reader.readFramesU8(u8Reader.availableFrames);
+      const i16 = i16Reader.readFramesI16(i16Reader.availableFrames);
+      const roots = frames.chordRoot as Int32Array;
+      const qualities = frames.chordQuality as Int32Array;
+      const confidences = frames.chordConfidence as Float32Array;
+      expect(roots.length).toBeGreaterThan(0);
+      for (const q of [u8, i16]) {
+        expect(q.nFrames).toBe(frames.nFrames);
+        expect(q.chordRoot).toBeInstanceOf(Int8Array);
+        expect(q.chordQuality).toBeInstanceOf(Int8Array);
+        expect(Array.from(q.chordRoot as Int8Array)).toEqual(Array.from(roots));
+        expect(Array.from(q.chordQuality as Int8Array)).toEqual(Array.from(qualities));
+      }
+      expect(u8.chordConfidence).toBeInstanceOf(Uint8Array);
+      expect(i16.chordConfidence).toBeInstanceOf(Int16Array);
+      for (let f = 0; f < frames.nFrames; f++) {
+        expect(
+          Math.abs((u8.chordConfidence as Uint8Array)[f] - confidences[f] * 255),
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs((i16.chordConfidence as Int16Array)[f] - (confidences[f] * 65535 - 32768)),
+        ).toBeLessThanOrEqual(1);
+      }
+      const none = analyzer({ computeChroma: false });
+      try {
+        none.process(audio);
+        const bare = none.readFramesU8(none.availableFrames);
+        for (const key of ['chordRoot', 'chordQuality', 'chordConfidence']) {
+          expect(bare).not.toHaveProperty(key);
+        }
+      } finally {
+        none.destroy();
+      }
+    } finally {
+      float.destroy();
+      u8Reader.destroy();
+      i16Reader.destroy();
+    }
+  });
+
   it('has a token for every chord ordinal native can emit', () => {
     expect(CHORD_QUALITIES).toHaveLength(25);
     expect(new Set(CHORD_QUALITIES).size).toBe(25);

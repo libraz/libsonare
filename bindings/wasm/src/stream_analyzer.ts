@@ -109,13 +109,16 @@ function sharedFrameArrays<T extends Float32Array | Uint8Array | Int16Array>(
 }
 
 function quantizedFrames<T extends Uint8Array | Int16Array>(
-  native: NativeFrames<T>,
+  native: NativeFrames<T> & { chordRoot: Int8Array; chordQuality: Int8Array; chordConfidence: T },
 ): StreamFramesU8 | StreamFramesI16 {
   const out: {
     nFrames: number;
     timestampsSec: Float32Array;
     mel?: T;
     chroma?: T;
+    chordRoot?: Int8Array;
+    chordQuality?: Int8Array;
+    chordConfidence?: T;
   } = {
     nFrames: native.nFrames,
     timestampsSec: native.timestampsSec,
@@ -125,6 +128,9 @@ function quantizedFrames<T extends Uint8Array | Int16Array>(
   }
   if (native.featureFlags & FEATURE_CHROMA) {
     out.chroma = bandMajor(native.chroma, native.nFrames, native.nChroma);
+    out.chordRoot = native.chordRoot;
+    out.chordQuality = native.chordQuality;
+    out.chordConfidence = native.chordConfidence;
   }
   return { ...out, ...sharedFrameArrays(native) } as StreamFramesU8 | StreamFramesI16;
 }
