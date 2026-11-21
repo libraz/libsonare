@@ -54,21 +54,17 @@ function capture(run: () => unknown): unknown {
  * finite, is refused with that domain instead of the float range; only a value
  * inside the domain but past the float range reads the float-range text.
  */
-const FLOORS: Record<string, { text: string; holds: (value: number) => boolean }> = {
-  compressionThresholdDb: { text: 'at least 0', holds: (value) => value >= 0 },
-};
-
-/** Asserts the caught value is the float-range refusal naming `key`, or its floor's refusal. */
-function expectRangeRefusal(caught: unknown, key: string, value: number, context: string): void {
+/** Asserts the caught value is a refusal naming `key` with `predicate`. */
+function expectRefusalText(caught: unknown, key: string, predicate: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  const floor = FLOORS[key];
-  const predicate =
-    floor && !(Number.isFinite(value) && floor.holds(value))
-      ? `must be finite and ${floor.text}`
-      : RANGE_MESSAGE;
   expect(error.message, context).toMatch(
     new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${predicate.replace(/[[\].]/g, '\\$&')}$`),
   );
+}
+
+/** Asserts the caught value is the float-range refusal naming `key`. */
+function expectRangeRefusal(caught: unknown, key: string, context: string): void {
+  expectRefusalText(caught, key, RANGE_MESSAGE, context);
 }
 
 // A 256-sample silent buffer. checkedFloatFromVal refuses before this file's
@@ -142,19 +138,30 @@ const FLOAT_FIELDS: FloatField[] = [
     run: (v) => analyzeRhythm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: 60, bpmMax: 200, startBpm: v }),
   },
   {
+    entry: 'analyzeTimbre',
+    key: 'windowSec',
+    run: (v) => analyzeTimbre(REFUSAL_AUDIO, REFUSAL_SR, { windowSec: v }),
+  },
+];
+
+/**
+ * Float fields read against their core domain: a value outside it is refused in the domain's
+ * text, and one inside it that a float cannot hold in the float range's text.
+ */
+const DOMAIN_FIELDS: Array<FloatField & { domain: string; holds: (value: number) => boolean }> = [
+  {
     entry: 'analyzeDynamics',
     key: 'windowSec',
     run: (v) => analyzeDynamics(REFUSAL_AUDIO, REFUSAL_SR, { windowSec: v }),
+    domain: 'must be finite and greater than 0',
+    holds: (value) => value > 0,
   },
   {
     entry: 'analyzeDynamics',
     key: 'compressionThresholdDb',
     run: (v) => analyzeDynamics(REFUSAL_AUDIO, REFUSAL_SR, { compressionThresholdDb: v }),
-  },
-  {
-    entry: 'analyzeTimbre',
-    key: 'windowSec',
-    run: (v) => analyzeTimbre(REFUSAL_AUDIO, REFUSAL_SR, { windowSec: v }),
+    domain: 'must be finite and at least 0',
+    holds: (value) => value >= 0,
   },
 ];
 
@@ -166,7 +173,7 @@ describe('every converted quick-detailed float parameter refuses a value the flo
   it('covers one field per formerly-plain-float quick-detailed parameter', () => {
     // A field dropped from the table stops being covered without anything
     // going red, which is the one way this file could quietly shrink.
-    expect(FLOAT_FIELDS).toHaveLength(9);
+    expect(FLOAT_FIELDS).toHaveLength(7);
     const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -176,11 +183,24 @@ describe('every converted quick-detailed float parameter refuses a value the flo
       expectRangeRefusal(
         capture(() => run(value)),
         key,
-        value,
         `${key} = ${value}`,
       );
     }
   });
+
+  it.each(DOMAIN_FIELDS)(
+    '$entry names $key in its core domain rather than accepting an infinity',
+    ({ key, run, domain, holds }) => {
+      for (const value of REFUSED) {
+        expectRefusalText(
+          capture(() => run(value)),
+          key,
+          Number.isFinite(value) && holds(value) ? RANGE_MESSAGE : domain,
+          `${key} = ${value}`,
+        );
+      }
+    },
+  );
 });
 
 describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {

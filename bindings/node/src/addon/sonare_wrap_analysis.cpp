@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "analysis/bpm_analyzer.h"
+#include "analysis/dynamics_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "core/audio.h"
@@ -743,12 +744,19 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   float window_sec{};
-  if (!OptionalFloatArg(env, info, 2, "windowSec", 0.4f, &window_sec)) return env.Undefined();
-  int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
-  float compression_threshold{};
-  if (!OptionalFloatArg(env, info, 4, "compressionThreshold", 6.0f, &compression_threshold))
+  if (!OptionalDomainArg(env, info, 2, "windowSec", 0.4f, sonare::kDynamicsWindowSecDomain,
+                         &window_sec)) {
     return env.Undefined();
+  }
+  int hop_length{};
+  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kDynamicsHopDomain, &hop_length)) {
+    return env.Undefined();
+  }
+  float compression_threshold{};
+  if (!OptionalDomainArg(env, info, 4, "compressionThresholdDb", 6.0f,
+                         sonare::kDynamicsCompressionThresholdDomain, &compression_threshold)) {
+    return env.Undefined();
+  }
 
   SonareDynamicsResult dynamics{};
   SonareError err = sonare_analyze_dynamics(data, length, sample_rate, window_sec, hop_length,

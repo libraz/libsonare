@@ -89,10 +89,11 @@ val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_va
 
 val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_sec_val,
                         const val& hop_length_val, const val& compression_threshold_val) {
-  const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float compression_threshold =
-      checkedFloatFromVal(compression_threshold_val, "compressionThreshold");
+  const float window_sec =
+      domainNumberFromVal<float>(window_sec_val, "windowSec", kDynamicsWindowSecDomain);
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kDynamicsHopDomain);
+  const float compression_threshold = domainNumberFromVal<float>(
+      compression_threshold_val, "compressionThresholdDb", kDynamicsCompressionThresholdDomain);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   DynamicsConfig config;

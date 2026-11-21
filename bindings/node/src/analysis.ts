@@ -64,7 +64,6 @@ import {
   assertFloatValue,
   assertInt32,
   assertInt64,
-  assertNonNegativeFloatValue,
   assertNonNegativeSafeInteger,
   assertPitchClass,
   assertPositiveInteger,
@@ -1215,15 +1214,12 @@ export function analyzeDynamics(
 export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   return withEntry('analyzeDynamics', () => {
     const request = audioCall<AnalyzeDynamicsRequest>('analyzeDynamics', args);
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
-    const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
-    assertNonNegativeFloatValue(compressionThresholdDb, 'compressionThresholdDb');
     return addon.analyzeDynamics(
       request.samples,
       request.sampleRate,
       request.windowSec ?? 0.4,
       request.hopLength ?? 512,
-      compressionThresholdDb,
+      request.compressionThresholdDb ?? 6.0,
     );
   });
 }

@@ -59,7 +59,6 @@ import {
   assertFloatFields,
   assertFloatValue,
   assertFrequencyBounds,
-  assertNonNegativeFloatValue,
   assertNonNegativeSafeInteger,
   assertNumber,
   assertSampleRate,
@@ -1249,14 +1248,12 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   return withEntry('analyzeDynamics', () => {
     const request = sampleOneShot<AnalyzeDynamicsRequest>('analyzeDynamics', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
-    assertNonNegativeFloatValue(compressionThresholdDb, 'compressionThresholdDb');
     const result = requireModule().analyzeDynamics(
       request.samples,
       request.sampleRate,
       request.windowSec ?? 0.4,
       request.hopLength ?? 512,
-      compressionThresholdDb,
+      request.compressionThresholdDb ?? 6.0,
     );
     return {
       dynamicRangeDb: result.dynamicRangeDb,
