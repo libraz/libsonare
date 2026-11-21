@@ -1180,10 +1180,10 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") 
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_length",
+TEST_CASE("sonare_engine_set_clips_reads_a_to_end_tempo_sync_length_as_the_source_length",
           "[c_api]") {
-  // length_samples == 0 means "to the end of the source" for every warp mode, so
-  // it must behave exactly like that length spelled out.
+  // SONARE_ENGINE_CLIP_LENGTH_TO_END means "to the end of the source" for every warp mode,
+  // so it must behave exactly like that length spelled out.
   std::vector<float> source(4096);
   for (size_t i = 0; i < source.size(); ++i) {
     source[i] = std::sin(static_cast<float>(i) * 0.02f);
@@ -1226,7 +1226,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_
     std::vector<float> defaulted;
     REQUIRE(render(static_cast<int64_t>(source.size()) - kOffset, with_anchors, &spelled) ==
             SONARE_OK);
-    REQUIRE(render(0, with_anchors, &defaulted) == SONARE_OK);
+    REQUIRE(render(SONARE_ENGINE_CLIP_LENGTH_TO_END, with_anchors, &defaulted) == SONARE_OK);
     CHECK(defaulted == spelled);
     float peak = 0.0f;
     for (float v : defaulted) peak = std::max(peak, std::abs(v));
