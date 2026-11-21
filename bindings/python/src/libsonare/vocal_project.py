@@ -273,16 +273,8 @@ def _apply_project_vocal_edit(
     handle = _project_handle(project)
     source = _validate_samples(rendered_mono, arg_name="rendered_mono")
     expected_count = _narrow_int(
-        expected_source_sample_count,
-        "expected_source_sample_count",
-        1,
-        _INT64_MAX,
+        expected_source_sample_count, "expected_source_sample_count", _INT64_MIN, _INT64_MAX
     )
-    if source.size != expected_count:
-        raise _refuse(
-            "rendered_mono length must equal expected_source_sample_count "
-            f"({source.size} != {expected_count})"
-        )
     expected_rate = _narrow_int(
         expected_source_sample_rate, "expected_source_sample_rate", 0, _UINT32_MAX
     )
@@ -324,7 +316,10 @@ def _apply_project_vocal_edit(
     desc.sve1 = ctypes.cast(sve1_buffer, ctypes.POINTER(ctypes.c_uint8))
     desc.sve1_size = len(sve1_bytes)
     result = SonareProjectVocalEditApplyResult()
-    _check(lib.sonare_project_apply_vocal_edit(handle, ctypes.byref(desc), ctypes.byref(result)))
+    _check(
+        lib.sonare_project_apply_vocal_edit(handle, ctypes.byref(desc), ctypes.byref(result)),
+        flattened="desc",
+    )
     return _apply_result(result)
 
 

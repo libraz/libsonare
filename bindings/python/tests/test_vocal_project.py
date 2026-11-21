@@ -412,6 +412,34 @@ def test_apply_range_validation_comes_from_the_c_abi(clip_length: float, offset:
             )
 
 
+def test_a_rendered_length_mismatch_is_refused_by_the_core_in_the_callers_words() -> None:
+    source, sample_rate, source_sha256, rendered, (state, token) = _source_and_render()
+    with Project.create() as project:
+        project.set_sample_rate(float(sample_rate))
+        track_id = project.add_track()
+        clip_id = project.add_clip(
+            track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate
+        )
+        clip = project.clips()[0]
+        with pytest.raises(SonareValueError) as raised:
+            project.apply_vocal_edit(
+                clip_id=clip_id,
+                expected_source_id=clip.source_id,
+                expected_source_sample_rate=sample_rate,
+                expected_source_sample_count=source.size,
+                expected_source_sha256=source_sha256.hex(),
+                expected_clip_length_ppq=1.0,
+                expected_source_offset_ppq=0.0,
+                rendered_mono=rendered[:-1],
+                rendered_sample_rate=sample_rate,
+                render_token=token,
+                sve1=state,
+            )
+    assert str(raised.value) == (
+        "Project.apply_vocal_edit: rendered_mono length must equal expected_source_sample_count"
+    )
+
+
 def test_apply_digest_is_case_insensitive() -> None:
     from libsonare.vocal_project import _digest
 

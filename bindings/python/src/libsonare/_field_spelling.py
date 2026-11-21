@@ -115,7 +115,9 @@ OVERRIDES: dict[tuple[str, str], str] = {
 }
 
 # (C entry key, C-ABI count subject) pairs whose value is the length of the named array.
-LENGTHS: dict[tuple[str, str], str] = {}
+LENGTHS: dict[tuple[str, str], str] = {
+    ("project_apply_vocal_edit", "rendered_sample_count"): "rendered_mono",
+}
 
 
 def surface_spelling(entry: str, subject: str) -> str:

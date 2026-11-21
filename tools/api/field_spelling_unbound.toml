@@ -34,9 +34,9 @@
 "polyphonic_set_note_edit.envelope" = "rename: node amplitudeEnvelope, python amplitude_envelope, wasm amplitudeEnvelope"
 
 [unclassified]
-node = 1
-wasm = 1
-python = 1
+node = 0
+wasm = 0
+python = 0
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"

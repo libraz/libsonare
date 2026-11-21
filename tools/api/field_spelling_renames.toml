@@ -98,3 +98,12 @@ sample_offset = "start_sample"
 base_sample_offset = "start_sample"
 param_name = ["name", "kind"]
 offset_samples = "record_offset_samples"
+
+[python.length_of]
+"project_apply_vocal_edit.rendered_sample_count" = "rendered_mono"
+
+[node.length_of]
+"project_apply_vocal_edit.rendered_sample_count" = "renderedMono"
+
+[wasm.length_of]
+"project_apply_vocal_edit.rendered_sample_count" = "renderedMono"
