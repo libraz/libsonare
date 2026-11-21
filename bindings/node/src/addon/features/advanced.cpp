@@ -2,6 +2,7 @@
 #include <limits>
 #include <vector>
 
+#include "c_api/inverse_input_domains.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/resample.h"
@@ -184,7 +185,10 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   int bins_per_octave{};
   if (!OptionalIntArg(env, info, 6, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
   int n_iter{};
-  if (!OptionalIntArg(env, info, 7, "nIter", 32, &n_iter)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 7, "nIter", 32, sonare_c_detail::kGriffinLimIterationsDomain,
+                         &n_iter)) {
+    return env.Undefined();
+  }
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError error = sonare_cqt_to_audio_checked(
@@ -218,7 +222,10 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   float gamma{};
   if (!OptionalFloatArg(env, info, 7, "gamma", -1.0f, &gamma)) return env.Undefined();
   int n_iter{};
-  if (!OptionalIntArg(env, info, 8, "nIter", 32, &n_iter)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 8, "nIter", 32, sonare_c_detail::kGriffinLimIterationsDomain,
+                         &n_iter)) {
+    return env.Undefined();
+  }
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError error = sonare_vqt_to_audio_checked(
@@ -262,9 +269,14 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
+                         &sr)) {
+    return env.Undefined();
+  }
   int n_fft{};
-  if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nFft", 2048, sonare::kMelToStftFftSizeDomain, &n_fft)) {
+    return env.Undefined();
+  }
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 5, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
@@ -309,9 +321,14 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
+                         &sr)) {
+    return env.Undefined();
+  }
   int n_fft{};
-  if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "nFft", 2048, sonare::kMelToStftFftSizeDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
   if (!OptionalCoreResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
   float fmin{};
@@ -362,7 +379,10 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int n_iter{};
-  if (!OptionalIntArg(env, info, 6, "nIter", 32, &n_iter)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 6, "nIter", 32, sonare_c_detail::kGriffinLimIterationsDomain,
+                         &n_iter)) {
+    return env.Undefined();
+  }
   float momentum{};
   if (!OptionalFiniteFloatArg(env, info, 7, "momentum", 0.99f, &momentum)) return env.Undefined();
   float* out = nullptr;
@@ -426,9 +446,14 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!OptionalIntArg(env, info, 3, "nMels", 128, &n_mels)) return env.Undefined();
   int sr{};
-  if (!OptionalIntArg(env, info, 4, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 4, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
+                         &sr)) {
+    return env.Undefined();
+  }
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kMelToStftFftSizeDomain, &n_fft)) {
+    return env.Undefined();
+  }
   int hop_length{};
   if (!OptionalCoreResynthesisHopArg(env, info, 6, &hop_length)) return env.Undefined();
   float fmin{};

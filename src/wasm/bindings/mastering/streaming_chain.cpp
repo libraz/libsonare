@@ -54,7 +54,8 @@ class StreamingMasteringChainWrapper {
     const int block_size = max_block_size.isUndefined() || max_block_size.isNull()
                                ? mastering::api::MasteringChain::kDefaultMaxBlock
                                : checkedIntFromVal(max_block_size, "maxBlockSize");
-    const int channels = checkedIntFromVal(num_channels, "numChannels");
+    const int channels = domainNumberFromVal<int>(
+        num_channels, "numChannels", mastering::api::kStreamingChainChannelCountDomain);
     chain_.prepare(sample_rate, block_size, channels);
     max_block_size_ = block_size;
   }

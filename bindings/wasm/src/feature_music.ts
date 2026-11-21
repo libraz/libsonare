@@ -326,10 +326,7 @@ function cqtInverseInput(request: CqtToAudioRequest | VqtToAudioRequest) {
   const nIter = request.nIter ?? 32;
   assertSampleRate(sampleRate);
   assertCqtHopLength(hopLength);
-  validatePositiveIntegers({ binsPerOctave, nIter });
-  if (nIter > 256) {
-    throw refuse(`nIter must be at most 256`);
-  }
+  validatePositiveIntegers({ binsPerOctave });
   const fminHz = request.fminHz ?? 32.70319566257483;
   assertPositiveFloatValue(fminHz, 'fminHz');
   return { sampleRate, hopLength, binsPerOctave, nIter, fminHz };

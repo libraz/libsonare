@@ -64,7 +64,6 @@ import {
   assertInt32,
   assertInt64,
   assertPitchClass,
-  assertSampleRate,
   requestObject,
   requestOnly,
   sampleOneShot,
@@ -887,7 +886,7 @@ export function synthesizeRir(request: SynthesizeRirRequest): RirResult;
 export function synthesizeRir(...args: unknown[]): RirResult {
   return withEntry('synthesizeRir', () => {
     const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
-    assertSampleRate(r.sampleRate);
+    assertInt32(r.sampleRate, 'sampleRate');
     return addon.synthesizeRir(nativeRoomOptions(r));
   });
 }

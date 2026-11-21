@@ -6,6 +6,7 @@
 #include <cmath>
 #include <string>
 
+#include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "sonare/sonare_c_types_engine.h"
 #include "util/resource_limits.h"
@@ -349,18 +350,15 @@ val RealtimeEngineWasm::processWithMonitor(val channels_val) {
 val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_val, bool finalize) {
   int block_size = (block_size_val.isUndefined() || block_size_val.isNull())
                        ? 0
-                       : checkedIntFromVal(block_size_val, "blockSize");
+                       : domainNumberFromVal<int>(block_size_val, "blockSize",
+                                                  sonare_c_detail::kEngineRenderBlockSizeDomain);
   // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
   // engine renders nothing and cannot signal through telemetry, so fail closed
   // instead of handing back a silent buffer that reads as a completed render.
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
-  // Match the C-ABI oracle (sonare_engine_render_offline): a negative block
-  // size is an error, and 0 selects the default offline block.
-  if (block_size < 0) {
-    throw WasmRangeError("block size must be an integer of at least 0");
-  }
+  // 0 selects the default offline block.
   block_size = resolveOfflineBlock(block_size);
   ChannelBlock block = readChannels(channels_val);
   // More channels or a larger block than the engine was prepared for would write zeros past the
@@ -404,9 +402,11 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // it renders anything rather than silently mapping it to None, which would
   // hand back undithered audio with no way to tell the request was ignored.
   const int dither = intProperty(options_val, "dither", 0);
-  if (total_frames <= 0) throw WasmRangeError("totalFrames must be positive");
+  sonare::util::check::integer_within(total_frames, sonare_c_detail::kEngineBounceFramesDomain,
+                                      "totalFrames");
   if (block_size < 0) throw WasmRangeError("blockSize must not be negative");
-  if (num_channels <= 0) throw WasmRangeError("numChannels must be positive");
+  sonare::util::check::integer_within(num_channels, sonare_c_detail::kEngineRenderChannelsDomain,
+                                      "numChannels");
   if (requested_target_rate < 0) throw WasmRangeError("targetSampleRate must not be negative");
   if (requested_source_rate < 0) {
     throw WasmRangeError("source_sample_rate must be an integer in [0, 2147483647]");
@@ -447,9 +447,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     throw WasmRangeError("source_sample_rate must equal the prepared sample rate " +
                          std::to_string(static_cast<long long>(engine_.sample_rate())));
   }
-  if (dither != 0 && (dither_bits < mastering::final::kMinDitherTargetBits ||
-                      dither_bits > mastering::final::kMaxDitherTargetBits)) {
-    throw WasmRangeError("ditherBits out of range");
+  if (dither != 0) {
+    sonare::util::check::integer_within(dither_bits, sonare_c_detail::kEngineDitherBitsDomain,
+                                        "options.ditherBits");
   }
   // Every option is read before the render, which consumes engine state.
   const bool normalize_lufs = boolProperty(options_val, "normalizeLufs", false);

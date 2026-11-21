@@ -11,6 +11,7 @@
 #include <string>
 #include <type_traits>
 
+#include "c_api/engine_config_domains.h"
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
@@ -89,6 +90,13 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       throw WasmRangeError("clip startPpq must be finite");
     }
     clip.length_samples = int64Property(clip_val, "lengthSamples", clip.length_samples);
+    // An absent length is the open-ended clip; a given one is a real length.
+    const std::string path = "clips[" + std::to_string(i) + "]";
+    if (hasProperty(clip_val, "lengthSamples")) {
+      const std::string length_subject = path + ".lengthSamples";
+      sonare::util::check::integer_within(
+          clip.length_samples, sonare_c_detail::kEngineClipLengthDomain, length_subject.c_str());
+    }
     // Linear gain envelope over the destination's rendered audio (matches
     // SonareEngineMidiClipSchedule.gain / fade_in_samples / fade_out_samples).
     // Absent gain defaults to unity, absent fades default to none.
@@ -98,9 +106,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     }
     clip.fade_in_samples = int64Property(clip_val, "fadeInSamples", clip.fade_in_samples);
     clip.fade_out_samples = int64Property(clip_val, "fadeOutSamples", clip.fade_out_samples);
-    if (clip.fade_in_samples < 0 || clip.fade_out_samples < 0) {
-      throw WasmRangeError("clip fade lengths must be an integer of at least 0");
-    }
+    const std::string fade_in_subject = path + ".fadeInSamples";
+    const std::string fade_out_subject = path + ".fadeOutSamples";
+    sonare::util::check::integer_within(
+        clip.fade_in_samples, sonare_c_detail::kEngineClipFadeDomain, fade_in_subject.c_str());
+    sonare::util::check::integer_within(
+        clip.fade_out_samples, sonare_c_detail::kEngineClipFadeDomain, fade_out_subject.c_str());
     // An open-ended clip (length_samples <= 0) has no end to fade out towards.
     if (clip.fade_out_samples > 0 && clip.length_samples <= 0) {
       throw WasmRangeError("fade-out requires a bounded clip length");
@@ -112,8 +123,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     clip.loop_length_samples =
         int64Property(clip_val, "loopLengthSamples", clip.loop_length_samples);
     // As in the C ABI, a looping clip names its loop length.
-    if (clip.loop_mode == sonare::midi::MidiLoopMode::kLoop && clip.loop_length_samples < 1) {
-      throw WasmRangeError("clip loopLengthSamples must be an integer of at least 1");
+    if (clip.loop_mode == sonare::midi::MidiLoopMode::kLoop ||
+        hasProperty(clip_val, "loopLengthSamples")) {
+      const std::string loop_subject = path + ".loopLengthSamples";
+      sonare::util::check::integer_within(clip.loop_length_samples,
+                                          sonare_c_detail::kEngineMidiClipLoopLengthDomain,
+                                          loop_subject.c_str());
     }
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];

@@ -3,11 +3,14 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/feature_input_domains.h"
+#include "c_api/inverse_input_domains.h"
 #include "core/spectrum.h"
+#include "feature/cqt.h"
+#include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "filters/mel.h"
 #include "util/numeric_validation.h"
-#include "util/resource_limits.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -26,15 +29,11 @@ void validate_sample_rate(int sample_rate) {
   }
 }
 
-/// Validates a JS matrix argument's shape and copies it out. The non-finite
-/// element case is deliberately absent: the core transforms this helper feeds
+/// Validates a JS matrix argument's size against its already domain-checked shape and copies it
+/// out. The non-finite element case is deliberately absent: the core transforms this helper feeds
 /// reject it themselves, so the rule has a single home shared with every other
 /// surface.
-std::vector<float> load_validated_matrix(val input, int rows, int frames, const char* data_name,
-                                         const char* rows_name) {
-  validate_positive(rows, rows_name);
-  validate_positive(frames, "nFrames");
-
+std::vector<float> load_validated_matrix(val input, int rows, int frames, const char* data_name) {
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(frames),
@@ -191,11 +190,12 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
 
 val js_mel_delta(val features, const val& n_features_val, const val& n_frames_val,
                  const val& width_val) {
-  const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_features =
+      domainNumberFromVal<int>(n_features_val, "nFeatures", sonare_c_detail::kMelDeltaShapeDomain);
+  const int n_frames =
+      domainNumberFromVal<int>(n_frames_val, "nFrames", sonare_c_detail::kMelDeltaShapeDomain);
   const int width = checkedIntFromVal(width_val, "width");
-  std::vector<float> data =
-      load_validated_matrix(features, n_features, n_frames, "features", "nFeatures");
+  std::vector<float> data = load_validated_matrix(features, n_features, n_frames, "features");
   return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
 }
 
@@ -230,15 +230,14 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
 val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val,
                    const val& sample_rate_val, const val& n_fft_val, const val& fmin_val,
                    const val& fmax_val, bool htk) {
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kInverseMelBandsDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kMelToStftFramesDomain);
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  validate_sample_rate(sample_rate);
-  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power", "nMels");
-  validate_positive(n_fft, "nFft");
+  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -262,17 +261,16 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
 val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
                     const val& fmin_val, const val& fmax_val, const val& n_iter_val, bool htk) {
-  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kInverseMelBandsDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kMelToStftFramesDomain);
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  validate_sample_rate(sample_rate);
-  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power", "nMels");
-  validate_positive(n_fft, "nFft");
+  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -290,20 +288,19 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
 val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val,
                    const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
                    const val& n_iter_val, const val& momentum_val) {
-  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins",
+                                              sonare_c_detail::kInverseSpectrogramExtentDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
+                                                sonare_c_detail::kInverseSpectrogramExtentDomain);
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = resynthesisHopFromVal(hop_length_val);
-  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const int n_iter =
+      domainNumberFromVal<int>(n_iter_val, "nIter", sonare_c_detail::kGriffinLimIterationsDomain);
   const float momentum = checkedFloatFromVal(momentum_val, "momentum");
   validate_sample_rate(sample_rate);
-  std::vector<float> data =
-      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
-  validate_positive(n_fft, "nFft");
-  validate_positive(n_iter, "nIter");
-  if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
-      momentum < 0.0f || momentum >= 1.0f) {
+  std::vector<float> data = load_validated_matrix(magnitude, n_bins, n_frames, "magnitude");
+  if (n_bins != n_fft / 2 + 1 || momentum < 0.0f || momentum >= 1.0f) {
     throw WasmRangeError("invalid shape or options");
   }
   GriffinLimConfig config;
@@ -318,11 +315,11 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
 // Mirrors feature::mfcc_to_mel.
 val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, const val& n_mels_val,
                    const val& lifter_val) {
-  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mfcc = domainNumberFromVal<int>(n_mfcc_val, "nMfcc", kInverseMfccCountDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kInverseFramesDomain);
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
-  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients", "nMfcc");
+  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients");
 
   std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
 
@@ -338,19 +335,18 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
                      const val& n_mels_val, const val& sample_rate_val, const val& n_fft_val,
                      const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                      const val& n_iter_val, bool htk, const val& lifter_val) {
-  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mfcc = domainNumberFromVal<int>(n_mfcc_val, "nMfcc", kInverseMfccCountDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames", kMelToStftFramesDomain);
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int sample_rate =
+      domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
+  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
-  validate_sample_rate(sample_rate);
-  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients", "nMfcc");
-  validate_positive(n_fft, "nFft");
+  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -368,24 +364,20 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
 val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& hop_length_val, const val& fmin_val,
                     const val& bins_per_octave_val, const val& n_iter_val) {
-  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins", kCqtCountDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
+                                                sonare_c_detail::kInverseSpectrogramExtentDomain);
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
-  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const int n_iter =
+      domainNumberFromVal<int>(n_iter_val, "nIter", sonare_c_detail::kGriffinLimIterationsDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   validate_sample_rate(sample_rate);
-  std::vector<float> data =
-      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
+  std::vector<float> data = load_validated_matrix(magnitude, n_bins, n_frames, "magnitude");
   validate_positive(hop_length, "hopLength");
   validate_positive(bins_per_octave, "binsPerOctave");
-  validate_positive(n_iter, "nIter");
   validate_cqt_fmin(fmin);
-  if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("nIter must be at most " +
-                         std::to_string(sonare::resource::kMaxGriffinLimIterations));
-  }
   CqtConfig config;
   config.hop_length = hop_length;
   config.fmin = fmin;
@@ -404,25 +396,21 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
 val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& hop_length_val, const val& fmin_val,
                     const val& bins_per_octave_val, float gamma, const val& n_iter_val) {
-  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins", kCqtCountDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
+                                                sonare_c_detail::kInverseSpectrogramExtentDomain);
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
-  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const int n_iter =
+      domainNumberFromVal<int>(n_iter_val, "nIter", sonare_c_detail::kGriffinLimIterationsDomain);
   const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   validate_sample_rate(sample_rate);
-  std::vector<float> data =
-      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
+  std::vector<float> data = load_validated_matrix(magnitude, n_bins, n_frames, "magnitude");
   validate_positive(hop_length, "hopLength");
   validate_positive(bins_per_octave, "binsPerOctave");
-  validate_positive(n_iter, "nIter");
   validate_cqt_fmin(fmin);
   validate_vqt_gamma(gamma);
-  if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("nIter must be at most " +
-                         std::to_string(sonare::resource::kMaxGriffinLimIterations));
-  }
   VqtConfig config;
   config.hop_length = hop_length;
   config.fmin = fmin;

@@ -510,9 +510,10 @@ val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
                const val& frame_length, const val& hop_length) {
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  Audio result = trim_absolute(audio, checkedFloatFromVal(threshold_db, "thresholdDb"),
-                               checkedIntFromVal(frame_length, "frameLength"),
-                               checkedIntFromVal(hop_length, "hopLength"));
+  Audio result = trim_absolute(
+      audio, checkedFloatFromVal(threshold_db, "thresholdDb"),
+      domainNumberFromVal<int>(frame_length, "frameLength", sonare::kSilenceFrameLengthDomain),
+      domainNumberFromVal<int>(hop_length, "hopLength", sonare::kSilenceHopLengthDomain));
   return vectorToFloat32Array(result.data(), result.size());
 }
 

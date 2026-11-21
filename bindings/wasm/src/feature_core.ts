@@ -846,8 +846,6 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    assertPositiveInteger(r.frameLength, 'frameLength');
-    assertPositiveInteger(r.hopLength, 'hopLength');
     const { nFrames, frames } = requireModule().frameSignal(r.samples, r.frameLength, r.hopLength);
     // Native stores one frame after another; the surface puts samples on rows and frames on columns.
     const data = new Float32Array(frames.length);

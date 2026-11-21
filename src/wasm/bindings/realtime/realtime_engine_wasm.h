@@ -519,7 +519,8 @@ class RealtimeEngineWasm {
     std::shared_ptr<const sonare::engine::ClipAudioStorage> storage;
     bool tempo_baked = false;
   };
-  BuiltClip buildClipSchedule(emscripten::val clip_val, uint32_t default_id);
+  BuiltClip buildClipSchedule(emscripten::val clip_val, uint32_t default_id,
+                              const std::string& path);
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> clip_storage_;
   std::vector<uint32_t> clip_ids_;
   std::vector<uint8_t> clip_tempo_baked_;

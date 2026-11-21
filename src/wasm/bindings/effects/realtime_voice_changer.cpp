@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/daw_config_domains.h"
 #include "wasm/bindings/common/common.h"
 
 std::string realtimeVoiceChangerConfigTextFromVal(val config) {
@@ -256,10 +257,12 @@ class RealtimeVoiceChangerWrapper {
 
   void prepare(double sample_rate, const val& max_block_size_val, const val& channels_val) {
     const bool block_absent = max_block_size_val.isUndefined() || max_block_size_val.isNull();
-    const int max_block_size = block_absent
-                                   ? editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock
-                                   : checkedIntFromVal(max_block_size_val, "maxBlockSize");
-    const int channels = checkedIntFromVal(channels_val, "channels");
+    const int max_block_size =
+        block_absent ? editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock
+                     : domainNumberFromVal<int>(max_block_size_val, "maxBlockSize",
+                                                sonare_c_detail::kVoiceChangerBlockSizeDomain);
+    const int channels = domainNumberFromVal<int>(channels_val, "numChannels",
+                                                  sonare_c_detail::kVoiceChangerChannelsDomain);
     changer_.prepare(sample_rate, max_block_size, channels);
     // Pre-warm the per-instance scratch buffers so the first process* call
     // does not trigger an allocation. The `ensure_*_capacity` helpers only

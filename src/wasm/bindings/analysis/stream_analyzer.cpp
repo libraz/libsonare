@@ -69,7 +69,8 @@ class StreamAnalyzerWrapper {
     // integers arrive as val because embind's integer glue wraps, so a request past 2^32 would
     // reach the config as a small legal one.
     StreamConfig config;
-    config.sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+    config.sample_rate =
+        domainNumberFromVal<int>(sample_rate_val, "sampleRate", kAudioSampleRateDomain);
     if (given(n_fft_val)) config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
     if (given(hop_length_val)) config.hop_length = checkedIntFromVal(hop_length_val, "hopLength");
     if (given(n_mels_val)) config.n_mels = checkedIntFromVal(n_mels_val, "nMels");
@@ -91,16 +92,14 @@ class StreamAnalyzerWrapper {
     if (given(emit_every_n_frames_val)) {
       config.emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");
     }
-    if (given(max_pending_frames_val) &&
-        !numeric::checked_integral_cast(numberFromVal(max_pending_frames_val, "maxPendingFrames"),
-                                        &config.max_pending_frames)) {
-      throw WasmRangeError("maxPendingFrames must be an integer of at least 0");
+    if (given(max_pending_frames_val)) {
+      config.max_pending_frames = domainNumberFromVal<std::size_t>(
+          max_pending_frames_val, "maxPendingFrames", kStreamConfigMaxPendingFramesDomain);
     }
-    if (given(max_progression_entries_val) &&
-        !numeric::checked_integral_cast(
-            numberFromVal(max_progression_entries_val, "maxProgressionEntries"),
-            &config.max_progression_entries)) {
-      throw WasmRangeError("maxProgressionEntries must be an integer of at least 0");
+    if (given(max_progression_entries_val)) {
+      config.max_progression_entries =
+          domainNumberFromVal<std::size_t>(max_progression_entries_val, "maxProgressionEntries",
+                                           kStreamConfigMaxProgressionEntriesDomain);
     }
     if (given(key_update_interval_sec_val)) {
       config.key_update_interval_sec =

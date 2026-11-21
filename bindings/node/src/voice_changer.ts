@@ -18,7 +18,6 @@ import {
   assertAudioInput,
   assertBoundedInteger,
   assertKnownRequestKeys,
-  assertPositiveInteger,
   assertRetuneGrain,
   assertSampleRate,
   requestOnly,
@@ -228,11 +227,7 @@ export class RealtimeVoiceChanger {
     }
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
-    if (maxBlockSize !== undefined) {
-      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
-    }
     const numChannels = options.numChannels;
-    assertChannelCount(numChannels);
     this.native = new addon.RealtimeVoiceChanger(
       nativeVoiceConfig(options.config ?? 'neutralMonitor'),
     );

@@ -344,15 +344,15 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('waveformPeakPyramid rejects a level count fabricated after the facade checks', () => {
-    // The facade reads `.length` twice (empty check, then `some`); the native
-    // reader is the third read, so this exercises the guard the audit named
+    // The facade reads `.length` once (the empty check); the native
+    // reader is the second read, so this exercises the guard the audit named
     // without needing the facade to forward an invalid value.
     let reads = 0;
     const levels = new Proxy([512, 1024], {
       get(target, property, receiver) {
         if (property === 'length') {
           reads += 1;
-          if (reads > 2) {
+          if (reads > 1) {
             return 2e9;
           }
         }

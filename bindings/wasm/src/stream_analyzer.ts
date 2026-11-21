@@ -24,7 +24,7 @@ import type {
   StreamQuantizeConfig,
   StreamStats,
 } from './stream_types.js';
-import { assertFloatValue, assertIntegerValue, assertSampleRate } from './validation.js';
+import { assertFloatValue, assertIntegerValue } from './validation.js';
 
 const REFERENCE_HZ_RANGE = [220, 880] as const;
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
@@ -269,7 +269,6 @@ export class StreamAnalyzer {
         throw refuseUnknownKey(key, [...CONFIG_KEYS]);
       }
     }
-    assertSampleRate(config.sampleRate);
     if (config.window !== undefined) {
       windowOrdinal(config.window);
     }

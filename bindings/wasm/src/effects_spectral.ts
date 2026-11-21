@@ -4,7 +4,6 @@
  */
 
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
-import { refuseZeroSentinel } from './internal/metering_native.js';
 import { withRespelled } from './internal/respell.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -90,8 +89,6 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     if (request.window !== undefined) {
       windowOrdinal(request.window);
     }
-    // A given 0 is refused in the words both surfaces share, ahead of the native range check.
-    refuseZeroSentinel(request, ['nFft', 'hopLength', 'healRadiusFrames']);
     // A non-Array array-like goes to the native reader, which bounds its length.
     const respellings: Respelled[] = [];
     const nativeOps = Array.isArray(requestOps)

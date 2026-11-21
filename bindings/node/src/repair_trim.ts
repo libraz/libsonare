@@ -50,6 +50,7 @@ function nativeTrimOptions(
     sampleRate,
     'paddingSamples',
     'paddingSec',
+    'signed',
   );
   delete native.paddingSec;
   if (padding.value !== undefined) {

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/mastering_input_domains.h"
 #include "core/audio.h"
 #include "effects/repair_common.h"
 #include "mastering/repair/dehum.h"
@@ -186,11 +187,6 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
         BoolProperty(options, "speechPresenceGain", config.speech_presence_gain);
     config.gain_smoothing = BoolProperty(options, "gainSmoothing", config.gain_smoothing);
   }
-  if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
-    Napi::RangeError::New(env, "nFft must be a power of two greater than 0")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   if (config.hop_length <= 0) {
     Napi::RangeError::New(env, "hopLength must be an integer in [1, " + node_int_max_text() + "]")
         .ThrowAsJavaScriptException();
@@ -308,6 +304,8 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
   const int n_fft = IntProperty(request, "nFft", DefaultDenoiseConfig().n_fft);
   int sample_rate{};
   if (!RequiredIntProperty(env, request, "sampleRate", &sample_rate)) return env.Undefined();
+  sample_rate = node_domain_number<int>(request.Get("sampleRate"), "sampleRate",
+                                        sonare_c_detail::kNoiseBandSampleRateDomain);
   // The C entry writes into the array's own storage; no intermediate buffer.
   auto bins = Napi::Int32Array::New(env, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT);
   SonareError err = sonare_mastering_repair_noise_band_bins(n_fft, sample_rate, bins.Data());

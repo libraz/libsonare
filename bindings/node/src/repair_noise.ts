@@ -23,13 +23,7 @@ import type {
   MasteringRepairSamplesRequest,
   NoiseDetection,
 } from './types.js';
-import {
-  assertAudioChannels,
-  assertAudioInput,
-  assertPositiveInteger,
-  requestOnly,
-  sampleOneShot,
-} from './validation.js';
+import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
@@ -422,8 +416,6 @@ export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
       'masteringRepairNoiseBandBins',
       args,
     );
-    // Geometry only, no audio read: the core requires sample_rate > 0, not the audio-analysis range.
-    assertPositiveInteger(r.sampleRate, 'sampleRate');
     assertRepairGeometry(r);
     return addon.masteringRepairNoiseBandBins({ nFft: r.nFft, sampleRate: r.sampleRate });
   });

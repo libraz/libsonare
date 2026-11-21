@@ -22,7 +22,7 @@ describe('boundary regressions (WASM)', () => {
     const tiny = new Float32Array(1);
     for (const [rows, frames] of INVERSE_OVERFLOW_SHAPES) {
       expect(() => module.melToStft(tiny, rows, frames, SR, 1024, 0, 0, false)).toThrow(
-        /matrix shape exceeds WASM budget/,
+        /matrix shape exceeds WASM budget|nFrames must be an integer in \[1, 4096\]/,
       );
     }
 

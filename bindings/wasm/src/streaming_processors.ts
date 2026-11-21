@@ -19,7 +19,6 @@ import type {
   StreamingRetuneConfig,
 } from './public_types.js';
 import {
-  assertBoundedInteger,
   assertInt32,
   assertIntegerValue,
   assertKnownRequestKeys,
@@ -187,7 +186,6 @@ export class StreamingMasteringChain {
     } = config;
     assertIntegerValue(sampleRate, 'sampleRate');
     const blockSize = optionalIntegerBlockSize(maxBlockSize);
-    assertBoundedInteger(numChannels, 'numChannels', 1, 2);
     const options: Record<string, number> = {};
     if (loudnessStaticGainDb !== undefined) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;

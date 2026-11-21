@@ -80,19 +80,12 @@ Napi::Object EmitDeclickReport(Napi::Env env, const T& report) {
 ///        names, defaults and maxClickSamples guard as the mono facade's C++
 ///        DeclickConfig mapping above -- the two structs share their shape,
 ///        this is the C-ABI mirror of that reading.
-SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& options,
-                                          SonareDeclickConfig config) {
+SonareDeclickConfig read_declick_config_c(const Napi::Object& options, SonareDeclickConfig config) {
   config.threshold = FloatProperty(options, "threshold", config.threshold);
   config.neighbor_ratio = FloatProperty(options, "neighborRatio", config.neighbor_ratio);
-  if (options.Has("maxClickSamples")) {
-    const int max_click_samples =
-        IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
-    if (max_click_samples <= 0) {
-      throw Napi::RangeError::New(
-          env, "maxClickSamples must be an integer in [1, " + node_int_max_text() + "]");
-    }
-    config.max_click_samples = static_cast<size_t>(max_click_samples);
-  }
+  config.max_click_samples =
+      DomainProperty<size_t>(options, "maxClickSamples", config.max_click_samples,
+                             sonare::mastering::repair::kDeclickMaxClickSamplesDomain);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
   config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
   return config;
@@ -200,17 +193,9 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
     Napi::Object options = info[2].As<Napi::Object>();
     config.threshold = FloatProperty(options, "threshold", config.threshold);
     config.neighbor_ratio = FloatProperty(options, "neighborRatio", config.neighbor_ratio);
-    if (options.Has("maxClickSamples")) {
-      const int max_click_samples =
-          IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
-      if (max_click_samples <= 0) {
-        Napi::RangeError::New(
-            env, "maxClickSamples must be an integer in [1, " + node_int_max_text() + "]")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      config.max_click_samples = static_cast<size_t>(max_click_samples);
-    }
+    config.max_click_samples =
+        DomainProperty<size_t>(options, "maxClickSamples", config.max_click_samples,
+                               sonare::mastering::repair::kDeclickMaxClickSamplesDomain);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
   }
@@ -250,7 +235,7 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
   SonareDeclickConfig config{};
   sonare_declick_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
-    config = read_declick_config_c(env, info[3].As<Napi::Object>(), config);
+    config = read_declick_config_c(info[3].As<Napi::Object>(), config);
   }
   SonareDeclickStereoResult result{};
   SonareError err = sonare_mastering_repair_declick_stereo(
@@ -276,7 +261,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& in
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareDeclickConfig config = DefaultDeclickConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
-  if (has_options) config = read_declick_config_c(env, info[2].As<Napi::Object>(), config);
+  if (has_options) config = read_declick_config_c(info[2].As<Napi::Object>(), config);
   SonareClickDetection detection{};
   SonareError err = sonare_mastering_repair_detect_clicks(
       typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);

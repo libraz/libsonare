@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/daw_config_domains.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "mastering/api/chain.h"
@@ -140,13 +141,14 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const double sample_rate = info[0].As<Napi::Number>().DoubleValue();
   int max_block_size{};
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize",
-                      sonare::editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock,
-                      &max_block_size)) {
+  if (!OptionalDomainArg<int>(env, info, 1, "maxBlockSize",
+                              sonare::editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock,
+                              sonare_c_detail::kVoiceChangerBlockSizeDomain, &max_block_size)) {
     return env.Undefined();
   }
   int channels{};
-  if (!RequiredIntArg(env, info, 2, "channels", &channels)) {
+  if (!RequiredDomainArg<int>(env, info, 2, "numChannels",
+                              sonare_c_detail::kVoiceChangerChannelsDomain, &channels)) {
     return env.Undefined();
   }
   changer_->prepare(sample_rate, max_block_size, channels);

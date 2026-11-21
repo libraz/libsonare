@@ -736,7 +736,7 @@ describe('capture', () => {
         TypeError,
       );
       expect(() => engine.configureCapture({ capacityFrames: 128, numChannels: 0 })).toThrow(
-        /omit it for the default/,
+        /numChannels must be an integer in \[1, 2147483647\]/,
       );
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, bufferFrames: 1 } as never),

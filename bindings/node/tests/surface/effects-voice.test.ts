@@ -90,7 +90,7 @@ describe('voice changer surface', () => {
     it("requires numChannels, the channel count of the caller's stream", () => {
       expect(
         () => new RealtimeVoiceChanger({ sampleRate } as unknown as RealtimeVoiceChangerOptions),
-      ).toThrow(new TypeError('RealtimeVoiceChanger: numChannels must be 1 or 2'));
+      ).toThrow(new TypeError('RealtimeVoiceChanger: numChannels must be an integer'));
     });
 
     it.each([

@@ -106,12 +106,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_dereverb_config(info[2].As<Napi::Object>(), config);
   }
-  if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
-    Napi::RangeError::New(env, "nFft must be a power of two greater than 0")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
+  if (config.hop_length <= 0) {
     Napi::RangeError::New(env, "hopLength must be in (0, nFft / 2]").ThrowAsJavaScriptException();
     return env.Undefined();
   }

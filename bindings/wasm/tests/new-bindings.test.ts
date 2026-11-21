@@ -399,15 +399,16 @@ describe('newly exposed WASM functions', () => {
     expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
   });
 
-  it.each(['nFft', 'hopLength', 'healRadiusFrames'] as const)(
-    'spectralEdit refuses %s 0 instead of reading it as the default',
-    (field) => {
-      const x = makeSine(0.1, 440);
-      expect(() => spectralEdit(x, SR, { ops: [], [field]: 0 })).toThrow(
-        new RangeError(`spectralEdit: ${field} must not be 0; omit it for the default`),
-      );
-    },
-  );
+  it.each([
+    ['nFft', 'nFft must be a power of two in [4, 262144]'],
+    ['hopLength', 'hopLength must be an integer in [1, 2147483647]'],
+    ['healRadiusFrames', 'healRadiusFrames must be an integer in [1, 2147483647]'],
+  ] as const)('spectralEdit refuses %s 0 instead of reading it as the default', (field, text) => {
+    const x = makeSine(0.1, 440);
+    expect(() => spectralEdit(x, SR, { ops: [], [field]: 0 })).toThrow(
+      new RangeError(`spectralEdit: ${text}`),
+    );
+  });
 
   it('spectralEdit refuses a high edge that is not a positive frequency instead of reading it as Nyquist', () => {
     const x = makeSine(0.1, 440);

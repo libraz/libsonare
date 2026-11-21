@@ -463,6 +463,24 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'error-subject label built from a literal name and an element index',
     },
     {
+      file: 'realtime/clips.cpp',
+      text: 'subject.c_str()',
+      count: 3,
+      reason: 'error-subject label built from a clip index and a literal member name',
+    },
+    {
+      file: 'realtime/midi.cpp',
+      text: 'subject.c_str()',
+      count: 4,
+      reason: 'error-subject label built from a clip index and a literal member name',
+    },
+    {
+      file: 'metering/metering.cpp',
+      text: 'subject.c_str()',
+      count: 1,
+      reason: 'error-subject label built from a literal name and an element index',
+    },
+    {
       file: 'mixing/mixing.cpp',
       text: 'element.c_str()',
       count: 1,

@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <string>
 
+#include "c_api/effects_config_domains.h"
+#include "core/spectrum.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
@@ -80,19 +82,18 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
     // a given value is read literally and checked as sonare_spectral_edit checks it.
     if (hasProperty(options, "nFft")) {
       config.n_fft = checkedIntFromVal(options["nFft"], "nFft");
-      sonare::util::check::integer_at_least(config.n_fft, 1, "nFft");
     }
     if (hasProperty(options, "hopLength")) {
-      config.hop_length = checkedIntFromVal(options["hopLength"], "hopLength");
-      sonare::util::check::integer_at_least(config.hop_length, 1, "hopLength");
+      config.hop_length =
+          domainNumberFromVal<int>(options["hopLength"], "hopLength", sonare::kStftHopDomain);
     }
     if (hasProperty(options, "window")) {
       config.window = parseSpectralEditWindow(options["window"]);
     }
     if (hasProperty(options, "healRadiusFrames")) {
       config.heal_radius_frames =
-          checkedIntFromVal(options["healRadiusFrames"], "healRadiusFrames");
-      sonare::util::check::integer_at_least(config.heal_radius_frames, 1, "healRadiusFrames");
+          domainNumberFromVal<int>(options["healRadiusFrames"], "healRadiusFrames",
+                                   sonare_c_detail::kSpectralEditHealRadiusDomain);
     }
   }
 

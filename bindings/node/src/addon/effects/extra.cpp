@@ -147,22 +147,21 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "nFeatures must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[3].IsNumber()) {
-    Napi::TypeError::New(env, "nComponents must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   auto arr = info[0].As<Napi::Float32Array>();
-  int n_features = node_narrow_int(env, info[1], "nFeatures");
-  int n_frames = node_narrow_int(env, info[2], "nFrames");
-  int n_components = node_narrow_int(env, info[3], "nComponents");
+  int n_features{};
+  if (!RequiredDomainArg(env, info, 1, "nFeatures", sonare::kDecomposeNFeaturesDomain,
+                         &n_features)) {
+    return env.Undefined();
+  }
+  int n_frames{};
+  if (!RequiredDomainArg(env, info, 2, "nFrames", sonare::kDecomposeNFramesDomain, &n_frames)) {
+    return env.Undefined();
+  }
+  int n_components{};
+  if (!RequiredDomainArg(env, info, 3, "nComponents", sonare::kDecomposeNComponentsDomain,
+                         &n_components)) {
+    return env.Undefined();
+  }
   if (!ValidateMatrixDims(env, n_features, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }

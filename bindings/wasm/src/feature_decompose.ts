@@ -13,7 +13,6 @@ import {
   assertAudioInput,
   assertHpssKernels,
   assertMatrix2D,
-  assertNonNegativeSafeInteger,
   assertPositiveInteger,
   optionalBoolean,
   optionalToken,
@@ -208,14 +207,13 @@ export interface HpssWithResidualResult {
  * to converge in fewer iterations).
  *
  * @throws {TypeError} when `nComponents` is missing or `s` is not a Matrix2D
- * @throws {RangeError} on a malformed matrix, a non-positive `nComponents` or `nIter`, or an unknown `init`
+ * @throws {RangeError} on a malformed matrix, a non-positive `nIter`, or an unknown `init`
  */
 export function decompose(request: DecomposeRequest): DecomposeResult;
 export function decompose(...args: unknown[]): DecomposeResult {
   return withEntry('decompose', () => {
     const r = requestOnly<DecomposeRequest>('decompose', args);
     const s = assertMatrix2D(r.s, 's');
-    assertPositiveInteger(r.nComponents, 'nComponents');
     // An empty token is the embind reader's spelling of the library's initialiser.
     const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';
     const native = requireModule().decomposeWithInit(
@@ -545,7 +543,6 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
     if (r.k !== undefined) {
       assertPositiveInteger(r.k, 'k');
     }
-    assertNonNegativeSafeInteger(r.width ?? 1, 'width');
     const native = requireModule().segmentRecurrenceMatrix(
       data.data,
       data.rows,
@@ -601,7 +598,6 @@ export function segmentSubsegment(...args: unknown[]): Int32Array {
   return withEntry('segmentSubsegment', () => {
     const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
     const data = assertMatrix2D(r.data, 'data');
-    assertPositiveInteger(r.nSegments ?? 4, 'nSegments');
     return requireModule().segmentSubsegment(
       data.data,
       data.rows,
@@ -618,7 +614,6 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
   return withEntry('segmentAgglomerative', () => {
     const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
     const data = assertMatrix2D(r.data, 'data');
-    assertPositiveInteger(r.k, 'k');
     return requireModule().segmentAgglomerative(
       data.data,
       data.rows,
@@ -640,10 +635,6 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
     const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    assertPositiveInteger(r.win, 'win');
-    assertPositiveInteger(r.maxRatio ?? 2, 'maxRatio');
-    assertNonNegativeSafeInteger(r.minRatio ?? 0, 'minRatio');
-    assertPositiveInteger(r.nFilters ?? 7, 'nFilters');
     const native = requireModule().segmentPathEnhance(
       recurrence.data,
       recurrence.rows,

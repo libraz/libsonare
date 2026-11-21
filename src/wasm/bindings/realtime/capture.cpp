@@ -5,6 +5,7 @@
 
 #include <cmath>
 
+#include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "util/parameter_checks.h"
 
@@ -37,9 +38,10 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
                                           const val& capacity_frames_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int capacity_frames = checkedIntFromVal(capacity_frames_val, "capacityFrames");
-  if (num_channels <= 0 || capacity_frames <= 0) {
-    throw WasmRangeError("capture buffer dimensions must be integers of at least 1");
-  }
+  sonare::util::check::integer_within(num_channels, sonare_c_detail::kEngineCaptureChannelsDomain,
+                                      "numChannels");
+  sonare::util::check::integer_within(
+      capacity_frames, sonare_c_detail::kEngineCaptureCapacityFramesDomain, "capacityFrames");
   allocatePlanes(capture_storage_, capture_ptrs_, num_channels, capacity_frames);
   engine_.set_capture_segment(
       {capture_ptrs_.data(), num_channels, static_cast<int64_t>(capacity_frames)});
@@ -47,7 +49,8 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
 
 void RealtimeEngineWasm::armCapture(bool armed) { engine_.set_capture_armed(armed); }
 void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
-  sonare::util::check::integer_at_least(start_sample, 0, "start_sample");
+  sonare::util::check::integer_within(start_sample, sonare_c_detail::kEngineCapturePunchStartDomain,
+                                      "start_sample");
   if (end_sample < start_sample) {
     sonare::util::check::refuse_relation({"end_sample", "start_sample"},
                                          "{0} must not be before {1}");

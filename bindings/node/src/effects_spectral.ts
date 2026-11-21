@@ -4,7 +4,6 @@
  */
 
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
-import { refuseZeroSentinel } from './internal/metering_native.js';
 import { withRespelled } from './internal/respell.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
@@ -98,8 +97,6 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     if (requestOptions.window !== undefined) {
       assertClosedToken(requestOptions.window, WINDOW_TYPES, 'window');
     }
-    // A given 0 is refused in the words both surfaces share, ahead of the native range check.
-    refuseZeroSentinel(requestOptions, ['nFft', 'hopLength', 'healRadiusFrames']);
     for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
       const value = requestOptions[field];
       if (value !== undefined) {

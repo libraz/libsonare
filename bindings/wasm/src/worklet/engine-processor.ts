@@ -1192,11 +1192,11 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       case SonareEngineCommandType.Punch: {
         // Both endpoints already arrive as samples (see SonareEngine.punch);
-        // do NOT re-scale by sampleRate. A fractional or negative out point is
-        // refused (reported as InvalidCommand telemetry), never rounded.
+        // do NOT re-scale by sampleRate. A fractional out point is refused
+        // (reported as InvalidCommand telemetry), never rounded.
         const outSample = Number(command.argFloat ?? 0);
-        if (!Number.isSafeInteger(outSample) || outSample < 0) {
-          throw refuse(`Punch out sample must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
+        if (!Number.isSafeInteger(outSample)) {
+          throw refuse('Punch out sample must be a safe integer');
         }
         this.native.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
         break;

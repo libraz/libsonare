@@ -80,7 +80,6 @@ import type {
 import {
   assertClosedToken,
   assertFiniteSamples,
-  assertNonNegativeSafeInteger,
   C_INT_MAX,
   requestObject,
   requireBoolean,
@@ -1778,18 +1777,10 @@ export class RealtimeEngine {
     if (isAbsent(request.capacityFrames)) {
       throw refuseType(`capacityFrames must be an integer`);
     }
-    const capacityFrames = request.capacityFrames as number;
-    const numChannels = isAbsent(request.numChannels) ? 2 : (request.numChannels as number);
-    // Two clauses, two owners: that each is a count a JS number still denotes is
-    // the shared check's, that neither may be zero is this buffer's.
-    assertNonNegativeSafeInteger(numChannels, 'numChannels');
-    assertNonNegativeSafeInteger(capacityFrames, 'capacityFrames');
-    if (numChannels <= 0) {
-      throw refuse(`numChannels must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
-    }
-    if (capacityFrames <= 0) {
-      throw refuse(`capacityFrames must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
-    }
+    const capacityFrames = requireFiniteInteger(request.capacityFrames, 'capacityFrames');
+    const numChannels = isAbsent(request.numChannels)
+      ? 2
+      : requireFiniteInteger(request.numChannels, 'numChannels');
     const source = isAbsent(request.source) ? 'output' : request.source;
     assertClosedToken(source, CAPTURE_SOURCES, 'source');
     const offset = isAbsent(request.recordOffsetSamples)

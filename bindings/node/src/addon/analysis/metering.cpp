@@ -7,7 +7,9 @@
 #include <vector>
 
 #include "analysis/music_analyzer.h"
+#include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
+#include "metering/waveform.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_options.h"
@@ -160,19 +162,14 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels{};
+  if (!RequiredDomainArg(env, info, 1, "channels", sonare_c_detail::kInterleavedChannelsDomain,
+                         &channels)) {
     return env.Undefined();
   }
-  auto typed = info[0].As<Napi::Float32Array>();
-  int channels = node_narrow_int(env, info[1], "channels");
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  if (channels <= 0) {
-    Napi::RangeError::New(env, "channels must be an integer in [1, " + node_int_max_text() + "]")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::RangeError::New(env, "interleaved length must be a multiple of channels")
         .ThrowAsJavaScriptException();
@@ -205,19 +202,14 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels{};
+  if (!RequiredDomainArg(env, info, 1, "channels", sonare_c_detail::kInterleavedChannelsDomain,
+                         &channels)) {
     return env.Undefined();
   }
-  auto typed = info[0].As<Napi::Float32Array>();
-  int channels = node_narrow_int(env, info[1], "channels");
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  if (channels <= 0) {
-    Napi::RangeError::New(env, "channels must be an integer in [1, " + node_int_max_text() + "]")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::RangeError::New(env, "interleaved length must be a multiple of channels")
         .ThrowAsJavaScriptException();
@@ -1081,11 +1073,14 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   if (!RequireNumberValue(env, info[1], "channels")) return env.Undefined();
-  if (!RequireNumberValue(env, info[2], "samplesPerBucket")) return env.Undefined();
   auto typed = info[0].As<Napi::Float32Array>();
   int channels = node_narrow_int(env, info[1], "channels");
-  size_t samples_per_bucket = static_cast<size_t>(
-      std::max<int64_t>(0, node_narrow_int64(env, info[2], "samplesPerBucket")));
+  int64_t samples_per_bucket_value{};
+  if (!RequiredDomainArg(env, info, 2, "samplesPerBucket",
+                         sonare::metering::kSamplesPerBucketDomain, &samples_per_bucket_value)) {
+    return env.Undefined();
+  }
+  const size_t samples_per_bucket = static_cast<size_t>(samples_per_bucket_value);
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::RangeError::New(env, "samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
@@ -1129,8 +1124,9 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
       Napi::TypeError::New(env, "levels must be numbers").ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    levels.push_back(
-        static_cast<size_t>(std::max<int64_t>(0, node_narrow_int64(env, item, "levels"))));
+    levels.push_back(static_cast<size_t>(node_domain_number<int64_t>(
+        item, ("samplesPerBucketLevels[" + std::to_string(i) + "]").c_str(),
+        sonare::metering::kSamplesPerBucketDomain)));
   }
   SonareWaveformPeakPyramidResult result{};
   const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);

@@ -182,7 +182,7 @@ describe('addon input errors remain catchable (Node)', () => {
       }),
     ).toThrow(/^tempogramRatio: factors must be a Float32Array or number\[\]$/);
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxPendingFrames: 1.5 })).toThrow(
-      /^StreamAnalyzer: maxPendingFrames must be an integer of at least 0$/,
+      /^StreamAnalyzer: maxPendingFrames must be an integer in \[1, 1048576\]$/,
     );
   });
 });

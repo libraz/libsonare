@@ -193,8 +193,8 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       // an unchecked static_cast of an out-of-int-range double is undefined
       // behaviour, and on ARM64 it saturates to INT_MAX, which slips past the
       // core's positivity checks instead of being rejected here.
-      config.sample_rate =
-          CheckedConfigInt(DoubleProperty(opts, "sampleRate", config.sample_rate), "sampleRate");
+      config.sample_rate = DomainProperty<int>(opts, "sampleRate", config.sample_rate,
+                                               sonare::kAudioSampleRateDomain);
       config.n_fft = CheckedConfigInt(DoubleProperty(opts, "nFft", config.n_fft), "nFft");
       config.hop_length =
           CheckedConfigInt(DoubleProperty(opts, "hopLength", config.hop_length), "hopLength");
@@ -217,19 +217,12 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.compute_spectral = BoolProperty(opts, "computeSpectral", config.compute_spectral);
       config.emit_every_n_frames = CheckedConfigInt(
           DoubleProperty(opts, "emitEveryNFrames", config.emit_every_n_frames), "emitEveryNFrames");
-      const double max_pending_frames =
-          DoubleProperty(opts, "maxPendingFrames", config.max_pending_frames);
-      if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "maxPendingFrames must be an integer of at least 0");
-      }
-      const double max_progression_entries =
-          DoubleProperty(opts, "maxProgressionEntries", config.max_progression_entries);
-      if (!sonare::numeric::checked_integral_cast(max_progression_entries,
-                                                  &config.max_progression_entries)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "maxProgressionEntries must be an integer of at least 0");
-      }
+      config.max_pending_frames =
+          DomainProperty<size_t>(opts, "maxPendingFrames", config.max_pending_frames,
+                                 sonare::kStreamConfigMaxPendingFramesDomain);
+      config.max_progression_entries =
+          DomainProperty<size_t>(opts, "maxProgressionEntries", config.max_progression_entries,
+                                 sonare::kStreamConfigMaxProgressionEntriesDomain);
       config.key_update_interval_sec = static_cast<float>(
           DoubleProperty(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
       config.bpm_update_interval_sec = static_cast<float>(

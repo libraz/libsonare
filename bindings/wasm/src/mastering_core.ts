@@ -48,7 +48,6 @@ import {
   assertFloatValue,
   assertIntegerValue,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSampleRate,
   assertString,
   optionalBoolean,
@@ -915,7 +914,6 @@ function profileParams(
   for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
     const value = r[key];
     if (value !== undefined && value !== null) {
-      assertPositiveInteger(value, key);
       params[key] = value;
     }
   }

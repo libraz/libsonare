@@ -1727,7 +1727,7 @@ describe('v1.2 feature additions (WASM)', () => {
         mfccToAudio({
           coefficients: { data: new Float32Array(6), rows: 2, cols: 3 },
           nMels: 40,
-          sampleRate: 7999,
+          sampleRate: 0,
         }),
       ).toThrow(/sampleRate/);
     });

@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/engine_config_domains.h"
 #include "engine/common.h"
 #include "sonare_wrap_clip_page_provider.h"
 #include "sonare_wrap_engine.h"
@@ -598,15 +599,12 @@ Napi::Value RealtimeEngineWrap::SetClipPagePrefetchFrames(const Napi::CallbackIn
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  double frames = 0.0;
-  if (!OptionalDoubleArg(env, info, 0, "frames", 0.0, &frames)) return env.Undefined();
-  if (!(frames >= 0.0)) {
-    Napi::TypeError::New(env, "clip page prefetch frames must be finite and at least 0")
-        .ThrowAsJavaScriptException();
+  int64_t frames = 0;
+  if (!OptionalDomainArg<int64_t>(env, info, 0, "frames", 0,
+                                  sonare_c_detail::kEnginePrefetchFramesDomain, &frames)) {
     return env.Undefined();
   }
-  ThrowIfError(env,
-               sonare_engine_set_clip_page_prefetch_frames(engine_, static_cast<int64_t>(frames)));
+  ThrowIfError(env, sonare_engine_set_clip_page_prefetch_frames(engine_, frames));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -652,13 +650,12 @@ Napi::Value RealtimeEngineWrap::SetCaptureBufferExtent(const Napi::CallbackInfo&
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int num_channels = 0;
   int64_t capacity_frames = 0;
-  if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
-      !RequiredInt64Arg(env, info, 1, "capacityFrames", &capacity_frames)) {
-    return env.Undefined();
-  }
-  if (num_channels <= 0 || capacity_frames <= 0) {
-    Napi::RangeError::New(env, "numChannels and capacityFrames must be integers of at least 1")
-        .ThrowAsJavaScriptException();
+  // The planes are allocated below, ahead of the C entry, so the domain is read here.
+  if (!RequiredDomainArg<int>(env, info, 0, "numChannels",
+                              sonare_c_detail::kEngineCaptureChannelsDomain, &num_channels) ||
+      !RequiredDomainArg<int64_t>(env, info, 1, "capacityFrames",
+                                  sonare_c_detail::kEngineCaptureCapacityFramesDomain,
+                                  &capacity_frames)) {
     return env.Undefined();
   }
 

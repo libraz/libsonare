@@ -25,7 +25,6 @@ import {
   assertMatrix2D,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSampleRate,
   optionalBoolean,
   requestOnly,
@@ -232,8 +231,6 @@ export function trim(...args: unknown[]): Float32Array {
     const hopLength = r.hopLength ?? 512;
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFiniteScalar(thresholdDb, 'thresholdDb');
-    assertPositiveInteger(frameLength, 'frameLength');
-    assertPositiveInteger(hopLength, 'hopLength');
     return requireModule().trimEx(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
   });
 }

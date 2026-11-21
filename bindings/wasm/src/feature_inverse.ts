@@ -4,7 +4,6 @@
  */
 
 import { refuse, withEntry } from './internal/entry.js';
-import { validatePositiveIntegers } from './internal/feature_validation.js';
 import {
   resolveEffectFftOptions,
   resolveFftOptions,
@@ -141,13 +140,11 @@ export function melToStft(...args: unknown[]): Matrix2D {
   return withEntry('melToStft', () => {
     const r = requestOnly<MelToStftRequest>('melToStft', args);
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     const power = assertMatrix2D(r.power, 'power');
     // Not on the shared FFT rule: this inverts a filterbank rather than running a
     // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
     // size is accepted by the core and by the Node surface alike.
     const nFft = r.nFft ?? 2048;
-    validatePositiveIntegers({ nFft });
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -180,7 +177,6 @@ export function melToAudio(...args: unknown[]): Float32Array {
   return withEntry('melToAudio', () => {
     const r = requestOnly<MelToAudioRequest>('melToAudio', args);
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     const power = assertMatrix2D(r.power, 'power');
     const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
     const nIter = r.nIter ?? 32;
@@ -228,7 +224,6 @@ export function griffinLim(...args: unknown[]): Float32Array {
     const fft = resolveInverseFftOptions(r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
     assertGriffinLimFftSize(magnitude.rows, fft.nFft);
     const nIter = r.nIter ?? 32;
-    validatePositiveIntegers({ nIter });
     return requireModule().griffinLim(
       magnitude.data,
       magnitude.rows,
@@ -277,7 +272,6 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   return withEntry('mfccToAudio', () => {
     const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
     const sampleRate = r.sampleRate ?? 22050;
-    assertSampleRate(sampleRate);
     const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
     const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
     const nMels = r.nMels ?? 128;

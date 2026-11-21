@@ -12,6 +12,7 @@
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
 #include "effects/acoustic/room_morph.h"
+#include "effects/common/room_field_checks.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -169,17 +170,11 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   Napi::Object opts = info[0].As<Napi::Object>();
-  const int sample_rate = IntProperty(opts, "sampleRate", 48000);
-  if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
+  const int sample_rate =
+      DomainProperty<int>(opts, "sampleRate", 48000, sonare::kAudioSampleRateDomain);
   sonare::acoustic::RirSynthConfig cfg;
-  // Match the C ABI: reject a negative ISM order instead of clamping it to 0, so
-  // the same invalid input fails identically on every surface.
-  cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
-  if (cfg.ism_order < 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "ismOrder must be an integer in [0, " + node_int_max_text() + "]");
-  }
+  cfg.ism_order = DomainProperty<int>(opts, "ismOrder", cfg.ism_order,
+                                      sonare::effects::common::kRirIsmOrderDomain);
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.seed = Uint32Property(opts, "seed", cfg.seed);

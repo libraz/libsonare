@@ -82,7 +82,7 @@ const entries: Array<{
   {
     name: 'trimSilence',
     run: (o) => masteringRepairTrimSilence(samples, SR, o as never),
-    fields: [{ key: 'paddingSamples', wrong: '64', type: 'number' }],
+    fields: [{ key: 'paddingSamples', wrong: '64', type: 'integer' }],
   },
 ];
 
@@ -94,7 +94,7 @@ describe('mastering repair option types (WASM)', () => {
   for (const { name, run, fields } of entries) {
     for (const { key, wrong, type } of fields) {
       it(`${name} refuses a wrong-typed ${key} by name`, () => {
-        expect(() => run({ [key]: wrong })).toThrow(new RegExp(`${key} must be a ${type}`));
+        expect(() => run({ [key]: wrong })).toThrow(new RegExp(`${key} must be an? ${type}`));
       });
 
       it(`${name} reads an undefined or null ${key} as the default`, () => {

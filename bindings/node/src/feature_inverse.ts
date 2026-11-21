@@ -179,10 +179,9 @@ export function cqtToAudio(...args: unknown[]): Float32Array {
     assertMatrix2D(r.magnitude, 'magnitude');
     const sampleRate = r.sampleRate;
     assertSampleRate(sampleRate);
-    // nIter is positive here; the core names the Griffin-Lim ceiling itself.
     const hopLength = r.hopLength ?? 512;
     assertCqtHopLength(hopLength);
-    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
     assertPositiveFloatValue(fminHz, 'fminHz');
     return addon.cqtToAudio(
@@ -208,7 +207,7 @@ export function vqtToAudio(...args: unknown[]): Float32Array {
     assertSampleRate(sampleRate);
     const hopLength = r.hopLength ?? 512;
     assertCqtHopLength(hopLength);
-    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
     assertPositiveFloatValue(fminHz, 'fminHz');
     return addon.vqtToAudio(
@@ -232,12 +231,7 @@ export function melToStft(...args: unknown[]): Matrix2D {
     const r = requestOnly<MelToStftRequest>('melToStft', args);
     assertMatrix2D(r.power, 'power');
     const sampleRate = r.sampleRate ?? 22050;
-    // No range bound here: the core only requires sample_rate > 0 for this
-    // reconstruction, unlike the [8000, 384000] audio-analysis bound.
-    assertPositiveInteger(sampleRate, 'sampleRate');
-    // Positivity only: the filterbank inverse takes any positive size, so the
-    // even-size rule the STFT entries carry would refuse sizes this one answers.
-    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const nFft = r.nFft ?? 2048;
     const fminHz = r.fminHz ?? 0;
     const fmaxHz = r.fmaxHz ?? 0;
     assertFloatFields({ fminHz, fmaxHz });
@@ -266,10 +260,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
     const r = requestOnly<MelToAudioRequest>('melToAudio', args);
     assertMatrix2D(r.power, 'power');
     const sampleRate = r.sampleRate ?? 22050;
-    assertPositiveInteger(sampleRate, 'sampleRate');
-    // Positivity only, as melToStft: the geometry rule this reconstruction carries
-    // is that all three are positive.
-    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const nFft = r.nFft ?? 2048;
     const hopLength = resolveResynthesisHop(r.hopLength);
     const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? 0;
@@ -316,7 +307,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
     const nFft = resolvePositiveIntegerOption('nFft', r.nFft, (nBins - 1) * 2);
     assertGriffinLimFftSize(nBins, nFft);
     const hopLength = resolveResynthesisHop(r.hopLength);
-    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     return addon.griffinLim(
       r.magnitude.data,
       r.magnitude.rows,
@@ -354,10 +345,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
     assertMatrix2D(r.coefficients, 'coefficients');
     const sampleRate = r.sampleRate ?? 22050;
-    assertPositiveInteger(sampleRate, 'sampleRate');
-    // Positivity only, as melToAudio: the same reconstruction behind one more
-    // inverse transform, under the same geometry rule.
-    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const nFft = r.nFft ?? 2048;
     const hopLength = resolveResynthesisHop(r.hopLength);
     const nIter = resolveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? 0;

@@ -396,7 +396,6 @@ export function engineCapabilities(): EngineCapabilities {
 /** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its embind instance. */
 function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
   const { warpMode, pageProvider, ...rest } = clip;
-  engineCount(`${label}.lengthSamples`, rest.lengthSamples);
   return {
     ...rest,
     ...(warpMode === undefined
@@ -438,20 +437,17 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
   if (!Array.isArray(clips)) {
     return clips;
   }
-  return clips.map((clip, index) => {
+  return clips.map((clip) => {
     if (typeof clip !== 'object' || clip === null) {
       return clip;
     }
     const { lengthSamples, loopLengthSamples, ...rest } = clip;
-    const length = engineCount(`clips[${index}].lengthSamples`, lengthSamples);
-    const loopLength = engineCount(`clips[${index}].loopLengthSamples`, loopLengthSamples);
-    if (rest.loop && loopLength === undefined) {
-      throw refuse(`clips[${index}].loopLengthSamples must be an integer of at least 1`);
-    }
     return {
       ...rest,
-      ...(length === undefined ? {} : { lengthSamples: length }),
-      ...(loopLength === undefined ? {} : { loopLengthSamples: loopLength }),
+      ...(lengthSamples === undefined || lengthSamples === null ? {} : { lengthSamples }),
+      ...(loopLengthSamples === undefined || loopLengthSamples === null
+        ? {}
+        : { loopLengthSamples }),
     };
   });
 }
@@ -2604,7 +2600,7 @@ export class RealtimeEngine {
     if (typeof options.capacityFrames !== 'number') {
       throw refuseType('capacityFrames must be an integer');
     }
-    const numChannels = optionalCount('numChannels', options.numChannels) ?? 2;
+    const numChannels = options.numChannels ?? 2;
     const source = tokenCode('source', options.source ?? 'output', CAPTURE_SOURCES);
     const offset = options.recordOffsetSamples ?? 0;
     if (typeof offset !== 'number') {
@@ -2828,9 +2824,6 @@ export class RealtimeEngine {
     if (ditherCode !== undefined && typeof bits === 'number') {
       if (!Number.isInteger(bits)) {
         throw refuse('ditherBits must be an integer');
-      }
-      if (bits < 2 || bits > 32) {
-        throw refuse('options.ditherBits must be an integer in [2, 32]');
       }
     }
     const result = this.native.bounceOffline({

@@ -203,14 +203,6 @@ const BARE_HAS_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'engine/clips_capture.cpp:warpMode',
     'ParseWarpMode maps undefined and null to SONARE_ENGINE_WARP_MODE_OFF, the omitted default.',
   ],
-  [
-    'effects/repair_impulsive.cpp:maxClickSamples',
-    'The value is read with the presence-checked IntProperty and the default (8) is positive, so undefined cannot trip the positivity check.',
-  ],
-  [
-    'effects/repair_trim.cpp:paddingSamples',
-    'The value is read with the presence-checked IntProperty and the default is non-negative, so undefined cannot trip the range check.',
-  ],
 ]);
 
 const SR = 22050;

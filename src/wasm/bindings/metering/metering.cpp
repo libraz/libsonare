@@ -5,7 +5,9 @@
 
 #include <cmath>
 #include <limits>
+#include <string>
 
+#include "metering/waveform.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
@@ -475,8 +477,8 @@ val emit_waveform_peaks_result(const metering::WaveformPeaksResult& result) {
 
 val js_waveform_peaks(val samples, const val& channels_val, const val& samples_per_bucket_val) {
   const int channels = checkedIntFromVal(channels_val, "channels");
-  const std::size_t samples_per_bucket =
-      static_cast<std::size_t>(checkedUintFromVal(samples_per_bucket_val, "samplesPerBucket"));
+  const std::size_t samples_per_bucket = static_cast<std::size_t>(domainNumberFromVal<long long>(
+      samples_per_bucket_val, "samplesPerBucket", metering::kSamplesPerBucketDomain));
   std::vector<float> data = float32ArrayToVector(samples);
   // Reject a length that is not a whole number of interleaved frames instead of
   // silently dropping a trailing partial frame (matches the Node/Python facades,
@@ -498,7 +500,9 @@ val js_waveform_peak_pyramid(val samples, const val& channels_val, val js_levels
   const size_t n = wasmArrayLikeLength(js_levels, "levels");
   levels.reserve(n);
   for (size_t i = 0; i < n; ++i) {
-    levels.push_back(checkedUintFromVal(js_levels[i], "levels[i]"));
+    const std::string subject = "samplesPerBucketLevels[" + std::to_string(i) + "]";
+    levels.push_back(static_cast<size_t>(domainNumberFromVal<long long>(
+        js_levels[i], subject.c_str(), metering::kSamplesPerBucketDomain)));
   }
   // Reject a length that is not a whole number of interleaved frames instead of
   // silently dropping a trailing partial frame (matches the Node/Python facades,

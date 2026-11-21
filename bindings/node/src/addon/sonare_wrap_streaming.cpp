@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/mastering_input_domains.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/streaming_retune.h"
@@ -214,7 +215,9 @@ Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   int num_channels{};
-  if (!sonare_node::RequiredIntArg(env, info, 2, "numChannels", &num_channels)) {
+  if (!sonare_node::RequiredDomainArg(env, info, 2, "numChannels",
+                                      sonare::mastering::api::kStreamingChainChannelCountDomain,
+                                      &num_channels)) {
     return env.Undefined();
   }
   chain_->prepare(sample_rate, max_block_size, num_channels);
@@ -775,10 +778,8 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
     if (!Int32Property(env, options, "referenceSampleRate", sample_rate, &reference_sample_rate)) {
       return env.Undefined();
     }
-    // Positivity stays below, where the C ABI's own bound is; this is the read.
-    if (!NonNegativeSizeTProperty(env, options, "maxBands", max_bands, &max_bands)) {
-      return env.Undefined();
-    }
+    max_bands = DomainProperty<size_t>(options, "maxBands", max_bands,
+                                       sonare_c_detail::kEqMatchMaxBandsDomain);
   }
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
@@ -786,10 +787,6 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
                                        sample_rate);
   sonare::validate_offline_audio_input("reference", reference.Data(), reference.ElementLength(),
                                        reference_sample_rate);
-  if (max_bands == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "maxBands must be an integer of at least 1");
-  }
   sonare::mastering::match::MatchEqConfig match_config;
   match_config.max_bands = max_bands;
   sonare::mastering::match::configure_equalizer_from_audio(

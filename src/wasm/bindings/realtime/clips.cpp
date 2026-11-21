@@ -8,6 +8,7 @@
 #include <atomic>
 #include <thread>
 
+#include "c_api/engine_config_domains.h"
 #include "engine/clip_page_limits.h"
 #include "engine/tempo_sync.h"
 #include "realtime_engine_wasm.h"
@@ -156,7 +157,8 @@ std::shared_ptr<WasmClipPageProvider> readPageProvider(const val& value) {
 }  // namespace
 
 RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val,
-                                                                    uint32_t default_id) {
+                                                                    uint32_t default_id,
+                                                                    const std::string& path) {
   const bool has_page_provider = hasProperty(clip_val, "pageProvider") &&
                                  !objectProperty(clip_val, "pageProvider").isNull() &&
                                  !objectProperty(clip_val, "pageProvider").isUndefined();
@@ -213,9 +215,9 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   const int64_t default_length = source_samples - schedule.clip_offset_samples;
   // As in the C ABI, only an absent length plays the source remaining after clipOffsetSamples.
   schedule.length_samples = int64Property(clip_val, "lengthSamples", default_length);
-  if (schedule.length_samples < 1) {
-    throw WasmRangeError("clip lengthSamples must be an integer of at least 1");
-  }
+  const std::string length_subject = path + ".lengthSamples";
+  sonare::util::check::integer_within(
+      schedule.length_samples, sonare_c_detail::kEngineClipLengthDomain, length_subject.c_str());
   schedule.loop = boolProperty(clip_val, "loop", schedule.loop);
   schedule.gain = floatProperty(clip_val, "gain", 1.0f);
   if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
@@ -223,9 +225,12 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   }
   schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
   schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
-  if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
-    throw WasmRangeError("clip fade lengths must be an integer of at least 0");
-  }
+  const std::string fade_in_subject = path + ".fadeInSamples";
+  const std::string fade_out_subject = path + ".fadeOutSamples";
+  sonare::util::check::integer_within(
+      schedule.fade_in_samples, sonare_c_detail::kEngineClipFadeDomain, fade_in_subject.c_str());
+  sonare::util::check::integer_within(
+      schedule.fade_out_samples, sonare_c_detail::kEngineClipFadeDomain, fade_out_subject.c_str());
   if (hasProperty(clip_val, "warpMode")) {
     val mode_val = objectProperty(clip_val, "warpMode");
     if (mode_val.typeOf().as<std::string>() == "string") {
@@ -390,7 +395,8 @@ void RealtimeEngineWasm::setClips(val clips) {
   new_clip_tempo_baked.reserve(static_cast<size_t>(count));
 
   for (int i = 0; i < count; ++i) {
-    BuiltClip built = buildClipSchedule(clips[i], static_cast<uint32_t>(i + 1));
+    BuiltClip built = buildClipSchedule(clips[i], static_cast<uint32_t>(i + 1),
+                                        "clips[" + std::to_string(i) + "]");
     new_clip_ids.push_back(built.schedule.id);
     new_clip_tempo_baked.push_back(built.tempo_baked ? 1u : 0u);
     schedules.push_back(std::move(built.schedule));
@@ -403,7 +409,7 @@ void RealtimeEngineWasm::setClips(val clips) {
 }
 
 void RealtimeEngineWasm::upsertClip(val clip) {
-  BuiltClip built = buildClipSchedule(clip, 1);
+  BuiltClip built = buildClipSchedule(clip, 1, "clip");
   const uint32_t id = built.schedule.id;
   engine_.upsert_clip(built.schedule);
   // Keep the storage bookkeeping in step with the one published entry per id.
@@ -500,8 +506,9 @@ uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
 // the C-ABI guard -- refuses the same way Node/Python do through the C ABI.
 void RealtimeEngineWasm::setWarpVoiceCapacity(const emscripten::val& voices_val) {
   const uint32_t voices = checkedUintFromVal(voices_val, "voices");
+  sonare::util::check::integer_within(voices, sonare_c_detail::kEngineWarpVoicesDomain, "voices");
   if (!engine_.set_warp_voice_capacity(voices)) {
-    throw WasmRangeError("warp voice capacity must be in [0, 64]");
+    throw WasmRangeError("warp voice capacity is out of range");
   }
 }
 
@@ -515,8 +522,9 @@ uint32_t RealtimeEngineWasm::warpVoiceCapacity() const { return engine_.warp_voi
 void RealtimeEngineWasm::setClipPagePrefetchFrames(double frames) {
   // 2^63 rather than numeric_limits: INT64_MAX is not a representable double and rounds up.
   static constexpr double kInt64UpperBound = 9223372036854775808.0;
-  if (!sonare::numeric::finite_non_negative(frames) || frames >= kInt64UpperBound) {
-    throw WasmRangeError("clip page prefetch frames must be finite and within [0, 2^63)");
+  sonare::util::check::within(frames, sonare_c_detail::kEnginePrefetchFramesDomain, "frames");
+  if (frames >= kInt64UpperBound) {
+    throw WasmRangeError("clip page prefetch frames must be within [0, 2^63)");
   }
   engine_.set_clip_page_prefetch_frames(static_cast<int64_t>(frames));
 }

@@ -204,13 +204,6 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
   },
   {
     entry: 'StreamAnalyzer',
-    field: 'sampleRate',
-    legal: 44100,
-    domainRefusal: 'sampleRate must be an integer in [8000, 384000]',
-    construct: (sampleRate) => newAnalyzer({ sampleRate }),
-  },
-  {
-    entry: 'StreamAnalyzer',
     field: 'nFft',
     legal: 512,
     domainRefusal: 'nFft must be an integer in [1, 524288]',
@@ -444,11 +437,20 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     );
   });
 
+  it('sampleRate is read against its domain, so every wrapped shape is refused in its text', () => {
+    for (const shape of NEIGHBOUR_VALUES) {
+      const error = refusalFor(() => newAnalyzer({ sampleRate: shape.value }));
+      expect(error.message, `sampleRate = ${shape.label}`).toContain(
+        'StreamAnalyzer: sampleRate must be an integer in [8000, 384000]',
+      );
+    }
+  });
+
   it('maxPendingFrames keeps its own refusal wording', () => {
     for (const shape of NEIGHBOUR_VALUES) {
       const error = refusalFor(() => newAnalyzer({ maxPendingFrames: shape.value }));
       expect(error.message, `maxPendingFrames = ${shape.label}`).toContain(
-        'StreamAnalyzer: maxPendingFrames must be an integer of at least 0',
+        'StreamAnalyzer: maxPendingFrames must be an integer in [1, 1048576]',
       );
     }
   });

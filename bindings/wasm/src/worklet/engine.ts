@@ -978,9 +978,6 @@ export class SonareEngine {
     if (this.epoch.closed) {
       throw releasedHandleError('SonareEngine');
     }
-    if (!Number.isFinite(frames) || frames < 0) {
-      throw refuse('clip page prefetch frames must be finite and at least 0');
-    }
     commitSync(
       this.commitContext,
       (offline) => offline.setClipPagePrefetchFrames(frames),

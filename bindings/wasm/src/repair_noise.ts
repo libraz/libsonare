@@ -13,13 +13,7 @@ import type {
   MasteringRepairDenoiseClassicalResult,
   NoiseDetection,
 } from './public_types_repair.js';
-import {
-  assertAudioChannels,
-  assertAudioInput,
-  assertPositiveInteger,
-  requestOnly,
-  sampleOneShot,
-} from './validation.js';
+import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -416,8 +410,6 @@ export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
       'masteringRepairNoiseBandBins',
       args,
     );
-    // Geometry only: the core needs a positive rate, not the audio-analysis range.
-    assertPositiveInteger(r.sampleRate, 'sampleRate');
     return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
   });
 }

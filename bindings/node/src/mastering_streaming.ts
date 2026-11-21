@@ -23,11 +23,9 @@ import type {
 } from './types.js';
 import { CHORD_QUALITIES } from './types.js';
 import {
-  assertBoundedInteger,
   assertClosedToken,
   assertFloatValue,
   assertIntegerValue,
-  assertSampleRate,
   requireBoolean,
 } from './validation.js';
 
@@ -154,7 +152,6 @@ export class StreamingMasteringChain {
     } = config;
     assertIntegerValue(sampleRate, 'sampleRate');
     const blockSize = optionalIntegerBlockSize(maxBlockSize);
-    assertBoundedInteger(numChannels, 'numChannels', 1, 2);
     const options: Record<string, number> = {};
     if (loudnessStaticGainDb !== undefined) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;
@@ -557,7 +554,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
       throw refuseUnknownKey(key, [...STREAM_CONFIG_KEYS]);
     }
   }
-  assertSampleRate(config.sampleRate);
+  assertIntegerValue(config.sampleRate, 'sampleRate');
   const { fminHz, fmaxHz, referenceHz, window, ...rest } = config;
   const native: Record<string, unknown> = { ...rest };
   if (fminHz !== undefined) {

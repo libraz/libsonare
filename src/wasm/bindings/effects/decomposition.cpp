@@ -41,23 +41,22 @@ DecomposeStemsConfig readDecomposeStemsConfig(val options) {
 // [n_components x n_frames] row-major (both flat Float32Array buffers).
 val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
                  const val& n_components_val, const val& n_iter_val, const val& beta_val) {
-  const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  const int n_components = checkedIntFromVal(n_components_val, "nComponents");
+  const int n_features =
+      domainNumberFromVal<int>(n_features_val, "nFeatures", sonare::kDecomposeNFeaturesDomain);
+  const int n_frames =
+      domainNumberFromVal<int>(n_frames_val, "nFrames", sonare::kDecomposeNFramesDomain);
+  const int n_components = domainNumberFromVal<int>(n_components_val, "nComponents",
+                                                    sonare::kDecomposeNComponentsDomain);
   // An omitted (undefined or null) iteration count takes the core default.
   const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
                          ? kDecomposeDefaultIter
                          : checkedIntFromVal(n_iter_val, "nIter");
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
-  if (n_components <= 0) {
-    throw WasmRangeError("nComponents must be an integer in [1, 2147483647]");
-  }
   if (n_iter <= 0) {
     throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
   }
-  if (n_features <= 0 || n_frames <= 0 ||
-      static_cast<size_t>(n_features) >
+  if (static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
     throw WasmRangeError("spectrogram dimensions exceed input");
@@ -78,23 +77,22 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
 val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames_val,
                            const val& n_components_val, const val& n_iter_val, const val& beta_val,
                            std::string init) {
-  const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
-  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  const int n_components = checkedIntFromVal(n_components_val, "nComponents");
+  const int n_features =
+      domainNumberFromVal<int>(n_features_val, "nFeatures", sonare::kDecomposeNFeaturesDomain);
+  const int n_frames =
+      domainNumberFromVal<int>(n_frames_val, "nFrames", sonare::kDecomposeNFramesDomain);
+  const int n_components = domainNumberFromVal<int>(n_components_val, "nComponents",
+                                                    sonare::kDecomposeNComponentsDomain);
   // An omitted (undefined or null) iteration count takes the core default.
   const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
                          ? kDecomposeDefaultIter
                          : checkedIntFromVal(n_iter_val, "nIter");
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
-  if (n_components <= 0) {
-    throw WasmRangeError("nComponents must be an integer in [1, 2147483647]");
-  }
   if (n_iter <= 0) {
     throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
   }
-  if (n_features <= 0 || n_frames <= 0 ||
-      static_cast<size_t>(n_features) >
+  if (static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
     throw WasmRangeError("spectrogram dimensions exceed input");

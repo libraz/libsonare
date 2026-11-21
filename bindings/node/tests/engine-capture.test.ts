@@ -34,6 +34,7 @@ describe('RealtimeEngine native binding', () => {
     expect(captured[1].length).toBe(128);
     expect(captured[0][0]).toBeCloseTo(0.25, 4);
     expect(captured[1][0]).toBeCloseTo(-0.25, 4);
+    engine.armCapture({ armed: false });
     expect(() => engine.configureCapture({ capacityFrames: 128, numChannels: 0 })).toThrow(
       RangeError,
     );

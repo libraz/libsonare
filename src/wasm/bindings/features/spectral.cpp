@@ -5,6 +5,7 @@
 
 #include "feature/spectral.h"
 
+#include "c_api/segment_input_domains.h"
 #include "core/spectrum.h"
 #include "feature/onset.h"
 #include "wasm/bindings/common/common.h"
@@ -12,9 +13,6 @@
 namespace {
 
 std::vector<float> load_segment_matrix(val input, int rows, int cols, const char* data_name) {
-  if (rows <= 0 || cols <= 0) {
-    throw WasmRangeError("matrix dimensions must be integers in [1, 2147483647]");
-  }
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(cols),
@@ -232,10 +230,14 @@ val js_zero_crossings(val samples, const val& threshold_val, bool ref_magnitude,
 val js_segment_cross_similarity(val x, const val& x_rows_val, const val& x_cols_val, val y,
                                 const val& y_rows_val, const val& y_cols_val, const val& k_val,
                                 const std::string& metric, const std::string& mode) {
-  const int x_rows = checkedIntFromVal(x_rows_val, "xRows");
-  const int x_cols = checkedIntFromVal(x_cols_val, "xCols");
-  const int y_rows = checkedIntFromVal(y_rows_val, "yRows");
-  const int y_cols = checkedIntFromVal(y_cols_val, "yCols");
+  const int x_rows =
+      domainNumberFromVal<int>(x_rows_val, "xRows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int x_cols =
+      domainNumberFromVal<int>(x_cols_val, "xCols", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int y_rows =
+      domainNumberFromVal<int>(y_rows_val, "yRows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int y_cols =
+      domainNumberFromVal<int>(y_cols_val, "yCols", sonare_c_detail::kSegmentMatrixExtentDomain);
   const int k = checkedIntFromVal(k_val, "k");
   std::vector<float> x_data = load_segment_matrix(x, x_rows, x_cols, "x");
   std::vector<float> y_data = load_segment_matrix(y, y_rows, y_cols, "y");
@@ -253,40 +255,45 @@ val js_segment_cross_similarity(val x, const val& x_rows_val, const val& x_cols_
 val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_val,
                                  const val& k_val, const val& width_val, bool sym,
                                  const std::string& metric, const std::string& mode) {
-  const int rows = checkedIntFromVal(rows_val, "rows");
-  const int cols = checkedIntFromVal(cols_val, "cols");
+  const int rows =
+      domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int cols =
+      domainNumberFromVal<int>(cols_val, "cols", sonare_c_detail::kSegmentMatrixExtentDomain);
   const int k = checkedIntFromVal(k_val, "k");
-  const int width = checkedIntFromVal(width_val, "width");
+  const int width =
+      domainNumberFromVal<int>(width_val, "width", sonare_c_detail::kSegmentRecurrenceWidthDomain);
   std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
-  if (k < 0 || width < 0) {
-    throw WasmRangeError("k and width must be integers in [0, 2147483647]");
+  if (k < 0) {
+    throw WasmRangeError("k must be an integer in [0, 2147483647]");
   }
   return segment_matrix_result(
       recurrence_matrix(values.data(), rows, cols, k, width, sym, metric, mode), cols, cols);
 }
 
 val js_segment_recurrence_to_lag(val recurrence, const val& n_val, bool pad) {
-  const int n = checkedIntFromVal(n_val, "n");
+  const int n = domainNumberFromVal<int>(n_val, "n", sonare_c_detail::kSegmentMatrixExtentDomain);
   std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
   return segment_matrix_result(recurrence_to_lag(values.data(), n, pad), pad ? 2 * n : n, n);
 }
 
 val js_segment_lag_to_recurrence(val lag, const val& rows_val, const val& lags_val) {
-  const int rows = checkedIntFromVal(rows_val, "rows");
-  const int lags = checkedIntFromVal(lags_val, "lags");
+  const int rows =
+      domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int lags =
+      domainNumberFromVal<int>(lags_val, "lags", sonare_c_detail::kSegmentMatrixExtentDomain);
   std::vector<float> values = load_segment_matrix(lag, lags, rows, "lag");
   return segment_matrix_result(lag_to_recurrence(values.data(), rows, lags), rows, rows);
 }
 
 val js_segment_subsegment(val data, const val& rows_val, const val& cols_val, val boundaries,
                           const val& n_segments_val) {
-  const int rows = checkedIntFromVal(rows_val, "rows");
-  const int cols = checkedIntFromVal(cols_val, "cols");
-  const int n_segments = checkedIntFromVal(n_segments_val, "nSegments");
+  const int rows =
+      domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int cols =
+      domainNumberFromVal<int>(cols_val, "cols", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int n_segments = domainNumberFromVal<int>(n_segments_val, "nSegments",
+                                                  sonare_c_detail::kSubsegmentCountDomain);
   std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
-  if (n_segments <= 0) {
-    throw WasmRangeError("nSegments must be an integer in [1, 2147483647]");
-  }
   const std::vector<int32_t> source = int32ArrayToVector(boundaries);
   const std::vector<int> points(source.begin(), source.end());
   return vectorToInt32Array(subsegment(values.data(), rows, cols, points, n_segments));
@@ -294,28 +301,29 @@ val js_segment_subsegment(val data, const val& rows_val, const val& cols_val, va
 
 val js_segment_agglomerative(val data, const val& rows_val, const val& cols_val, const val& k_val,
                              const std::string& linkage) {
-  const int rows = checkedIntFromVal(rows_val, "rows");
-  const int cols = checkedIntFromVal(cols_val, "cols");
-  const int k = checkedIntFromVal(k_val, "k");
+  const int rows =
+      domainNumberFromVal<int>(rows_val, "rows", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int cols =
+      domainNumberFromVal<int>(cols_val, "cols", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int k =
+      domainNumberFromVal<int>(k_val, "k", sonare_c_detail::kAgglomerativeClusterCountDomain);
   std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
-  if (k <= 0) {
-    throw WasmRangeError("k must be an integer in [1, 2147483647]");
-  }
   return vectorToInt32Array(agglomerative(values.data(), rows, cols, k, linkage));
 }
 
 val js_segment_path_enhance(val recurrence, const val& n_val, const val& win_val,
                             const val& max_ratio_val, const val& min_ratio_val,
                             const val& n_filters_val) {
-  const int n = checkedIntFromVal(n_val, "n");
-  const int win = checkedIntFromVal(win_val, "win");
-  const int max_ratio = checkedIntFromVal(max_ratio_val, "maxRatio");
-  const int min_ratio = checkedIntFromVal(min_ratio_val, "minRatio");
-  const int n_filters = checkedIntFromVal(n_filters_val, "nFilters");
+  const int n = domainNumberFromVal<int>(n_val, "n", sonare_c_detail::kSegmentMatrixExtentDomain);
+  const int win =
+      domainNumberFromVal<int>(win_val, "win", sonare_c_detail::kPathEnhanceWindowDomain);
+  const int max_ratio = domainNumberFromVal<int>(max_ratio_val, "maxRatio",
+                                                 sonare_c_detail::kPathEnhanceMaxRatioDomain);
+  const int min_ratio = domainNumberFromVal<int>(min_ratio_val, "minRatio",
+                                                 sonare_c_detail::kPathEnhanceMinRatioDomain);
+  const int n_filters = domainNumberFromVal<int>(n_filters_val, "nFilters",
+                                                 sonare_c_detail::kPathEnhanceFilterCountDomain);
   std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
-  if (win <= 0 || max_ratio <= 0 || min_ratio < 0 || n_filters <= 0) {
-    throw WasmRangeError("invalid enhancement parameters");
-  }
   return segment_matrix_result(path_enhance(values.data(), n, win, max_ratio, min_ratio, n_filters),
                                n, n);
 }

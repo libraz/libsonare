@@ -60,15 +60,9 @@ sonare::mastering::repair::TrimSilenceConfig ReadTrimConfig(const Napi::Object& 
         *threshold_db = db;
         return sonare::mastering::repair::trim_threshold_from_db(db, key);
       });
-  if (options.Has("paddingSamples")) {
-    const int padding_samples =
-        IntProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
-    if (padding_samples < 0) {
-      throw Napi::RangeError::New(
-          options.Env(), "paddingSamples must be an integer in [0, " + node_int_max_text() + "]");
-    }
-    config.padding_samples = static_cast<size_t>(padding_samples);
-  }
+  config.padding_samples =
+      DomainProperty<size_t>(options, "paddingSamples", config.padding_samples,
+                             sonare::mastering::repair::kTrimPaddingSamplesDomain);
   config.mode = parse_trim_silence_mode(options, config.mode);
   config.gate_lufs = DomainFloatProperty(options, "gateLufs", config.gate_lufs);
   config.window_ms = DomainFloatProperty(options, "windowMs", config.window_ms);

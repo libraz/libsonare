@@ -13,7 +13,6 @@ import {
   assertInt32,
   assertNonNegativeSafeInteger,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSamplesInWindow,
   requestOnly,
   resolveOptionalNonNegative,
@@ -688,7 +687,6 @@ export function waveformPeaks(...args: unknown[]): WaveformPeaksReport {
     // Native reads one interleaved buffer and a channel count.
     const { data, numChannels } = interleaveMeterChannels(r.channels, r);
     const samplesPerBucket = r.samplesPerBucket ?? 512;
-    assertPositiveInteger(samplesPerBucket, 'samplesPerBucket');
     return waveformReportFromNative(addon.waveformPeaks(data, numChannels, samplesPerBucket));
   });
 }
@@ -708,9 +706,6 @@ export function waveformPeakPyramid(...args: unknown[]): WaveformPeaksReport[] {
     if (levels.length === 0) {
       throw refuse('samplesPerBucketLevels must not be empty');
     }
-    levels.forEach((level, index) => {
-      assertPositiveInteger(level, `samplesPerBucketLevels[${index}]`);
-    });
     return addon.waveformPeakPyramid(data, numChannels, levels).map(waveformReportFromNative);
   });
 }

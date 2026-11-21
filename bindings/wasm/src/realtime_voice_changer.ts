@@ -19,12 +19,7 @@ import type {
   RealtimeVoiceChangerConfigInput,
   VoicePresetId,
 } from './public_types.js';
-import {
-  assertBoundedInteger,
-  assertPositiveInteger,
-  assertSampleRate,
-  assertString,
-} from './validation.js';
+import { assertBoundedInteger, assertSampleRate, assertString } from './validation.js';
 
 /** Construction options for {@link RealtimeVoiceChanger}. */
 export interface RealtimeVoiceChangerOptions {
@@ -177,11 +172,7 @@ export class RealtimeVoiceChanger {
     }
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
-    if (maxBlockSize !== undefined) {
-      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
-    }
     const numChannels = options.numChannels;
-    assertChannelCount(numChannels);
     const nativeConfig = nativeVoiceConfig(options.config ?? 'neutralMonitor');
     this.changerHandle = getSonareModule().createRealtimeVoiceChanger(nativeConfig);
     // The handle is already allocated; a throwing constructor leaves `this` unreachable and

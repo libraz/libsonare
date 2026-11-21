@@ -198,12 +198,13 @@ describe('spectralEdit (Node)', () => {
     expect(kept.length).toBe(samples.length);
   });
 
-  it.each(['nFft', 'hopLength', 'healRadiusFrames'] as const)(
-    'refuses %s 0 instead of reading it as the default',
-    (field) => {
-      expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [], [field]: 0 })).toThrow(
-        new RangeError(`spectralEdit: ${field} must not be 0; omit it for the default`),
-      );
-    },
-  );
+  it.each([
+    ['nFft', 'nFft must be a power of two in [4, 262144]'],
+    ['hopLength', 'hopLength must be an integer in [1, 2147483647], or omitted'],
+    ['healRadiusFrames', 'healRadiusFrames must be an integer in [1, 2147483647]'],
+  ] as const)('refuses %s 0 instead of reading it as the default', (field, text) => {
+    expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [], [field]: 0 })).toThrow(
+      new RangeError(`spectralEdit: ${text}`),
+    );
+  });
 });

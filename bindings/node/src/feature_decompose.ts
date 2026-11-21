@@ -357,14 +357,13 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
  * `'nndsvd'` (SVD-based warm start, which tends to converge in fewer iterations).
  *
  * @throws {TypeError} when `nComponents` is missing or `s` is not a Matrix2D
- * @throws {RangeError} on a malformed matrix, a non-positive `nComponents` or `nIter`, or an unknown `init`
+ * @throws {RangeError} on a malformed matrix, a non-positive `nIter`, or an unknown `init`
  */
 export function decompose(request: DecomposeRequest): DecomposeResult;
 export function decompose(...args: unknown[]): DecomposeResult {
   return withEntry('decompose', () => {
     const r = requestOnly<DecomposeRequest>('decompose', args);
     assertMatrix2D(r.s, 's');
-    assertPositiveInteger(r.nComponents, 'nComponents');
     if (r.init !== undefined) {
       assertClosedToken(r.init, NMF_INITS, 'init');
     }

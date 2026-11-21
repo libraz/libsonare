@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 
+#include "c_api/mastering_input_domains.h"
 #include "wasm/bindings/common/common.h"
 
 // Included after common.h, which opens `using namespace sonare` for the
@@ -282,14 +283,14 @@ class EqualizerWrapper {
         intProperty(options, "sampleRate", static_cast<int>(std::lround(sample_rate_)));
     // An omitted reference rate is the source's.
     const int reference_sample_rate = intProperty(options, "referenceSampleRate", sample_rate);
-    const int max_bands = intProperty(options, "maxBands", 8);
+    const size_t max_bands =
+        optionalDomainValue<size_t>(objectProperty(options, "maxBands"), "maxBands",
+                                    sonare_c_detail::kEqMatchMaxBandsDomain)
+            .value_or(8);
     validate_offline_audio_input("source", src.data(), src.size(), sample_rate);
     validate_offline_audio_input("reference", ref.data(), ref.size(), reference_sample_rate);
-    if (max_bands <= 0) {
-      throw WasmRangeError("maxBands must be an integer in [1, 2147483647]");
-    }
     mastering::match::MatchEqConfig match_config;
-    match_config.max_bands = static_cast<size_t>(max_bands);
+    match_config.max_bands = max_bands;
     mastering::match::configure_equalizer_from_audio(
         processor_, Audio::from_buffer(src.data(), src.size(), sample_rate),
         Audio::from_buffer(ref.data(), ref.size(), reference_sample_rate), match_config);

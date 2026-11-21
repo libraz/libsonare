@@ -130,7 +130,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ],
   [
     'RealtimeVoiceChanger.prepare',
-    'channels',
+    'numChannels',
     () => new addon.RealtimeVoiceChanger('neutralMonitor').prepare(48000, 128, 'x'),
   ],
   ['addon.amplitudeToDb', 'ref', () => addon.amplitudeToDb(readerTone, 'x')],

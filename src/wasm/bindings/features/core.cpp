@@ -9,6 +9,7 @@
 #include "feature/onset.h"
 #include "feature/rhythm.h"
 #include "filters/mel.h"
+#include "util/frame.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -235,8 +236,10 @@ val js_split_silence_common_with_report(val signals, const val& top_db_val,
 }
 
 val js_frame_signal(val samples, const val& frame_length_val, const val& hop_length_val) {
-  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int frame_length =
+      domainNumberFromVal<int>(frame_length_val, "frameLength", kFrameLengthDomain);
+  const int hop_length =
+      domainNumberFromVal<int>(hop_length_val, "hopLength", kFrameHopLengthDomain);
   std::vector<float> data = float32ArrayToVector(samples);
   val out = val::object();
   out.set("nFrames", frame_count(data.size(), frame_length, hop_length));

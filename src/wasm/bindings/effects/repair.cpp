@@ -5,8 +5,10 @@
 
 #include <algorithm>
 
+#include "c_api/mastering_input_domains.h"
 #include "mastering/assistant/repair_session.h"
 #include "mastering/common/noise_profile.h"
+#include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/trim_silence.h"
 #include "wasm/bindings/common/common.h"
@@ -102,13 +104,10 @@ mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options) 
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.threshold = floatProperty(options, "threshold", cfg.threshold);
   cfg.neighbor_ratio = floatProperty(options, "neighborRatio", cfg.neighbor_ratio);
-  if (hasProperty(options, "maxClickSamples")) {
-    const int v = intProperty(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
-    if (v <= 0) {
-      throw WasmRangeError("maxClickSamples must be an integer in [1, 2147483647]");
-    }
-    cfg.max_click_samples = static_cast<size_t>(v);
-  }
+  cfg.max_click_samples =
+      optionalDomainValue<size_t>(objectProperty(options, "maxClickSamples"), "maxClickSamples",
+                                  mastering::repair::kDeclickMaxClickSamplesDomain)
+          .value_or(cfg.max_click_samples);
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.residual_ratio = floatProperty(options, "residualRatio", cfg.residual_ratio);
   return cfg;
@@ -274,9 +273,6 @@ mastering::repair::DenoiseClassicalConfig validatedDenoiseConfig(const val& opti
   if (!options.isUndefined() && !options.isNull()) {
     cfg = readDenoiseConfig(options, cfg);
   }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw WasmRangeError("nFft must be a power of two");
-  }
   if (cfg.hop_length <= 0) {
     throw WasmRangeError("hopLength must be an integer in [1, 2147483647]");
   }
@@ -288,10 +284,7 @@ mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& op
   if (!options.isUndefined() && !options.isNull()) {
     cfg = readDereverbConfig(options, cfg);
   }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw WasmRangeError("nFft must be a power of two");
-  }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft / 2) {
+  if (cfg.hop_length <= 0) {
     throw WasmRangeError("hopLength must be an integer in [1, nFft / 2]");
   }
   return cfg;
@@ -520,9 +513,7 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
   throw WasmRangeError("unknown trim silence mode: " + name);
 }
 
-// Read a trim options bag over `config`, leaving absent keys alone. paddingSamples is
-// the one field here that is refused rather than defaulted, because the core field is a size_t and
-// a negative count arrives past the validator's padding bound rather than below zero.
+// Read a trim options bag over `config`, leaving absent keys alone.
 mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     const val& options, mastering::repair::TrimSilenceConfig config) {
   if (options.isUndefined() || options.isNull()) return config;
@@ -530,13 +521,10 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     config.threshold = mastering::repair::trim_threshold_from_db(
         domainFloatProperty(options, "thresholdDb", 0.0f), "thresholdDb");
   }
-  if (hasProperty(options, "paddingSamples")) {
-    const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
-    if (v < 0) {
-      throw WasmRangeError("paddingSamples must be an integer in [0, 2147483647]");
-    }
-    config.padding_samples = static_cast<size_t>(v);
-  }
+  config.padding_samples =
+      optionalDomainValue<size_t>(objectProperty(options, "paddingSamples"), "paddingSamples",
+                                  mastering::repair::kTrimPaddingSamplesDomain)
+          .value_or(config.padding_samples);
   std::string mode_name;
   if (repairEnumOption(options, "mode", &mode_name)) {
     config.mode = parseTrimSilenceMode(mode_name);
@@ -853,13 +841,11 @@ val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, 
 // layer, which this surface does not go through.
 val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_rate_val) {
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   if (n_fft <= 0 || (n_fft & (n_fft - 1)) != 0) {
     throw WasmRangeError("nFft must be a power of two");
   }
-  if (sample_rate <= 0) {
-    throw WasmRangeError("sampleRate must be an integer in [1, 2147483647]");
-  }
+  const int sample_rate = domainNumberFromVal<int>(sample_rate_val, "sampleRate",
+                                                   sonare_c_detail::kNoiseBandSampleRateDomain);
   std::vector<int> bins(mastering::common::kRepairNoiseBandCount + 1);
   mastering::common::repair_noise_band_bins(n_fft, sample_rate, bins.data());
   return vectorToInt32Array(bins);
