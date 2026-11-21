@@ -27,6 +27,20 @@ reason = "Per-event MIDI push runs once per message; a request object would allo
 
 [[allow]]
 check = "one-positional-form"
+surface = "node"
+name = "RealtimeEngine.setParameter"
+category = "hot-path"
+reason = "Per-change parameter queueing stays positional like the other renderFrame-taking engine calls; smoothed is the one options-bag field."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "RealtimeEngine.setParameter"
+category = "hot-path"
+reason = "Per-change parameter queueing stays positional like the other renderFrame-taking engine calls; smoothed is the one options-bag field."
+
+[[allow]]
+check = "one-positional-form"
 surface = "wasm"
 name = "SonareEngine.pushMidi*"
 category = "hot-path"
