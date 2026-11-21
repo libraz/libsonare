@@ -1444,6 +1444,7 @@ ci-local:
 	$(MAKE) check-abi-version
 	$(MAKE) check-abi-bumps
 	$(MAKE) abi-layout-check
+	$(MAKE) surface-check
 
 # Coverage targets
 coverage-build:

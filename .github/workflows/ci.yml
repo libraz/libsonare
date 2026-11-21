@@ -107,14 +107,21 @@ jobs:
         #
         # `parity` depends on `conformance`, whose closing live-CLI comparison
         # skips itself when no built CLI is present, as it is here.
+        #
+        # `surface-check` reads the Node and WASM facades through each package's
+        # own TypeScript, so both packages' node_modules are installed; nothing
+        # is built.
         working-directory: .
         run: |
           python3 -m pip install --disable-pip-version-check numpy==2.4.6
           (cd tools/audition/web && yarn install --immutable)
+          (cd bindings/node && yarn install --immutable)
+          (cd bindings/wasm && yarn install --immutable)
           python3 tools/abi/gen_abi_layout.py --check
           make check-abi-version
           make processor-types-check
           make parity
+          make surface-check
 
   voicematch:
     name: Python tools
@@ -460,6 +467,10 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test && yarn test:types && yarn test:bundle
+      # Re-runs the suite with every public export wrapped and fails when more of
+      # the refusals it provokes name a field in C spelling than the ratchet allows.
+      - name: Refusal spelling ratchet (WASM)
+        run: make refusal-spelling-check REFUSAL_SPELLING_SURFACES=wasm
       # Reads the built compile_commands.json, so it has to follow the build. A
       # catch compiled without -fexceptions is deleted silently: no compile
       # error, no link error, no failing test, just a throw that walks past its
