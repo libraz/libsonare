@@ -658,21 +658,23 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
             "config.struct_size must be set by sonare_percussive_event_config_init");
     }
 
-    // Zero and negative integer fields are rejected rather than silently clamped; a hop of -1
-    // is the auto spelling, so the hop is driven separately.
+    // A hop of 0 is the auto spelling and one past the int range is refused, so the hop is
+    // driven separately from the signed fields.
+    {
+      SonarePercussiveEventConfig hop = event_config();
+      hop.hop_length = static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1;
+      rejects([&](SonarePercussiveEventsResult* out) { return extract_at(samples, &hop, out); });
+    }
     for (const int32_t bad : {0, -1, -2048}) {
       SonarePercussiveEventConfig n_fft = event_config();
       n_fft.n_fft = bad;
-      SonarePercussiveEventConfig hop = event_config();
-      hop.hop_length = bad == -1 ? 0 : bad;
       SonarePercussiveEventConfig harmonic = event_config();
       harmonic.hpss_kernel_harmonic = bad;
       SonarePercussiveEventConfig percussive = event_config();
       percussive.hpss_kernel_percussive = bad;
       SonarePercussiveEventConfig wait = event_config();
       wait.onset_wait = bad;
-      std::vector<const SonarePercussiveEventConfig*> refused = {&n_fft, &hop, &harmonic,
-                                                                 &percussive};
+      std::vector<const SonarePercussiveEventConfig*> refused = {&n_fft, &harmonic, &percussive};
       if (bad != 0) refused.push_back(&wait);
       for (const SonarePercussiveEventConfig* config : refused) {
         rejects(
@@ -721,8 +723,8 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
     // refused there by the overlap-add rule: n_fft even and at least 2, hop
     // positive and no more than half of it. Zero and negative parts never get that
     // far -- the argument check above has them.
-    const int32_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
-                                          {2048, 1025}, {1024, 513}, {2048, 2048}};
+    const size_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
+                                         {2048, 1025}, {1024, 513}, {2048, 2048}};
     for (const auto& framing : kBrokenFramings) {
       INFO("n_fft " << framing[0] << " hop " << framing[1]);
       SonarePercussiveEventConfig config = event_config();
@@ -1048,16 +1050,20 @@ TEST_CASE("sonare_render_percussive_events rejects malformed arguments",
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
+  {
+    SonarePercussiveRenderConfig hop = render_config();
+    hop.hop_length = static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1;
+    REQUIRE(render_at(samples, &event, 1, &hop, &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
   for (const int32_t bad : {0, -1, -2048}) {
     SonarePercussiveRenderConfig n_fft = render_config();
     n_fft.n_fft = bad;
-    SonarePercussiveRenderConfig hop = render_config();
-    hop.hop_length = bad == -1 ? 0 : bad;
     SonarePercussiveRenderConfig harmonic = render_config();
     harmonic.hpss_kernel_harmonic = bad;
     SonarePercussiveRenderConfig percussive = render_config();
     percussive.hpss_kernel_percussive = bad;
-    for (const SonarePercussiveRenderConfig* config : {&n_fft, &hop, &harmonic, &percussive}) {
+    for (const SonarePercussiveRenderConfig* config : {&n_fft, &harmonic, &percussive}) {
       REQUIRE(render_at(samples, &event, 1, config, &out, &out_length) ==
               SONARE_ERROR_INVALID_PARAMETER);
     }
@@ -1100,8 +1106,8 @@ TEST_CASE("sonare_render_percussive_events rejects a broken framing on every set
   REQUIRE(first_mismatch(render_ok(samples, identity, 2), samples) == kNoMismatch);
 
   // Every row here carries two positive parts that break the overlap-add rule together.
-  const int32_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
-                                        {2048, 1025}, {1024, 513}, {2048, 2048}};
+  const size_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
+                                       {2048, 1025}, {1024, 513}, {2048, 2048}};
   float* out = nullptr;
   size_t out_length = 0;
   for (const auto& framing : kBrokenFramings) {
@@ -1118,7 +1124,7 @@ TEST_CASE("sonare_render_percussive_events rejects a broken framing on every set
 
   // Inside the rule the pass-through still holds, including at exactly half the
   // window, so the rejections are not simply "any non-default framing".
-  const int32_t kValidFramings[][2] = {{2048, 512}, {2048, 1024}, {1024, 512}};
+  const size_t kValidFramings[][2] = {{2048, 512}, {2048, 1024}, {1024, 512}};
   for (const auto& framing : kValidFramings) {
     INFO("n_fft " << framing[0] << " hop " << framing[1]);
     SonarePercussiveRenderConfig config = render_config();
@@ -1139,7 +1145,7 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
   // kernels, the two detector rules and the two span rules.
   struct Row {
     int32_t n_fft;
-    int32_t hop_length;
+    size_t hop_length;
     int32_t kernel_harmonic;
     int32_t kernel_percussive;
     int32_t onset_wait;
@@ -1147,7 +1153,7 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
     float max_event_ms;
     float min_percussive_ratio;
   };
-  constexpr int32_t kAuto = SONARE_STFT_HOP_AUTO;
+  constexpr size_t kAuto = 0;
   static const Row kRows[] = {
       {2048, kAuto, 31, 31, 1, 0.12f, 500.0f, 0.25f}, {2048, 512, 31, 15, 3, 0.06f, 500.0f, 1.0f},
       {1024, 256, 15, 15, 1, 0.06f, 40.0f, 0.0f},     {2048, 1024, 15, 31, 1, 0.06f, 40.0f, 1.0f},
@@ -1188,7 +1194,7 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
     // that the row found something.
     if (row.min_percussive_ratio == 0.0f && row.onset_delta <= 0.06f && row.onset_wait <= 1) {
       REQUIRE(out.count >= 1);
-      const int32_t hop = row.hop_length == kAuto ? 512 : row.hop_length;
+      const size_t hop = row.hop_length == kAuto ? 512 : row.hop_length;
       if (hop <= 512) REQUIRE(out.count == 2);
     }
 
@@ -1214,13 +1220,13 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
   enum class Shift { kNone, kSpanForward, kOffLeft, kOffRight };
   struct Row {
     int32_t n_fft;
-    int32_t hop_length;
+    size_t hop_length;
     float fade_ms;
     int32_t muted;
     float gain_db;
     Shift shift;
   };
-  constexpr int32_t kAuto = SONARE_STFT_HOP_AUTO;
+  constexpr size_t kAuto = 0;
   static const Row kRows[] = {
       {2048, kAuto, 5.0f, 0, 0.0f, Shift::kNone},
       {1024, 256, 50.0f, -1, 6.0206f, Shift::kOffLeft},

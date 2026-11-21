@@ -44,7 +44,7 @@ TEST_CASE("C ABI imports externally separated planar stems atomically",
           "[arrangement][external_stems][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   StemBuffers vocals(31);
   StemBuffers drums(31);
@@ -139,7 +139,7 @@ TEST_CASE("C ABI external stem import rejects source-id collisions without mutat
           "[arrangement][external_stems][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   sonare::arrangement::AudioSourceSamples orphan;
   orphan.sample_rate = 48000.0;
@@ -173,7 +173,7 @@ TEST_CASE("C ABI external stem import refuses an argument by its header name",
           "[arrangement][external_stems][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const auto message = [] { return std::string(sonare_last_error_message()); };
 
   StemBuffers buffers(8);
@@ -240,7 +240,7 @@ TEST_CASE("C ABI external stem import names the stem field it refuses",
           "[arrangement][external_stems][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   StemBuffers a(8);
   StemBuffers b(8);
   SonareExternalStemImportResult result{};
@@ -294,7 +294,7 @@ TEST_CASE("C ABI external stem import reads its request through struct_size",
           "[arrangement][external_stems][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   StemBuffers stem(4);
   const SonareExternalStemDesc desc = {
       "stem", nullptr, SONARE_EXTERNAL_STEM_STEREO, stem.planes.data(), 4, 0};

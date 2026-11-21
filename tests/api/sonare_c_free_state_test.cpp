@@ -1527,13 +1527,13 @@ TEST_CASE("sonare_free_waveform_peak_pyramid_result leaves the result zeroed", "
 
 TEST_CASE("sonare_free_waveform_peaks_result leaves the result zeroed", "[c_api][c_free]") {
   SonareWaveformPeaksResult r{};
-  r.channels = static_cast<decltype(r.channels)>(1);
+  r.num_channels = static_cast<decltype(r.num_channels)>(1);
   r.bucket_count = static_cast<decltype(r.bucket_count)>(1);
   r.samples_per_bucket = static_cast<decltype(r.samples_per_bucket)>(1);
   sonare_free_waveform_peaks_result(&r);
   CHECK(r.min == nullptr);
   CHECK(r.max == nullptr);
-  CHECK(r.channels == static_cast<decltype(r.channels)>(0));
+  CHECK(r.num_channels == static_cast<decltype(r.num_channels)>(0));
   CHECK(r.bucket_count == static_cast<decltype(r.bucket_count)>(0));
   CHECK(r.samples_per_bucket == static_cast<decltype(r.samples_per_bucket)>(0));
 }

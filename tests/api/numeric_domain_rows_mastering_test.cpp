@@ -157,7 +157,7 @@ struct InverseArguments {
   int n_frames = 4;
   int n_mfcc = 4;
   int n_fft = 64;
-  int hop_length = 16;
+  size_t hop_length = 16;
   int sample_rate = 22050;
   int n_iter = 1;
 };
@@ -225,7 +225,7 @@ struct SpectrogramArguments {
   int n_bins = 24;
   int n_frames = 8;
   int sample_rate = 22050;
-  int hop_length = 512;
+  size_t hop_length = 512;
   int bins_per_octave = 12;
   int n_iter = 1;
 };
@@ -277,10 +277,10 @@ SonareError probe_griffin_lim(const std::string& param, double value) {
 // ---------------------------------------------------------------------------
 
 SonareError probe_frame_signal(const std::string& param, double value) {
-  int frame_length = 512;
-  int hop_length = 256;
-  if (is_param(param, "frame_length")) frame_length = as_int(value);
-  if (is_param(param, "hop_length")) hop_length = as_int(value);
+  size_t frame_length = 512;
+  size_t hop_length = 256;
+  if (is_param(param, "frame_length")) frame_length = as_size(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   float* out = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
@@ -388,7 +388,7 @@ SonareError probe_stream_analyzer_create(const std::string& param, double value)
   sonare_stream_config_init(&config);
   if (is_param(param, "config.sample_rate")) config.sample_rate = as_int(value);
   if (is_param(param, "config.n_fft")) config.n_fft = as_int(value);
-  if (is_param(param, "config.hop_length")) config.hop_length = as_int(value);
+  if (is_param(param, "config.hop_length")) config.hop_length = as_size(value);
   if (is_param(param, "config.n_mels")) config.n_mels = as_int(value);
   if (is_param(param, "config.emit_every_n_frames")) config.emit_every_n_frames = as_int(value);
   if (is_param(param, "config.max_pending_frames")) config.max_pending_frames = as_size(value);

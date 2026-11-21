@@ -311,7 +311,7 @@ SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRender
 }
 
 SonareError sonare_playback_renderer_non_finite_discard_count(
-    const SonarePlaybackRenderer* renderer, uint32_t* out_count) {
+    const SonarePlaybackRenderer* renderer, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_PLAYBACK)

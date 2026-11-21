@@ -31,6 +31,9 @@ inline constexpr sonare::util::check::NumericDomain kEnvelopeOffsetDomain =
 /// @brief What a note object's frame_start accepts.
 inline constexpr sonare::util::check::NumericDomain kNoteFrameStartDomain =
     sonare::util::check::integer_domain_of<int32_t>(0);
+/// @brief What a note region's offset_sample accepts: the int sample index the note editor holds.
+inline constexpr sonare::util::check::NumericDomain kNoteSampleIndexDomain =
+    sonare::util::check::integer_domain_of<int>(0);
 /// @brief What the sample rate of a note-target assignment accepts.
 inline constexpr sonare::util::check::NumericDomain kNoteTargetSampleRateDomain =
     sonare::util::check::integer_domain_of<int>(1);

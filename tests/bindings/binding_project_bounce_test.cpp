@@ -118,7 +118,7 @@ TEST_CASE("auto-length project bounce includes a scheduled classic GS EFX tail",
   const auto bounce_length = [](bool include_efx) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
     const std::vector<uint8_t> smf = make_classic_efx_tail_smf(include_efx);
     uint32_t first_clip = 0;
@@ -160,7 +160,7 @@ TEST_CASE("auto-length synth bounce includes a scheduled modern GS EFX tail",
   const auto bounce_length = [](bool include_efx, int64_t total_frames) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
     const std::vector<uint8_t> smf = make_efx_tail_smf(include_efx, 0x01, 0x50);
     uint32_t first_clip = 0;
@@ -206,7 +206,7 @@ TEST_CASE("auto-length synth bounce includes a scheduled modern GS EFX tail",
 TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -391,7 +391,7 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const char* scene =
       R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
@@ -510,7 +510,7 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const char* scene =
       R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
@@ -600,7 +600,7 @@ TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   // Hard-panned strips keep each track's stem on its own plane, so a dropped
   // track shows up as a silent plane instead of a slightly quieter mix.
   const char* scene = R"({"version":2,"buses":[{"id":"master","role":"master"}],)"
@@ -714,7 +714,7 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
   const auto bounce_with_breakpoints = [](size_t point_count, int64_t total_frames) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
     const char* scene =
         R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip"}]})";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
@@ -812,7 +812,7 @@ TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const char* scene =
       R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
@@ -854,7 +854,7 @@ TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "
 TEST_CASE("bounce_with_instruments auto length includes callback instrument tail", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -906,7 +906,7 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -960,7 +960,7 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
 TEST_CASE("project bounce refuses a built-in waveform outside the enum", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -1041,7 +1041,7 @@ TEST_CASE("bounce_with_synth_instruments validates null handles before patch con
 TEST_CASE("synth bounce GM mode follows program changes through the C API", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -1092,7 +1092,7 @@ TEST_CASE("synth bounce GM programs 4 and 40 stay audible and distinct", "[proje
   const auto render = [](uint8_t program, bool use_gm_programs) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
     uint32_t track = 0;
     uint32_t clip = 0;
@@ -1156,7 +1156,7 @@ TEST_CASE("synth bounce GM programs 4 and 40 stay audible and distinct", "[proje
 TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -1210,7 +1210,7 @@ TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") 
 TEST_CASE("project bounce rejects non-project output sample rates", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -1246,7 +1246,7 @@ TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping 
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   constexpr int kFrames = 256;
   std::vector<float> right_only(static_cast<size_t>(kFrames) * 2, 0.0f);
@@ -1457,7 +1457,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
 TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   SonareProjectTrackDesc track_desc{};
   track_desc.kind = SONARE_TRACK_AUDIO;
@@ -1555,7 +1555,7 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   // regenerates the stem the strip then processes.
   SonareProject* base = nullptr;
   REQUIRE(sonare_project_create(&base) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(base, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(base, 48000) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(base, 0.0, 4.0, &track, &clip) == SONARE_OK);
@@ -1633,7 +1633,7 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
 TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   char* scene_json = nullptr;
   REQUIRE(sonare_mixing_scene_preset_json("vocalReverbSend", &scene_json) == SONARE_OK);
@@ -1688,7 +1688,7 @@ TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
 TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[project][tail]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const char* scene_json = R"({
     "version":2,
@@ -1763,7 +1763,7 @@ TEST_CASE("channel-strip bounce preserves tail impulse through master latency in
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const char* scene_json =
       "{\"version\":2,\"strips\":[{\"id\":\"track\"}],"
@@ -1831,7 +1831,7 @@ TEST_CASE("channel-strip bounce preserves tail impulse through master latency in
 TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   constexpr int kLatency = 16;
   const char* scene_json =
@@ -1903,7 +1903,7 @@ TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "
 TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const char* scene_json =
       "{\"version\":2,\"strips\":[{\"id\":\"bound\"}],"
@@ -1970,7 +1970,7 @@ TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects
 TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const char* scene_json =
       "{\"version\":2,\"strips\":[{\"id\":\"solo\",\"soloed\":true}],"
@@ -2033,7 +2033,7 @@ TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") 
 TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -2128,7 +2128,7 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
   // and increasing render frame.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -2225,7 +2225,7 @@ TEST_CASE("a tick denser than the per-block event hold loses no events", "[proje
   constexpr int kEvents = 700;  // comfortably past the 512-entry hold
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -2326,7 +2326,7 @@ TEST_CASE("bounce delivers the end-of-render note release to a callback instrume
   // which is the only clock the C seam gives it.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -2421,7 +2421,7 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
 
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -2500,7 +2500,7 @@ TEST_CASE("channel-strip bounce opens at the static fader gain without a first-b
   // The very first frame must already sit at the configured fader gain.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   // -6.0206 dB == 0.5 linear. A constant 0.5 source through this strip settles to
   // 0.25; if the fader smoother ramps in from 0 dB (unity) the first frame is
@@ -2569,7 +2569,7 @@ TEST_CASE("project bounce applies the master trim when every track is unbound",
           "[project][audio_workflow]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   // Keep one unused strip in the scene so this exercises the direct-stem mixer
   // input while leaving the only authored track unbound. The master trim must
@@ -2641,7 +2641,7 @@ TEST_CASE("all-unbound project bounce auto-length includes the master FX tail",
           "[project][audio_workflow][tail]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const char* scene_json =
       "{\"version\":2,\"strips\":[{\"id\":\"unused\"}],"
@@ -2710,7 +2710,7 @@ TEST_CASE("legacy opaque fader automation stays on musical time after channel PD
   const auto render = [](int latency_samples) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
     const std::string scene_json =
         "{\"version\":2,\"strips\":[{\"id\":\"voice\","
@@ -2799,7 +2799,7 @@ TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
   const auto render = [](int latency_samples) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
     const std::string scene_json =
         "{\"version\":2,\"strips\":[{\"id\":\"voice\","
@@ -2883,7 +2883,7 @@ TEST_CASE("legacy opaque automation ignores master-only latency for its stage cl
           "[project][audio_workflow][pdc]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   // The master look-ahead is after the strip fader. PDC must trim that latency
   // from the returned audio without moving the fader breakpoint itself.
@@ -2951,7 +2951,7 @@ TEST_CASE("typed track fader automation remains a single gain stage in bounce",
   const auto render = [](bool with_typed_lane) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
     const char* scene_json =
         "{\"version\":2,\"strips\":[{\"id\":\"voice\"}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
@@ -3046,7 +3046,7 @@ TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expressio
   auto bounce_with = [&](const std::vector<SonareMidiEventPod>& events) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
     uint32_t track = 0;
     uint32_t clip = 0;
     REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
@@ -3135,7 +3135,7 @@ TEST_CASE("project bounce hosts several instrument kinds and refuses a destinati
           "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   float* out = nullptr;
   size_t len = 0;
   int channels = 0;
@@ -3185,7 +3185,7 @@ TEST_CASE("project bounce refuses options and instrument members by their header
           "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   float* out = nullptr;
   size_t len = 0;
   int channels = 0;
@@ -3268,7 +3268,7 @@ TEST_CASE("project bounce refuses options and instrument members by their header
 TEST_CASE("project bounce refuses each built-in synth field by name", "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   float* out = nullptr;
   size_t len = 0;
   int channels = 0;
@@ -3312,7 +3312,7 @@ TEST_CASE("project bounce refuses each built-in synth field by name", "[project]
 TEST_CASE("project bounce refuses each SF2 player field by name", "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   float* out = nullptr;
   size_t len = 0;
   int channels = 0;
@@ -3378,7 +3378,7 @@ TEST_CASE(
   const auto render = [](int sample_rate, const char* scene_inserts) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, static_cast<double>(sample_rate)) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, sample_rate) == SONARE_OK);
 
     const std::string scene_json = std::string(R"({"version":2,"strips":[{"id":"voice")") +
                                    scene_inserts +

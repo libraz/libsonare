@@ -127,7 +127,8 @@ EnginePtr make_engine(Processor p, Placement placement) {
   SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
   EnginePtr engine(raw);
-  REQUIRE(sonare_engine_prepare(engine.get(), kSampleRate, kBlock, 1024, 1024, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine.get(), static_cast<int>(kSampleRate), kBlock, 1024, 1024,
+                                0) == SONARE_OK);
 
   const float* clip_channels[] = {source().left.data(), source().right.data()};
   SonareEngineClip clip;

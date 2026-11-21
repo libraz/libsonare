@@ -55,7 +55,7 @@ SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float du
   SONARE_C_CATCH
 }
 
-SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
+SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, size_t length,
                           float frequency_hz, float click_duration_sec, float** out,
                           size_t* out_length) {
   SONARE_C_API_ENTRY;
@@ -70,9 +70,9 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
                                             {"frequency", "frequency_hz"},
                                             {"click_duration", "click_duration_sec"}}},
                       [&] {
-                        return fill_audio_samples(
-                            clicks(values, sample_rate, length, frequency_hz, click_duration_sec),
-                            out, out_length);
+                        return fill_audio_samples(clicks(values, sample_rate, core_length(length),
+                                                         frequency_hz, click_duration_sec),
+                                                  out, out_length);
                       });
   SONARE_C_CATCH
 }
@@ -81,7 +81,7 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
 // ============================================================================
 
 SonareError sonare_spectral_centroid(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, float** out, size_t* out_count) {
+                                     int n_fft, size_t hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
   if (const SonareError err =
@@ -95,7 +95,7 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result = spectral_centroid(spec, audio.sample_rate());
         return copy_vector(result, out, out_count);
@@ -110,7 +110,7 @@ void sonare_spectral_bandwidth_options_init(SonareSpectralBandwidthOptions* opti
 }
 
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
-                                      int n_fft, int hop_length,
+                                      int n_fft, size_t hop_length,
                                       const SonareSpectralBandwidthOptions* options, float** out,
                                       size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -137,7 +137,7 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result = spectral_bandwidth(spec, audio.sample_rate(), p);
         return copy_vector(result, out, out_count);
@@ -145,7 +145,7 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
 }
 
 SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
-                                    int hop_length, float roll_percent, float** out,
+                                    size_t hop_length, float roll_percent, float** out,
                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
@@ -160,7 +160,7 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result = spectral_rolloff(spec, audio.sample_rate(), roll_percent);
         return copy_vector(result, out, out_count);
@@ -168,7 +168,7 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
 }
 
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, float** out, size_t* out_count) {
+                                     int n_fft, size_t hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
   if (const SonareError err =
@@ -182,7 +182,7 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
                                   [&](const Audio& audio) -> SonareError {
                                     StftConfig config;
                                     config.n_fft = n_fft;
-                                    config.hop_length = hop_length;
+                                    config.hop_length = core_length(hop_length);
                                     Spectrogram spec = Spectrogram::compute(audio, config);
                                     std::vector<float> result = spectral_flatness(spec);
                                     return copy_vector(result, out, out_count);
@@ -190,7 +190,7 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
 }
 
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 int hop_length, int lag, float** out, size_t* out_count) {
+                                 size_t hop_length, int lag, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
   if (const SonareError err =
@@ -209,14 +209,14 @@ SonareError sonare_spectral_flux(const float* samples, size_t length, int sample
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         const std::vector<float> result = spectral_flux(Spectrogram::compute(audio, config), lag);
         return copy_vector(result, out, out_count);
       });
 }
 
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
-                                      int frame_length, int hop_length, float** out,
+                                      size_t frame_length, size_t hop_length, float** out,
                                       size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
@@ -229,13 +229,15 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
   SONARE_C_REQUIRE_NONNULL(out_count);
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
+        std::vector<float> result =
+            zero_crossing_rate(audio, core_length(frame_length), core_length(hop_length));
         return copy_vector(result, out, out_count);
       });
 }
 
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
-                              int frame_length, int hop_length, float** out, size_t* out_count) {
+                              size_t frame_length, size_t hop_length, float** out,
+                              size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
   if (const SonareError err =
@@ -247,13 +249,14 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
   SONARE_C_REQUIRE_NONNULL(out_count);
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        std::vector<float> result = rms_energy(audio, frame_length, hop_length);
+        std::vector<float> result =
+            rms_energy(audio, core_length(frame_length), core_length(hop_length));
         return copy_vector(result, out, out_count);
       });
 }
 
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, int n_bands, float fmin_hz,
+                                     int n_fft, size_t hop_length, int n_bands, float fmin_hz,
                                      float quantile, float** out, int* out_rows, int* out_cols) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
@@ -269,7 +272,7 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result =
             with_c_names(std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}}, [&] {
@@ -287,7 +290,7 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
 }
 
 SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 int hop_length, int order, float** out, int* out_rows,
+                                 size_t hop_length, int order, float** out, int* out_rows,
                                  int* out_cols) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
@@ -303,7 +306,7 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result = poly_features(spec, audio.sample_rate(), order);
         int rows = order + 1;
@@ -419,7 +422,7 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 }
 
 SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
-                                   int hop_length, float resolution, int bins_per_octave,
+                                   size_t hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_tuning);
@@ -437,7 +440,8 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        *out_tuning = estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
+        *out_tuning =
+            estimate_tuning(audio, n_fft, core_length(hop_length), resolution, bins_per_octave);
         return SONARE_OK;
       });
 }
@@ -473,7 +477,7 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
 }
 
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
-                            int hop_length, float fmin_hz, float fmax_hz, float threshold,
+                            size_t hop_length, float fmin_hz, float fmax_hz, float threshold,
                             int* out_n_bins, int* out_n_frames, float** out_pitches,
                             float** out_magnitudes) {
   SONARE_C_API_ENTRY;
@@ -490,9 +494,10 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        PiptrackResult result = with_c_names(
-            std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}},
-            [&] { return piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold); });
+        PiptrackResult result =
+            with_c_names(std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}}, [&] {
+              return piptrack(audio, n_fft, core_length(hop_length), fmin_hz, fmax_hz, threshold);
+            });
         const size_t total = result.pitches.size();
         if (result.magnitudes.size() != total) return SONARE_ERROR_UNKNOWN;
         std::unique_ptr<float[]> pitches(total ? new float[total] : nullptr);
@@ -510,8 +515,8 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
 }
 
 SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, int sample_rate,
-                                          int n_fft, int hop_length, float ref_power, int fill_nan,
-                                          SonareReassignedSpectrogramResult* out) {
+                                          int n_fft, size_t hop_length, float ref_power,
+                                          int fill_nan, SonareReassignedSpectrogramResult* out) {
   SONARE_C_API_ENTRY;
   // Zero the owned out-pointers BEFORE any validating early-return, so a rejected
   // input always leaves a NULL owned pointer and sonare_free_reassigned_spectrogram_result(&r)
@@ -536,7 +541,7 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         ReassignedSpectrogram result =
             reassigned_spectrogram(audio, config, ref_power, fill_nan != 0);
         if (result.times.size() != result.magnitude.size() ||
@@ -583,7 +588,7 @@ namespace {
 
 template <typename PitchFn>
 SonareError run_pitch_track(const char* fn, const char* name, const float* samples, size_t length,
-                            int sample_rate, int frame_length, int hop_length, float fmin,
+                            int sample_rate, size_t frame_length, size_t hop_length, float fmin,
                             float fmax, float threshold, int fill_na, SonarePitchResult* out,
                             PitchFn pitch) {
   if (const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
@@ -594,8 +599,8 @@ SonareError run_pitch_track(const char* fn, const char* name, const float* sampl
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         PitchConfig config;
-        config.frame_length = frame_length;
-        config.hop_length = hop_length;
+        config.frame_length = core_length(frame_length);
+        config.hop_length = core_length(hop_length);
         config.fmin = fmin;
         config.fmax = fmax;
         config.threshold = threshold;
@@ -610,9 +615,9 @@ SonareError run_pitch_track(const char* fn, const char* name, const float* sampl
 
 }  // namespace
 
-SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
-                             int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
-                             SonarePitchResult* out) {
+SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate,
+                             size_t frame_length, size_t hop_length, float f0_min_hz,
+                             float f0_max_hz, float threshold, SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 
@@ -624,8 +629,9 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 }
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
-                              int frame_length, int hop_length, float f0_min_hz, float f0_max_hz,
-                              float threshold, int fill_na, SonarePitchResult* out) {
+                              size_t frame_length, size_t hop_length, float f0_min_hz,
+                              float f0_max_hz, float threshold, int fill_na,
+                              SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 
@@ -780,15 +786,15 @@ float sonare_note_to_hz(const char* note) {
   SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
-float sonare_frames_to_time(int frames, int sample_rate, int hop_length) {
+float sonare_frames_to_time(int frames, int sample_rate, size_t hop_length) {
   SONARE_C_TRY
-  return frames_to_time(frames, sample_rate, hop_length);
+  return frames_to_time(frames, sample_rate, core_length(hop_length));
   SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
-int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length) {
+int sonare_time_to_frames(float time_sec, int sample_rate, size_t hop_length) {
   SONARE_C_TRY
-  return time_to_frames(time_sec, sample_rate, hop_length);
+  return time_to_frames(time_sec, sample_rate, core_length(hop_length));
   SONARE_C_CATCH_RETURN(0)
 }
 

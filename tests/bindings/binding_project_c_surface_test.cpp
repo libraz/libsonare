@@ -58,7 +58,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   double sample_rate = 0.0;
   REQUIRE(sonare_project_get_sample_rate(project, &sample_rate) == SONARE_OK);
   CHECK(sample_rate == 48000.0);
-  REQUIRE(sonare_project_set_sample_rate(project, 44100.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 44100) == SONARE_OK);
   REQUIRE(sonare_project_get_sample_rate(project, &sample_rate) == SONARE_OK);
   CHECK(sample_rate == 44100.0);
 
@@ -801,7 +801,7 @@ TEST_CASE("project core entries refuse by the parameter the header spells", "[pr
   CHECK(sonare_project_serialize(project, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "out_json must not be NULL");
 
-  CHECK(sonare_project_set_sample_rate(project, 44100.5) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_sample_rate(project, 7999) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "sample_rate must be a whole number of hertz in [8000, 384000]");
 
   SonareProjectTrack track{};

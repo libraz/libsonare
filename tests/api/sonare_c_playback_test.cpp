@@ -407,7 +407,7 @@ TEST_CASE("playback renderer diagnostics_json and non_finite_discard_count", "[p
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(diagnostics == nullptr);
 
-  uint32_t discards = 123;
+  size_t discards = 123;
   CHECK(sonare_playback_renderer_non_finite_discard_count(renderer, &discards) == SONARE_OK);
   CHECK(discards == 0u);
 
@@ -645,7 +645,7 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   json = reinterpret_cast<char*>(uintptr_t{1});
   CHECK(sonare_playback_renderer_diagnostics_json(nullptr, &json) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(json == nullptr);
-  uint32_t count = 7;
+  size_t count = 7;
   CHECK(sonare_playback_renderer_non_finite_discard_count(nullptr, &count) ==
         SONARE_ERROR_NOT_SUPPORTED);
   CHECK(count == 0u);

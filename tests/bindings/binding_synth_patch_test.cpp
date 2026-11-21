@@ -59,7 +59,7 @@ namespace {
 SonareProject* make_synth_project(uint32_t dest, uint8_t note = 60) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
@@ -1353,7 +1353,7 @@ namespace {
 SonareProject* make_census_project(uint8_t note) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
@@ -1669,7 +1669,7 @@ TEST_CASE("a GS variation bank reports whether it is voiced or falls back",
 TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][synth_patch]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   SonareSynthPatch patch{};
   REQUIRE(sonare_synth_preset_patch("sawLead", &patch) == SONARE_OK);

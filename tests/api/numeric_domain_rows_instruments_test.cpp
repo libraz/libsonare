@@ -61,7 +61,7 @@ std::string field_of(const std::string& param) { return param.substr(param.rfind
 SonareError probe_engine_builtin(const std::string& param, double value) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 64, 32, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig config{};
   sonare_engine_builtin_synth_config_init(&config);
   set_builtin_field(&config, field_of(param), value);
@@ -73,7 +73,7 @@ SonareError probe_engine_builtin(const std::string& param, double value) {
 SonareError probe_engine_sf2(const std::string& param, double value) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 64, 32, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   set_sf2_field(&config, field_of(param), value);

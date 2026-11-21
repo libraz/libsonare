@@ -215,7 +215,7 @@ TEST_CASE("the polyphonic handle reports what the chain found", "[c_api][polypho
   // otherwise every count below would be comparing one note against itself.
   REQUIRE(note_count_of(handle.get()) == 2);
 
-  int32_t frames = 0;
+  size_t frames = 0;
   REQUIRE(sonare_polyphonic_frame_count(handle.get(), &frames) == SONARE_OK);
   REQUIRE(frames > 1);
 
@@ -281,11 +281,11 @@ TEST_CASE("the polyphonic handle reports what the chain found", "[c_api][polypho
   }
 
   SECTION("the per-frame voice count is one per frame") {
-    std::vector<int32_t> counts(static_cast<size_t>(frames) + 4, -1);
+    std::vector<int32_t> counts(frames + 4, -1);
     size_t written = 0;
     REQUIRE(sonare_polyphonic_polyphony(handle.get(), counts.data(), counts.size(), &written) ==
             SONARE_OK);
-    REQUIRE(written == static_cast<size_t>(frames));
+    REQUIRE(written == frames);
     for (size_t i = 0; i < written; ++i) CHECK(counts[i] >= 0);
   }
 }
@@ -322,8 +322,8 @@ TEST_CASE("the polyphonic handle forwards the chain exactly", "[c_api][polyphony
     config.hop_length = 1024;
     const Handle wider(&config, samples);
     REQUIRE(wider.error() == SONARE_OK);
-    int32_t wide_frames = 0;
-    int32_t default_frames = 0;
+    size_t wide_frames = 0;
+    size_t default_frames = 0;
     REQUIRE(sonare_polyphonic_frame_count(wider.get(), &wide_frames) == SONARE_OK);
     REQUIRE(sonare_polyphonic_frame_count(handle.get(), &default_frames) == SONARE_OK);
     // A longer hop is fewer frames. Without this the whole config struct could be
@@ -380,7 +380,7 @@ TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api
   CHECK(c.struct_size == sizeof(SonarePolyphonicConfig));
   CHECK(c.n_fft == 4096);
   CHECK(c.hop_length == 512);
-  CHECK(c.win_length == SONARE_POLYPHONIC_WIN_LENGTH_FFT);
+  CHECK(c.win_length == 0);
   CHECK(c.cent_ref_hz == 55.0f);
   CHECK(c.cents_per_bin == 100.0f / 3.0f);
   CHECK(c.cent_max_hz == 8000.0f);
@@ -563,7 +563,14 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
         {"max_fit_residual 0", [](SonarePolyphonicConfig& c) { c.max_fit_residual = 0.0f; }},
         {"f0_tolerance_cents 0", [](SonarePolyphonicConfig& c) { c.f0_tolerance_cents = 0.0f; }},
         {"reference_hz 0", [](SonarePolyphonicConfig& c) { c.reference_hz = 0.0f; }},
-        {"win_length 0", [](SonarePolyphonicConfig& c) { c.win_length = 0; }},
+        {"win_length past the int range",
+         [](SonarePolyphonicConfig& c) {
+           c.win_length = static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1;
+         }},
+        {"hop_length past the int range",
+         [](SonarePolyphonicConfig& c) {
+           c.hop_length = static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1;
+         }},
         {"max_refine_hz 0", [](SonarePolyphonicConfig& c) { c.max_refine_hz = 0.0f; }},
     };
     for (const NamedField& field : fields) {
@@ -579,7 +586,7 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
 
   SECTION("a NULL handle, and a note index the analysis does not have") {
     size_t count = 99;
-    int32_t frames = 99;
+    size_t frames = 99;
     float curve = 0.0f;
     CHECK(sonare_polyphonic_note_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_polyphonic_frame_count(nullptr, &frames) == SONARE_ERROR_INVALID_PARAMETER);

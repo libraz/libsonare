@@ -1,3 +1,4 @@
+#include <climits>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -530,7 +531,8 @@ int cmd_project_align_takes(const CliArgs& args) {
 
   SonareTakeAlignConfig config;
   sonare_take_align_config_init(&config);
-  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.hop_length = static_cast<size_t>(
+      args.get_int_in_range("hop-length", 1, INT_MAX, static_cast<int>(config.hop_length)));
   config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
 
   double project_sample_rate = 0.0;

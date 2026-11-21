@@ -117,6 +117,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"merge_notes", "notes[].edit.envelope_offset", kEnvelopeOffsetDomain, nullptr},
     {"nn_filter", "n_features", sonare::kDecomposeNFeaturesDomain, nullptr},
     {"nn_filter", "n_frames", sonare::kDecomposeNFramesDomain, nullptr},
+    {"note_move", "offset_sample", kNoteSampleIndexDomain, nullptr},
+    {"note_stretch", "offset_sample", kNoteSampleIndexDomain, nullptr},
     {"phase_vocoder", "n_fft", sonare::kColaNFftDomain, "even"},
     {"pitch_correct_timevarying", "config.scale_mode_mask",
      sonare::editing::pitch_editor::kScaleModeMaskDomain, nullptr},

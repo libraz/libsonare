@@ -85,7 +85,7 @@ constexpr int64_t kArrangementFrames = 24000;
 SonareProject* make_project(const std::vector<SonareMidiEventPod>& events) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kRate)) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
@@ -309,7 +309,7 @@ std::vector<float> pedal_bounce(int pedal_cc, bool sf2) {
   if (pedal_cc >= 0) events.push_back(pod(5.0, cc));
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kRate)) == SONARE_OK);
   if (sf2) {
     std::ifstream file("tests/fixtures/sf2/minimal_gs.sf2", std::ios::binary);
     const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file),

@@ -1023,7 +1023,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
               SONARE_OK);
       SonareStreamFramesU8 u8{};
-      REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 1, &u8) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, nullptr, 1, &u8) ==
+              SONARE_OK);
       REQUIRE(u8.n_frames == 1);
       REQUIRE(u8.feature_flags == mask);
       REQUIRE(u8.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
@@ -1032,6 +1033,9 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE((u8.chroma != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
       REQUIRE((u8.onset_strength != nullptr) == ((mask & SONARE_STREAM_FEATURE_ONSET) != 0));
       REQUIRE((u8.spectral_centroid != nullptr) == ((mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0));
+      REQUIRE((u8.chord_root != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((u8.chord_quality != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((u8.chord_confidence != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
       REQUIRE(u8.rms_energy != nullptr);
       sonare_free_stream_frames_u8(&u8);
       sonare_stream_analyzer_destroy(analyzer);
@@ -1041,7 +1045,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
               SONARE_OK);
       SonareStreamFramesI16 i16{};
-      REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 1, &i16) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_read_quantized_frames_i16(analyzer, nullptr, 1, &i16) ==
+              SONARE_OK);
       REQUIRE(i16.n_frames == 1);
       REQUIRE(i16.feature_flags == mask);
       REQUIRE(i16.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
@@ -1050,6 +1055,9 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
       REQUIRE((i16.chroma != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
       REQUIRE((i16.onset_strength != nullptr) == ((mask & SONARE_STREAM_FEATURE_ONSET) != 0));
       REQUIRE((i16.spectral_centroid != nullptr) == ((mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0));
+      REQUIRE((i16.chord_root != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((i16.chord_quality != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((i16.chord_confidence != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
       REQUIRE(i16.rms_energy != nullptr);
       sonare_free_stream_frames_i16(&i16);
       sonare_stream_analyzer_destroy(analyzer);
@@ -1139,7 +1147,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
     SonareStreamQuantizeConfig quantize{};
     SonareStreamFramesU8 frames{};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()) ==
             "config.struct_size must be set by sonare_stream_quantize_config_init");
@@ -1189,11 +1197,11 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     sonare_stream_quantize_config_init(&quantize);
     quantize.rms_max = inf;
     SonareStreamFramesU8 frames{};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_stream_quantize_config_init(&quantize);
     quantize.mel_db_min = quantize.mel_db_max;
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, &quantize, 0, &frames) ==
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_stream_analyzer_destroy(analyzer);
   }
@@ -1208,7 +1216,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
             SONARE_OK);
 
     SonareStreamFramesU8 u8 = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 4, &u8) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(analyzer, nullptr, 4, &u8) ==
+            SONARE_OK);
     REQUIRE(u8.n_frames > 0);
     REQUIRE(u8.n_frames <= 4);
     REQUIRE(u8.n_mels == config.n_mels);
@@ -1223,7 +1232,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
             SONARE_OK);
     SonareStreamFramesI16 i16 = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 4, &i16) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_i16(analyzer, nullptr, 4, &i16) ==
+            SONARE_OK);
     REQUIRE(i16.n_frames > 0);
     REQUIRE(i16.n_mels == config.n_mels);
     REQUIRE(i16.n_chroma == 12);
@@ -1234,6 +1244,60 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     sonare_free_stream_frames_i16(&i16);
 
     sonare_stream_analyzer_destroy(analyzer);
+  }
+
+  SECTION("quantized chord arrays agree with the float read within one quantization step") {
+    const auto samples = generate_sine(440.0f, config.sample_rate, 0.5f);
+    const auto fed = [&] {
+      SonareStreamAnalyzer* analyzer = nullptr;
+      REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+              SONARE_OK);
+      return analyzer;
+    };
+
+    SonareStreamAnalyzer* float_analyzer = fed();
+    SonareStreamFrames floats{};
+    REQUIRE(sonare_stream_analyzer_read_frames(float_analyzer, 8, &floats) == SONARE_OK);
+    REQUIRE(floats.n_frames > 0);
+    REQUIRE(floats.chord_root != nullptr);
+
+    SonareStreamAnalyzer* u8_analyzer = fed();
+    SonareStreamFramesU8 u8{};
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(u8_analyzer, nullptr, 8, &u8) ==
+            SONARE_OK);
+    REQUIRE(u8.n_frames == floats.n_frames);
+    REQUIRE(u8.chord_root != nullptr);
+    REQUIRE(u8.chord_quality != nullptr);
+    REQUIRE(u8.chord_confidence != nullptr);
+
+    SonareStreamAnalyzer* i16_analyzer = fed();
+    SonareStreamFramesI16 i16{};
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_i16(i16_analyzer, nullptr, 8, &i16) ==
+            SONARE_OK);
+    REQUIRE(i16.n_frames == floats.n_frames);
+    REQUIRE(i16.chord_root != nullptr);
+    REQUIRE(i16.chord_quality != nullptr);
+    REQUIRE(i16.chord_confidence != nullptr);
+
+    for (int i = 0; i < floats.n_frames; ++i) {
+      CAPTURE(i);
+      CHECK(u8.chord_root[i] == floats.chord_root[i]);
+      CHECK(u8.chord_quality[i] == floats.chord_quality[i]);
+      CHECK(std::fabs(static_cast<float>(u8.chord_confidence[i]) / 255.0f -
+                      floats.chord_confidence[i]) <= 1.0f / 255.0f);
+      CHECK(i16.chord_root[i] == floats.chord_root[i]);
+      CHECK(i16.chord_quality[i] == floats.chord_quality[i]);
+      CHECK(std::fabs((static_cast<float>(i16.chord_confidence[i]) + 32768.0f) / 65535.0f -
+                      floats.chord_confidence[i]) <= 1.0f / 65535.0f);
+    }
+
+    sonare_free_stream_frames(&floats);
+    sonare_free_stream_frames_u8(&u8);
+    sonare_free_stream_frames_i16(&i16);
+    sonare_stream_analyzer_destroy(float_analyzer);
+    sonare_stream_analyzer_destroy(u8_analyzer);
+    sonare_stream_analyzer_destroy(i16_analyzer);
   }
 
   SECTION("finalize flushes a partial tail frame") {
@@ -1291,7 +1355,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     SonareStreamQuantizeConfig narrow = qdefault;
     narrow.centroid_max = 1.0f;
     SonareStreamFramesU8 tight_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(tight, &narrow, 4, &tight_frames) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(tight, &narrow, 4, &tight_frames) ==
+            SONARE_OK);
     REQUIRE(tight_frames.n_frames > 0);
 
     SonareStreamAnalyzer* wide = nullptr;
@@ -1301,7 +1366,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     SonareStreamQuantizeConfig broad = qdefault;
     broad.centroid_max = 1.0e9f;
     SonareStreamFramesU8 wide_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(wide, &broad, 4, &wide_frames) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(wide, &broad, 4, &wide_frames) ==
+            SONARE_OK);
     REQUIRE(wide_frames.n_frames == tight_frames.n_frames);
 
     bool centroid_differs = false;
@@ -1316,7 +1382,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     // A null config is identical to the default-range read.
     SonareStreamFramesU8 null_frames = {};
-    REQUIRE(sonare_stream_analyzer_read_frames_u8(wide, nullptr, 4, &null_frames) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_read_quantized_frames_u8(wide, nullptr, 4, &null_frames) ==
+            SONARE_OK);
     sonare_free_stream_frames_u8(&null_frames);
 
     sonare_free_stream_frames_u8(&tight_frames);
@@ -1907,7 +1974,7 @@ TEST_CASE("sonare_meter_options_init mirrors the core defaults", "[c_api]") {
   SonareMeterOptions options;
   sonare_meter_options_init(&options);
 
-  REQUIRE(options.candidate_numerator_count == 3);
+  REQUIRE(options.candidate_numerator_count == 3u);
   REQUIRE(options.candidate_numerators[0] == 3);
   REQUIRE(options.candidate_numerators[1] == 4);
   REQUIRE(options.candidate_numerators[2] == 6);
@@ -1916,12 +1983,10 @@ TEST_CASE("sonare_meter_options_init mirrors the core defaults", "[c_api]") {
   // A drift from MeterConfig would make the C surface answer a different
   // question than the core the other surfaces reach directly.
   const sonare::MeterConfig config;
-  REQUIRE(static_cast<std::size_t>(options.candidate_numerator_count) ==
-          config.candidate_numerators.size());
-  for (int i = 0; i < options.candidate_numerator_count; ++i) {
+  REQUIRE(options.candidate_numerator_count == config.candidate_numerators.size());
+  for (std::size_t i = 0; i < options.candidate_numerator_count; ++i) {
     CAPTURE(i);
-    REQUIRE(options.candidate_numerators[i] ==
-            config.candidate_numerators[static_cast<std::size_t>(i)]);
+    REQUIRE(options.candidate_numerators[i] == config.candidate_numerators[i]);
   }
   REQUIRE(options.denominator == config.denominator);
   REQUIRE(options.downbeat_weight == config.downbeat_weight);
@@ -1960,8 +2025,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     REQUIRE(root["timeSignature"]["denominator"].as_number() == 4.0);
     REQUIRE(root["timeSignature"]["confidence"].as_number() > 0.5);
     REQUIRE(root["downbeatPhase"].as_number() == 0.0);
-    REQUIRE(root["candidateScores"].size() ==
-            static_cast<std::size_t>(defaults.candidate_numerator_count));
+    REQUIRE(root["candidateScores"].size() == defaults.candidate_numerator_count);
     REQUIRE(root["candidates"].size() > 0);
 
     sonare_free_string(json);
@@ -2017,11 +2081,11 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
                                        &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
-    SonareMeterOptions negative = defaults;
-    negative.candidate_numerator_count = -1;
+    SonareMeterOptions largest = defaults;
+    largest.candidate_numerator_count = std::numeric_limits<std::size_t>::max();
     json = sentinel();
     REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &negative,
+                                       series.times.size(), &largest,
                                        &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 

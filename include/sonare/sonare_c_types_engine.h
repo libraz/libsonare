@@ -144,7 +144,7 @@ typedef struct {
   double bpm;               ///< Tempo in beats per minute at the current position.
   double loop_start_ppq;    ///< Loop region start in PPQ.
   double loop_end_ppq;      ///< Loop region end in PPQ.
-  double sample_rate;       ///< Prepared engine sample rate in Hz.
+  int sample_rate;          ///< Prepared engine sample rate in Hz.
   /// PPQ of the current bar's downbeat. Musical position fields from here on are derived from the
   /// tempo map every block.
   double bar_start_ppq;
@@ -408,7 +408,7 @@ typedef enum SONARE_ENUM_BASE {
 /// Capture state returned by sonare_engine_capture_status.
 typedef struct {
   int64_t captured_frames;        ///< Frames recorded into the capture buffer so far.
-  uint32_t overflow_count;        ///< Times the capture buffer filled and dropped audio.
+  size_t overflow_count;          ///< Times the capture buffer filled and dropped audio.
   int armed;                      ///< Non-zero while capture is armed.
   int punch_enabled;              ///< Non-zero while the punch-in/out window is enabled.
   int source;                     ///< A @ref SonareEngineCaptureSource naming the recorded signal.
@@ -575,6 +575,8 @@ static_assert(offsetof(SonareTransportState, render_frame) == 8u,
               "SonareTransportState render_frame offset changed");
 static_assert(offsetof(SonareTransportState, ppq_position) == 24u,
               "SonareTransportState ppq_position offset changed");
+static_assert(offsetof(SonareTransportState, sample_rate) == 56u,
+              "SonareTransportState sample_rate offset changed");
 static_assert(offsetof(SonareTransportState, bar_start_ppq) == 64u,
               "SonareTransportState bar_start_ppq offset changed");
 static_assert(offsetof(SonareTransportState, time_signature) == 80u,

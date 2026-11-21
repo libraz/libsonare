@@ -41,7 +41,7 @@ namespace {
 SonareEngine* make_synth_engine(uint32_t dest, int engine_mode) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.engine_mode = engine_mode;
@@ -65,7 +65,7 @@ std::vector<float> render_blocks(SonareEngine* engine, int blocks) {
 /// player's slur actually sends, and the one a mode that ignores the overlap
 /// cannot be told apart from by the first half alone.
 std::vector<float> render_slur(uint32_t dest, int engine_mode, int articulation,
-                               uint32_t* out_fallbacks) {
+                               size_t* out_fallbacks) {
   SonareEngine* engine = make_synth_engine(dest, engine_mode);
   REQUIRE(sonare_engine_set_articulation(engine, dest, 0, articulation) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_note_on(engine, dest, 0, 0, 60, 100, -1) == SONARE_OK);
@@ -137,7 +137,7 @@ TEST_CASE("articulation round-trips per channel", "[c_api][articulation]") {
 
   // Nothing has been asked for and declined yet, so the counter starts where a
   // later case can see it move.
-  uint32_t fallbacks = 123;
+  size_t fallbacks = 123;
   REQUIRE(sonare_engine_legato_fallback_count(engine, 3, &fallbacks) == SONARE_OK);
   REQUIRE(fallbacks == 0);
 
@@ -165,7 +165,7 @@ TEST_CASE("articulation keeps its three refusals apart", "[c_api][articulation]"
   // A destination nothing is bound to, and a destination holding an instrument
   // with no articulation of its own, are different answers. Both would
   // otherwise read as "the call worked" to a caller that only checks for OK.
-  uint32_t fallbacks = 123;
+  size_t fallbacks = 123;
   REQUIRE(sonare_engine_set_articulation(engine, 5, 0, SONARE_ARTICULATION_MONO_LEGATO) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_articulation(engine, 5, 0, &mode) == SONARE_ERROR_INVALID_PARAMETER);
@@ -203,8 +203,8 @@ TEST_CASE("articulation keeps its three refusals apart", "[c_api][articulation]"
 }
 
 TEST_CASE("an articulation set through the C ABI reaches the sound", "[c_api][articulation]") {
-  uint32_t slurred_fallbacks = 123;
-  uint32_t retriggered_fallbacks = 123;
+  size_t slurred_fallbacks = 123;
+  size_t retriggered_fallbacks = 123;
   const std::vector<float> slurred =
       render_slur(3, SONARE_SYNTH_ENGINE_REED, SONARE_ARTICULATION_MONO_LEGATO, &slurred_fallbacks);
   const std::vector<float> retriggered = render_slur(
@@ -230,7 +230,7 @@ TEST_CASE("an engine that declines to be carried is counted through the C ABI",
           "[c_api][articulation]") {
   // A struck string cannot be slurred: its exciter is spent before the second
   // sample. The note still sounds, so the counter is the only evidence.
-  uint32_t declined = 0;
+  size_t declined = 0;
   const std::vector<float> audio =
       render_slur(3, SONARE_SYNTH_ENGINE_PIANO, SONARE_ARTICULATION_MONO_LEGATO, &declined);
   REQUIRE(declined >= 1);
@@ -241,7 +241,7 @@ TEST_CASE("an engine that declines to be carried is counted through the C ABI",
 
   // The same phrase under the default mode refuses nothing, so the count above
   // is the request being declined rather than a counter that only ever rises.
-  uint32_t poly = 123;
+  size_t poly = 123;
   render_slur(3, SONARE_SYNTH_ENGINE_PIANO, SONARE_ARTICULATION_POLY, &poly);
   REQUIRE(poly == 0);
 }

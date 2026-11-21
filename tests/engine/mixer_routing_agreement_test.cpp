@@ -297,7 +297,8 @@ struct EngineOptions {
 SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, static_cast<int>(kSampleRate), kBlockSize, 64, 16, 0) ==
+          SONARE_OK);
 
   const SonareEngineTrackSend sends[] = {{kBusB, kSendDb, 1,
                                           row.routing == Routing::kASendPreB
@@ -454,7 +455,7 @@ OfflineRender render_offline(const Row& row, const EngineOptions& options = {}) 
 std::vector<float> render_project_bounce(const Row& row) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kSampleRate)) == SONARE_OK);
   const std::string scene = project_scene_json(row);
   CAPTURE(scene);
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene.c_str()) == SONARE_OK);

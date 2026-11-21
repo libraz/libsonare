@@ -216,7 +216,7 @@ void fill_dependency_from_envelope(const Key& key, const Envelope& envelope,
   value->derived_source_id = envelope.derived_source_id;
   value->source_sample_rate = envelope.source_sample_rate;
   value->profile_id = envelope.profile_id;
-  value->source_sample_count = envelope.source_sample_count;
+  value->source_sample_count = static_cast<size_t>(envelope.source_sample_count);
   value->committed_revision = envelope.committed_revision;
   std::memcpy(value->original_source_sha256, envelope.original_digest.data(), 32);
   std::memcpy(value->derived_source_sha256, envelope.derived_digest.data(), 32);
@@ -340,8 +340,8 @@ void check_original_input(const SonareProjectVocalOriginalSource& value, size_t 
   if (out != nullptr) {
     out->source_id = value.source_id;
     out->mono = value.mono;
-    out->sample_count = value.sample_count;
-    out->sample_rate = value.sample_rate;
+    out->sample_count = static_cast<int64_t>(value.sample_count);
+    out->sample_rate = static_cast<uint32_t>(value.sample_rate);
     out->digest = digest_samples(samples);
   }
 }
@@ -492,7 +492,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
                                        0,
                                        desc->expected_source_sample_rate,
                                        static_cast<uint32_t>(persisted.render_settings.profile),
-                                       desc->expected_source_sample_count,
+                                       static_cast<int64_t>(desc->expected_source_sample_count),
                                        persisted.committed_revision,
                                        original_digest,
                                        {},
@@ -500,7 +500,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
       desc->render_token.revision != persisted.committed_revision ||
       desc->render_token.draft_id != 0 || desc->render_token.generation != 0 ||
       desc->render_token.profile_id != static_cast<uint32_t>(persisted.render_settings.profile) ||
-      persisted.output_length_samples != desc->expected_source_sample_count) {
+      persisted.output_length_samples != static_cast<int64_t>(desc->expected_source_sample_count)) {
     return SONARE_ERROR_INVALID_STATE;
   }
   std::vector<float> rendered(
@@ -568,7 +568,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   envelope.derived_source_id = derived_source_id;
   envelope.source_sample_rate = desc->expected_source_sample_rate;
   envelope.profile_id = static_cast<uint32_t>(persisted.render_settings.profile);
-  envelope.source_sample_count = desc->expected_source_sample_count;
+  envelope.source_sample_count = static_cast<int64_t>(desc->expected_source_sample_count);
   envelope.committed_revision = persisted.committed_revision;
   envelope.original_digest = original_digest;
   envelope.derived_digest = derived_digest;
@@ -703,7 +703,7 @@ SonareError sonare_project_get_vocal_edit_dependencies(
 
 SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                                                  const SonareProjectVocalOriginalSource* originals,
-                                                 uint64_t original_count,
+                                                 size_t original_count,
                                                  SonareVocalCancelCallback cancel, void* user_data,
                                                  SonareProjectVocalRehydrateResult* result) {
   SONARE_C_API_ENTRY;
@@ -733,11 +733,11 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   if (rehydrate_in_progress(project)) return refuse_during_rehydrate();
   const RehydrateScope rehydrating(project);
   std::vector<SourceInput> source_inputs;
-  source_inputs.reserve(static_cast<size_t>(original_count));
+  source_inputs.reserve(original_count);
   std::set<uint32_t> source_ids;
-  for (uint64_t i = 0; i < original_count; ++i) {
+  for (size_t i = 0; i < original_count; ++i) {
     SourceInput input;
-    check_original_input(originals[i], static_cast<size_t>(i), &input);
+    check_original_input(originals[i], i, &input);
     if (!source_ids.insert(input.source_id).second) {
       sonare::util::check::refuse(
           sonare::util::check::indexed_subject("originals", static_cast<size_t>(i), "source_id")

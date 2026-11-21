@@ -23,7 +23,7 @@ extern "C" {
 ///          @p hop_length is in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
-                               float bpm_max, float start_bpm, int n_fft, int hop_length,
+                               float bpm_max, float start_bpm, int n_fft, size_t hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out);
 /// @brief Options for @ref sonare_analyze_impulse_response.
 /// @details Fill with @ref sonare_analyze_impulse_response_options_init before setting fields.
@@ -61,17 +61,17 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 /// @param out Receives heap-owned arrays; free with sonare_free_rhythm_result.
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
-                                  int hop_length, SonareRhythmResult* out);
+                                  size_t hop_length, SonareRhythmResult* out);
 /// @param hop_length Hop in samples of the caller's buffer, at @p sample_rate.
 /// @param out Receives heap-owned arrays; free with sonare_free_dynamics_result.
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
-                                    float window_sec, int hop_length,
+                                    float window_sec, size_t hop_length,
                                     float compression_threshold_db, SonareDynamicsResult* out);
 /// @param n_fft Analysis window length in samples at 22050 Hz, rescaled to
 ///   @p sample_rate; @p hop_length is in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_timbre_result.
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
-                                  int hop_length, int n_mels, int n_mfcc, float window_sec,
+                                  size_t hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out);
 /// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
 void sonare_chord_detection_options_init(SonareChordDetectionOptions* options);
@@ -176,8 +176,8 @@ void sonare_analyze_melody_options_init(SonareAnalyzeMelodyOptions* options);
 ///   threshold distribution -- see @ref sonare_pitch_pyin.
 /// @param out Receives heap-owned arrays; free with sonare_free_melody_result.
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
-                                  float f0_min_hz, float f0_max_hz, int frame_length,
-                                  int hop_length, float threshold,
+                                  float f0_min_hz, float f0_max_hz, size_t frame_length,
+                                  size_t hop_length, float threshold,
                                   const SonareAnalyzeMelodyOptions* options,
                                   SonareMelodyResult* out);
 /// @brief Releases the arrays of a BPM-analysis result and resets its pointers and counts.
@@ -222,7 +222,7 @@ SonareError sonare_tone(float frequency_hz, int sample_rate, float duration_sec,
 SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float duration_sec,
                          int linear, float** out, size_t* out_length);
 /// @brief Generates decaying sine clicks at times in seconds. Free @p out with sonare_free_floats.
-SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
+SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, size_t length,
                           float frequency_hz, float click_duration_sec, float** out,
                           size_t* out_length);
 
@@ -236,7 +236,7 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
 typedef struct {
   int n_bins;          ///< Number of frequency bins.
   int n_frames;        ///< Number of time frames.
-  int hop_length;      ///< Hop between frames, in samples.
+  size_t hop_length;   ///< Hop between frames, in samples.
   int sample_rate;     ///< Sample rate of the analysed audio (Hz).
   float* magnitude;    ///< Magnitude matrix, n_bins * n_frames, row-major.
   float* frequencies;  ///< Bin center frequencies in Hz, n_bins entries.
@@ -247,25 +247,25 @@ typedef struct {
 
 /// @brief Computes the Constant-Q Transform magnitude.
 /// @param filter_scale Filter length scale factor, finite and > 0 (librosa default 1).
-SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, size_t hop_length,
                        float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                        SonareCqtResult* out);
 /// @brief Computes a faster pseudo-CQT magnitude approximation.
 /// @param filter_scale As @ref sonare_cqt.
-SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
-                              SonareCqtResult* out);
+SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate,
+                              size_t hop_length, float fmin_hz, int n_bins, int bins_per_octave,
+                              float filter_scale, SonareCqtResult* out);
 /// @brief Computes a hybrid CQT magnitude.
 /// @param filter_scale As @ref sonare_cqt.
-SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
-                              SonareCqtResult* out);
+SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate,
+                              size_t hop_length, float fmin_hz, int n_bins, int bins_per_octave,
+                              float filter_scale, SonareCqtResult* out);
 /// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
 /// @param filter_scale As @ref sonare_cqt.
 /// @param gamma Optional bandwidth offset in Hz, finite and >= 0. NaN (not given) selects the
 /// librosa-compatible ERB-derived automatic value; 0 is the constant-Q bandwidth; a negative
 /// or infinite value is refused. The value the transform ran with is @c out->gamma.
-SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
+SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, size_t hop_length,
                        float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                        float gamma, SonareCqtResult* out);
 /// @brief Releases the magnitude and frequency arrays of a CQT/VQT result and sets them to NULL.
@@ -277,7 +277,7 @@ void sonare_free_cqt_result(SonareCqtResult* result);
 ///   @c SONARE_ERROR_INVALID_PARAMETER. Iterations must be in [1, 256]. The output is owned
 ///   by the caller and released with @ref sonare_free_floats.
 SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
-                                int n_frames, int sample_rate, int hop_length, float fmin_hz,
+                                int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, int n_iter, float** out, size_t* out_length);
 
 /// @brief Reconstructs mono audio from row-major VQT magnitude with Griffin-Lim.
@@ -287,7 +287,7 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
 /// automatic value; zero selects standard CQT.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
-                                int n_frames, int sample_rate, int hop_length, float fmin_hz,
+                                int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, float gamma, int n_iter, float** out,
                                 size_t* out_length);
 
@@ -310,7 +310,7 @@ void sonare_stft_options_init(SonareStftOptions* options);
 /// @details A NULL @p options takes the defaults (no dB plane).
 /// @param out Receives heap-owned arrays; free with sonare_free_stft_result.
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, const SonareStftOptions* options, SonareStftResult* out);
+                        size_t hop_length, const SonareStftOptions* options, SonareStftResult* out);
 
 // ============================================================================
 // Features - Mel
@@ -339,7 +339,7 @@ void sonare_mel_spectrogram_options_init(SonareMelSpectrogramOptions* options);
 /// @details A NULL @p options takes the defaults (fmin 0, fmax sr/2, Slaney).
 /// @param out Receives heap-owned arrays; free with sonare_free_mel_result.
 SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
-                                   int hop_length, int n_mels,
+                                   size_t hop_length, int n_mels,
                                    const SonareMelSpectrogramOptions* options,
                                    SonareMelResult* out);
 
@@ -367,7 +367,7 @@ void sonare_mfcc_options_init(SonareMfccOptions* options);
 /// @details A NULL @p options takes the defaults.
 /// @param out Receives heap-owned arrays; free with sonare_free_mfcc_result.
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, int n_mels, int n_mfcc, const SonareMfccOptions* options,
+                        size_t hop_length, int n_mels, int n_mfcc, const SonareMfccOptions* options,
                         SonareMfccResult* out);
 
 /// @brief Computes first-order delta features from a row-major feature matrix.
@@ -448,8 +448,8 @@ void sonare_mel_to_audio_options_init(SonareMelToAudioOptions* options);
 /// @param n_frames Number of time frames.
 /// @param sample_rate Sample rate of the original audio (Hz).
 /// @param n_fft FFT size used for reconstruction.
-/// @param hop_length Hop length used for reconstruction, or @ref SONARE_STFT_HOP_AUTO for a
-/// quarter of @p n_fft (at least 1); 0 is refused.
+/// @param hop_length Hop length used for reconstruction, or 0 for a
+/// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
@@ -458,18 +458,17 @@ void sonare_mel_to_audio_options_init(SonareMelToAudioOptions* options);
 ///        sonare_free_floats).
 /// @param out_length Receives the number of reconstructed samples.
 SonareError sonare_mel_to_audio(const float* mel, size_t input_length, int n_mels, int n_frames,
-                                int sample_rate, int n_fft, int hop_length, float fmin_hz,
+                                int sample_rate, int n_fft, size_t hop_length, float fmin_hz,
                                 float fmax_hz, int n_iter, const SonareMelToAudioOptions* options,
                                 float** out, size_t* out_length);
 /// @brief Reconstruct mono audio from an STFT magnitude matrix with Griffin-Lim.
 /// @details @p magnitude is row-major [n_bins x n_frames]; @p input_length must
 ///   equal n_bins * n_frames, n_bins must equal n_fft / 2 + 1, and momentum is in [0, 1).
-///   A @p hop_length of @ref SONARE_STFT_HOP_AUTO is a quarter of @p n_fft (at least 1); 0 is
-///   refused.
+///   A @p hop_length of 0 is a quarter of @p n_fft (at least 1).
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int n_bins,
-                               int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
-                               float momentum, float** out, size_t* out_length);
+                               int n_frames, int n_fft, size_t hop_length, int sample_rate,
+                               int n_iter, float momentum, float** out, size_t* out_length);
 
 /// @brief Options for @ref sonare_mfcc_to_mel.
 /// @details Fill with @ref sonare_mfcc_to_mel_options_init before setting fields.
@@ -519,8 +518,8 @@ void sonare_mfcc_to_audio_options_init(SonareMfccToAudioOptions* options);
 /// @param n_mels Number of Mel bins (must match the MFCC source config).
 /// @param sample_rate Sample rate of the original audio (Hz).
 /// @param n_fft FFT size used for reconstruction.
-/// @param hop_length Hop length used for reconstruction, or @ref SONARE_STFT_HOP_AUTO for a
-/// quarter of @p n_fft (at least 1); 0 is refused.
+/// @param hop_length Hop length used for reconstruction, or 0 for a
+/// quarter of @p n_fft (at least 1).
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
@@ -530,7 +529,7 @@ void sonare_mfcc_to_audio_options_init(SonareMfccToAudioOptions* options);
 /// @param out_length Receives the number of reconstructed samples.
 SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length, int n_mfcc,
                                  int n_frames, int n_mels, int sample_rate, int n_fft,
-                                 int hop_length, float fmin_hz, float fmax_hz, int n_iter,
+                                 size_t hop_length, float fmin_hz, float fmax_hz, int n_iter,
                                  const SonareMfccToAudioOptions* options, float** out,
                                  size_t* out_length);
 
@@ -552,7 +551,7 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 ///   measure it themselves under @c tuning_auto.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
-                          int hop_length, SonareChromaResult* out);
+                          size_t hop_length, SonareChromaResult* out);
 /// @brief Options for @ref sonare_chroma_cens.
 /// @details Fill with @ref sonare_chroma_cens_options_init before setting fields.
 typedef struct {
@@ -569,9 +568,9 @@ void sonare_chroma_cens_options_init(SonareChromaCensOptions* options);
 /// @details A NULL @p options takes the defaults. @c options->bins_per_octave must be a
 ///   positive multiple of @p n_chroma.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
-SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
-                               int n_chroma, const SonareChromaCensOptions* options,
-                               SonareChromaResult* out);
+SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate,
+                               size_t hop_length, int n_chroma,
+                               const SonareChromaCensOptions* options, SonareChromaResult* out);
 /// @brief Options for @ref sonare_chroma_cqt.
 /// @details Fill with @ref sonare_chroma_cqt_options_init before setting fields.
 typedef struct {
@@ -594,15 +593,15 @@ void sonare_chroma_cqt_options_init(SonareChromaCqtOptions* options);
 ///   measure it themselves under @c tuning_auto. A NULL @p options takes the defaults;
 ///   @c options->bins_per_octave must be a positive multiple of @p n_chroma.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
-SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              int n_chroma, const SonareChromaCqtOptions* options,
-                              SonareChromaResult* out);
+SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate,
+                              size_t hop_length, int n_chroma,
+                              const SonareChromaCqtOptions* options, SonareChromaResult* out);
 /// @details The CQT resolution is the library's own rather than a parameter, and
 ///   every pitch class takes the mean of a whole number of its bins, so
 ///   @p n_chroma must divide 36.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
-SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
-                               int n_chroma, SonareChromaResult* out);
+SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate,
+                               size_t hop_length, int n_chroma, SonareChromaResult* out);
 
 // ============================================================================
 // Features - Spectral (each returns a float array of per-frame values)
@@ -610,7 +609,7 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
 
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_spectral_centroid(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, float** out, size_t* out_count);
+                                     int n_fft, size_t hop_length, float** out, size_t* out_count);
 /// @brief Options for @ref sonare_spectral_bandwidth.
 /// @details Fill with @ref sonare_spectral_bandwidth_options_init before setting fields.
 typedef struct {
@@ -627,27 +626,28 @@ void sonare_spectral_bandwidth_options_init(SonareSpectralBandwidthOptions* opti
 /// @details A NULL @p options takes the defaults (p = 2).
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
-                                      int n_fft, int hop_length,
+                                      int n_fft, size_t hop_length,
                                       const SonareSpectralBandwidthOptions* options, float** out,
                                       size_t* out_count);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
-                                    int hop_length, float roll_percent, float** out,
+                                    size_t hop_length, float roll_percent, float** out,
                                     size_t* out_count);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, float** out, size_t* out_count);
+                                     int n_fft, size_t hop_length, float** out, size_t* out_count);
 /// @brief Unsigned L1 spectral flux envelope with a positive frame lag.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 int hop_length, int lag, float** out, size_t* out_count);
+                                 size_t hop_length, int lag, float** out, size_t* out_count);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
-                                      int frame_length, int hop_length, float** out,
+                                      size_t frame_length, size_t hop_length, float** out,
                                       size_t* out_count);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
-                              int frame_length, int hop_length, float** out, size_t* out_count);
+                              size_t frame_length, size_t hop_length, float** out,
+                              size_t* out_count);
 
 /// @brief Spectral contrast: peak-to-valley energy difference per band per frame.
 /// @details Mirrors librosa.feature.spectral_contrast. Output is a row-major
@@ -663,7 +663,7 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 /// @param out_rows Receives the number of rows (n_bands + 1).
 /// @param out_cols Receives the number of columns (n_frames).
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, int n_bands, float fmin_hz,
+                                     int n_fft, size_t hop_length, int n_bands, float fmin_hz,
                                      float quantile, float** out, int* out_rows, int* out_cols);
 
 /// @brief Polynomial coefficients fit to each frame's spectrum.
@@ -674,7 +674,7 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
 /// @param out_rows Receives the number of rows (order + 1).
 /// @param out_cols Receives the number of columns (n_frames).
 SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 int hop_length, int order, float** out, int* out_rows,
+                                 size_t hop_length, int order, float** out, int* out_rows,
                                  int* out_cols);
 
 /// @brief Raw zero-crossing indices of a signal (librosa.zero_crossings).
@@ -720,7 +720,7 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 ///        [-0.5, 0.5). -0.5 is attainable (a pitch half a bin flat); +0.5 is
 ///        not, because a residual of +0.5 wraps to -0.5.
 SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
-                                   int hop_length, float resolution, int bins_per_octave,
+                                   size_t hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning);
 
 /// @brief Reference frequency of an A4 raised by @p tuning_cents.
@@ -749,7 +749,7 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz, float
 /// @details @p pitches and @p magnitudes are row-major [n_bins x n_frames]
 ///          matrices and must each be released with @ref sonare_free_floats.
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
-                            int hop_length, float fmin_hz, float fmax_hz, float threshold,
+                            size_t hop_length, float fmin_hz, float fmax_hz, float threshold,
                             int* out_n_bins, int* out_n_frames, float** out_pitches,
                             float** out_magnitudes);
 
@@ -768,8 +768,8 @@ typedef struct SonareReassignedSpectrogramResult {
 /// @param ref_power Bins with lower power use ordinary bin coordinates, or NaN
 ///        when @p fill_nan is non-zero.
 SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, int sample_rate,
-                                          int n_fft, int hop_length, float ref_power, int fill_nan,
-                                          SonareReassignedSpectrogramResult* out);
+                                          int n_fft, size_t hop_length, float ref_power,
+                                          int fill_nan, SonareReassignedSpectrogramResult* out);
 /// @brief Releases all arrays in a reassigned-spectrogram result and clears it.
 void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult* result);
 
@@ -846,9 +846,9 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 ///   rejected with @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library
 ///   default and librosa's.
 /// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
-SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
-                             int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
-                             SonarePitchResult* out);
+SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate,
+                             size_t frame_length, size_t hop_length, float f0_min_hz,
+                             float f0_max_hz, float threshold, SonarePitchResult* out);
 /// @brief Estimate f0 with probabilistic YIN (librosa.pyin).
 /// @param threshold UPPER BOUND of pYIN's swept threshold distribution, not a
 ///   single cutoff: the tracker sweeps a ladder of CMNDF thresholds from 0 to
@@ -889,8 +889,9 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///          array is supplied.
 /// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
-                              int frame_length, int hop_length, float f0_min_hz, float f0_max_hz,
-                              float threshold, int fill_na, SonarePitchResult* out);
+                              size_t frame_length, size_t hop_length, float f0_min_hz,
+                              float f0_max_hz, float threshold, int fill_na,
+                              SonarePitchResult* out);
 
 /// @brief Configuration for @ref sonare_note_segments.
 /// @details Prepare one with @ref sonare_note_segmenter_config_init (50 cents, 30 ms,
@@ -987,15 +988,15 @@ SonareError sonare_hz_to_note(float hz, char** out_string);
 float sonare_note_to_hz(const char* note);
 /// @brief Frame index to seconds. Returns NaN when @p sample_rate or @p hop_length is not positive
 ///   (detail in @ref sonare_last_error_message).
-float sonare_frames_to_time(int frames, int sample_rate, int hop_length);
+float sonare_frames_to_time(int frames, int sample_rate, size_t hop_length);
 /// @brief Seconds to frame index. Returns 0 when @p sample_rate or @p hop_length is not positive
 ///   (detail in @ref sonare_last_error_message).
-int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length);
+int sonare_time_to_frames(float time_sec, int sample_rate, size_t hop_length);
 
 /// @brief Frame index to sample index; a positive @p n_fft is the offset of n_fft / 2 samples.
-int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
+int sonare_frames_to_samples(int frames, size_t hop_length, int n_fft);
 /// @brief Sample index to frame index (floor); a positive @p n_fft subtracts n_fft / 2 first.
-int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
+int sonare_samples_to_frames(int samples, size_t hop_length, int n_fft);
 
 /* INPUT-BUFFER POLICY for the compat / transform functions below
    (power_to_db, amplitude_to_db, db_to_power, db_to_amplitude, preemphasis,
@@ -1053,9 +1054,9 @@ SonareError sonare_deemphasis(const float* samples, size_t length, float coef, f
 ///   SONARE_ERROR_INVALID_PARAMETER so it cannot be confused with that result.
 ///   @p top_db must be finite and strictly positive.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
-                                int hop_length, float** out, size_t* out_length, int* start_sample,
-                                int* end_sample);
+SonareError sonare_trim_silence(const float* samples, size_t length, float top_db,
+                                size_t frame_length, size_t hop_length, float** out,
+                                size_t* out_length, int64_t* start_sample, int64_t* end_sample);
 /// @brief Lists non-silent intervals as flattened (start, end) pairs.
 /// @details An entirely silent input succeeds with zero intervals
 ///   (@c *out_intervals == NULL, @c *out_interval_count == 0). An EMPTY input
@@ -1064,7 +1065,7 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
 ///   strictly positive.
 /// @note Free @p out_intervals with @ref sonare_free_ints.
 SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
-                                 int frame_length, int hop_length, int** out_intervals,
+                                 size_t frame_length, size_t hop_length, int** out_intervals,
                                  size_t* out_interval_count);
 
 /// @brief Why @ref sonare_split_silence_common found the gaps it did.
@@ -1123,14 +1124,15 @@ typedef struct {
 ///   @ref SonareSilenceCommonReport; a caller cutting takes has no use for it and passes NULL.
 /// @note Free @p out_intervals with @ref sonare_free_ints.
 SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
-                                        const size_t* lengths, float top_db, int frame_length,
-                                        int hop_length, int** out_intervals,
+                                        const size_t* lengths, float top_db, size_t frame_length,
+                                        size_t hop_length, int** out_intervals,
                                         size_t* out_interval_count,
                                         SonareSilenceCommonReport* out_report);
 
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
-                                int hop_length, float** out, size_t* out_length, int* out_n_frames);
+SonareError sonare_frame_signal(const float* samples, size_t length, size_t frame_length,
+                                size_t hop_length, float** out, size_t* out_length,
+                                int* out_n_frames);
 /// @brief Centres @p values inside @p target_size, filling both sides with
 ///        @p pad_value.
 /// @param pad_value The literal value written into every added element; must be
@@ -1182,36 +1184,36 @@ SonareError sonare_vector_normalize(const float* values, size_t length, SonareNo
 
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
-                        int hop_length, float time_constant, float gain, float bias, float power,
+                        size_t hop_length, float time_constant, float gain, float bias, float power,
                         float eps, float** out, size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, float** out,
                            size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                             int hop_length, int win_length, int center, int norm, int mode,
+                             size_t hop_length, size_t win_length, int center, int norm, int mode,
                              float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                                    int hop_length, int win_length, float bpm_min, int n_bins,
+                                    size_t hop_length, size_t win_length, float bpm_min, int n_bins,
                                     float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
-                       float bpm_min, float bpm_max, int win_length, float** out,
-                       size_t* out_length);
+SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate,
+                       size_t hop_length, float bpm_min, float bpm_max, size_t win_length,
+                       float** out, size_t* out_length);
 
 /// @brief Onset strength envelope from audio (librosa.onset.onset_strength).
 /// @details Builds a Mel spectrogram from @p samples and returns the half-wave
 ///   rectified onset strength envelope. Output length is the number of frames.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_onset_strength(const float* samples, size_t length, int sample_rate, int n_fft,
-                                  int hop_length, int n_mels, float** out, size_t* out_length);
+                                  size_t hop_length, int n_mels, float** out, size_t* out_length);
 /// @brief Multi-band onset strength envelope from audio.
 /// @details Output is [n_bands x n_frames] row-major. @p out_n_frames receives
 ///   the frame count so callers can derive the matrix shape.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sample_rate,
-                                        int n_fft, int hop_length, int n_mels, int n_bands,
+                                        int n_fft, size_t hop_length, int n_mels, int n_bands,
                                         float** out, size_t* out_length, int* out_n_frames);
 
 /// @brief Fourier (FFT-based) tempogram of an onset envelope.
@@ -1219,7 +1221,7 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
 ///   n_bins = win_length / 2 + 1 (derivable as out_length / out_n_frames).
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                                     int hop_length, int win_length, int center, int norm,
+                                     size_t hop_length, size_t win_length, int center, int norm,
                                      float** out, size_t* out_length, int* out_n_frames);
 
 /// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
@@ -1233,8 +1235,8 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
 ///   answer with a zero-filled vector. Supplying fewer factors than requested is
 ///   not possible: the output length always equals the effective factor count.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int win_length,
-                                   int sample_rate, int hop_length, const float* factors,
+SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, size_t win_length,
+                                   int sample_rate, size_t hop_length, const float* factors,
                                    size_t n_factors, float** out, size_t* out_length);
 
 /// @brief Options for @ref sonare_nnls_chroma.
@@ -1249,7 +1251,7 @@ typedef struct {
   /// STFT window of the blended chroma, in samples. Default 4096.
   int32_t stft_blend_n_fft;
   /// CQT hop length in samples. Default 512.
-  int32_t hop_length;
+  size_t hop_length;
 } SonareNnlsChromaOptions;
 
 /// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.

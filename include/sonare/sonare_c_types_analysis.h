@@ -52,13 +52,13 @@ typedef enum SONARE_ENUM_BASE {
 
 /// @brief Short-time Fourier transform spectrogram, laid out as n_bins * n_frames.
 typedef struct {
-  int n_bins;        ///< Frequency bins per frame.
-  int n_frames;      ///< Time frames.
-  int n_fft;         ///< FFT length in samples.
-  int hop_length;    ///< Hop between frames in samples.
-  int sample_rate;   ///< Sample rate in Hz.
-  float* magnitude;  ///< n_bins * n_frames, caller frees with sonare_free_floats
-  float* power;      ///< n_bins * n_frames, caller frees with sonare_free_floats
+  int n_bins;         ///< Frequency bins per frame.
+  int n_frames;       ///< Time frames.
+  int n_fft;          ///< FFT length in samples.
+  size_t hop_length;  ///< Hop between frames in samples.
+  int sample_rate;    ///< Sample rate in Hz.
+  float* magnitude;   ///< n_bins * n_frames, caller frees with sonare_free_floats
+  float* power;       ///< n_bins * n_frames, caller frees with sonare_free_floats
   float* db;  ///< n_bins * n_frames magnitude in dB; NULL unless SonareStftOptions::db is non-zero
 } SonareStftResult;
 
@@ -69,10 +69,10 @@ typedef struct {
    the forward transform, so the result is enough to invert it: the inverse
    entry points take the same values as arguments. */
 typedef struct {
-  int n_mels;       ///< Mel bands per frame.
-  int n_frames;     ///< Time frames.
-  int sample_rate;  ///< Sample rate in Hz.
-  int hop_length;   ///< Hop between frames in samples.
+  int n_mels;         ///< Mel bands per frame.
+  int n_frames;       ///< Time frames.
+  int sample_rate;    ///< Sample rate in Hz.
+  size_t hop_length;  ///< Hop between frames in samples.
   /** FFT size of the source STFT. */
   int n_fft;
   /** Mel range in Hz as applied: fmax_hz is sr/2 when the request left it at 0. */
@@ -90,11 +90,11 @@ typedef struct {
 /** MFCC result. Carries the Mel parameters its coefficients were derived with,
    plus the lifter, so the result is enough to invert it. */
 typedef struct {
-  int n_mfcc;       ///< Coefficients per frame.
-  int n_frames;     ///< Time frames.
-  int sample_rate;  ///< Sample rate in Hz.
-  int hop_length;   ///< Hop between frames in samples.
-  int n_fft;        ///< FFT size of the source STFT.
+  int n_mfcc;         ///< Coefficients per frame.
+  int n_frames;       ///< Time frames.
+  int sample_rate;    ///< Sample rate in Hz.
+  size_t hop_length;  ///< Hop between frames in samples.
+  int n_fft;          ///< FFT size of the source STFT.
   /** Mel bands the coefficients were taken from. */
   int n_mels;
   float fmin_hz;  ///< Lower edge of the Mel range in Hz.
@@ -112,7 +112,7 @@ typedef struct {
   int n_chroma;        ///< Chroma bins per frame.
   int n_frames;        ///< Time frames.
   int sample_rate;     ///< Sample rate in Hz.
-  int hop_length;      ///< Hop between frames in samples.
+  size_t hop_length;   ///< Hop between frames in samples.
   float* features;     ///< Chromagram, [n_chroma x n_frames] row-major.
   float* mean_energy;  ///< n_chroma
 } SonareChromaResult;
@@ -332,7 +332,7 @@ typedef struct {
   int n_fft;
   /** Hop between analysis frames in samples of the analysed signal: the input resampled to
    * 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */
-  int hop_length;
+  size_t hop_length;
   /** Minimum section length in seconds; it also sets the analysis scale. Default 4. */
   float min_section_sec;
   /** Relative boundary threshold, as SonareBoundaryOptions::threshold. Default 0.22, below the
@@ -367,7 +367,7 @@ typedef struct {
   size_t novelty_length;  ///< Entries in novelty_curve.
   float novelty_peak;     ///< 0 when nothing rose above the numerical floor
   int sample_rate;        ///< the rate the ANALYSIS ran at, not the input's
-  int hop_length;         ///< Hop between analysis frames in samples at the analysis rate.
+  size_t hop_length;      ///< Hop between analysis frames in samples at the analysis rate.
   int n_frames;           ///< analysis frames the similarity band was built on
   int frame_stride;       ///< raw frames averaged per analysis frame; 1 unless pooled
 } SonareBoundaryResult;
@@ -380,7 +380,7 @@ typedef struct {
   int n_fft;             ///< Window length in samples at 22050 Hz, rescaled to the analysis rate.
   /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
    * 22050 Hz, the input itself otherwise. */
-  int hop_length;
+  size_t hop_length;
   int kernel_size;  ///< checkerboard kernel, in frames
   float threshold;  ///< relative to the local novelty maximum, lone dominant event set aside
   float absolute_threshold;  ///< applied to the raw response, before scaling
@@ -423,7 +423,7 @@ typedef struct {
   float threshold;      ///< final-template correlation threshold [0, 1]; below => UNKNOWN / N.C.
   int use_triads_only;  ///< Non-zero restricts the vocabulary to triads.
   int n_fft;            ///< STFT chroma window in samples at 22050 Hz, rescaled to the input rate
-  int hop_length;       ///< Hop between frames in samples.
+  size_t hop_length;    ///< Hop between frames in samples.
   int use_beat_sync;    ///< Non-zero decides chords per beat.
   int use_hmm;          ///< Non-zero smooths candidates with a Viterbi HMM.
   int hmm_beam_width;   ///< Candidate beam width for the HMM smoothing.

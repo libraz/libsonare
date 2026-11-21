@@ -142,7 +142,7 @@ TEST_CASE("chroma C API defines the whole out-struct on rejected input", "[c_api
     r.n_chroma = -1;
     r.n_frames = -1;
     r.sample_rate = -1;
-    r.hop_length = -1;
+    r.hop_length = std::numeric_limits<size_t>::max();
     r.features = reinterpret_cast<float*>(0x1);
     r.mean_energy = reinterpret_cast<float*>(0x1);
   };
@@ -729,7 +729,7 @@ TEST_CASE("sonare waveform peaks bucket interleaved audio", "[c_api][meter]") {
   SonareWaveformPeaksResult result{};
 
   REQUIRE(sonare_waveform_peaks(samples.data(), 5, 2, 2, &result) == SONARE_OK);
-  REQUIRE(result.channels == 2);
+  REQUIRE(result.num_channels == 2);
   REQUIRE(result.bucket_count == 3);
   REQUIRE(result.samples_per_bucket == 2);
   REQUIRE(result.min != nullptr);
@@ -1426,8 +1426,8 @@ TEST_CASE("silence C entry points validate finite positive thresholds",
     CAPTURE(top_db);
     float* trimmed = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
     size_t trimmed_length = 7;
-    int start = 42;
-    int end = 43;
+    int64_t start = 42;
+    int64_t end = 43;
     REQUIRE(sonare_trim_silence(samples.data(), samples.size(), top_db, 3, 1, &trimmed,
                                 &trimmed_length, &start, &end) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(trimmed == nullptr);
@@ -1447,8 +1447,8 @@ TEST_CASE("silence C entry points validate finite positive thresholds",
     CAPTURE(top_db);
     float* trimmed = nullptr;
     size_t trimmed_length = 0;
-    int start = 0;
-    int end = 0;
+    int64_t start = 0;
+    int64_t end = 0;
     REQUIRE(sonare_trim_silence(samples.data(), samples.size(), top_db, 3, 1, &trimmed,
                                 &trimmed_length, &start, &end) == SONARE_OK);
     sonare_free_floats(trimmed);
@@ -1564,8 +1564,8 @@ TEST_CASE("array transforms refuse a non-finite input in the core function they 
   float* out = nullptr;
   size_t out_length = 0;
   int* intervals = nullptr;
-  int start = 0;
-  int end = 0;
+  int64_t start = 0;
+  int64_t end = 0;
   int n_frames = 0;
   refused_naming(sonare_preemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
                  "preemphasis");
@@ -1599,7 +1599,7 @@ TEST_CASE("every constant-Q entry bounds its hop at the CQT's maximum on both si
           "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   const std::vector<float> magnitude(84 * 4, 0.1f);
-  for (const int hop : {0, -1, 65537}) {
+  for (const size_t hop : {size_t{0}, size_t{65537}, std::numeric_limits<size_t>::max()}) {
     INFO("hop_length " << hop);
     SonareChromaResult chroma{};
     CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, hop, 12, nullptr, &chroma) ==

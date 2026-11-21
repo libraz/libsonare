@@ -280,7 +280,8 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
   options.min_section_sec = args.get_float("min-duration-sec", options.min_section_sec);
   options.threshold = args.get_float("threshold", options.threshold);
   options.n_fft = args.get_int("n-fft", options.n_fft);
-  options.hop_length = args.get_int("hop-length", options.hop_length);
+  options.hop_length =
+      static_cast<size_t>(args.get_int("hop-length", static_cast<int>(options.hop_length)));
 
   SonareSectionResult raw{};
   const SonareError err =

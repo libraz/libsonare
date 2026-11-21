@@ -261,13 +261,13 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
 void sonare_free_spectrum_result(SonareSpectrumResult* result);
 
 /// @brief Per-channel min/max waveform buckets. @c min and @c max are
-///        channel-major arrays of length @c channels * @c bucket_count:
+///        channel-major arrays of length @c num_channels * @c bucket_count:
 ///        index = channel * bucket_count + bucket. Free with
 ///        @ref sonare_free_waveform_peaks_result.
 typedef struct {
   float* min;                 ///< Per-bucket minimum sample, channel-major.
   float* max;                 ///< Per-bucket maximum sample, channel-major.
-  int channels;               ///< Channel count of the analyzed buffer.
+  int num_channels;           ///< Channel count of the analyzed buffer.
   size_t bucket_count;        ///< Buckets per channel.
   size_t samples_per_bucket;  ///< Bucket width in frames.
 } SonareWaveformPeaksResult;
@@ -336,21 +336,22 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int num
 /// @param num_channels Channel count (must be > 0).
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
-/// @param out_momentary Receives the 400 ms series; free with
+/// @param out_momentary_lufs Receives the 400 ms series; free with
 ///        @ref sonare_free_floats. May be null to skip the series, in which case
-///        @p out_momentary_length must be null too.
-/// @param out_momentary_length Receives the 400 ms series length.
-/// @param out_short_term Receives the 3 s series; free with
+///        @p out_momentary_lufs_length must be null too.
+/// @param out_momentary_lufs_length Receives the 400 ms series length.
+/// @param out_short_term_lufs Receives the 3 s series; free with
 ///        @ref sonare_free_floats. May be null to skip the series, in which case
-///        @p out_short_term_length must be null too.
-/// @param out_short_term_length Receives the 3 s series length.
+///        @p out_short_term_lufs_length must be null too.
+/// @param out_short_term_lufs_length Receives the 3 s series length.
 /// @return SONARE_ERROR_INVALID_PARAMETER if either pointer/length pair has
 ///         exactly one null member. A signal shorter than a window yields an
 ///         empty series (null pointer, zero length), not an error.
 SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int num_channels,
-                                           int sample_rate, float** out_momentary,
-                                           size_t* out_momentary_length, float** out_short_term,
-                                           size_t* out_short_term_length);
+                                           int sample_rate, float** out_momentary_lufs,
+                                           size_t* out_momentary_lufs_length,
+                                           float** out_short_term_lufs,
+                                           size_t* out_short_term_lufs_length);
 
 /// @brief EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
 /// @details Multi-channel signals are not accepted here; use

@@ -575,7 +575,7 @@ SonareError probe_chord_symbol_from_analysis(const std::string&, double value) {
 template <typename Bounce>
 SonareError bounce_options_with(const std::string& param, double value, Bounce&& bounce) {
   Project project;
-  REQUIRE(sonare_project_set_sample_rate(project.handle, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project.handle, 48000) == SONARE_OK);
   SonareProjectBounceOptions options;
   sonare_project_bounce_options_init(&options);
   options.total_frames = 64;
@@ -609,7 +609,7 @@ SonareError probe_bounce(const std::string& param, double value) {
 
 SonareError probe_import_external_stems(const std::string& param, double value) {
   Project project;
-  REQUIRE(sonare_project_set_sample_rate(project.handle, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project.handle, 48000) == SONARE_OK);
   const float* planes[] = {payload_buffer()};
   SonareExternalStemDesc stem{};
   stem.name = "stem";
@@ -647,7 +647,7 @@ SonareError probe_apply_vocal_edit(const std::string& param, double value) {
     desc.expected_source_sample_rate = to_u32(value);
   }
   if (is_param(param, "desc.expected_source_sample_count")) {
-    desc.expected_source_sample_count = to_i64(value);
+    desc.expected_source_sample_count = to_count(value);
   }
   SonareProjectVocalEditApplyResult result;
   sonare_project_vocal_edit_apply_result_init(&result);
@@ -663,8 +663,8 @@ SonareError probe_rehydrate_vocal_edits(const std::string& param, double value) 
   original.sample_count = 1;
   original.sample_rate = 48000;
   if (is_param(param, "originals[].source_id")) original.source_id = to_u32(value);
-  if (is_param(param, "originals[].sample_count")) original.sample_count = to_i64(value);
-  if (is_param(param, "originals[].sample_rate")) original.sample_rate = to_u32(value);
+  if (is_param(param, "originals[].sample_count")) original.sample_count = to_count(value);
+  if (is_param(param, "originals[].sample_rate")) original.sample_rate = static_cast<int>(value);
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
   const SonareError err =

@@ -199,7 +199,7 @@ typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareTakeAlignConfig); set by the init function.
   /// Chroma hop in samples, which sets the time resolution of the anchors. In [1, 65536];
   /// default 512.
-  int32_t hop_length;
+  size_t hop_length;
   /// Chroma bins per octave; default 12. Must be a positive multiple of 12, because the grid
   /// is folded onto the twelve pitch classes and a span that does not divide by
   /// them has no fold -- 13 and 18 are refused for that reason alone.
@@ -241,12 +241,11 @@ typedef struct {
 #ifdef __cplusplus
 static_assert(offsetof(SonareTakeAlignConfig, struct_size) == 0,
               "TakeAlignConfig.struct_size offset");
-static_assert(offsetof(SonareTakeAlignConfig, hop_length) == sizeof(uint32_t),
+static_assert(offsetof(SonareTakeAlignConfig, hop_length) == sizeof(size_t),
               "TakeAlignConfig.hop_length offset");
-static_assert(offsetof(SonareTakeAlignConfig, bins_per_octave) ==
-                  sizeof(uint32_t) + sizeof(int32_t),
+static_assert(offsetof(SonareTakeAlignConfig, bins_per_octave) == 2u * sizeof(size_t),
               "TakeAlignConfig.bins_per_octave offset");
-static_assert(sizeof(SonareTakeAlignConfig) == sizeof(uint32_t) + 2u * sizeof(int32_t),
+static_assert(sizeof(SonareTakeAlignConfig) == 3u * sizeof(size_t),
               "SonareTakeAlignConfig layout drift");
 static_assert(offsetof(SonareTakeAlignment, mean_residual_frames) == 0,
               "TakeAlignment.mean_residual_frames offset");

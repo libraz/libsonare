@@ -66,7 +66,7 @@ bool names_contain(const char* names, const std::string& wanted) {
 SonareEngine* make_reed_engine(uint32_t dest) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
@@ -284,7 +284,7 @@ TEST_CASE("controller profile calls name the destination that has no instrument"
           "[c_api][controller]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   size_t count = 123;
   const SonareControllerBinding binding = breath_to_excitation();
@@ -308,7 +308,7 @@ TEST_CASE("an instrument without a controller profile refuses with a specific me
           "[c_api][controller]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig builtin{};
   sonare_engine_builtin_synth_config_init(&builtin);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);

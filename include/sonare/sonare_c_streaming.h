@@ -23,9 +23,9 @@ typedef struct {
   /// Window in samples at 44100 Hz (default 2048); rescaled below that rate, never shorter than
   /// the hop.
   int n_fft;
-  int hop_length;  ///< Hop between analysis frames in input samples (default 512, at most n_fft)
-  int n_mels;      ///< Number of Mel bands (default 128)
-  float fmin_hz;   ///< Lowest Mel filterbank frequency in Hz (default 0)
+  size_t hop_length;  ///< Hop between analysis frames in input samples (default 512, at most n_fft)
+  int n_mels;         ///< Number of Mel bands (default 128)
+  float fmin_hz;      ///< Lowest Mel filterbank frequency in Hz (default 0)
   /// Highest Mel filterbank frequency in Hz, greater than fmin_hz; NaN (the default) is the
   /// Nyquist frequency. At most 22050 effective above 44100 Hz input, where the analyzer works
   /// at 44100 Hz.
@@ -142,7 +142,7 @@ typedef struct {
   int n_chroma;              ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFrames;
 
-/// @brief 8-bit quantized frame buffer from sonare_stream_analyzer_read_frames_u8.
+/// @brief 8-bit quantized frame buffer from sonare_stream_analyzer_read_quantized_frames_u8.
 ///
 /// Every array holds values scaled to 0..255 over the quantization range noted per field. Free
 /// with sonare_free_stream_frames_u8.
@@ -157,11 +157,14 @@ typedef struct {
   uint8_t* rms_energy;         ///< [n_frames] quantized over [0, rms_max]
   uint8_t* spectral_centroid;  ///< [n_frames] quantized over [0, centroid_max]
   uint8_t* spectral_flatness;  ///< [n_frames] quantized over [0, 1]
+  int8_t* chord_root;          ///< [n_frames] root pitch class, NULL when CHROMA is absent
+  int8_t* chord_quality;       ///< [n_frames] @ref SonareChordQuality, NULL when CHROMA is absent
+  uint8_t* chord_confidence;   ///< [n_frames] quantized over [0, 1], NULL when CHROMA is absent
   uint32_t feature_flags;      ///< Bitwise SonareStreamFeatureFlags for populated arrays
   int n_chroma;                ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFramesU8;
 
-/// @brief 16-bit quantized frame buffer from sonare_stream_analyzer_read_frames_i16.
+/// @brief 16-bit quantized frame buffer from sonare_stream_analyzer_read_quantized_frames_i16.
 ///
 /// Same layout and quantization ranges as SonareStreamFramesU8 with int16 samples. Free with
 /// sonare_free_stream_frames_i16.
@@ -176,6 +179,9 @@ typedef struct {
   int16_t* rms_energy;         ///< [n_frames] quantized over [0, rms_max]
   int16_t* spectral_centroid;  ///< [n_frames] quantized over [0, centroid_max]
   int16_t* spectral_flatness;  ///< [n_frames] quantized over [0, 1]
+  int8_t* chord_root;          ///< [n_frames] root pitch class, NULL when CHROMA is absent
+  int8_t* chord_quality;       ///< [n_frames] @ref SonareChordQuality, NULL when CHROMA is absent
+  int16_t* chord_confidence;   ///< [n_frames] quantized over [0, 1], NULL when CHROMA is absent
   uint32_t feature_flags;      ///< Bitwise SonareStreamFeatureFlags for populated arrays
   int n_chroma;                ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFramesI16;
@@ -212,7 +218,7 @@ typedef struct {
   float bpm;                     ///< Estimated BPM (0 if not yet estimated)
   float bpm_confidence;          ///< BPM confidence (0-1)
   /// Tempo candidates the most recent BPM estimate chose from; 0 until one has run.
-  int bpm_candidate_count;
+  size_t bpm_candidate_count;
   int key;                         ///< Estimated key root pitch class (0-11, -1 = unknown)
   int key_minor;                   ///< Non-zero if minor mode
   float key_confidence;            ///< Key confidence (0-1)
@@ -228,7 +234,7 @@ typedef struct {
   size_t bar_chord_progression_count;  ///< Number of entries in bar_chord_progression
   /// Beat-synchronized chord per bar, oldest first; capped at max_progression_entries
   SonareStreamBarChord* bar_chord_progression;
-  int pattern_length;  ///< Length in bars of the repeating chord pattern (see voted_pattern)
+  size_t pattern_length;  ///< Length in bars of the repeating chord pattern (see voted_pattern)
   size_t voted_pattern_count;  ///< Number of entries in voted_pattern
   /// Majority-voted chord per position of the repeating pattern; see SonareStreamBarChord
   SonareStreamBarChord* voted_pattern;
@@ -257,8 +263,8 @@ typedef struct {
 /// @par Threading and lifecycle
 /// A handle supports one producer thread calling process,
 /// or finalize concurrently with one consumer thread calling available_frames,
-/// a read_frames variant, stats, frame_count, or current_time_sec. Calls within
-/// either role must be serialized. Completed frames and stats snapshots use an
+/// a read_frames or read_quantized_frames variant, stats, frame_count, or current_time_sec. Calls
+/// within either role must be serialized. Completed frames and stats snapshots use an
 /// allocation-free release/acquire handoff; when the pending ring is full the
 /// newly produced output frame is dropped, while analysis totals still advance.
 /// reset, all set_* functions, destroy, and ownership transfer require both
@@ -309,18 +315,18 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
 /// @param config Quantization ranges; started from @ref sonare_stream_quantize_config_init.
 ///        NULL = those defaults.
 /// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_u8).
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
-                                                  const SonareStreamQuantizeConfig* config,
-                                                  size_t max_frames, SonareStreamFramesU8* out);
+SonareError sonare_stream_analyzer_read_quantized_frames_u8(
+    SonareStreamAnalyzer* analyzer, const SonareStreamQuantizeConfig* config, size_t max_frames,
+    SonareStreamFramesU8* out);
 
 /// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
 ///        using caller-supplied quantization ranges.
 /// @param config Quantization ranges; started from @ref sonare_stream_quantize_config_init.
 ///        NULL = those defaults.
 /// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
-SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
-                                                   const SonareStreamQuantizeConfig* config,
-                                                   size_t max_frames, SonareStreamFramesI16* out);
+SonareError sonare_stream_analyzer_read_quantized_frames_i16(
+    SonareStreamAnalyzer* analyzer, const SonareStreamQuantizeConfig* config, size_t max_frames,
+    SonareStreamFramesI16* out);
 
 /// @brief Resets analyzer state for a new stream.
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer, size_t base_sample_offset);
@@ -332,7 +338,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
 void sonare_free_stream_stats(SonareStreamStats* stats);
 
 /// @brief Returns the total number of frames processed.
-SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count);
+SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, size_t* out_count);
 
 /// @brief Returns the current stream time position in seconds.
 SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer, float* out_sec);

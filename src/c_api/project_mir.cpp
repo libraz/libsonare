@@ -52,7 +52,7 @@ void fill_tempo_candidate(const sonare::mir::TempoEstimate& estimate,
   out->bpm = estimate.segments.empty() ? 0.0f : static_cast<float>(estimate.segments.front().bpm);
   out->confidence = estimate.confidence;
   out->kind = tempo_candidate_kind(estimate.label);
-  out->time_signature_count = static_cast<uint32_t>(estimate.time_sigs.size());
+  out->time_signature_count = estimate.time_sigs.size();
   if (!estimate.time_sigs.empty()) {
     const auto& time_sig = estimate.time_sigs.front();
     out->first_time_signature = {time_sig.start_ppq, time_sig.time_sig.numerator,
@@ -455,7 +455,7 @@ void sonare_take_align_config_init(SonareTakeAlignConfig* config) {
   config->struct_size = sizeof(SonareTakeAlignConfig);
 #if defined(SONARE_WITH_ARRANGEMENT)
   const sonare::mir::ChromaDtwConfig defaults;
-  config->hop_length = defaults.hop_length;
+  config->hop_length = static_cast<size_t>(defaults.hop_length);
   config->bins_per_octave = defaults.bins_per_octave;
 #endif
 }
@@ -519,7 +519,7 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
   SONARE_C_REQUIRE_NONNULL(out_count);
 
   sonare::mir::ChromaDtwConfig dtw_config;
-  dtw_config.hop_length = resolved.hop_length;
+  dtw_config.hop_length = static_cast<int>(resolved.hop_length);
   dtw_config.bins_per_octave = resolved.bins_per_octave;
 
   SONARE_C_TRY

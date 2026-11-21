@@ -9,10 +9,6 @@
 extern "C" {
 #endif
 
-/// STFT hop of a config struct: a quarter of the FFT size in use (at least 1). Outside the
-/// hop's real domain (a positive sample count), so it never reads as a length.
-#define SONARE_STFT_HOP_AUTO (-1)
-
 // ============================================================================
 // Effects
 // ============================================================================
@@ -734,12 +730,12 @@ typedef struct {
   /// FFT size and hop the separation and the onset detector share. They cannot
   /// be set apart: an event measured on one framing and lifted out on another is
   /// not the same signal. @c n_fft defaults to 2048 and @c hop_length to
-  /// @ref SONARE_STFT_HOP_AUTO, a quarter of the n_fft in use. The pair must overlap-add --
-  /// @c n_fft even and at least 2, @c hop_length positive and no more than half of it --
+  /// 0, a quarter of the n_fft in use. The pair must overlap-add --
+  /// @c n_fft even and at least 2, @c hop_length no more than half of it --
   /// because the separation inverts an STFT.
   int32_t n_fft;
-  /// Hop in samples, or @ref SONARE_STFT_HOP_AUTO; see @c n_fft.
-  int32_t hop_length;
+  /// Hop in samples, or 0 for a quarter of @c n_fft; see @c n_fft.
+  size_t hop_length;
   /// Median filter lengths the separation runs, along time and along frequency.
   /// A longer harmonic kernel calls more of a sustained sound harmonic. Odd and positive,
   /// default 31, so an even one is rejected rather than rounded. 1 is legal and degenerate --
@@ -786,9 +782,8 @@ typedef struct {
   /// Validated even when every edit is the identity and no separation runs, so an unusable
   /// framing is an error on every set.
   int32_t n_fft;
-  /// Hop in samples of the separation, or @ref SONARE_STFT_HOP_AUTO (the default), a quarter
-  /// of @c n_fft.
-  int32_t hop_length;
+  /// Hop in samples of the separation, or 0 (the default), a quarter of @c n_fft.
+  size_t hop_length;
   /// Harmonic median kernel length of the separation; odd and positive, default 31.
   int32_t hpss_kernel_harmonic;
   /// Percussive median kernel length of the separation; odd and positive, default 31.
@@ -1111,9 +1106,8 @@ typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareDecomposeStemsConfig); set by the init function.
   int n_components;      ///< Number of NMF components (stems), >= 1; default 4.
   int n_fft;             ///< STFT size in samples, even and at least 4; default 2048.
-  /// STFT hop in samples, positive and at most n_fft / 2; default @ref SONARE_STFT_HOP_AUTO
-  /// (a quarter of n_fft).
-  int hop_length;
+  /// STFT hop in samples, at most n_fft / 2; 0 (the default) is a quarter of n_fft.
+  size_t hop_length;
   int n_iter;        ///< Multiplicative-update iterations, >= 1; default 100.
   float beta;        ///< Finite beta divergence: 2 = Frobenius (default), 1 = KL, 0 = IS.
   const char* init;  ///< Initialiser "random" (default) or "nndsvd"; never NULL once initialised.
@@ -1274,7 +1268,7 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 /// @param speed_ratio Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
 /// @param n_fft FFT size used for analysis/synthesis: an even integer >= 4.
 /// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2], or
-///        @ref SONARE_STFT_HOP_AUTO for a quarter of @p n_fft (at least 1); 0 is refused. See
+///        0 for a quarter of @p n_fft (at least 1). See
 ///        @ref SonareHpssOptions::hop_length for why the overlap bound applies.
 /// @param out Receives the time-stretched audio buffer.
 /// @param out_length Receives the output length.
@@ -1282,7 +1276,7 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 /// sample_rate, rate, n_fft, hop_length. Prefer a request object where the
 /// language binding provides one.
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,
-                                 float speed_ratio, int n_fft, int hop_length, float** out,
+                                 float speed_ratio, int n_fft, size_t hop_length, float** out,
                                  size_t* out_length);
 
 /// @brief How a spectral region op modifies the masked STFT bins.
@@ -1299,9 +1293,8 @@ typedef enum SONARE_ENUM_BASE {
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareSpectralEditConfig); set by the init function.
   int n_fft;             ///< STFT size in samples, a power of two in [4, 262144]; default 2048.
-  /// STFT hop in samples, 0 < hop <= n_fft/2; default @ref SONARE_STFT_HOP_AUTO (a quarter of
-  /// n_fft).
-  int hop_length;
+  /// STFT hop in samples, at most n_fft/2; 0 (the default) is a quarter of n_fft.
+  size_t hop_length;
   int window;              ///< A @ref SonareWindowType (sonare_c_streaming.h); default Hann.
   int heal_radius_frames;  ///< Neighbour frames on each side that heal reads, >= 1; default 2.
 } SonareSpectralEditConfig;

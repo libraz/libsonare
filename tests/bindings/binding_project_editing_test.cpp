@@ -72,7 +72,7 @@ TEST_CASE("project C deserialize rejects oversized JSON before copying caller by
 TEST_CASE("snap_to_grid snaps a near-beat coordinate to the beat line", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   double snapped = -1.0;
   REQUIRE(sonare_project_snap_to_grid(project, 1.02, 1.0, nullptr, &snapped) == SONARE_OK);
@@ -117,6 +117,7 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
   REQUIRE(count > 0);
   REQUIRE(candidates[0].bpm > 0.0f);
   REQUIRE(candidates[0].confidence >= 0.0f);
+  REQUIRE(candidates[0].time_signature_count > 0);
   REQUIRE(candidates[0].first_time_signature.numerator > 0);
   REQUIRE(candidates[0].first_time_signature.denominator > 0);
 

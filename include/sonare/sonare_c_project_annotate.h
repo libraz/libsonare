@@ -185,7 +185,7 @@ typedef struct {
   float bpm;         ///< Candidate tempo in beats per minute.
   float confidence;  ///< Relative confidence of the candidate.
   uint32_t kind;     ///< A @ref SonareProjectTempoCandidateKind labelling the octave hypothesis.
-  uint32_t time_signature_count;  ///< Number of detected time-signature segments.
+  size_t time_signature_count;  ///< Number of detected time-signature segments.
   SonareProjectTimeSignatureSegment
       first_time_signature;  ///< First detected time-signature segment.
 } SonareProjectTempoCandidate;

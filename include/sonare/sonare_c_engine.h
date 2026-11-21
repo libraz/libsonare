@@ -117,8 +117,8 @@ void sonare_engine_destroy(SonareEngine* engine);
 ///          Capture, instrument, PDC and monitor scratch is reserved for
 ///          @p max_channels (1..64) only: the host must not pass more channels
 ///          to process/render until it prepares again with a larger bound.
-///          @p sample_rate must be a whole number of hertz in [8000, 384000];
-///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER, as does a
+///          @p sample_rate must be in [8000, 384000] Hz; a rate outside it
+///          returns SONARE_ERROR_INVALID_PARAMETER, as does a
 ///          @p max_block_size outside [1, 1048576] after the sentinel is applied.
 /// @return SONARE_ERROR_INVALID_STATE when a bound instrument cannot prepare a
 ///         SysEx in the MIDI clips scheduled earlier; the engine is then
@@ -126,7 +126,7 @@ void sonare_engine_destroy(SonareEngine* engine);
 /// @return SONARE_ERROR_INVALID_STATE when an applied project timeline locks the
 ///         sample rate and @p sample_rate differs from it; the engine is left
 ///         untouched until the timeline's clips are cleared.
-SonareError sonare_engine_prepare(SonareEngine* engine, double sample_rate, int max_block_size,
+SonareError sonare_engine_prepare(SonareEngine* engine, int sample_rate, int max_block_size,
                                   size_t command_capacity, size_t telemetry_capacity,
                                   int max_channels);
 /// @brief Queues a transport start at @p render_frame (negative or past: the next block head).
@@ -855,8 +855,7 @@ SonareError sonare_engine_pop_clip_page_request(SonareEngine* engine,
 ///   @ref sonare_engine_prepare. A non-zero count means the host is draining
 ///   @ref sonare_engine_pop_clip_page_request too slowly and some pages were
 ///   never asked for, so their reads produced silence.
-SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine,
-                                                           uint32_t* out_count);
+SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine, size_t* out_count);
 /// @brief Number of blocks in which a time-stretched clip fell back to resampling.
 /// @details Advisory telemetry; monotonic within a prepared session and reset by
 ///   @ref sonare_engine_prepare. Only @ref sonare_engine_warp_voice_capacity
@@ -864,7 +863,7 @@ SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine,
 ///   clips than voices plays some of them pitch-shifted instead -- except at
 ///   capacity 0, a deliberate "stretch disabled" choice that never counts here.
 ///   A non-zero count is the only way to detect that degradation.
-SonareError sonare_engine_warp_stretch_overflow_count(SonareEngine* engine, uint32_t* out_count);
+SonareError sonare_engine_warp_stretch_overflow_count(SonareEngine* engine, size_t* out_count);
 /// @brief Largest @p voices @ref sonare_engine_set_warp_voice_capacity accepts.
 #define SONARE_ENGINE_MAX_WARP_VOICES 64u
 /// @brief Sets the number of concurrent time-stretch voices.
@@ -1141,8 +1140,7 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
 ///   the control thread while @ref sonare_engine_process is not running.
 /// @param out_band_count Optional; receives the band count actually applied.
 SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int interval_frames,
-                                                    unsigned int band_count,
-                                                    unsigned int* out_band_count);
+                                                    size_t band_count, size_t* out_band_count);
 /// @brief Drains pending spectrum + vectorscope telemetry records.
 /// @param out Caller-owned array receiving up to @p max_records entries.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
@@ -1706,16 +1704,14 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
 ///        the note started a voice of its own instead.
 /// @details Counted rather than inferred: a refusal sounds like an ordinary
 ///          note, so nothing in the audio separates "this engine declines
-///          legato" from "the mode was never set". Saturates at UINT32_MAX
-///          rather than wrapping, so a large value stays readable as "at least
-///          this many".
+///          legato" from "the mode was never set".
 ///
 ///          Refuses on the same terms as the two calls above rather than
 ///          answering zero: an instrument that never had an articulation has
 ///          refused nothing, and a host reading that zero would read it as
 ///          "every slur took" — the reading this counter exists to prevent.
 SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t destination_id,
-                                                uint32_t* out_count);
+                                                size_t* out_count);
 
 /// @brief Sets the rig of one part, or of the destination default, on a
 ///        destination's instrument.
@@ -2036,7 +2032,7 @@ SonareError sonare_engine_set_midi_destination_external(SonareEngine* engine,
 SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, int enabled);
 /// @brief Number of external-MIDI events dropped because the queue was full.
 /// @details Advisory telemetry; monotonic within a prepared session.
-SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, uint32_t* out_count);
+SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, size_t* out_count);
 /// @brief Drains queued external-MIDI events, lowered to MIDI 1.0 byte messages.
 /// @details Each output slot is a @ref SonareExternalMidiEvent. A single queued
 ///   channel-voice event may lower to more than one output event (e.g. a MIDI 2.0

@@ -1226,6 +1226,13 @@ domain = "mastering"
 rule = "num-channels"
 
 [[entry]]
+kind = "field"
+old = "SonareWaveformPeaksResult.channels"
+new = "SonareWaveformPeaksResult.num_channels"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
 kind = "function"
 old = "sonare_engine_bounce_options_default"
 removed = "call sonare_engine_bounce_options_init(&options) on a caller-owned struct instead; set num_channels before bouncing (a 0 width is refused)"
@@ -1981,6 +1988,34 @@ new = "SonareMelResult.fmax_hz"
 domain = "analysis"
 rule = "unit-in-name"
 
+
+[[entry]]
+kind = "option"
+old = "sonare_lufs_series_interleaved(out_momentary)"
+new = "sonare_lufs_series_interleaved(out_momentary_lufs)"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_lufs_series_interleaved(out_momentary_length)"
+new = "sonare_lufs_series_interleaved(out_momentary_lufs_length)"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_lufs_series_interleaved(out_short_term)"
+new = "sonare_lufs_series_interleaved(out_short_term_lufs)"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_lufs_series_interleaved(out_short_term_length)"
+new = "sonare_lufs_series_interleaved(out_short_term_lufs_length)"
+domain = "mastering"
+rule = "unit-in-name"
 [[entry]]
 kind = "type"
 old = "SonareSectionResult"
@@ -2146,7 +2181,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_phase_vocoder"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::phase_vocoder derives an absent hop"
@@ -2154,7 +2189,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::phase_vocoder deriv
 [[entry]]
 kind = "function"
 old = "sonare_griffin_lim"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::griffin_lim derives an absent hop"
@@ -2162,7 +2197,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::griffin_lim derives
 [[entry]]
 kind = "function"
 old = "sonare_mel_to_audio"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
@@ -2170,7 +2205,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusa
 [[entry]]
 kind = "function"
 old = "sonare_mfcc_to_audio"
-changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct"
+changed = "pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
@@ -2188,6 +2223,7 @@ old = "SONARE_REVERB_MODEL_SABINE"
 removed = "set prefer_eyring to 0 on SonareRirSynthConfig or SonareRoomMorphConfig"
 domain = "effects"
 rule = "absent-not-sentinel"
+
 
 [[entry]]
 kind = "field"
@@ -2340,7 +2376,7 @@ old = "SonareBuiltinSynthConfig"
 changed = "leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/binding_project_bounce_test.cpp::bounce_with_builtin_instruments refuses each synth field by name"
+test = "tests/bindings/binding_project_bounce_test.cpp::project bounce refuses each built-in synth field by name"
 
 [[entry]]
 kind = "type"
@@ -2356,7 +2392,7 @@ old = "SonareSf2InstrumentConfig"
 changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "tests/bindings/binding_project_bounce_test.cpp::bounce_with_sf2_instruments refuses each player field by name"
+test = "tests/bindings/binding_project_bounce_test.cpp::project bounce refuses each SF2 player field by name"
 
 [[entry]]
 kind = "field"
@@ -2672,6 +2708,1030 @@ domain = "effects"
 rule = "c-count-types"
 test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"
 
+
+[[entry]]
+kind = "field"
+old = "SonareBoundaryOptions.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareBoundaryResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareChromaResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareCqtResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareDecomposeStemsConfig.hop_length"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_decompose_stems"
+
+[[entry]]
+kind = "field"
+old = "SonareMelResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterOptions.candidate_numerator_count"
+changed = "the count is a size_t instead of an int; a value above the capacity of the candidate array is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::sonare_estimate_meter_json"
+
+[[entry]]
+kind = "field"
+old = "SonareMfccResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.meter_candidate_numerator_count"
+changed = "the count is a size_t instead of an int; a value above the capacity of the candidate array is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_music_test.cpp::onset, analysis JSON and meter entries name the refused argument"
+
+[[entry]]
+kind = "field"
+old = "SonareOnsetDetectConfig.hop_length"
+changed = "the hop is a size_t instead of an int32_t; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::a configured onset detector still answers to its configuration"
+
+[[entry]]
+kind = "field"
+old = "SonarePercussiveEventConfig.hop_length"
+changed = "the hop is a size_t instead of an int32_t; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_percussive_events_test.cpp::sonare_extract_percussive_events rejects malformed arguments and clears its output"
+
+[[entry]]
+kind = "field"
+old = "SonarePercussiveRenderConfig.hop_length"
+changed = "the hop is a size_t instead of an int32_t; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_percussive_events_test.cpp::sonare_render_percussive_events rejects malformed arguments"
+
+[[entry]]
+kind = "field"
+old = "SonarePolyphonicConfig.hop_length"
+changed = "the hop is a size_t instead of an int32_t; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_polyphony_test.cpp::the polyphonic C API refuses what it cannot do"
+
+[[entry]]
+kind = "field"
+old = "SonarePolyphonicConfig.win_length"
+changed = "the window length is a size_t instead of an int32_t; 0 selects n_fft, replacing SONARE_POLYPHONIC_WIN_LENGTH_FFT, and a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_polyphony_test.cpp::the polyphonic C API refuses what it cannot do"
+
+[[entry]]
+kind = "field"
+old = "SonareSpectralEditConfig.hop_length"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_spectral_edit"
+
+[[entry]]
+kind = "field"
+old = "SonareStftResult.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamConfig.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.bpm_candidate_count"
+changed = "the count is a size_t instead of an int"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.pattern_length"
+changed = "the count is a size_t instead of an int"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_bpm(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_dynamics(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_melody(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_melody(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_rhythm(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_timbre(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_bass_chroma(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_chroma(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_chroma_cens(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_chroma_cqt(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_clicks(length)"
+changed = "the length is a size_t instead of an int; a value above the offline audio limit is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_cqt(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_cqt_to_audio(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_cyclic_tempogram(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_cyclic_tempogram(win_length)"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_estimate_tuning(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_fourier_tempogram(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_fourier_tempogram(win_length)"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_frame_signal(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_frame_signal(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_frames_to_samples(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_frames_to_time(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_griffin_lim(hop_length)"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_hybrid_cqt(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_mel_spectrogram(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_mel_to_audio(hop_length)"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_mfcc(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_mfcc_to_audio(hop_length)"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_onset_strength(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_onset_strength_multi(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_pcen(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_phase_vocoder(hop_length)"
+changed = "the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_piptrack(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_pyin(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_pyin(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_yin(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_yin(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_plp(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_plp(win_length)"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_poly_features(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_polyphonic_frame_count(out_count)"
+changed = "the count is written through a size_t* instead of an int pointer"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_polyphony_test.cpp::the polyphonic handle reports what the chain found"
+
+[[entry]]
+kind = "option"
+old = "sonare_pseudo_cqt(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_reassigned_spectrogram(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_rms_energy(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_rms_energy(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_samples_to_frames(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_bandwidth(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_centroid(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_contrast(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_flatness(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_flux(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_spectral_rolloff(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_split_silence(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_split_silence(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_split_silence_common(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_split_silence_common(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_stft(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_stream_analyzer_frame_count(out_count)"
+changed = "the count is written through a size_t* instead of an int pointer"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates config and reads quantized frames"
+
+[[entry]]
+kind = "option"
+old = "sonare_tempogram(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_tempogram(win_length)"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_tempogram_ratio(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_tempogram_ratio(win_length)"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_time_to_frames(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_silence(end_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_silence(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_silence(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_silence(start_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_vqt(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_vqt_to_audio(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_zero_crossing_rate(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "option"
+old = "sonare_zero_crossing_rate(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "analysis"
+rule = "c-count-types"
+test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineCaptureStatus.overflow_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_voice_test.cpp::sonare engine capture can record live input and record offset metadata"
+
+[[entry]]
+kind = "field"
+old = "SonareExternalStemDesc.frame_count"
+changed = "the count is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_external_stems_test.cpp::C ABI external stem import refuses an argument by its header name"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectTempoCandidate.time_signature_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/bindings/binding_project_editing_test.cpp::project tempo analysis exposes ranked candidates and applies detected meter"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditApplyDesc.expected_source_sample_count"
+changed = "the length is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project entries refuse an argument by its header name"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditApplyDesc.rendered_sample_count"
+changed = "the length is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project entries refuse an argument by its header name"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditDependenciesResult.dependency_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project persistence reports dependencies and rehydrates derived PCM"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalEditDependency.source_sample_count"
+changed = "the length is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project persistence reports dependencies and rehydrates derived PCM"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalOriginalSource.sample_count"
+changed = "the length is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project persistence reports dependencies and rehydrates derived PCM"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalOriginalSource.sample_rate"
+changed = "the sample rate is an int instead of a uint32_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project apply and rehydrate enforce the supported sample-rate range"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectVocalRehydrateResult.item_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project persistence reports dependencies and rehydrates derived PCM"
+
+[[entry]]
+kind = "field"
+old = "SonareTakeAlignConfig.hop_length"
+changed = "the hop is a size_t instead of an int32_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C ABI take alignment reads its configuration and refuses unusable input"
+
+[[entry]]
+kind = "field"
+old = "SonareTransportState.sample_rate"
+changed = "the sample rate is an int instead of a double"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_prepare reports the whole-hertz rate it prepared"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalAnalysis.frame_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalAnalysisResult.sample_rate"
+changed = "the sample rate is an int instead of a uint32_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C create and restore enforce the supported sample-rate range"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalEditResult.dirty_range_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C empty commit returns null range storage"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalEditResult.id_change_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C empty commit returns null range storage"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNote.amplitude_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNoteEdit.amplitude_envelope_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNoteEdit.target_point_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNotesResult.note_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalNotesResult.transition_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalOperation.note_id_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C operations refuse a mode ordinal outside its enum"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalPitchResult.frame_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C draft exposes provisional notes and stale errors without publication"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalRenderResult.processed_range_count"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C snapshots own PCM after session destruction and jobs cancel safely"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalRenderResult.sample_count"
+changed = "the length is a size_t instead of an int64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/api/sonare_c_vocal_edit_test.cpp::vocal C snapshots own PCM after session destruction and jobs cancel safely"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_clip_page_request_overflow_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_automation_test.cpp::engine degradation counters are reachable through the C ABI"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_configure_scope_telemetry(band_count)"
+changed = "the count is a size_t instead of an unsigned int"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine scope telemetry reports a tone's spectrum and goniometer"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_configure_scope_telemetry(out_band_count)"
+changed = "the count is a size_t instead of an unsigned int"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine scope telemetry reports a tone's spectrum and goniometer"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_external_midi_dropped_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_contract_test.cpp::engine MIDI getters define their out-parameter on every exit path"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_legato_fallback_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_articulation_test.cpp::articulation round-trips per channel"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_prepare(sample_rate)"
+changed = "the sample rate is an int instead of a double"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_prepare reports the whole-hertz rate it prepared"
+
+[[entry]]
+kind = "option"
+old = "sonare_engine_warp_stretch_overflow_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_engine_automation_test.cpp::engine degradation counters are reachable through the C ABI"
+
+[[entry]]
+kind = "option"
+old = "sonare_midi_route_events(out_overflow_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface validates MIDI event helpers and input"
+
+[[entry]]
+kind = "option"
+old = "sonare_playback_renderer_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "engine"
+rule = "c-count-types"
+test = "tests/api/sonare_c_playback_test.cpp::playback renderer diagnostics_json and non_finite_discard_count"
+
+[[entry]]
+kind = "option"
+old = "sonare_project_rehydrate_vocal_edits(original_count)"
+changed = "the count is a size_t instead of a uint64_t"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_vocal_project_test.cpp::vocal project persistence reports dependencies and rehydrates derived PCM"
+
+[[entry]]
+kind = "option"
+old = "sonare_project_set_sample_rate(sample_rate)"
+changed = "the sample rate is an int instead of a double"
+domain = "project"
+rule = "c-count-types"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI set_sample_rate names its accepted range when it refuses one"
 [[entry]]
 kind = "function"
 old = "sonare_analyze_impulse_response_ex"
@@ -3066,7 +4126,7 @@ old = "sonare_engine_drain_meter_telemetry"
 changed = "fills SonareMeterTelemetryRecord, which is now the per-plane layout (peak_db[], rms_db[], true_peak_dbtp[], input_peak_db[] and num_channels, 192 bytes); a stereo target is planes 0 and 1"
 domain = "engine"
 rule = "options-struct"
-test = "tests/api/sonare_c_engine_routing_test.cpp::C engine meter drain refuses bad arguments and reports per-plane peaks"
+test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_engine_drain_meter_telemetry reports per-plane meters for a surround bus"
 
 [[entry]]
 kind = "function"
@@ -3246,6 +4306,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_stream_analyzer_read_frames_u8"
+to = "sonare_stream_analyzer_read_quantized_frames_u8"
 changed = "takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults)"
 domain = "analysis"
 rule = "options-struct"
@@ -3254,13 +4315,14 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates
 [[entry]]
 kind = "function"
 old = "sonare_stream_analyzer_read_frames_u8_ex"
-removed = "call sonare_stream_analyzer_read_frames_u8, which now takes the config"
+removed = "call sonare_stream_analyzer_read_quantized_frames_u8, which now takes the config"
 domain = "analysis"
 rule = "options-struct"
 
 [[entry]]
 kind = "function"
 old = "sonare_stream_analyzer_read_frames_i16"
+to = "sonare_stream_analyzer_read_quantized_frames_i16"
 changed = "takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults)"
 domain = "analysis"
 rule = "options-struct"
@@ -3269,9 +4331,10 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer C API validates
 [[entry]]
 kind = "function"
 old = "sonare_stream_analyzer_read_frames_i16_ex"
-removed = "call sonare_stream_analyzer_read_frames_i16, which now takes the config"
+removed = "call sonare_stream_analyzer_read_quantized_frames_i16, which now takes the config"
 domain = "analysis"
 rule = "options-struct"
+
 
 [[entry]]
 kind = "function"

@@ -73,12 +73,12 @@ void check_note_region(int64_t onset_sample, int64_t offset_sample, size_t lengt
   if (offset_sample <= onset_sample) {
     util::check::refuse_relation({"offset_sample", "onset_sample"}, "{0} must be greater than {1}");
   }
-  util::check::integer_in_range(offset_sample, 0, kMaxIndex, "offset_sample");
+  util::check::integer_within(offset_sample, kNoteSampleIndexDomain, "offset_sample");
 }
 
 /// Checks the separation framing of a percussive config and copies it onto the core one.
-SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
-                                          int32_t kernel_harmonic, int32_t kernel_percussive,
+SonareError resolve_percussive_separation(int32_t n_fft, size_t hop_length, int32_t kernel_harmonic,
+                                          int32_t kernel_percussive,
                                           editing::event_model::PercussiveSeparationConfig& out) {
   if (const SonareError err = run_validation([&] {
         util::check::even_within(n_fft, sonare::kColaNFftDomain, "config.n_fft");
@@ -1188,7 +1188,7 @@ void sonare_percussive_event_config_init(SonarePercussiveEventConfig* config) {
   config->struct_size = sizeof(*config);
   const editing::event_model::PercussiveEventExtractorConfig defaults;
   config->n_fft = defaults.separation.n_fft;
-  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hop_length = 0;
   config->hpss_kernel_harmonic = defaults.separation.hpss.kernel_size_harmonic;
   config->hpss_kernel_percussive = defaults.separation.hpss.kernel_size_percussive;
   config->onset_wait = defaults.onset.wait;
@@ -1203,7 +1203,7 @@ void sonare_percussive_render_config_init(SonarePercussiveRenderConfig* config) 
   config->struct_size = sizeof(*config);
   const editing::event_model::PercussiveEventRenderConfig defaults;
   config->n_fft = defaults.separation.n_fft;
-  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hop_length = 0;
   config->hpss_kernel_harmonic = defaults.separation.hpss.kernel_size_harmonic;
   config->hpss_kernel_percussive = defaults.separation.hpss.kernel_size_percussive;
   config->fade_ms = defaults.fade_ms;

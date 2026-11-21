@@ -46,7 +46,7 @@ std::string int_at_least_1() {
 SonareEngine* make_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   return engine;
 }
 
@@ -79,26 +79,24 @@ TEST_CASE("engine lifecycle refusals name the parameter", "[c_api][engine_refusa
   CHECK(sonare_engine_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
 
-  CHECK(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(nullptr, 48000, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "engine must not be NULL");
 
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   const std::string rate = refusal::integer_range_predicate(8000, 384000);
-  CHECK(sonare_engine_prepare(engine, 1000.0, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 1000, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("sample_rate", rate));
-  CHECK(sonare_engine_prepare(engine, 48000.0, -1, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000, -1, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_block_size", refusal::integer_range_predicate(1, 1 << 20)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 65537, 16, 0) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000, 128, 65537, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("command_capacity", refusal::integer_range_predicate(0, 65536)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16385, 0) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000, 128, 16, 16385, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         refused("telemetry_capacity", refusal::integer_range_predicate(0, 16384)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 65) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000, 128, 16, 16, 65) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_channels", refusal::integer_range_predicate(1, 64)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, -1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000, 128, 16, 16, -1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_channels", refusal::integer_range_predicate(1, 64)));
   sonare_engine_destroy(engine);
 }

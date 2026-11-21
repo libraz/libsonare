@@ -121,9 +121,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonarePolyphonicConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_polyphonic_config_init, after which every field is read literally and range-checked (a 0 is a 0, so min_frame_peak_ratio, min_separation_cents, min_ridge_peak_ratio and min_ridge_duration_ms take 0 directly and refuse a negative); reattack_ratio moves beside the other tracking fields; win_length 0 (n_fft), max_refine_hz 0 (derived) and reattack_ratio 0 (no split) keep their named meanings |
 | `SonareTranscribeConfig.reattack_ratio` | 0 now means no split (1.x: 0 was the default 2.0 and a negative value meant no split); a non-zero value must be finite and above 1 |
-| `sonare_griffin_lim` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_mel_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct |
-| `sonare_mfcc_to_audio` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct |
+| `sonare_griffin_lim` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
+| `sonare_mel_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct |
+| `sonare_mfcc_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct |
 | `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced_flags, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced_flags is non-NULL, and voiced flags read as 0/1 probabilities |
 
 #### Closed sets are string unions, not numbers or IntEnums
@@ -229,10 +229,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added |
 | `sonare_stft` | takes const SonareStftOptions* options (NULL = defaults; sonare_stft_options_init) before out; options->db non-zero also fills SonareStftResult.db with the magnitude in dB |
 | `sonare_stream_analyzer_config_default` | removed: call sonare_stream_config_init(&config) on a caller-owned struct instead |
-| `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_frames_i16, which now takes the config |
-| `sonare_stream_analyzer_read_frames_i16` | takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
-| `sonare_stream_analyzer_read_frames_u8_ex` | removed: call sonare_stream_analyzer_read_frames_u8, which now takes the config |
-| `sonare_stream_analyzer_read_frames_u8` | takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
+| `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_quantized_frames_i16, which now takes the config |
+| `sonare_stream_analyzer_read_frames_i16` | `sonare_stream_analyzer_read_quantized_frames_i16`: takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
+| `sonare_stream_analyzer_read_frames_u8_ex` | removed: call sonare_stream_analyzer_read_quantized_frames_u8, which now takes the config |
+| `sonare_stream_analyzer_read_frames_u8` | `sonare_stream_analyzer_read_quantized_frames_u8`: takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
 | `sonare_stream_quantize_config_default` | removed: call sonare_stream_quantize_config_init(&config) on a caller-owned struct instead |
 | `sonare_transcribe_config_default` | removed: call sonare_transcribe_config_init(&config) on a caller-owned struct instead |
 | `sonare_vqt_to_audio_checked` | removed: call sonare_vqt_to_audio, which now takes input_length after magnitude |
@@ -244,6 +244,98 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_free_note_segments` | `sonare_free_note_segments_result` |
 | `sonare_free_result` | removed, no replacement: the flat quick analysis result it released has no C replacement; sonare_analyze_json returns the full analysis as a string released with sonare_free_string |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareBoundaryOptions.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareBoundaryResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareChordDetectionOptions.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareChromaResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareCqtResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareMelResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareMeterOptions.candidate_numerator_count` | the count is a size_t instead of an int; a value above the capacity of the candidate array is refused |
+| `SonareMfccResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareMusicAnalyzeOptions.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareMusicAnalyzeOptions.meter_candidate_numerator_count` | the count is a size_t instead of an int; a value above the capacity of the candidate array is refused |
+| `SonareOnsetDetectConfig.hop_length` | the hop is a size_t instead of an int32_t; a value above 2147483647 is refused |
+| `SonarePolyphonicConfig.hop_length` | the hop is a size_t instead of an int32_t; a value above 2147483647 is refused |
+| `SonarePolyphonicConfig.win_length` | the window length is a size_t instead of an int32_t; 0 selects n_fft, replacing SONARE_POLYPHONIC_WIN_LENGTH_FFT, and a value above 2147483647 is refused |
+| `SonareStftResult.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareStreamConfig.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareStreamStats.bpm_candidate_count` | the count is a size_t instead of an int |
+| `SonareStreamStats.pattern_length` | the count is a size_t instead of an int |
+| `sonare_analyze_bpm(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_dynamics(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_melody(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_melody(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_rhythm(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_timbre(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_bass_chroma(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_chroma(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_chroma_cens(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_chroma_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_clicks(length)` | the length is a size_t instead of an int; a value above the offline audio limit is refused |
+| `sonare_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_cqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_cyclic_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_cyclic_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_estimate_tuning(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_fourier_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_fourier_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_frame_signal(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_frame_signal(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_frames_to_samples(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_frames_to_time(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_griffin_lim(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
+| `sonare_hybrid_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_mel_spectrogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_mel_to_audio(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
+| `sonare_mfcc(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_mfcc_to_audio(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
+| `sonare_onset_strength(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_onset_strength_multi(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pcen(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_piptrack(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_pyin(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_pyin(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_yin(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_yin(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_plp(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_plp(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_poly_features(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_polyphonic_frame_count(out_count)` | the count is written through a size_t* instead of an int pointer |
+| `sonare_pseudo_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_reassigned_spectrogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_rms_energy(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_rms_energy(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_samples_to_frames(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_bandwidth(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_centroid(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_contrast(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_flatness(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_flux(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_spectral_rolloff(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_split_silence(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_split_silence(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_split_silence_common(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_split_silence_common(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_stft(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_stream_analyzer_frame_count(out_count)` | the count is written through a size_t* instead of an int pointer |
+| `sonare_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_tempogram_ratio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_tempogram_ratio(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_time_to_frames(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_trim_silence(end_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_trim_silence(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_trim_silence(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_trim_silence(start_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_vqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_vqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_zero_crossing_rate(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_zero_crossing_rate(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 
 #### Every C failure sets the error message
 
@@ -352,7 +444,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRirSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults) |
 | `SonareRoomMorphConfig` | leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5) |
 | `SonareVoiceChangeConfig` | leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused |
-| `sonare_phase_vocoder` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
+| `sonare_phase_vocoder` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
 
 #### String values are lowerCamelCase tokens
@@ -419,12 +511,17 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareDecomposeStemsConfig.hop_length` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
 | `SonareDereverbClassicalConfig.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonarePercussiveEventConfig.hop_length` | the hop is a size_t instead of an int32_t; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
+| `SonarePercussiveRenderConfig.hop_length` | the hop is a size_t instead of an int32_t; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
+| `SonareSpectralEditConfig.hop_length` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
 | `sonare_note_move(offset_sample)` | the sample position is an int64_t instead of an int |
 | `sonare_note_move(onset_sample)` | the sample position is an int64_t instead of an int |
 | `sonare_note_move(target_onset_sample)` | the sample position is an int64_t instead of an int |
 | `sonare_note_stretch(offset_sample)` | the sample position is an int64_t instead of an int |
 | `sonare_note_stretch(onset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_phase_vocoder(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
 | `sonare_pitch_correct_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_pitch_correct_to_midi_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
@@ -515,6 +612,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareDeclipConfig.clip_threshold` | `SonareDeclipConfig.clip_threshold_db` |
 | `SonareTrimSilenceConfig.threshold` | `SonareTrimSilenceConfig.threshold_db` |
+| `sonare_lufs_series_interleaved(out_momentary)` | `sonare_lufs_series_interleaved(out_momentary_lufs)` |
+| `sonare_lufs_series_interleaved(out_momentary_length)` | `sonare_lufs_series_interleaved(out_momentary_lufs_length)` |
+| `sonare_lufs_series_interleaved(out_short_term)` | `sonare_lufs_series_interleaved(out_short_term_lufs)` |
+| `sonare_lufs_series_interleaved(out_short_term_length)` | `sonare_lufs_series_interleaved(out_short_term_lufs_length)` |
 
 #### Loudness quantities use one name per measurement
 
@@ -636,6 +737,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMixMeterSnapshot.channel_count` | `SonareMixMeterSnapshot.num_channels` |
+| `SonareWaveformPeaksResult.channels` | `SonareWaveformPeaksResult.num_channels` |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
@@ -719,6 +821,22 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_free_playback_render` | removed, no replacement: the buffers sonare_playback_render_interleaved and sonare_playback_renderer_render_offline return are plain float buffers; release them with sonare_free_floats |
 | `sonare_synth_engine_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 | `sonare_synth_patch_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareEngineCaptureStatus.overflow_count` | the count is a size_t instead of a uint32_t |
+| `SonareTransportState.sample_rate` | the sample rate is an int instead of a double |
+| `sonare_engine_clip_page_request_overflow_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_configure_scope_telemetry(band_count)` | the count is a size_t instead of an unsigned int |
+| `sonare_engine_configure_scope_telemetry(out_band_count)` | the count is a size_t instead of an unsigned int |
+| `sonare_engine_external_midi_dropped_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_legato_fallback_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_engine_prepare(sample_rate)` | the sample rate is an int instead of a double |
+| `sonare_engine_warp_stretch_overflow_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_midi_route_events(out_overflow_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_playback_renderer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 
 #### Each operation has exactly one entry point
 
@@ -849,6 +967,36 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_vocal_free_pitch_result` | `sonare_free_vocal_pitch_result` |
 | `sonare_vocal_free_render_result` | `sonare_free_vocal_render_result` |
 | `sonare_vocal_free_state_bytes` | `sonare_free_vocal_state_bytes` |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareExternalStemDesc.frame_count` | the count is a size_t instead of an int64_t |
+| `SonareProjectTempoCandidate.time_signature_count` | the count is a size_t instead of a uint32_t |
+| `SonareProjectVocalEditApplyDesc.expected_source_sample_count` | the length is a size_t instead of an int64_t |
+| `SonareProjectVocalEditApplyDesc.rendered_sample_count` | the length is a size_t instead of an int64_t |
+| `SonareProjectVocalEditDependenciesResult.dependency_count` | the count is a size_t instead of a uint64_t |
+| `SonareProjectVocalEditDependency.source_sample_count` | the length is a size_t instead of an int64_t |
+| `SonareProjectVocalOriginalSource.sample_count` | the length is a size_t instead of an int64_t |
+| `SonareProjectVocalOriginalSource.sample_rate` | the sample rate is an int instead of a uint32_t |
+| `SonareProjectVocalRehydrateResult.item_count` | the count is a size_t instead of a uint64_t |
+| `SonareTakeAlignConfig.hop_length` | the hop is a size_t instead of an int32_t |
+| `SonareVocalAnalysis.frame_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalAnalysisResult.sample_rate` | the sample rate is an int instead of a uint32_t |
+| `SonareVocalEditResult.dirty_range_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalEditResult.id_change_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalNote.amplitude_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalNoteEdit.amplitude_envelope_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalNoteEdit.target_point_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalNotesResult.note_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalNotesResult.transition_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalOperation.note_id_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalPitchResult.frame_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalRenderResult.processed_range_count` | the count is a size_t instead of a uint64_t |
+| `SonareVocalRenderResult.sample_count` | the length is a size_t instead of an int64_t |
+| `sonare_project_rehydrate_vocal_edits(original_count)` | the count is a size_t instead of a uint64_t |
+| `sonare_project_set_sample_rate(sample_rate)` | the sample rate is an int instead of a double |
 
 #### Each operation has exactly one entry point
 
@@ -6113,8 +6261,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `BuiltinInstrumentConfig.destinationId` | removed: Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounceWithBuiltinInstruments or setBuiltinInstrument(destinationId, config). |
-| `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none. |
+| `BuiltinInstrumentConfig.destinationId` | removed: Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounce({ builtinInstruments }) or setBuiltinInstrument(destinationId, config). |
+| `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounce({ instruments }), { destinationId, instrument }; the instrument itself carries none. |
 | `MidiCcBindOptions` | removed: Use ProjectMidiCcBinding: minValue and maxValue now sit beside ccNumber and paramId in the one binding passed to bindMidiCc. |
 | `Mixer.meterTap` | `Mixer.stripMeter` |
 | `RealtimeEngine.bindMidiCc(channel)` | removed: pass channel as a field of ProjectMidiCcBinding |
@@ -6123,6 +6271,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | `RealtimeEngine.bindMidiCc` |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.processWithMonitor` | removed: Call process(channels, { withMonitor: true }). |
 | `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
 | `SynthPatch.destinationId` | removed: Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 
@@ -6336,7 +6485,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.setMarker` | takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
-| `ProjectCompileTimelineResult.timeline` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `ProjectMidiRouteConfig.filterChannel` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | typed number only; null is no longer in the type, and a null at runtime still reads as absent |
@@ -6394,16 +6542,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.compileTimeline` | returns { diagnostics, timeline } only |
-| `Project.compile` | returns { diagnostics } only, with named codes and severities |
+| `Project.compile` | returns { diagnostics } with named codes and severities, plus timeline when withTimeline is set |
 | `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
 | `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
 | `Project.lastBounceCompileResult` | returns { diagnostics } only |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
-| `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compileTimeline() returns the timeline itself. |
+| `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
-| `ProjectCompileTimelineResult.hasTimeline` | removed: Test timeline !== null on the result. |
-| `ProjectCompileTimelineResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
 | `ProjectMidiFxBakeRequest.configJson` | `ProjectMidiFxBakeRequest.config` |
 | `ProjectMidiFxPreviewRequest.configJson` | `ProjectMidiFxPreviewRequest.config` |
 
@@ -6540,18 +6685,20 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `BuiltinSynthConfig.destinationId` | removed: Pass the destination id as the first argument of setBuiltinInstrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
-| `Project.bounceWithBuiltinInstrument` | `Project.bounceWithBuiltinInstruments` |
-| `Project.bounceWithBuiltinInstruments` | takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio |
-| `Project.bounceWithInstrument` | `Project.bounceWithInstruments` |
-| `Project.bounceWithInstruments` | takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio |
-| `Project.bounceWithSf2Instrument` | `Project.bounceWithSf2Instruments` |
-| `Project.bounceWithSf2Instruments` | takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio |
-| `Project.bounceWithSynthInstrument` | `Project.bounceWithSynthInstruments` |
-| `Project.bounceWithSynthInstruments` | takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio |
+| `Project.bounceWithBuiltinInstrument` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
+| `Project.bounceWithBuiltinInstruments` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
+| `Project.bounceWithInstrument` | removed: Call bounce({ ...options, instruments: [...] }). |
+| `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
+| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.compileTimeline` | removed: Call compile({ withTimeline: true }); the result then also carries timeline. |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
 | `Project.setProgram(bank)` | removed: bank moves into options as { msb, lsb }: setProgram(clipId, program, { bank: { msb, lsb } }) |
 | `Project.setProgramOnChannel` | removed: Call setProgram(clipId, program, { bank, group, channel }). |
+| `ProjectCompileTimelineResult` | removed: Use ProjectCompileResult; compile({ withTimeline: true }) fills its timeline. |
 | `Sf2InstrumentConfig.destinationId` | removed: Pass the destination id as the first argument of setSf2Instrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 
 #### Synchronous construction is new X(config); create() is async
@@ -6568,7 +6715,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `FileClipPageProvider.id` | removed: a clip names its provider by instance, not by id |
 | `FileClipPageProvider` | constructor(options: FileClipPageProviderOptions) with path inside the options object replaces (engine, path, options) |
 | `Project.create` | removed: call new Project() |
-| `ProjectTimeline.constructor` | removed: not constructible; get a timeline from Project.compileTimeline() and install it with RealtimeEngine.applyProjectTimeline() |
+| `ProjectTimeline.constructor` | removed: not constructible; get a timeline from Project.compile({ withTimeline: true }) and install it with RealtimeEngine.applyProjectTimeline() |
 
 #### Multichannel audio is planar: channels plus sampleRate
 
@@ -11138,8 +11285,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `BuiltinSynthBinding.destinationId` | removed: Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounceWithBuiltinInstruments or setBuiltinInstrument(destinationId, config). |
-| `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none. |
+| `BuiltinSynthBinding.destinationId` | removed: Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounce({ builtinInstruments }) or setBuiltinInstrument(destinationId, config). |
+| `ExternalInstrument.destinationId` | removed: Pass destinationId beside instrument in the pair given to bounce({ instruments }), { destinationId, instrument }; the instrument itself carries none. |
 | `MidiCcBindOptions` | removed: Use ProjectMidiCcBinding: minValue and maxValue now sit beside ccNumber and paramId in the one binding passed to bindMidiCc. |
 | `Mixer.meterTap` | `Mixer.stripMeter` |
 | `RealtimeEngine.bindMidiCc(channel)` | removed: pass channel as a field of ProjectMidiCcBinding |
@@ -11148,6 +11295,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | removed: Call bindMidiCc(binding) with a ProjectMidiCcBinding. |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.processPreparedWithMonitor` | removed: Call processPrepared(numFrames, { withMonitor: true }). |
+| `RealtimeEngine.processWithMonitor` | removed: Call process(channels, { withMonitor: true }). |
 | `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
 | `SonareEngine.bindMidiCc(channel)` (`./worklet`) | removed: pass channel as a field of ProjectMidiCcBinding |
 | `SonareEngine.bindMidiCc(controller)` (`./worklet`) | removed: pass it as ccNumber in ProjectMidiCcBinding |
@@ -11661,7 +11810,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setMarker` | setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
-| `ProjectCompileTimelineResult.timeline` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `ProjectMidiRouteConfig.filterChannel` | filterChannel is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | filterGroup is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | remapChannel is typed number, not number \| null; a null at runtime still reads as absent |
@@ -11717,16 +11865,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.compileTimeline` | compileTimeline returns { diagnostics, timeline } only |
 | `Project.compile` | compile returns { diagnostics } only; each diagnostic has a code token, an error / warning severity and an optional targetId |
 | `Project.lastBounceCompileResult` | lastBounceCompileResult returns the same { diagnostics } shape as compile |
 | `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
 | `ProjectCompileResult.diagnosticCount` | removed: Read diagnostics.length. |
-| `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compileTimeline() returns the timeline itself. |
+| `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
-| `ProjectCompileTimelineResult.diagnosticCount` | removed: Read diagnostics.length. |
-| `ProjectCompileTimelineResult.hasTimeline` | removed: Test timeline !== null on the result. |
-| `ProjectCompileTimelineResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
+| `ProjectCompileTimelineResult` | removed: Use ProjectCompileResult; compile({ withTimeline: true }) fills its timeline. |
 | `ProjectMidiFxBakeRequest.configJson` | `ProjectMidiFxBakeRequest.config` |
 | `ProjectMidiFxPreviewRequest.configJson` | `ProjectMidiFxPreviewRequest.config` |
 | `ProjectTempoCandidate.timeSignature` | `ProjectTempoCandidate.firstTimeSignature` |
@@ -11912,10 +12057,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `BuiltinSynthBinding` | `BuiltinSynthConfig` |
 | `BuiltinSynthConfig.destinationId` | removed: Pass the destination id as the first argument of setBuiltinInstrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
-| `Project.bounceWithBuiltinInstrument` | `Project.bounceWithBuiltinInstruments` |
-| `Project.bounceWithInstrument` | `Project.bounceWithInstruments` |
-| `Project.bounceWithSf2Instrument` | `Project.bounceWithSf2Instruments` |
-| `Project.bounceWithSynthInstrument` | `Project.bounceWithSynthInstruments` |
+| `Project.bounceWithBuiltinInstrument` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
+| `Project.bounceWithBuiltinInstruments` | removed: Call bounce({ ...options, builtinInstruments: [...] }). |
+| `Project.bounceWithInstrument` | removed: Call bounce({ ...options, instruments: [...] }). |
+| `Project.bounceWithInstruments` | removed: Call bounce({ ...options, instruments: [...] }). |
+| `Project.bounceWithSf2Instrument` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSf2Instruments` | removed: Call bounce({ ...options, sf2Instruments: [...] }). |
+| `Project.bounceWithSynthInstrument` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.bounceWithSynthInstruments` | removed: Call bounce({ ...options, synthInstruments: [...] }). |
+| `Project.compileTimeline` | removed: Call compile({ withTimeline: true }); the result then also carries timeline. |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
 | `Project.setProgram(bank)` | removed: bank moves into options as { msb, lsb }: setProgram(clipId, program, { bank: { msb, lsb } }) |
@@ -11932,7 +12082,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageProvider` | constructor(options: ClipPageProviderOptions) with { numChannels, numSamples, pageFrames } replaces construction through the engine; clear() after destroy() is InvalidState instead of a no-op |
 | `ClipPageStreamer.constructor(engine)` | removed: pass the engine in the one options object: new ClipPageStreamer({ engine, readAheadPages, retainBehindPages, maxRequestsPerPump }) |
 | `Project.create` | removed: call new Project() |
-| `ProjectTimeline.constructor` | removed: not constructible; get a timeline from Project.compileTimeline() and install it with RealtimeEngine.applyProjectTimeline() |
+| `ProjectTimeline.constructor` | removed: not constructible; get a timeline from Project.compile({ withTimeline: true }) and install it with RealtimeEngine.applyProjectTimeline() |
 | `VocalEditDraft.constructor` | removed: the constructor is protected; open a draft with VocalEditSession.beginEdit |
 | `VocalEditSession.constructor` | removed: the constructor is protected; open a session with createVocalEditSession or restoreVocalEditSession |
 | `VocalEditWorkerSession.constructor` | removed: the constructor is protected; open a session with VocalEditWorkerClient.create or VocalEditWorkerClient.restore |
@@ -11984,10 +12134,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.bounceWithBuiltinInstruments` | instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError |
-| `Project.bounceWithInstruments` | instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError |
-| `Project.bounceWithSf2Instruments` | instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError |
-| `Project.bounceWithSynthInstruments` | instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError |
 | `Project.setMidiEvents` | events are { ppq, word0, word1? } objects only; the [ppq, data0, data1] tuple and the data0/data1 keys are a TypeError |
 
 #### Historical aliases are removed

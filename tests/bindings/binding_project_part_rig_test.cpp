@@ -49,7 +49,7 @@ constexpr const char* kSoftClipChain = R"([{"processor":"saturation.softClipper"
 SonareProject* make_guitar_project() {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);

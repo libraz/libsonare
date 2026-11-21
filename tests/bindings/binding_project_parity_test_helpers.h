@@ -96,7 +96,7 @@ struct BuiltProject {
 [[maybe_unused]] BuiltProject build_project(const std::vector<float>& audio) {
   BuiltProject built;
   REQUIRE(sonare_project_create(&built.project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(built.project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(built.project, 48000) == SONARE_OK);
 
   SonareProjectTrackDesc track_desc{};
   track_desc.kind = SONARE_TRACK_AUDIO;

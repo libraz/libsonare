@@ -99,7 +99,7 @@ struct StripEngine {
   SonareEngine* engine = nullptr;
   StripEngine() {
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64, 0) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 64, 0) == SONARE_OK);
     SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
     REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
     SonareEngineBus buses[] = {{1, 0.0f, 0, 0, nullptr, 0}};

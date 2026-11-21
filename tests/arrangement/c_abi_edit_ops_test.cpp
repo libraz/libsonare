@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "feature/cqt.h"
 #include "mir/key_context.h"
 #include "transport/tempo_map.h"
 
@@ -455,7 +456,7 @@ TEST_CASE("C-ABI detached PCM edits become non-undoable at a byte boundary",
   SECTION("external_stems") {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
     REQUIRE(sonare_project_set_max_history_bytes(project, 1) == SONARE_OK);
 
     const std::vector<float> left = {1.0f, 0.5f};
@@ -465,7 +466,7 @@ TEST_CASE("C-ABI detached PCM edits become non-undoable at a byte boundary",
     stem.name = "boundary";
     stem.layout = SONARE_EXTERNAL_STEM_STEREO;
     stem.planar_samples = planes;
-    stem.frame_count = static_cast<int64_t>(left.size());
+    stem.frame_count = left.size();
     stem.start_frame = 0;
     SonareExternalStemImportRequest request;
     sonare_external_stem_import_request_init(&request);
@@ -493,24 +494,17 @@ TEST_CASE("C-ABI set_sample_rate names its accepted range when it refuses one",
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
 
-  REQUIRE(sonare_project_set_sample_rate(project, 4000.0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_sample_rate(project, 4000) == SONARE_ERROR_INVALID_PARAMETER);
   const std::string too_low = sonare_last_error_message();
   CAPTURE(too_low);
   REQUIRE(too_low.find("8000") != std::string::npos);
   REQUIRE(too_low.find("384000") != std::string::npos);
 
-  REQUIRE(sonare_project_set_sample_rate(project, 1'000'000.0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_sample_rate(project, 1'000'000) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()).find("384000") != std::string::npos);
 
-  // A fractional rate inside the range is refused by name, and the rate stays.
-  REQUIRE(sonare_project_set_sample_rate(project, 44100.5) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(std::string(sonare_last_error_message()).find("whole number") != std::string::npos);
-  double rate = 0.0;
-  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
-  REQUIRE(rate != 44100.5);
-
   // A rate inside the range still succeeds and leaves no error behind it.
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()).empty());
 
   sonare_project_destroy(project);
@@ -524,14 +518,14 @@ TEST_CASE("C-ABI set_sample_rate is undoable like every other setter", "[project
   // saved and what later bounces and resampling read.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   const std::string before = serialize(project);
   double rate = 0.0;
   REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
   REQUIRE(rate == 48000.0);
 
-  REQUIRE(sonare_project_set_sample_rate(project, 96000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 96000) == SONARE_OK);
   REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
   REQUIRE(rate == 96000.0);
   REQUIRE(serialize(project) != before);
@@ -553,7 +547,7 @@ TEST_CASE("C-ABI set_sample_rate is undoable like every other setter", "[project
 TEST_CASE("C-ABI remove_clip removes and undo restores", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   AudioFixture fx = add_audio_track_clip(project, 0.0, 4.0);
 
   const std::string before = serialize(project);
@@ -1830,7 +1824,8 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     SonareTakeAlignConfig initialised;
     sonare_take_align_config_init(&initialised);
     REQUIRE(initialised.struct_size == sizeof(SonareTakeAlignConfig));
-    REQUIRE(initialised.hop_length == sonare::mir::ChromaDtwConfig{}.hop_length);
+    REQUIRE(initialised.hop_length ==
+            static_cast<size_t>(sonare::mir::ChromaDtwConfig{}.hop_length));
     REQUIRE(initialised.bins_per_octave == sonare::mir::ChromaDtwConfig{}.bins_per_octave);
     REQUIRE(align(nullptr, &from_null) == SONARE_OK);
     REQUIRE(align(&initialised, &from_init) == SONARE_OK);
@@ -1850,6 +1845,10 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     REQUIRE(align(&zero_hop, &count) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()).find("config.hop_length") !=
             std::string::npos);
+    zero_hop.hop_length = static_cast<size_t>(sonare::kMaxCqtHopLength) + 1;
+    REQUIRE(align(&zero_hop, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    zero_hop.hop_length = SIZE_MAX;
+    REQUIRE(align(&zero_hop, &count) == SONARE_ERROR_INVALID_PARAMETER);
     SonareTakeAlignConfig zero_bins;
     sonare_take_align_config_init(&zero_bins);
     zero_bins.bins_per_octave = 0;

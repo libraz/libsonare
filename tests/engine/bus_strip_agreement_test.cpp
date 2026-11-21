@@ -164,7 +164,8 @@ SonareBuiltinSynthConfig project_synth_config() {
 // Builds a fresh engine wired identically to project_scene_json: track -> fx
 // bus (group routing via output_bus_id) -> master, one held note.
 void configure_engine(SonareEngine* engine, const BusStripCase& c, uint32_t track_id) {
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, static_cast<int>(kSampleRate), kBlockSize, 64, 16, 0) ==
+          SONARE_OK);
   SonareEngineBus buses[] = {
       {kBusId, 0.0f, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO), 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
@@ -249,7 +250,7 @@ std::vector<float> render_offline(const BusStripCase& c, uint32_t track_id) {
 std::vector<float> render_project_bounce(const BusStripCase& c) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kSampleRate)) == SONARE_OK);
   REQUIRE(sonare_project_set_mixer_scene_json(project, project_scene_json(c).c_str()) == SONARE_OK);
 
   uint32_t track = 0;
@@ -352,7 +353,7 @@ TEST_CASE("project serialize/deserialize preserves bus and master pan+EQ through
     DYNAMIC_SECTION("case " << i << ": " << c.name) {
       SonareProject* project = nullptr;
       REQUIRE(sonare_project_create(&project) == SONARE_OK);
-      REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+      REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kSampleRate)) == SONARE_OK);
       REQUIRE(sonare_project_set_mixer_scene_json(project, project_scene_json(c).c_str()) ==
               SONARE_OK);
       uint32_t track = 0;

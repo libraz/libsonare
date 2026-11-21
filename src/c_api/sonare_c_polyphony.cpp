@@ -41,7 +41,7 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   if (const SonareError err = run_validation([&] {
         require_struct_size(in->struct_size, sizeof(SonarePolyphonicConfig), "config",
                             "sonare_polyphonic_config_init");
-        if (in->win_length != SONARE_POLYPHONIC_WIN_LENGTH_FFT) {
+        if (in->win_length != 0) {
           sonare::util::check::integer_within(in->win_length, sonare::kColaWinLengthDomain,
                                               "config.win_length");
         }
@@ -62,8 +62,10 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   // The core spells these three absences as 0.
   auto& stft = out.extraction.stft;
   stft.n_fft = in->n_fft;
-  stft.hop_length = in->hop_length;
-  stft.win_length = in->win_length == SONARE_POLYPHONIC_WIN_LENGTH_FFT ? 0 : in->win_length;
+  // A hop past INT_MAX saturates there, so the core refuses it rather than a cast wrapping it.
+  stft.hop_length = static_cast<int>(
+      std::min<size_t>(in->hop_length, static_cast<size_t>(std::numeric_limits<int>::max())));
+  stft.win_length = static_cast<int>(in->win_length);
 
   auto& spectrum = out.extraction.spectrum;
   spectrum.ref_hz = in->cent_ref_hz;
@@ -180,8 +182,8 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
   const PolyphonicEditConfig defaults;
   const auto& stft = defaults.extraction.stft;
   config->n_fft = stft.n_fft;
-  config->hop_length = stft.hop_length;
-  config->win_length = SONARE_POLYPHONIC_WIN_LENGTH_FFT;
+  config->hop_length = static_cast<size_t>(stft.hop_length);
+  config->win_length = 0;
 
   const auto& spectrum = defaults.extraction.spectrum;
   config->cent_ref_hz = spectrum.ref_hz;
@@ -279,14 +281,14 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
 }
 
 SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analysis,
-                                          int32_t* out_count) {
+                                          size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(analysis);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  *out_count = static_cast<int32_t>(analysis->analysis.spectrum.n_frames());
+  *out_count = static_cast<size_t>(analysis->analysis.spectrum.n_frames());
   return SONARE_OK;
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);

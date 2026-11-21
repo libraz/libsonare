@@ -45,7 +45,8 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   float* momentary = nullptr;
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, nullptr, nullptr,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("out_momentary and out_momentary_length"));
+  CHECK_THAT(last_message(),
+             Catch::Matchers::StartsWith("out_momentary_lufs and out_momentary_lufs_length"));
   float* short_term = nullptr;
   size_t momentary_length = 0;
   size_t short_term_length = 0;
@@ -626,7 +627,7 @@ EnginePtr prepared_engine() {
   SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
   EnginePtr engine(raw, sonare_engine_destroy);
-  REQUIRE(sonare_engine_prepare(raw, 48000.0, 256, 64, 64, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(raw, 48000, 256, 64, 64, 0) == SONARE_OK);
   return engine;
 }
 

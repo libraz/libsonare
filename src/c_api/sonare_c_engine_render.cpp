@@ -540,15 +540,14 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
 }
 
 SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int interval_frames,
-                                                    unsigned int band_count,
-                                                    unsigned int* out_band_count) {
+                                                    size_t band_count, size_t* out_band_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_band_count);
   SONARE_C_REQUIRE_NONNULL(engine);
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY
-  const uint32_t applied =
-      engine->engine.configure_scope_telemetry(interval_frames, static_cast<uint32_t>(band_count));
+  const uint32_t applied = engine->engine.configure_scope_telemetry(
+      interval_frames, static_cast<uint32_t>(std::min<size_t>(band_count, UINT32_MAX)));
   if (out_band_count) *out_band_count = applied;
   return SONARE_OK;
   SONARE_C_CATCH

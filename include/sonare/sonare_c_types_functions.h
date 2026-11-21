@@ -170,7 +170,7 @@ typedef struct {
   int n_fft;
   /// Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
   /// 22050 Hz, the input itself otherwise. Default 512.
-  int hop_length;
+  size_t hop_length;
   /// Non-zero applies harmonic-percussive separation before the chroma. Default 0.
   int use_hpss;
   /// Non-zero weights chroma frames by loudness. Default 0.
@@ -229,7 +229,7 @@ typedef struct {
   /// FFT window length in samples at 22050 Hz, rescaled to the input rate. Default 2048.
   int32_t n_fft;
   /// Hop in samples at the analysis rate. Default 512.
-  int32_t hop_length;
+  size_t hop_length;
   /// Minimum onset strength a peak must reach, greater than 0; NaN (the default) selects the
   /// adaptive path, where the threshold follows the running mean of the envelope.
   /// Expressed in the units of the onset envelope this call computes internally,
@@ -263,11 +263,14 @@ typedef struct {
 } SonareOnsetDetectConfig;
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareOnsetDetectConfig) == 48u, "SonareOnsetDetectConfig layout drift");
 static_assert(offsetof(SonareOnsetDetectConfig, hop_length) == 8u,
               "SonareOnsetDetectConfig hop_length offset");
-static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 44u,
+static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 8u + sizeof(size_t) + 32u,
               "SonareOnsetDetectConfig backtrack_range offset");
+static_assert(sizeof(SonareOnsetDetectConfig) ==
+                  (8u + sizeof(size_t) + 36u + alignof(size_t) - 1u) / alignof(size_t) *
+                      alignof(size_t),
+              "SonareOnsetDetectConfig layout drift");
 #endif
 
 /// @brief Fills @p config with sizeof and the library defaults, the threshold being NaN
@@ -304,7 +307,7 @@ typedef struct {
   int n_fft;
   /// Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
   /// 22050 Hz, the input itself otherwise. Default 512.
-  int hop_length;
+  size_t hop_length;
   /// Lower bound of the tempo search in BPM. Default 60.
   float bpm_min;
   /// Upper bound of the tempo search in BPM. Default 200.
@@ -349,7 +352,7 @@ typedef struct {
   /// reproduces the library's standard result.
   int meter_candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
   /// Number of entries of meter_candidate_numerators that are read; at least 1.
-  int meter_candidate_numerator_count;
+  size_t meter_candidate_numerator_count;
   /// Beat unit reported for the detected meter; a power of two in [1, 32]. The
   /// estimator still reports 8 on its own when it resolves a compound meter. Default 4.
   int meter_denominator;
@@ -393,7 +396,7 @@ typedef struct {
   /// entries are read; each must be in [2, 32].
   int candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
   /// Number of entries of candidate_numerators that are read; at least 1.
-  int candidate_numerator_count;
+  size_t candidate_numerator_count;
   /// Beat unit reported for the detected meter; a power of two in [1, 32]. Default 4.
   /// Reported as requested: whether a beat divides into three is measured from
   /// energy between the beats, which per-beat accents do not carry, so a

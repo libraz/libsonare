@@ -379,7 +379,7 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
                                      const SonareMidiRouteConfig* config,
                                      SonareMidiEventPod* out_events, size_t out_capacity,
                                      size_t* out_count, int* out_overflowed,
-                                     uint32_t* out_overflow_count);
+                                     size_t* out_overflow_count);
 
 /// @brief Runs MIDI learn over an event stream and returns the learned binding.
 /// @details Observes events in order using the native CcMap learn logic,

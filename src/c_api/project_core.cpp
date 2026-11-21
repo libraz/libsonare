@@ -243,12 +243,12 @@ SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject*
 #endif
 }
 
-SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate) {
+SonareError sonare_project_set_sample_rate(SonareProject* project, int sample_rate) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
-  if (!sonare::is_supported_sample_rate(sample_rate)) {
+  if (!sonare::is_supported_sample_rate(static_cast<double>(sample_rate))) {
     // Name the rule, read from the constants the predicate checks, so a facade can
     // report why a rate it passed through was refused.
     sonare::util::check::refuse("sample_rate", "must be a whole number of hertz in [" +
@@ -261,7 +261,7 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
   // the rate at 96 kHz, and the wrong rate was then serialized into the saved
   // document. The facades all promise that every mutation routes through the
   // native EditHistory, so the sample rate has to be a command too.
-  auto command = std::make_unique<arr::SetSampleRate>(sample_rate);
+  auto command = std::make_unique<arr::SetSampleRate>(static_cast<double>(sample_rate));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH

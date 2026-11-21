@@ -651,7 +651,7 @@ SonareError validate_interleaved_audio(const float* samples, size_t frames, int 
 
 SonareError fill_waveform_peaks_result(const metering::WaveformPeaksResult& result,
                                        SonareWaveformPeaksResult* out) {
-  out->channels = result.channels;
+  out->num_channels = result.channels;
   out->bucket_count = result.bucket_count;
   out->samples_per_bucket = result.samples_per_bucket;
   const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
@@ -738,7 +738,7 @@ void sonare_free_waveform_peaks_result(SonareWaveformPeaksResult* result) {
   delete[] result->max;
   result->min = nullptr;
   result->max = nullptr;
-  result->channels = 0;
+  result->num_channels = 0;
   result->bucket_count = 0;
   result->samples_per_bucket = 0;
 }

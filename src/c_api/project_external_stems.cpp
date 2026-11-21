@@ -193,9 +193,9 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     layout =
         admitted_ordinal_to_enum<sonare::arrangement::ExternalSeparatedStemLayout>(desc.layout);
     check::non_null(desc.planar_samples, member("planar_samples").c_str());
-    check::integer_at_least<int64_t>(desc.frame_count, 1, member("frame_count").c_str());
+    check::integer_at_least<size_t>(desc.frame_count, 1, member("frame_count").c_str());
     const size_t channels = channel_count(desc.layout);
-    const size_t frames = static_cast<size_t>(desc.frame_count);
+    const size_t frames = desc.frame_count;
     if (frames > kMaxSamples / channels || total_samples > kMaxSamples - frames * channels) {
       check::refuse("request.stems",
                     "must hold at most " + std::to_string(kMaxSamples) + " samples in total");

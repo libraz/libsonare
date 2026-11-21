@@ -138,7 +138,7 @@ struct VocalStateFixture {
     sonare_vocal_render_result_init(&render);
     if (sonare_vocal_snapshot_render(snapshot.get(), {0, kSampleCount}, 1, nullptr, nullptr,
                                      &render) != SONARE_OK ||
-        render.samples == nullptr || render.sample_count != kSampleCount) {
+        render.samples == nullptr || static_cast<int64_t>(render.sample_count) != kSampleCount) {
       sonare_free_vocal_render_result(&render);
       throw std::runtime_error("could not render vocal snapshot");
     }
@@ -200,13 +200,13 @@ struct ProjectFixture {
     desc.take_id = 0;
     desc.expected_source_id = source_id;
     desc.expected_source_sample_rate = kSampleRate;
-    desc.expected_source_sample_count = kSampleCount;
+    desc.expected_source_sample_count = static_cast<size_t>(kSampleCount);
     const auto digest = float_digest(vocal.source);
     std::memcpy(desc.expected_source_sha256, digest.data(), digest.size());
     desc.expected_clip_length_ppq = 1.0;
     desc.expected_source_offset_ppq = 0.0;
     desc.rendered_mono = vocal.rendered.data();
-    desc.rendered_sample_count = kSampleCount;
+    desc.rendered_sample_count = static_cast<size_t>(kSampleCount);
     desc.rendered_sample_rate = kSampleRate;
     desc.rendered_start_sample = 0;
     desc.render_token = vocal.token;
@@ -367,7 +367,7 @@ TEST_CASE("vocal project persistence reports dependencies and rehydrates derived
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   SonareProjectVocalRehydrateResult rehydrated;
   sonare_project_vocal_rehydrate_result_init(&rehydrated);
@@ -418,7 +418,7 @@ TEST_CASE("vocal project accepts empty and opaque original metadata across persi
       sonare_project_vocal_original_source_init(&original);
       original.source_id = fixture.source_id;
       original.mono = fixture.vocal.source.data();
-      original.sample_count = kSampleCount;
+      original.sample_count = static_cast<size_t>(kSampleCount);
       original.sample_rate = kSampleRate;
       SonareProjectVocalRehydrateResult rehydrated;
       sonare_project_vocal_rehydrate_result_init(&rehydrated);
@@ -451,7 +451,7 @@ TEST_CASE("vocal project rejects mismatched derived source metadata during rehyd
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
@@ -542,7 +542,7 @@ TEST_CASE("vocal project rejects a mismatching existing original during rehydrat
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
@@ -569,7 +569,7 @@ TEST_CASE("vocal project cancellation publishes no staged PCM", "[project][vocal
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   CancelAfterFirstCall cancellation;
   SonareProjectVocalRehydrateResult result;
@@ -602,7 +602,7 @@ TEST_CASE("vocal project does not publish original PCM for an invalid SVE1",
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
@@ -633,7 +633,7 @@ TEST_CASE("vocal project validates SVE1 before reporting an already-ready entry"
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
@@ -747,7 +747,7 @@ SonareProjectVocalOriginalSource original_source(const ProjectFixture& fixture) 
   sonare_project_vocal_original_source_init(&original);
   original.source_id = fixture.source_id;
   original.mono = fixture.vocal.source.data();
-  original.sample_count = kSampleCount;
+  original.sample_count = static_cast<size_t>(kSampleCount);
   original.sample_rate = kSampleRate;
   return original;
 }
@@ -1023,7 +1023,7 @@ TEST_CASE("vocal project rehydrate survives a cancel callback that mutates the p
 TEST_CASE("vocal project apply and rehydrate enforce the supported sample-rate range",
           "[project][vocal][vocal_sample_rate]") {
   ProjectFixture fixture;
-  for (const uint32_t rate : {7999u, 384001u}) {
+  for (const int rate : {7999, 384001}) {
     CAPTURE(rate);
     SonareProjectVocalEditApplyDesc desc = fixture.apply_desc();
     desc.expected_source_sample_rate = rate;
@@ -1130,9 +1130,9 @@ TEST_CASE("vocal project entries refuse an argument by its header name",
   sonare_project_vocal_edit_apply_desc_init(&valid);
   valid.clip_id = 1;
   valid.expected_source_sample_rate = kSampleRate;
-  valid.expected_source_sample_count = kSampleCount;
+  valid.expected_source_sample_count = static_cast<size_t>(kSampleCount);
   valid.rendered_mono = pcm.data();
-  valid.rendered_sample_count = kSampleCount;
+  valid.rendered_sample_count = static_cast<size_t>(kSampleCount);
   valid.rendered_sample_rate = kSampleRate;
   valid.sve1 = &sve1_byte;
   valid.sve1_size = 1;
@@ -1161,7 +1161,7 @@ TEST_CASE("vocal project entries refuse an argument by its header name",
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "desc.expected_source_sample_rate must be an integer in [8000, 384000]");
   bad = valid;
-  bad.rendered_sample_count = kSampleCount - 1;
+  bad.rendered_sample_count = static_cast<size_t>(kSampleCount - 1);
   REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "desc.rendered_sample_count must equal desc.expected_source_sample_count");
@@ -1213,7 +1213,7 @@ TEST_CASE("vocal project entries refuse an argument by its header name",
     sonare_project_vocal_original_source_init(&original);
     original.source_id = 1;
     original.mono = pcm.data();
-    original.sample_count = kSampleCount;
+    original.sample_count = static_cast<size_t>(kSampleCount);
     original.sample_rate = kSampleRate;
   }
   originals[0].mono = nullptr;

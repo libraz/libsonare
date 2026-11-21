@@ -555,8 +555,8 @@ TEST_CASE("sonare_trim_silence and sonare_split_silence reject an empty input",
   SECTION("trim: normal, all-silent and empty are three distinct outcomes") {
     float* out = nullptr;
     size_t count = 0;
-    int start = -1;
-    int end = -1;
+    int64_t start = -1;
+    int64_t end = -1;
 
     REQUIRE(sonare_trim_silence(samples.data(), samples.size(), 60.0f, 2048, 512, &out, &count,
                                 &start, &end) == SONARE_OK);

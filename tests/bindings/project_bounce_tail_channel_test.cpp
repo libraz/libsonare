@@ -58,7 +58,7 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   // One strip routed straight to the master (transparent: no inserts, unity
   // fader), so a drained (zero-input) tail region collapses to exact silence and
@@ -129,7 +129,7 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   // A MIDI clip routed to an unbound destination: the plain (no-instrument)
   // bounce renders it to silence, which is enough to exercise the stereo success
@@ -186,7 +186,7 @@ TEST_CASE("project bounce reads only the named constants as the default for widt
           "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
@@ -235,7 +235,7 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     CAPTURE(c.layout ? c.layout : "none", c.width);
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
     if (c.layout != nullptr) {
       const std::string scene =
           std::string(R"({"version":2,"buses":[{"id":"master","role":"master","layout":")") +

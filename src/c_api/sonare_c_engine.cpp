@@ -126,10 +126,10 @@ static_assert(engine::RealtimeEngine::kMaxSysExPayloadBytes == 512,
 // enough out, an overflowing multiply). The core clamps; the C ABI reports the
 // out-of-range request instead of silently preparing a smaller engine than the
 // host asked for.
-SonareError check_prepare_limits(double sample_rate, int max_block_size, size_t command_capacity,
+SonareError check_prepare_limits(int sample_rate, int max_block_size, size_t command_capacity,
                                  size_t telemetry_capacity) {
   return run_validation([&] {
-    if (!is_supported_sample_rate(sample_rate)) {
+    if (!is_supported_sample_rate(static_cast<double>(sample_rate))) {
       util::check::refuse("sample_rate", util::refusal::integer_range_predicate(
                                              kMinAudioSampleRate, kMaxAudioSampleRate));
     }
@@ -165,7 +165,7 @@ SonareError sonare_engine_create(SonareEngine** out) {
 
 void sonare_engine_destroy(SonareEngine* engine) { delete engine; }
 
-SonareError sonare_engine_prepare(SonareEngine* engine, double sample_rate, int max_block_size,
+SonareError sonare_engine_prepare(SonareEngine* engine, int sample_rate, int max_block_size,
                                   size_t command_capacity, size_t telemetry_capacity,
                                   int max_channels) {
   SONARE_C_API_ENTRY;
@@ -188,8 +188,8 @@ SonareError sonare_engine_prepare(SonareEngine* engine, double sample_rate, int 
     return err;
   }
   SONARE_C_TRY
-  engine->engine.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity,
-                         max_channels);
+  engine->engine.prepare(static_cast<double>(sample_rate), max_block_size, command_capacity,
+                         telemetry_capacity, max_channels);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -849,7 +849,7 @@ SonareError sonare_engine_get_transport_state(SonareEngine* engine, SonareTransp
   out->bpm = state.bpm;
   out->loop_start_ppq = state.loop_start_ppq;
   out->loop_end_ppq = state.loop_end_ppq;
-  out->sample_rate = state.sample_rate;
+  out->sample_rate = static_cast<int>(state.sample_rate);
   out->bar_start_ppq = state.bar_start_ppq;
   out->bar_index = state.bar_count;
   out->time_signature.numerator = state.time_sig.numerator;

@@ -1,7 +1,6 @@
 #include <array>
 #include <cmath>
 #include <limits>
-#include <type_traits>
 
 #include "c_api/features_internal.h"
 #include "util/parameter_checks.h"
@@ -60,11 +59,9 @@ void free_stream_frame_arrays(Frames* frames) {
   delete[] frames->rms_energy;
   delete[] frames->spectral_centroid;
   delete[] frames->spectral_flatness;
-  if constexpr (std::is_same_v<std::remove_cv_t<Frames>, SonareStreamFrames>) {
-    delete[] frames->chord_root;
-    delete[] frames->chord_quality;
-    delete[] frames->chord_confidence;
-  }
+  delete[] frames->chord_root;
+  delete[] frames->chord_quality;
+  delete[] frames->chord_confidence;
   *frames = {};
 }
 
@@ -80,11 +77,9 @@ void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
   staged->rms_energy = copy_vector(buffer.rms_energy);
   staged->spectral_centroid = copy_vector(buffer.spectral_centroid);
   staged->spectral_flatness = copy_vector(buffer.spectral_flatness);
-  if constexpr (std::is_same_v<std::remove_cv_t<Buffer>, FrameBuffer>) {
-    staged->chord_root = copy_vector(buffer.chord_root);
-    staged->chord_quality = copy_vector(buffer.chord_quality);
-    staged->chord_confidence = copy_vector(buffer.chord_confidence);
-  }
+  staged->chord_root = copy_vector(buffer.chord_root);
+  staged->chord_quality = copy_vector(buffer.chord_quality);
+  staged->chord_confidence = copy_vector(buffer.chord_confidence);
   staged->feature_flags = buffer.feature_flags;
   staged->n_chroma = buffer.n_chroma;
   staged.publish(out);
@@ -99,7 +94,7 @@ void sonare_stream_config_init(SonareStreamConfig* config) {
   config->struct_size = sizeof(*config);
   config->sample_rate = defaults.sample_rate;
   config->n_fft = defaults.n_fft;
-  config->hop_length = defaults.hop_length;
+  config->hop_length = static_cast<size_t>(defaults.hop_length);
   config->n_mels = defaults.n_mels;
   config->fmin_hz = defaults.fmin;
   // The core spells the Nyquist default as 0; the C field leaves it absent.
@@ -134,7 +129,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
         check::integer_within(config->n_fft, kStreamConfigNFftDomain, "config.n_fft");
         check::integer_within(config->hop_length, kStreamConfigHopLengthDomain,
                               "config.hop_length");
-        if (config->hop_length > config->n_fft) {
+        if (config->hop_length > static_cast<size_t>(config->n_fft)) {
           check::refuse_relation({"config.hop_length", "config.n_fft"}, "{0} must be at most {1}");
         }
         check::integer_within(config->n_mels, kStreamConfigNMelsDomain, "config.n_mels");
@@ -178,7 +173,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   validate_soa_stream_config(cfg);
   cfg.sample_rate = config->sample_rate;
   cfg.n_fft = config->n_fft;
-  cfg.hop_length = config->hop_length;
+  cfg.hop_length = static_cast<int>(config->hop_length);
   cfg.n_mels = config->n_mels;
   cfg.fmin = config->fmin_hz;
   cfg.fmax = std::isnan(config->fmax_hz) ? 0.0f : config->fmax_hz;
@@ -294,9 +289,9 @@ void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config) {
   config->centroid_max = q.centroid_max;
 }
 
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
-                                                  const SonareStreamQuantizeConfig* config,
-                                                  size_t max_frames, SonareStreamFramesU8* out) {
+SonareError sonare_stream_analyzer_read_quantized_frames_u8(
+    SonareStreamAnalyzer* analyzer, const SonareStreamQuantizeConfig* config, size_t max_frames,
+    SonareStreamFramesU8* out) {
   SONARE_C_API_ENTRY;
 
   SONARE_C_ZERO_OUTS(out);
@@ -311,9 +306,9 @@ SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer
   SONARE_C_CATCH
 }
 
-SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
-                                                   const SonareStreamQuantizeConfig* config,
-                                                   size_t max_frames, SonareStreamFramesI16* out) {
+SonareError sonare_stream_analyzer_read_quantized_frames_i16(
+    SonareStreamAnalyzer* analyzer, const SonareStreamQuantizeConfig* config, size_t max_frames,
+    SonareStreamFramesI16* out) {
   SONARE_C_API_ENTRY;
 
   SONARE_C_ZERO_OUTS(out);
@@ -355,7 +350,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   staged->dropped_output_frames = s.dropped_output_frames;
   staged->bpm = s.estimate.bpm;
   staged->bpm_confidence = s.estimate.bpm_confidence;
-  staged->bpm_candidate_count = s.estimate.bpm_candidate_count;
+  staged->bpm_candidate_count = static_cast<size_t>(s.estimate.bpm_candidate_count);
   staged->key = s.estimate.key;
   staged->key_minor = s.estimate.key_minor ? 1 : 0;
   staged->key_confidence = s.estimate.key_confidence;
@@ -369,7 +364,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   staged->chord_progression = copy_chord_changes(s.estimate.chord_progression);
   staged->bar_chord_progression_count = s.estimate.bar_chord_progression.size();
   staged->bar_chord_progression = copy_bar_chords(s.estimate.bar_chord_progression);
-  staged->pattern_length = s.estimate.pattern_length;
+  staged->pattern_length = static_cast<size_t>(s.estimate.pattern_length);
   staged->voted_pattern_count = s.estimate.voted_pattern.size();
   staged->voted_pattern = copy_bar_chords(s.estimate.voted_pattern);
   copy_text(staged->detected_pattern_name, sizeof(staged->detected_pattern_name),
@@ -397,13 +392,13 @@ void sonare_free_stream_stats(SonareStreamStats* stats) {
   *stats = {};
 }
 
-SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count) {
+SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
-  *out_count = analyzer->analyzer->frame_count();
+  *out_count = static_cast<size_t>(analyzer->analyzer->frame_count());
   return SONARE_OK;
   SONARE_C_CATCH
 }

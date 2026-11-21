@@ -206,7 +206,7 @@ std::vector<SonareSf2ProgramStatus> gs_manifest_of(
     const std::vector<std::vector<uint8_t>>& messages) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const std::vector<uint8_t> smf = smf_of(messages);
   uint32_t clip = 0;
   REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &clip) == SONARE_OK);
@@ -279,7 +279,7 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
 TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -357,7 +357,7 @@ TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss play
           "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -385,7 +385,7 @@ TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss play
 TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -424,7 +424,7 @@ TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velo
     DYNAMIC_SECTION("velocity16=" << velocity16) {
       SonareProject* project = nullptr;
       REQUIRE(sonare_project_create(&project) == SONARE_OK);
-      REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+      REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
       uint32_t track = 0;
       uint32_t clip = 0;
@@ -452,7 +452,7 @@ TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velo
 TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -537,7 +537,7 @@ TEST_CASE("sonare_project_soundfont_manifest reports what the player resolves un
 TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project][sf2]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -645,7 +645,7 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
 TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   SonareEngineSf2InstrumentConfig config{};
@@ -758,7 +758,7 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
 TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
@@ -816,7 +816,7 @@ std::vector<uint8_t> gs_dt1(uint8_t a0, uint8_t a1, uint8_t a2, std::vector<uint
 std::vector<float> render_overdrive(int realization) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
@@ -847,7 +847,7 @@ std::vector<float> render_overdrive(int realization) {
 TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   for (int bad : {-1, 2, 7}) {

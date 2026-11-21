@@ -311,7 +311,7 @@ TEST_CASE("SMF2 project import shares aggregate persistence preflight",
 TEST_CASE("project C surface exports MIDI events to SMF", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;
@@ -547,7 +547,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   SonareMidiEventPod routed[2]{};
   size_t routed_count = 0;
   int route_overflowed = 0;
-  uint32_t route_overflow_count = 0;
+  size_t route_overflow_count = 0;
   REQUIRE(sonare_midi_route_events(route_input, 3, &route_config, routed, 2, &routed_count,
                                    &route_overflowed, &route_overflow_count) == SONARE_OK);
   REQUIRE(routed_count == 2);
@@ -698,7 +698,7 @@ TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
   SonareMidiEventPod routed[4]{};
   size_t routed_count = 0;
   int overflowed = 0;
-  uint32_t overflow_count = 0;
+  size_t overflow_count = 0;
 
   SonareMidiRouteConfig config = make_route_config(3, -1, -1);
   REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
@@ -1743,7 +1743,7 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   // caller is nudged toward bounce_with_builtin_instruments / a bound destination.
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;

@@ -44,7 +44,7 @@ class PreparedEngine {
  public:
   PreparedEngine() {
     REQUIRE(sonare_engine_create(&engine_) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine_, 48000.0, 64, 32, 16, 0) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine_, 48000, 64, 32, 16, 0) == SONARE_OK);
   }
   ~PreparedEngine() { sonare_engine_destroy(engine_); }
   PreparedEngine(const PreparedEngine&) = delete;
@@ -149,9 +149,8 @@ SonareError probe_phase_vocoder(const std::string& param, double value) {
   const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err =
-      sonare_phase_vocoder(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                           1.5f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  const SonareError err = sonare_phase_vocoder(analysis_samples().data(), analysis_samples().size(),
+                                               kAnalysisRate, 1.5f, n_fft, 0, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -194,14 +193,14 @@ SonareError probe_biquad_filter(const std::string& param, double value) {
 }
 
 struct SilenceFraming {
-  int frame_length = 2048;
-  int hop_length = 512;
+  size_t frame_length = 2048;
+  size_t hop_length = 512;
 };
 
 SilenceFraming silence_framing(const std::string& param, double value) {
   SilenceFraming framing;
-  if (is_param(param, "frame_length")) framing.frame_length = static_cast<int>(value);
-  if (is_param(param, "hop_length")) framing.hop_length = static_cast<int>(value);
+  if (is_param(param, "frame_length")) framing.frame_length = as_size(value);
+  if (is_param(param, "hop_length")) framing.hop_length = as_size(value);
   return framing;
 }
 
@@ -222,8 +221,8 @@ SonareError probe_trim_silence(const std::string& param, double value) {
   const SilenceFraming framing = silence_framing(param, value);
   float* out = nullptr;
   size_t out_length = 0;
-  int start = 0;
-  int end = 0;
+  int64_t start = 0;
+  int64_t end = 0;
   const SonareError err = sonare_trim_silence(analysis_samples().data(), analysis_samples().size(),
                                               60.0f, framing.frame_length, framing.hop_length, &out,
                                               &out_length, &start, &end);
@@ -462,7 +461,7 @@ SonareError probe_engine_prepare(const std::string& param, double value) {
   if (is_param(param, "command_capacity")) command_capacity = as_size(value);
   if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
   if (is_param(param, "max_channels")) max_channels = static_cast<int>(value);
-  const SonareError err = sonare_engine_prepare(engine, 48000.0, max_block_size, command_capacity,
+  const SonareError err = sonare_engine_prepare(engine, 48000, max_block_size, command_capacity,
                                                 telemetry_capacity, max_channels);
   sonare_engine_destroy(engine);
   return err;

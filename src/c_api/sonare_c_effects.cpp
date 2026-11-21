@@ -42,15 +42,6 @@ const std::array<CName, 2> kStftOptionNames{
 const std::array<CName, 3> kTimeStretchNames{
     {{"rate", "speed_ratio"}, {"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
 
-// An options hop of 0 is absent (a quarter of n_fft); one above INT_MAX saturates there, so the
-// range check refuses it rather than a narrowing cast wrapping it into range.
-int options_stft_hop(size_t value) {
-  if (value == 0) return SONARE_STFT_HOP_AUTO;
-  return value > static_cast<size_t>(std::numeric_limits<int>::max())
-             ? std::numeric_limits<int>::max()
-             : static_cast<int>(value);
-}
-
 /// Checks a decompose-stems config and copies it onto the core one. Throws the refusal.
 void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
                                  DecomposeStemsConfig* core_config) {
@@ -153,7 +144,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
   // The FFT size and hop are refused before any input is decoded.
   if (const SonareError err = run_validation([&] {
         sonare::util::check::even_within(resolved.n_fft, sonare::kColaNFftDomain, "options.n_fft");
-        check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length");
+        check_stft_hop(resolved.hop_length, "options.hop_length");
       });
       err != SONARE_OK) {
     return err;
@@ -170,7 +161,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 
         StftConfig stft_config;
         stft_config.n_fft = resolved.n_fft;
-        stft_config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
+        stft_config.hop_length = core_stft_hop(resolved.hop_length);
 
         if (!with_residual) {
           HpssAudioResult result =
@@ -260,8 +251,8 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation(
-          [&] { check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length"); });
+  if (const SonareError err =
+          run_validation([&] { check_stft_hop(resolved.hop_length, "options.hop_length"); });
       err != SONARE_OK) {
     return err;
   }
@@ -270,7 +261,7 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
 
   TimeStretchConfig config;
   config.n_fft = resolved.n_fft;
-  config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
+  config.hop_length = core_stft_hop(resolved.hop_length);
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(
       samples, length, sample_rate, out, out_length, [speed_ratio, config](const Audio& a) {
@@ -302,8 +293,8 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation(
-          [&] { check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length"); });
+  if (const SonareError err =
+          run_validation([&] { check_stft_hop(resolved.hop_length, "options.hop_length"); });
       err != SONARE_OK) {
     return err;
   }
@@ -318,7 +309,7 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
 
   PitchShiftConfig config;
   config.n_fft = resolved.n_fft;
-  config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
+  config.hop_length = core_stft_hop(resolved.hop_length);
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(
       samples, length, sample_rate, out, out_length, [pitch_semitones, config](const Audio& a) {
@@ -708,7 +699,7 @@ void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config) {
   const DecomposeStemsConfig defaults;
   config->n_components = defaults.n_components;
   config->n_fft = defaults.n_fft;
-  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hop_length = 0;
   config->n_iter = defaults.n_iter;
   config->beta = defaults.beta;
   config->init = "random";
@@ -890,7 +881,7 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 }
 
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,
-                                 float speed_ratio, int n_fft, int hop_length, float** out,
+                                 float speed_ratio, int n_fft, size_t hop_length, float** out,
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
@@ -936,7 +927,7 @@ void sonare_spectral_edit_config_init(SonareSpectralEditConfig* config) {
   config->struct_size = sizeof(*config);
   const SpectralEditConfig defaults;
   config->n_fft = defaults.n_fft;
-  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hop_length = 0;
   config->window = SONARE_WINDOW_HANN;
   config->heal_radius_frames = defaults.heal_radius_frames;
 }

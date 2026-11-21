@@ -90,7 +90,7 @@ typedef struct {
   uint32_t frame_length_samples;  ///< Analysis window length in samples (default 2048).
   const float* f0_hz;             ///< frame_count fundamentals in Hz.
   const uint8_t* voiced;          ///< frame_count flags; nonzero marks a voiced frame.
-  uint64_t frame_count;           ///< Number of entries in f0_hz and voiced.
+  size_t frame_count;             ///< Number of entries in f0_hz and voiced.
   const char*
       algorithm_id;  ///< NUL-terminated analyzer name, fewer than 256 bytes (default "host").
   uint32_t algorithm_version;  ///< Version of the analyzer named by algorithm_id.
@@ -148,7 +148,7 @@ typedef struct {
   uint32_t target_mode;  ///< A @ref SonareVocalTargetMode choosing how the target is given.
   double target_midi;    ///< Target pitch as a MIDI note number for CENTER mode.
   const SonareVocalPitchPoint* target_points;  ///< target_point_count curve points for CURVE mode.
-  uint64_t target_point_count;                 ///< Number of entries in target_points.
+  size_t target_point_count;                   ///< Number of entries in target_points.
   double amount;                       ///< Correction strength toward the target, in [0, 1].
   double speed_ms;                     ///< Correction smoothing time constant in ms; 0 is instant.
   double max_correction_semitones;     ///< Largest correction applied, in semitones; at least 0.
@@ -162,7 +162,7 @@ typedef struct {
   uint32_t formant_mode;               ///< A @ref SonareVocalFormantMode choosing formant handling.
   double formant_shift_semitones;      ///< Formant shift in semitones; limits in capabilities.
   const float* amplitude_envelope;     ///< amplitude_envelope_count non-negative gain factors.
-  uint64_t amplitude_envelope_count;   ///< Number of entries in amplitude_envelope; 0 means none.
+  size_t amplitude_envelope_count;     ///< Number of entries in amplitude_envelope; 0 means none.
 } SonareVocalNoteEdit;
 
 /// @brief A detected note with its current edit.
@@ -180,7 +180,7 @@ typedef struct {
   double center_midi;        ///< Center pitch as a MIDI note number.
   double f0_stability;       ///< Pitch steadiness in [0, 1]; 1 is steadiest.
   const float* amplitude;    ///< amplitude_count per-frame amplitudes of the note.
-  uint64_t amplitude_count;  ///< Number of entries in amplitude.
+  size_t amplitude_count;    ///< Number of entries in amplitude.
   SonareVocalNoteEdit edit;  ///< Current edit; its arrays are library-allocated.
 } SonareVocalNote;
 
@@ -208,7 +208,7 @@ typedef struct {
   int64_t destination_length_samples;  ///< New destination length for SET_SOURCE_SPAN.
   int64_t cut_source_sample;           ///< Source sample at which SPLIT cuts the note.
   const uint32_t* note_ids;            ///< note_id_count ids for MERGE and RESET.
-  uint64_t note_id_count;              ///< Number of entries in note_ids.
+  size_t note_id_count;                ///< Number of entries in note_ids.
   uint32_t merge_policy;               ///< A @ref SonareVocalMergePolicy for MERGE.
   SonareVocalTransition
       transition;  ///< Transition for SET_TRANSITION; REMOVE_TRANSITION reads its note ids.
@@ -230,9 +230,9 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;    ///< sizeof of this struct; set by the matching init function.
   SonareVocalNote* notes;  ///< note_count notes.
-  uint64_t note_count;     ///< Number of entries in notes.
+  size_t note_count;       ///< Number of entries in notes.
   SonareVocalTransition* transitions;  ///< transition_count transitions.
-  uint64_t transition_count;           ///< Number of entries in transitions.
+  size_t transition_count;             ///< Number of entries in transitions.
 } SonareVocalNotesResult;
 
 /// @brief The analysis a session holds, with digests of its source and of the analysis.
@@ -244,7 +244,7 @@ typedef struct {
   char source_sha256[65];         ///< Lowercase hex SHA-256 of the source, NUL-terminated.
   char analysis_sha256[65];       ///< Lowercase hex SHA-256 of the analysis, NUL-terminated.
   int64_t source_length_samples;  ///< Source length in samples.
-  uint32_t sample_rate;           ///< Source sample rate in Hz.
+  int sample_rate;                ///< Source sample rate in Hz.
 } SonareVocalAnalysisResult;
 
 /// @brief Note ids replaced by one applied operation.
@@ -262,9 +262,9 @@ typedef struct {
   uint32_t struct_size;             ///< sizeof of this struct; set by the matching init function.
   SonareVocalStateToken token;      ///< State after the call.
   SonareVocalRange* dirty_ranges;   ///< Ranges whose rendered audio changed.
-  uint64_t dirty_range_count;       ///< Number of entries in dirty_ranges.
+  size_t dirty_range_count;         ///< Number of entries in dirty_ranges.
   SonareVocalIdChange* id_changes;  ///< Note ids retired and created; only set by apply.
-  uint64_t id_change_count;         ///< Number of entries in id_changes.
+  size_t id_change_count;           ///< Number of entries in id_changes.
 } SonareVocalEditResult;
 
 /// @brief Per-frame pitch evaluation of one note.
@@ -278,7 +278,7 @@ typedef struct {
   double* effective_midi;  ///< frame_count pitches after the edit as MIDI note numbers.
   uint8_t* voiced;         ///< frame_count flags; nonzero marks a voiced frame.
   uint8_t* has_target;     ///< frame_count flags; nonzero where target_midi is defined.
-  uint64_t frame_count;    ///< Number of entries in each array.
+  size_t frame_count;      ///< Number of entries in each array.
 } SonareVocalPitchResult;
 
 /// @brief Rendered PCM and the ranges it covers.
@@ -287,11 +287,11 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;         ///< sizeof of this struct; set by the matching init function.
   float* samples;               ///< sample_count mono samples.
-  int64_t sample_count;         ///< Number of entries in samples.
+  size_t sample_count;          ///< Number of entries in samples.
   int64_t start_sample;         ///< Output sample at which samples begins.
   SonareVocalStateToken token;  ///< State rendered; request_id echoes the caller's.
   SonareVocalRange* processed_ranges;  ///< Ranges of the output covered by this render.
-  uint64_t processed_range_count;      ///< Number of entries in processed_ranges.
+  size_t processed_range_count;        ///< Number of entries in processed_ranges.
   uint64_t cache_hit_units;            ///< Render units served from the cache.
   uint64_t dry_passed_frames;          ///< Voiced frames left unshifted: target pitch out of range.
   uint64_t limited_correction_frames;  ///< Frames whose correction was clamped to the maximum.

@@ -13,12 +13,12 @@
 namespace {
 
 // Builds the config from arguments validate_key_arguments already admitted.
-void make_key_config(int n_fft, int hop_length, int use_hpss, int loudness_weighted,
+void make_key_config(int n_fft, size_t hop_length, int use_hpss, int loudness_weighted,
                      float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
                      SonareKeyProfileType profile_type, const char* genre_hint,
                      KeyConfig* out_config) {
   out_config->n_fft = n_fft;
-  out_config->hop_length = hop_length;
+  out_config->hop_length = core_length(hop_length);
   out_config->use_hpss = use_hpss != 0;
   out_config->loudness_weighted = loudness_weighted != 0;
   out_config->high_pass_hz = chroma_high_pass_hz;
@@ -36,13 +36,13 @@ std::optional<float> tuning_from_c(float tuning_cents, int tuning_auto) {
 
 // The key arguments in header order: the scalars through the core's rule for them, then the mode
 // list and the profile selector, which are this layer's own.
-SonareError validate_key_arguments(int n_fft, int hop_length, int use_hpss,
+SonareError validate_key_arguments(int n_fft, size_t hop_length, int use_hpss,
                                    float chroma_high_pass_hz, const SonareMode* modes,
                                    size_t mode_count, SonareKeyProfileType profile_type) {
   if (const SonareError err = run_validation([&] {
         KeyConfig config;
         config.n_fft = n_fft;
-        config.hop_length = hop_length;
+        config.hop_length = core_length(hop_length);
         config.use_hpss = use_hpss != 0;
         config.high_pass_hz = chroma_high_pass_hz;
         validate_key_config(config);
@@ -101,7 +101,7 @@ void sonare_detect_key_options_init(SonareDetectKeyOptions* options) {
   *options = {};
   options->struct_size = sizeof(*options);
   options->n_fft = config.n_fft;
-  options->hop_length = config.hop_length;
+  options->hop_length = static_cast<size_t>(config.hop_length);
   options->use_hpss = config.use_hpss ? 1 : 0;
   options->loudness_weighted = config.loudness_weighted ? 1 : 0;
   options->chroma_high_pass_hz = config.high_pass_hz;
@@ -281,7 +281,7 @@ void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config) {
   *config = {};
   config->struct_size = sizeof(*config);
   config->n_fft = native.n_fft;
-  config->hop_length = native.hop_length;
+  config->hop_length = static_cast<size_t>(native.hop_length);
   config->threshold = std::numeric_limits<float>::quiet_NaN();
   config->pre_max = native.pre_max;
   config->post_max = native.post_max;
@@ -329,7 +329,7 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 
   sonare::OnsetDetectConfig native;
   native.n_fft = config->n_fft;
-  native.hop_length = config->hop_length;
+  native.hop_length = core_length(config->hop_length);
   native.threshold = std::isnan(config->threshold) ? 0.0f : config->threshold;
   native.pre_max = config->pre_max;
   native.post_max = config->post_max;
@@ -369,7 +369,7 @@ void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options) {
   *options = {};
   options->struct_size = sizeof(*options);
   options->n_fft = config.n_fft;
-  options->hop_length = config.hop_length;
+  options->hop_length = static_cast<size_t>(config.hop_length);
   options->bpm_min = config.bpm_min;
   options->bpm_max = config.bpm_max;
   options->start_bpm = config.start_bpm;
@@ -393,7 +393,7 @@ void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options) {
   for (size_t i = 0; i < count; ++i) {
     options->meter_candidate_numerators[i] = config.meter_candidate_numerators[i];
   }
-  options->meter_candidate_numerator_count = static_cast<int>(count);
+  options->meter_candidate_numerator_count = count;
 }
 
 namespace {
@@ -403,7 +403,7 @@ namespace {
 MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeOptions& options) {
   MusicAnalyzerConfig config;
   config.n_fft = options.n_fft;
-  config.hop_length = options.hop_length;
+  config.hop_length = core_length(options.hop_length);
   config.bpm_min = options.bpm_min;
   config.bpm_max = options.bpm_max;
   config.start_bpm = options.start_bpm;
@@ -473,9 +473,9 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
         sonare_c_detail::require_struct_size(options->struct_size,
                                              sizeof(SonareMusicAnalyzeOptions), "options",
                                              "sonare_music_analyze_options_init");
-        util::check::integer_in_range(options->meter_candidate_numerator_count, 0,
-                                      SONARE_MAX_METER_CANDIDATE_NUMERATORS,
-                                      "options.meter_candidate_numerator_count");
+        util::check::integer_in_range(
+            static_cast<long long>(options->meter_candidate_numerator_count), 0,
+            SONARE_MAX_METER_CANDIDATE_NUMERATORS, "options.meter_candidate_numerator_count");
         with_c_names(kMusicAnalyzeOptionNames,
                      [&] { validate_config(music_analyzer_config_from_options(*options)); });
       });
@@ -525,7 +525,7 @@ void sonare_meter_options_init(SonareMeterOptions* options) {
   for (size_t i = 0; i < count; ++i) {
     options->candidate_numerators[i] = config.candidate_numerators[i];
   }
-  options->candidate_numerator_count = static_cast<int>(count);
+  options->candidate_numerator_count = count;
 }
 
 SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
@@ -544,7 +544,7 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareMeterOptions),
                                              "options", "sonare_meter_options_init");
-        util::check::integer_in_range(options->candidate_numerator_count, 0,
+        util::check::integer_in_range(static_cast<long long>(options->candidate_numerator_count), 0,
                                       SONARE_MAX_METER_CANDIDATE_NUMERATORS,
                                       "options.candidate_numerator_count");
       });

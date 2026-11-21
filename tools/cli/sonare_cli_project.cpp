@@ -185,7 +185,7 @@ int cmd_project_new(const CliArgs& args) {
   }
   // Only a rate the caller spelled is set; an explicit 0 reaches the library as written.
   if (args.has("sample-rate")) {
-    err = sonare_project_set_sample_rate(handle.ptr, args.get_double("sample-rate", 0.0));
+    err = sonare_project_set_sample_rate(handle.ptr, args.get_int("sample-rate", 0));
     if (err != SONARE_OK) {
       project_report_error("set sample rate", err);
       return project_exit_code(err);

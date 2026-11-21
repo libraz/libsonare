@@ -19,12 +19,17 @@ using namespace sonare::test::numeric_domains;
 using sonare_c_detail::kAnalysisDomainRows;
 using sonare_c_detail::numeric_domain_table;
 
+// A probe value below zero is the largest size_t, past every domain's upper bound.
+size_t as_size(double value) {
+  return value < 0.0 ? std::numeric_limits<size_t>::max() : static_cast<size_t>(value);
+}
+
 SonareError probe_dynamics(const std::string& param, double value) {
   float window_sec = 0.4f;
-  int hop_length = 512;
+  size_t hop_length = 512;
   float threshold = 6.0f;
   if (is_param(param, "window_sec")) window_sec = static_cast<float>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   if (is_param(param, "compression_threshold")) threshold = static_cast<float>(value);
   SonareDynamicsResult out{};
   const SonareError err =
@@ -65,12 +70,12 @@ SonareError probe_detect_acoustic(const std::string& param, double value) {
 
 SonareError probe_timbre(const std::string& param, double value) {
   int n_fft = 2048;
-  int hop_length = 512;
+  size_t hop_length = 512;
   int n_mels = 128;
   int n_mfcc = 13;
   float window_sec = 0.5f;
   if (is_param(param, "n_fft")) n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   if (is_param(param, "n_mels")) n_mels = static_cast<int>(value);
   if (is_param(param, "n_mfcc")) n_mfcc = static_cast<int>(value);
   if (is_param(param, "window_sec")) window_sec = static_cast<float>(value);
@@ -85,16 +90,16 @@ SonareError probe_timbre(const std::string& param, double value) {
 struct MelodyArguments {
   float f0_min_hz = 65.0f;
   float f0_max_hz = 2093.0f;
-  int frame_length = 2048;
-  int hop_length = 256;
+  size_t frame_length = 2048;
+  size_t hop_length = 256;
   float threshold = 0.1f;
 };
 
 MelodyArguments melody_arguments(const std::string& param, double value) {
   MelodyArguments a;
   if (is_param(param, "f0_min_hz")) a.f0_min_hz = static_cast<float>(value);
-  if (is_param(param, "frame_length")) a.frame_length = static_cast<int>(value);
-  if (is_param(param, "hop_length")) a.hop_length = static_cast<int>(value);
+  if (is_param(param, "frame_length")) a.frame_length = as_size(value);
+  if (is_param(param, "hop_length")) a.hop_length = as_size(value);
   if (is_param(param, "threshold")) a.threshold = static_cast<float>(value);
   return a;
 }
@@ -117,13 +122,13 @@ size_t pcm_length() { return analysis_samples().size(); }
 /// The framing every STFT-based entry takes, at working defaults.
 struct Frame {
   int n_fft = 2048;
-  int hop_length = 512;
+  size_t hop_length = 512;
 };
 
 Frame frame_of(const std::string& param, double value) {
   Frame f;
   if (is_param(param, "n_fft")) f.n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) f.hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) f.hop_length = as_size(value);
   return f;
 }
 
@@ -190,7 +195,7 @@ SonareChordDetectionOptions chord_options(const std::string& param, double value
   SonareChordDetectionOptions options{};
   sonare_chord_detection_options_init(&options);
   if (is_param(param, "n_fft")) options.n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) options.hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) options.hop_length = as_size(value);
   if (is_param(param, "hmm_beam_width")) options.hmm_beam_width = static_cast<int>(value);
   return options;
 }
@@ -223,7 +228,7 @@ SonareError probe_analyze_sections(const std::string& param, double value) {
   SonareSectionOptions options{};
   sonare_section_options_init(&options);
   if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
-  if (is_param(param, "options.hop_length")) options.hop_length = static_cast<int>(value);
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
   SonareSectionResult out{};
   const SonareError err =
       sonare_analyze_sections(pcm(), pcm_length(), kAnalysisRate, &options, &out);
@@ -235,7 +240,7 @@ SonareError probe_detect_boundaries(const std::string& param, double value) {
   SonareBoundaryOptions options{};
   sonare_boundary_options_init(&options);
   if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
-  if (is_param(param, "options.hop_length")) options.hop_length = static_cast<int>(value);
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
   if (is_param(param, "options.kernel_size")) options.kernel_size = static_cast<int>(value);
   if (is_param(param, "options.n_mfcc")) options.n_mfcc = static_cast<int>(value);
   if (is_param(param, "options.n_chroma")) options.n_chroma = static_cast<int>(value);
@@ -251,7 +256,7 @@ SonareMusicAnalyzeOptions music_options(const std::string& param, double value) 
   sonare_music_analyze_options_init(&options);
   const int v = static_cast<int>(value);
   if (is_param(param, "options.n_fft")) options.n_fft = v;
-  if (is_param(param, "options.hop_length")) options.hop_length = v;
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
   if (is_param(param, "options.chroma_hop_multiplier")) options.chroma_hop_multiplier = v;
   if (is_param(param, "options.chord_hmm_beam_width")) options.chord_hmm_beam_width = v;
   if (is_param(param, "options.tempo_update_interval_beats")) {
@@ -292,14 +297,14 @@ SonareError probe_chroma(const std::string& param, double value) {
 
 /// Chroma-over-CQT arguments: the hop, the pitch-class count and the bin grid.
 struct ChromaCqt {
-  int hop_length = 512;
+  size_t hop_length = 512;
   int n_chroma = 12;
   int bins_per_octave = 36;
 };
 
 ChromaCqt chroma_cqt_of(const std::string& param, double value) {
   ChromaCqt c;
-  if (is_param(param, "hop_length")) c.hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) c.hop_length = as_size(value);
   if (is_param(param, "n_chroma")) c.n_chroma = static_cast<int>(value);
   if (is_param(param, "bins_per_octave")) c.bins_per_octave = static_cast<int>(value);
   return c;
@@ -341,14 +346,14 @@ SonareError probe_bass_chroma(const std::string& param, double value) {
 
 /// Constant-Q arguments: the hop, the bin count and the bin grid.
 struct Cqt {
-  int hop_length = 512;
+  size_t hop_length = 512;
   int n_bins = 48;
   int bins_per_octave = 12;
 };
 
 Cqt cqt_of(const std::string& param, double value) {
   Cqt c;
-  if (is_param(param, "hop_length")) c.hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) c.hop_length = as_size(value);
   if (is_param(param, "n_bins")) c.n_bins = static_cast<int>(value);
   if (is_param(param, "bins_per_octave")) c.bins_per_octave = static_cast<int>(value);
   return c;
@@ -560,14 +565,14 @@ SonareError probe_piptrack(const std::string& param, double value) {
 
 /// YIN-style framing: a window and a hop in samples.
 struct Tracking {
-  int frame_length = 2048;
-  int hop_length = 512;
+  size_t frame_length = 2048;
+  size_t hop_length = 512;
 };
 
 Tracking tracking_of(const std::string& param, double value) {
   Tracking t;
-  if (is_param(param, "frame_length")) t.frame_length = static_cast<int>(value);
-  if (is_param(param, "hop_length")) t.hop_length = static_cast<int>(value);
+  if (is_param(param, "frame_length")) t.frame_length = as_size(value);
+  if (is_param(param, "hop_length")) t.hop_length = as_size(value);
   return t;
 }
 
@@ -601,8 +606,8 @@ SonareError probe_reassigned_spectrogram(const std::string& param, double value)
 /// Tempogram-family arguments: the hop, the window and the rate.
 struct Tempo {
   int sample_rate = kAnalysisRate;
-  int hop_length = 512;
-  int win_length = 384;
+  size_t hop_length = 512;
+  size_t win_length = 384;
   int n_bins = 12;
 };
 
@@ -611,8 +616,8 @@ Tempo tempo_of(const std::string& param, double value) {
   if (is_param(param, "sr") || is_param(param, "sample_rate")) {
     t.sample_rate = static_cast<int>(value);
   }
-  if (is_param(param, "hop_length")) t.hop_length = static_cast<int>(value);
-  if (is_param(param, "win_length")) t.win_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) t.hop_length = as_size(value);
+  if (is_param(param, "win_length")) t.win_length = as_size(value);
   if (is_param(param, "n_bins")) t.n_bins = static_cast<int>(value);
   return t;
 }
@@ -678,7 +683,7 @@ SonareError probe_nnls_chroma(const std::string& param, double value) {
   options.stft_blend_weight = 0.5f;
   options.stft_blend_n_fft = 2048;
   if (is_param(param, "stft_blend_n_fft")) options.stft_blend_n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) options.hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) options.hop_length = as_size(value);
   float* out = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
@@ -689,9 +694,9 @@ SonareError probe_nnls_chroma(const std::string& param, double value) {
 
 SonareError probe_griffin_lim(const std::string& param, double value) {
   int n_fft = 128;
-  int hop_length = 32;
+  size_t hop_length = 32;
   if (is_param(param, "n_fft")) n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   const int n_bins = n_fft / 2 + 1;
   const int n_frames = 4;
   float* out = nullptr;
@@ -720,9 +725,9 @@ SonareError probe_chirp(const std::string& param, double value) {
 
 SonareError probe_clicks(const std::string& param, double value) {
   int sample_rate = kAnalysisRate;
-  int length = 4096;
+  size_t length = 4096;
   if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
-  if (is_param(param, "length")) length = static_cast<int>(value);
+  if (is_param(param, "length")) length = as_size(value);
   const float times[2] = {0.0f, 0.05f};
   float* out = nullptr;
   size_t out_length = 0;
@@ -853,18 +858,18 @@ SonareError probe_onset_strength(const std::string& param, double value) {
 // The conversions return a value, so the refusal is read back from the last error.
 SonareError probe_frames_to_time(const std::string& param, double value) {
   int sr = kAnalysisRate;
-  int hop_length = 512;
+  size_t hop_length = 512;
   if (is_param(param, "sr")) sr = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   (void)sonare_frames_to_time(10, sr, hop_length);
   return sonare_last_error_code();
 }
 
 SonareError probe_time_to_frames(const std::string& param, double value) {
   int sr = kAnalysisRate;
-  int hop_length = 512;
+  size_t hop_length = 512;
   if (is_param(param, "sr")) sr = static_cast<int>(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   (void)sonare_time_to_frames(1.0f, sr, hop_length);
   return sonare_last_error_code();
 }
@@ -874,8 +879,8 @@ SonareError probe_polyphonic_analyze(const std::string& param, double value) {
   SonarePolyphonicConfig config{};
   sonare_polyphonic_config_init(&config);
   if (is_param(param, "config.n_fft")) config.n_fft = static_cast<int32_t>(value);
-  if (is_param(param, "config.hop_length")) config.hop_length = static_cast<int32_t>(value);
-  if (is_param(param, "config.win_length")) config.win_length = static_cast<int32_t>(value);
+  if (is_param(param, "config.hop_length")) config.hop_length = as_size(value);
+  if (is_param(param, "config.win_length")) config.win_length = as_size(value);
   if (is_param(param, "config.max_refine_hz")) config.max_refine_hz = static_cast<float>(value);
   if (is_param(param, "config.reattack_ratio")) config.reattack_ratio = static_cast<float>(value);
   SonarePolyphonicAnalysis* out = nullptr;

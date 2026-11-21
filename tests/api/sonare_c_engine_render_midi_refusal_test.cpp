@@ -26,7 +26,7 @@ std::string last_error() { return sonare_last_error_message(); }
 SonareEngine* prepared_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 2) == SONARE_OK);
   return engine;
 }
 
@@ -536,7 +536,7 @@ TEST_CASE("engine instrument entries refuse an unknown destination and a bad ord
   CHECK(last_error() == unknown_destination);
   CHECK(sonare_engine_articulation(engine, 99, 0, &articulation) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == unknown_destination);
-  uint32_t legato = 0;
+  size_t legato = 0;
   CHECK(sonare_engine_legato_fallback_count(engine, 99, &legato) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == unknown_destination);
   CHECK(sonare_engine_set_part_rig(engine, 99, 0, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);

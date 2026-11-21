@@ -93,6 +93,11 @@ void StreamAnalyzer::read_frames_quantized(size_t max_frames, Buffer& buffer,
     for (float c : frame.chroma) {
       buffer.chroma.push_back(quantize(c, 0.0f, 1.0f));
     }
+    if (config_.compute_chroma) {
+      buffer.chord_root.push_back(static_cast<int8_t>(frame.chord_root));
+      buffer.chord_quality.push_back(static_cast<int8_t>(frame.chord_quality));
+      buffer.chord_confidence.push_back(quantize(frame.chord_confidence, 0.0f, 1.0f));
+    }
 
     if (config_.compute_onset) {
       buffer.onset_strength.push_back(quantize(frame.onset_strength, 0.0f, qconfig.onset_max));

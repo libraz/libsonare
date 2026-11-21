@@ -97,7 +97,8 @@ SonareBuiltinSynthConfig project_synth() {
 std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, static_cast<int>(kSampleRate), kBlockSize, 64, 16, 0) ==
+          SONARE_OK);
   uint32_t output_bus = 0;
   if (bus_layout != kNoBus) {
     SonareEngineBus bus{};
@@ -147,7 +148,7 @@ std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) 
 SonareProject* make_project(const std::string& scene_json) {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kSampleRate)) == SONARE_OK);
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
   uint32_t track = 0;
   uint32_t clip = 0;

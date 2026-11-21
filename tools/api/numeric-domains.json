@@ -2176,7 +2176,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "griffin_lim",
@@ -4313,10 +4313,32 @@
       "sentinel": null
     },
     {
+      "entry": "note_move",
+      "param": "offset_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "note_segments",
       "param": "n_frames",
       "kind": "integer",
       "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "note_stretch",
+      "param": "offset_sample",
+      "kind": "integer",
+      "lo": 0,
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
@@ -4684,7 +4706,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "project_add_automation_lane",

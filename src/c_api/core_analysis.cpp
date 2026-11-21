@@ -30,7 +30,7 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
   config.threshold = options.threshold;
   config.use_triads_only = options.use_triads_only != 0;
   config.n_fft = options.n_fft;
-  config.hop_length = options.hop_length;
+  config.hop_length = core_length(options.hop_length);
   config.use_beat_sync = options.use_beat_sync != 0;
   config.use_hmm = options.use_hmm != 0;
   config.hmm_beam_width = options.hmm_beam_width;
@@ -67,7 +67,7 @@ SonareError check_chord_detection_options(const SonareChordDetectionOptions& opt
 }  // namespace
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
-                               float bpm_max, float start_bpm, int n_fft, int hop_length,
+                               float bpm_max, float start_bpm, int n_fft, size_t hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
@@ -76,7 +76,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
   config.bpm_max = bpm_max;
   config.start_bpm = start_bpm;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   if (const SonareError err = run_validation([&] {
         validate_bpm_config(config);
         validate_bpm_candidate_count(max_candidates);
@@ -201,7 +201,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
-                                  int hop_length, SonareRhythmResult* out) {
+                                  size_t hop_length, SonareRhythmResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   // Built inside each guarded call: RhythmConfig allocates, and a throw here must not escape.
@@ -211,7 +211,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
     config.bpm_max = bpm_max;
     config.start_bpm = start_bpm;
     config.n_fft = n_fft;
-    config.hop_length = hop_length;
+    config.hop_length = core_length(hop_length);
     return config;
   };
   if (const SonareError err = run_validation([&] { validate_rhythm_config(make_config()); });
@@ -243,13 +243,13 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 }
 
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
-                                    float window_sec, int hop_length,
+                                    float window_sec, size_t hop_length,
                                     float compression_threshold_db, SonareDynamicsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   DynamicsConfig config;
   config.window_sec = window_sec;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.compression_threshold = compression_threshold_db;
   if (const SonareError err = run_validation([&] { validate_dynamics_config(config); });
       err != SONARE_OK) {
@@ -284,13 +284,13 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
 }
 
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
-                                  int hop_length, int n_mels, int n_mfcc, float window_sec,
+                                  size_t hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   TimbreConfig config;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.n_mels = n_mels;
   config.n_mfcc = n_mfcc;
   config.window_sec = window_sec;
@@ -353,7 +353,7 @@ void sonare_chord_detection_options_init(SonareChordDetectionOptions* options) {
   options->threshold = config.threshold;
   options->use_triads_only = config.use_triads_only ? 1 : 0;
   options->n_fft = config.n_fft;
-  options->hop_length = config.hop_length;
+  options->hop_length = static_cast<size_t>(config.hop_length);
   options->use_beat_sync = config.use_beat_sync ? 1 : 0;
   options->use_hmm = config.use_hmm ? 1 : 0;
   options->hmm_beam_width = config.hmm_beam_width;
@@ -551,7 +551,7 @@ void sonare_section_options_init(SonareSectionOptions* options) {
   *options = {};
   options->struct_size = sizeof(*options);
   options->n_fft = config.n_fft;
-  options->hop_length = config.hop_length;
+  options->hop_length = static_cast<size_t>(config.hop_length);
   options->min_section_sec = config.min_section_sec;
   options->threshold = config.boundary_threshold;
 }
@@ -586,7 +586,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   SONARE_C_REQUIRE_NONNULL(options);
   SectionConfig config;
   config.n_fft = options->n_fft;
-  config.hop_length = options->hop_length;
+  config.hop_length = core_length(options->hop_length);
   config.min_section_sec = options->min_section_sec;
   config.boundary_threshold = options->threshold;
   if (const SonareError err = run_validation([&] {
@@ -629,7 +629,7 @@ void sonare_boundary_options_init(SonareBoundaryOptions* options) {
   *options = {};
   options->struct_size = sizeof(*options);
   options->n_fft = config.n_fft;
-  options->hop_length = config.hop_length;
+  options->hop_length = static_cast<size_t>(config.hop_length);
   options->kernel_size = config.kernel_size;
   options->threshold = config.threshold;
   options->absolute_threshold = config.absolute_threshold;
@@ -649,7 +649,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   SONARE_C_REQUIRE_NONNULL(options);
   BoundaryConfig config;
   config.n_fft = options->n_fft;
-  config.hop_length = options->hop_length;
+  config.hop_length = core_length(options->hop_length);
   config.kernel_size = options->kernel_size;
   config.threshold = options->threshold;
   config.absolute_threshold = options->absolute_threshold;
@@ -694,7 +694,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
                        // The analysis rate, not the caller's: input above 22.05 kHz is resampled
                        // before any feature is computed, and `frame` indexes that grid.
                        out->sample_rate = detector.sample_rate();
-                       out->hop_length = detector.hop_length();
+                       out->hop_length = static_cast<size_t>(detector.hop_length());
                        out->n_frames = detector.n_frames();
                        out->frame_stride = detector.frame_stride();
                        return SONARE_OK;
@@ -710,8 +710,8 @@ void sonare_analyze_melody_options_init(SonareAnalyzeMelodyOptions* options) {
 }
 
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
-                                  float f0_min_hz, float f0_max_hz, int frame_length,
-                                  int hop_length, float threshold,
+                                  float f0_min_hz, float f0_max_hz, size_t frame_length,
+                                  size_t hop_length, float threshold,
                                   const SonareAnalyzeMelodyOptions* options,
                                   SonareMelodyResult* out) {
   SONARE_C_API_ENTRY;
@@ -735,8 +735,8 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
   MelodyConfig config;
   config.fmin = f0_min_hz;
   config.fmax = f0_max_hz;
-  config.frame_length = frame_length;
-  config.hop_length = hop_length;
+  config.frame_length = core_length(frame_length);
+  config.hop_length = core_length(hop_length);
   config.threshold = threshold;
   config.use_pyin = resolved.use_pyin != 0;
   config.center = resolved.center != 0;

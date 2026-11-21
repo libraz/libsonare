@@ -54,7 +54,7 @@ SonareProject* make_midi_project(double start_ppq, uint32_t destination_id, uint
                                  uint32_t* out_clip) {
   SonareProject* project = nullptr;
   if (sonare_project_create(&project) != SONARE_OK ||
-      sonare_project_set_sample_rate(project, 48000.0) != SONARE_OK ||
+      sonare_project_set_sample_rate(project, 48000) != SONARE_OK ||
       sonare_project_add_midi_clip(project, start_ppq, 1.0, out_track, out_clip) != SONARE_OK ||
       sonare_project_set_track_midi_destination(project, *out_track, destination_id) != SONARE_OK) {
     sonare_project_destroy(project);
@@ -223,7 +223,7 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const char* scene =
       R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"},{"id":"c"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
@@ -259,7 +259,7 @@ TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project]
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
   const char* scene =
       R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);

@@ -6,10 +6,11 @@
 
 namespace {
 
-MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, float fmax, int htk) {
+MelConfig make_mel_config(int n_fft, size_t hop_length, int n_mels, float fmin, float fmax,
+                          int htk) {
   MelConfig config;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.n_mels = n_mels;
   with_c_names(kMelOptionsRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
   config.fmin = fmin;
@@ -30,7 +31,8 @@ void sonare_stft_options_init(SonareStftOptions* options) {
 }
 
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, const SonareStftOptions* options, SonareStftResult* out) {
+                        size_t hop_length, const SonareStftOptions* options,
+                        SonareStftResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SonareStftOptions resolved;
@@ -45,7 +47,7 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
                      [&](const Audio& audio) -> SonareError {
                        StftConfig config;
                        config.n_fft = n_fft;
-                       config.hop_length = hop_length;
+                       config.hop_length = core_length(hop_length);
                        Spectrogram spec = Spectrogram::compute(audio, config);
 
                        size_t total = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
@@ -66,7 +68,7 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
                        out->n_bins = spec.n_bins();
                        out->n_frames = spec.n_frames();
                        out->n_fft = spec.n_fft();
-                       out->hop_length = spec.hop_length();
+                       out->hop_length = static_cast<size_t>(spec.hop_length());
                        out->sample_rate = spec.sample_rate();
                        out->magnitude = release_array(magnitude);
                        out->power = release_array(power);
@@ -85,7 +87,7 @@ void sonare_mel_spectrogram_options_init(SonareMelSpectrogramOptions* options) {
 }
 
 SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
-                                   int hop_length, int n_mels,
+                                   size_t hop_length, int n_mels,
                                    const SonareMelSpectrogramOptions* options,
                                    SonareMelResult* out) {
   SONARE_C_API_ENTRY;
@@ -112,7 +114,7 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
         out->n_mels = mel.n_mels();
         out->n_frames = mel.n_frames();
         out->sample_rate = mel.sample_rate();
-        out->hop_length = mel.hop_length();
+        out->hop_length = static_cast<size_t>(mel.hop_length());
         out->n_fft = config.n_fft;
         out->fmin_hz = config.fmin;
         out->fmax_hz = config.resolved_fmax(mel.sample_rate());
@@ -139,7 +141,7 @@ void sonare_mfcc_options_init(SonareMfccOptions* options) {
 }
 
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, int n_mels, int n_mfcc, const SonareMfccOptions* options,
+                        size_t hop_length, int n_mels, int n_mfcc, const SonareMfccOptions* options,
                         SonareMfccResult* out) {
   SONARE_C_API_ENTRY;
 
@@ -165,7 +167,7 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
         out->n_mfcc = n_mfcc;
         out->n_frames = mel.n_frames();
         out->sample_rate = mel.sample_rate();
-        out->hop_length = mel.hop_length();
+        out->hop_length = static_cast<size_t>(mel.hop_length());
         out->n_fft = config.n_fft;
         out->n_mels = mel.n_mels();
         out->fmin_hz = config.fmin;

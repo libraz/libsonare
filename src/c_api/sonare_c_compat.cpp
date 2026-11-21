@@ -133,12 +133,12 @@ static_assert(static_cast<int>(NormType::Inf) == 0 && static_cast<int>(NormType:
 
 }  // namespace
 
-int sonare_frames_to_samples(int frames, int hop_length, int n_fft) {
-  return frames_to_samples(frames, hop_length, n_fft);
+int sonare_frames_to_samples(int frames, size_t hop_length, int n_fft) {
+  return frames_to_samples(frames, core_length(hop_length), n_fft);
 }
 
-int sonare_samples_to_frames(int samples, int hop_length, int n_fft) {
-  return samples_to_frames(samples, hop_length, n_fft);
+int sonare_samples_to_frames(int samples, size_t hop_length, int n_fft) {
+  return samples_to_frames(samples, core_length(hop_length), n_fft);
 }
 
 SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
@@ -187,9 +187,9 @@ SonareError sonare_deemphasis(const float* samples, size_t length, float coef, f
   });
 }
 
-SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
-                                int hop_length, float** out, size_t* out_length, int* start_sample,
-                                int* end_sample) {
+SonareError sonare_trim_silence(const float* samples, size_t length, float top_db,
+                                size_t frame_length, size_t hop_length, float** out,
+                                size_t* out_length, int64_t* start_sample, int64_t* end_sample) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, start_sample, end_sample);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -197,19 +197,21 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
   SONARE_C_REQUIRE_NONNULL(start_sample);
   SONARE_C_REQUIRE_NONNULL(end_sample);
   SONARE_C_TRY
-  TrimResult result = trim(samples, length, top_db, frame_length, hop_length);
-  *start_sample = result.start_sample;
-  *end_sample = result.end_sample;
+  TrimResult result =
+      trim(samples, length, top_db, core_length(frame_length), core_length(hop_length));
+  *start_sample = static_cast<int64_t>(result.start_sample);
+  *end_sample = static_cast<int64_t>(result.end_sample);
   return copy_vector(result.audio, out, out_length);
   SONARE_C_CATCH
 }
 
 SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
-                                 int frame_length, int hop_length, int** out_intervals,
+                                 size_t frame_length, size_t hop_length, int** out_intervals,
                                  size_t* out_interval_count) {
   SONARE_C_API_ENTRY;
   return transform_core_buffer("samples", samples, length, out_intervals, out_interval_count, [&] {
-    auto ranges = split(samples, length, top_db, frame_length, hop_length);
+    auto ranges =
+        split(samples, length, top_db, core_length(frame_length), core_length(hop_length));
     std::vector<int> flat;
     flat.reserve(ranges.size() * 2);
     for (const auto& range : ranges) {
@@ -221,8 +223,8 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
 }
 
 SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
-                                        const size_t* lengths, float top_db, int frame_length,
-                                        int hop_length, int** out_intervals,
+                                        const size_t* lengths, float top_db, size_t frame_length,
+                                        size_t hop_length, int** out_intervals,
                                         size_t* out_interval_count,
                                         SonareSilenceCommonReport* out_report) {
   SONARE_C_API_ENTRY;
@@ -246,8 +248,8 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
   SONARE_C_TRY
   // The union rule and its report live in the core because the WebAssembly
   // binding needs them too and calls the core directly, never this layer.
-  const CommonSplitReport report =
-      split_common_with_report(signals, lengths, signal_count, top_db, frame_length, hop_length);
+  const CommonSplitReport report = split_common_with_report(
+      signals, lengths, signal_count, top_db, core_length(frame_length), core_length(hop_length));
   if (out_report != nullptr) {
     out_report->silence_ceiling_db = report.silence_ceiling_db;
     out_report->max_signal_intervals = static_cast<int32_t>(report.max_signal_intervals);
@@ -263,8 +265,8 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
   SONARE_C_CATCH
 }
 
-SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
-                                int hop_length, float** out, size_t* out_length,
+SonareError sonare_frame_signal(const float* samples, size_t length, size_t frame_length,
+                                size_t hop_length, float** out, size_t* out_length,
                                 int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
@@ -272,8 +274,9 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
-  *out_n_frames = frame_count(length, frame_length, hop_length);
-  return copy_vector(frame(samples, length, frame_length, hop_length), out, out_length);
+  *out_n_frames = frame_count(length, core_length(frame_length), core_length(hop_length));
+  return copy_vector(frame(samples, length, core_length(frame_length), core_length(hop_length)),
+                     out, out_length);
   SONARE_C_CATCH
 }
 
@@ -337,7 +340,7 @@ SonareError sonare_vector_normalize(const float* values, size_t length, SonareNo
 }
 
 SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
-                        int hop_length, float time_constant, float gain, float bias, float power,
+                        size_t hop_length, float time_constant, float gain, float bias, float power,
                         float eps, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
@@ -357,7 +360,7 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
   SONARE_C_TRY
   PcenConfig config;
   config.sr = sample_rate;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.time_constant = time_constant;
   config.gain = gain;
   config.bias = bias;
@@ -391,7 +394,7 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
 }
 
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                             int hop_length, int win_length, int center, int norm, int mode,
+                             size_t hop_length, size_t win_length, int center, int norm, int mode,
                              float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
@@ -409,8 +412,8 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
   TempogramConfig config;
-  config.hop_length = hop_length;
-  config.win_length = win_length;
+  config.hop_length = core_length(hop_length);
+  config.win_length = core_length(win_length);
   config.center = center != 0;
   config.norm = norm != 0;
   config.mode =
@@ -418,13 +421,13 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
   std::vector<float> input(onset_envelope, onset_envelope + length);
   const std::vector<float> result = tempogram(input, sample_rate, config);
   // The core frames the envelope (one frame per window when not centered), so read the count back.
-  *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length));
+  *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(config.win_length));
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                                    int hop_length, int win_length, float bpm_min, int n_bins,
+                                    size_t hop_length, size_t win_length, float bpm_min, int n_bins,
                                     float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
@@ -437,8 +440,8 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
   TempogramConfig config;
-  config.hop_length = hop_length;
-  config.win_length = win_length;
+  config.hop_length = core_length(hop_length);
+  config.win_length = core_length(win_length);
   config.center = true;
   config.norm = false;
   std::vector<float> input(onset_envelope, onset_envelope + length);
@@ -448,9 +451,9 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
-                       float bpm_min, float bpm_max, int win_length, float** out,
-                       size_t* out_length) {
+SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate,
+                       size_t hop_length, float bpm_min, float bpm_max, size_t win_length,
+                       float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err = validate_buffer("onset_envelope", onset_envelope, length);
@@ -462,10 +465,10 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   SONARE_C_TRY
   PlpConfig config;
   config.sr = sample_rate;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.tempo_min = bpm_min;
   config.tempo_max = bpm_max;
-  config.win_length = win_length;
+  config.win_length = core_length(win_length);
   std::vector<float> input(onset_envelope, onset_envelope + length);
   return copy_vector(with_c_names(std::array<CName, 3>{{{"sr", "sample_rate"},
                                                         {"tempo_min", "bpm_min"},
@@ -476,7 +479,7 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
 }
 
 SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                                     int hop_length, int win_length, int center, int norm,
+                                     size_t hop_length, size_t win_length, int center, int norm,
                                      float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
@@ -489,19 +492,20 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
   TempogramConfig config;
-  config.hop_length = hop_length;
-  config.win_length = win_length;
+  config.hop_length = core_length(hop_length);
+  config.win_length = core_length(win_length);
   config.center = center != 0;
   config.norm = norm != 0;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   const std::vector<float> result = fourier_tempogram(input, sample_rate, config);
-  *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length / 2 + 1));
+  *out_n_frames =
+      static_cast<int>(result.size() / static_cast<std::size_t>(config.win_length / 2 + 1));
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
-SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int win_length,
-                                   int sample_rate, int hop_length, const float* factors,
+SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, size_t win_length,
+                                   int sample_rate, size_t hop_length, const float* factors,
                                    size_t n_factors, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
@@ -517,9 +521,10 @@ SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int wi
   std::vector<float> result;
   if (factors != nullptr && n_factors > 0) {
     std::vector<float> factor_vec(factors, factors + n_factors);
-    result = tempogram_ratio(input, win_length, sample_rate, hop_length, factor_vec);
+    result = tempogram_ratio(input, core_length(win_length), sample_rate, core_length(hop_length),
+                             factor_vec);
   } else {
-    result = tempogram_ratio(input, win_length, sample_rate, hop_length);
+    result = tempogram_ratio(input, core_length(win_length), sample_rate, core_length(hop_length));
   }
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
@@ -591,11 +596,13 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int num
 }
 
 SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int num_channels,
-                                           int sample_rate, float** out_momentary,
-                                           size_t* out_momentary_length, float** out_short_term,
-                                           size_t* out_short_term_length) {
+                                           int sample_rate, float** out_momentary_lufs,
+                                           size_t* out_momentary_lufs_length,
+                                           float** out_short_term_lufs,
+                                           size_t* out_short_term_lufs_length) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_momentary, out_momentary_length, out_short_term, out_short_term_length);
+  SONARE_C_ZERO_OUTS(out_momentary_lufs, out_momentary_lufs_length, out_short_term_lufs,
+                     out_short_term_lufs_length);
   if (const SonareError err =
           validate_interleaved_lufs_input(samples, frames, num_channels, sample_rate);
       err != SONARE_OK) {
@@ -604,12 +611,12 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
   if (const SonareError err = run_validation([&] {
-        if ((out_momentary == nullptr) != (out_momentary_length == nullptr)) {
-          util::check::refuse_relation({"out_momentary", "out_momentary_length"},
+        if ((out_momentary_lufs == nullptr) != (out_momentary_lufs_length == nullptr)) {
+          util::check::refuse_relation({"out_momentary_lufs", "out_momentary_lufs_length"},
                                        "{0} and {1} must be given together");
         }
-        if ((out_short_term == nullptr) != (out_short_term_length == nullptr)) {
-          util::check::refuse_relation({"out_short_term", "out_short_term_length"},
+        if ((out_short_term_lufs == nullptr) != (out_short_term_lufs_length == nullptr)) {
+          util::check::refuse_relation({"out_short_term_lufs", "out_short_term_lufs_length"},
                                        "{0} and {1} must be given together");
         }
       });
@@ -620,19 +627,19 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   std::vector<float> momentary;
   std::vector<float> short_term;
   metering::lufs_interleaved(samples, frames, num_channels, sample_rate, {},
-                             out_momentary ? &momentary : nullptr,
-                             out_short_term ? &short_term : nullptr);
+                             out_momentary_lufs ? &momentary : nullptr,
+                             out_short_term_lufs ? &short_term : nullptr);
   // Both copies are made before either pair is published, so a failed second
   // copy cannot leave the first series behind an error return.
   std::unique_ptr<float[]> momentary_copy(copy_vector(momentary));
   std::unique_ptr<float[]> short_term_copy(copy_vector(short_term));
-  if (out_momentary) {
-    *out_momentary = momentary_copy.release();
-    *out_momentary_length = momentary.size();
+  if (out_momentary_lufs) {
+    *out_momentary_lufs = momentary_copy.release();
+    *out_momentary_lufs_length = momentary.size();
   }
-  if (out_short_term) {
-    *out_short_term = short_term_copy.release();
-    *out_short_term_length = short_term.size();
+  if (out_short_term_lufs) {
+    *out_short_term_lufs = short_term_copy.release();
+    *out_short_term_lufs_length = short_term.size();
   }
   return SONARE_OK;
   SONARE_C_CATCH

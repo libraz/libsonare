@@ -236,12 +236,6 @@ struct QuantizeConfig {
 /// @brief Frame buffer with 8-bit quantized data.
 /// @details Reduces bandwidth for postMessage transfer.
 /// Mel values are quantized from dB scale, chroma from 0-1.
-/// @note Intentionally omits the per-frame chord fields (chord_root /
-/// chord_quality / chord_confidence) that @ref FrameBuffer carries: this buffer
-/// exists purely to shrink the mel/chroma spectral payload for transfer. Callers
-/// that need per-frame chord detection read the float @ref FrameBuffer instead
-/// (or the progressive chord estimate). This is a deliberate scope limit, not an
-/// oversight — the same omission applies to @ref QuantizedFrameBufferI16.
 struct QuantizedFrameBufferU8 {
   size_t n_frames = 0;  ///< Number of frames in buffer
   int n_mels = 0;       ///< Number of mel bands per frame
@@ -255,13 +249,25 @@ struct QuantizedFrameBufferU8 {
   std::vector<uint8_t> rms_energy;         ///< [n_frames] quantized RMS
   std::vector<uint8_t> spectral_centroid;  ///< [n_frames] quantized centroid
   std::vector<uint8_t> spectral_flatness;  ///< [n_frames] quantized flatness
+  std::vector<int8_t> chord_root;          ///< [n_frames] when chroma enabled, else empty
+  std::vector<int8_t> chord_quality;       ///< [n_frames] when chroma enabled, else empty
+  std::vector<uint8_t> chord_confidence;   ///< [n_frames] quantized over [0, 1] when chroma enabled
 
   /// @brief Clears all data.
-  void clear() { streaming_detail::clear_frame_buffer(*this); }
+  void clear() {
+    streaming_detail::clear_frame_buffer(*this);
+    chord_root.clear();
+    chord_quality.clear();
+    chord_confidence.clear();
+  }
 
   /// @brief Reserves capacity for n frames.
   void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
     streaming_detail::reserve_frame_buffer(*this, n, mels, chroma_bins, features);
+    const size_t chord_frames = chroma_bins > 0 ? n : 0;
+    chord_root.reserve(chord_frames);
+    chord_quality.reserve(chord_frames);
+    chord_confidence.reserve(chord_frames);
   }
 };
 
@@ -280,13 +286,25 @@ struct QuantizedFrameBufferI16 {
   std::vector<int16_t> rms_energy;         ///< [n_frames] quantized RMS
   std::vector<int16_t> spectral_centroid;  ///< [n_frames] quantized centroid
   std::vector<int16_t> spectral_flatness;  ///< [n_frames] quantized flatness
+  std::vector<int8_t> chord_root;          ///< [n_frames] when chroma enabled, else empty
+  std::vector<int8_t> chord_quality;       ///< [n_frames] when chroma enabled, else empty
+  std::vector<int16_t> chord_confidence;   ///< [n_frames] quantized over [0, 1] when chroma enabled
 
   /// @brief Clears all data.
-  void clear() { streaming_detail::clear_frame_buffer(*this); }
+  void clear() {
+    streaming_detail::clear_frame_buffer(*this);
+    chord_root.clear();
+    chord_quality.clear();
+    chord_confidence.clear();
+  }
 
   /// @brief Reserves capacity for n frames.
   void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
     streaming_detail::reserve_frame_buffer(*this, n, mels, chroma_bins, features);
+    const size_t chord_frames = chroma_bins > 0 ? n : 0;
+    chord_root.reserve(chord_frames);
+    chord_quality.reserve(chord_frames);
+    chord_confidence.reserve(chord_frames);
   }
 };
 

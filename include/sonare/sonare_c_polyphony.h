@@ -35,10 +35,6 @@
 extern "C" {
 #endif
 
-/// The analysis window as long as the FFT. Outside the window length's real domain (a positive
-/// sample count), so it never reads as a length.
-#define SONARE_POLYPHONIC_WIN_LENGTH_FFT (-1)
-
 /// @brief Opaque analysis: one STFT, the tracked ridges, a mask per note, and the
 ///        notes themselves.
 typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
@@ -49,7 +45,7 @@ typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
 ///          read literally (a 0 is a 0) and checked against the range given beside
 ///          it, an out-of-range value being refused with
 ///          SONARE_ERROR_INVALID_PARAMETER. Three fields have an absent spelling and say
-///          so: @c win_length (@ref SONARE_POLYPHONIC_WIN_LENGTH_FFT) and @c max_refine_hz
+///          so: @c win_length (0, which means n_fft) and @c max_refine_hz
 ///          and @c reattack_ratio (NaN, not given).
 ///
 ///          The window function and the centred framing are not settable. Every
@@ -69,10 +65,9 @@ typedef struct {
   /// STFT size in samples at 44100 Hz. Default 4096, the size this chain is tuned at; positive.
   int32_t n_fft;
   /// STFT hop in samples at 44100 Hz. Default 512; positive.
-  int32_t hop_length;
-  /// Analysis window length in samples at 44100 Hz, in [1, n_fft]. Default
-  /// @ref SONARE_POLYPHONIC_WIN_LENGTH_FFT, which means n_fft.
-  int32_t win_length;
+  size_t hop_length;
+  /// Analysis window length in samples at 44100 Hz, in [1, n_fft]. Default 0, which means n_fft.
+  size_t win_length;
 
   // The cent axis the salience is folded onto.
 
@@ -228,14 +223,8 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
                                          size_t* out_count);
 
 /// @brief Number of STFT frames the analysis ran over.
-/// @details An @c int32_t rather than the @c size_t the note count uses, and the
-///          difference is deliberate: a frame is a signed 32-bit quantity throughout
-///          this library -- a note's @c frame_start and @c frame_end among them -- so
-///          a host bounds-checking a note against this compares like with like
-///          instead of signed against unsigned. The @c size_t counts here count
-///          elements; this one counts frames.
 SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analysis,
-                                          int32_t* out_count);
+                                          size_t* out_count);
 
 /// @brief Copies the notes out, in the order their claim sets are held in.
 /// @details Each note carries its sample span, its frame span, its median pitch, its

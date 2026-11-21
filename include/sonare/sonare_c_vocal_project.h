@@ -30,14 +30,14 @@ typedef struct {
   uint32_t
       expected_source_id;  ///< The root original source, even when the binding is already derived.
   uint32_t expected_source_sample_rate;  ///< Sample rate of the original, in [8000, 384000] Hz.
-  int64_t expected_source_sample_count;  ///< Length of the original in frames; must be positive.
+  size_t expected_source_sample_count;   ///< Length of the original in frames; must be positive.
   uint8_t expected_source_sha256[32];    ///< SHA-256 digest of the original PCM.
   double
       expected_clip_length_ppq;  ///< Clip length in quarter notes; start position is not checked.
   double
       expected_source_offset_ppq;  ///< Source offset of the target take (clip offset for take 0).
   const float* rendered_mono;      ///< Rendered mono PCM; must not be NULL.
-  int64_t rendered_sample_count;   ///< Frames in rendered_mono; must equal the original's count.
+  size_t rendered_sample_count;    ///< Frames in rendered_mono; must equal the original's count.
   uint32_t rendered_sample_rate;   ///< Sample rate in Hz; must equal the original's rate.
   int64_t rendered_start_sample;   ///< Start offset of the render in the source; must be 0.
   SonareVocalStateToken render_token;  ///< State token the render was produced from.
@@ -68,7 +68,7 @@ typedef struct {
   uint32_t derived_source_id;   ///< Derived source id produced by the edit.
   uint32_t source_sample_rate;  ///< Sample rate of both sources, in Hz.
   uint32_t profile_id;          ///< Profile identifier carried by the recorded state.
-  int64_t source_sample_count;  ///< Length of both sources in frames.
+  size_t source_sample_count;   ///< Length of both sources in frames.
   uint64_t committed_revision;  ///< Revision of the recorded vocal-edit state.
   uint8_t original_source_sha256[32];  ///< Expected SHA-256 digest of the original PCM.
   uint8_t derived_source_sha256[32];   ///< Expected SHA-256 digest of the derived PCM.
@@ -84,7 +84,7 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;  ///< sizeof of this struct; set by the init function.
   SonareProjectVocalEditDependency* dependencies;  ///< Library-owned array; NULL when empty.
-  uint64_t dependency_count;                       ///< Number of entries in dependencies.
+  size_t dependency_count;                         ///< Number of entries in dependencies.
 } SonareProjectVocalEditDependenciesResult;
 
 /// @brief Caller-supplied original PCM for rehydrate.
@@ -94,8 +94,8 @@ typedef struct {
   uint32_t struct_size;  ///< sizeof of this struct; set by the init function.
   uint32_t source_id;    ///< Project source id this PCM is the original of.
   const float* mono;     ///< Mono PCM of the original; borrowed, copied during the call.
-  int64_t sample_count;  ///< Frames in mono.
-  uint32_t sample_rate;  ///< Sample rate of mono in Hz.
+  size_t sample_count;   ///< Frames in mono.
+  int sample_rate;       ///< Sample rate of mono in Hz.
 } SonareProjectVocalOriginalSource;
 
 /// @brief Outcome of rehydrating one vocal-edit sidecar.
@@ -114,7 +114,7 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;                    ///< sizeof of this struct; set by the init function.
   SonareProjectVocalRehydrateItem* items;  ///< Library-owned array; NULL when empty.
-  uint64_t item_count;                     ///< Number of entries in items.
+  size_t item_count;                       ///< Number of entries in items.
 } SonareProjectVocalRehydrateResult;
 
 /// @brief Initializes @p value with the current struct size and schema version.
@@ -154,7 +154,7 @@ SonareError sonare_project_get_vocal_edit_dependencies(
 ///   the same project are refused with SONARE_ERROR_INVALID_STATE while this call runs.
 SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                                                  const SonareProjectVocalOriginalSource* originals,
-                                                 uint64_t original_count,
+                                                 size_t original_count,
                                                  SonareVocalCancelCallback cancel, void* user_data,
                                                  SonareProjectVocalRehydrateResult* result);
 

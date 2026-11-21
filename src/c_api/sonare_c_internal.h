@@ -117,17 +117,22 @@ inline void require_struct_size(uint32_t struct_size, size_t expected, const std
                                                   subject + ".struct_size",
                                                   std::string("must be set by ") + init_name);
 }
-/// @brief Refuses a C hop that is neither positive nor @ref SONARE_STFT_HOP_AUTO, by @p subject.
+/// @brief Refuses a C hop that is neither 0 (auto) nor within @c kStftHopDomain, by @p subject.
 /// @throws sonare::SonareParameterRefusal naming @p subject.
-inline void check_stft_hop(int hop_length, const char* subject) {
-  if (hop_length != SONARE_STFT_HOP_AUTO) {
+inline void check_stft_hop(size_t hop_length, const char* subject) {
+  if (hop_length != 0) {
     sonare::util::check::integer_within(hop_length, sonare::kStftHopDomain, subject);
   }
 }
-/// @brief The core spelling of a checked C hop: @ref SONARE_STFT_HOP_AUTO becomes 0, the hop
-///        the core derives as a quarter of the FFT size.
-inline int core_stft_hop(int hop_length) noexcept {
-  return hop_length == SONARE_STFT_HOP_AUTO ? 0 : hop_length;
+/// @brief The core spelling of a checked C hop; 0 stays 0, the hop the core derives as a
+///        quarter of the FFT size.
+inline int core_stft_hop(size_t hop_length) noexcept { return static_cast<int>(hop_length); }
+/// @brief Narrows a C hop, frame, window or count to the core's int. A value no int holds becomes
+///        -1, which every core length domain refuses under its own subject, so it is never
+///        truncated into range.
+inline int core_length(size_t value) noexcept {
+  return value > static_cast<size_t>(std::numeric_limits<int>::max()) ? -1
+                                                                      : static_cast<int>(value);
 }
 /// @brief A core refusal subject path and the C parameter path that spells it ("sr" ->
 ///        "sample_rate", "air.humidity_percent" -> "config.air_humidity_percent").

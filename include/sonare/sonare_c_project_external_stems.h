@@ -33,7 +33,7 @@ typedef struct {
   const char* role;  ///< Optional NUL-terminated UTF-8 label kept as source metadata; may be NULL.
   uint32_t layout;   ///< A @ref SonareExternalStemLayout giving the number of planes.
   const float* const* planar_samples;  ///< One non-NULL plane pointer per channel of layout.
-  int64_t frame_count;                 ///< Frames in each plane; must be positive.
+  size_t frame_count;                  ///< Frames in each plane; must be positive.
   int64_t start_frame;  ///< Clip start on the project timeline in sample frames; non-negative.
 } SonareExternalStemDesc;
 
@@ -51,7 +51,9 @@ static_assert(offsetof(SonareExternalStemDesc, frame_count) ==
                   offsetof(SonareExternalStemDesc, planar_samples) + sizeof(void*),
               "ExternalStemDesc.frame_count offset");
 static_assert(offsetof(SonareExternalStemDesc, start_frame) ==
-                  offsetof(SonareExternalStemDesc, frame_count) + sizeof(int64_t),
+                  (offsetof(SonareExternalStemDesc, frame_count) + sizeof(size_t) +
+                   alignof(int64_t) - 1u) /
+                      alignof(int64_t) * alignof(int64_t),
               "ExternalStemDesc.start_frame offset");
 #endif
 

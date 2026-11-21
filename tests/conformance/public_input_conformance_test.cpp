@@ -88,7 +88,7 @@ TEST_CASE("public input corpus preserves atomic marker state across the C ABI",
 
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
   for (const auto& test_case : transaction["cases"].as_array()) {
     DYNAMIC_SECTION(test_case["id"].as_string()) {

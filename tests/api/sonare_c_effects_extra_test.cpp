@@ -919,7 +919,9 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     for (const auto zero : std::vector<void (*)(SonareDecomposeStemsConfig&)>{
              [](SonareDecomposeStemsConfig& c) { c.n_components = 0; },
              [](SonareDecomposeStemsConfig& c) { c.n_fft = 0; },
-             [](SonareDecomposeStemsConfig& c) { c.hop_length = 0; },
+             [](SonareDecomposeStemsConfig& c) {
+               c.hop_length = static_cast<size_t>(std::numeric_limits<int>::max()) + 1;
+             },
              [](SonareDecomposeStemsConfig& c) { c.n_iter = 0; }}) {
       sonare_decompose_stems_config_init(&config);
       zero(config);
@@ -1341,7 +1343,7 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     sonare_spectral_edit_config_init(&initialised);
     CHECK(initialised.struct_size == sizeof(SonareSpectralEditConfig));
     CHECK(initialised.n_fft == 2048);
-    CHECK(initialised.hop_length == SONARE_STFT_HOP_AUTO);
+    CHECK(initialised.hop_length == 0);
     CHECK(initialised.window == SONARE_WINDOW_HANN);
     CHECK(initialised.heal_radius_frames == 2);
 

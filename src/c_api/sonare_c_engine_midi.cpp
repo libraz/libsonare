@@ -597,7 +597,7 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
 }
 
 SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t destination_id,
-                                                uint32_t* out_count) {
+                                                size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
@@ -616,7 +616,7 @@ SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t d
                    "destination instrument does not count legato fallbacks");
     return SONARE_ERROR_NOT_SUPPORTED;
   }
-  *out_count = counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
+  *out_count = static_cast<size_t>(counted);
   return SONARE_OK;
   SONARE_C_CATCH
 #endif
@@ -1357,7 +1357,7 @@ SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, 
 #endif
 }
 
-SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, uint32_t* out_count) {
+SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);

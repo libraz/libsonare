@@ -245,7 +245,7 @@ bool sonare_c_detail::vocal_edit_compiled_in() noexcept {
 
 void sonare_free_vocal_notes_result(SonareVocalNotesResult* v) {
   if (!v) return;
-  for (uint64_t i = 0; i < v->note_count; ++i) {
+  for (size_t i = 0; i < v->note_count; ++i) {
     delete[] v->notes[i].amplitude;
     delete[] v->notes[i].edit.target_points;
     delete[] v->notes[i].edit.amplitude_envelope;
@@ -325,7 +325,7 @@ vocal::VocalNoteEdit import_edit(const SonareVocalNoteEdit& v) {
   }
   e.pitch.target.center_midi = v.target_midi;
   checked_count(v.target_points, v.target_point_count, "target_points");
-  for (uint64_t i = 0; i < v.target_point_count; ++i)
+  for (size_t i = 0; i < v.target_point_count; ++i)
     e.pitch.target.points.push_back({v.target_points[i].source_sample, v.target_points[i].midi});
   e.pitch.amount = v.amount;
   e.pitch.speed_ms = v.speed_ms;
@@ -464,7 +464,7 @@ void map_notes(const Owner& owner, SonareVocalNotesResult* out) {
   initialize(&local);
 }
 void map_ranges(const std::vector<vocal::SampleRange>& ranges, SonareVocalRange*& data,
-                uint64_t& count) {
+                size_t& count) {
   if (ranges.empty()) {
     data = nullptr;
     count = 0;
@@ -532,7 +532,7 @@ void map_render(vocal::VocalRenderResult rendered, SonareVocalRenderResult* out)
   auto samples = copy_output(rendered.samples);
   map_ranges(rendered.processed_ranges, out->processed_ranges, out->processed_range_count);
   out->samples = samples.release();
-  out->sample_count = static_cast<int64_t>(rendered.samples.size());
+  out->sample_count = rendered.samples.size();
   out->start_sample = rendered.start_sample;
   out->token = map_token(rendered.state_token);
   out->token.request_id = rendered.request_id;
@@ -756,9 +756,9 @@ SonareError sonare_vocal_session_analysis(const SonareVocalSession* s,
       copy_text(local.source_sha256, hex(descriptor.digest));
       copy_text(local.analysis_sha256, hex(a.digest));
       local.source_length_samples = descriptor.sample_count;
-      local.sample_rate = descriptor.sample_rate; local.analysis.f0_hz = f0.release();
-      local.analysis.voiced = voiced.release(); local.analysis.algorithm_id = name.release();
-      *out = local);
+      local.sample_rate = static_cast<int>(descriptor.sample_rate);
+      local.analysis.f0_hz = f0.release(); local.analysis.voiced = voiced.release();
+      local.analysis.algorithm_id = name.release(); *out = local);
 }
 SonareError sonare_vocal_session_capabilities(const SonareVocalSession* s,
                                               SonareVocalCapabilities* out) {

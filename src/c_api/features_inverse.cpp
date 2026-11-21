@@ -68,7 +68,7 @@ SonareError validate_mel_inverse(int n_mels, int n_frames, int n_fft, int sample
 // / mel_to_stft / mfcc_to_mel / griffin_lim reject it themselves, so the rule has
 // a single home that WASM (which calls the core directly) inherits too.
 SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, int n_bins,
-                                 int n_frames, int sample_rate, int hop_length, float fmin,
+                                 int n_frames, int sample_rate, size_t hop_length, float fmin,
                                  int bins_per_octave, const float* gamma, int n_iter) {
   SONARE_C_REQUIRE_NONNULL(magnitude);
   return run_validation([&] {
@@ -87,7 +87,7 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
 }  // namespace
 
 SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
-                                int n_frames, int sample_rate, int hop_length, float fmin_hz,
+                                int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, int n_iter, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
@@ -100,7 +100,7 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
 
   SONARE_C_TRY
   CqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.fmin = fmin_hz;
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
@@ -114,7 +114,7 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
 }
 
 SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
-                                int n_frames, int sample_rate, int hop_length, float fmin_hz,
+                                int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, float gamma, int n_iter, float** out,
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
@@ -128,7 +128,7 @@ SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int
 
   SONARE_C_TRY
   VqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = core_length(hop_length);
   config.fmin = fmin_hz;
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
@@ -193,7 +193,7 @@ void sonare_mel_to_audio_options_init(SonareMelToAudioOptions* options) {
 }
 
 SonareError sonare_mel_to_audio(const float* mel, size_t input_length, int n_mels, int n_frames,
-                                int sample_rate, int n_fft, int hop_length, float fmin_hz,
+                                int sample_rate, int n_fft, size_t hop_length, float fmin_hz,
                                 float fmax_hz, int n_iter, const SonareMelToAudioOptions* options,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
@@ -239,8 +239,8 @@ SonareError sonare_mel_to_audio(const float* mel, size_t input_length, int n_mel
 }
 
 SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int n_bins,
-                               int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
-                               float momentum, float** out, size_t* out_length) {
+                               int n_frames, int n_fft, size_t hop_length, int sample_rate,
+                               int n_iter, float momentum, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(magnitude);
@@ -314,7 +314,7 @@ void sonare_mfcc_to_audio_options_init(SonareMfccToAudioOptions* options) {
 
 SonareError sonare_mfcc_to_audio(const float* coefficients, size_t input_length, int n_mfcc,
                                  int n_frames, int n_mels, int sample_rate, int n_fft,
-                                 int hop_length, float fmin_hz, float fmax_hz, int n_iter,
+                                 size_t hop_length, float fmin_hz, float fmax_hz, int n_iter,
                                  const SonareMfccToAudioOptions* options, float** out,
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;

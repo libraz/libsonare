@@ -46,7 +46,7 @@ struct DcTrack {
 SonareEngine* make_routing_engine(std::initializer_list<DcTrack> tracks) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 64, 64, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, kRoutingBlock, 64, 64, 0) == SONARE_OK);
   static const float* channels[] = {dc_source().data()};
   std::vector<SonareEngineClip> clips;
   uint32_t clip_id = 1;
@@ -406,7 +406,7 @@ SonareEngineMidiClipSchedule held_note_clip(const SonareEngineMidiEvent* events)
 std::vector<float> render_midi_clip(const SonareEngineMidiClipSchedule& clip) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, kRoutingBlock, 16, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
   sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
@@ -449,7 +449,7 @@ TEST_CASE("sonare_engine MIDI clip gain scales the destination's rendered audio"
 TEST_CASE("sonare_engine_set_midi_clips refuses a bad gain or fade", "[c_engine_routing]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, kRoutingBlock, 16, 16, 0) == SONARE_OK);
   const SonareEngineMidiEvent events[] = {{0, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0}};
   const SonareEngineMidiClipSchedule good = held_note_clip(events);
   constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
@@ -523,7 +523,7 @@ TEST_CASE("C engine queues a master loudness reset", "[c_api][engine][loudness_r
   constexpr int kProgramBlocks = 160;  // More than the 3 s short-term window.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 4, 8, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, kBlock, 4, 8, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_input_monitor(engine, 1, 1.0f) == SONARE_OK);
   REQUIRE(sonare_engine_reset_master_loudness_meter(nullptr, -1) == SONARE_ERROR_INVALID_PARAMETER);
   std::array<float, kBlock> samples{};

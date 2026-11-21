@@ -153,7 +153,7 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 
-  const auto run = [&](int n_fft, int hop, SonareError expected) {
+  const auto run = [&](int n_fft, size_t hop, SonareError expected) {
     float* audio = nullptr;
     size_t audio_length = 0;
     REQUIRE(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, kRate, n_fft, hop, 0.0f,
@@ -165,16 +165,16 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    CHECK(run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK) ==
-          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
-    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
+    CHECK(run(n_fft, 0, SONARE_OK) ==
+          run(n_fft, static_cast<size_t>(item["derived_hop_length"].as_number()), SONARE_OK));
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
     REQUIRE(item["cause"].as_string() == "argument");
+    // A negative spelling reaches the C entry as a value past the int range.
     run(static_cast<int>(item["n_fft"].as_number()),
-        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+        static_cast<size_t>(static_cast<long long>(item["hop_length"].as_number())),
+        SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(),
                Catch::Matchers::ContainsSubstring(item["message"].as_string()));
   }
@@ -223,7 +223,7 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 
-  const auto run = [&](int n_fft, int hop, SonareError expected) {
+  const auto run = [&](int n_fft, size_t hop, SonareError expected) {
     float* audio = nullptr;
     size_t audio_length = 0;
     REQUIRE(sonare_mfcc_to_audio(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels, kRate, n_fft,
@@ -235,16 +235,16 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    CHECK(run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK) ==
-          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
-    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
+    CHECK(run(n_fft, 0, SONARE_OK) ==
+          run(n_fft, static_cast<size_t>(item["derived_hop_length"].as_number()), SONARE_OK));
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
     REQUIRE(item["cause"].as_string() == "argument");
+    // A negative spelling reaches the C entry as a value past the int range.
     run(static_cast<int>(item["n_fft"].as_number()),
-        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+        static_cast<size_t>(static_cast<long long>(item["hop_length"].as_number())),
+        SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(),
                Catch::Matchers::ContainsSubstring(item["message"].as_string()));
   }
@@ -259,7 +259,7 @@ TEST_CASE("griffin_lim derives an absent hop and names a negative one",
   const int n_frames = static_cast<int>(input["n_frames"].as_number());
   const float fill = static_cast<float>(input["fill"].as_number());
 
-  const auto run = [&](int n_fft, int hop, SonareError expected) {
+  const auto run = [&](int n_fft, size_t hop, SonareError expected) {
     const int n_bins = n_fft / 2 + 1;
     const std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, fill);
     float* audio = nullptr;
@@ -273,18 +273,18 @@ TEST_CASE("griffin_lim derives an absent hop and names a negative one",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    const std::vector<float> absent = run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK);
+    const std::vector<float> absent = run(n_fft, 0, SONARE_OK);
     CHECK_FALSE(absent.empty());
     CHECK(absent ==
-          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
-    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
+          run(n_fft, static_cast<size_t>(item["derived_hop_length"].as_number()), SONARE_OK));
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
     REQUIRE(item["cause"].as_string() == "argument");
+    // A negative spelling reaches the C entry as a value past the int range.
     run(static_cast<int>(item["n_fft"].as_number()),
-        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+        static_cast<size_t>(static_cast<long long>(item["hop_length"].as_number())),
+        SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(),
                Catch::Matchers::ContainsSubstring(item["message"].as_string()));
   }
@@ -300,7 +300,7 @@ TEST_CASE("phase_vocoder derives an absent hop and names a negative one",
                                    static_cast<float>(input["fill"].as_number()));
   const float speed = static_cast<float>(input["speed_ratio"].as_number());
 
-  const auto run = [&](int n_fft, int hop, SonareError expected) {
+  const auto run = [&](int n_fft, size_t hop, SonareError expected) {
     float* audio = nullptr;
     size_t audio_length = 0;
     REQUIRE(sonare_phase_vocoder(samples.data(), samples.size(), rate, speed, n_fft, hop, &audio,
@@ -312,18 +312,18 @@ TEST_CASE("phase_vocoder derives an absent hop and names a negative one",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    const std::vector<float> absent = run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK);
+    const std::vector<float> absent = run(n_fft, 0, SONARE_OK);
     CHECK_FALSE(absent.empty());
     CHECK(absent ==
-          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
-    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
+          run(n_fft, static_cast<size_t>(item["derived_hop_length"].as_number()), SONARE_OK));
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
     REQUIRE(item["cause"].as_string() == "argument");
+    // A negative spelling reaches the C entry as a value past the int range.
     run(static_cast<int>(item["n_fft"].as_number()),
-        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+        static_cast<size_t>(static_cast<long long>(item["hop_length"].as_number())),
+        SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(),
                Catch::Matchers::ContainsSubstring(item["message"].as_string()));
   }
@@ -409,8 +409,8 @@ TEST_CASE("native spectral stretch geometry refusals are owned by the core funct
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 
-  // A hop of 0 in a core config is absent and runs the derived hop, as SONARE_STFT_HOP_AUTO does
-  // in a C entry, which refuses 0; the positional primitive takes the hop it is handed.
+  // A hop of 0 is absent and runs the derived hop in a core config and in a C entry alike; the
+  // positional primitive takes the hop it is handed.
   for (const auto& item : route["absent_hop"].as_array()) {
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
     const int hop = static_cast<int>(item["hop_length"].as_number());

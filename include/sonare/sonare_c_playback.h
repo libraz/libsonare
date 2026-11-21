@@ -164,7 +164,7 @@ SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRender
                                                       char** out_json);
 /// @brief Number of non-finite input samples replaced with 0 since creation.
 SonareError sonare_playback_renderer_non_finite_discard_count(
-    const SonarePlaybackRenderer* renderer, uint32_t* out_count);
+    const SonarePlaybackRenderer* renderer, size_t* out_count);
 
 /// @brief Renders a whole interleaved buffer offline.
 /// @details The output is aligned with the input (the renderer latency is

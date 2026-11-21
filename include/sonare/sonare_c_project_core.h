@@ -201,7 +201,7 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
 ///        within [8000, 384000]; anything else returns SONARE_ERROR_INVALID_PARAMETER.
 /// @details Applied through the edit history like every other setter, so it is
 ///          undoable and takes its place in the undo stack.
-SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);
+SonareError sonare_project_set_sample_rate(SonareProject* project, int sample_rate);
 
 /// @brief Sets the project's clip-overlap policy.
 SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy);

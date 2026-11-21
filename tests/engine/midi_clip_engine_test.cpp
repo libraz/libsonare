@@ -617,7 +617,7 @@ TEST_CASE("sonare_project_set_clip_gain and set_clip_fade change a MIDI clip's b
           "[midi_clip_engine]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, static_cast<int>(kSampleRate)) == SONARE_OK);
 
   uint32_t track = 0;
   uint32_t clip = 0;

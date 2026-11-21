@@ -20,7 +20,7 @@ constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
 SonareEngine* make_prepared(size_t command_capacity = 64) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, command_capacity, 64, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, kBlock, command_capacity, 64, 0) == SONARE_OK);
   return engine;
 }
 

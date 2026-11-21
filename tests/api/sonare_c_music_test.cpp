@@ -1126,7 +1126,7 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
   CHECK(sonare_estimate_meter_json(beats, beats, 2, nullptr, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options must not be NULL");
-  meter.candidate_numerator_count = -1;
+  meter.candidate_numerator_count = std::numeric_limits<size_t>::max();
   CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.candidate_numerator_count must be an integer in [0, " +
