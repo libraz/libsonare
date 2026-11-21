@@ -518,7 +518,9 @@ describe('WASM transcribe', () => {
     expect(run({ reattackRatio: 2 }).noteCount).toBe(2);
     for (const bad of [0, 1, -1]) {
       expect(() => run({ reattackRatio: bad })).toThrow(RangeError);
-      expect(() => run({ reattackRatio: bad })).toThrow(/reattackRatio must be greater than 1/);
+      expect(() => run({ reattackRatio: bad })).toThrow(
+        /reattackRatio must be finite and greater than 1/,
+      );
     }
     // A larger ratio than the second strike's rise also leaves the tone whole.
     expect(run({ reattackRatio: 50 }).noteCount).toBe(1);

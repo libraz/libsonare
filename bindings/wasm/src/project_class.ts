@@ -20,7 +20,6 @@ import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
-import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
   compSegmentsToNative,
@@ -869,12 +868,7 @@ export class Project {
     assertSamples(request.samples, true);
     assertSampleRate(request.sampleRate);
     const { clipId, samples, sampleRate, ...options } = request;
-    return this.native.transcribeToClip(
-      clipId,
-      samples,
-      sampleRate,
-      nativeTranscribeOptions(options),
-    );
+    return this.native.transcribeToClip(clipId, samples, sampleRate, options);
   }
 
   /**

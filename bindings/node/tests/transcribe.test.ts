@@ -629,13 +629,13 @@ describe('transcribe polyphonic tuning', () => {
     const bad = (extra: Record<string, number>) => () => poly(extra);
     expect(bad({ maxPolyphony: 0 })).toThrow(/maxPolyphony must be an integer in \[1, 64\]/);
     expect(bad({ maxPolyphony: 65 })).toThrow(/maxPolyphony must be an integer in \[1, 64\]/);
-    expect(bad({ minFramePeakRatio: -0.1 })).toThrow(/minFramePeakRatio must be a number/);
-    expect(bad({ minFramePeakRatio: 1.5 })).toThrow(/minFramePeakRatio must be a number/);
-    expect(bad({ minRidgePeakRatio: -1 })).toThrow(/minRidgePeakRatio must be a number/);
-    expect(bad({ minRidgePeakRatio: 2 })).toThrow(/minRidgePeakRatio must be a number/);
-    expect(bad({ reattackRatio: 1 })).toThrow(/reattackRatio must be greater than 1/);
-    expect(bad({ reattackRatio: 0.5 })).toThrow(/reattackRatio must be greater than 1/);
-    expect(bad({ reattackRatio: -1 })).toThrow(/reattackRatio must be greater than 1/);
+    expect(bad({ minFramePeakRatio: -0.1 })).toThrow(/minFramePeakRatio must be finite and in \[0, 1\]/);
+    expect(bad({ minFramePeakRatio: 1.5 })).toThrow(/minFramePeakRatio must be finite and in \[0, 1\]/);
+    expect(bad({ minRidgePeakRatio: -1 })).toThrow(/minRidgePeakRatio must be finite and in \[0, 1\]/);
+    expect(bad({ minRidgePeakRatio: 2 })).toThrow(/minRidgePeakRatio must be finite and in \[0, 1\]/);
+    expect(bad({ reattackRatio: 1 })).toThrow(/reattackRatio must be finite and greater than 1/);
+    expect(bad({ reattackRatio: 0.5 })).toThrow(/reattackRatio must be finite and greater than 1/);
+    expect(bad({ reattackRatio: -1 })).toThrow(/reattackRatio must be finite and greater than 1/);
   });
 
   it('surfaces the C refusal of a polyphonic field on the monophonic tracker', () => {

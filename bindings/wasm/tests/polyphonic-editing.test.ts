@@ -507,8 +507,7 @@ describe('PolyphonicAnalysis reattackRatio', () => {
     const negative = expectRefusalOf(() =>
       analyzePolyphonic({ samples, sampleRate, reattackRatio: -1 }),
     );
-    const message =
-      'analyzePolyphonic: reattackRatio must be greater than 1 (omit it for no split)';
+    const message = 'analyzePolyphonic: reattackRatio must be finite and greater than 1';
     expect(negative.message).toBe(message);
     for (const bad of [0, 0.5, 1]) {
       const error = expectRefusalOf(() =>

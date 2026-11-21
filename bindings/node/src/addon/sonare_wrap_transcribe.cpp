@@ -12,82 +12,33 @@
 namespace sonare_node {
 namespace {
 
-// Refuses the values the C ABI structurally CANNOT refuse.
-//
-// On the C ABI a field's 0 spells "keep the documented default", so a caller who
-// writes 0 into one of these gets the default and no error. That sentinel has no
-// job on a JS surface, where omitting the key already means the default: a
-// written 0 is therefore a value the field's own domain excludes, and letting it
-// through returns an answer measured against something the caller never asked
-// for -- indistinguishable downstream from a deliberate one. hasProperty-class
-// knowledge is what makes this reachable here and not there.
-//
-// f0MinHz, f0MaxHz and minNoteMs are the fields whose C defaults are themselves 0
-// sentinels: an omitted key must stay 0 so the C layer can resolve it from the
-// selected source. Their presence is therefore carried separately and only present values are
-// checked here. fixedVelocity, maxPolyphony and minNoteDivision are checked at their read. group
-// and channel are absent on purpose -- there 0 is a value a caller can mean, and
-// that is the distinction deciding the whole set.
-bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_f0_min,
-                       bool has_f0_max, bool has_min_note_ms) {
-  struct PositiveField {
-    const char* key;
-    float value;
-    bool present;
-  };
-  const PositiveField positive[] = {
-      {"referenceHz", config.reference_hz, true},
-      {"f0MinHz", config.f0_min_hz, has_f0_min},
-      {"f0MaxHz", config.f0_max_hz, has_f0_max},
-      {"minNoteMs", config.min_note_ms, has_min_note_ms},
-      {"segmentationThresholdCents", config.segmentation_threshold_cents, true},
-  };
-  for (const PositiveField& field : positive) {
-    if (!field.present) continue;
-    if (!(field.value > 0.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              std::string(field.key) + " must be finite and greater than 0");
-      return false;
-    }
-  }
-  if (!(config.velocity_floor_db < 0.0f)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "velocityFloorDb must be finite and less than 0");
-    return false;
-  }
-  return true;
-}
-
-// Seeds the C ABI's own defaults, then applies whichever keys the caller wrote.
-// Seeding rather than zeroing keeps the documented default of every field in one
-// place — sonare_transcribe_config_init() — so this file cannot drift from
-// the header a caller reads. f0MinHz/f0MaxHz intentionally remain zero when omitted:
-// the C layer resolves those sentinels against the selected tracker source, and
-// so does minNoteMs, whose default is the source's.
-//
-// The floats take the finite reader: none of these fields documents an infinity
-// or a NaN as selecting anything, so a non-finite value is refused by name here
-// rather than reaching the C ABI, which refuses it without saying which field
-// carried it.
+// Seeds the C ABI's own defaults, then applies whichever keys the caller wrote, so the documented
+// defaults live only in sonare_transcribe_config_init(). An omitted key keeps the initialised NaN
+// or UNSET value, which the C layer resolves against the selected source; a written value is read
+// in the C ABI's domain for its field under the caller's key.
 bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTranscribeConfig* out) {
   sonare_transcribe_config_init(out);
   out->polyphonic = BoolProperty(request, "polyphonic", out->polyphonic != 0) ? 1 : 0;
   bool reference_auto = false;
+  const Napi::Value reference = request.Get("referenceHz");
   out->reference_hz =
       AutoFiniteFloatProperty(request, "referenceHz", out->reference_hz, &reference_auto);
+  if (!reference_auto && !reference.IsUndefined() && !reference.IsNull()) {
+    out->reference_hz = node_domain_number<float>(reference, "referenceHz",
+                                                  sonare_c_detail::kTranscribeFrequencyHzDomain);
+  }
   out->reference_auto = reference_auto ? 1 : 0;
-  const Napi::Value f0_min = request.Get("f0MinHz");
-  const bool wrote_f0_min = !f0_min.IsUndefined() && !f0_min.IsNull();
-  out->f0_min_hz = FiniteFloatProperty(request, "f0MinHz", out->f0_min_hz);
-  const Napi::Value f0_max = request.Get("f0MaxHz");
-  const bool wrote_f0_max = !f0_max.IsUndefined() && !f0_max.IsNull();
-  out->f0_max_hz = FiniteFloatProperty(request, "f0MaxHz", out->f0_max_hz);
-  const Napi::Value min_note_ms = request.Get("minNoteMs");
-  const bool wrote_min_note_ms = !min_note_ms.IsUndefined() && !min_note_ms.IsNull();
-  out->min_note_ms = FiniteFloatProperty(request, "minNoteMs", out->min_note_ms);
-  out->segmentation_threshold_cents =
-      FiniteFloatProperty(request, "segmentationThresholdCents", out->segmentation_threshold_cents);
-  out->velocity_floor_db = FiniteFloatProperty(request, "velocityFloorDb", out->velocity_floor_db);
+  out->f0_min_hz = DomainProperty<float>(request, "f0MinHz", out->f0_min_hz,
+                                         sonare_c_detail::kTranscribeFrequencyHzDomain);
+  out->f0_max_hz = DomainProperty<float>(request, "f0MaxHz", out->f0_max_hz,
+                                         sonare_c_detail::kTranscribeFrequencyHzDomain);
+  out->min_note_ms = DomainProperty<float>(request, "minNoteMs", out->min_note_ms,
+                                           sonare_c_detail::kTranscribeMinNoteMsDomain);
+  out->segmentation_threshold_cents = DomainProperty<float>(
+      request, "segmentationThresholdCents", out->segmentation_threshold_cents,
+      sonare_c_detail::kTranscribeSegmentationCentsDomain);
+  out->velocity_floor_db = DomainProperty<float>(request, "velocityFloorDb", out->velocity_floor_db,
+                                                 sonare_c_detail::kTranscribeVelocityFloorDbDomain);
   // Absence selects the C ABI's 0; a written value is checked against the given-value domain.
   out->fixed_velocity = DomainProperty<int>(request, "fixedVelocity", 0,
                                             sonare_c_detail::kTranscribeFixedVelocityDomain);
@@ -95,16 +46,15 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
                                            sonare_c_detail::kTranscribeMaxPolyphonyDomain);
   out->min_note_division = DomainProperty<int>(request, "minNoteDivision", 0,
                                                sonare_c_detail::kTranscribeMinNoteDivisionDomain);
-  const Napi::Value frame_ratio = request.Get("minFramePeakRatio");
-  const bool wrote_frame_ratio = !frame_ratio.IsUndefined() && !frame_ratio.IsNull();
   out->min_frame_peak_ratio =
-      FiniteFloatProperty(request, "minFramePeakRatio", out->min_frame_peak_ratio);
-  const Napi::Value ridge_ratio = request.Get("minRidgePeakRatio");
-  const bool wrote_ridge_ratio = !ridge_ratio.IsUndefined() && !ridge_ratio.IsNull();
+      DomainProperty<float>(request, "minFramePeakRatio", out->min_frame_peak_ratio,
+                            sonare_c_detail::kTranscribePeakRatioDomain);
   out->min_ridge_peak_ratio =
-      FiniteFloatProperty(request, "minRidgePeakRatio", out->min_ridge_peak_ratio);
-  // Absent stays NaN, the C meaning "no split"; a given value is validated by the C layer.
-  out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", out->reattack_ratio);
+      DomainProperty<float>(request, "minRidgePeakRatio", out->min_ridge_peak_ratio,
+                            sonare_c_detail::kTranscribePeakRatioDomain);
+  // Absent stays NaN, the C meaning "no split".
+  out->reattack_ratio = DomainProperty<float>(request, "reattackRatio", out->reattack_ratio,
+                                              sonare_c_detail::kReattackRatioDomain);
   // A string name rather than the ordinal: undefined/null keeps the C default
   // (segments), a non-string is a TypeError and an unknown name a RangeError.
   const std::string monophonic_model = StringProperty(request, "monophonicModel", "segments");
@@ -118,26 +68,8 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   }
   out->group = IntProperty(request, "group", out->group);
   out->channel = IntProperty(request, "channel", out->channel);
-  // Short-circuited: a reader that already refused a key left an exception
-  // pending, and a second throw on top of it aborts rather than reaching JS.
-  if (env.IsExceptionPending()) return false;
-  const struct {
-    const char* key;
-    float* value;
-    bool present;
-  } peak_ratios[] = {
-      {"minFramePeakRatio", &out->min_frame_peak_ratio, wrote_frame_ratio},
-      {"minRidgePeakRatio", &out->min_ridge_peak_ratio, wrote_ridge_ratio},
-  };
-  for (const auto& ratio : peak_ratios) {
-    if (!ratio.present) continue;
-    if (!(*ratio.value >= 0.0f && *ratio.value <= 1.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              std::string(ratio.key) + " must be a number in [0, 1]");
-      return false;
-    }
-  }
-  return RefuseOutOfDomain(env, *out, wrote_f0_min, wrote_f0_max, wrote_min_note_ms);
+  // A reader that already refused a key left an exception pending.
+  return !env.IsExceptionPending();
 }
 
 // The request shape both entry points share: mono audio plus its rate. Returns

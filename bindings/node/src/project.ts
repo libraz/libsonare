@@ -25,7 +25,6 @@ import {
   WARP_MODE,
 } from './internal/project_tokens.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
-import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type {
   BuiltinSynthConfig,
@@ -1380,7 +1379,7 @@ export class Project {
   transcribeToClip(request: ProjectTranscribeRequest): number {
     assertSamples(request.samples, true);
     assertSampleRate(request.sampleRate);
-    return this.native.transcribeToClip(nativeTranscribeRequest(request));
+    return this.native.transcribeToClip(request);
   }
 
   // -- MIR --

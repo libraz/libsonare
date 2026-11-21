@@ -10,7 +10,6 @@ import type {
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertFloatValue,
   assertInt32,
   assertInt64,
   resolveSampleBound,
@@ -41,13 +40,6 @@ function nativePolyphonicOptions(options: PolyphonicAnalysisOptions): Record<str
   for (const [field, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (options[field as keyof typeof NAMED_ZERO_FIELDS] === 0) {
       throw refuse(`${field} must not be 0; omit it for ${meaning}`);
-    }
-  }
-  const { reattackRatio } = options;
-  if (reattackRatio !== undefined && reattackRatio !== null) {
-    assertFloatValue(reattackRatio, 'reattackRatio');
-    if (reattackRatio <= 1) {
-      throw refuse(`reattackRatio must be greater than 1 (omit it for no split)`);
     }
   }
   return out;

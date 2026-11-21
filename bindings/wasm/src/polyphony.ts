@@ -12,7 +12,6 @@ import type { WasmPolyphonicAnalysis } from './sonare.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertFloatValue,
   requestObject,
   resolveSampleBound,
   sampleOneShot,
@@ -43,13 +42,6 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
   for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (config[key] === 0) {
       throw refuse(`${key} must not be 0; omit it for ${meaning}`);
-    }
-  }
-  const reattack = config.reattackRatio;
-  if (reattack !== undefined && reattack !== null) {
-    assertFloatValue(reattack, 'reattackRatio');
-    if ((reattack as number) <= 1) {
-      throw refuse('reattackRatio must be greater than 1 (omit it for no split)');
     }
   }
   return config;

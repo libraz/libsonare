@@ -27,43 +27,12 @@
 
 namespace {
 
-// What a written value of a float field must be. Omission keeps the value the
-// config was initialised with, so a written 0 is a value the caller chose and
-// is either out of domain or, for the ratio kind, a real 0.
-enum class FloatDomain {
-  kPositive,   // > 0
-  kNegative,   // < 0
-  kUnitRatio,  // [0, 1]
-};
-
-// A present value is range-checked here by the domain's own wording and
-// otherwise forwarded as given; the C ABI checks it once more. An omitted
-// field returns @p absent, the initialised value.
-float signedField(val config, const char* key, FloatDomain domain, float absent) {
-  if (!hasProperty(config, key)) return absent;
-  const float value = floatProperty(config, key, 0.0f);
-  const std::string name(key);
-  switch (domain) {
-    case FloatDomain::kPositive:
-      if (!(value > 0.0f)) throw WasmRangeError(name + " must be finite and greater than 0");
-      return value;
-    case FloatDomain::kNegative:
-      if (!(value < 0.0f)) throw WasmRangeError(name + " must be finite and less than 0");
-      return value;
-    case FloatDomain::kUnitRatio:
-      if (!(value >= 0.0f && value <= 1.0f)) {
-        throw WasmRangeError(name + " must be a number in [0, 1]");
-      }
-      return value;
-  }
-  return value;
-}
-
-// Omission keeps the initialised UNSET value; a written value is read in the core's domain for the
-// field, which refuses 0 as it refuses any other out-of-domain integer.
-int rangeField(val config, const char* key, const sonare::util::check::NumericDomain& domain,
-               int absent) {
-  return optionalDomainValue<int>(objectProperty(config, key), key, domain).value_or(absent);
+// Omission keeps the initialised NaN or UNSET value; a written value is read in the C ABI's domain
+// for the field under the caller's key.
+template <typename T>
+T domainField(val config, const char* key, const sonare::util::check::NumericDomain& domain,
+              T absent) {
+  return optionalDomainValue<T>(objectProperty(config, key), key, domain).value_or(absent);
 }
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
@@ -79,33 +48,41 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
     }
     out.reference_auto = 1;
   } else {
-    out.reference_hz = signedField(config, "referenceHz", FloatDomain::kPositive, out.reference_hz);
+    out.reference_hz = domainField<float>(
+        config, "referenceHz", sonare_c_detail::kTranscribeFrequencyHzDomain, out.reference_hz);
   }
-  out.f0_min_hz = signedField(config, "f0MinHz", FloatDomain::kPositive, out.f0_min_hz);
-  out.f0_max_hz = signedField(config, "f0MaxHz", FloatDomain::kPositive, out.f0_max_hz);
-  out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive, out.min_note_ms);
+  out.f0_min_hz = domainField<float>(config, "f0MinHz",
+                                     sonare_c_detail::kTranscribeFrequencyHzDomain, out.f0_min_hz);
+  out.f0_max_hz = domainField<float>(config, "f0MaxHz",
+                                     sonare_c_detail::kTranscribeFrequencyHzDomain, out.f0_max_hz);
+  out.min_note_ms = domainField<float>(
+      config, "minNoteMs", sonare_c_detail::kTranscribeMinNoteMsDomain, out.min_note_ms);
   // Both spellings written is forwarded; the C ABI refuses it naming min_note_division.
   out.min_note_division =
-      rangeField(config, "minNoteDivision", sonare_c_detail::kTranscribeMinNoteDivisionDomain,
-                 SONARE_NOTE_DIVISION_UNSET);
-  out.segmentation_threshold_cents =
-      signedField(config, "segmentationThresholdCents", FloatDomain::kPositive,
-                  out.segmentation_threshold_cents);
+      domainField<int>(config, "minNoteDivision", sonare_c_detail::kTranscribeMinNoteDivisionDomain,
+                       SONARE_NOTE_DIVISION_UNSET);
+  out.segmentation_threshold_cents = domainField<float>(
+      config, "segmentationThresholdCents", sonare_c_detail::kTranscribeSegmentationCentsDomain,
+      out.segmentation_threshold_cents);
   out.velocity_floor_db =
-      signedField(config, "velocityFloorDb", FloatDomain::kNegative, out.velocity_floor_db);
+      domainField<float>(config, "velocityFloorDb",
+                         sonare_c_detail::kTranscribeVelocityFloorDbDomain, out.velocity_floor_db);
   out.fixed_velocity =
-      rangeField(config, "fixedVelocity", sonare_c_detail::kTranscribeFixedVelocityDomain,
-                 SONARE_FIXED_VELOCITY_UNSET);
+      domainField<int>(config, "fixedVelocity", sonare_c_detail::kTranscribeFixedVelocityDomain,
+                       SONARE_FIXED_VELOCITY_UNSET);
   // Polyphonic only; a monophonic call with any of these written is refused by the C ABI.
   out.max_polyphony =
-      rangeField(config, "maxPolyphony", sonare_c_detail::kTranscribeMaxPolyphonyDomain,
-                 SONARE_MAX_POLYPHONY_UNSET);
+      domainField<int>(config, "maxPolyphony", sonare_c_detail::kTranscribeMaxPolyphonyDomain,
+                       SONARE_MAX_POLYPHONY_UNSET);
   out.min_frame_peak_ratio =
-      signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio, out.min_frame_peak_ratio);
+      domainField<float>(config, "minFramePeakRatio", sonare_c_detail::kTranscribePeakRatioDomain,
+                         out.min_frame_peak_ratio);
   out.min_ridge_peak_ratio =
-      signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio, out.min_ridge_peak_ratio);
-  // Absent never splits; a written value is forwarded and the C ABI refuses an invalid one.
-  out.reattack_ratio = floatProperty(config, "reattackRatio", out.reattack_ratio);
+      domainField<float>(config, "minRidgePeakRatio", sonare_c_detail::kTranscribePeakRatioDomain,
+                         out.min_ridge_peak_ratio);
+  // Absent never splits.
+  out.reattack_ratio = domainField<float>(
+      config, "reattackRatio", sonare_c_detail::kReattackRatioDomain, out.reattack_ratio);
   // Absence is the segments model; the C ABI refuses a non-segments model on the polyphonic path.
   const std::string model = stringProperty(config, "monophonicModel", "segments");
   if (model == "singing") {

@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/transcribe_input_domains.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #include "util/parameter_checks.h"
@@ -107,7 +108,7 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   namespace check = sonare::util::check;
   if (hasProperty(config, "winLength")) check::integer_at_least(stft.win_length, 1, "winLength");
   if (hasProperty(config, "reattackRatio")) {
-    check::greater_than(ridges.reattack_ratio, 1.0, "reattackRatio");
+    check::within(ridges.reattack_ratio, sonare_c_detail::kReattackRatioDomain, "reattackRatio");
   }
   if (hasProperty(config, "maxRefineHz")) {
     check::greater_than(out.shared_bins.max_refine_hz, 0.0, "maxRefineHz");

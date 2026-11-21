@@ -1,5 +1,4 @@
 import { withEntry } from './internal/entry.js';
-import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
 import type { OptionsOf } from './validation.js';
@@ -90,7 +89,6 @@ export function transcribe(...args: unknown[]): TranscribeResult {
     if (tempoBpm !== undefined && tempoBpm !== null) {
       assertPositiveFloatValue(tempoBpm, 'tempoBpm');
     }
-    const nativeOptions = nativeTranscribeOptions(rest);
-    return projectModule().transcribe(samples, sampleRate, tempoBpm, nativeOptions);
+    return projectModule().transcribe(samples, sampleRate, tempoBpm, rest);
   });
 }

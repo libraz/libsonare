@@ -1,5 +1,4 @@
 import { withEntry } from './internal/entry.js';
-import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -53,6 +52,6 @@ export function transcribe(...args: unknown[]): TranscribeResult {
     if (rest.tempoBpm !== undefined && rest.tempoBpm !== null) {
       assertPositiveFloatValue(rest.tempoBpm, 'tempoBpm');
     }
-    return addon.transcribe(nativeTranscribeRequest(rest));
+    return addon.transcribe(rest);
   });
 }

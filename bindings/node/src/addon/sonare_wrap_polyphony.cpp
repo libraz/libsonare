@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/transcribe_input_domains.h"
 #include "sonare_wrap_note_objects.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -87,7 +88,8 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
       FloatProperty(opts, "segmentationThresholdCents", out->segmentation_threshold_cents);
   out->min_note_ms = FloatProperty(opts, "minNoteMs", out->min_note_ms);
   out->reference_hz = FloatProperty(opts, "referenceHz", out->reference_hz);
-  out->reattack_ratio = FiniteFloatProperty(opts, "reattackRatio", out->reattack_ratio);
+  out->reattack_ratio = DomainProperty<float>(opts, "reattackRatio", out->reattack_ratio,
+                                              sonare_c_detail::kReattackRatioDomain);
   return !env.IsExceptionPending();
 }
 
