@@ -17,7 +17,7 @@
   ],
   "floor": {
     "sites": 14,
-    "comparisons": 216,
+    "comparisons": 207,
     "helper_calls": 6
   },
   "sites": [

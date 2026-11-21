@@ -212,7 +212,7 @@ class OffsetTest(_CopiedTree):
 
     def test_both_claims_track_one_constant_through_its_offset(self) -> None:
         root = self.tree((HPSS_CORE, HPSS_DOC))
-        claims = (HPSS_CEILING._replace(floor=3), HPSS_LARGEST._replace(floor=3))
+        claims = (HPSS_CEILING._replace(floor=1), HPSS_LARGEST._replace(floor=1))
         self.assertEqual(check.evaluate(root, claims), [])
 
         moved = self.tree(

@@ -48,8 +48,8 @@ ROWS: tuple[Literal, ...] = (
         sites=(
             Site("node", "bindings/node/src", r"\bbeta \?\? ([-\d.]+)", 1),
             Site("wasm", "bindings/wasm/src", r"\bbeta \?\? ([-\d.]+)", 1),
-            # Only the librosa-named decompose / decompose_with_init (runtime + stub) state it.
-            Site("python", "bindings/python/src/libsonare", r"\bbeta: float = ([-\d.]+)", 4),
+            # Only the librosa-named decompose (runtime + stub) states it.
+            Site("python", "bindings/python/src/libsonare", r"\bbeta: float = ([-\d.]+)", 2),
         ),
     ),
     Literal(
@@ -59,7 +59,7 @@ ROWS: tuple[Literal, ...] = (
             # Node and WASM leave an omitted count to the native default.
             Site("node", "bindings/node/src", r"\bmaxRecords = (\d+)", 0),
             Site("wasm", "bindings/wasm/src", r"\bmaxRecords = (\d+)", 0),
-            Site("python", "bindings/python/src/libsonare", r"\bmax_records: int = (\d+)", 10),
+            Site("python", "bindings/python/src/libsonare", r"\bmax_records: int = (\d+)", 8),
         ),
     ),
 )

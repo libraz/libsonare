@@ -135,21 +135,21 @@ CLAIMS: tuple[Claim, ...] = (
         key="HPSS median kernel largest legal size",
         pattern=r"positive odd integer at most\s+(?P<largest>\d+)",
         groups={"largest": ("max_stft_n_fft", -1)},
-        # The WASM hpss() @param restated the request field's sentence; it now
-        # documents the field once, on HpssRequest.
-        floor=9,
+        # One sonare_hpss entry per surface documents the kernel once; the folded
+        # stereo and with-options variants no longer restate it.
+        floor=4,
     ),
     Claim(
         key="HPSS median kernel ceiling",
         pattern=r"[Tt]he ceiling is\s+(?P<ceiling>\d+)",
         groups={"ceiling": ("max_stft_n_fft", 0)},
-        floor=9,
+        floor=4,
     ),
     Claim(
         key="HPSS median kernel largest restated",
         pattern=r"so\s+(?P<largest>\d+)\s+is the largest legal",
         groups={"largest": ("max_stft_n_fft", -1)},
-        floor=9,
+        floor=4,
     ),
     Claim(
         key="audio sample rate range",

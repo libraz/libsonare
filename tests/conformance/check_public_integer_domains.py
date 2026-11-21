@@ -471,12 +471,6 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_assistant_suggest_stereo": {
         "params": _ASSISTANT_BAG,
     },
-    "analyzer.mastering_assistant_suggest_chain": {
-        "params": _ASSISTANT_BAG,
-    },
-    "analyzer.mastering_assistant_suggest_chain_stereo": {
-        "params": _ASSISTANT_BAG,
-    },
     # The exception constructors. The library raises them with the status code
     # and the counts a C call returned; none of the three values is handed to the
     # core, so nothing past the FFI has a domain to check them against.
