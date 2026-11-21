@@ -6,9 +6,9 @@
 //   that differs from the derivation, a key reached by two entries, an ambiguous or
 //   unresolved site, or a surface where nothing was scanned.
 //
-// A native key is a free native function ("analyzeWithProgress"), a native class
+// A native key is a free native function ("analyze"), a native class
 // ("PlaybackRenderer", whose key is also its constructor) or a native method
-// ("Project.setMarkerEx"). Native names come from the C++ registrations; call sites
+// ("Project.setMarker"). Native names come from the C++ registrations; call sites
 // come from a TypeScript AST walk of the facade sources. Each call site resolves to
 // the outermost public entries that reach it: a function or class in the value
 // re-export closure of a package entry point, or a public member of such a class.
