@@ -16,9 +16,6 @@ namespace sonare_c_detail {
 /// Keymap sets are dense, so an index also sizes the table it creates.
 inline constexpr uint32_t kMaxKeymapSets = 4096u;
 
-/// @brief What a percussive separation config's n_fft accepts.
-inline constexpr sonare::util::check::NumericDomain kPercussiveNFftDomain =
-    sonare::util::check::integer_domain_of<int32_t>(1);
 /// @brief What a percussive separation config's harmonic and percussive HPSS kernels accept.
 inline constexpr sonare::util::check::NumericDomain kPercussiveHpssKernelDomain =
     sonare::util::check::integer_domain_of<int32_t>(1);

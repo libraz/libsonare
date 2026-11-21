@@ -8,6 +8,7 @@
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "c_api/note_render_common.h"
+#include "c_api/transcribe_input_domains.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #endif
 #include <sonare/sonare_c.h>
@@ -45,10 +46,13 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
                                               "config.win_length");
         }
         if (!std::isnan(in->max_refine_hz)) {
-          sonare::util::check::greater_than(in->max_refine_hz, 0.0, "config.max_refine_hz");
+          sonare::util::check::within(in->max_refine_hz,
+                                      sonare_c_detail::kPolyphonicMaxRefineHzDomain,
+                                      "config.max_refine_hz");
         }
         if (!std::isnan(in->reattack_ratio)) {
-          sonare::util::check::greater_than(in->reattack_ratio, 1.0, "config.reattack_ratio");
+          sonare::util::check::within(in->reattack_ratio, sonare_c_detail::kReattackRatioDomain,
+                                      "config.reattack_ratio");
         }
       });
       err != SONARE_OK) {

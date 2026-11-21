@@ -135,7 +135,7 @@ TEST_CASE("the percussive entries refuse their arguments by name", "[c_api][engi
   config.n_fft = 0;
   CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.n_fft must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "config.n_fft must be an even integer in [4, 524288]");
   sonare_percussive_event_config_init(&config);
   config.hpss_kernel_harmonic = 0;
   CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==

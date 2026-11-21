@@ -7,6 +7,8 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
+#include "c_api/midi_input_domains.h"
+#include "c_api/transcribe_input_domains.h"
 #include "editing/note_model/note_transcriber.h"
 #include "editing/polyphony/multi_f0.h"
 #include "feature/chroma.h"
@@ -25,8 +27,8 @@ using sonare::constants::kCentsPerSemitone;
 namespace {
 
 namespace ntm = sonare::editing::note_model;
-
-constexpr int32_t kMaxMinNoteDivision = 128;
+using sonare::util::check::integer_within;
+using sonare::util::check::within;
 
 /// Refuses @p subject, named by its C field, so each binding respells it in its own keys.
 [[noreturn]] void refuse(const char* subject, const char* predicate) {
@@ -59,14 +61,14 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   out->source =
       in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
 
-  if (!finite_positive(in->reference_hz)) refuse("reference_hz", "must be a positive number");
+  within(in->reference_hz, kTranscribeFrequencyHzDomain, "reference_hz");
   out->reference_hz = in->reference_hz;
   if (!std::isnan(in->f0_min_hz)) {
-    if (!finite_positive(in->f0_min_hz)) refuse("f0_min_hz", "must be a positive number");
+    within(in->f0_min_hz, kTranscribeFrequencyHzDomain, "f0_min_hz");
     out->fmin = in->f0_min_hz;
   }
   if (!std::isnan(in->f0_max_hz)) {
-    if (!finite_positive(in->f0_max_hz)) refuse("f0_max_hz", "must be a positive number");
+    within(in->f0_max_hz, kTranscribeFrequencyHzDomain, "f0_max_hz");
     out->fmax = in->f0_max_hz;
   }
   const ntm::TranscribeF0Range range = ntm::resolve_transcribe_f0_range(*out);
@@ -75,51 +77,38 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   }
   const bool min_note_ms_given = !std::isnan(in->min_note_ms);
   if (min_note_ms_given) {
-    if (!finite_positive(in->min_note_ms)) refuse("min_note_ms", "must be a positive number");
+    within(in->min_note_ms, kTranscribeMinNoteMsDomain, "min_note_ms");
     out->min_note_ms = in->min_note_ms;
   }
-  if (!finite_positive(in->segmentation_threshold_cents)) {
-    refuse("segmentation_threshold_cents", "must be a positive number");
-  }
+  within(in->segmentation_threshold_cents, kTranscribeSegmentationCentsDomain,
+         "segmentation_threshold_cents");
   out->segmentation_threshold_cents = in->segmentation_threshold_cents;
-  if (!std::isfinite(in->velocity_floor_db) || in->velocity_floor_db >= 0.0f) {
-    refuse("velocity_floor_db", "must be a finite negative number");
-  }
+  within(in->velocity_floor_db, kTranscribeVelocityFloorDbDomain, "velocity_floor_db");
   out->velocity_floor_db = in->velocity_floor_db;
   if (in->fixed_velocity != SONARE_FIXED_VELOCITY_UNSET) {
-    if (in->fixed_velocity < 1 || in->fixed_velocity > 127) {
-      refuse("fixed_velocity", "must be an integer in [1, 127]");
-    }
+    integer_within(in->fixed_velocity, kTranscribeFixedVelocityDomain, "fixed_velocity");
     out->fixed_velocity = in->fixed_velocity;
   }
-  if (in->group < 0 || in->group > 15) refuse("group", "must be an integer in [0, 15]");
-  if (in->channel < 0 || in->channel > 15) {
-    refuse("channel", "must be an integer in [0, 15]");
-  }
+  integer_within(in->group, kMidiUmpGroupDomain, "group");
+  integer_within(in->channel, kMidiChannelDomain, "channel");
   *out_group = static_cast<uint8_t>(in->group);
   *out_channel = static_cast<uint8_t>(in->channel);
 
   const bool polyphonic = out->source == ntm::TranscribeSource::kPolyphonic;
-  if (in->max_polyphony != SONARE_MAX_POLYPHONY_UNSET &&
-      (in->max_polyphony < 1 ||
-       in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices)) {
-    refuse("max_polyphony", "must be an integer in [1, 64]");
+  if (in->max_polyphony != SONARE_MAX_POLYPHONY_UNSET) {
+    integer_within(in->max_polyphony, kTranscribeMaxPolyphonyDomain, "max_polyphony");
   }
-  if (!std::isnan(in->min_frame_peak_ratio) &&
-      !(in->min_frame_peak_ratio >= 0.0f && in->min_frame_peak_ratio <= 1.0f)) {
-    refuse("min_frame_peak_ratio", "must be a finite number in [0, 1]");
+  if (!std::isnan(in->min_frame_peak_ratio)) {
+    within(in->min_frame_peak_ratio, kTranscribePeakRatioDomain, "min_frame_peak_ratio");
   }
-  if (!std::isnan(in->min_ridge_peak_ratio) &&
-      !(in->min_ridge_peak_ratio >= 0.0f && in->min_ridge_peak_ratio <= 1.0f)) {
-    refuse("min_ridge_peak_ratio", "must be a finite number in [0, 1]");
+  if (!std::isnan(in->min_ridge_peak_ratio)) {
+    within(in->min_ridge_peak_ratio, kTranscribePeakRatioDomain, "min_ridge_peak_ratio");
   }
-  if (!std::isnan(in->reattack_ratio) &&
-      (!std::isfinite(in->reattack_ratio) || in->reattack_ratio <= 1.0f)) {
-    refuse("reattack_ratio", "must be a finite number above 1");
+  if (!std::isnan(in->reattack_ratio)) {
+    within(in->reattack_ratio, kReattackRatioDomain, "reattack_ratio");
   }
-  if (in->min_note_division != SONARE_NOTE_DIVISION_UNSET &&
-      (in->min_note_division < 1 || in->min_note_division > kMaxMinNoteDivision)) {
-    refuse("min_note_division", "must be an integer in [1, 128]");
+  if (in->min_note_division != SONARE_NOTE_DIVISION_UNSET) {
+    integer_within(in->min_note_division, kTranscribeMinNoteDivisionDomain, "min_note_division");
   }
   if (in->min_note_division != SONARE_NOTE_DIVISION_UNSET && min_note_ms_given) {
     refuse_pair("min_note_division", "min_note_ms", "{0} and {1} cannot both be set");

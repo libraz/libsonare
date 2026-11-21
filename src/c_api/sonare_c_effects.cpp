@@ -43,7 +43,7 @@ void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
   require_struct_size(config.struct_size, sizeof(config), "config",
                       "sonare_decompose_stems_config_init");
   check::integer_within(config.n_components, kDecomposeNComponentsDomain, "config.n_components");
-  check::integer_within(config.n_fft, kDecomposeStemsNFftDomain, "config.n_fft");
+  check::even_within(config.n_fft, kColaNFftDomain, "config.n_fft");
   check_stft_hop(config.hop_length, "config.hop_length");
   check::integer_within(config.n_iter, kDecomposeStemsIterDomain, "config.n_iter");
   check::finite_float(config.beta, "config.beta");
@@ -132,7 +132,7 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
   }
   // The FFT size and hop are refused before any input is decoded.
   if (const SonareError err = run_validation([&] {
-        sonare::util::check::integer_within(n_fft, kHpssNFftDomain, "n_fft");
+        sonare::util::check::even_within(n_fft, sonare::kColaNFftDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
       });
       err != SONARE_OK) {
@@ -887,6 +887,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
   }
   if (const SonareError err = run_validation([&] {
         validate_stretch_rate(speed_ratio);
+        sonare::util::check::even_within(n_fft, kColaNFftDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
       });
       err != SONARE_OK) {

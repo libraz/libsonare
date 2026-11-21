@@ -737,6 +737,54 @@ SonareError probe_rehydrate_vocal_edits(const std::string& param, double value) 
   return err;
 }
 
+/// The transcription config with `param` (`config.<field>`) set to `value` and the rest at the
+/// defaults. An UNSET integer is 0, so a value below a domain starting at 1 is probed at -1.
+SonareTranscribeConfig transcribe_config(const std::string& param, double value) {
+  SonareTranscribeConfig config{};
+  sonare_transcribe_config_init(&config);
+  const std::string field = param.substr(param.rfind('.') + 1);
+  const auto set_value = static_cast<float>(value);
+  const int32_t set_int = value < 1.0 ? -1 : static_cast<int32_t>(value);
+  if (field == "reference_hz") config.reference_hz = set_value;
+  if (field == "f0_min_hz") config.f0_min_hz = set_value;
+  if (field == "f0_max_hz") config.f0_max_hz = set_value;
+  if (field == "min_note_ms") config.min_note_ms = set_value;
+  if (field == "segmentation_threshold_cents") config.segmentation_threshold_cents = set_value;
+  if (field == "velocity_floor_db") config.velocity_floor_db = set_value;
+  if (field == "fixed_velocity") config.fixed_velocity = set_int;
+  if (field == "group") config.group = static_cast<int32_t>(value);
+  if (field == "channel") config.channel = static_cast<int32_t>(value);
+  if (field == "min_note_division") config.min_note_division = set_int;
+  const bool polyphonic_only = field == "max_polyphony" || field == "min_frame_peak_ratio" ||
+                               field == "min_ridge_peak_ratio" || field == "reattack_ratio";
+  if (polyphonic_only) config.polyphonic = 1;
+  if (field == "max_polyphony") config.max_polyphony = set_int;
+  if (field == "min_frame_peak_ratio") config.min_frame_peak_ratio = set_value;
+  if (field == "min_ridge_peak_ratio") config.min_ridge_peak_ratio = set_value;
+  if (field == "reattack_ratio") config.reattack_ratio = set_value;
+  return config;
+}
+
+SonareError probe_transcribe(const std::string& param, double value) {
+  const SonareTranscribeConfig config = transcribe_config(param, value);
+  const std::vector<float>& samples = analysis_samples();
+  SonareTranscribeResult result{};
+  const SonareError err =
+      sonare_transcribe(samples.data(), samples.size(), kAnalysisRate, 120.0f, &config, &result);
+  sonare_free_transcribe_result(&result);
+  return err;
+}
+
+SonareError probe_project_transcribe_to_clip(const std::string& param, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  const SonareTranscribeConfig config = transcribe_config(param, value);
+  const std::vector<float>& samples = analysis_samples();
+  size_t note_count = 0;
+  return sonare_project_transcribe_to_clip(project.handle, clip, samples.data(), samples.size(),
+                                           kAnalysisRate, &config, &note_count);
+}
+
 #endif  // SONARE_WITH_PITCH_EDITOR
 
 #endif  // SONARE_WITH_ARRANGEMENT
@@ -820,6 +868,8 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_PITCH_EDITOR)
       {"project_apply_vocal_edit", probe_apply_vocal_edit},
       {"project_rehydrate_vocal_edits", probe_rehydrate_vocal_edits},
+      {"project_transcribe_to_clip", probe_project_transcribe_to_clip},
+      {"transcribe", probe_transcribe},
 #endif
 #endif
   };
@@ -847,6 +897,13 @@ double inside_value(const NumericDomainRow& row) {
   const std::string param = row.param;
   if (entry == "mixing_assistant_suggest") return 48000.0;
   if (entry == "project_import_external_stems" && param == "request.sample_rate") return 48000.0;
+  if (entry == "transcribe" || entry == "project_transcribe_to_clip") {
+    // A frequency pair must stay ordered, and the level floor domain has no lower edge.
+    if (param == "config.f0_min_hz") return 100.0;
+    if (param == "config.f0_max_hz") return 2000.0;
+    if (param == "config.reference_hz") return 440.0;
+    if (param == "config.velocity_floor_db") return -60.0;
+  }
   if (entry == "vocal_session_create") {
     return param == "options.frame_length_samples" ? 2048.0 : 512.0;
   }

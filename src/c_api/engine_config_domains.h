@@ -9,12 +9,14 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "core/audio.h"
 #include "engine/clip_page_limits.h"
 #include "engine/insert_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/final/dither.h"
 #include "mixing/alignment_delay.h"
+#include "streaming/realtime_limits.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
@@ -136,5 +138,37 @@ inline constexpr sonare::util::check::NumericDomain kEngineSampleRateDomain =
 inline constexpr sonare::util::check::NumericDomain kEngineDitherBitsDomain =
     sonare::util::check::integer_domain(sonare::mastering::final::kMinDitherTargetBits,
                                         sonare::mastering::final::kMaxDitherTargetBits);
+
+/// @brief What prepare's max_block_size accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMaxBlockSizeDomain =
+    sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize);
+/// @brief What prepare's command_capacity accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineCommandCapacityDomain =
+    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_COMMAND_CAPACITY);
+/// @brief What prepare's telemetry_capacity accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineTelemetryCapacityDomain =
+    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_TELEMETRY_CAPACITY);
+/// @brief What prepare's max_channels accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMaxChannelsDomain =
+    sonare::util::check::integer_domain(
+        1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxAudioChannels));
+/// @brief What a seek's timeline_sample accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineTimelineSampleDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+/// @brief What a count-in's start_sample accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineCountInStartDomain =
+    sonare::util::check::integer_domain_of<int64_t>(0);
+/// @brief What a time signature's numerator accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineTimeSignatureNumeratorDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What a time signature's denominator accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineTimeSignatureDenominatorDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What a tempo or time-signature segment count accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineSegmentCountDomain =
+    sonare::util::check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize));
+/// @brief What a marker id accepts.
+inline constexpr sonare::util::check::NumericDomain kEngineMarkerIdDomain =
+    sonare::util::check::integer_domain_of<uint32_t>(1);
 
 }  // namespace sonare_c_detail

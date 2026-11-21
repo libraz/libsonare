@@ -156,6 +156,39 @@ SonareError probe_hpss_ex(const std::string& param, double value) {
   return err;
 }
 
+SonareError probe_phase_vocoder(const std::string& param, double value) {
+  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err =
+      sonare_phase_vocoder(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
+                           1.5f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  if (err == SONARE_OK) sonare_free_floats(out);
+  return err;
+}
+
+SonareError probe_time_stretch_ex(const std::string& param, double value) {
+  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err =
+      sonare_time_stretch_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
+                             1.5f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  if (err == SONARE_OK) sonare_free_floats(out);
+  return err;
+}
+
+SonareError probe_pitch_shift_ex(const std::string& param, double value) {
+  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err =
+      sonare_pitch_shift_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
+                            2.0f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  if (err == SONARE_OK) sonare_free_floats(out);
+  return err;
+}
+
 SonareError probe_biquad_filter(const std::string& param, double value) {
   SonareBiquadFilterConfig config{};
   sonare_biquad_filter_config_init(&config);
@@ -460,6 +493,108 @@ SonareError probe_engine_set_track_strip_channel_delay_samples(const std::string
   PreparedEngine engine;
   return sonare_engine_set_track_strip_channel_delay_samples(engine.get(), 1,
                                                              static_cast<int>(value));
+}
+
+/// A sized prepare argument reads 0 as the library default, so a value below the domain's
+/// lower edge is probed at -1, which the argument refuses.
+int prepare_int(double value) { return value < 1.0 ? -1 : static_cast<int>(value); }
+
+SonareError probe_engine_prepare(const std::string& param, double value) {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  int max_block_size = 64;
+  std::size_t command_capacity = 32;
+  std::size_t telemetry_capacity = 16;
+  if (is_param(param, "max_block_size")) max_block_size = prepare_int(value);
+  if (is_param(param, "command_capacity")) command_capacity = as_size(value);
+  if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
+  const SonareError err =
+      sonare_engine_prepare(engine, 48000.0, max_block_size, command_capacity, telemetry_capacity);
+  sonare_engine_destroy(engine);
+  return err;
+}
+
+SonareError probe_engine_prepare_with_channels(const std::string& param, double value) {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  int max_block_size = 64;
+  std::size_t command_capacity = 32;
+  std::size_t telemetry_capacity = 16;
+  int max_channels = 2;
+  if (is_param(param, "max_block_size")) max_block_size = prepare_int(value);
+  if (is_param(param, "command_capacity")) command_capacity = as_size(value);
+  if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
+  if (is_param(param, "max_channels")) max_channels = prepare_int(value);
+  const SonareError err = sonare_engine_prepare_with_channels(
+      engine, 48000.0, max_block_size, command_capacity, telemetry_capacity, max_channels);
+  sonare_engine_destroy(engine);
+  return err;
+}
+
+SonareError probe_engine_seek_sample(const std::string&, double value) {
+  PreparedEngine engine;
+  return sonare_engine_seek_sample(engine.get(), as_i64(value), 0);
+}
+
+SonareError probe_engine_count_in_end_sample(const std::string&, double value) {
+  PreparedEngine engine;
+  std::int64_t end = 0;
+  return sonare_engine_count_in_end_sample(engine.get(), as_i64(value), 1, &end);
+}
+
+SonareError probe_engine_prime_offline_parameters(const std::string& param, double value) {
+  PreparedEngine engine;
+  int num_channels = 1;
+  int block_size = 0;
+  if (is_param(param, "num_channels")) num_channels = static_cast<int>(value);
+  if (is_param(param, "block_size")) block_size = static_cast<int>(value);
+  return sonare_engine_prime_offline_parameters(engine.get(), num_channels, block_size);
+}
+
+SonareError probe_engine_set_time_signature(const std::string& param, double value) {
+  PreparedEngine engine;
+  int numerator = 4;
+  int denominator = 4;
+  if (is_param(param, "numerator")) numerator = static_cast<int>(value);
+  if (is_param(param, "denominator")) denominator = static_cast<int>(value);
+  return sonare_engine_set_time_signature(engine.get(), numerator, denominator);
+}
+
+SonareError probe_engine_set_tempo_segments(const std::string& param, double value) {
+  PreparedEngine engine;
+  const SonareProjectTempoSegment segment{0.0, 120.0, 0.0, 0.0};
+  const std::size_t count = is_param(param, "segment_count") ? as_size(value) : 1;
+  return sonare_engine_set_tempo_segments(engine.get(), &segment, count);
+}
+
+SonareError probe_engine_set_time_signature_segments(const std::string& param, double value) {
+  PreparedEngine engine;
+  SonareProjectTimeSignatureSegment segment{0.0, 4, 4};
+  std::size_t count = 1;
+  if (is_param(param, "segment_count")) count = as_size(value);
+  if (is_param(param, "segments[].numerator")) segment.numerator = static_cast<int>(value);
+  if (is_param(param, "segments[].denominator")) segment.denominator = static_cast<int>(value);
+  return sonare_engine_set_time_signature_segments(engine.get(), &segment, count);
+}
+
+SonareError probe_engine_add_parameter(const std::string&, double value) {
+  PreparedEngine engine;
+  SonareParameterInfo info{};
+  info.id = as_u32(value);
+  std::strcpy(info.name, "p");
+  info.min_value = 0.0f;
+  info.max_value = 1.0f;
+  info.default_value = 0.0f;
+  info.rt_safe = 1;
+  return sonare_engine_add_parameter(engine.get(), &info);
+}
+
+SonareError probe_engine_set_markers(const std::string&, double value) {
+  PreparedEngine engine;
+  SonareEngineMarker marker{};
+  marker.id = as_u32(value);
+  std::strcpy(marker.name, "m");
+  return sonare_engine_set_markers(engine.get(), &marker, 1);
 }
 
 #if defined(SONARE_WITH_GRAPH)
@@ -799,20 +934,30 @@ const std::map<std::string, Probe>& probes() {
       {"decompose_stems", probe_decompose_stems},
       {"decompose_stems_linked", probe_decompose_stems_linked},
       {"decompose_with_init", probe_decompose_with_init},
+      {"engine_add_parameter", probe_engine_add_parameter},
       {"engine_articulation", probe_engine_articulation},
       {"engine_bind_midi_cc", probe_engine_bind_midi_cc},
       {"engine_bind_midi_cc_binding", probe_engine_bind_midi_cc_binding},
       {"engine_bounce_offline", probe_engine_bounce_offline},
+      {"engine_count_in_end_sample", probe_engine_count_in_end_sample},
       {"engine_freeze_offline", probe_engine_freeze_offline},
       {"engine_load_soundfont", probe_engine_load_soundfont},
+      {"engine_prepare", probe_engine_prepare},
+      {"engine_prepare_with_channels", probe_engine_prepare_with_channels},
+      {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},
       {"engine_render_offline", probe_engine_render_offline},
       {"engine_render_offline_ex", probe_engine_render_offline_ex},
+      {"engine_seek_sample", probe_engine_seek_sample},
       {"engine_set_articulation", probe_engine_set_articulation},
       {"engine_set_capture_buffer", probe_engine_set_capture_buffer},
       {"engine_set_capture_punch", probe_engine_set_capture_punch},
       {"engine_set_clip_page_prefetch_frames", probe_engine_set_clip_page_prefetch_frames},
       {"engine_set_clips", probe_engine_set_clips},
+      {"engine_set_markers", probe_engine_set_markers},
+      {"engine_set_tempo_segments", probe_engine_set_tempo_segments},
+      {"engine_set_time_signature", probe_engine_set_time_signature},
+      {"engine_set_time_signature_segments", probe_engine_set_time_signature_segments},
       {"engine_set_track_strip_channel_delay_samples",
        probe_engine_set_track_strip_channel_delay_samples},
       {"engine_set_warp_voice_capacity", probe_engine_set_warp_voice_capacity},
@@ -820,11 +965,14 @@ const std::map<std::string, Probe>& probes() {
       {"extract_percussive_events", probe_extract_percussive_events},
       {"hpss_ex", probe_hpss_ex},
       {"nn_filter", probe_nn_filter},
+      {"phase_vocoder", probe_phase_vocoder},
+      {"pitch_shift_ex", probe_pitch_shift_ex},
       {"render_percussive_events", probe_render_percussive_events},
       {"spectral_edit", probe_spectral_edit},
       {"split_silence", probe_split_silence},
       {"split_silence_common", probe_split_silence_common},
       {"split_silence_common_ex", probe_split_silence_common_ex},
+      {"time_stretch_ex", probe_time_stretch_ex},
       {"trim_ex", probe_trim_ex},
       {"trim_silence", probe_trim_silence},
 #if defined(SONARE_WITH_GRAPH)

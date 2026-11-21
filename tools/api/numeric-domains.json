@@ -464,8 +464,8 @@
       "entry": "chirp",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null
@@ -654,8 +654,8 @@
       "entry": "clicks",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null
@@ -944,11 +944,11 @@
       "entry": "decompose_stems",
       "param": "config.n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 4,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "decompose_stems",
@@ -974,11 +974,11 @@
       "entry": "decompose_stems_linked",
       "param": "config.n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 4,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "decompose_stems_linked",
@@ -1361,6 +1361,16 @@
       "stricter": null
     },
     {
+      "entry": "engine_add_parameter",
+      "param": "info.id",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4294967295,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
       "entry": "engine_articulation",
       "param": "channel",
       "kind": "integer",
@@ -1491,6 +1501,16 @@
       "stricter": null
     },
     {
+      "entry": "engine_count_in_end_sample",
+      "param": "start_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
       "entry": "engine_freeze_offline",
       "param": "options.block_size",
       "kind": "integer",
@@ -1526,6 +1546,96 @@
       "kind": "integer",
       "lo": 1,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare",
+      "param": "command_capacity",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 65536,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare",
+      "param": "max_block_size",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1048576,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare",
+      "param": "telemetry_capacity",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16384,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare_with_channels",
+      "param": "command_capacity",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 65536,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare_with_channels",
+      "param": "max_block_size",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1048576,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare_with_channels",
+      "param": "max_channels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prepare_with_channels",
+      "param": "telemetry_capacity",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16384,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prime_offline_parameters",
+      "param": "block_size",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_prime_offline_parameters",
+      "param": "num_channels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
       "stricter": null
@@ -1593,6 +1703,16 @@
     {
       "entry": "engine_render_offline_ex",
       "param": "total_frames",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_seek_sample",
+      "param": "timeline_sample",
       "kind": "integer",
       "lo": 0,
       "hi": null,
@@ -1811,6 +1931,16 @@
       "stricter": null
     },
     {
+      "entry": "engine_set_markers",
+      "param": "markers[].id",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4294967295,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
       "entry": "engine_set_master_strip_eq_band_json",
       "param": "band_index",
       "kind": "integer",
@@ -1965,6 +2095,66 @@
       "param": "config.prefer_model_for_modeled_families",
       "kind": "integer",
       "lo": 0,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_tempo_segments",
+      "param": "segment_count",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_time_signature",
+      "param": "denominator",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_time_signature",
+      "param": "numerator",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_time_signature_segments",
+      "param": "segment_count",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_time_signature_segments",
+      "param": "segments[].denominator",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "engine_set_time_signature_segments",
+      "param": "segments[].numerator",
+      "kind": "integer",
+      "lo": 1,
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
@@ -2134,11 +2324,11 @@
       "entry": "estimate_tuning",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 2,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "extract_notes",
@@ -2174,11 +2364,11 @@
       "entry": "extract_percussive_events",
       "param": "config.n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 4,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "extract_percussive_events",
@@ -2275,7 +2465,7 @@
       "param": "n_fft",
       "kind": "integer",
       "lo": 4,
-      "hi": 2147483647,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
       "stricter": "even"
@@ -2314,11 +2504,11 @@
       "entry": "hpss_ex",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 4,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "hybrid_cqt",
@@ -3004,11 +3194,11 @@
       "entry": "mel_to_audio",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mel_to_audio",
@@ -3054,11 +3244,11 @@
       "entry": "mel_to_audio_checked",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mel_to_audio_checked",
@@ -3104,11 +3294,11 @@
       "entry": "mel_to_audio_checked_ex",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mel_to_audio_checked_ex",
@@ -3154,11 +3344,11 @@
       "entry": "mel_to_audio_ex",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mel_to_audio_ex",
@@ -3484,11 +3674,11 @@
       "entry": "mfcc_to_audio",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio",
@@ -3544,11 +3734,11 @@
       "entry": "mfcc_to_audio_checked",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio_checked",
@@ -3604,11 +3794,11 @@
       "entry": "mfcc_to_audio_checked_ex",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio_checked_ex",
@@ -3664,11 +3854,11 @@
       "entry": "mfcc_to_audio_checked_ex2",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio_checked_ex2",
@@ -3724,11 +3914,11 @@
       "entry": "mfcc_to_audio_ex",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio_ex",
@@ -3784,11 +3974,11 @@
       "entry": "mfcc_to_audio_ex2",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
+      "lo": 4,
       "hi": 8192,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "mfcc_to_audio_ex2",
@@ -5031,6 +5221,16 @@
       "stricter": null
     },
     {
+      "entry": "phase_vocoder",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 524288,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "even"
+    },
+    {
       "entry": "piptrack",
       "param": "hop_length",
       "kind": "integer",
@@ -5044,11 +5244,11 @@
       "entry": "piptrack",
       "param": "n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 2,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "pitch_correct_timevarying",
@@ -5089,6 +5289,16 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null
+    },
+    {
+      "entry": "pitch_shift_ex",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 524288,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "even"
     },
     {
       "entry": "pitch_tuning",
@@ -5177,6 +5387,26 @@
       "lo": 0,
       "hi": 2147483647,
       "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "polyphonic_analyze",
+      "param": "config.max_refine_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "polyphonic_analyze",
+      "param": "config.reattack_ratio",
+      "kind": "real",
+      "lo": 1,
+      "hi": null,
+      "lo_included": false,
       "hi_included": true,
       "stricter": null
     },
@@ -5851,6 +6081,146 @@
       "stricter": null
     },
     {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.channel",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.f0_max_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.f0_min_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.fixed_velocity",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.group",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.max_polyphony",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.min_frame_peak_ratio",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.min_note_division",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 128,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.min_note_ms",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.min_ridge_peak_ratio",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.reattack_ratio",
+      "kind": "real",
+      "lo": 1,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.reference_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.segmentation_threshold_cents",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "project_transcribe_to_clip",
+      "param": "config.velocity_floor_db",
+      "kind": "real",
+      "lo": null,
+      "hi": 0,
+      "lo_included": true,
+      "hi_included": false,
+      "stricter": null
+    },
+    {
       "entry": "pseudo_cqt",
       "param": "bins_per_octave",
       "kind": "integer",
@@ -5964,11 +6334,11 @@
       "entry": "render_percussive_events",
       "param": "config.n_fft",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 4,
+      "hi": 524288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null
+      "stricter": "even"
     },
     {
       "entry": "rms_energy",
@@ -6901,6 +7271,16 @@
       "stricter": null
     },
     {
+      "entry": "time_stretch_ex",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 524288,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "even"
+    },
+    {
       "entry": "time_to_frames",
       "param": "hop_length",
       "kind": "integer",
@@ -6924,8 +7304,8 @@
       "entry": "tone",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null
@@ -6948,6 +7328,146 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.channel",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.f0_max_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.f0_min_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.fixed_velocity",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.group",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.max_polyphony",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.min_frame_peak_ratio",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.min_note_division",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 128,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.min_note_ms",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.min_ridge_peak_ratio",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.reattack_ratio",
+      "kind": "real",
+      "lo": 1,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.reference_hz",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.segmentation_threshold_cents",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null
+    },
+    {
+      "entry": "transcribe",
+      "param": "config.velocity_floor_db",
+      "kind": "real",
+      "lo": null,
+      "hi": 0,
+      "lo_included": true,
+      "hi_included": false,
       "stricter": null
     },
     {

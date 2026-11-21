@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "automation/parameter.h"
+#include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "engine/realtime_engine.h"
 #include "rt/command.h"
@@ -132,11 +133,10 @@ SonareError check_prepare_limits(double sample_rate, int max_block_size, size_t 
       util::check::refuse("sample_rate", util::refusal::integer_range_predicate(
                                              kMinAudioSampleRate, kMaxAudioSampleRate));
     }
-    util::check::integer_in_range(max_block_size, 1, kMaxRealtimeBlockSize, "max_block_size");
-    util::check::integer_in_range(static_cast<long long>(command_capacity), 0,
-                                  SONARE_ENGINE_MAX_COMMAND_CAPACITY, "command_capacity");
-    util::check::integer_in_range(static_cast<long long>(telemetry_capacity), 0,
-                                  SONARE_ENGINE_MAX_TELEMETRY_CAPACITY, "telemetry_capacity");
+    util::check::integer_within(max_block_size, kEngineMaxBlockSizeDomain, "max_block_size");
+    util::check::integer_within(command_capacity, kEngineCommandCapacityDomain, "command_capacity");
+    util::check::integer_within(telemetry_capacity, kEngineTelemetryCapacityDomain,
+                                "telemetry_capacity");
   });
 }
 
@@ -202,9 +202,7 @@ SonareError sonare_engine_prepare_with_channels(SonareEngine* engine, double sam
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(
-            max_channels, 1, static_cast<long long>(engine::RealtimeEngine::kMaxAudioChannels),
-            "max_channels");
+        util::check::integer_within(max_channels, kEngineMaxChannelsDomain, "max_channels");
       });
       err != SONARE_OK) {
     return err;
@@ -239,8 +237,10 @@ SonareError sonare_engine_seek_sample(SonareEngine* engine, int64_t timeline_sam
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   // A negative position is refused, not clamped onto the timeline start.
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least<int64_t>(timeline_sample, 0, "timeline_sample"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(timeline_sample, kEngineTimelineSampleDomain,
+                                    "timeline_sample");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -326,8 +326,9 @@ SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(numerator, 1, "numerator");
-        util::check::integer_at_least(denominator, 1, "denominator");
+        util::check::integer_within(numerator, kEngineTimeSignatureNumeratorDomain, "numerator");
+        util::check::integer_within(denominator, kEngineTimeSignatureDenominatorDomain,
+                                    "denominator");
       });
       err != SONARE_OK) {
     return err;
@@ -345,8 +346,7 @@ SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(segments, segment_count);
-  util::check::integer_in_range(static_cast<long long>(segment_count), 0,
-                                static_cast<long long>(kMaxBufferSize), "segment_count");
+  util::check::integer_within(segment_count, kEngineSegmentCountDomain, "segment_count");
   std::vector<transport::TempoSegment> out;
   // The staging vector is sized from a caller-supplied count, so its allocation
   // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
@@ -378,8 +378,7 @@ SonareError sonare_engine_set_time_signature_segments(
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(segments, segment_count);
-  util::check::integer_in_range(static_cast<long long>(segment_count), 0,
-                                static_cast<long long>(kMaxBufferSize), "segment_count");
+  util::check::integer_within(segment_count, kEngineSegmentCountDomain, "segment_count");
   std::vector<transport::TimeSignatureSegment> out;
   // Same reason as sonare_engine_set_tempo_segments: a caller-sized allocation
   // must not throw outside the try.
@@ -389,8 +388,10 @@ SonareError sonare_engine_set_time_signature_segments(
     const std::string prefix = "segments[" + std::to_string(i) + "].";
     util::check::in_range(in.start_ppq, 0.0, transport::kMaxPublicPpq,
                           (prefix + "start_ppq").c_str());
-    util::check::integer_at_least(in.numerator, 1, (prefix + "numerator").c_str());
-    util::check::integer_at_least(in.denominator, 1, (prefix + "denominator").c_str());
+    util::check::integer_within(in.numerator, kEngineTimeSignatureNumeratorDomain,
+                                (prefix + "numerator").c_str());
+    util::check::integer_within(in.denominator, kEngineTimeSignatureDenominatorDomain,
+                                (prefix + "denominator").c_str());
     transport::TimeSignatureSegment seg;
     seg.start_ppq = in.start_ppq;
     seg.time_sig.numerator = in.numerator;
@@ -446,7 +447,7 @@ SonareError sonare_engine_add_parameter(SonareEngine* engine, const SonareParame
         // matching the automation-lane path and the other surfaces.
         util::check::one_of(info->default_curve, std::array<int, 4>{0, 1, 2, 3},
                             "info.default_curve");
-        util::check::integer_in_range(info->id, 1, std::numeric_limits<uint32_t>::max(), "info.id");
+        util::check::integer_within(info->id, kEngineParameterIdDomain, "info.id");
         if (sonare::engine::RealtimeEngine::parameter_target_reserved(info->id)) {
           util::check::refuse("info.id", "must not be a reserved engine parameter id");
         }
@@ -620,7 +621,7 @@ SonareError sonare_engine_set_markers(SonareEngine* engine, const SonareEngineMa
   staged_ids.reserve(marker_count);
   for (size_t i = 0; i < marker_count; ++i) {
     const std::string prefix = "markers[" + std::to_string(i) + "].";
-    util::check::integer_at_least(markers[i].id, 1, (prefix + "id").c_str());
+    util::check::integer_within(markers[i].id, kEngineMarkerIdDomain, (prefix + "id").c_str());
     if (std::find(staged_ids.begin(), staged_ids.end(), markers[i].id) != staged_ids.end()) {
       util::check::refuse((prefix + "id").c_str(), "must be unique across markers");
     }
@@ -760,8 +761,9 @@ SonareError sonare_engine_count_in_end_sample(SonareEngine* engine, int64_t star
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_sample);
   SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least<int64_t>(start_sample, 0, "start_sample"); });
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_within(start_sample, kEngineCountInStartDomain, "start_sample");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -909,8 +911,8 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(num_channels, 1, "num_channels");
-        util::check::integer_at_least(block_size, 0, "block_size");
+        util::check::integer_within(num_channels, kEngineRenderChannelsDomain, "num_channels");
+        util::check::integer_within(block_size, kEngineRenderBlockSizeDomain, "block_size");
       });
       err != SONARE_OK) {
     return err;

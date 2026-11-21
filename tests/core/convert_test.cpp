@@ -337,7 +337,7 @@ TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
   const float nan_value = std::numeric_limits<float>::quiet_NaN();
 
   CHECK(refusal_message([] { (void)tone(440.0f, 0, 1.0f); }) ==
-        "sr must be an integer in [1, 2147483647]");
+        "sr must be an integer in [8000, 384000]");
   CHECK(refusal_message([&] { (void)tone(440.0f, 22050, nan_value); }) ==
         "duration must be finite and at least 0");
   CHECK(refusal_message([] { (void)tone(440.0f, 22050, -1.0f); }) ==
@@ -346,7 +346,7 @@ TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
         "duration * sr must be at most 500000000");
 
   CHECK(refusal_message([] { (void)chirp(100.0f, 200.0f, -1, 1.0f); }) ==
-        "sr must be an integer in [1, 2147483647]");
+        "sr must be an integer in [8000, 384000]");
   CHECK(refusal_message([&] { (void)chirp(100.0f, 200.0f, 22050, nan_value); }) ==
         "duration must be finite and at least 0");
   CHECK(refusal_message([] { (void)chirp(0.0f, 200.0f, 22050, 1.0f, false); }) ==
@@ -361,7 +361,7 @@ TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
 
   const std::vector<float> times = {0.5f};
   CHECK(refusal_message([&] { (void)clicks(times, 0); }) ==
-        "sr must be an integer in [1, 2147483647]");
+        "sr must be an integer in [8000, 384000]");
   CHECK(refusal_message([&] { (void)clicks(times, 22050, 0, 1000.0f, 0.0f); }) ==
         "click_duration must be finite and greater than 0");
   CHECK(refusal_message([&] { (void)clicks(times, 22050, 0, 0.0f); }) ==

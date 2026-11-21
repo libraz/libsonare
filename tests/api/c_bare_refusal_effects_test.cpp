@@ -32,7 +32,7 @@ TEST_CASE("hpss_ex and trim_ex refuse a non-positive size by name", "[c_api][eff
   SonareHpssResult result{};
   CHECK(sonare_hpss_ex(samples.data(), samples.size(), kRate, 31, 31, 0, 0, 1, 0, &result,
                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "n_fft must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "n_fft must be an even integer in [4, 524288]");
 
   float* out = nullptr;
   size_t out_length = 0;

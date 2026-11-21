@@ -45,12 +45,18 @@ SonareError validate_inverse_input(size_t input_length, int rows, int n_frames,
   });
 }
 
-// Refuses the mel / mfcc inverse dimensions every entry reads before the core runs.
-SonareError validate_mel_inverse(int n_mels, int n_frames, int n_fft, int sample_rate) {
+// Refuses the mel / mfcc inverse dimensions every entry reads before the core runs; an entry that
+// resynthesizes audio also needs an FFT size that overlap-adds.
+SonareError validate_mel_inverse(int n_mels, int n_frames, int n_fft, int sample_rate,
+                                 bool resynthesis = false) {
   return run_validation([&] {
     check::integer_within(n_mels, sonare::kInverseMelBandsDomain, "n_mels");
     check::integer_within(n_frames, sonare::kMelToStftFramesDomain, "n_frames");
-    check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
+    if (resynthesis) {
+      check::even_within(n_fft, sonare::kMelToAudioFftSizeDomain, "n_fft");
+    } else {
+      check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
+    }
     check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
   });
 }
@@ -198,7 +204,7 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
-  if (const SonareError err = validate_mel_inverse(n_mels, n_frames, n_fft, sample_rate);
+  if (const SonareError err = validate_mel_inverse(n_mels, n_frames, n_fft, sample_rate, true);
       err != SONARE_OK) {
     return err;
   }
@@ -295,7 +301,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (const SonareError err = run_validation([&] {
-        check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
+        check::even_within(n_fft, sonare::kMelToAudioFftSizeDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
         check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
       });

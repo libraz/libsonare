@@ -31,9 +31,6 @@ inline constexpr util::check::NumericDomain kDecomposeIterDomain =
 /// @brief What the iteration count of the stem separation accepts.
 inline constexpr util::check::NumericDomain kDecomposeStemsIterDomain =
     util::check::integer_domain_of<int>(1);
-/// @brief What the stem separation's FFT size accepts.
-inline constexpr util::check::NumericDomain kDecomposeStemsNFftDomain =
-    util::check::integer_domain_of<int>(1);
 /// @brief What the stem separation's hop length accepts (0 takes a quarter of n_fft).
 inline constexpr util::check::NumericDomain kDecomposeStemsHopLengthDomain =
     util::check::integer_domain_of<int>(0);

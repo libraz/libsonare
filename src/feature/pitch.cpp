@@ -702,8 +702,8 @@ float midi_to_freq(float midi) { return midi_to_hz(midi); }
 PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmin, float fmax,
                         float threshold) {
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
-  util::check::integer_within<int>(n_fft, kPitchCountDomain, "n_fft");
-  util::check::integer_within<int>(hop_length, kPitchCountDomain, "hop_length");
+  util::check::even_within(n_fft, kStftNFftDomain, "n_fft");
+  util::check::integer_within<int>(hop_length, kStftHopDomain, "hop_length");
   util::check::greater_than(fmin, 0.0, "fmin");
   if (!(numeric::finite(fmax) && fmax > fmin)) {
     util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");

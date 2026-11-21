@@ -12,8 +12,8 @@
 
 namespace sonare {
 
-/// @brief The positive counts of the pitch functions (frame_length, n_fft, hop_length,
-///        bins_per_octave).
+/// @brief The positive counts of the pitch functions (frame_length, hop_length,
+///        bins_per_octave); piptrack's STFT takes the STFT domains.
 inline constexpr util::check::NumericDomain kPitchCountDomain =
     util::check::integer_domain_of<int>(1);
 

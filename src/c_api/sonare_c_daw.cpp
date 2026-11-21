@@ -30,6 +30,7 @@
 
 #include "c_api/daw_config_domains.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
 // Ungated: the percussive event model depends only on HPSS and the onset
 // analyzer, both of which are compiled in every configuration.
 #include "editing/event_model/event_extractor.h"
@@ -76,7 +77,7 @@ SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
                                           int32_t kernel_harmonic, int32_t kernel_percussive,
                                           editing::event_model::PercussiveSeparationConfig& out) {
   if (const SonareError err = run_validation([&] {
-        util::check::integer_within(n_fft, kPercussiveNFftDomain, "config.n_fft");
+        util::check::even_within(n_fft, sonare::kColaNFftDomain, "config.n_fft");
         check_stft_hop(hop_length, "config.hop_length");
         util::check::integer_within(kernel_harmonic, kPercussiveHpssKernelDomain,
                                     "config.hpss_kernel_harmonic");

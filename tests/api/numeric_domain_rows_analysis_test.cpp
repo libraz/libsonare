@@ -1043,6 +1043,8 @@ SonareError probe_polyphonic_analyze(const std::string& param, double value) {
   if (is_param(param, "config.n_fft")) config.n_fft = static_cast<int32_t>(value);
   if (is_param(param, "config.hop_length")) config.hop_length = static_cast<int32_t>(value);
   if (is_param(param, "config.win_length")) config.win_length = static_cast<int32_t>(value);
+  if (is_param(param, "config.max_refine_hz")) config.max_refine_hz = static_cast<float>(value);
+  if (is_param(param, "config.reattack_ratio")) config.reattack_ratio = static_cast<float>(value);
   SonarePolyphonicAnalysis* out = nullptr;
   const SonareError err =
       sonare_polyphonic_analyze(pcm(), pcm_length(), kAnalysisRate, &config, &out);

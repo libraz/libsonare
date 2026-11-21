@@ -455,7 +455,7 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
 
 void validate_config(const DecomposeStemsConfig& config) {
   util::check::integer_within(config.n_components, kDecomposeNComponentsDomain, "n_components");
-  util::check::integer_within(config.n_fft, kDecomposeStemsNFftDomain, "n_fft");
+  util::check::even_within(config.n_fft, kColaNFftDomain, "n_fft");
   // 0 takes a quarter of n_fft.
   util::check::integer_within(config.hop_length, kDecomposeStemsHopLengthDomain, "hop_length");
   util::check::integer_within(config.n_iter, kDecomposeStemsIterDomain, "n_iter");

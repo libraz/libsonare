@@ -102,9 +102,10 @@ void validate_config(const StftConfig& config);
 /// @brief What StftConfig::n_fft accepts: even, since the real FFT has no odd size.
 inline constexpr util::check::NumericDomain kStftNFftDomain =
     util::check::integer_domain(2, kMaxStftNFft);
-/// @brief What n_fft of a COLA geometry accepts: even, at least 4.
+/// @brief What n_fft of a COLA geometry accepts: even, at least 4, and no larger than the STFT
+///        every resynthesis runs through.
 inline constexpr util::check::NumericDomain kColaNFftDomain =
-    util::check::integer_domain(4, std::numeric_limits<int>::max());
+    util::check::integer_domain(4, kMaxStftNFft);
 /// @brief What the hop length of an STFT or COLA geometry accepts.
 inline constexpr util::check::NumericDomain kStftHopDomain = util::check::integer_domain_of<int>(1);
 /// @brief What StftConfig::win_length accepts; 0 selects n_fft.

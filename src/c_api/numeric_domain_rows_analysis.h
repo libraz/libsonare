@@ -16,6 +16,7 @@
 #include "analysis/timbre_analyzer.h"
 #include "c_api/feature_input_domains.h"
 #include "c_api/numeric_domain_row.h"
+#include "c_api/transcribe_input_domains.h"
 #include "core/convert.h"
 #include "core/spectrum.h"
 #include "core/synthesis.h"
@@ -149,8 +150,8 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"downmix", "num_channels", sonare_c_detail::kDownmixChannelCountDomain, nullptr},
     {"estimate_meter_json", "options.denominator", sonare::kMeterDenominatorDomain, "power_of_two"},
     {"estimate_tuning", "bins_per_octave", sonare::kPitchCountDomain, nullptr},
-    {"estimate_tuning", "hop_length", sonare::kPitchCountDomain, nullptr},
-    {"estimate_tuning", "n_fft", sonare::kPitchCountDomain, nullptr},
+    {"estimate_tuning", "hop_length", sonare::kStftHopDomain, nullptr},
+    {"estimate_tuning", "n_fft", sonare::kStftNFftDomain, "even"},
     {"fourier_tempogram", "hop_length", sonare::kRhythmCountDomain, nullptr},
     {"fourier_tempogram", "win_length", sonare::kTempogramWinLengthDomain, nullptr},
     {"frames_to_time", "hop_length", sonare::kFrameTimeHopDomain, nullptr},
@@ -188,8 +189,8 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"onset_strength_multi", "n_bands", sonare::kOnsetCountDomain, nullptr},
     {"onset_strength_multi", "n_fft", sonare::kStftNFftDomain, "even"},
     {"onset_strength_multi", "n_mels", sonare::kMelBandsDomain, nullptr},
-    {"piptrack", "hop_length", sonare::kPitchCountDomain, nullptr},
-    {"piptrack", "n_fft", sonare::kPitchCountDomain, nullptr},
+    {"piptrack", "hop_length", sonare::kStftHopDomain, nullptr},
+    {"piptrack", "n_fft", sonare::kStftNFftDomain, "even"},
     {"pitch_pyin", "frame_length", sonare::kPitchCountDomain, nullptr},
     {"pitch_pyin", "hop_length", sonare::kPitchCountDomain, nullptr},
     {"pitch_tuning", "bins_per_octave", sonare::kPitchCountDomain, nullptr},
@@ -201,6 +202,8 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"poly_features", "hop_length", sonare::kStftHopDomain, nullptr},
     {"poly_features", "n_fft", sonare::kStftNFftDomain, "even"},
     {"poly_features", "order", sonare::kSpectralOrderDomain, nullptr},
+    {"polyphonic_analyze", "config.max_refine_hz", kPolyphonicMaxRefineHzDomain, nullptr},
+    {"polyphonic_analyze", "config.reattack_ratio", kReattackRatioDomain, nullptr},
     {"polyphonic_analyze", "config.win_length", sonare::kColaWinLengthDomain, nullptr},
     {"project_analyze_tempo_with_options", "options.tempo_update_interval_beats",
      sonare::kMusicCountDomain, nullptr},

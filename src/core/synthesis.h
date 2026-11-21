@@ -12,9 +12,9 @@
 
 namespace sonare {
 
-/// @brief What the sample rate of tone, chirp and clicks accepts.
-inline constexpr util::check::NumericDomain kSynthesisSampleRateDomain =
-    util::check::integer_domain_of<int>(1);
+/// @brief What the sample rate of tone, chirp and clicks accepts: they produce audio, so the
+///        audio sample-rate domain.
+inline constexpr util::check::NumericDomain kSynthesisSampleRateDomain = kAudioSampleRateDomain;
 /// @brief What the output length of clicks accepts, in samples; 0 sizes it to the last click.
 inline constexpr util::check::NumericDomain kClicksLengthDomain =
     util::check::integer_domain(0, static_cast<long long>(resource::kMaxOfflineAudioSamples));

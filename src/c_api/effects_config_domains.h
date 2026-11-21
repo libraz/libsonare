@@ -11,9 +11,6 @@
 
 namespace sonare_c_detail {
 
-/// @brief What the HPSS FFT size accepts.
-inline constexpr sonare::util::check::NumericDomain kHpssNFftDomain =
-    sonare::util::check::integer_domain_of<int>(1);
 /// @brief What the biquad filter's type accepts.
 inline constexpr sonare::util::check::NumericDomain kBiquadFilterTypeDomain =
     sonare::util::check::integer_domain(SONARE_BIQUAD_FILTER_HIGH_PASS, SONARE_BIQUAD_FILTER_NOTCH);

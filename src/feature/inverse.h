@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
@@ -22,6 +23,12 @@ inline constexpr util::check::NumericDomain kInverseSampleRateDomain =
 /// @brief The FFT sizes @ref mel_to_stft inverts: [1, 8192].
 inline constexpr util::check::NumericDomain kMelToStftFftSizeDomain =
     util::check::integer_domain(1, 8192);
+
+/// @brief The FFT sizes @ref mel_to_audio resynthesizes from: even, at least the overlap-add
+///        floor of @ref kColaNFftDomain and at most the @ref mel_to_stft ceiling.
+inline constexpr util::check::NumericDomain kMelToAudioFftSizeDomain =
+    util::check::integer_domain(static_cast<long long>(*kColaNFftDomain.lo),
+                                static_cast<long long>(*kMelToStftFftSizeDomain.hi));
 
 /// @brief The frame counts @ref mel_to_stft inverts: [1, @ref kMaxInverseFrames].
 inline constexpr util::check::NumericDomain kMelToStftFramesDomain =
