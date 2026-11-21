@@ -122,14 +122,15 @@ def test_a_free_function_does_not_credit_a_handle_op() -> None:
 def test_an_alias_may_still_name_a_free_function() -> None:
     """Aliases keep free-function reach; the blanket free credit is what went.
 
-    Six live entries resolve only to a free function (the voice-changer preset
-    helpers), and folding an op onto one deliberately is what an entry is for.
+    Live entries resolve only to a free function (split_silence_common to its
+    report-returning sibling), and folding an op onto one deliberately is what an
+    entry is for.
     """
     rep = _report(
-        _c("realtime_voice_changer_config_default"),
-        _py(frees=["realtime_voice_changer_preset_config"]),
+        _c("split_silence_common"),
+        _py(frees=["split_silence_common_with_report"]),
     )
-    assert ("realtime_voice_changer_config_default", "python") not in _active(rep), _active(rep)
+    assert ("split_silence_common", "python") not in _active(rep), _active(rep)
 
 
 def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
@@ -330,15 +331,7 @@ def test_vocal_threadlocal_error_helper_is_explicitly_allowlisted() -> None:
     assert ("project_apply_vocal_edit", "python") in _active(unrelated), _active(unrelated)
 
 
-_ADDITIVE_DSP_ALIASES = (
-    ("hpss_ex", "hpss"),
-    ("time_stretch_ex", "time_stretch"),
-    ("pitch_shift_ex", "pitch_shift"),
-    ("normalize_rms", "normalize"),
-    ("trim_ex", "trim"),
-    ("nnls_chroma_ex2", "nnls_chroma"),
-    ("analyze_impulse_response_ex", "analyze_impulse_response"),
-)
+_ADDITIVE_DSP_ALIASES = (("normalize_rms", "normalize"),)
 
 
 def test_additive_dsp_aliases_are_explicit_and_required() -> None:
@@ -349,15 +342,6 @@ def test_additive_dsp_aliases_are_explicit_and_required() -> None:
 
         missing = _report(_c(c_key), _py())
         assert (c_key, "python") in _active(missing), _active(missing)
-
-
-def test_typed_project_automation_overload_is_covered_by_base_method() -> None:
-    """An optional typed descriptor does not require a second facade spelling."""
-    rep = _report(
-        _c("project_add_automation_lane_ex"),
-        _py(methods={"add_automation_lane": "Project"}),
-    )
-    assert ("project_add_automation_lane_ex", "python") not in _active(rep), _active(rep)
 
 
 def test_alias_does_not_match_unrelated_member() -> None:

@@ -312,7 +312,7 @@ describe('refusal spelling', () => {
     const unaccounted = rows
       .filter((r) => !(`${r.entry}.${r.subject}` in UNDRIVEN) && !(r.entry in DRIVERS))
       .map((r) => `${r.entry}.${r.subject}`);
-    // eslint-disable-next-line no-console
+    // biome-ignore lint/suspicious/noConsole: the sweep's driven/undriven totals are its report.
     console.log(`refusal spelling sweep: driven=${driven} undriven=${undriven}`);
     expect(stale).toEqual([]);
     expect(badReason).toEqual([]);

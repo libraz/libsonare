@@ -1543,7 +1543,6 @@ RULES: list[Rule] = [
                     "node:RealtimeVoiceChangerOptions.numChannels",
                     "node:StreamingMasteringChainConfig.numChannels",
                     "node:RealtimeVoiceChanger.processInterleavedInto(numChannels)",
-                    "node:RealtimeVoiceChanger.processInterleavedWithCarrierInto(numChannels)",
                     "wasm:RealtimeVoiceChangerInterleavedBuffer.numChannels",
                     "wasm:RealtimeVoiceChangerOptions.numChannels",
                     "wasm:SonareRealtimeVoiceChangerWorkletProcessorOptions.numChannels",
@@ -1551,7 +1550,6 @@ RULES: list[Rule] = [
                     "wasm:RealtimeVoiceChanger.createRealtimeInterleavedBuffer(numChannels)",
                     "wasm:RealtimeVoiceChanger.createRealtimePlanarBuffer(numChannels)",
                     "wasm:RealtimeVoiceChanger.processInterleavedInto(numChannels)",
-                    "wasm:RealtimeVoiceChanger.processInterleavedWithCarrierInto(numChannels)",
                 )
             },
         },

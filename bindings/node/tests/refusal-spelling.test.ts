@@ -295,6 +295,7 @@ describe('refusal spelling sweep', () => {
   );
 
   it('accounts for every row', () => {
+    // biome-ignore lint/suspicious/noConsole: the sweep's driven/undriven totals are its report.
     console.log(`refusal spelling sweep: driven=${counts.driven} undriven=${counts.undriven}`);
     const keys = new Set(ROWS.map(key));
     const stale = Object.keys(UNDRIVEN).filter((k) => !keys.has(k));
