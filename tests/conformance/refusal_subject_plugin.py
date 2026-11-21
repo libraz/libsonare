@@ -5,7 +5,10 @@ leading segment of each subject (``options`` in ``options.total_frames``,
 ``ranges`` in ``ranges[2].start``) must be a parameter the entry's header
 declaration carries, or no surface can respell it to what its caller wrote. A
 path inside a JSON document parameter roots at the parameter's stem
-(``config.loudness.targetLufs`` under ``config_json``).
+(``config.loudness.targetLufs`` under ``config_json``). A loader refusing the
+content of a ``document`` it was handed (InvalidFormat) names the path inside
+that document, rooted at the document's own top-level keys, so any root is
+accepted for those refusals.
 
 The plugin wraps the binding's single refusal translation point, records each
 (entry, subject) the suite reaches, and fails the session on a subject whose root
@@ -26,7 +29,11 @@ ROOT = Path(__file__).resolve().parents[2]
 _SUFFIXES = ("_with_progress", "_with_options", "_checked", "_ex2", "_ex", "_v2")
 _ROOT_SEGMENT = re.compile(r"[A-Za-z_]\w*")
 
+_INVALID_FORMAT = 2
+_DOCUMENT_PARAMETER = "document"
+
 _seen: dict[tuple[str, str], int] = defaultdict(int)
+_content: set[tuple[str, str]] = set()
 
 
 def entry_key(name: str) -> str:
@@ -67,11 +74,19 @@ def document_roots(names: set[str]) -> set[str]:
 
 
 def misnamed(
-    seen: dict[tuple[str, str], int], params: dict[str, set[str]]
+    seen: dict[tuple[str, str], int],
+    params: dict[str, set[str]],
+    content: set[tuple[str, str]] | frozenset[tuple[str, str]] = frozenset(),
 ) -> list[tuple[str, str]]:
-    """The recorded (entry, subject) pairs whose subject root is no parameter of the entry."""
+    """The recorded (entry, subject) pairs whose subject root is no parameter of the entry.
+
+    ``content`` holds the pairs refused as InvalidFormat; one whose entry takes a
+    ``document`` names a path inside that document and is not checked.
+    """
     found = []
     for entry, subject in sorted(seen):
+        if (entry, subject) in content and _DOCUMENT_PARAMETER in params.get(entry, set()):
+            continue
         head = _ROOT_SEGMENT.match(subject)
         if head is None or head.group(0) not in params.get(entry, set()):
             found.append((entry, subject))
@@ -85,9 +100,13 @@ def pytest_configure(config) -> None:
 
     def recording(lib, root, respelled):
         entry = (lib.sonare_last_refusal_entry() or b"").decode("utf-8")
+        content = lib.sonare_last_error_code() == _INVALID_FORMAT
         for index in range(lib.sonare_last_refusal_subject_count()):
             raw = lib.sonare_last_refusal_subject(_runtime._to_c_size_t(index, "index"))
-            _seen[(entry, (raw or b"").decode("utf-8"))] += 1
+            pair = (entry, (raw or b"").decode("utf-8"))
+            _seen[pair] += 1
+            if content:
+                _content.add(pair)
         return original(lib, root, respelled)
 
     _runtime._render_as_given = recording
@@ -95,7 +114,7 @@ def pytest_configure(config) -> None:
 
 def pytest_sessionfinish(session, exitstatus) -> None:
     params = header_parameters()
-    bad = misnamed(_seen, params)
+    bad = misnamed(_seen, params, _content)
     entries = {entry for entry, _ in _seen}
     reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     lines = [

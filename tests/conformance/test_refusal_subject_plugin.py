@@ -36,6 +36,15 @@ class MisnamedTest(unittest.TestCase):
             plugin.document_roots({"config_json", "out_json", "samples"}), {"config", "out"}
         )
 
+    def test_a_document_content_refusal_roots_at_the_document_keys(self) -> None:
+        params = {"load": {"document", "json_out"}, "apply": {"params"}}
+        seen = {("load", "params.ratio"): 1, ("apply", "version"): 1}
+        content = {("load", "params.ratio"), ("apply", "version")}
+        self.assertEqual(plugin.misnamed(seen, params, content), [("apply", "version")])
+        self.assertEqual(
+            plugin.misnamed(seen, params), [("apply", "version"), ("load", "params.ratio")]
+        )
+
     def test_the_tree_declarations_are_read(self) -> None:
         params = plugin.header_parameters()
         self.assertGreater(len(params), 500)
