@@ -297,7 +297,7 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
 }
 
 void validate_config(const StftConfig& config) {
-  util::check::integer_within<int>(config.n_fft, kStftNFftDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(config.hop_length, kStftHopDomain, "hop_length");
   // 0 is the documented "use nFft" sentinel; a negative value would take the
   // same branch and silently read as that default.

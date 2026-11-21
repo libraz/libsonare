@@ -515,7 +515,7 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        check::integer_within(n_fft, sonare::kStftNFftDomain, "n_fft");
+        check::even_within(n_fft, sonare::kStftNFftDomain, "n_fft");
         check::integer_within(hop_length, sonare::kStftHopDomain, "hop_length");
         check::at_least(ref_power, 0.0, "ref_power");
         check::integer_in_range(fill_nan, 0, 1, "fill_nan");

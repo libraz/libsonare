@@ -698,7 +698,7 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
             with pytest.raises(SonareError):
                 stft(_sine(1024), SR, n_fft=3)
             stale = _get_lib().sonare_last_error_message().decode("utf-8")
-            assert "FFT size" in stale, "the control-thread call must leave a detail behind"
+            assert "n_fft" in stale, "the control-thread call must leave a detail behind"
 
             block = np.zeros(128, dtype=np.float32)
             with pytest.raises(SonareValueError) as exc_info:
@@ -706,7 +706,7 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
                 changer.process_planar([block, block.copy()])
         assert exc_info.value.code == 4
         assert str(exc_info.value) == "RealtimeVoiceChanger.process_planar: Invalid parameter"
-        assert "FFT size" not in str(exc_info.value)
+        assert "n_fft" not in str(exc_info.value)
 
     def test_the_return_code_mapping_has_a_single_definition(self):
         # Two byte-identical copies of `_check` used to exist, so a fix to the

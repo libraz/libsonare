@@ -150,6 +150,17 @@ TEST_CASE("validate_cola_geometry rejects geometries outside the half-overlap co
   }
 }
 
+TEST_CASE("validate_config refuses an odd or too small n_fft by name", "[spectrum][refusal]") {
+  StftConfig config;
+  config.n_fft = 2049;
+  REQUIRE_THROWS_WITH(validate_config(config), "n_fft must be an even integer in [2, 524288]");
+  config.n_fft = 1;
+  REQUIRE_THROWS_WITH(validate_config(config), "n_fft must be an even integer in [2, 524288]");
+  config.n_fft = 2;
+  config.hop_length = 1;
+  REQUIRE_NOTHROW(validate_config(config));
+}
+
 TEST_CASE("validate_config leaves analysis-only STFTs free of the overlap rule", "[spectrum]") {
   // Nothing is reconstructed from an analysis STFT, so a sparse hop is a valid
   // request there and must keep reaching Spectrogram::compute.

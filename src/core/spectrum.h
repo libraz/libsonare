@@ -99,9 +99,9 @@ std::vector<float> build_padded_window(WindowType window, int win_length, int n_
 ///         as OutOfMemory, which names nothing the caller passed.
 void validate_config(const StftConfig& config);
 
-/// @brief What StftConfig::n_fft accepts.
+/// @brief What StftConfig::n_fft accepts: even, since the real FFT has no odd size.
 inline constexpr util::check::NumericDomain kStftNFftDomain =
-    util::check::integer_domain(1, kMaxStftNFft);
+    util::check::integer_domain(2, kMaxStftNFft);
 /// @brief What n_fft of a COLA geometry accepts: even, at least 4.
 inline constexpr util::check::NumericDomain kColaNFftDomain =
     util::check::integer_domain(4, std::numeric_limits<int>::max());
