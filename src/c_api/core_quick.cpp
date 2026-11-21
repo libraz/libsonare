@@ -355,36 +355,8 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
       });
 }
 
-// Full quick analysis. Although SonareAnalysisResult is a flat C struct, it
-// still exposes meter/beat data, so this intentionally pays the full quick
-// analysis cost. Use sonare_detect_bpm/key/beats for cheaper single-purpose
-// queries.
-
-SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
-                           SonareAnalysisResult* out) {
-  SONARE_C_API_ENTRY;
-
-  // Zero the whole struct up front so a rejected input never leaves an inconsistent
-  // (null beat_times, garbage beat_count) pair (matches sonare_analyze_melody).
-  SONARE_C_ZERO_OUTS(out);
-  if (const SonareError err =
-          validate_audio_params("analyze", "samples", samples, length, sample_rate);
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  return run_prevalidated_offline(
-      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        AnalysisResult result = quick::analyze(audio.data(), audio.size(), audio.sample_rate());
-
-        return fill_analysis_result(result, out);
-      });
-}
-
 // Full analysis serialized to a camelCase JSON object (chords, sections,
-// timbre, dynamics, rhythm, melody, form) — the rich counterpart to
-// sonare_analyze, which only fills the flat bpm/key/beats struct. The schema is
+// timbre, dynamics, rhythm, melody, form). The schema is
 // the single source of truth in analysis_result_to_json and is mirrored by the
 // WASM native object. *out_json is heap-allocated; free with sonare_free_string.
 static_assert(SONARE_MAX_METER_CANDIDATE_NUMERATORS == sonare::kMaxMeterCandidateNumerators,

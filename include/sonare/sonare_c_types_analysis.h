@@ -190,7 +190,7 @@ typedef struct {
 typedef struct {
   float bpm;  ///< Estimated tempo in BPM.
   /** Winning tempo cluster's vote share within [bpm_min, bpm_max], searched at the input rate;
-     can differ from sonare_analyze's bpm_confidence (60-200 BPM at 22050 Hz) on the same input. */
+     differs from sonare_analyze_json's tempo confidence, which searches 60-200 BPM at 22050 Hz. */
   float confidence;
   /** Chosen tempo first (candidates[0].bpm == bpm), then other bins by descending vote share. */
   SonareBpmCandidate* candidates;
@@ -903,15 +903,6 @@ static_assert(sizeof(SonareKeyCandidate) == sizeof(SonareKey) + sizeof(float),
               "SonareKeyCandidate layout changed");
 static_assert(sizeof(SonareTimeSignature) == 2u * sizeof(int) + sizeof(float),
               "SonareTimeSignature layout changed");
-static_assert(offsetof(SonareAnalysisResult, beat_times) ==
-                  sizeof(float) + sizeof(float) + sizeof(SonareKey) + sizeof(SonareTimeSignature),
-              "SonareAnalysisResult scalar prefix layout changed");
-static_assert(offsetof(SonareAnalysisResult, beat_count) ==
-                  offsetof(SonareAnalysisResult, beat_times) + sizeof(float*),
-              "SonareAnalysisResult tail layout changed");
-static_assert(offsetof(SonareAnalysisResult, bpm_candidates) ==
-                  offsetof(SonareAnalysisResult, beat_count) + sizeof(size_t),
-              "SonareAnalysisResult candidate layout changed");
 
 static_assert(SONARE_SYNTH_ENGINE_SINGING + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "SonareSynthEngineMode count changed");

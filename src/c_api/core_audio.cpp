@@ -324,21 +324,3 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
   return copy_vector(onsets, out_times, out_count);
   SONARE_C_CATCH
 }
-
-SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out) {
-  SONARE_C_API_ENTRY;
-
-  // Zero the whole struct up front so a rejected input never leaves an
-  // inconsistent (null beat_times, garbage beat_count) pair (matches
-  // sonare_analyze_melody).
-  SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL(audio);
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  SONARE_C_TRY
-  AnalysisResult result =
-      quick::analyze(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
-
-  return fill_analysis_result(result, out);
-  SONARE_C_CATCH
-}

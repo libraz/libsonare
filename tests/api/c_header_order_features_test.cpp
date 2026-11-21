@@ -184,11 +184,6 @@ TEST_CASE("quick entries name the audio buffer before out", "[c_api][header_orde
     CHECK(times == nullptr);
     CHECK(count == 0);
   }
-
-  SECTION("analyze") {
-    REQUIRE(sonare_analyze(nullptr, 0, 22050, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "samples must be a non-empty buffer");
-  }
 }
 
 TEST_CASE("polyphony entries name the analysis before the outputs", "[c_api][header_order]") {

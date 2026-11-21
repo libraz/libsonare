@@ -211,8 +211,7 @@ typedef struct {
   size_t dropped_output_frames;  ///< New output frames dropped at the configured cap
   float bpm;                     ///< Estimated BPM (0 if not yet estimated)
   float bpm_confidence;          ///< BPM confidence (0-1)
-  /// Tempo candidates the most recent BPM estimate chose from; 0 until one has run. Same quantity
-  /// as SonareAnalysisResult.bpm_candidate_count
+  /// Tempo candidates the most recent BPM estimate chose from; 0 until one has run.
   int bpm_candidate_count;
   int key;                         ///< Estimated key root pitch class (0-11, -1 = unknown)
   int key_minor;                   ///< Non-zero if minor mode

@@ -1018,13 +1018,7 @@ TEST_CASE("quick detection entries name the refused argument", "[c_api][quick][r
   CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, nullptr, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_key must not be NULL");
-
-  SonareAnalysisResult analysis = {};
-  CHECK(sonare_analyze(samples.data(), samples.size(), 22050, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "out must not be NULL");
   (void)key;
-  (void)analysis;
 }
 
 TEST_CASE("key detection entries name the refused mode list and profile",

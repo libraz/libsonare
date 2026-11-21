@@ -198,15 +198,6 @@ void sonare_free_string(char* ptr) { delete[] ptr; }
 
 void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
 
-void sonare_free_analysis_result(SonareAnalysisResult* result) {
-  if (result != nullptr) {
-    delete[] result->beat_times;
-    delete[] result->bpm_candidates;
-    delete[] result->time_signature_candidates;
-    *result = {};
-  }
-}
-
 const char* sonare_error_message(SonareError error) {
   switch (error) {
     case SONARE_OK:

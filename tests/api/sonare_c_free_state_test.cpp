@@ -35,37 +35,6 @@ TEST_CASE("sonare_free_acoustic_result leaves the result zeroed", "[c_api][c_fre
   CHECK(r.is_blind == static_cast<decltype(r.is_blind)>(0));
 }
 
-TEST_CASE("sonare_free_analysis_result leaves the result zeroed", "[c_api][c_free]") {
-  SonareAnalysisResult r{};
-  r.bpm = static_cast<decltype(r.bpm)>(1);
-  r.bpm_confidence = static_cast<decltype(r.bpm_confidence)>(1);
-  r.key.root = static_cast<decltype(r.key.root)>(1);
-  r.key.mode = static_cast<decltype(r.key.mode)>(1);
-  r.key.confidence = static_cast<decltype(r.key.confidence)>(1);
-  r.time_signature.numerator = static_cast<decltype(r.time_signature.numerator)>(1);
-  r.time_signature.denominator = static_cast<decltype(r.time_signature.denominator)>(1);
-  r.time_signature.confidence = static_cast<decltype(r.time_signature.confidence)>(1);
-  r.beat_count = static_cast<decltype(r.beat_count)>(1);
-  r.bpm_candidate_count = static_cast<decltype(r.bpm_candidate_count)>(1);
-  r.time_signature_candidate_count = static_cast<decltype(r.time_signature_candidate_count)>(1);
-  sonare_free_analysis_result(&r);
-  CHECK(r.bpm == static_cast<decltype(r.bpm)>(0));
-  CHECK(r.bpm_confidence == static_cast<decltype(r.bpm_confidence)>(0));
-  CHECK(r.key.root == static_cast<decltype(r.key.root)>(0));
-  CHECK(r.key.mode == static_cast<decltype(r.key.mode)>(0));
-  CHECK(r.key.confidence == static_cast<decltype(r.key.confidence)>(0));
-  CHECK(r.time_signature.numerator == static_cast<decltype(r.time_signature.numerator)>(0));
-  CHECK(r.time_signature.denominator == static_cast<decltype(r.time_signature.denominator)>(0));
-  CHECK(r.time_signature.confidence == static_cast<decltype(r.time_signature.confidence)>(0));
-  CHECK(r.beat_times == nullptr);
-  CHECK(r.beat_count == static_cast<decltype(r.beat_count)>(0));
-  CHECK(r.bpm_candidates == nullptr);
-  CHECK(r.bpm_candidate_count == static_cast<decltype(r.bpm_candidate_count)>(0));
-  CHECK(r.time_signature_candidates == nullptr);
-  CHECK(r.time_signature_candidate_count ==
-        static_cast<decltype(r.time_signature_candidate_count)>(0));
-}
-
 TEST_CASE("sonare_free_boundary_result leaves the result zeroed", "[c_api][c_free]") {
   SonareBoundaryResult r{};
   r.boundary_count = static_cast<decltype(r.boundary_count)>(1);

@@ -230,7 +230,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_free_note_segments` | `sonare_free_note_segments_result` |
-| `sonare_free_result` | `sonare_free_analysis_result` |
+| `sonare_free_result` | removed, no replacement: the flat quick analysis result it released has no C replacement; sonare_analyze_json returns the full analysis as a string released with sonare_free_string |
 
 #### Every C failure sets the error message
 
@@ -289,8 +289,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareAnalysisBpmCandidate` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
+| `SonareAnalysisResult` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `SonareAnalyzer` | removed, no replacement: no function created or accepted this handle; drop any declaration that names it |
+| `SonareBpmCandidateRelation` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `SonareSectionResult` | gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result |
+| `sonare_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
+| `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
 
 ### C: Effects, separation, repair and room acoustics
@@ -460,6 +465,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareDeclipConfig.clip_threshold` | `SonareDeclipConfig.clip_threshold_db` |
 | `SonareTrimSilenceConfig.threshold` | `SonareTrimSilenceConfig.threshold_db` |
+| `sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_db)` | `sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_dbtp)`: the true peak the static gain was computed for is named in dBTP, its unit |
 
 #### Loudness quantities use one name per measurement
 

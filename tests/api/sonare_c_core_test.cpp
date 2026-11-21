@@ -1528,56 +1528,6 @@ TEST_CASE("sonare_detect_onsets", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_analyze", "[.][slow][c_api]") {
-  SECTION("returns complete analysis result") {
-    auto samples = generate_clicks(120.0f, 22050, 4.0f);
-    SonareAnalysisResult result = {};
-
-    SonareError err = sonare_analyze(samples.data(), samples.size(), 22050, &result);
-
-    REQUIRE(err == SONARE_OK);
-    REQUIRE(result.bpm > 0.0f);
-    REQUIRE(result.bpm_confidence >= 0.0f);
-    REQUIRE(result.key.root >= SONARE_PITCH_C);
-    REQUIRE(result.key.root <= SONARE_PITCH_B);
-    REQUIRE(result.time_signature.numerator > 0);
-    REQUIRE(result.time_signature.denominator > 0);
-    REQUIRE(result.bpm_candidate_count > 0);
-    REQUIRE(result.bpm_candidates != nullptr);
-    REQUIRE(result.bpm_candidates[0].relation == SONARE_BPM_CANDIDATE_PRIMARY);
-    REQUIRE(result.time_signature_candidate_count > 0);
-    REQUIRE(result.time_signature_candidates != nullptr);
-
-    sonare_free_analysis_result(&result);
-  }
-
-  SECTION("returns error for null samples") {
-    SonareAnalysisResult result = {};
-    SonareError err = sonare_analyze(nullptr, 100, 22050, &result);
-    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
-  }
-
-  SECTION("free_result is safe on partially initialized struct") {
-    SonareAnalysisResult result = {};
-    result.beat_times = new float[2]{0.1f, 0.2f};
-    result.beat_count = 2;
-    result.bpm_candidates =
-        new SonareAnalysisBpmCandidate[1]{{120.0f, 0.9f, SONARE_BPM_CANDIDATE_PRIMARY}};
-    result.bpm_candidate_count = 1;
-    result.time_signature_candidates = new SonareTimeSignature[1]{{4, 4, 0.8f}};
-    result.time_signature_candidate_count = 1;
-
-    sonare_free_analysis_result(&result);
-
-    REQUIRE(result.beat_times == nullptr);
-    REQUIRE(result.beat_count == 0);
-    REQUIRE(result.bpm_candidates == nullptr);
-    REQUIRE(result.bpm_candidate_count == 0);
-    REQUIRE(result.time_signature_candidates == nullptr);
-    REQUIRE(result.time_signature_candidate_count == 0);
-  }
-}
-
 TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
   auto samples = generate_clicks(120.0f, 22050, 4.0f);
 
@@ -1603,7 +1553,7 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     REQUIRE(root.contains("rhythm"));
     REQUIRE(root.contains("melody"));
     REQUIRE(root.contains("form"));
-    // Beats carry per-beat strength (dropped by sonare_analyze).
+    // Beats carry per-beat strength.
     REQUIRE(root["beats"].is_array());
     if (root["beats"].size() > 0) {
       REQUIRE(root["beats"][static_cast<std::size_t>(0)].contains("strength"));

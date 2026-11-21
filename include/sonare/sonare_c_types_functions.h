@@ -145,11 +145,6 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
 /// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
-/// @brief Runs the full quick analysis pipeline and fills the flat C result.
-/// @details Use the single-purpose sonare_audio_detect_* helpers for cheaper queries.
-/// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
-SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
-
 // Quick detection functions
 /// @brief Detects the tempo within a search range.
 /// @param bpm_min Lower bound of the tempo search in BPM; finite and positive.
@@ -278,12 +273,6 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
                                  const SonareOnsetDetectConfig* config, float** out_times,
                                  size_t* out_count);
 
-/// @brief Runs the full quick analysis pipeline and fills the flat C result.
-/// @details Use the single-purpose sonare_detect_* helpers for cheaper queries.
-/// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
-SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
-                           SonareAnalysisResult* out);
-
 /// Progress callback for the JSON analysis: progress in [0,1] plus a
 /// stage label. user_data is the opaque pointer passed to the analyze call.
 typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
@@ -379,9 +368,8 @@ typedef struct {
 /// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
 void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options);
 /// @brief Full analysis serialized to a camelCase JSON object.
-/// @details Unlike sonare_analyze (which fills only the flat bpm/key/beats struct), this returns
-///   the complete result: chords, sections, timbre, dynamics, rhythm, melody and form, with
-///   per-beat strength.
+/// @details Returns the complete result: tempo, key, beats with per-beat strength, chords,
+///   sections, timbre, dynamics, rhythm, melody and form.
 /// @param options NULL selects the defaults of @ref sonare_music_analyze_options_init. No
 ///   callback or user pointer in it is retained past the call.
 /// @param out_json Receives a heap-allocated string; release it with @ref sonare_free_string.
@@ -459,8 +447,6 @@ void sonare_free_ints(int* ptr);
 void sonare_free_string(char* ptr);
 /// @brief Releases a key-candidate array; NULL is ignored.
 void sonare_free_key_candidates(SonareKeyCandidate* ptr);
-/// @brief Releases the arrays of an analysis result and zeroes their counts; NULL is ignored.
-void sonare_free_analysis_result(SonareAnalysisResult* result);
 
 // Error handling
 /// @brief Returns a short static description of @p error.

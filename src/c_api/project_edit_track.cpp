@@ -78,13 +78,18 @@ void check_lane_value(sonare::automation::AutomationTargetKind kind, uint32_t pa
 // Validates lane descriptor fields and builds an automation::AutomationLane, refusing by throwing.
 // The target parameter id must be non-zero; each breakpoint's ppq must be finite and >= 0, its
 // value finite (and inside the pan or width domain for such lanes), and its curve ordinal in range.
-void automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
+// A non-null @p current_kind is the edited lane's kind, which SONARE_AUTOMATION_TARGET_UNCHANGED
+// keeps.
+void automation_lane_from_values(uint32_t target_param_id, int32_t target_kind,
                                  const SonareAutomationPoint* point_data, size_t point_count,
+                                 const sonare::automation::AutomationTargetKind* current_kind,
                                  sonare::automation::AutomationLane* out) {
   namespace check = sonare::util::check;
   check::integer_within(target_param_id, kAutomationTargetParamIdDomain, "desc.target_param_id");
   sonare::automation::AutomationTargetKind kind{};
-  if (!ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
+  if (current_kind != nullptr && target_kind == SONARE_AUTOMATION_TARGET_UNCHANGED) {
+    kind = *current_kind;
+  } else if (!ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
     check::refuse("desc.target_kind", sonare::util::refusal::kDeclaredValuePredicate);
   }
   check::non_null_when_count(point_data, point_count, "desc.points", "desc.point_count");
@@ -113,9 +118,10 @@ void automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
 }
 
 void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
+                               const sonare::automation::AutomationTargetKind* current_kind,
                                sonare::automation::AutomationLane* out) {
-  automation_lane_from_values(desc->target_param_id, static_cast<uint32_t>(desc->target_kind),
-                              desc->points, desc->point_count, out);
+  automation_lane_from_values(desc->target_param_id, static_cast<int32_t>(desc->target_kind),
+                              desc->points, desc->point_count, current_kind, out);
 }
 
 // Refuses a track_id that names no track of the project.
@@ -665,7 +671,7 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
   if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   sonare::automation::AutomationLane lane;
-  automation_lane_from_desc(desc, &lane);
+  automation_lane_from_desc(desc, nullptr, &lane);
   auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   if (out_target_param_id) *out_target_param_id = desc->target_param_id;
@@ -688,8 +694,12 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
   SONARE_C_TRY
   const arr::Track* track = project->history.project().find_track(track_id);
   require_lane(*track, target_param_id);
+  const auto current = std::find_if(
+      track->automation_lanes.begin(), track->automation_lanes.end(),
+      [target_param_id](const auto& l) { return l.target_param_id() == target_param_id; });
+  const sonare::automation::AutomationTargetKind current_kind = current->target_kind();
   sonare::automation::AutomationLane lane;
-  automation_lane_from_desc(desc, &lane);
+  automation_lane_from_desc(desc, &current_kind, &lane);
   if (lane.target_param_id() != target_param_id) {
     sonare::util::check::refuse_relation({"target_param_id", "desc.target_param_id"},
                                          "{0} must equal {1}");

@@ -4,9 +4,8 @@
 /// @brief Canonical JSON serializer for the unified AnalysisResult.
 ///
 /// This is the single source of truth for the field schema returned by the
-/// one-shot analyze() API across every binding. The flat C-ABI struct
-/// (SonareAnalysisResult) only carries bpm/key/beats; the rich result
-/// (chords, sections, timbre, dynamics, rhythm, melody, form) is exposed to
+/// one-shot analyze() API across every binding. The full result
+/// (tempo, key, beats, chords, sections, timbre, dynamics, rhythm, melody, form) is exposed to
 /// C/Python/Node via sonare_analyze_json, which serializes through this helper.
 /// The WASM native object (analysisResultToVal) mirrors the same field names.
 

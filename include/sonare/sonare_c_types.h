@@ -5,7 +5,7 @@
 
 /// @brief ABI version of the general C function contracts and flat analysis /
 ///        feature POD structs declared in this header (SonareKey,
-///        SonareAnalysisResult, the feature result structs,
+///        the feature result structs,
 ///        SonareChordDetectionOptions, ...). Bump on ANY layout change
 ///        to one of those structs or a shipped general C function signature.
 ///        Mirrors the project / engine / voice / acoustic per-subsystem

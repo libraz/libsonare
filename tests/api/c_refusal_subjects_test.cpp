@@ -358,8 +358,6 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
   float* times = nullptr;
   CHECK(sonare_audio_detect_onsets(audio, &times, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_count must not be NULL");
-  CHECK(sonare_audio_analyze(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "out must not be NULL");
   sonare_audio_destroy(audio);
 }
 

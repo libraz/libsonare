@@ -1513,6 +1513,22 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   const std::string after_edit = serialize(project);
   REQUIRE(after_edit.find("\"targetKind\":1") != std::string::npos);
 
+  // UNCHANGED keeps the lane's kind on an edit, and names no kind a new lane could take.
+  SonareAutomationPoint unchanged_points[1] = {{0.0, -9.0f, SONARE_CURVE_LINEAR}};
+  SonareAutomationLaneDesc unchanged_edit = kept_kind_edit;
+  unchanged_edit.target_kind = SONARE_AUTOMATION_TARGET_UNCHANGED;
+  unchanged_edit.points = unchanged_points;
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &unchanged_edit) ==
+          SONARE_OK);
+  const std::string after_unchanged = serialize(project);
+  REQUIRE(after_unchanged != after_edit);
+  REQUIRE(after_unchanged.find("\"targetKind\":1") != std::string::npos);
+  SonareAutomationLaneDesc unchanged_add = unchanged_edit;
+  unchanged_add.target_param_id = 104;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &unchanged_add, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == after_unchanged);
+
   // Opaque lanes continue to coexist with typed mixer lanes.
   SonareAutomationLaneDesc opaque{};
   opaque.target_param_id = 200;
@@ -1563,6 +1579,7 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo second track
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo pan lane
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo opaque lane
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo UNCHANGED edit
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo edit
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo fader add
   REQUIRE(serialize(project).find("\"automationLanes\":[]") != std::string::npos);

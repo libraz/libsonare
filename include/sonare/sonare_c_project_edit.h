@@ -291,8 +291,10 @@ typedef enum SONARE_ENUM_BASE {
 /// @brief Persistent target classification for an automation lane.
 ///
 /// Opaque is the legacy host-defined target. Track fader and track pan are
-/// typed mixer targets; no other ordinal is currently valid.
+/// typed mixer targets. @ref SONARE_AUTOMATION_TARGET_UNCHANGED is accepted only by
+/// @ref sonare_project_edit_automation_lane, where it keeps the lane's current kind.
 typedef enum SONARE_ENUM_BASE {
+  SONARE_AUTOMATION_TARGET_UNCHANGED = -1,      ///< Edit only: keep the lane's current kind.
   SONARE_AUTOMATION_TARGET_OPAQUE = 0,          ///< Host-defined target id.
   SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,  ///< The track's mixer fader, in dB.
   SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,       ///< The track's mixer pan.
@@ -697,8 +699,9 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
 ///        command. @p track_id must reference an existing track and
 ///        @p target_param_id identifies an existing lane on it. The descriptor
 ///        must retain the same target id; changing a lane's identity requires
-///        remove then add. The descriptor's target kind is applied and
-///        typed-target conflicts are rejected atomically.
+///        remove then add. The descriptor's target kind is applied, or the
+///        lane's current kind kept when it is @ref SONARE_AUTOMATION_TARGET_UNCHANGED,
+///        and typed-target conflicts are rejected atomically.
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
                                                 uint32_t target_param_id,
                                                 const SonareAutomationLaneDesc* desc);

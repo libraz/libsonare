@@ -276,39 +276,6 @@ typedef struct {
   float confidence;  ///< Belief in this meter over the other candidates, in [0, 1].
 } SonareTimeSignature;
 
-/** Relationship between a tempo candidate and SonareAnalysisResult.bpm. */
-typedef enum SONARE_ENUM_BASE {
-  SONARE_BPM_CANDIDATE_PRIMARY = 0,
-  SONARE_BPM_CANDIDATE_HALF = 1,
-  SONARE_BPM_CANDIDATE_DOUBLE = 2,
-  SONARE_BPM_CANDIDATE_OTHER = 3
-} SonareBpmCandidateRelation;
-
-/// One tempo hypothesis of SonareAnalysisResult.
-typedef struct {
-  float value;                          ///< Tempo in BPM.
-  float confidence;                     ///< Candidate confidence in [0, 1].
-  SonareBpmCandidateRelation relation;  ///< How this tempo relates to the reported bpm.
-} SonareAnalysisBpmCandidate;
-
-/// Flat analysis result of sonare_analyze / sonare_audio_analyze; release its arrays with
-/// sonare_free_analysis_result. Producing it runs the full quick analysis pipeline because it
-/// includes meter and beat data; use sonare_detect_bpm/key/beats for cheaper single queries.
-typedef struct {
-  float bpm;  ///< Estimated tempo in BPM.
-  /** Winning tempo cluster's vote share within 60-200 BPM, searched at 22050 Hz. sonare_analyze_bpm
-     searches its own range at the input rate, so pass 60/200 and 22050 Hz input to compare. */
-  float bpm_confidence;
-  SonareKey key;                       ///< Detected key.
-  SonareTimeSignature time_signature;  ///< Detected meter.
-  float* beat_times;                   ///< Beat times in seconds; NULL when beat_count is 0.
-  size_t beat_count;                   ///< Number of entries in beat_times.
-  SonareAnalysisBpmCandidate* bpm_candidates;      ///< Tempo hypotheses; NULL when the count is 0.
-  size_t bpm_candidate_count;                      ///< Number of entries in bpm_candidates.
-  SonareTimeSignature* time_signature_candidates;  ///< Meter hypotheses; NULL when the count is 0.
-  size_t time_signature_candidate_count;  ///< Number of entries in time_signature_candidates.
-} SonareAnalysisResult;
-
 #ifdef __cplusplus
 }
 #endif

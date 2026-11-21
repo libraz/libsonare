@@ -167,9 +167,50 @@ test = "tests/api/sonare_c_acoustic_test.cpp::refuses invalid RIR geometry with 
 [[entry]]
 kind = "function"
 old = "sonare_free_result"
-new = "sonare_free_analysis_result"
+removed = true
+no_replacement = "the flat quick analysis result it released has no C replacement; sonare_analyze_json returns the full analysis as a string released with sonare_free_string"
 domain = "analysis"
 rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze"
+removed = true
+no_replacement = "the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_analyze"
+removed = true
+no_replacement = "the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "SonareAnalysisResult"
+removed = true
+no_replacement = "the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "SonareAnalysisBpmCandidate"
+removed = true
+no_replacement = "the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "SonareBpmCandidateRelation"
+removed = true
+no_replacement = "the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis"
+domain = "analysis"
+rule = "individual"
 
 [[entry]]
 kind = "function"
