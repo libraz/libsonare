@@ -114,7 +114,13 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("zero_crossing_rate", "sample_rate"): "sr",
 }
 
+# (C entry key, C-ABI count subject) pairs whose value is the length of the named array.
+LENGTHS: dict[tuple[str, str], str] = {}
+
 
 def surface_spelling(entry: str, subject: str) -> str:
     """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+    length = LENGTHS.get((entry, subject))
+    if length is not None:
+        return f"{length} length"
     return OVERRIDES.get((entry, subject), subject)

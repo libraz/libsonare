@@ -194,6 +194,36 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(module.surface_spelling("resample", "sr"), "sample_rate")
         self.assertEqual(module.surface_spelling("resample", "n_fft"), "n_fft")
 
+    def test_a_length_of_row_binds_a_count_to_the_array_the_entry_takes(self) -> None:
+        facts = [
+            Fact("apply", "rendered_mono", "param", "python", "rendered_mono"),
+            Fact("apply", "rendered_count", "param", "python", None),
+        ]
+        rule = {"python": {"length_of": {"apply.rendered_count": "rendered_mono"}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(
+            rows["python"], [gen.Row("apply", "rendered_count", "rendered_mono", True)]
+        )
+        self.assertEqual((unbound, idle), ([], []))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "_field_spelling.py"
+            path.write_text(gen.render_py(rows["python"]))
+            spec = importlib.util.spec_from_file_location("_field_spelling", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        self.assertEqual(module.surface_spelling("apply", "rendered_count"), "rendered_mono length")
+        text = gen.render_cpp("node", [gen.Row("apply", "rendered_count", "renderedMono", True)])
+        self.assertIn('kLengths = {{\n    {"apply", "rendered_count", "renderedMono"},', text)
+        self.assertIn("std::array<Override, 0> kOverrides", text)
+
+    def test_a_length_of_row_needs_the_array_on_that_entry(self) -> None:
+        facts = [Fact("apply", "rendered_count", "param", "python", None)]
+        rule = {"python": {"length_of": {"apply.rendered_count": "rendered_mono"}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["python"], [])
+        self.assertEqual(len(unbound), 1)
+        self.assertEqual(idle, [("python", "length_of.apply.rendered_count", "rendered_mono")])
+
 
 if __name__ == "__main__":
     unittest.main()

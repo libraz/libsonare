@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -60,15 +61,27 @@ inline constexpr std::array<Override, 38> kOverrides = {{
     {"waveform_peaks", "num_channels", "channels"},
 }};
 
-// The node caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
-inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {
+// (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
+inline constexpr std::array<Override, 0> kLengths = {{}};
+
+template <std::size_t N>
+inline const Override* Find(const std::array<Override, N>& table, std::string_view entry,
+                            std::string_view subject) {
   const auto it =
-      std::lower_bound(kOverrides.begin(), kOverrides.end(), Override{entry, subject, {}},
+      std::lower_bound(table.begin(), table.end(), Override{entry, subject, {}},
                        [](const Override& a, const Override& b) {
                          return a.entry != b.entry ? a.entry < b.entry : a.subject < b.subject;
                        });
-  if (it != kOverrides.end() && it->entry == entry && it->subject == subject) {
-    return std::string(it->spelling);
+  return it != table.end() && it->entry == entry && it->subject == subject ? &*it : nullptr;
+}
+
+// The node caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
+inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {
+  if (const Override* length = Find(kLengths, entry, subject)) {
+    return std::string(length->spelling) + " length";
+  }
+  if (const Override* row = Find(kOverrides, entry, subject)) {
+    return std::string(row->spelling);
   }
   return sonare::util::check::camel_path(std::string(subject));
 }
