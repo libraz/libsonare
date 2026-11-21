@@ -2380,11 +2380,11 @@ REFUSALS = (
     ),
     (
         "options-struct:suffix",
-        [_fn("c", "sonare_room_morph", "SonareError"), _fn("c", "sonare_room_morph_stereo")],
+        [_fn("c", "sonare_tempogram", "SonareError"), _fn("c", "sonare_tempogram_with_mode")],
         [
             (
-                "c function sonare_room_morph_stereo: is sonare_room_morph plus _stereo,"
-                " a second form of sonare_room_morph"
+                "c function sonare_tempogram_with_mode: is sonare_tempogram plus _with_mode,"
+                " a second form of sonare_tempogram"
             )
         ],
     ),
@@ -2695,8 +2695,61 @@ class SecondFormExtensions(CheckerCase):
             [
                 (
                     "c function sonare_cqt_ex: suffix _ex marks a second form of one operation;"
-                    " allowlisted as distinct-operation, but a fixed second-form suffix names"
-                    " no other operation"
+                    " allowlisted as distinct-operation, but a fixed second-form suffix or a"
+                    " channel form names no other operation"
+                )
+            ],
+        )
+
+    def mono(self, name, *tail, returns="SonareError"):
+        audio = (_c_param("samples", "const float*"), _c_param("length", "size_t"))
+        return _fn("c", name, returns, *audio, _c_param("sample_rate", "int"), *tail)
+
+    def stereo(self, name, *tail, returns="SonareError"):
+        audio = (
+            _c_param("left", "const float*"),
+            _c_param("right", "const float*"),
+            _c_param("length", "size_t"),
+        )
+        return _fn("c", name, returns, *audio, _c_param("sample_rate", "int"), *tail)
+
+    def test_a_channel_form_matching_its_base_is_counted_not_refused(self):
+        _, before = self.run_check("--check", "options-struct:suffix")
+        self.add(
+            self.mono("sonare_dehum", _c_param("out", "SonareDehumResult*")),
+            self.stereo("sonare_dehum_stereo", _c_param("out", "SonareDehumStereoResult*")),
+        )
+        _, lines = self.run_check("--check", "options-struct:suffix")
+        added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
+        self.assertEqual(
+            added,
+            [
+                (
+                    "not compared: 1 channel-form twins (_stereo, _linked, _interleaved)"
+                    " match their base after the audio"
+                )
+            ],
+        )
+
+    def test_a_channel_form_with_another_result_is_refused_and_not_excusable(self):
+        self.add(
+            self.mono(
+                "sonare_morph", _c_param("out", "float**"), _c_param("out_length", "size_t*")
+            ),
+            self.stereo("sonare_morph_stereo", _c_param("out", "SonareMorphStereoResult*")),
+        )
+        allow = self.allow("sonare_morph_stereo")
+        code, lines = self.run_check("--check", "options-struct:suffix", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            self.flagged(lines),
+            [
+                (
+                    "c function sonare_morph_stereo: is the _stereo channel form of sonare_morph"
+                    " but differs from it after the audio: base has float** out, size_t*"
+                    " out_length; twin has SonareMorphStereoResult* out; allowlisted as"
+                    " distinct-operation, but a fixed second-form suffix or a channel form"
+                    " names no other operation"
                 )
             ],
         )

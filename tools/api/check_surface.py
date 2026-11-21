@@ -1516,13 +1516,56 @@ _C_STRUCTURAL_EXTENSION = (
     (re.compile(r"^sonare_free_"), "releases of a distinct result type"),
 )
 _C_EXTENSION_MESSAGE = "is {base} plus _{rest}, a second form of {base}"
+# The decided channel forms of one operation: a left/right pair, N planar channels, and one
+# interleaved buffer. A twin is one only while it differs from its base in the audio alone.
+_C_CHANNEL_FORMS = ("stereo", "linked", "interleaved")
+_C_CHANNEL_FORM_MESSAGE = (
+    "is the _{form} channel form of {base} but differs from it after the audio"
+)
+_C_AUDIO_TYPES = {"const float*", "const float* const*"}
+_C_AUDIO_EXTENTS = re.compile(r"^(?:length|frames|num_channels|\w+_length)$")
+
+
+def _c_after_audio(rec: dict, form: str = "") -> list[tuple[str, str, str]] | None:
+    """(compared type, name, spelled type) past the audio buffers and their extents, then
+    the return type. A twin's ``<Form>Result`` compares as its base's ``Result``."""
+    sigs = rec.get("sigs") or []
+    if not sigs:
+        return None
+    out = []
+    for p in sigs[0]["params"]:
+        t = " ".join(p.get("type", "").split())
+        if t in _C_AUDIO_TYPES or ("*" not in t and _C_AUDIO_EXTENTS.match(p.get("name", ""))):
+            continue
+        key = t.replace(f"{form.capitalize()}Result", "Result") if form else t
+        out.append((key, p.get("name", ""), t))
+    returns = sigs[0].get("returns", "")
+    return out + [(returns, "(return)", returns)]
+
+
+def _c_channel_twin(rec: dict, base: dict, form: str) -> str | None:
+    """None when the twin matches its base after the audio, else the differing parameters."""
+    mine, theirs = _c_after_audio(rec, form), _c_after_audio(base)
+    if mine is None or theirs is None:
+        return None
+    keys = lambda xs: [(k, n) for k, n, _ in xs]
+    if keys(mine) == keys(theirs):
+        return None
+
+    def only(a, b):
+        other = keys(b)
+        return ", ".join(f"{t} {n}" for k, n, t in a if (k, n) not in other) or "nothing else"
+
+    return f"base has {only(theirs, mine)}; twin has {only(mine, theirs)}"
 
 
 def chk_options_suffix(ctx):
     cands = recs(ctx, ("c",), ("function",))
-    names = {r["name"] for r in cands}
+    by_name = {r["name"]: r for r in cands}
+    names = set(by_name)
     bad = []
     structural: collections.Counter = collections.Counter()
+    channel_forms = 0
     for r in cands:
         name = r["name"]
         fixed = _C_SUFFIX.search(name)
@@ -1545,7 +1588,20 @@ def chk_options_suffix(ctx):
             structural[label] += 1
             continue
         rest = name[len(base) + 1 :]
+        if rest in _C_CHANNEL_FORMS:
+            diff = _c_channel_twin(r, by_name[base], rest)
+            if diff is None:
+                channel_forms += 1
+            else:
+                msg = _C_CHANNEL_FORM_MESSAGE.format(form=rest, base=base)
+                bad.append((r, f"{msg}: {diff}"))
+            continue
         bad.append((r, _C_EXTENSION_MESSAGE.format(base=base, rest=rest)))
+    if channel_forms:
+        ctx.not_compared["options-struct:suffix"].append(
+            f"{channel_forms} channel-form twins (_stereo, _linked, _interleaved) match their"
+            " base after the audio"
+        )
     if structural:
         ctx.not_compared["options-struct:suffix"].append(
             "functions named as another plus an extension that names what they act on: "
@@ -2450,8 +2506,8 @@ _CATEGORY_FITS = {
         "a token with a word separator has a lowerCamel form",
     ),
     "distinct-operation": (
-        lambda r, msg: not _C_SUFFIX.search(r["name"]),
-        "a fixed second-form suffix names no other operation",
+        lambda r, msg: not _C_SUFFIX.search(r["name"]) and " channel form of " not in msg,
+        "a fixed second-form suffix or a channel form names no other operation",
     ),
 }
 
