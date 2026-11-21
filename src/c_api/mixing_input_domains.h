@@ -4,18 +4,20 @@
 /// @brief Numeric domains of the C-ABI mixing entries' arguments that no core validator sees,
 ///        stated once for the checks that refuse them and for numeric_domain_rows.h.
 
+#include "core/audio.h"
 #include "mixing/automation_lane.h"
 #include "streaming/realtime_limits.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
 
-/// @brief What the sample rate a mixing assistant request names for its output accepts.
+/// @brief What the sample rate a mixing assistant request names for its output accepts: the
+///        audio rates, since the suggestion configures a mixer running at it.
 inline constexpr sonare::util::check::NumericDomain kMixingAssistantSampleRateDomain =
-    sonare::util::check::integer_domain_of<int>(1);
+    sonare::kAudioSampleRateDomain;
 /// @brief What the sample rate of one assistant input track accepts.
 inline constexpr sonare::util::check::NumericDomain kMixingAssistantTrackSampleRateDomain =
-    sonare::util::check::integer_domain_of<int>(1);
+    sonare::kAudioSampleRateDomain;
 /// @brief What a mixer's max_block_size accepts; 0 takes the mixer default.
 inline constexpr sonare::util::check::NumericDomain kMixerMaxBlockSizeDomain =
     sonare::util::check::with_sentinel(

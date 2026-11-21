@@ -48,12 +48,15 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
                                       ("track_lengths" + at()).c_str());
       }
       if (track_ids[index] == nullptr) return refuse_null(("track_ids" + at()).c_str());
-      if (track_sample_rates != nullptr && track_sample_rates[index] <= 0) {
+      if (track_sample_rates != nullptr) {
         const std::string name = "track_sample_rates" + at();
-        return run_validation([&] {
-          sonare::util::check::integer_within(track_sample_rates[index],
-                                              kMixingAssistantTrackSampleRateDomain, name.c_str());
-        });
+        if (const SonareError err = run_validation([&] {
+              sonare::util::check::integer_within(
+                  track_sample_rates[index], kMixingAssistantTrackSampleRateDomain, name.c_str());
+            });
+            err != SONARE_OK) {
+          return err;
+        }
       }
     }
     if (const SonareError err = run_validation([&] {

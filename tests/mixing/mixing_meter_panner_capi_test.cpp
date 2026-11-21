@@ -1263,10 +1263,10 @@ TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixin
   const int bad_rates[] = {0};
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, bad_rates, 1, 48000,
                                         nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(refusal() == "track_sample_rates[0] must be an integer in [1, 2147483647]");
+  CHECK(refusal() == "track_sample_rates[0] must be an integer in [8000, 384000]");
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
                                         nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(refusal() == "sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 48000,
                                         nullptr, 1, &json) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refusal() == "params must not be NULL when param_count is not 0");
@@ -1276,5 +1276,5 @@ TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixin
   // A bad argument is named before the NULL out.
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
                                         nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(refusal() == "sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
 }
