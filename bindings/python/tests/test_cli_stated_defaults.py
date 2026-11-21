@@ -319,7 +319,7 @@ _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
     ("transcribe", "--max-polyphony"): "None selects the core default, 10",
     ("transcribe", "--min-frame-peak-ratio"): "None selects the core default, 0.20",
     ("transcribe", "--min-ridge-peak-ratio"): "None selects the core default, 0.10",
-    ("transcribe", "--reattack-ratio"): "None selects the core default, 2.0",
+    ("transcribe", "--reattack-ratio"): "None is resolved by the CLI to 2.0 for a polyphonic run",
     ("transcribe", "--segmentation-threshold-cents"): "None selects the core default, 50",
     ("playback", "--target"): "a field of the render config, not a signature default",
     ("playback", "--input-layout"): "a field of the render config, not a signature default",

@@ -691,6 +691,17 @@ def _transcribe_refusal(args: argparse.Namespace) -> str | None:
     return None
 
 
+# The facade reads an absent ratio as "no split", so the polyphonic default the CLI states is given.
+_DEFAULT_REATTACK_RATIO = 2.0
+
+
+def _transcribe_reattack_ratio(args: argparse.Namespace) -> float | None:
+    """The ratio the CLI means: 0 is no split, absent is the polyphonic default."""
+    if args.reattack_ratio is None:
+        return _DEFAULT_REATTACK_RATIO if args.polyphonic else None
+    return args.reattack_ratio or None
+
+
 def cmd_transcribe(args: argparse.Namespace) -> int:
     from . import Project
 
@@ -725,7 +736,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             max_polyphony=args.max_polyphony,
             min_frame_peak_ratio=args.min_frame_peak_ratio,
             min_ridge_peak_ratio=args.min_ridge_peak_ratio,
-            reattack_ratio=args.reattack_ratio or None,
+            reattack_ratio=_transcribe_reattack_ratio(args),
             min_note_division=args.min_note_division,
             monophonic_model=args.monophonic_model,
             **_given(args, "channel"),

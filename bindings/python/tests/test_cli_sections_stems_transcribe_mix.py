@@ -421,6 +421,36 @@ def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
     assert seen["monophonic_model"] is None
 
 
+@pytest.mark.parametrize(("argv", "expected"), [([], 2.0), (["--reattack-ratio", "0"], None)])
+def test_transcribe_polyphonic_sends_the_stated_reattack_ratio(
+    melody_wav: str, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: float | None
+) -> None:
+    """An omitted ratio is the stated 2.0 (the facade reads None as no split); 0 is no split."""
+    import libsonare
+    from libsonare import cli
+
+    seen: dict[str, object] = {}
+    original = libsonare.Project.transcribe_to_clip
+
+    def spy(self: object, clip_id: int, samples: object, sr: int, **options: object) -> int:
+        seen.update(options)
+        return original(self, clip_id, samples, sr, **options)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(libsonare.Project, "transcribe_to_clip", spy)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["sonare", "transcribe", melody_wav, "-o", output, "--polyphonic", *argv],
+        )
+        try:
+            cli.main()
+        except SystemExit as exc:
+            assert exc.code in (0, None)
+    assert seen["reattack_ratio"] == expected
+
+
 def test_transcribe_forwards_the_monophonic_model(
     melody_wav: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
