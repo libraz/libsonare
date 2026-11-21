@@ -21,6 +21,7 @@ import {
   entryClass,
   invalidState,
   mergeRespelled,
+  nameNativeError,
   type Respelled,
   refuse,
   refuseType,
@@ -81,7 +82,6 @@ import type {
   EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
-  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
@@ -109,7 +109,7 @@ import type {
   WasmClipPageProvider,
   WasmEngineBus,
   WasmEngineClip,
-  WasmEngineMeterTelemetryWide,
+  WasmEngineMeterTelemetry,
   WasmEngineTrackSend,
   WasmRealtimeEngine,
 } from './sonare.js';
@@ -148,7 +148,6 @@ export type {
   EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
-  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineMidiEvent,
@@ -555,28 +554,7 @@ function telemetryFromNative(record: {
   };
 }
 
-/** Level a plane the target does not carry reads as, matching the engine's meter floor. */
-const METER_FLOOR_DB = -120;
-
-/** The stereo view of a per-plane record: planes 0 and 1, the floor where a plane is absent. */
-function meterTelemetryFromWide(wide: EngineMeterTelemetryWide): EngineMeterTelemetry {
-  const { numChannels: _numChannels, peakDb, rmsDb, truePeakDbtp, inputPeakDb, ...rest } = wide;
-  return {
-    ...rest,
-    peakDbL: peakDb[0] ?? METER_FLOOR_DB,
-    peakDbR: peakDb[1] ?? METER_FLOOR_DB,
-    rmsDbL: rmsDb[0] ?? METER_FLOOR_DB,
-    rmsDbR: rmsDb[1] ?? METER_FLOOR_DB,
-    truePeakDbtpL: truePeakDbtp[0] ?? METER_FLOOR_DB,
-    truePeakDbtpR: truePeakDbtp[1] ?? METER_FLOOR_DB,
-    inputPeakDbL: inputPeakDb[0] ?? METER_FLOOR_DB,
-    inputPeakDbR: inputPeakDb[1] ?? METER_FLOOR_DB,
-  } as unknown as EngineMeterTelemetry;
-}
-
-function meterTelemetryWideFromNative(
-  record: WasmEngineMeterTelemetryWide,
-): EngineMeterTelemetryWide {
+function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): EngineMeterTelemetry {
   const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = record;
   return {
     ...rest,
@@ -660,6 +638,17 @@ function insertParam(
   return param;
 }
 
+/** One bank-select byte, refused under the key the caller wrote rather than the native name. */
+function bankByte(value: unknown, argName: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  if (!Number.isInteger(value) || value < 0 || value > 127) {
+    throw refuse(`${argName} must be an integer in [0, 127]`);
+  }
+  return value;
+}
+
 function programBank(
   requestName: 'pushMidiProgram' | 'pushMidiInputProgram',
   bank: { msb: number; lsb: number } | null | undefined,
@@ -667,8 +656,12 @@ function programBank(
   if (bank === undefined || bank === null) {
     return { bankValid: false, bankMsb: 0, bankLsb: 0 };
   }
-  requestObject(requestName, bank, 'bank', true);
-  return { bankValid: true, bankMsb: bank.msb, bankLsb: bank.lsb };
+  const record = requestObject(requestName, bank, 'bank', true);
+  return {
+    bankValid: true,
+    bankMsb: bankByte(record.msb, 'bank.msb'),
+    bankLsb: bankByte(record.lsb, 'bank.lsb'),
+  };
 }
 
 function sceneStripJson(strip: MixSceneStripInput): string {
@@ -2750,7 +2743,12 @@ export class RealtimeEngine {
     if (options === undefined) {
       return this.native.process(channels, undefined) as Float32Array[];
     }
-    const withMonitor = engineProcessMonitor('process', options);
+    let withMonitor: boolean;
+    try {
+      withMonitor = engineProcessMonitor('process', options);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeEngine.process');
+    }
     if (withMonitor) {
       return this.native.process(channels, true) as EngineProcessWithMonitorResult;
     }
@@ -2791,10 +2789,13 @@ export class RealtimeEngine {
       this.native.processPrepared(numFrames, undefined);
       return;
     }
-    this.native.processPrepared(
-      numFrames,
-      engineProcessMonitor('processPrepared', options) ? true : undefined,
-    );
+    let withMonitor: boolean;
+    try {
+      withMonitor = engineProcessMonitor('processPrepared', options);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeEngine.processPrepared');
+    }
+    this.native.processPrepared(numFrames, withMonitor ? true : undefined);
   }
 
   /**
@@ -2913,25 +2914,13 @@ export class RealtimeEngine {
   }
 
   /**
-   * Drains pending meter telemetry records, oldest first.
+   * Drains pending meter telemetry as per-plane records, oldest first. A stereo target's left
+   * and right are planes 0 and 1; a surround target carries every plane.
    *
    * @param maxRecords Most records to return (non-negative integer). Omitted: 1024. 0 returns an empty array.
    */
   drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
-    return this.drainMeterTelemetryWide(maxRecords).map(meterTelemetryFromWide);
-  }
-
-  /**
-   * Drains pending meter telemetry as per-plane (wide) records. This is the one
-   * meter drain: a stereo target's left and right are planes 0 and 1, and a
-   * surround target carries every plane. Use it alone; {@link drainMeterTelemetry}
-   * consumes the same queue (every target's records) and stays for
-   * compatibility. The live AudioWorklet engine drains through this one, so a
-   * worklet-driven engine delivers per-plane meters on both the postMessage and
-   * the SharedArrayBuffer meter paths.
-   */
-  drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
-    return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryWideFromNative);
+    return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryFromNative);
   }
 
   /**

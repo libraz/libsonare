@@ -52,7 +52,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['lufs', 'samples'],
   ['masteringApplyProcessor', 'samples'],
   ['masteringAssistantSuggest', 'samples'],
-  ['masteringAssistantSuggestChain', 'samples'],
   ['masteringAudioProfile', 'samples'],
   ['masteringDynamicsCompressor', 'samples'],
   ['masteringDynamicsGate', 'samples'],

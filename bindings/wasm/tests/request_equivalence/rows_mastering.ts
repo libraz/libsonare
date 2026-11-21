@@ -201,15 +201,6 @@ export const ROWS: Row[] = [
     invalid: { sampleRate: 0 },
   },
   {
-    name: 'masteringAssistantSuggestChain',
-    fn: sonare.masteringAssistantSuggestChain,
-    form: 'sampleOptions',
-    params: 'samples sampleRate targetLufs?',
-    values: { samples: SIG, sampleRate: ALT_SR, targetLufs: -13 },
-    inert: { sampleRate: 'the suggested chain holds physical quantities this input does not move' },
-    invalid: { sampleRate: 0 },
-  },
-  {
     name: 'masteringAudioProfile',
     fn: sonare.masteringAudioProfile,
     form: 'sampleOptions',

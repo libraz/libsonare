@@ -65,11 +65,11 @@ describe('RealtimeEngine.pushMidiProgram', () => {
         [() => engine.pushMidiProgram(DEST, 0, 0, 128), 'program must be an integer in [0, 127]'],
         [
           () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 }),
-          'bank_msb must be an integer in [0, 127]',
+          'bank.msb must be an integer in [0, 127]',
         ],
         [
           () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 128 }),
-          'bank_lsb must be an integer in [0, 127]',
+          'bank.lsb must be an integer in [0, 127]',
         ],
       ];
       for (const [call, message] of calls) {

@@ -1336,7 +1336,7 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   // Drains the engine meter telemetry queue into the meter ring / transport.
   //
-  // The wide drain is the one meter drain: it carries every plane of every
+  // The engine's meter drain is the only one: it carries every plane of every
   // target (stereo is planes 0/1), so both transports deliver surround meters
   // and nothing else may pop this queue on a worklet-driven engine.
   private publishMeters(): void {
@@ -1359,7 +1359,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const delivered: WorkletMeterSnapshot[] = [];
     const newestByTarget = new Map<number, WorkletMeterSnapshot>();
-    for (const item of this.engine.drainMeterTelemetryWide(64)) {
+    for (const item of this.engine.drainMeterTelemetry(64)) {
       const meter = meterFromEngine(item);
       if (!this.meterDue(meter.targetId, meter.frame)) {
         continue;

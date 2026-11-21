@@ -46,7 +46,7 @@ describe('wide meter telemetry (WASM)', () => {
         new Float32Array(BLOCK),
       ]);
 
-      const wide = engine.drainMeterTelemetryWide();
+      const wide = engine.drainMeterTelemetry();
       const busMeter = wide.find((record) => record.targetId === 33);
       expect(busMeter).toBeDefined();
       if (!busMeter) {

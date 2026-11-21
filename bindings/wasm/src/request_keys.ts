@@ -2899,8 +2899,6 @@ export const REQUEST_SHAPES = {
   masteringApplyProcessor: { keys: MasteringApplyProcessorRequestKeys },
   masteringApplyProcessorStereo: { keys: MasteringApplyProcessorStereoRequestKeys },
   masteringAssistantSuggest: { keys: MasteringAssistantSuggestRequestKeys },
-  masteringAssistantSuggestChain: { keys: MasteringAssistantSuggestRequestKeys },
-  masteringAssistantSuggestChainStereo: { keys: MasteringAssistantSuggestStereoRequestKeys },
   masteringAssistantSuggestStereo: { keys: MasteringAssistantSuggestStereoRequestKeys },
   masteringAudioProfile: { keys: MasteringAudioProfileRequestKeys },
   masteringAudioProfileStereo: { keys: MasteringAudioProfileStereoRequestKeys },

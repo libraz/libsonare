@@ -58,7 +58,7 @@ function silent(channels: number): Float32Array[] {
   return Array.from({ length: channels }, () => new Float32Array(BLOCK));
 }
 
-/** The first bus meter a plain engine reads through the wide drain, as the reference. */
+/** The first bus meter a plain engine reads through the engine drain, as the reference. */
 function referenceBusMeter(
   channelLayout: 'mono' | 'stereo' | '5.1',
   strip: MixSceneStrip | undefined,
@@ -68,7 +68,7 @@ function referenceBusMeter(
   try {
     seedBus(engine, channelLayout, strip);
     engine.process(silent(channels));
-    const record = engine.drainMeterTelemetryWide().find((r) => r.targetId === BUS_TARGET);
+    const record = engine.drainMeterTelemetry().find((r) => r.targetId === BUS_TARGET);
     if (!record) {
       throw new Error('expected a bus meter');
     }

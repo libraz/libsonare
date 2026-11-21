@@ -128,7 +128,6 @@ const MONO: ReadonlyArray<[string, Record<string, unknown>]> = [
   ['masteringApplyProcessor', { processor: 'dynamics.limiter' }],
   ['masteringAudioProfile', {}],
   ['masteringAssistantSuggest', {}],
-  ['masteringAssistantSuggestChain', {}],
   ['masteringStreamingPreview', {}],
   ['streamingLoudnessGain', {}],
 ];
@@ -140,7 +139,6 @@ const STEREO: ReadonlyArray<[string, Record<string, unknown>]> = [
   ['masteringAnalyzeStereo', { analysis: 'stereo.monoCompatCheck' }],
   ['masteringAudioProfileStereo', {}],
   ['masteringAssistantSuggestStereo', {}],
-  ['masteringAssistantSuggestChainStereo', {}],
   ['masteringStreamingPreviewStereo', {}],
   ['streamingLoudnessGainStereo', {}],
 ];
@@ -681,10 +679,8 @@ describe('chain config: nested form only, tokens only', () => {
   });
 
   it('the assistant chain nests, with tokens and dBFS, and passes straight back', () => {
-    const chain = sonare.masteringAssistantSuggestChain({ samples: left, sampleRate }) as Record<
-      string,
-      unknown
-    >;
+    const chain = sonare.masteringAssistantSuggest({ samples: left, sampleRate })
+      .chainConfig as Record<string, unknown>;
     expect(Object.keys(chain).some((key) => key.includes('.'))).toBe(false);
     expect(() =>
       sonare.masterAudio({ samples: left, sampleRate, overrides: chain as MasteringChainConfig }),

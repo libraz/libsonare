@@ -1,5 +1,5 @@
 import { ErrorCode } from '../errors.js';
-import type { EngineMeterTelemetryWide } from '../index.js';
+import type { EngineMeterTelemetry } from '../index.js';
 import { codedError, refuse, withEntry } from '../internal/entry.js';
 import { decodeFrame } from './engine-rings.js';
 import {
@@ -575,7 +575,7 @@ export function spectrumRingFromSharedBuffer(
 }
 
 // A plane the target does not have (the right side of a mono lane) reads as the floor.
-export function meterFromEngine(meter: EngineMeterTelemetryWide): WorkletMeterSnapshot {
+export function meterFromEngine(meter: EngineMeterTelemetry): WorkletMeterSnapshot {
   const snapshot: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: meter.targetId,

@@ -78,8 +78,6 @@ export {
   masteringApplyProcessor,
   masteringApplyProcessorStereo,
   masteringAssistantSuggest,
-  masteringAssistantSuggestChain,
-  masteringAssistantSuggestChainStereo,
   masteringAssistantSuggestStereo,
   masteringAudioProfile,
   masteringAudioProfileStereo,

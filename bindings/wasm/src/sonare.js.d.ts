@@ -1190,7 +1190,7 @@ export interface WasmEngineTelemetry {
   value: number;
 }
 
-export interface WasmEngineMeterTelemetryWide {
+export interface WasmEngineMeterTelemetry {
   /**
    * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
    * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
@@ -1783,7 +1783,7 @@ export interface WasmRealtimeEngine {
   meterScratchValue: (field: number) => number;
   meterScratchInputPeakDbL: () => number;
   meterScratchInputPeakDbR: () => number;
-  drainMeterTelemetry: (maxRecords: number | undefined) => WasmEngineMeterTelemetryWide[];
+  drainMeterTelemetry: (maxRecords: number | undefined) => WasmEngineMeterTelemetry[];
   meterTargetInsertGainReduction: (targetId: number) => number[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
   drainScopeTelemetry: (maxRecords: number | undefined) => WasmEngineScopeTelemetry[];
@@ -2657,11 +2657,6 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean | string>,
   ) => string;
-  masteringAssistantSuggestChain: (
-    samples: Float32Array,
-    sampleRate: number,
-    params: Record<string, number | boolean | string>,
-  ) => string;
   masteringAudioProfile: (
     samples: Float32Array,
     sampleRate: number,
@@ -2673,12 +2668,6 @@ export interface SonareModule {
     platforms: Array<{ name: string; targetLufs: number; ceilingDbtp: number }>,
   ) => string;
   masteringAssistantSuggestStereo: (
-    left: Float32Array,
-    right: Float32Array,
-    sampleRate: number,
-    params: Record<string, number | boolean | string>,
-  ) => string;
-  masteringAssistantSuggestChainStereo: (
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,

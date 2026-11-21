@@ -589,7 +589,7 @@ std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_v
 }
 
 // The chain document text of preset `preset_name`'s built-in configuration, the same shape
-// masteringAssistantSuggestChain returns for an analyzed chain -- passing it as the
+// masteringAssistantSuggest carries as chainConfig for an analyzed chain -- passing it as the
 // overrides document to masterAudio reproduces the preset unchanged. Calls the core directly
 // rather than the C ABI's mirror sonare_mastering_preset_params_json.
 //
@@ -608,17 +608,6 @@ std::string js_mastering_preset_params(std::string preset_name) {
 std::string js_mastering_chain_config_params(std::string document) {
   wasmRefuseEmbeddedNul(document, "document");
   return mastering::api::chain_config_to_json(mastering::api::chain_config_from_json(document));
-}
-
-std::string js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val,
-                                                 val params_obj) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples, "samples");
-  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
-  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
-  const auto result =
-      mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
-  return mastering::api::chain_config_to_json(result.config);
 }
 
 std::string js_mastering_audio_profile(val samples, const val& sample_rate_val, val params_obj) {
@@ -642,18 +631,6 @@ std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_sa
   const auto result = mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
   return mastering::assistant::assistant_result_to_json(result);
-}
-
-std::string js_mastering_assistant_suggest_chain_stereo(val left_samples, val right_samples,
-                                                        const val& sample_rate_val,
-                                                        val params_obj) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<float> interleaved =
-      interleaveValidatedPair("left", "right", left_samples, right_samples, sample_rate);
-  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
-  const auto result = mastering::assistant::suggest_chain_interleaved(
-      interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
-  return mastering::api::chain_config_to_json(result.config);
 }
 
 std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples,
@@ -744,11 +721,9 @@ void registerMasteringApiBindings() {
   function("masteringAbMatchLoudnessStereo", &js_mastering_ab_match_loudness_stereo);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
   function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
-  function("masteringAssistantSuggestChain", &js_mastering_assistant_suggest_chain);
   function("masteringAudioProfile", &js_mastering_audio_profile);
   function("masteringStreamingPreview", &js_mastering_streaming_preview);
   function("masteringAssistantSuggestStereo", &js_mastering_assistant_suggest_stereo);
-  function("masteringAssistantSuggestChainStereo", &js_mastering_assistant_suggest_chain_stereo);
   function("masteringAudioProfileStereo", &js_mastering_audio_profile_stereo);
   function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);

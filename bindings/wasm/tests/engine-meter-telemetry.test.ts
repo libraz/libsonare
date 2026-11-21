@@ -54,10 +54,10 @@ it.each(['lane', 'bus', 'master'] as const)(
         last = engine.drainMeterTelemetry().find((record) => record.targetId === targetId) ?? last;
       }
       expect(last).toBeDefined();
-      expect(last?.inputPeakDbL).toBeGreaterThan(-10);
-      expect(last?.inputPeakDbR).toBe(-120);
+      expect(last?.inputPeakDb[0]).toBeGreaterThan(-10);
+      expect(last?.inputPeakDb[1] ?? -120).toBe(-120);
       expect(last?.gainReductionDb).toBeLessThan(-10);
-      expect(last?.peakDbL).toBeLessThan((last?.inputPeakDbL ?? -120) - 10);
+      expect(last?.peakDb[0]).toBeLessThan((last?.inputPeakDb[0] ?? -120) - 10);
     } finally {
       engine.destroy();
     }
@@ -89,7 +89,7 @@ it('resets master integrated loudness while retaining the other meter windows', 
     expect(after?.momentaryLufs).toBeGreaterThan(-40);
     expect(after?.shortTermLufs).toBeGreaterThan(-40);
     expect(after?.maxTruePeakDbtp).toBeGreaterThan(-12);
-    expect(after?.inputPeakDbL).toBeGreaterThan(-12);
+    expect(after?.inputPeakDb[0]).toBeGreaterThan(-12);
   } finally {
     engine.destroy();
   }

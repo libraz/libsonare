@@ -470,53 +470,12 @@ export interface EngineTelemetry {
 }
 
 /**
- * Meter telemetry target ids: `0` is the master mix, `1..32` the track lanes
+ * Per-plane meter telemetry. A stereo target's left and right are planes 0 and 1; a surround
+ * target carries every plane. Target ids: `0` is the master mix, `1..32` the track lanes
  * (lane index + 1), `33..40` the buses, and `0xFFFF` the input-monitor tap.
  */
 export interface EngineMeterTelemetry {
   /** Tap target id: `0` master, `1..32` track lanes, `33..40` buses, `0xFFFF` input-monitor tap (not a lane index + 1). */
-  targetId: number;
-  /** Render-frame timestamp of the snapshot. */
-  renderFrame: number;
-  /** Monotonic sequence number. */
-  seq: number;
-  /** Left-channel peak level in dB. */
-  peakDbL: number;
-  /** Right-channel peak level in dB. */
-  peakDbR: number;
-  /** Left-channel RMS level in dB. */
-  rmsDbL: number;
-  /** Right-channel RMS level in dB. */
-  rmsDbR: number;
-  /** Inter-sample peak in dB (4x polyphase, one filter group delay behind the block). */
-  truePeakDbtpL: number;
-  /** Right-channel inter-sample peak in dB. */
-  truePeakDbtpR: number;
-  /** Maximum inter-sample peak across channels in dB. */
-  maxTruePeakDbtp: number;
-  /** Stereo correlation in `[-1, 1]`. */
-  correlation: number;
-  /** Mono-compatibility width metric. */
-  monoCompatWidth: number;
-  /** Momentary loudness in LUFS. */
-  momentaryLufs: number;
-  /** Short-term loudness in LUFS. */
-  shortTermLufs: number;
-  /** Integrated loudness in LUFS. */
-  integratedLufs: number;
-  /** Gain reduction in dB. */
-  gainReductionDb: number;
-  /** Maximum pre-trim input peak in dBFS. */
-  inputPeakDbL: number;
-  /** Maximum pre-trim input peak, right channel, in dBFS. */
-  inputPeakDbR: number;
-  /** Number of records dropped before this snapshot. */
-  droppedRecords: number;
-}
-
-/** Per-plane meter telemetry; `targetId` follows {@link EngineMeterTelemetry}. */
-export interface EngineMeterTelemetryWide {
-  /** Telemetry tap target id; see {@link EngineMeterTelemetry}. `0xFFFF` is the input-monitor tap. */
   targetId: number;
   /** Render-frame timestamp of the snapshot. */
   renderFrame: number;
@@ -528,7 +487,7 @@ export interface EngineMeterTelemetryWide {
   peakDb: number[];
   /** Per-plane RMS level in dB (length `numChannels`). */
   rmsDb: number[];
-  /** Per-plane inter-sample peak in dB, as {@link EngineMeterTelemetry.truePeakDbtpL}. */
+  /** Per-plane inter-sample peak in dB (4x polyphase, one filter group delay behind the block). */
   truePeakDbtp: number[];
   /** Maximum inter-sample peak across channels in dB. */
   maxTruePeakDbtp: number;

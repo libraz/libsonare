@@ -236,7 +236,6 @@ const TABLE: Entry[] = [
   stereo('masteringAnalyzeStereo', { analysis: 'stereo.monoCompatCheck' }),
   ...[
     'masteringAssistantSuggest',
-    'masteringAssistantSuggestChain',
     'masteringAudioProfile',
     'masteringStreamingPreview',
     'masteringDynamicsCompressor',
@@ -245,7 +244,6 @@ const TABLE: Entry[] = [
   ].map((name) => mono(name)),
   ...[
     'masteringAssistantSuggestStereo',
-    'masteringAssistantSuggestChainStereo',
     'masteringAudioProfileStereo',
     'masteringStreamingPreviewStereo',
   ].map((name) => stereo(name)),

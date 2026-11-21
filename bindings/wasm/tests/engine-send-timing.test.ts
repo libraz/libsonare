@@ -45,7 +45,7 @@ it('lane pre-fader sends retain their level when the strip fader is lowered', ()
         engine.process([new Float32Array(256)]);
         for (const record of engine.drainMeterTelemetry()) {
           if (record.targetId === 33) {
-            peak = record.peakDbL;
+            peak = record.peakDb[0];
           }
         }
       }

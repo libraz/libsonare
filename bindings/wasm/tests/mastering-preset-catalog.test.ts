@@ -1,7 +1,7 @@
 /**
  * The mastering preset catalog: `capabilityCatalog().masteringPresets`
  * against the tracked `tools/capability-catalog.json`, and
- * `masteringPresetParams` against `masteringAssistantSuggestChain`'s nested
+ * `masteringPresetParams` against `masteringAssistantSuggest`'s nested `chainConfig`
  * key space.
  */
 
@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
   init,
-  masteringAssistantSuggestChain,
+  masteringAssistantSuggest,
   masteringPresetNames,
   masteringPresetParams,
 } from '../dist/index.js';
@@ -68,7 +68,9 @@ describe('mastering preset catalog', () => {
     beforeAll(() => {
       // Deferred to beforeAll: init() has not necessarily run when this
       // describe body itself executes.
-      suggestedKeys = leafPaths(masteringAssistantSuggestChain({ samples, sampleRate })).sort();
+      suggestedKeys = leafPaths(
+        masteringAssistantSuggest({ samples, sampleRate }).chainConfig,
+      ).sort();
     });
 
     it('does not throw for any built-in preset', () => {
@@ -77,7 +79,7 @@ describe('mastering preset catalog', () => {
       }
     });
 
-    it("matches masteringAssistantSuggestChain's key set for every preset", () => {
+    it("matches masteringAssistantSuggest's chainConfig key set for every preset", () => {
       expect(suggestedKeys.length).toBeGreaterThan(0);
       for (const preset of masteringPresetNames()) {
         const keys = leafPaths(masteringPresetParams(preset)).sort();

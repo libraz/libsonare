@@ -195,12 +195,12 @@ describe('mixer worklet true-peak metering', () => {
         throw new Error('expected the engine to publish meter telemetry');
       }
       for (const value of [
-        engineMeter.peakDbL,
-        engineMeter.peakDbR,
-        engineMeter.rmsDbL,
-        engineMeter.rmsDbR,
-        engineMeter.truePeakDbtpL,
-        engineMeter.truePeakDbtpR,
+        engineMeter.peakDb[0],
+        engineMeter.peakDb[1],
+        engineMeter.rmsDb[0],
+        engineMeter.rmsDb[1],
+        engineMeter.truePeakDbtp[0],
+        engineMeter.truePeakDbtp[1],
       ]) {
         expect(value).toBe(FLOOR_DB);
       }
@@ -234,12 +234,12 @@ describe('mixer worklet true-peak metering', () => {
         throw new Error('expected the engine to publish meter telemetry');
       }
 
-      expect(mixerMeter.truePeakDbtpL).toBeCloseTo(engineMeter.truePeakDbtpL, 3);
-      expect(mixerMeter.truePeakDbtpR).toBeCloseTo(engineMeter.truePeakDbtpR, 3);
+      expect(mixerMeter.truePeakDbtpL).toBeCloseTo(engineMeter.truePeakDbtp[0], 3);
+      expect(mixerMeter.truePeakDbtpR).toBeCloseTo(engineMeter.truePeakDbtp[1], 3);
       // The construction places the inter-sample peak 3.01 dB above the sample
       // peak, so agreeing on the sample peak or on the floor cannot satisfy this.
-      expect(engineMeter.truePeakDbtpL).toBeGreaterThan(engineMeter.peakDbL + 1.5);
-      expect(engineMeter.truePeakDbtpR).toBeGreaterThan(engineMeter.peakDbR + 1.5);
+      expect(engineMeter.truePeakDbtp[0]).toBeGreaterThan(engineMeter.peakDb[0] + 1.5);
+      expect(engineMeter.truePeakDbtp[1]).toBeGreaterThan(engineMeter.peakDb[1] + 1.5);
     } finally {
       engine.destroy();
     }
