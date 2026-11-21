@@ -64,43 +64,11 @@ python = [
 [coverage]
 # Example (disabled): wasm = ["audio_from_file"]
 #
-# --- C functions FOLDED INTO the base facade (extended / options variants) ---
-# These C entry points are NOT separate facade functions: the base facade
-# function exposes them through an options/mode argument or a callback, the same
-# pattern as detect_chords -> detect_chords_ex (the template below).
-#
-#   detect_chords_ex: the facade `detect_chords` IS the extended form (it
-#     exposes all SonareChordDetectionOptions fields and calls
-#     sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
-#   voice_change_ex: the facade `voiceChange` / `voice_change` IS the extended
-#     form -- its `formantMode` / `formant_mode` argument is the `_ex` field.
-#     Node and WASM pass it to the core directly; Python calls the C `_ex` entry.
-#   detect_key_with_options / _and_modes / _with_extended_options /
-#     _with_tuning and the detect_key_candidates_with_modes /
-#     _with_extended_options / _with_tuning family: folded into the facade
-#     `detect_key` / `detect_key_candidates` extended params (modes / profile /
-#     genre_hint, and tuning; detect_key's result reports the tuning used).
-#   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
+# --- C functions folded into the base facade (extended / options variants) ---
 #   (mel_spectrogram_ex / mfcc_ex are credited by _ALIAS_COVERAGE in compare.py,
 #    anchored to the base mel_spectrogram / mfcc facade which now exposes the
 #    fmin/fmax/htk arguments and routes to the _ex C entry point — so they are
 #    not allowlisted here.)
-#   project_auto_tempo_ex / project_snap_to_grid_ex: folded into each Project
-#     facade's base auto-tempo / snap-to-grid method. The extended candidate,
-#     meter-apply, and division arguments are public optional parameters and the
-#     wrappers call the corresponding C `_ex` entry points; the defaults match
-#     the legacy base calls.
-#   project_analyze_tempo_with_options / project_auto_tempo_with_options: folded
-#     into the same two Project facade methods. The bridge options become an
-#     optional options bag on Node/WASM and keyword arguments on Python, and both
-#     wrappers now call the with-options entry points; passing nothing reproduces
-#     the fixed-signature calls exactly.
-#   project_bake_midi_fx_ex: folded into each Project facade's bake-MIDI-FX
-#     method. The provenance buffer becomes a `withSourceIndex` request field on
-#     Node/WASM and a `with_source_index` keyword on Python, and the wrapper
-#     calls the C `_ex` entry point; omitting it reproduces the base call. The
-#     companion sizing entry point project_preview_midi_fx_count is a real
-#     facade method on all three surfaces and is NOT allowlisted.
 #   error_message / last_error_message / last_error_code / last_diagnostic_count /
 #     last_diagnostic / diagnostic_init: C-ABI error and diagnostic channel accessors
 #     consumed internally by each facade (errors map to native exceptions; the
@@ -119,29 +87,9 @@ python = [
 #     caller-owned result or request POD and sets its schema version. The facades
 #     build those values as plain objects, so none has a free-function
 #     counterpart.
-#   mixer_strip_at: the handle->index convention the [order] notes already
-#     record for strip_meter. No facade hands out a SonareStrip*; every strip op
-#     takes an index or an id and resolves the borrowed handle internally.
-#   mixer_add_strip_ex: folded into the facade `addStrip` / `add_strip`, whose
-#     optional metering argument IS the `_ex` parameter set -- `enabled` / `lufs`
-#     / `truePeak` / `truePeakOversample` on Node and WASM, the matching keywords
-#     on Python, under the same names the scene document spells them. Omitting it
-#     reproduces the base sonare_mixer_add_strip call exactly. The base entry
-#     point is NOT allowlisted: it is the facade method.
-#   engine_set_synth_instrument_with_bank: folded into each facade's
-#     set_synth_instrument as an optional sample-bank argument, which is
-#     where the bank already lives for the bounce path. The plain C entry
-#     point is the same call with no bank, so exposing both would put two
-#     names on one operation. WASM reaches the same behaviour without calling
-#     this C function at all: c_api/sonare_c_engine_midi.cpp is not in the
-#     WASM source list, so its realtime binding constructs the NativeSynth
-#     directly and hands it the same shared bank one layer lower.
-#   engine_set_synth_instrument_binding: same fold, one C entry point wider.
-#     Node and Python route set_synth_instrument's useGmPrograms/sampleBank
-#     through this call now (a SonareSynthInstrumentBinding carries both), so
-#     it IS reachable there -- just under the facade's existing method name,
-#     which the name-matching extractor does not credit. WASM still constructs
-#     the NativeSynth directly, as above.
+#   mixer_strip_at: the handle->index convention. No facade hands out a
+#     SonareStrip*; every strip op takes an index or an id and resolves the
+#     borrowed handle internally.
 node = [
   # Platform constraint: only the WASM worklet must size its output bus before a
   # renderer exists, so the two playback channel-count probes have no mirror here.
@@ -159,23 +107,6 @@ node = [
   # The C thread-local detail is consumed by the Node exception bridge; it is
   # not a second public operation beside the VocalEdit methods.
   "vocal_last_error_detail",
-  "engine_set_synth_instrument_with_bank",
-  "engine_set_synth_instrument_binding",
-  "detect_chords_ex",
-  "voice_change_ex",
-  "detect_key_with_options",
-  "detect_key_with_options_and_modes",
-  "detect_key_with_extended_options",
-  "detect_key_with_tuning",
-  "detect_key_candidates_with_modes",
-  "detect_key_candidates_with_extended_options",
-  "detect_key_candidates_with_tuning",
-  "tempogram_with_mode",
-  "project_auto_tempo_ex",
-  "project_analyze_tempo_with_options",
-  "project_auto_tempo_with_options",
-  "project_snap_to_grid_ex",
-  "project_bake_midi_fx_ex",
   # C-only probe so a C caller need not parse the capabilities JSON; the
   # bindings read capabilities().features[key].
   "has_feature",
@@ -190,34 +121,16 @@ node = [
   "last_refusal_render",
   "last_refusal_entry",
   "mixer_strip_at",
-  "mixer_add_strip_ex",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
   # result IS what analyze() returns, serialized via sonare_analyze_json) and
   # `analyzeWithProgress` (the progress-callback variant, which takes the same
-  # analysis options through sonare_analyze_json_ex_with_progress). analyze_melody_ex is
-  # folded into analyzeMelody's usePyin/center options.
+  # analysis options through sonare_analyze_json_ex_with_progress).
   "analyze_json",
-  "analyze_json_ex_with_progress",
-  "analyze_melody_ex",
   # C-ABI-internal length-checked inverse variants: bindings build their own
   # arrays with known lengths and call the base function, so the explicit-length
   # guards are not part of the binding surface.
-  "mel_to_stft_checked",
-  "mel_to_audio_checked",
-  "mfcc_to_mel_checked",
-  "mfcc_to_mel_checked_ex",
-  "mfcc_to_audio_checked",
-  "cqt_to_audio_checked",
-  "vqt_to_audio_checked",
   # HTK-aware inverse variants are folded into the base facades through the
   # `htk` option and route to the _ex C entry points internally.
-  "mel_to_stft_ex",
-  "mel_to_audio_ex",
-  "mfcc_to_audio_ex",
-  "mel_to_stft_checked_ex",
-  "mel_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex2",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -263,23 +176,6 @@ wasm = [
   # The WASM module reads this thread-local detail to attach the matching
   # structured payload to the thrown exception.
   "vocal_last_error_detail",
-  "engine_set_synth_instrument_with_bank",
-  "engine_set_synth_instrument_binding",
-  "detect_chords_ex",
-  "voice_change_ex",
-  "detect_key_with_options",
-  "detect_key_with_options_and_modes",
-  "detect_key_with_extended_options",
-  "detect_key_with_tuning",
-  "detect_key_candidates_with_modes",
-  "detect_key_candidates_with_extended_options",
-  "detect_key_candidates_with_tuning",
-  "tempogram_with_mode",
-  "project_auto_tempo_ex",
-  "project_analyze_tempo_with_options",
-  "project_auto_tempo_with_options",
-  "project_snap_to_grid_ex",
-  "project_bake_midi_fx_ex",
   # C-only probe so a C caller need not parse the capabilities JSON; the
   # bindings read capabilities().features[key].
   "has_feature",
@@ -294,28 +190,11 @@ wasm = [
   "last_refusal_render",
   "last_refusal_entry",
   "mixer_strip_at",
-  "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
-  "mel_to_stft_checked",
-  "mel_to_audio_checked",
-  "mfcc_to_mel_checked",
-  "mfcc_to_mel_checked_ex",
-  "mfcc_to_audio_checked",
-  "cqt_to_audio_checked",
-  "vqt_to_audio_checked",
-  "mel_to_stft_ex",
-  "mel_to_audio_ex",
-  "mfcc_to_audio_ex",
-  "mel_to_stft_checked_ex",
-  "mel_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex2",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
   "analyze_json",
-  "analyze_json_ex_with_progress",
-  "analyze_melody_ex",
   # --- WASM platform / API-shape differences ---
   # No host filesystem and no compressed-audio decoder in the WASM build: the
   # WASM Audio class is a pure-JS sample wrapper constructed via Audio.fromBuffer.
@@ -327,7 +206,6 @@ wasm = [
   # Loading one channel of a file is the same host-filesystem and decoder
   # dependency as audio_from_file above; a WASM caller already holds the samples
   # and builds each channel through Audio.fromBuffer.
-  "audio_from_file_channel",
   # See the Node note: this C enum parser is internal to typed facade inputs.
   "synth_builtin_waveform_from_name",
   # See the Node note: WASM also takes the delivery target by name and resolves
@@ -359,23 +237,6 @@ python = [
   # ctypes reads the thread-local detail after a failed call and folds it into
   # VocalEditError; callers do not invoke the ABI helper directly.
   "vocal_last_error_detail",
-  "engine_set_synth_instrument_with_bank",
-  "engine_set_synth_instrument_binding",
-  "detect_chords_ex",
-  "voice_change_ex",
-  "detect_key_with_options",
-  "detect_key_with_options_and_modes",
-  "detect_key_with_extended_options",
-  "detect_key_with_tuning",
-  "detect_key_candidates_with_modes",
-  "detect_key_candidates_with_extended_options",
-  "detect_key_candidates_with_tuning",
-  "tempogram_with_mode",
-  "project_auto_tempo_ex",
-  "project_analyze_tempo_with_options",
-  "project_auto_tempo_with_options",
-  "project_snap_to_grid_ex",
-  "project_bake_midi_fx_ex",
   # C-only probe so a C caller need not parse the capabilities JSON; the
   # bindings read capabilities().features[key].
   "has_feature",
@@ -385,28 +246,11 @@ python = [
   "last_diagnostic_count",
   "last_diagnostic",
   "mixer_strip_at",
-  "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
-  "mel_to_stft_checked",
-  "mel_to_audio_checked",
-  "mfcc_to_mel_checked",
-  "mfcc_to_mel_checked_ex",
-  "mfcc_to_audio_checked",
-  "cqt_to_audio_checked",
-  "vqt_to_audio_checked",
-  "mel_to_stft_ex",
-  "mel_to_audio_ex",
-  "mfcc_to_audio_ex",
-  "mel_to_stft_checked_ex",
-  "mel_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex",
-  "mfcc_to_audio_checked_ex2",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
-  # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
+  # `analyze_with_progress`.
   "analyze_json",
-  "analyze_json_ex_with_progress",
-  "analyze_melody_ex",
   # See the JS notes: Python resolves typed waveform strings internally.
   "synth_builtin_waveform_from_name",
   # Called by the Python facade to turn the targetPlatform name into the index
@@ -455,25 +299,11 @@ python = [
 # midi, reference_midi=default) and remap to C order internally (verified in the
 # addon / embind / ctypes wrappers).
 #
-# tempogram (python): the facade exposes a single `mode` selector (cyclic /
-# fourier / autocorr) that folds the C `center` / `norm` flags, keeping
-# center+norm alongside it. Documented ergonomic convenience, not order drift.
-# strip_meter (wasm/node): the C handle method `sonare_strip_meter` takes a
-# `strip` handle; the facades follow the documented handle->index convention
-# (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
-# selector, the same extended-facade shape already accepted for strip_meter
-# (python) below. Same op, handle->index + tap-selector — not order drift.
 # chord_functional_analysis (python): C is (options-bag, key_root, key_mode); the
 # facade puts (key_root, key_mode) first and INLINES the
 # SonareChordDetectionOptions fields after them — the same ergonomic
 # options-inlining + key-first shape already used for detect_chords. Remapped
 # internally; not order drift.
-# voice_change (python): the facade appends `formant_mode`, which maps to the
-# `formant_mode` field of the C sonare_voice_change_ex config; the base C
-# voice_change lacks it. Folded extended-facade param, not order drift.
-# analyze_melody (python): the facade appends the extended use_pyin/center params
-# that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks them.
-# Folded extended-facade params, not order drift.
 # midi_cc_learn (python): C is (events, count, param_id, min_value, max_value,
 # min_movement). The facade DERIVES `count` from the events array length and keeps
 # the range params as keyword args. Passing both the array and a redundant count
@@ -506,22 +336,16 @@ python = [
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
-  "strip_meter",
   "downmix",
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]
 wasm = [
   "scale_quantize_midi",
   "scale_correction_semitones",
-  "strip_meter",
   "downmix",
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]
 
-# detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
-# that map to the extended C variants (detect_key_candidates_with_modes /
-# _with_extended_options). strip_meter (python): the extra `tap` selector maps
-# to the metering-tap variant. Both are legitimate extended-facade params.
 # scale_quantize_midi / scale_correction_semitones (python): same ergonomic
 # (root, mode_mask, midi, reference_midi=default) order as Node/WASM above,
 # remapped to the C order internally by the ctypes wrapper.
@@ -530,14 +354,9 @@ python = [
   # and splits `key` into the C root/mode pair; the C out-arrays become the added
   # roman/function fields.
   "chord_functions",
-  "detect_key_candidates",
-  "strip_meter",
-  "tempogram",
   "scale_quantize_midi",
   "scale_correction_semitones",
   "chord_functional_analysis",
-  "analyze_melody",
-  "voice_change",
   "midi_cc_learn",
   "midi_route_events",
   "split_note",
@@ -751,7 +570,6 @@ fields = [
   # The stereo room morph's diagnostics travel on the C diagnostic channel
   # (sonare_last_diagnostic_*), as the mono morph's do; the facades fold them
   # into the result.
-  "room_morph_stereo_result.diagnostics",
 
   # --- category 4: intentionally one-sided facade additions ---
   # Human-readable text derived from the diagnostic `code`; the C POD carries
@@ -824,7 +642,6 @@ fields = [
   "project_compile_result.has_timeline",
   # A project stores musical positions only. The sample start is derived when
   # the project compiles and is never read back.
-  "project_tempo_segment.start_sample",
   # --- Matrix dims folded into Matrix2D rows/cols (category 2) ---
   # C carries a flat buffer plus its counts; both JS facades return a Matrix2D
   # whose rows and cols are those counts.
@@ -881,12 +698,9 @@ fields = [
   # --- Beat times folded into beats (categories 2 and 1) ---
   # C beat_times + beat_count become beats: Beat[], each beat carrying its time
   # and the count being the array length.
-  "analysis_result.beat_times",
   # --- Tempo hypothesis spelled bpm (category 1) ---
   # Every facade names a candidate's tempo `bpm`, as the result's own tempo is;
   # the C struct calls the same float `value`.
-  "analysis_bpm_candidate.value",
-  "analysis_bpm_candidate.bpm",
   # --- Fields with one permitted value (category 4) ---
   # MFCC is_db is always 0; the stream config's magnitude pair and output format
   # accept only their defaults. The facades pass those and do not expose them.
@@ -896,16 +710,11 @@ fields = [
   "stream_config.output_format",
 ]
 
-# Category 4 (intentionally one-sided): the facade record is a RICHER read model
-# than the C struct, so extra fields are expected while a MISSING C field still
-# reports. `SonareAnalysisResult` is the lean POD returned by the struct-based C
-# entry points; the TS `AnalysisResult` mirrors the parsed sonare_analyze_json
-# document (nested beats / chords / sections / timbre / dynamics / rhythm /
-# melody / form). Stated as a direction rather than as a field list so the entry
-# stays correct as the analysis document grows.
+# Empty on purpose: an entry would excuse a facade record carrying fields the C
+# struct lacks (a richer read model), which no record currently does.
 [record.extra_fields]
-node = ["analysis_result"]
-wasm = ["analysis_result"]
+node = []
+wasm = []
 
 # Whole-record suppression. Empty on purpose: it hides missing C fields too,
 # which is the drift this unit exists to catch. Reach for `extra_fields` or
