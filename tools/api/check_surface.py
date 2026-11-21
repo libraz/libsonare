@@ -1571,6 +1571,58 @@ def _c_channel_twin(rec: dict, base: dict, form: str) -> str | None:
     return f"base has {only(theirs, mine)}; twin has {only(mine, theirs)}"
 
 
+# The decided sample formats of one read: the same call returning its buffers in another
+# element type. A twin is one only while its parameters match and its result struct differs
+# from the base's in buffer element type alone.
+_C_SAMPLE_FORMATS = {"u8": "uint8_t", "i16": "int16_t"}
+_C_SAMPLE_FORMAT_MESSAGE = "is the _{fmt} sample format of {base} but differs from it"
+
+
+def _c_sample_format_twin(ctx, rec: dict, base: dict, fmt: str) -> str | None:
+    """None when the twin is its base with buffers of another element type, else what differs."""
+    suffix = fmt.upper()
+    elem = _C_SAMPLE_FORMATS[fmt]
+    sig = lambda r: (r.get("sigs") or [{}])[0]
+    norm = lambda t: " ".join(t.split())
+    mine = [(norm(p.get("type", "")), p.get("name", "")) for p in sig(rec).get("params", [])]
+    theirs = [(norm(p.get("type", "")), p.get("name", "")) for p in sig(base).get("params", [])]
+    pairs = {}
+    renamed = []
+    for t, n in mine:
+        m = re.match(rf"^(\w+){suffix}\*$", t)
+        if m:
+            pairs[m.group(1)] = m.group(1) + suffix
+            t = f"{m.group(1)}*"
+        renamed.append((t, n))
+    diffs = []
+    if renamed != theirs or sig(rec).get("returns") != sig(base).get("returns"):
+        extra = [f"{t} {n}" for t, n in renamed if (t, n) not in theirs]
+        gone = [f"{t} {n}" for t, n in theirs if (t, n) not in renamed]
+        diffs.append(
+            f"parameters: base has {', '.join(gone) or 'nothing else'};"
+            f" twin has {', '.join(extra) or 'nothing else'}"
+        )
+    fields = collections.defaultdict(dict)
+    for f in recs(ctx, ("c",), ("field",)):
+        owner = f["name"].split(".")[0]
+        fields[owner][f["member"]] = norm(f.get("type", ""))
+    for b, t in sorted(pairs.items()):
+        bf, tf = fields.get(b, {}), fields.get(t, {})
+        gone = [m for m in bf if m not in tf]
+        extra = [m for m in tf if m not in bf]
+        retyped = [
+            m for m in bf if m in tf and tf[m] != bf[m] and tf[m] != bf[m].replace("float", elem)
+        ]
+        for label, ms in (
+            ("lacks", gone),
+            ("adds", extra),
+            ("retypes beyond the element", retyped),
+        ):
+            if ms:
+                diffs.append(f"{t} {label} {', '.join(ms)}")
+    return "; ".join(diffs) or None
+
+
 def chk_options_suffix(ctx):
     cands = recs(ctx, ("c",), ("function",))
     by_name = {r["name"]: r for r in cands}
@@ -1578,6 +1630,7 @@ def chk_options_suffix(ctx):
     bad = []
     structural: collections.Counter = collections.Counter()
     channel_forms = 0
+    sample_formats = 0
     for r in cands:
         name = r["name"]
         fixed = _C_SUFFIX.search(name)
@@ -1608,7 +1661,20 @@ def chk_options_suffix(ctx):
                 msg = _C_CHANNEL_FORM_MESSAGE.format(form=rest, base=base)
                 bad.append((r, f"{msg}: {diff}"))
             continue
+        if rest in _C_SAMPLE_FORMATS:
+            diff = _c_sample_format_twin(ctx, r, by_name[base], rest)
+            if diff is None:
+                sample_formats += 1
+            else:
+                msg = _C_SAMPLE_FORMAT_MESSAGE.format(fmt=rest, base=base)
+                bad.append((r, f"{msg}: {diff}"))
+            continue
         bad.append((r, _C_EXTENSION_MESSAGE.format(base=base, rest=rest)))
+    if sample_formats:
+        ctx.not_compared["options-struct:suffix"].append(
+            f"{sample_formats} sample-format twins (_u8, _i16) match their base but for the"
+            " buffer element type"
+        )
     if channel_forms:
         ctx.not_compared["options-struct:suffix"].append(
             f"{channel_forms} channel-form twins (_stereo, _linked, _interleaved) match their"
@@ -2518,8 +2584,12 @@ _CATEGORY_FITS = {
         "a token with a word separator has a lowerCamel form",
     ),
     "distinct-operation": (
-        lambda r, msg: not _C_SUFFIX.search(r["name"]) and " channel form of " not in msg,
-        "a fixed second-form suffix or a channel form names no other operation",
+        lambda r, msg: (
+            not _C_SUFFIX.search(r["name"])
+            and " channel form of " not in msg
+            and " sample format of " not in msg
+        ),
+        "a fixed second-form suffix, a channel form or a sample format names no other operation",
     ),
 }
 

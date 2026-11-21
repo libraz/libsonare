@@ -2695,8 +2695,8 @@ class SecondFormExtensions(CheckerCase):
             [
                 (
                     "c function sonare_cqt_ex: suffix _ex marks a second form of one operation;"
-                    " allowlisted as distinct-operation, but a fixed second-form suffix or a"
-                    " channel form names no other operation"
+                    " allowlisted as distinct-operation, but a fixed second-form suffix, a"
+                    " channel form or a sample format names no other operation"
                 )
             ],
         )
@@ -2766,8 +2766,67 @@ class SecondFormExtensions(CheckerCase):
                     "c function sonare_morph_stereo: is the _stereo channel form of sonare_morph"
                     " but differs from it after the audio: base has float** out, size_t*"
                     " out_length; twin has SonareMorphStereoResult* out; allowlisted as"
-                    " distinct-operation, but a fixed second-form suffix or a channel form"
-                    " names no other operation"
+                    " distinct-operation, but a fixed second-form suffix, a channel form or a"
+                    " sample format names no other operation"
+                )
+            ],
+        )
+
+    def frames(self, struct, elem):
+        return (
+            _rec("c", "type", struct, c_kind="struct"),
+            _field("c", struct, "n_frames", "int", index=0),
+            _field("c", struct, "mel", f"{elem}*", index=1),
+        )
+
+    def reader(self, name, struct, *extra):
+        return _fn(
+            "c",
+            name,
+            "SonareError",
+            _c_param("analyzer", "SonareStreamAnalyzer*"),
+            *extra,
+            _c_param("out", f"{struct}*"),
+        )
+
+    def test_a_sample_format_differing_in_element_type_alone_is_counted(self):
+        _, before = self.run_check("--check", "options-struct:suffix")
+        self.add(
+            *self.frames("SonareFrames", "float"),
+            *self.frames("SonareFramesU8", "uint8_t"),
+            self.reader("sonare_read_frames", "SonareFrames"),
+            self.reader("sonare_read_frames_u8", "SonareFramesU8"),
+        )
+        _, lines = self.run_check("--check", "options-struct:suffix")
+        added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
+        self.assertEqual(len(added), 1, added)
+        self.assertIn("1 sample-format twins (_u8, _i16)", added[0])
+
+    def test_a_sample_format_with_another_input_or_member_is_refused(self):
+        self.add(
+            *self.frames("SonareFrames", "float"),
+            _field("c", "SonareFrames", "chord_root", "int*", index=2),
+            *self.frames("SonareFramesI16", "int16_t"),
+            self.reader("sonare_read_frames", "SonareFrames"),
+            self.reader(
+                "sonare_read_frames_i16",
+                "SonareFramesI16",
+                _c_param("config", "const SonareQuantizeConfig*"),
+            ),
+        )
+        allow = self.allow("sonare_read_frames_i16")
+        code, lines = self.run_check("--check", "options-struct:suffix", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            self.flagged(lines),
+            [
+                (
+                    "c function sonare_read_frames_i16: is the _i16 sample format of"
+                    " sonare_read_frames but differs from it: parameters: base has nothing"
+                    " else; twin has const SonareQuantizeConfig* config; SonareFramesI16"
+                    " lacks chord_root; allowlisted as distinct-operation, but a fixed"
+                    " second-form suffix, a channel form or a sample format names no other"
+                    " operation"
                 )
             ],
         )
