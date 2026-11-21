@@ -15,7 +15,8 @@
 ///
 /// @section playback_threading Thread safety
 /// - `sonare_playback_renderer_process_planar`,
-///   `sonare_playback_renderer_process_interleaved` and
+///   `sonare_playback_renderer_process_interleaved`,
+///   `sonare_playback_renderer_process_silence` and
 ///   `sonare_playback_renderer_set_head_orientation` are realtime-safe: they
 ///   neither allocate nor throw, and they do not touch the thread-local
 ///   `sonare_last_error_message()` channel. They report a rejected argument
@@ -140,6 +141,15 @@ SonareError sonare_playback_renderer_process_planar(SonarePlaybackRenderer* rend
 SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer* renderer,
                                                          const float* in, int in_channels,
                                                          float* out, int out_channels, int frames);
+/// @brief Renders one planar block of silence, for a host with no input connected yet.
+/// @details Every stage advances as for a block of zeros through the active input layout,
+///          and the input layout is neither fixed nor switched: under "auto" the first block
+///          that carries input still sets it without counting a switch. @p frames must not
+///          exceed the max block size; 0 is a no-op. @p num_output_channels must equal the
+///          output channel count. A rejected call does not advance any state.
+SonareError sonare_playback_renderer_process_silence(SonarePlaybackRenderer* renderer,
+                                                     float* const* out, int num_output_channels,
+                                                     int frames);
 /// @brief Renderer latency in frames (headphones: near ear).
 SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRenderer* renderer,
                                                      int* out);

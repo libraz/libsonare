@@ -1506,6 +1506,7 @@
 "playback_renderer_options": {"domain": "engine", "surfaces": ["node", "wasm"]},
 "playback_renderer_process_interleaved": {"domain": "engine", "surfaces": ["c"]},
 "playback_renderer_process_planar": {"domain": "engine", "surfaces": ["c"]},
+"playback_renderer_process_silence": {"domain": "engine", "surfaces": ["c"]},
 "playback_renderer_render_offline": {"domain": "engine", "surfaces": ["c"]},
 "playback_renderer_reset": {"domain": "engine", "surfaces": ["c"]},
 "playback_renderer_set_config_json": {"domain": "engine", "surfaces": ["c"]},

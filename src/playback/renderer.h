@@ -87,6 +87,10 @@ class PlaybackRenderer {
   /// Interleaved variant; @p in and @p out must not alias.
   bool process_interleaved(const float* in, int in_channels, float* out, int out_channels,
                            int frames) noexcept;
+  /// Renders one planar block of zero input through the active input layout: every stage
+  /// advances as for a block, and the input layout is neither fixed nor switched. Returns false
+  /// (and advances nothing) for a rejected shape; frames == 0 returns true.
+  bool process_silence(float* const* out, int out_channels, int frames) noexcept;
   /// Clears all DSP state, including pending drains; keeps the configuration,
   /// the head pose and the active input layout.
   void reset() noexcept;

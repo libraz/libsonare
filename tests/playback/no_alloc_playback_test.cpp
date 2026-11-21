@@ -65,6 +65,18 @@ class Driver {
     n_ += kBlock;
   }
 
+  /// One block of silence for a host with no input connected yet.
+  void silence() {
+    bool ok = false;
+    {
+      sonare::test::AllocationGuard guard;
+      ok = renderer_.process_silence(out_ptrs_.data(), renderer_.output_channel_count(), kBlock);
+      allocations_ += guard.count();
+    }
+    all_ok_ = all_ok_ && ok;
+    n_ += kBlock;
+  }
+
   size_t allocations() const { return allocations_; }
   double energy() const { return energy_; }
   bool all_ok() const { return all_ok_; }
@@ -102,6 +114,7 @@ void run_switch_sequence(const RendererConfig& config) {
   Driver driver(renderer);
   RendererConfig changed = config;
   int run = 0;
+  for (int b = 0; b < 2; ++b) driver.silence();
   for (int channels : {1, 2, 6, 8, 2}) {
     for (int b = 0; b < blocks_per_run; ++b) driver.block(channels, b % 2 == 1);
     // A realtime-only change, adopted by the next guarded block.
@@ -116,6 +129,7 @@ void run_switch_sequence(const RendererConfig& config) {
   driver.block(6, false);
   driver.block(2, false);
   for (int b = 0; b < 4; ++b) driver.block(2, false);
+  driver.silence();
 
   const RendererDiagnostics d = renderer.diagnostics();
   CHECK(driver.all_ok());

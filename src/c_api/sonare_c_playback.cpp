@@ -250,6 +250,20 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
 #endif
 }
 
+SonareError sonare_playback_renderer_process_silence(SonarePlaybackRenderer* renderer,
+                                                     float* const* out, int num_output_channels,
+                                                     int frames) {
+  // Realtime entry: never touches the thread-local error message.
+  SONARE_C_RT_API_ENTRY;
+#if defined(SONARE_WITH_PLAYBACK)
+  if (!renderer) return SONARE_ERROR_INVALID_PARAMETER;
+  const bool ok = renderer->renderer->process_silence(out, num_output_channels, frames);
+  return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(renderer, out, num_output_channels, frames);
+#endif
+}
+
 SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRenderer* renderer,
                                                      int* out) {
   SONARE_C_API_ENTRY;

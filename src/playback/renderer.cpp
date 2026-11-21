@@ -222,10 +222,18 @@ struct PlaybackRenderer::Impl {
     layout_switches.fetch_add(1, std::memory_order_relaxed);
   }
 
-  /// Renders `frames` of the staged input into out_ptrs.
-  void render(int in_channels, int frames) noexcept {
+  /// Renders `frames` of the staged input into out_ptrs; a block that carries input fixes the
+  /// layout under auto, and a silent one leaves it to the next block that does.
+  void render(int in_channels, int frames, bool carries_input) noexcept {
     rt::ScopedNoDenormals no_denormals;
     adopt();
+    if (carries_input) fix_layout(in_channels);
+    render_stages(frames);
+  }
+
+  /// Under auto, adopts the layout @p in_channels names on the first block that carries input
+  /// and switches to it on a later one.
+  void fix_layout(int in_channels) noexcept {
     if (auto_layout &&
         in_channels != front_ends[static_cast<size_t>(active)]->input_channel_count()) {
       ChannelLayout layout = ChannelLayout::Stereo;
@@ -237,7 +245,10 @@ struct PlaybackRenderer::Impl {
       }
     }
     layout_established = true;
+  }
 
+  /// Renders `frames` of the staged input through the active front end and every later stage.
+  void render_stages(int frames) noexcept {
     const int bus_count = bus.channel_count();
     for (int p = 0; p < bus_count; ++p) {
       std::fill(bus_ptrs[static_cast<size_t>(p)], bus_ptrs[static_cast<size_t>(p)] + frames, 0.0f);
@@ -501,7 +512,7 @@ bool PlaybackRenderer::process_planar(const float* const* in, int in_channels, f
   }
   if (replaced > 0) m.non_finite.add(replaced);
 
-  m.render(in_channels, frames);
+  m.render(in_channels, frames, true);
   for (int c = 0; c < out_channels; ++c) {
     const float* from = m.output_plane(c);
     std::copy(from, from + frames, out[c]);
@@ -532,13 +543,35 @@ bool PlaybackRenderer::process_interleaved(const float* in, int in_channels, flo
   }
   if (replaced > 0) m.non_finite.add(replaced);
 
-  m.render(in_channels, frames);
+  m.render(in_channels, frames, true);
   for (int c = 0; c < out_channels; ++c) {
     const float* from = m.output_plane(c);
     for (int i = 0; i < frames; ++i) {
       out[static_cast<size_t>(i) * static_cast<size_t>(out_channels) + static_cast<size_t>(c)] =
           from[i];
     }
+  }
+  return true;
+}
+
+bool PlaybackRenderer::process_silence(float* const* out, int out_channels, int frames) noexcept {
+  Impl& m = *impl_;
+  if (frames == 0) return true;
+  if (frames < 0 || frames > m.max_block || out == nullptr || out_channels != m.out_count) {
+    return false;
+  }
+  for (int c = 0; c < out_channels; ++c) {
+    if (out[c] == nullptr) return false;
+  }
+
+  const int in_channels = m.front_ends[static_cast<size_t>(m.active)]->input_channel_count();
+  for (int c = 0; c < in_channels; ++c) {
+    std::fill_n(m.staging[static_cast<size_t>(c)].data(), frames, 0.0f);
+  }
+  m.render(in_channels, frames, false);
+  for (int c = 0; c < out_channels; ++c) {
+    const float* from = m.output_plane(c);
+    std::copy(from, from + frames, out[c]);
   }
   return true;
 }

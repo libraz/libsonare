@@ -319,6 +319,41 @@ TEST_CASE("playback renderer process_planar renders and rejects without advancin
   sonare_playback_renderer_destroy(renderer);
 }
 
+TEST_CASE("playback renderer process_silence renders without fixing the input layout",
+          "[playback][capi]") {
+  constexpr int kMaxBlock = 128;
+  SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config(), 48000, kMaxBlock);
+  std::vector<std::vector<float>> planes(6, std::vector<float>(kMaxBlock, 1.0f));
+  std::vector<float*> out;
+  for (auto& plane : planes) out.push_back(plane.data());
+
+  CHECK(sonare_playback_renderer_process_silence(renderer, out.data(), 6, kMaxBlock) == SONARE_OK);
+  for (const auto& plane : planes) {
+    for (float sample : plane) CHECK(sample == 0.0f);
+  }
+  CHECK(sonare_playback_renderer_process_silence(renderer, out.data(), 6, 0) == SONARE_OK);
+  CHECK(sonare_playback_renderer_process_silence(renderer, out.data(), 2, kMaxBlock) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_playback_renderer_process_silence(renderer, out.data(), 6, kMaxBlock + 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_playback_renderer_process_silence(renderer, out.data(), 6, -1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_playback_renderer_process_silence(renderer, nullptr, 6, kMaxBlock) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_playback_renderer_process_silence(nullptr, out.data(), 6, kMaxBlock) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  // The first block that carries input still sets the layout.
+  std::vector<float> in(kMaxBlock * 6, 0.1f);
+  std::vector<float> interleaved(kMaxBlock * 6, 0.0f);
+  CHECK(sonare_playback_renderer_process_interleaved(renderer, in.data(), 6, interleaved.data(), 6,
+                                                     kMaxBlock) == SONARE_OK);
+  int in_channels = 0;
+  CHECK(sonare_playback_renderer_num_input_channels(renderer, &in_channels) == SONARE_OK);
+  CHECK(in_channels == 6);
+  sonare_playback_renderer_destroy(renderer);
+}
+
 TEST_CASE("playback renderer process_interleaved rejects aliasing", "[playback][capi]") {
   constexpr int kMaxBlock = 128;
   SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config(), 48000, kMaxBlock);

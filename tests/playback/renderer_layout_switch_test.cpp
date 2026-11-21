@@ -330,6 +330,37 @@ TEST_CASE("the first block under auto fixes the layout without counting a switch
   CHECK(automatic.input_channel_count() == 6);
 }
 
+TEST_CASE("silence before the first input leaves the layout to that input at the same position",
+          "[playback][layout-switch]") {
+  const RendererConfig config = auto_config(TargetKind::Speakers, ChannelLayout::FivePointOne);
+  const Source source = [](int, int ch, int n) { return ch == 2 ? sine(n) : 0.0f; };
+  const Source zeros = [](int, int, int) { return 0.0f; };
+  constexpr int kSilentBlocks = 10;
+
+  PlaybackRenderer silenced(config, nullptr, kRate, kBlock);
+  PlaybackRenderer zero_fed(config, nullptr, kRate, kBlock);
+  const int out_count = silenced.output_channel_count();
+  Planes silence(static_cast<size_t>(out_count), std::vector<float>(kBlock, 1.0f));
+  std::vector<float*> silence_ptrs;
+  for (auto& plane : silence) silence_ptrs.push_back(plane.data());
+  for (int b = 0; b < kSilentBlocks; ++b) {
+    REQUIRE(silenced.process_silence(silence_ptrs.data(), out_count, kBlock));
+  }
+  (void)run(zero_fed, {{6, kSilentBlocks}}, zeros);
+
+  const Planes after_silence = run(silenced, {{6, 20}}, source);
+  const Planes after_zeros = run(zero_fed, {{6, 20}}, source);
+  CHECK(silenced.diagnostics().layout_switches == 0u);
+  CHECK(silenced.input_channel_count() == 6);
+  float worst = 0.0f;
+  for (size_t p = 0; p < after_silence.size(); ++p) {
+    for (size_t i = 0; i < after_silence[p].size(); ++i) {
+      worst = std::max(worst, std::fabs(after_silence[p][i] - after_zeros[p][i]));
+    }
+  }
+  CHECK(worst <= 1e-6f);
+}
+
 TEST_CASE("an impulse in every layout section lands at its latency", "[playback][layout-switch]") {
   PlaybackRenderer renderer(auto_config(TargetKind::Speakers, ChannelLayout::FivePointOne), nullptr,
                             kRate, kBlock);
