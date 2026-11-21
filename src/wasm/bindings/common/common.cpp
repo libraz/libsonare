@@ -705,6 +705,22 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
   return checkedFloatFromVal(v, key);
 }
 
+double domainCheckedNumber(const val& value, const char* key,
+                           const sonare::util::check::NumericDomain& domain) {
+  if (!value.isNumber()) {
+    throw WasmTypeError(std::string(key) + (domain.kind == sonare::util::check::NumberKind::Integer
+                                                ? " must be an integer"
+                                                : " must be a number"));
+  }
+  const double number = value.as<double>();
+  try {
+    sonare::util::check::within(number, domain, key);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw refusal.as_caller_spelled();
+  }
+  return number;
+}
+
 std::optional<float> optionalDomainNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
   return sonare::util::check::saturated_float(numberFromVal(v, key));
