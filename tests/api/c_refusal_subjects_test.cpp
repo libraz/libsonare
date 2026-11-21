@@ -231,6 +231,22 @@ TEST_CASE("the music feature entries refuse their own members", "[c_api][feature
   CHECK(sonare_estimate_tuning(samples.data(), samples.size(), 22050, 2048, 512, 0.01f, 0,
                                &tuning) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "bins_per_octave must be an integer in [1, 2147483647]");
+
+  SonareMelodyResult melody{};
+  CHECK(sonare_analyze_melody(samples.data(), samples.size(), 22050, 0.0f, 2093.0f, 2048, 256, 0.1f,
+                              &melody) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_min_hz must be finite and greater than 0");
+  CHECK(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 100.0f, 100.0f, 2048, 256,
+                                 0.1f, 1, 1, &melody) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_max_hz must be finite and greater than f0_min_hz");
+
+  SonarePitchResult pitch{};
+  CHECK(sonare_pitch_yin(samples.data(), samples.size(), 22050, 2048, 512, 500.0f, 100.0f, 0.1f,
+                         &pitch) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_max_hz must be finite and greater than f0_min_hz");
+  CHECK(sonare_pitch_pyin(samples.data(), samples.size(), 22050, 2048, 512, 500.0f, 100.0f, 0.1f, 0,
+                          &pitch) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_max_hz must be finite and greater than f0_min_hz");
 }
 
 TEST_CASE("the music and spectrogram entries refuse a NULL argument by its name",
@@ -553,6 +569,23 @@ namespace {
 /// an entry that refuses no value of that subject.
 const std::map<std::string_view, std::function<void()>>& spelling_row_drivers() {
   static const std::map<std::string_view, std::function<void()>> drivers = {
+      {"align_take_to_reference",
+       [] {
+         // 8000 Hz carries only 12 bins per octave, so 60 is refused against the reference rate.
+         std::vector<float> audio(8000, 0.1f);
+         SonareTakeAlignConfig config{};
+         config.bins_per_octave = 60;
+         SonareProjectWarpAnchor* anchors = nullptr;
+         size_t count = 0;
+         sonare_align_take_to_reference_ex(audio.data(), audio.size(), 8000, audio.data(),
+                                           audio.size(), 8000, &config, &anchors, &count, nullptr);
+       }},
+      {"downmix",
+       [] {
+         const float samples[2] = {0.1f, 0.1f};
+         float* out = nullptr;
+         sonare_downmix(samples, 2, 0, 0, nullptr, &out);
+       }},
       {"mel_to_audio",
        [] {
          float* out = nullptr;

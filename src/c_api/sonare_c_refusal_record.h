@@ -69,10 +69,10 @@ inline sonare::SonareParameterRefusal refusal_from_parts(const RefusalParts& par
   };
   const std::string& subject = parts.subjects.front();
   if (parts.form == "predicate") {
-    return spelled(parts.domain ? SonareParameterRefusal::predicate(parts.code, subject,
-                                                                    parts.predicate, *parts.domain)
-                                : SonareParameterRefusal::predicate(parts.code, subject,
-                                                                    parts.predicate));
+    return spelled(
+        parts.domain
+            ? SonareParameterRefusal::predicate(parts.code, subject, parts.predicate, *parts.domain)
+            : SonareParameterRefusal::predicate(parts.code, subject, parts.predicate));
   }
   if (parts.form == "wrongType") {
     return spelled(SonareParameterRefusal::wrong_type(parts.code, subject, parts.predicate));

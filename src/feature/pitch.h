@@ -3,11 +3,20 @@
 /// @file pitch.h
 /// @brief Pitch (fundamental frequency) detection using YIN and pYIN algorithms.
 
+#include <array>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
 
 namespace sonare {
+
+/// @brief The core names yin/pyin refuse under, as their JS requests spell them.
+inline constexpr std::array<std::pair<const char*, const char*>, 3> kPitchTrackRequestKeys{
+    {{"fmin", "f0MinHz"}, {"fmax", "f0MaxHz"}, {"sr", "sampleRate"}}};
+/// @brief The core names piptrack refuses under, as its JS request spells them.
+inline constexpr std::array<std::pair<const char*, const char*>, 2> kPiptrackRequestKeys{
+    {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}}};
 
 /// @brief Pitch detection configuration.
 struct PitchConfig {

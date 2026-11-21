@@ -344,8 +344,13 @@ TEST_CASE("MelodyAnalyzer onset time and pitch agree across input rates", "[melo
   }
 }
 
-TEST_CASE("validate_melody_config names fmax against fmin", "[melody_analyzer]") {
+TEST_CASE("validate_melody_config names the f0 bounds by their parameter names",
+          "[melody_analyzer]") {
   MelodyConfig config;
   config.fmax = config.fmin;
-  REQUIRE_THROWS_WITH(validate_melody_config(config), "fmax must be finite and greater than fmin");
+  REQUIRE_THROWS_WITH(validate_melody_config(config),
+                      "f0_max_hz must be finite and greater than f0_min_hz");
+  config.fmin = 0.0f;
+  REQUIRE_THROWS_WITH(validate_melody_config(config),
+                      "f0_min_hz must be finite and greater than 0");
 }

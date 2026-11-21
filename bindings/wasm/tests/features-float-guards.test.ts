@@ -177,17 +177,17 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'pitchYin',
-    key: 'fmax',
+    key: 'f0MaxHz',
     run: (v) => m().pitchYin(pureTone300, SR, 1024, 256, 65, v, 0.1),
   },
   {
     entry: 'pitchPyin',
-    key: 'fmax',
+    key: 'f0MaxHz',
     run: (v) => m().pitchPyin(pureTone300, SR, 1024, 256, 65, v, 0.1, false),
   },
   {
     entry: 'piptrack',
-    key: 'fmax',
+    key: 'fmaxHz',
     run: (v) => m().piptrack(pureTone300, SR, 512, 256, 65, v, 0.1),
   },
   {
@@ -202,7 +202,7 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'analyzeMelody',
-    key: 'fmax',
+    key: 'f0MaxHz',
     run: (v) => m().analyzeMelody(pureTone300, SR, 65, v, 1024, 256, 0.1, false, true),
   },
   {

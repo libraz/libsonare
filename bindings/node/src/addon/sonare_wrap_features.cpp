@@ -16,6 +16,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 using namespace sonare_node::features;
@@ -240,16 +241,20 @@ Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
   float fmin{};
-  if (!OptionalFloatArg(env, info, 4, "fmin", 150.0f, &fmin)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 4, "fminHz", 150.0f, &fmin)) return env.Undefined();
   float fmax{};
-  if (!OptionalFloatArg(env, info, 5, "fmax", 4000.0f, &fmax)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 5, "fmaxHz", 4000.0f, &fmax)) return env.Undefined();
   float threshold{};
   if (!OptionalFloatArg(env, info, 6, "threshold", 0.1f, &threshold)) return env.Undefined();
   sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(),
                                        args.sample_rate);
-  const sonare::PiptrackResult result = sonare::piptrack(
-      sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), args.sample_rate),
-      args.frame_length, args.hop_length, fmin, fmax, threshold);
+  const sonare::PiptrackResult result = sonare::util::check::with_camel_paths(
+      [&] {
+        return sonare::piptrack(
+            sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), args.sample_rate),
+            args.frame_length, args.hop_length, fmin, fmax, threshold);
+      },
+      sonare::kPiptrackRequestKeys);
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, result.n_bins));
   out.Set("nFrames", Napi::Number::New(env, result.n_frames));
@@ -626,8 +631,8 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   sonare::PitchConfig config;
   config.frame_length = args.frame_length;
   config.hop_length = args.hop_length;
-  if (!OptionalFloatArg(env, info, 4, "fmin", config.fmin, &config.fmin) ||
-      !OptionalFloatArg(env, info, 5, "fmax", config.fmax, &config.fmax) ||
+  if (!OptionalFloatArg(env, info, 4, "f0MinHz", config.fmin, &config.fmin) ||
+      !OptionalFloatArg(env, info, 5, "f0MaxHz", config.fmax, &config.fmax) ||
       !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold)) {
     return env.Undefined();
   }
@@ -635,7 +640,8 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
-  sonare::PitchResult result = sonare::yin_track(audio, config);
+  sonare::PitchResult result = sonare::util::check::with_camel_paths(
+      [&] { return sonare::yin_track(audio, config); }, sonare::kPitchTrackRequestKeys);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("f0", VecToFloat32(env, result.f0));
@@ -673,8 +679,8 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   sonare::PitchConfig config;
   config.frame_length = args.frame_length;
   config.hop_length = args.hop_length;
-  if (!OptionalFloatArg(env, info, 4, "fmin", config.fmin, &config.fmin) ||
-      !OptionalFloatArg(env, info, 5, "fmax", config.fmax, &config.fmax) ||
+  if (!OptionalFloatArg(env, info, 4, "f0MinHz", config.fmin, &config.fmin) ||
+      !OptionalFloatArg(env, info, 5, "f0MaxHz", config.fmax, &config.fmax) ||
       !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold) ||
       !OptionalBoolArg(env, info, 7, "fillNa", config.fill_na, &config.fill_na)) {
     return env.Undefined();
@@ -683,7 +689,8 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
-  sonare::PitchResult result = sonare::pyin(audio, config);
+  sonare::PitchResult result = sonare::util::check::with_camel_paths(
+      [&] { return sonare::pyin(audio, config); }, sonare::kPitchTrackRequestKeys);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("f0", VecToFloat32(env, result.f0));

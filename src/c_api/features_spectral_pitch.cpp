@@ -580,18 +580,21 @@ SonareError run_pitch_track(const char* fn, const char* name, const float* sampl
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  return run_prevalidated_offline(samples, length, sample_rate,
-                                  [&](const Audio& audio) -> SonareError {
-                                    PitchConfig config;
-                                    config.frame_length = frame_length;
-                                    config.hop_length = hop_length;
-                                    config.fmin = fmin;
-                                    config.fmax = fmax;
-                                    config.threshold = threshold;
-                                    config.fill_na = fill_na != 0;
-                                    PitchResult result = pitch(audio, config);
-                                    return fill_pitch_result(result, out);
-                                  });
+  return run_prevalidated_offline(
+      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        PitchConfig config;
+        config.frame_length = frame_length;
+        config.hop_length = hop_length;
+        config.fmin = fmin;
+        config.fmax = fmax;
+        config.threshold = threshold;
+        config.fill_na = fill_na != 0;
+        PitchResult result = with_c_names(
+            std::array<CName, 3>{
+                {{"fmin", "f0_min_hz"}, {"fmax", "f0_max_hz"}, {"sr", "sample_rate"}}},
+            [&] { return pitch(audio, config); });
+        return fill_pitch_result(result, out);
+      });
 }
 
 }  // namespace

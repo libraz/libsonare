@@ -54,9 +54,11 @@ struct MelodyConfig {
 ///         and above fmin, frame_length and hop_length are positive, and threshold is finite and
 ///         positive.
 inline void validate_melody_config(const MelodyConfig& config) {
-  util::check::greater_than(config.fmin, 0.0, "fmin");
+  // Subjects carry the parameter name every surface takes, not the config member.
+  util::check::greater_than(config.fmin, 0.0, "f0_min_hz");
   if (!(std::isfinite(config.fmax) && config.fmax > config.fmin)) {
-    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");
+    util::check::refuse_relation({"f0_max_hz", "f0_min_hz"},
+                                 "{0} must be finite and greater than {1}");
   }
   util::check::integer_at_least(config.frame_length, 1, "frame_length");
   util::check::integer_at_least(config.hop_length, 1, "hop_length");

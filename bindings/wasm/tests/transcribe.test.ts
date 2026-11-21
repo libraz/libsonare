@@ -336,7 +336,7 @@ describe('WASM transcribe', () => {
     expect(() => transcribe({ samples, sampleRate, f0MinHz: 1800, tempoBpm: 120 })).not.toThrow();
     expect(() =>
       transcribe({ samples, sampleRate, polyphonic: true, f0MinHz: 1800, tempoBpm: 120 }),
-    ).toThrow(/^transcribe: f0MaxHz must be greater than f0MinHz$/);
+    ).toThrow(/^transcribe: f0MaxHz must be finite and greater than f0MinHz$/);
   });
 
   it('emits on the requested group and channel', () => {
@@ -424,7 +424,7 @@ describe('WASM transcribe', () => {
       [
         'f0MaxHz below f0MinHz',
         { f0MinHz: 500, f0MaxHz: 400 },
-        /f0MaxHz must be greater than f0MinHz/,
+        /f0MaxHz must be finite and greater than f0MinHz/,
       ],
       ['group above 15', { group: 16 }, /group/],
       ['channel above 15', { channel: 16 }, /channel/],

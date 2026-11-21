@@ -71,7 +71,7 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   }
   const ntm::TranscribeF0Range range = ntm::resolve_transcribe_f0_range(*out);
   if (range.fmax <= range.fmin) {
-    refuse_pair("f0_max_hz", "f0_min_hz", "{0} must be greater than {1}");
+    refuse_pair("f0_max_hz", "f0_min_hz", "{0} must be finite and greater than {1}");
   }
   const bool min_note_ms_given = !std::isnan(in->min_note_ms);
   if (min_note_ms_given) {

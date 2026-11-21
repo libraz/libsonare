@@ -37,8 +37,8 @@ val run_pitch_track(const char* name, val samples, const val& sample_rate_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "f0MinHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "f0MaxHz");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(name, samples, sample_rate);
 
@@ -50,7 +50,8 @@ val run_pitch_track(const char* name, val samples, const val& sample_rate_val,
   config.threshold = threshold;
   config.fill_na = fill_na;
 
-  PitchResult result = pitch(audio, config);
+  PitchResult result =
+      util::check::with_camel_paths([&] { return pitch(audio, config); }, kPitchTrackRequestKeys);
   return pitch_result_to_val(result);
 }
 
@@ -182,11 +183,13 @@ val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   const Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
+  const PiptrackResult result = util::check::with_camel_paths(
+      [&] { return piptrack(audio, n_fft, hop_length, fmin, fmax, threshold); },
+      kPiptrackRequestKeys);
   val out = val::object();
   out.set("nBins", result.n_bins);
   out.set("nFrames", result.n_frames);

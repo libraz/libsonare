@@ -249,8 +249,8 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
                       const val& threshold_val, bool use_pyin, bool center) {
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "f0MinHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "f0MaxHz");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));

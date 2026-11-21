@@ -498,5 +498,28 @@
       { "id": "freeze_offline_block_size_zero", "entry": "freeze_offline", "key": "block_size", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
       { "id": "freeze_offline_block_size_negative", "entry": "freeze_offline", "key": "block_size", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" }
     ]
+  },
+  "inverted_band": {
+    "sample_rate": 22050,
+    "predicate": "{max} must be finite and greater than {min}",
+    "cases": [
+      { "id": "piptrack_inverted", "entry": "piptrack", "min_key": "fmin_hz", "max_key": "fmax_hz", "min": 500, "max": 100 },
+      { "id": "piptrack_equal", "entry": "piptrack", "min_key": "fmin_hz", "max_key": "fmax_hz", "min": 100, "max": 100 },
+      { "id": "pitch_yin_inverted", "entry": "pitch_yin", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 500, "max": 100 },
+      { "id": "pitch_yin_equal", "entry": "pitch_yin", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 100, "max": 100 },
+      { "id": "pitch_pyin_inverted", "entry": "pitch_pyin", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 500, "max": 100 },
+      { "id": "pitch_pyin_equal", "entry": "pitch_pyin", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 100, "max": 100 },
+      { "id": "analyze_melody_inverted", "entry": "analyze_melody", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 500, "max": 100 },
+      { "id": "analyze_melody_equal", "entry": "analyze_melody", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 100, "max": 100 },
+      { "id": "detect_bpm_inverted", "entry": "detect_bpm", "min_key": "bpm_min", "max_key": "bpm_max", "min": 250, "max": 100 },
+      { "id": "detect_bpm_equal", "entry": "detect_bpm", "min_key": "bpm_min", "max_key": "bpm_max", "min": 100, "max": 100 },
+      { "id": "detect_beats_inverted", "entry": "detect_beats", "min_key": "bpm_min", "max_key": "bpm_max", "min": 250, "max": 100 },
+      { "id": "detect_beats_equal", "entry": "detect_beats", "min_key": "bpm_min", "max_key": "bpm_max", "min": 100, "max": 100 },
+      { "id": "transcribe_inverted", "entry": "transcribe", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 500, "max": 100 },
+      { "id": "transcribe_equal", "entry": "transcribe", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "min": 100, "max": 100 },
+      { "id": "analyze_melody_max_below_default_min", "entry": "analyze_melody", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "max": 50 },
+      { "id": "detect_bpm_max_below_default_min", "entry": "detect_bpm", "min_key": "bpm_min", "max_key": "bpm_max", "max": 50 },
+      { "id": "pitch_yin_max_below_default_min", "entry": "pitch_yin", "min_key": "f0_min_hz", "max_key": "f0_max_hz", "max": 50 }
+    ]
   }
 }

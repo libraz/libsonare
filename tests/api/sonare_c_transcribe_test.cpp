@@ -725,7 +725,7 @@ TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api
                           poly_result.out()) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(poly_result.get().events == nullptr);
   CHECK(std::string(sonare_last_error_message()) ==
-        "config.f0_max_hz must be greater than config.f0_min_hz");
+        "config.f0_max_hz must be finite and greater than config.f0_min_hz");
 }
 
 // --- The tuning reference --------------------------------------------------

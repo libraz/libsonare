@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MixStereoStrip } from '../dist/index.js';
 import {
+  analyzeMelody,
   cqt,
+  detectBeats,
+  detectBpm,
   gm2DrumName,
   gm2DrumSetName,
   gm2InstrumentName,
@@ -28,11 +31,15 @@ import {
   midiParamToCc,
   mixStereo,
   perNoteControllerName,
+  piptrack,
+  pitchPyin,
+  pitchYin,
   pseudoCqt,
   RealtimeEngine,
   roomMorphStereo,
   SonareError,
   StreamingRetune,
+  transcribe,
   vqt,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
@@ -732,6 +739,55 @@ describe('an engine field whose native 0 is a sentinel refuses 0 out of domain u
       } finally {
         engine.destroy();
       }
+    });
+  }
+});
+
+type InvertedBandCase = {
+  id: string;
+  entry: string;
+  min_key: string;
+  max_key: string;
+  min?: number;
+  max: number;
+  pending?: Record<string, string>;
+};
+type InvertedBandSection = { sample_rate: number; predicate: string; cases: InvertedBandCase[] };
+
+/** The entries whose frequency or tempo band the core orders, each taking a request object. */
+const INVERTED_BAND_CALLS: Record<string, (request: Record<string, unknown>) => unknown> = {
+  piptrack: (request) => piptrack(request as never),
+  pitch_yin: (request) => pitchYin(request as never),
+  pitch_pyin: (request) => pitchPyin(request as never),
+  analyze_melody: (request) => analyzeMelody(request as never),
+  detect_bpm: (request) => detectBpm(request as never),
+  detect_beats: (request) => detectBeats(request as never),
+  transcribe: (request) => transcribe(request as never),
+};
+
+describe('an inverted band is refused once, in the core text, under the request keys', () => {
+  beforeAll(async () => {
+    await init();
+  });
+  const section = (corpus as unknown as { inverted_band: InvertedBandSection }).inverted_band;
+  const sampleRate = section.sample_rate;
+  const samples = new Float32Array(sampleRate).map(
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * 220 * i) / sampleRate),
+  );
+  for (const testCase of section.cases) {
+    const pending = testCase.pending?.[SURFACE];
+    const test = pending ? it.fails : it;
+    test(`${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+      const minKey = camelKey(testCase.min_key);
+      const maxKey = camelKey(testCase.max_key);
+      const request: Record<string, unknown> = { samples, sampleRate, [maxKey]: testCase.max };
+      if (testCase.min !== undefined) {
+        request[minKey] = testCase.min;
+      }
+      const text = section.predicate.replace('{max}', maxKey).replace('{min}', minKey);
+      expect(() => INVERTED_BAND_CALLS[testCase.entry](request)).toThrow(
+        new RangeError(`${camelKey(testCase.entry)}: ${text}`),
+      );
     });
   }
 });

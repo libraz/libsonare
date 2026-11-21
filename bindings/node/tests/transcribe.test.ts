@@ -257,7 +257,7 @@ describe('transcribe', () => {
         f0MinHz: 1800,
         tempoBpm: 120,
       }),
-    ).toThrow(new RangeError('transcribe: f0MaxHz must be greater than f0MinHz'));
+    ).toThrow(new RangeError('transcribe: f0MaxHz must be finite and greater than f0MinHz'));
   });
 
   it('refuses a zero the C ABI would have read as its default', () => {
@@ -344,7 +344,7 @@ describe('transcribe', () => {
     // throws, with the same code, carrying a message that names nothing.
     expect(() =>
       transcribe({ samples: audio, sampleRate: SR, f0MinHz: 900, f0MaxHz: 200 }),
-    ).toThrow(/^transcribe: f0MaxHz must be greater than f0MinHz$/);
+    ).toThrow(/^transcribe: f0MaxHz must be finite and greater than f0MinHz$/);
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(
       /^transcribe: group must be an integer in \[0, 15\]$/,
     );
@@ -540,7 +540,7 @@ describe('Project.transcribeToClip', () => {
           f0MinHz: 900,
           f0MaxHz: 200,
         }),
-      ).toThrow(/^Project\.transcribeToClip: f0MaxHz must be greater than f0MinHz$/);
+      ).toThrow(/^Project\.transcribeToClip: f0MaxHz must be finite and greater than f0MinHz$/);
     });
   });
 });

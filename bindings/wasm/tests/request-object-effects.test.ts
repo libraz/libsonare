@@ -185,7 +185,7 @@ describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
 
   it('throws a RangeError when f0MinHz is above f0MaxHz', () => {
     expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
-      /analyzeMelody: f0MaxHz must be greater than f0MinHz$/,
+      /analyzeMelody: f0MaxHz must be finite and greater than f0MinHz$/,
     );
     expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
       RangeError,

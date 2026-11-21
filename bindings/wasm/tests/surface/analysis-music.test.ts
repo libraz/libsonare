@@ -340,6 +340,17 @@ describe('analysis records', () => {
     }
   });
 
+  it('names the f0 bounds by their request keys when a bound only narrows out of range', () => {
+    const samples = new Float32Array(sampleRate / 2);
+    // 1e-46 passes the facade as positive and narrows to a float 0; 100.000001 narrows to 100.
+    expect(() => analyzeMelody({ samples, sampleRate, f0MinHz: 1e-46 })).toThrow(
+      new RangeError('analyzeMelody: f0MinHz must be finite and greater than 0'),
+    );
+    expect(() => analyzeMelody({ samples, sampleRate, f0MinHz: 100, f0MaxHz: 100.000001 })).toThrow(
+      new RangeError('analyzeMelody: f0MaxHz must be finite and greater than f0MinHz'),
+    );
+  });
+
   it('detectBoundaries and detectChords report *Sec fields', () => {
     const boundaries = detectBoundaries({ samples: triad(2), sampleRate });
     for (const boundary of boundaries.boundaries) {

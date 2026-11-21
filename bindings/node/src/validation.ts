@@ -155,7 +155,7 @@ export function assertFloatFields(fields: Record<string, unknown>): void {
   }
 }
 
-/** A frequency band: each given bound is a positive float, and a given pair is strictly ordered. Absent (`undefined` / `null`) is skipped. */
+/** A frequency band: each given bound is a positive float; their order is the core's to refuse. Absent (`undefined` / `null`) is skipped. */
 export function assertFrequencyBounds(
   min: unknown,
   max: unknown,
@@ -169,9 +169,6 @@ export function assertFrequencyBounds(
   }
   if (hasMax) {
     assertPositiveFloatValue(max, maxName);
-  }
-  if (hasMin && hasMax && !((max as number) > (min as number))) {
-    throw refuse(`${maxName} must be greater than ${minName}`);
   }
 }
 
