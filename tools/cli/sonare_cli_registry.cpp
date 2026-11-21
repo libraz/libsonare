@@ -173,10 +173,12 @@ CliOptionSpec nullable_string_value(const char* name) {
 // A repeatable path. `path_value` takes no repeatable flag because most path
 // options here are single-valued, and the default has to be the empty array
 // rather than null so the two front-ends publish the same absent value.
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_MIXING_ASSISTANT)
 CliOptionSpec repeatable_path(const char* name) {
   return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Path,
                      string_array_default(), {}, {}, false, true, false, true);
 }
+#endif
 
 #ifdef SONARE_WITH_ARRANGEMENT
 // The positional every project-reading leaf names in its missing-argument error.
@@ -206,6 +208,7 @@ CliOptionDomain greater_than(double minimum) {
   return domain;
 }
 
+#ifdef SONARE_WITH_ARRANGEMENT
 CliOptionDomain less_than(double maximum) {
   CliOptionDomain domain;
   domain.has_maximum = true;
@@ -213,6 +216,7 @@ CliOptionDomain less_than(double maximum) {
   domain.exclusive_maximum = true;
   return domain;
 }
+#endif
 
 CliOptionDomain at_least(double minimum) {
   CliOptionDomain domain;
@@ -271,11 +275,13 @@ CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
   return spec;
 }
 
+#ifdef SONARE_WITH_ARRANGEMENT
 /// Marks an integer option backed by an `int64_t` field, read with `get_int64`.
 CliOptionSpec int64_width(CliOptionSpec spec) {
   spec.int64_width = true;
   return spec;
 }
+#endif
 
 // One spelling of a position given in samples or in seconds, from a builder with
 // no default: absence lets the handler apply the library's own.
@@ -285,11 +291,13 @@ CliOptionSpec position(CliOptionSpec spec) { return with_domain(std::move(spec),
 // greater than 0, so no command reaches the library with a tempo nobody can play.
 CliOptionSpec tempo(CliOptionSpec spec) { return with_domain(std::move(spec), greater_than(0.0)); }
 
+#if defined(SONARE_WITH_ARRANGEMENT) || defined(SONARE_WITH_ACOUSTIC_SIM)
 // A render length or channel count the library chooses when the flag is left out;
 // a value the caller spells is refused at the flag unless it is greater than 0.
 CliOptionSpec library_sized(CliOptionSpec spec) {
   return with_domain(std::move(spec), greater_than(0.0));
 }
+#endif
 
 // A twelve-bit scale mask the caller may also name by mode. It stays an Integer
 // option in the inventory: the name is another spelling of the same mask.
@@ -532,12 +540,15 @@ CliValidationError validate_voice_change(const CliArgs& args) {
   return {voice_set_refusal(args.get_string_list("set"))};
 }
 
-CliValidationError validate_voice_preset(const CliArgs& args) {
 #ifdef SONARE_WITH_VOICE_CHANGER
+CliValidationError validate_voice_preset(const CliArgs& args) {
   if (args.has("preset")) return {builtin_voice_preset_refusal(args.get_string("preset"))};
-#endif
   return {};
 }
+constexpr CliCommandValidator kVoicePresetValidator = validate_voice_preset;
+#else
+constexpr CliCommandValidator kVoicePresetValidator = nullptr;
+#endif
 
 CliValidationError validate_voice_preset_validate(const CliArgs& args) {
   return {voice_set_refusal(args.get_string_list("set"))};
@@ -547,6 +558,7 @@ CliValidationError validate_polyphonic_edits(const CliArgs& args) {
   return {polyphonic_edit_refusal(args.get_string_list("edit"))};
 }
 
+#ifdef SONARE_WITH_ARRANGEMENT
 // Each rule is one the Python facade states (_effects_note_model.py, _transcribe_config and
 // _transcribe_reattack) or the C ABI refuses (sonare_c_transcribe.cpp:128 and :157).
 CliValidationError validate_transcribe(const CliArgs& args) {
@@ -575,6 +587,7 @@ CliValidationError validate_transcribe(const CliArgs& args) {
   }
   return {};
 }
+#endif
 
 #ifdef SONARE_WITH_MIXING
 // A scene comes from exactly one source, and a render needs both its inputs and a file to write.
@@ -877,6 +890,7 @@ std::string joined_numbers(const std::vector<int>& values) {
   return text;
 }
 
+#ifdef SONARE_WITH_ARRANGEMENT
 /// A render length the library takes from the project when the flag is left out.
 CliOptionSpec project_length(CliOptionSpec spec) {
   return with_stated_default(library_sized(std::move(spec)), "through the last event and its tail");
@@ -886,6 +900,7 @@ CliOptionSpec project_length(CliOptionSpec spec) {
 CliOptionSpec master_width(CliOptionSpec spec) {
   return with_stated_default(library_sized(std::move(spec)), "the scene master's width");
 }
+#endif
 
 /// A twelve-bit scale mask (or mode name) the handler leaves to the library when absent.
 CliOptionSpec global_number(const char* name, double value) {
@@ -1152,7 +1167,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {}, validate_voice_change);
     add_command(commands, "voice-presets", false, {});
     add_command(commands, "voice-preset", false, {string_value("preset", "neutralMonitor")}, {},
-                validate_voice_preset);
+                kVoicePresetValidator);
     // The preset document arrives as the positional rather than through an
     // option, which is the arity the trailing argument declares.
     add_command(

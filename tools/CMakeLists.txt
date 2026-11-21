@@ -38,6 +38,19 @@ endif()
 if(BUILD_MIXING)
   target_link_libraries(sonare PRIVATE sonare_mixing)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
+  # The mix command and project bounce both render through the mixer C ABI
+  # (sonare_mixer_from_scene_json / _process_stereo), whose translation units and
+  # routing graph are in no static lib the CLI links, so they are compiled in here
+  # rather than under BUILD_ARRANGEMENT (BUILD_MIXING implies BUILD_GRAPH).
+  target_sources(sonare PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_assistant.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
+  )
+  target_link_libraries(sonare PRIVATE sonare_graph)
+  target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
   # Beside the mixer rather than under the arrangement block below, because the
   # assistant reads tracks and returns a scene and needs no project: nesting it
   # there would drop `suggest-mix` from a -DBUILD_ARRANGEMENT=OFF build with
@@ -129,21 +142,6 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/tools
   )
-  if(BUILD_MIXING)
-    # project_bounce.cpp renders per-track channel strips through the mixer C ABI
-    # (sonare_mixer_from_scene_json / _process_stereo), whose translation units
-    # and routing graph are not in any static lib the CLI already links. Compile
-    # them in (BUILD_MIXING implies BUILD_GRAPH, see the top-level CMakeLists).
-    target_sources(sonare PRIVATE
-      ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
-      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_assistant.cpp
-      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
-      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
-      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
-    )
-    target_link_libraries(sonare PRIVATE sonare_graph)
-    target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
-  endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 target_compile_definitions(sonare PRIVATE
