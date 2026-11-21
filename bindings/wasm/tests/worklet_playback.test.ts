@@ -117,11 +117,8 @@ describe('SonarePlaybackWorkletProcessor', () => {
     });
     try {
       const output = outputBlock(6);
-      // An empty inputs[0] (no channels connected yet) maps to
-      // processPreparedSilence -- exercised here as the processor's very
-      // first call, before any processPrepared call has cached an input
-      // channel count, so it must fall back to the same default the C ABI
-      // documents (2 channels) rather than reading uninitialized state.
+      // An empty inputs[0] (no channels connected yet) renders silence as the processor's very
+      // first call, which must neither fix nor switch the automatic input layout.
       expect(processor.process([[]], [output])).toBe(true);
       for (const plane of output) {
         expect(plane.every((v) => v === 0)).toBe(true);

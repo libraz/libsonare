@@ -17,7 +17,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | mastering | 142 | 128/142 | 135/142 (3 core) | 128/142 (3 core) | 24/142 | 24/142 |
 | metering | 40 | 40/40 | 40/40 | 40/40 | 7/40 | 7/40 |
 | mixing & routing | 62 | 59/62 | 60/62 | 60/62 | 2/62 | 2/62 |
-| playback | 25 | 23/25 | 23/25 | 23/25 | 7/25 | 7/25 |
+| playback | 26 | 24/26 | 24/26 | 24/26 | 7/26 | 7/26 |
 | polyphony | 14 | 13/14 | 14/14 | 13/14 | 4/14 | 4/14 |
 | project & arrangement | 183 | 166/183 | 174/183 | 174/183 | 12/183 | 9/183 |
 | project part rig | 3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 57 | 43/57 | 56/57 | 56/57 | 11/57 | 11/57 |
 | vocal project | 10 | 6/10 | 10/10 | 10/10 | 2/10 | 2/10 |
 | voice changer | 27 | 26/27 | 26/27 | 26/27 | 3/27 | 3/27 |
-| **all domains** | **1103** | **970/1103** | **1031/1103 (3 core)** | **996/1103 (3 core)** | **184/1103** | **179/1103** |
+| **all domains** | **1104** | **971/1104** | **1032/1104 (3 core)** | **997/1104 (3 core)** | **184/1104** | **179/1104** |

@@ -714,6 +714,7 @@ inline constexpr std::string_view kTokens[] = {
     "playback_renderer_num_output_channels",
     "playback_renderer_process_interleaved",
     "playback_renderer_process_planar",
+    "playback_renderer_process_silence",
     "playback_renderer_render_offline",
     "playback_renderer_reset",
     "playback_renderer_set_config_json",

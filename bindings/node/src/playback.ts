@@ -102,7 +102,7 @@ export class HrtfSet {
  * is either fixed at construction ("prepare") or adopted at the next
  * processed block ("realtime") — see {@link PlaybackRendererConfig}.
  */
-@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved'])
+@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved', 'processSilence'])
 export class PlaybackRenderer {
   private native: NativePlaybackRenderer;
   private disposed = false;
@@ -129,6 +129,16 @@ export class PlaybackRenderer {
   /** Renders one planar block; every plane must carry the same frame count. */
   processPlanar(planes: Float32Array[]): Float32Array[] {
     return this.native.processPlanar(planes);
+  }
+
+  /**
+   * Renders one planar block of silence for a host with no input connected yet. Every stage
+   * advances as for a block of zeros through the active input layout, and the layout is neither
+   * fixed nor switched, so under `"auto"` the first block carrying input still sets it. `frames`
+   * must be an integer in `[0, maxBlockSize]`; 0 is a no-op.
+   */
+  processSilence(frames: number): Float32Array[] {
+    return this.native.processSilence(frames);
   }
 
   /** Interleaved variant of {@link processPlanar}. */

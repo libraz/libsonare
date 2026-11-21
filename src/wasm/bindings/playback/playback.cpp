@@ -147,6 +147,26 @@ class PlaybackRendererWasm {
     return out;
   }
 
+  val processSilence(const val& frames_val) {
+    const int frames = checkedIntFromVal(frames_val, "frames");
+    if (frames < 0 || frames > max_block_) {
+      throw WasmRangeError("frames must be an integer in [0, " + std::to_string(max_block_) + "]");
+    }
+    if (sonare_playback_renderer_process_silence(renderer_.get(), out_ptrs_.data(), out_channels_,
+                                                 frames) != SONARE_OK) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "the renderer rejected a silent block of " + std::to_string(frames) + " frames");
+    }
+    val out = val::array();
+    for (int ch = 0; ch < out_channels_; ++ch) {
+      const float* plane = out_planes_[static_cast<size_t>(ch)].data();
+      out.call<void>("push", val::global("Float32Array")
+                                 .new_(val(typed_memory_view(static_cast<size_t>(frames), plane))));
+    }
+    return out;
+  }
+
   val processInterleaved(const val& samples, const val& in_channels_val) {
     const int in_channels = checkedIntFromVal(in_channels_val, "inChannels");
     if (in_channels <= 0) {
@@ -271,32 +291,15 @@ class PlaybackRendererWasm {
     if (in_channels < 1 || in_channels > kMaxInputChannels) return SONARE_ERROR_INVALID_PARAMETER;
     const int err = sonare_playback_renderer_process_planar(
         renderer_.get(), in_ptrs_.data(), in_channels, out_ptrs_.data(), out_channels_, frames);
-    // A rejected call does not advance any state (per the C ABI's own
-    // contract), so the cache below only updates on SONARE_OK -- at which
-    // point the renderer's active input layout is exactly `in_channels`,
-    // whether this block just switched it (an "auto" layout) or confirmed it
-    // (a fixed one).
-    if (err == SONARE_OK) last_input_channels_ = in_channels;
     return err;
   }
 
-  /// Renders @p frames of silence on the active input layout, so the timeline
-  /// advances without switching the layout.
-  ///
-  /// Reads the active input channel count from `last_input_channels_` rather
-  /// than sonare_playback_renderer_num_input_channels: that C-ABI entry is
-  /// SONARE_C_API_ENTRY-guarded (it clears the thread-local last-error string),
-  /// not one of the three entries sonare_c_playback.h documents as realtime-
-  /// safe, and this method runs on the AudioWorklet's real-time callback.
+  /// Renders @p frames of silence into the output planes without fixing or switching the input
+  /// layout; returns the C ABI code instead of throwing, as the worklet path requires.
   int processPreparedSilence(const val& frames_val) {
     const int frames = checkedIntFromVal(frames_val, "frames");
-    if (frames < 0 || frames > max_block_) return SONARE_ERROR_INVALID_PARAMETER;
-    for (int ch = 0; ch < last_input_channels_; ++ch) {
-      std::fill_n(in_planes_[static_cast<size_t>(ch)].begin(), frames, 0.0f);
-    }
-    return sonare_playback_renderer_process_planar(renderer_.get(), in_ptrs_.data(),
-                                                   last_input_channels_, out_ptrs_.data(),
-                                                   out_channels_, frames);
+    return sonare_playback_renderer_process_silence(renderer_.get(), out_ptrs_.data(),
+                                                    out_channels_, frames);
   }
 
  private:
@@ -310,10 +313,6 @@ class PlaybackRendererWasm {
   int sample_rate_ = 0;
   int max_block_ = 0;
   int out_channels_ = 0;
-  // Mirrors sonare_playback_renderer_num_input_channels's own documented
-  // default ("2 before the first call"); kept current by processPrepared so
-  // processPreparedSilence never has to ask the C ABI from the realtime path.
-  int last_input_channels_ = 2;
   std::vector<std::vector<float>> in_planes_;
   std::vector<std::vector<float>> out_planes_;
   std::vector<const float*> in_ptrs_;
@@ -332,6 +331,7 @@ class PlaybackLoudnessMeterWasm {
   PlaybackLoudnessMeterWasm& operator=(const PlaybackLoudnessMeterWasm&) = delete;
 
   void pushInterleaved(const val& samples) {
+    wasmFloat32ArrayLength(samples, "samples");
     const std::vector<float> input = float32ArrayToVector(samples);
     if (input.size() % static_cast<size_t>(channels_) != 0) {
       throw WasmRangeError("interleaved sample count must be a whole number of frames");
@@ -397,6 +397,7 @@ void registerPlaybackBindings() {
   class_<PlaybackRendererWasm>("PlaybackRenderer")
       .function("processPlanar", &PlaybackRendererWasm::processPlanar)
       .function("processInterleaved", &PlaybackRendererWasm::processInterleaved)
+      .function("processSilence", &PlaybackRendererWasm::processSilence)
       .function("renderOffline", &PlaybackRendererWasm::renderOffline)
       .function("setConfig", &PlaybackRendererWasm::setConfig)
       .function("configJson", &PlaybackRendererWasm::configJson)

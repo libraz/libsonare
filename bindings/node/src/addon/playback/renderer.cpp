@@ -15,6 +15,8 @@ Napi::Object PlaybackRendererWrap::Init(Napi::Env env, Napi::Object exports) {
                                                                napi_default_method),
           InstanceMethod<&PlaybackRendererWrap::ProcessInterleaved>("processInterleaved",
                                                                     napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::ProcessSilence>("processSilence",
+                                                                napi_default_method),
           InstanceMethod<&PlaybackRendererWrap::RenderOffline>("renderOffline",
                                                                napi_default_method),
           InstanceMethod<&PlaybackRendererWrap::SetConfig>("setConfig", napi_default_method),
@@ -133,6 +135,42 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
       env, sonare_playback_renderer_process_planar(renderer_, in_pointers.data(),
                                                    static_cast<int>(in_channels),
                                                    out_pointers.data(), out_channels, frames));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return outputs;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value PlaybackRendererWrap::ProcessSilence(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!EnsureAlive(env)) return env.Undefined();
+  int frames = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 0, "frames", &frames)) return env.Undefined();
+  int max_block = 0;
+  int out_channels = 0;
+  sonare_node::ThrowIfError(env, sonare_playback_renderer_max_block_size(renderer_, &max_block));
+  if (env.IsExceptionPending()) return env.Undefined();
+  sonare_node::ThrowIfError(env,
+                            sonare_playback_renderer_num_output_channels(renderer_, &out_channels));
+  if (env.IsExceptionPending()) return env.Undefined();
+  // The planes are sized from frames, so its bound is checked before they are allocated.
+  if (frames < 0 || frames > max_block) {
+    Napi::RangeError::New(env,
+                          "frames must be an integer in [0, " + std::to_string(max_block) + "]")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Array outputs = Napi::Array::New(env, static_cast<uint32_t>(out_channels));
+  std::vector<float*> out_pointers(static_cast<size_t>(out_channels));
+  for (int ch = 0; ch < out_channels; ++ch) {
+    Napi::Float32Array plane = Napi::Float32Array::New(env, static_cast<size_t>(frames));
+    out_pointers[static_cast<size_t>(ch)] = plane.Data();
+    outputs.Set(static_cast<uint32_t>(ch), plane);
+  }
+  // Realtime entry: see the note in sonare_wrap_playback.h.
+  sonare_node::ThrowIfRealtimeError(env, sonare_playback_renderer_process_silence(
+                                             renderer_, out_pointers.data(), out_channels, frames));
   if (env.IsExceptionPending()) return env.Undefined();
   return outputs;
   SONARE_NODE_CATCH(env)
