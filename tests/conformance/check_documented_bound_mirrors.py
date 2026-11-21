@@ -87,7 +87,7 @@ CONSTANTS: dict[str, Constant] = {
         "src/engine/realtime_engine.h", "kMaxWarpVoices", scope="RealtimeEngine"
     ),
     "max_bank_sample_points": Constant("src/c_api/sonare_c_sample_bank.cpp", "kMaxBankSamplePoints"),
-    "max_keymap_sets": Constant("src/c_api/sonare_c_sample_bank.cpp", "kMaxKeymapSets"),
+    "max_keymap_sets": Constant("src/c_api/daw_config_domains.h", "kMaxKeymapSets"),
     "declip_max_lpc_gap": Constant("src/mastering/repair/declip.h", "kDeclipMaxLpcGapSamples"),
     "max_griffin_lim_iterations": Constant("src/util/resource_limits.h", "kMaxGriffinLimIterations"),
     "max_synth_voices": Constant("src/midi/builtin_synth.h", "kMaxSynthVoices"),
