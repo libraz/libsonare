@@ -553,7 +553,7 @@ def cmd_project(args: argparse.Namespace) -> int:
         try:
             # Compiled for the timeline only to report whether one was produced,
             # as the native front-end reports the C result's own flag.
-            result = cast(Any, project).compile(timeline=True)
+            result = cast(Any, project).compile(with_timeline=True)
             has_timeline = result.timeline is not None
             if has_timeline:
                 result.timeline.close()

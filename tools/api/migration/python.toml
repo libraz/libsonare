@@ -13358,7 +13358,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.process_with_monitor"
-removed = "call RealtimeEngine.process(channels, monitor=True)"
+removed = "call RealtimeEngine.process(channels, with_monitor=True)"
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -13470,7 +13470,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.compile_timeline"
-removed = "call Project.compile(timeline=True) and read the result's timeline"
+removed = "call Project.compile(with_timeline=True) and read the result's timeline"
 domain = "project"
 rule = "one-entry-per-operation"
 

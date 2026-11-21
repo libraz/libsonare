@@ -379,13 +379,13 @@ class RealtimeEngine:
         ...
     @overload
     def process(
-        self, channels: PlanarChannels, *, monitor: Literal[False] = False
+        self, channels: PlanarChannels, *, with_monitor: Literal[False] = False
     ) -> list[np.ndarray]:
         """Render one block and return the processed channel copies; inputs are not modified."""
         ...
     @overload
     def process(
-        self, channels: PlanarChannels, *, monitor: Literal[True]
+        self, channels: PlanarChannels, *, with_monitor: Literal[True]
     ) -> EngineProcessWithMonitorResult:
         """Render one block and return the program planes and the monitor planes."""
         ...

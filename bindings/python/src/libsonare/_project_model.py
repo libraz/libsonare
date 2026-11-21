@@ -511,7 +511,7 @@ class ProjectCompileResult:
     ``"error"`` entry means no timeline was produced."""
     timeline: ProjectTimeline | None = None
     """The compiled playback snapshot, owned by the caller; ``None`` unless
-    :meth:`Project.compile` ran with ``timeline=True`` and compilation produced
+    :meth:`Project.compile` ran with ``with_timeline=True`` and compilation produced
     one."""
 
 

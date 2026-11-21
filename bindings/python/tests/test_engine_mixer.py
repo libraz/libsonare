@@ -69,7 +69,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         )
         engine.play()
         engine.set_track_monitor_mode(10, "pfl", render_frame=block // 2)
-        processed = engine.process([[0.0] * block], monitor=True)
+        processed = engine.process([[0.0] * block], with_monitor=True)
         main, monitor = processed.output, processed.monitor
         assert main[0][-1] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][0] == pytest.approx(0.0, abs=0.01)
@@ -78,13 +78,13 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
 
         engine.set_parameter(engine.resolve_strip_automation_id(10, "faderDb"), -6.0)
         for _ in range(9):
-            processed = engine.process([[0.0] * block], monitor=True)
+            processed = engine.process([[0.0] * block], with_monitor=True)
             main, monitor = processed.output, processed.monitor
         assert 0.4 < main[0][-1] < 0.7
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
         engine.set_track_monitor_mode(10, "afl")
-        processed = engine.process([[0.0] * block], monitor=True)
+        processed = engine.process([[0.0] * block], with_monitor=True)
         main, monitor = processed.output, processed.monitor
         assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
         assert 0.4 < monitor[0][-1] < 0.7
@@ -544,9 +544,9 @@ def test_realtime_engine_process_monitor_returns_separate_bus() -> None:
         plain = engine.process([[0.25] * 16, [-0.25] * 16])
         assert isinstance(plain, list)
         assert not isinstance(plain, EngineProcessWithMonitorResult)
-        explicit = engine.process([[0.25] * 16, [-0.25] * 16], monitor=False)
+        explicit = engine.process([[0.25] * 16, [-0.25] * 16], with_monitor=False)
         assert all(np.array_equal(a, b) for a, b in zip(explicit, plain, strict=True))
-        result = engine.process([[0.25] * 16, [-0.25] * 16], monitor=True)
+        result = engine.process([[0.25] * 16, [-0.25] * 16], with_monitor=True)
         assert isinstance(result, EngineProcessWithMonitorResult)
         with pytest.raises(TypeError):
             iter(result)
@@ -886,7 +886,7 @@ def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
 
 def test_track_solo_mute_after_a_project_timeline_is_coded_invalid_state() -> None:
     with Project() as project, RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        result = project.compile(timeline=True)
+        result = project.compile(with_timeline=True)
         assert result.timeline is not None
         with result.timeline as timeline:
             engine.apply_project_timeline(timeline)

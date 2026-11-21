@@ -35,7 +35,7 @@ PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
 
 @dataclass(frozen=True, slots=True, eq=False)
 class EngineProcessWithMonitorResult:
-    """Result of ``RealtimeEngine.process(..., monitor=True)``: the program and monitor planes."""
+    """Result of ``RealtimeEngine.process(..., with_monitor=True)``: program and monitor planes."""
 
     output: tuple[npt.NDArray[np.float32], ...]
     """Processed program channel planes, one float32 array per channel."""

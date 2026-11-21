@@ -2898,7 +2898,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
 | `MeterTelemetryRecordWide` | removed: read MeterTelemetryRecord, which carries the per-channel planes and num_channels |
 | `RealtimeEngine.drain_meter_telemetry_wide` | removed: call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes |
-| `RealtimeEngine.process_with_monitor` | removed: call RealtimeEngine.process(channels, monitor=True) |
+| `RealtimeEngine.process_with_monitor` | removed: call RealtimeEngine.process(channels, with_monitor=True) |
 | `RealtimeEngine.set_capture_buffer` | `RealtimeEngine.configure_capture`: configure_capture(capacity_frames=..., num_channels=...) sets the whole capture setup; the buffer is reallocated only when its shape changes, and reallocating while armed raises SonareError (INVALID_STATE) |
 | `RealtimeEngine.set_capture_punch(enabled)` | removed: pass configure_capture(..., punch=CapturePunch(...)) to gate capture and omit punch to leave it ungated |
 | `RealtimeEngine.set_capture_punch(end_sample)` | removed: set CapturePunch(end_sample=...) and pass it as configure_capture(..., punch=...) |
@@ -3294,7 +3294,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.bounce_with_instruments` | removed: call Project.bounce(instruments=[(destination_id, instrument), ...]) |
 | `Project.bounce_with_sf2_instrument` | removed: call Project.bounce(sf2_instruments=[(destination_id, config), ...]) |
 | `Project.bounce_with_synth_instrument` | removed: call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True |
-| `Project.compile_timeline` | removed: call Project.compile(timeline=True) and read the result's timeline |
+| `Project.compile_timeline` | removed: call Project.compile(with_timeline=True) and read the result's timeline |
 | `Project.midi2_program(bank_valid)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank |
 | `Project.set_program(bank)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank select |
 | `Project.set_program_on_channel` | removed: call Project.set_program(clip_id, program, bank_msb=..., bank_lsb=..., group=..., channel=...) |
@@ -3549,9 +3549,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.spectralRolloff` | takes (options?: Omit<SpectralRolloffRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `Audio.stft(nFft)` | removed: pass nFft as a field of StftRequest |
-| `Audio.stftDb(hopLength)` | removed: pass hopLength as a field of StftDbRequest |
-| `Audio.stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
-| `Audio.stftDb` | takes (options?: Omit<StftDbRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft` | takes (options?: Omit<StftRequest,'samples'\|'sampleRate'>) |
 | `Audio.trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `Audio.trim` | trim(options?: Omit<TrimRequest,'samples'\|'sampleRate'>) |
@@ -3580,7 +3577,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.fromFileChannel` | removed: Call Audio.fromFile(path, channelIndex). |
 | `Audio.masteringChain` | removed: Call masterAudio({ preset, overrides }); the old config is now overrides. |
+| `Audio.stftDb` | removed: Call audio.stft({ db: true }); the result then also carries db. |
 
 #### masterAudio is the mastering entry; mastering is renamed
 
@@ -3768,7 +3767,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `spectralFlux(sampleRate)` | required second argument (was optional / later position) |
 | `spectralRolloff(sampleRate)` | required second argument (was optional / later position) |
 | `stft(sampleRate)` | required second argument (was optional / later position) |
-| `stftDb(sampleRate)` | required second argument (was optional / later position) |
 | `vqt(sampleRate)` | required second argument (was optional / later position) |
 | `zeroCrossingRate(sampleRate)` | required second argument (was optional / later position) |
 
@@ -3847,7 +3845,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MelodyResult.vibratoRate` | `MelodyResult.vibratoRateHz` |
 | `MusicAnalyzeOptions.tuning` | `MusicAnalyzeOptions.tuningCents` |
 | `MusicAnalyzeRequest.tuning` | `AnalyzeRequest.tuningCents` |
-| `StreamAnalyzer.processWithOffset(sampleOffset)` | `StreamAnalyzer.processWithOffset(startSample)` |
 | `StreamAnalyzer.reset(baseOffset)` | `StreamAnalyzer.reset(startSample)` |
 | `StreamAnalyzer.setTuningRefHz(hz)` | `StreamAnalyzer.setReferenceHz(referenceHz)` |
 | `StreamAnalyzer.setTuningRefHz` | `StreamAnalyzer.setReferenceHz` |
@@ -4147,7 +4144,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SegmentSubsegmentRequest.cols` | removed: the Matrix2D input carries it as rows / cols |
 | `SegmentSubsegmentRequest.data` | Float32Array -> Matrix2D; rows are features, columns are frames |
 | `SegmentSubsegmentRequest.rows` | removed: the Matrix2D input carries it as rows / cols |
-| `StftDbResult` | removed: Use Matrix2D { data, rows, cols }; rows are frequency bins, cols are frames. |
+| `StftDbResult` | removed: Read StftResult.db from stft({ samples, sampleRate, db: true }): a Matrix2D { data, rows, cols } whose rows are frequency bins and cols are frames. |
 | `StftResult.magnitude` | Float32Array -> Matrix2D; rows are nFft/2+1 bins, columns are frames |
 | `StftResult.nBins` | removed: read rows / cols of the result's Matrix2D |
 | `StftResult.nFrames` | removed: read rows / cols of the result's Matrix2D |
@@ -4176,7 +4173,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `segmentPathEnhance` | returns Matrix2D |
 | `segmentRecurrenceMatrix` | returns Matrix2D |
 | `segmentRecurrenceToLag` | returns Matrix2D |
-| `stftDb` | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
 | `tonnetz` | returns Matrix2D |
 
 #### Public types never expose Wasm* names
@@ -4525,8 +4521,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `splitSilence` | one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'\|'sampleRate'>)); request form takes SplitSilenceRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` | removed: pass nFft as a field of StftRequest |
-| `stftDb(hopLength)` | removed: pass hopLength as a field of StftDbRequest |
-| `stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
 | `stft` | one positional form (stft(samples, sampleRate, options?: Omit<StftRequest,'samples'\|'sampleRate'>)); request form takes StftRequest |
 | `tempogram(hopLength)` | removed: pass hopLength as a field of TempogramRequest |
 | `tempogram(mode)` | removed: pass mode as a field of TempogramRequest |
@@ -4596,6 +4590,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MelResultToStftRequest` | removed: Use MelToStftRequest: pass the forward result's power Matrix2D as power, with its sampleRate, nFft, fminHz, fmaxHz and htk. |
 | `MfccResultToAudioRequest` | removed: Use MfccToAudioRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels, sampleRate, nFft and hopLength. |
 | `MfccResultToMelRequest` | removed: Use MfccToMelRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels. |
+| `StreamAnalyzer.processWithOffset` | removed: Call process(samples, startSample). |
+| `stftDb` | removed: Call stft({ samples, sampleRate, db: true }); the result then also carries db. |
 
 #### Setters take labelled objects, not positional booleans
 
@@ -6127,6 +6123,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | `RealtimeEngine.bindMidiCc` |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
 | `SynthPatch.destinationId` | removed: Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 
 #### Synchronous construction is new X(config); create() is async
@@ -6453,11 +6450,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `Project.setPartRig` | takes one request object; the positional form is gone |
-| `Project.setProgramOnChannel(bank)` | removed: pass bank as a field of ProjectProgramRequest |
-| `Project.setProgramOnChannel(channel)` | removed: pass channel as a field of ProjectProgramRequest |
-| `Project.setProgramOnChannel(group)` | removed: pass group as a field of ProjectProgramRequest |
-| `Project.setProgramOnChannel(program)` | removed: pass program as a field of ProjectProgramRequest |
-| `Project.setProgramOnChannel` | takes one { group, channel, program, bank } object with bank as { msb, lsb } |
 
 #### MIDI message packers and GM lookups are module functions
 
@@ -6558,6 +6550,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.bounceWithSynthInstruments` | takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
+| `Project.setProgram(bank)` | removed: bank moves into options as { msb, lsb }: setProgram(clipId, program, { bank: { msb, lsb } }) |
+| `Project.setProgramOnChannel` | removed: Call setProgram(clipId, program, { bank, group, channel }). |
 | `Sf2InstrumentConfig.destinationId` | removed: Pass the destination id as the first argument of setSf2Instrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 
 #### Synchronous construction is new X(config); create() is async
@@ -6919,9 +6913,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.spectralRolloff` | takes (options?: Omit<SpectralRolloffRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `Audio.stft(nFft)` | removed: pass nFft as a field of StftRequest |
-| `Audio.stftDb(hopLength)` | removed: pass hopLength as a field of StftDbRequest |
-| `Audio.stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
-| `Audio.stftDb` | takes (options?: Omit<StftDbRequest,'samples'\|'sampleRate'>) |
 | `Audio.stft` | takes (options?: Omit<StftRequest,'samples'\|'sampleRate'>) |
 | `Audio.trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `Audio.trim` | trim(options?: Omit<TrimRequest,'samples'\|'sampleRate'>) |
@@ -6950,6 +6941,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.masteringChain` | removed: Call masterAudio({ preset, overrides }); the old config is now overrides. |
+| `Audio.stftDb` | removed: Call audio.stft({ db: true }); the result then also carries db. |
 
 #### masterAudio is the mastering entry; mastering is renamed
 
@@ -7267,8 +7259,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `spectralRolloff(sampleRate)` | required second argument (was optional / later position) |
 | `stft(sampleRate)` (`./analysis`) | required second argument (was optional / later position) |
 | `stft(sampleRate)` | required second argument (was optional / later position) |
-| `stftDb(sampleRate)` (`./analysis`) | required second argument (was optional / later position) |
-| `stftDb(sampleRate)` | required second argument (was optional / later position) |
 | `vqt(sampleRate)` (`./analysis`) | required second argument (was optional / later position) |
 | `vqt(sampleRate)` | required second argument (was optional / later position) |
 | `zeroCrossingRate(sampleRate)` (`./analysis`) | required second argument (was optional / later position) |
@@ -7413,7 +7403,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MusicAnalyzeOptions.tuning` | `MusicAnalyzeOptions.tuningCents` |
 | `MusicAnalyzeRequest.tuning` (`./analysis`) | `AnalyzeRequest.tuningCents` |
 | `MusicAnalyzeRequest.tuning` | `AnalyzeRequest.tuningCents` |
-| `StreamAnalyzer.processWithOffset(sampleOffset)` | `StreamAnalyzer.processWithOffset(startSample)` |
 | `StreamAnalyzer.reset(baseSampleOffset)` | `StreamAnalyzer.reset(startSample)` |
 | `StreamAnalyzer.setTuningRefHz(refHz)` | `StreamAnalyzer.setReferenceHz(referenceHz)` |
 | `StreamAnalyzer.setTuningRefHz` | `StreamAnalyzer.setReferenceHz` |
@@ -8012,8 +8001,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `segmentRecurrenceMatrix` | returns Matrix2D |
 | `segmentRecurrenceToLag` (`./analysis`) | returns Matrix2D |
 | `segmentRecurrenceToLag` | returns Matrix2D |
-| `stftDb` (`./analysis`) | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
-| `stftDb` | returns Matrix2D; sampleRate is required (1.x defaulted to 22050) |
 | `tonnetz` (`./analysis`) | returns Matrix2D |
 | `tonnetz` | returns Matrix2D |
 
@@ -8661,10 +8648,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `stft(hopLength)` | removed: pass hopLength as a field of StftRequest |
 | `stft(nFft)` (`./analysis`) | removed: pass nFft as a field of StftRequest |
 | `stft(nFft)` | removed: pass nFft as a field of StftRequest |
-| `stftDb(hopLength)` (`./analysis`) | removed: pass hopLength as a field of StftDbRequest |
-| `stftDb(hopLength)` | removed: pass hopLength as a field of StftDbRequest |
-| `stftDb(nFft)` (`./analysis`) | removed: pass nFft as a field of StftDbRequest |
-| `stftDb(nFft)` | removed: pass nFft as a field of StftDbRequest |
 | `stft` (`./analysis`) | one positional form (stft(samples, sampleRate, options?: Omit<StftRequest,'samples'\|'sampleRate'>)); request form takes StftRequest |
 | `stft` | one positional form (stft(samples, sampleRate, options?: Omit<StftRequest,'samples'\|'sampleRate'>)); request form takes StftRequest |
 | `tempogram(hopLength)` (`./analysis`) | removed: pass hopLength as a field of TempogramRequest |
@@ -8789,6 +8772,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MfccResultToAudioRequest` | removed: Use MfccToAudioRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels, sampleRate, nFft and hopLength. |
 | `MfccResultToMelRequest` (`./analysis`) | removed: Use MfccToMelRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels. |
 | `MfccResultToMelRequest` | removed: Use MfccToMelRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels. |
+| `StreamAnalyzer.processWithOffset` | removed: Call process(samples, startSample). |
+| `stftDb` (`./analysis`) | removed: Call stft({ samples, sampleRate, db: true }); the result then also carries db. |
+| `stftDb` | removed: Call stft({ samples, sampleRate, db: true }); the result then also carries db. |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -8983,8 +8969,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SpectralEditWindow` | `WindowType` |
 | `SpectralFrameRequest` (`./analysis`) | removed: Use the request type of the function: SpectralCentroidRequest, SpectralBandwidthRequest, SpectralRolloffRequest or SpectralFlatnessRequest. |
 | `SpectralFrameRequest` | removed: Use the request type of the function: SpectralCentroidRequest, SpectralBandwidthRequest, SpectralRolloffRequest or SpectralFlatnessRequest. |
-| `SpectrogramRequest` (`./analysis`) | removed: Use the request type of the function: StftRequest, StftDbRequest, ChromaRequest or MelSpectrogramRequest. |
-| `SpectrogramRequest` | removed: Use the request type of the function: StftRequest, StftDbRequest, ChromaRequest or MelSpectrogramRequest. |
+| `SpectrogramRequest` (`./analysis`) | removed: Use the request type of the function: StftRequest, ChromaRequest or MelSpectrogramRequest. |
+| `SpectrogramRequest` | removed: Use the request type of the function: StftRequest, ChromaRequest or MelSpectrogramRequest. |
 | `TimbreAnalysisResult` (`./analysis`) | `TimbreResult` |
 | `TimbreAnalysisResult` | `TimbreResult` |
 | `Timbre` (`./analysis`) | `TimbreFrame` |
@@ -11162,6 +11148,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.bindMidiCc(paramId)` | removed: pass paramId as a field of ProjectMidiCcBinding |
 | `RealtimeEngine.bindMidiCcBinding` | removed: Call bindMidiCc(binding) with a ProjectMidiCcBinding. |
 | `RealtimeEngine.bindMidiCc` | bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor |
+| `RealtimeEngine.setParameterSmoothed` | removed: Call setParameter(paramId, value, renderFrame, { smoothed: true }). |
 | `SonareEngine.bindMidiCc(channel)` (`./worklet`) | removed: pass channel as a field of ProjectMidiCcBinding |
 | `SonareEngine.bindMidiCc(controller)` (`./worklet`) | removed: pass it as ccNumber in ProjectMidiCcBinding |
 | `SonareEngine.bindMidiCc(options)` (`./worklet`) | removed: pass it as minValue and maxValue in ProjectMidiCcBinding |
@@ -11824,11 +11811,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
 | `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest |
-| `Project.setProgramOnChannel(bank)` | removed: pass bank as a field of ProjectProgramInput |
-| `Project.setProgramOnChannel(channel)` | removed: pass channel as a field of ProjectProgramInput |
-| `Project.setProgramOnChannel(group)` | removed: pass group as a field of ProjectProgramInput |
-| `Project.setProgramOnChannel(program)` | removed: pass program as a field of ProjectProgramInput |
-| `Project.setProgramOnChannel` | setProgramOnChannel takes one { group, channel, program, bank?: { msb, lsb } } object; bank is no longer a 14-bit number |
 | `VocalEditWorkerReadOptions` | removed: Read the committed state on VocalEditWorkerSession and the draft on the VocalEditWorkerDraft from beginEdit(). |
 | `VocalEditWorkerSession.destinationSampleToSourceSample(options)` | removed: Drop options. Call destinationSampleToSourceSample(noteId, destinationSample) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
 | `VocalEditWorkerSession.evaluatePitch(options)` | removed: Drop options. Call evaluatePitch(noteId) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
@@ -11936,6 +11918,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.bounceWithSynthInstrument` | `Project.bounceWithSynthInstruments` |
 | `Project.setMarkerEx` | removed: Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id. |
 | `Project.setMidiFx` | removed: Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object. |
+| `Project.setProgram(bank)` | removed: bank moves into options as { msb, lsb }: setProgram(clipId, program, { bank: { msb, lsb } }) |
+| `Project.setProgramOnChannel` | removed: Call setProgram(clipId, program, { bank, group, channel }). |
 | `Sf2InstrumentConfig.destinationId` | removed: Pass the destination id as the first argument of setSf2Instrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused. |
 
 #### Synchronous construction is new X(config); create() is async

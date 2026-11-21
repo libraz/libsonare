@@ -171,7 +171,7 @@ def _compile_with(
     )
 
     class _Project:
-        def compile(self, *, timeline: bool = False) -> SimpleNamespace:
+        def compile(self, *, with_timeline: bool = False) -> SimpleNamespace:
             return result
 
         def close(self) -> None:

@@ -103,7 +103,7 @@ def _engine_bounce(engine: RealtimeEngine) -> np.ndarray:
 
 
 def _compile(project: Project) -> ProjectTimeline:
-    result = project.compile(timeline=True)
+    result = project.compile(with_timeline=True)
     assert isinstance(result, libsonare.ProjectCompileResult)
     assert not [d for d in result.diagnostics if d.severity == "error"]
     assert result.timeline is not None
@@ -172,7 +172,7 @@ def test_apply_while_playing_raises_and_leaves_engine_unchanged() -> None:
 def test_compile_failure_has_no_timeline_and_reports_diagnostics() -> None:
     # A clip naming a source the project does not hold is a compile error.
     with Project.from_json(dangling_source_json()) as project:
-        result = project.compile(timeline=True)
+        result = project.compile(with_timeline=True)
         expected = project.compile()
         assert isinstance(result, libsonare.ProjectCompileResult)
         assert result.timeline is None
@@ -186,6 +186,6 @@ def test_plain_compile_carries_no_timeline() -> None:
     project = Project()
     try:
         assert project.compile().timeline is None
-        assert project.compile(timeline=False).timeline is None
+        assert project.compile(with_timeline=False).timeline is None
     finally:
         project.close()

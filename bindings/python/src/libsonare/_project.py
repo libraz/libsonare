@@ -84,7 +84,7 @@ if TYPE_CHECKING:
 class ProjectTimeline:
     """Immutable compiled playback snapshot of a :class:`Project`.
 
-    Built by :meth:`Project.compile` with ``timeline=True`` and installed into a stopped
+    Built by :meth:`Project.compile` with ``with_timeline=True`` and installed into a stopped
     engine with :meth:`RealtimeEngine.apply_project_timeline`. It owns
     everything it references, so later project edits do not change it. The
     engine keeps its own share, so :meth:`close` may run right after the apply.
@@ -189,12 +189,12 @@ class Project(
         return self._handle
 
     @_entry("Project.compile")
-    def compile(self, *, timeline: bool = False) -> ProjectCompileResult:
+    def compile(self, *, with_timeline: bool = False) -> ProjectCompileResult:
         """Compile the project into an RT-readable timeline.
 
         Returns a :class:`ProjectCompileResult` holding every diagnostic. Never
         throws on bad project content; it surfaces error diagnostics. With
-        ``timeline=True`` the result's ``timeline`` is a :class:`ProjectTimeline`
+        ``with_timeline=True`` the result's ``timeline`` is a :class:`ProjectTimeline`
         for an engine when compilation produced one and ``None`` otherwise (the
         error diagnostics say why).
         """
@@ -205,7 +205,7 @@ class Project(
             lib.sonare_project_compile(
                 self._require_handle(),
                 ctypes.byref(result),
-                ctypes.byref(handle) if timeline else None,
+                ctypes.byref(handle) if with_timeline else None,
             )
         )
         try:

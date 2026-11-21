@@ -282,17 +282,17 @@ class _EngineIoMixin:
 
     @overload
     def process(
-        self, channels: Sequence[Sequence[float]], *, monitor: Literal[False] = False
+        self, channels: Sequence[Sequence[float]], *, with_monitor: Literal[False] = False
     ) -> list[np.ndarray]: ...
 
     @overload
     def process(
-        self, channels: Sequence[Sequence[float]], *, monitor: Literal[True]
+        self, channels: Sequence[Sequence[float]], *, with_monitor: Literal[True]
     ) -> EngineProcessWithMonitorResult: ...
 
     @_entry("RealtimeEngine.process")
     def process(
-        self, channels: Sequence[Sequence[float]], *, monitor: bool = False
+        self, channels: Sequence[Sequence[float]], *, with_monitor: bool = False
     ) -> list[np.ndarray] | EngineProcessWithMonitorResult:
         """Render one block and return the processed channel copies.
 
@@ -300,7 +300,7 @@ class _EngineIoMixin:
         private copies, adding its output to each corresponding input plane.
         Pass zero-filled planes when the engine is the only audio source.
 
-        With ``monitor=True`` the cue (monitor) bus is kept out of the program
+        With ``with_monitor=True`` the cue (monitor) bus is kept out of the program
         planes and returned beside them as an
         :class:`EngineProcessWithMonitorResult`; otherwise it is folded into
         the returned planes.
@@ -308,7 +308,7 @@ class _EngineIoMixin:
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         monitor_arrays: list[ctypes.Array[ctypes.c_float]] = []
         monitor_ptrs = None
-        if monitor:
+        if with_monitor:
             # `(c_float * N)()` zero-initialises each plane.
             monitor_arrays = [(ctypes.c_float * frame_count)() for _ in arrays]
             monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
@@ -323,7 +323,7 @@ class _EngineIoMixin:
                 _to_c_int(frame_count, "frame_count"),
             )
         )
-        if not monitor:
+        if not with_monitor:
             return _plane_arrays(arrays, frame_count)
         return EngineProcessWithMonitorResult(
             output=tuple(_plane_arrays(arrays, frame_count)),
