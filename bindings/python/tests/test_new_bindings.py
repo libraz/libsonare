@@ -7,6 +7,7 @@ returns the documented shape with finite values.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Sequence
 from typing import Any, cast
@@ -102,12 +103,12 @@ def test_decompose_factorizes_spectrogram() -> None:
 def test_decompose_stems_components_sum_back_to_the_input() -> None:
     x = _tone(440.0, 0.4)
     res = libsonare.decompose_stems(x, SR, n_components=2, n_fft=1024, hop_length=256, n_iter=30)
-    components = res["components"]
+    components = res.components
     assert len(components) == 2
     assert all(np.asarray(c).shape == x.shape for c in components)
-    assert np.asarray(res["w"]).shape == (1024 // 2 + 1, 2)
-    assert np.asarray(res["h"]).shape[0] == 2
-    assert res["sample_rate"] == SR
+    assert np.asarray(res.w).shape == (1024 // 2 + 1, 2)
+    assert np.asarray(res.h).shape[0] == 2
+    assert res.sample_rate == SR
     total = sum(np.asarray(c, dtype=np.float32) for c in components)
     interior = slice(1024, len(x) - 1024)
     err = float(np.linalg.norm(total[interior] - x[interior]))
@@ -131,14 +132,14 @@ def test_an_omitted_stems_framing_is_the_library_default() -> None:
     )
     for a, b in ((omitted, explicit), (linked, linked_explicit)):
         for key in ("w", "h"):
-            np.testing.assert_array_equal(np.asarray(a[key]), np.asarray(b[key]))
+            np.testing.assert_array_equal(np.asarray(getattr(a, key)), np.asarray(getattr(b, key)))
         for ca, cb in zip(
-            cast("Sequence[Any]", a["components"]),
-            cast("Sequence[Any]", b["components"]),
+            cast("Sequence[Any]", a.components),
+            cast("Sequence[Any]", b.components),
             strict=True,
         ):
             np.testing.assert_array_equal(np.asarray(ca), np.asarray(cb))
-    assert np.asarray(omitted["w"]).shape == (2048 // 2 + 1, 2)
+    assert np.asarray(omitted.w).shape == (2048 // 2 + 1, 2)
     with pytest.raises(ValueError, match="hop_length"):
         libsonare.decompose_stems(x, SR, hop_length=0, **common)
 
@@ -162,7 +163,9 @@ def test_an_omitted_stems_setting_is_the_library_default(
         omitted = fn(signal, SR)  # type: ignore[operator]
         explicit = fn(signal, SR, **{field: library_default})  # type: ignore[operator]
         for key in ("w", "h"):
-            np.testing.assert_array_equal(np.asarray(omitted[key]), np.asarray(explicit[key]))
+            np.testing.assert_array_equal(
+                np.asarray(getattr(omitted, key)), np.asarray(getattr(explicit, key))
+            )
 
 
 @pytest.mark.parametrize(
@@ -185,7 +188,7 @@ def test_a_stems_sentinel_is_refused_by_name(kwargs: dict[str, Any], field: str)
 
 def _stems_fingerprint(**kwargs: float) -> tuple[int, int, tuple[float, ...]]:
     res = libsonare.decompose_stems(_tone(440.0, 0.37), SR, **kwargs)  # type: ignore[arg-type]
-    components = cast("Sequence[Any]", res["components"])
+    components = cast("Sequence[Any]", res.components)
     first = np.asarray(components[0], dtype=np.float32)
     return len(components), int(first.size), tuple(float(v) for v in first[:8])
 
@@ -323,9 +326,9 @@ def test_remix_refuses_intervals_not_shaped_n_by_2(intervals: Any) -> None:
 
 def test_hpss_with_residual_splits_three_ways() -> None:
     res = libsonare.hpss_with_residual(_tone(), sample_rate=22050)
-    harmonic = np.asarray(res["harmonic"], dtype=np.float32)
-    percussive = np.asarray(res["percussive"], dtype=np.float32)
-    residual = np.asarray(res["residual"], dtype=np.float32)
+    harmonic = np.asarray(res.harmonic, dtype=np.float32)
+    percussive = np.asarray(res.percussive, dtype=np.float32)
+    residual = np.asarray(res.residual, dtype=np.float32)
     assert harmonic.size == percussive.size == residual.size > 0
     assert _finite(harmonic) and _finite(percussive) and _finite(residual)
 
@@ -485,3 +488,18 @@ def test_analyze_timbre_exposes_timbre_over_time() -> None:
         assert math.isfinite(frame.density)
         assert math.isfinite(frame.roughness)
         assert math.isfinite(frame.complexity)
+
+
+def test_stems_and_residual_results_are_records() -> None:
+    """The three separation results are frozen records read by attribute, not dicts."""
+    x = _tone(440.0, 0.3)
+    stems = libsonare.decompose_stems(x, SR, n_components=2, n_iter=5)
+    linked = libsonare.decompose_stems_linked([x, x], SR, n_components=2, n_iter=5)
+    residual = libsonare.hpss_with_residual(x, SR)
+    assert isinstance(stems, libsonare.DecomposeStemsResult)
+    assert isinstance(linked, libsonare.DecomposeStemsLinkedResult)
+    assert isinstance(residual, libsonare.HpssWithResidualResult)
+    assert stems.sample_rate == linked.sample_rate == residual.sample_rate == SR
+    assert np.asarray(linked.components[0]).shape == (2, len(x))
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        residual.sample_rate = 1  # type: ignore[misc]

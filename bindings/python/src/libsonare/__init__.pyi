@@ -90,7 +90,10 @@ from .analyzer import (
 )
 from .analyzer import CharacterType as CharacterType
 from .analyzer import DecomposeResult as DecomposeResult
+from .analyzer import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
+from .analyzer import DecomposeStemsResult as DecomposeStemsResult
 from .analyzer import FormantMode as FormantMode
+from .analyzer import HpssWithResidualResult as HpssWithResidualResult
 from .analyzer import MasteringAssistantParams as MasteringAssistantParams
 from .analyzer import MasteringParams as MasteringParams
 from .analyzer import MasteringParamValue as MasteringParamValue

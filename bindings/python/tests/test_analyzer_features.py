@@ -619,7 +619,9 @@ def test_an_omitted_hpss_hop_is_a_quarter_of_n_fft() -> None:
     with_residual = hpss_with_residual(tone, 22050, n_fft=512)
     with_residual_explicit = hpss_with_residual(tone, 22050, n_fft=512, hop_length=128)
     for key in ("harmonic", "percussive", "residual"):
-        np.testing.assert_array_equal(with_residual[key], with_residual_explicit[key])
+        np.testing.assert_array_equal(
+            getattr(with_residual, key), getattr(with_residual_explicit, key)
+        )
 
 
 def test_an_omitted_time_stretch_hop_is_a_quarter_of_n_fft() -> None:

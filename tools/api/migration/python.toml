@@ -2568,6 +2568,30 @@ rule = "matrix-2d"
 
 [[entry]]
 kind = "function"
+old = "decompose_stems"
+changed = "returns DecomposeStemsResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_results_are_records"
+
+[[entry]]
+kind = "function"
+old = "decompose_stems_linked"
+changed = "returns DecomposeStemsLinkedResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_results_are_records"
+
+[[entry]]
+kind = "function"
+old = "hpss_with_residual"
+changed = "returns HpssWithResidualResult(harmonic, percussive, residual, sample_rate) instead of a dict keyed harmonic / percussive / residual / sampleRate; read the fields by attribute"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_results_are_records"
+
+[[entry]]
+kind = "function"
 old = "trim_silence"
 changed = "returns TrimResult(audio, start_sample, end_sample) instead of a tuple"
 domain = "analysis"

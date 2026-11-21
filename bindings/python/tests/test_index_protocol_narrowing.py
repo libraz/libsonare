@@ -103,7 +103,7 @@ def test_an_index_only_decompose_count_factors_as_the_count_it_names(keyword, va
     def factored(**kwargs) -> str:
         # nndsvd rather than the default random init, so the result is a
         # deterministic function of the counts under test.
-        return _digest(ls.decompose_stems(tone, SR, init="nndsvd", **kwargs)["components"])
+        return _digest(ls.decompose_stems(tone, SR, init="nndsvd", **kwargs).components)
 
     default = factored()
     named = factored(**{keyword: value})

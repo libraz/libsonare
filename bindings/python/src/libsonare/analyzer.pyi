@@ -18,6 +18,9 @@ from ._effects_note_ops import NoteTarget as NoteTarget
 from ._effects_percussive import PercussiveEvent as PercussiveEvent
 from ._effects_percussive import PercussiveEventEdit as PercussiveEventEdit
 from ._effects_separation import DecomposeResult as DecomposeResult
+from ._effects_separation import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
+from ._effects_separation import DecomposeStemsResult as DecomposeStemsResult
+from ._effects_separation import HpssWithResidualResult as HpssWithResidualResult
 from ._effects_spectral import SpectralRegionOp as SpectralRegionOp
 from ._effects_voice import CharacterType as CharacterType
 from ._effects_voice import FormantMode as FormantMode
@@ -1505,7 +1508,7 @@ def decompose_stems(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-) -> dict[str, object]: ...
+) -> DecomposeStemsResult: ...
 def decompose_stems_linked(
     channels: PlanarChannels,
     sample_rate: int,
@@ -1516,7 +1519,7 @@ def decompose_stems_linked(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-) -> dict[str, object]: ...
+) -> DecomposeStemsLinkedResult: ...
 def nn_filter(
     s: FloatSamples,
     n_features: int,
@@ -1545,7 +1548,7 @@ def hpss_with_residual(
     n_fft: int = 2048,
     hop_length: int | None = None,
     hard_mask: bool = False,
-) -> dict[str, object]: ...
+) -> HpssWithResidualResult: ...
 def phase_vocoder(
     samples: FloatSamples,
     sample_rate: int,

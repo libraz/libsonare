@@ -65,6 +65,48 @@ class DecomposeResult:
     """Activation matrix of shape ``(n_components, n_frames)`` as float32."""
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DecomposeStemsResult:
+    """Result of :func:`decompose_stems`."""
+
+    components: list[np.ndarray]
+    """Component signals, each a 1-D float32 array the length of the input."""
+    w: np.ndarray
+    """Component matrix of shape ``(n_bins, n_components)`` as float32."""
+    h: np.ndarray
+    """Activation matrix of shape ``(n_components, n_frames)`` as float32."""
+    sample_rate: int
+    """Sample rate of the component signals, in Hz."""
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class DecomposeStemsLinkedResult:
+    """Result of :func:`decompose_stems_linked`."""
+
+    components: list[np.ndarray]
+    """Component signals, each a ``(num_channels, n)`` float32 array, channel ch at row ch."""
+    w: np.ndarray
+    """Component matrix of shape ``(n_bins, n_components)`` from the channel-averaged plane."""
+    h: np.ndarray
+    """Activation matrix of shape ``(n_components, n_frames)`` as float32."""
+    sample_rate: int
+    """Sample rate of the component signals, in Hz."""
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class HpssWithResidualResult:
+    """Result of :func:`hpss_with_residual`; the three signals add back up to the input."""
+
+    harmonic: np.ndarray
+    """Harmonic component as float32."""
+    percussive: np.ndarray
+    """Percussive component as float32."""
+    residual: np.ndarray
+    """What neither component claimed, as float32; silent under the default soft mask."""
+    sample_rate: int
+    """Sample rate of all three signals, in Hz."""
+
+
 @_entry("decompose")
 @_guard_buffer("s")
 def decompose(
@@ -215,7 +257,7 @@ def decompose_stems(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-) -> dict[str, object]:
+) -> DecomposeStemsResult:
     """NMF separation that carries the original phase, so components are listenable.
 
     :func:`decompose` returns the W / H factors of a magnitude spectrogram,
@@ -243,8 +285,8 @@ def decompose_stems(
             overlapping partials.
 
     Returns:
-        Dict with ``components`` (list of 1-D float32 arrays, each the length of
-        the input), ``w`` (``(n_bins, n_components)``), ``h``
+        A :class:`DecomposeStemsResult`: ``components`` (1-D float32 arrays, each
+        the length of the input), ``w`` (``(n_bins, n_components)``), ``h``
         (``(n_components, n_frames)``) and ``sample_rate``.
 
     Raises:
@@ -288,12 +330,12 @@ def decompose_stems(
         components = [flat[i * per : (i + 1) * per] for i in range(count)]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
-        return {
-            "components": components,
-            "w": w.reshape(-1, count) if count else w,
-            "h": h.reshape(count, -1) if count else h,
-            "sample_rate": sample_rate,
-        }
+        return DecomposeStemsResult(
+            components=components,
+            w=w.reshape(-1, count) if count else w,
+            h=h.reshape(count, -1) if count else h,
+            sample_rate=sample_rate,
+        )
 
 
 @_entry("decompose_stems_linked")
@@ -307,7 +349,7 @@ def decompose_stems_linked(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-) -> dict[str, object]:
+) -> DecomposeStemsLinkedResult:
     """N-channel form of :func:`decompose_stems`: one NMF model, one soft mask.
 
     Each channel's STFT is averaged into a single magnitude plane before the
@@ -339,8 +381,8 @@ def decompose_stems_linked(
             ratio.
 
     Returns:
-        Dict with the same keys as :func:`decompose_stems` -- ``components``,
-        ``w``, ``h`` and ``sample_rate`` -- but each ``components`` element is
+        A :class:`DecomposeStemsLinkedResult` with the fields of
+        :class:`DecomposeStemsResult`, but each ``components`` element is
         channel-planar: a 2-D float32 array of shape ``(num_channels, n)``
         rather than :func:`decompose_stems`'s 1-D array, component c channel
         ch at row ch.
@@ -392,12 +434,12 @@ def decompose_stems_linked(
         ]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
-        return {
-            "components": components,
-            "w": w.reshape(-1, count) if count else w,
-            "h": h.reshape(count, -1) if count else h,
-            "sample_rate": sample_rate,
-        }
+        return DecomposeStemsLinkedResult(
+            components=components,
+            w=w.reshape(-1, count) if count else w,
+            h=h.reshape(count, -1) if count else h,
+            sample_rate=sample_rate,
+        )
 
 
 @_entry("nn_filter")
@@ -674,7 +716,7 @@ def hpss_with_residual(
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
     hard_mask: bool = False,
-) -> dict[str, object]:
+) -> HpssWithResidualResult:
     """HPSS into harmonic / percussive / residual signals.
 
     The three outputs always add back up to the input. ``residual`` is silent
@@ -687,9 +729,9 @@ def hpss_with_residual(
 
     Example:
         >>> soft = hpss_with_residual(samples, sample_rate)
-        >>> # soft["residual"] is silence
+        >>> # soft.residual is silence
         >>> hard = hpss_with_residual(samples, sample_rate, hard_mask=True)
-        >>> # hard["residual"] carries what neither component claimed
+        >>> # hard.residual carries what neither component claimed
 
     Args:
         samples: Input audio.
@@ -707,8 +749,8 @@ def hpss_with_residual(
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
 
     Returns:
-        A dict with ``harmonic`` / ``percussive`` / ``residual`` float32 arrays
-        (all the same length) plus ``sampleRate``.
+        A :class:`HpssWithResidualResult` with ``harmonic`` / ``percussive`` /
+        ``residual`` float32 arrays (all the same length) and ``sample_rate``.
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
@@ -740,12 +782,12 @@ def hpss_with_residual(
     try:
         _check(rc)
         n = int(out.length)
-        return {
-            "harmonic": _from_c_float_array(out.harmonic, n),
-            "percussive": _from_c_float_array(out.percussive, n),
-            "residual": _from_c_float_array(residual, n),
-            "sampleRate": int(out.sample_rate),
-        }
+        return HpssWithResidualResult(
+            harmonic=_from_c_float_array(out.harmonic, n),
+            percussive=_from_c_float_array(out.percussive, n),
+            residual=_from_c_float_array(residual, n),
+            sample_rate=int(out.sample_rate),
+        )
     finally:
         lib.sonare_free_hpss_result(ctypes.byref(out))
         if residual:

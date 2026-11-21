@@ -34,22 +34,20 @@ def test_one_channel_matches_decompose_stems_bit_for_bit() -> None:
     linked = libsonare.decompose_stems_linked(
         [x], SR, n_components=2, n_fft=1024, hop_length=256, n_iter=20
     )
-    assert len(linked["components"]) == len(mono["components"])
-    for mono_component, linked_component in zip(
-        mono["components"], linked["components"], strict=True
-    ):
+    assert len(linked.components) == len(mono.components)
+    for mono_component, linked_component in zip(mono.components, linked.components, strict=True):
         linked_arr = np.asarray(linked_component)
         assert linked_arr.shape == (1, len(x))
         np.testing.assert_array_equal(linked_arr[0], np.asarray(mono_component))
-    np.testing.assert_array_equal(np.asarray(linked["w"]), np.asarray(mono["w"]))
-    np.testing.assert_array_equal(np.asarray(linked["h"]), np.asarray(mono["h"]))
-    assert linked["sample_rate"] == mono["sample_rate"] == SR
+    np.testing.assert_array_equal(np.asarray(linked.w), np.asarray(mono.w))
+    np.testing.assert_array_equal(np.asarray(linked.h), np.asarray(mono.h))
+    assert linked.sample_rate == mono.sample_rate == SR
 
 
 def test_mono_components_are_disjoint_views_of_one_owned_copy() -> None:
     x = _tone(440.0, 0.3)
     res = libsonare.decompose_stems(x, SR, n_components=2, n_fft=1024, hop_length=256, n_iter=20)
-    first, second = res["components"]
+    first, second = res.components
     assert first.base is not None
     assert first.base is second.base
     assert not np.shares_memory(first, second)
@@ -64,13 +62,13 @@ def test_two_channels_reconstruct_and_carry_the_channel_axis() -> None:
     res = libsonare.decompose_stems_linked(
         [left, right], SR, n_components=2, n_fft=1024, hop_length=256, n_iter=30
     )
-    components = res["components"]
+    components = res.components
     assert len(components) == 2
     for component in components:
         arr = np.asarray(component)
         assert arr.shape == (2, len(left))
-    assert np.asarray(res["w"]).shape == (1024 // 2 + 1, 2)
-    assert np.asarray(res["h"]).shape[0] == 2
+    assert np.asarray(res.w).shape == (1024 // 2 + 1, 2)
+    assert np.asarray(res.h).shape[0] == 2
 
     total_left = sum(np.asarray(c, dtype=np.float32)[0] for c in components)
     total_right = sum(np.asarray(c, dtype=np.float32)[1] for c in components)

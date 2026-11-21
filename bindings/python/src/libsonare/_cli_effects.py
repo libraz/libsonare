@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
@@ -180,10 +179,10 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             sample_rate=sr,
             **separation,
         )
-        harmonic = _audio_array(separated["harmonic"])
-        percussive = _audio_array(separated["percussive"])
-        residual = _audio_array(separated["residual"])
-        output_sr = int(cast(int, separated.get("sampleRate", sr)))
+        harmonic = _audio_array(separated.harmonic)
+        percussive = _audio_array(separated.percussive)
+        residual = _audio_array(separated.residual)
+        output_sr = separated.sample_rate
     else:
         result = hpss(
             samples,
@@ -262,10 +261,8 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
             args, "n_components", "n_fft", "hop_length", "n_iter", "beta", "init", "mask_power"
         ),
     )
-    components = [
-        _audio_array(component) for component in cast(Iterable[Any], result["components"])
-    ]
-    output_sr = int(cast(int, result["sample_rate"]))
+    components = [_audio_array(component) for component in result.components]
+    output_sr = result.sample_rate
 
     # One file per component, numbered from 1, in the base-name shape `hpss`
     # uses for its two: the destination names the set, not a single file.

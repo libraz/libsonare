@@ -102,7 +102,7 @@ def test_hpss_with_residual_options_reach_the_native_call(monkeypatch: pytest.Mo
     result = separation.hpss_with_residual(
         _samples(), n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
     )
-    assert set(result) == {"harmonic", "percussive", "residual", "sampleRate"}
+    assert isinstance(result, separation.HpssWithResidualResult)
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 1]
 
@@ -191,7 +191,7 @@ def test_extended_effects_work_with_fresh_library() -> None:
     assert len(stretched) > 0
     assert len(shifted) > 0
     assert separated.length == len(samples)
-    assert len(separated_residual["residual"]) == len(samples)
+    assert len(separated_residual.residual) == len(samples)
     assert len(normalized) == len(samples)
     assert len(trimmed) > 0
 

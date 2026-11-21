@@ -161,12 +161,12 @@ def test_hpss_residual_mode_writes_three_artifacts_and_conflicts_are_rejected(
     monkeypatch.setattr(
         libsonare,
         "hpss_with_residual",
-        lambda _samples, **_kwargs: {
-            "harmonic": [0.1],
-            "percussive": [0.2],
-            "residual": [0.3],
-            "sampleRate": 22050,
-        },
+        lambda _samples, **_kwargs: libsonare.HpssWithResidualResult(
+            harmonic=np.array([0.1], np.float32),
+            percussive=np.array([0.2], np.float32),
+            residual=np.array([0.3], np.float32),
+            sample_rate=22050,
+        ),
     )
 
     assert effects.cmd_hpss(_args(output="split.wav", with_residual=True)) == 0

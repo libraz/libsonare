@@ -242,8 +242,8 @@ def test_an_ordinary_kernel_still_separates(tone) -> None:
     assert any(value != 0.0 for value in result.harmonic)
 
     residual = hpss_with_residual(tone, SR)
-    assert set(residual) == {"harmonic", "percussive", "residual", "sampleRate"}
-    assert len(residual["harmonic"]) == len(tone)
+    assert residual.sample_rate == SR
+    assert len(residual.harmonic) == len(tone)
 
 
 # -- The percussive-event facade, which does not pre-validate the kernel --
