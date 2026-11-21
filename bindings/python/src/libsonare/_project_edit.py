@@ -711,14 +711,15 @@ class _ProjectEditMixin:
         if encoded_name == b"":
             raise _refuse("name must not be empty; omit it for no name")
         desc = SonareProjectWarpMapDesc(
-            # Passed unconverted so the struct's own narrowing sees the caller's
-            # value; int() would truncate a fraction past it.
-            id=warp_ref_id,
+            id=_narrow_int(warp_ref_id, "warp_ref_id", 0, _UINT32_MAX),
             name=encoded_name,
             anchors=c_anchors,
             anchor_count=count,
         )
-        _check(_get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc)))
+        _check(
+            _get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc)),
+            flattened="desc",
+        )
 
     @_entry("Project.remove_warp_map")
     def remove_warp_map(self, warp_ref_id: int) -> None:

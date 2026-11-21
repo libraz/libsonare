@@ -10,6 +10,7 @@ from __future__ import annotations
 import inspect
 import math
 import re
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -48,18 +49,127 @@ _UNREACHABLE = {
 }
 
 
-def _refusals(entry: str, spelling: str) -> list[str]:
+def _project_with_track() -> tuple[libsonare.Project, int]:
+    project = libsonare.Project()
+    return project, project.add_track("audio")
+
+
+def _mixer_with_send() -> libsonare.Mixer:
+    mixer = libsonare.Mixer(sample_rate=48000)
+    mixer.add_strip("a")
+    mixer.add_bus("b")
+    mixer.add_send("a", "s", "b")
+    return mixer
+
+
+def _loop_takes() -> tuple[Callable[..., Any], dict[str, Any]]:
+    project, track = _project_with_track()
+    return project.add_loop_recording_takes, {
+        "track_id": track,
+        "start_ppq": 0.0,
+        "loop_length_ppq": 4.0,
+        "audio": _TONE,
+        "audio_channels": 1,
+        "audio_sample_rate": 48000,
+    }
+
+
+def _clip() -> tuple[Callable[..., Any], dict[str, Any]]:
+    project, track = _project_with_track()
+    return project.add_clip, {
+        "track_id": track,
+        "start_ppq": 0.0,
+        "length_ppq": 4.0,
+        "audio_channels": 1,
+        "audio_sample_rate": 48000,
+    }
+
+
+def _voice_changer(method: str, **required: Any) -> Callable[[], tuple[Callable[..., Any], dict]]:
+    def make() -> tuple[Callable[..., Any], dict[str, Any]]:
+        changer = libsonare.RealtimeVoiceChanger(48000, num_channels=1, max_block_size=128)
+        return getattr(changer, method), required
+
+    return make
+
+
+def _playback(method: str) -> Callable[[], tuple[Callable[..., Any], dict]]:
+    def make() -> tuple[Callable[..., Any], dict[str, Any]]:
+        renderer = libsonare.PlaybackRenderer({}, sample_rate=48000, max_block_size=128)
+        return getattr(renderer, method), {"samples": _TONE[:128]}
+
+    return make
+
+
+# A C entry a handle method reaches: the bound method and a valid value for each argument.
+_METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
+    "engine_set_capture_buffer": lambda: (
+        libsonare.RealtimeEngine(sample_rate=48000, max_block_size=128).configure_capture,
+        {"capacity_frames": 1024},
+    ),
+    "playback_renderer_process_interleaved": _playback("process_interleaved"),
+    "playback_renderer_render_offline": _playback("render_offline"),
+    "project_add_clip": _clip,
+    "project_add_loop_recording_takes": _loop_takes,
+    "project_import_clip_file": lambda: (libsonare.Project().import_clip_file, {}),
+    "project_import_smf": lambda: (libsonare.Project().import_smf, {}),
+    "project_set_marker": lambda: (libsonare.Project().set_marker, {"ppq": 0.0}),
+    "project_set_marker_ex_name": lambda: (
+        libsonare.Project().set_marker,
+        {"ppq": 0.0, "name": "m"},
+    ),
+    "project_set_source_audio": lambda: (
+        libsonare.Project().set_source_audio,
+        {"source_id": 1, "audio": _TONE, "sample_rate": 48000},
+    ),
+    "project_set_warp_map": lambda: (
+        libsonare.Project().set_warp_map,
+        {"anchors": [(0.0, 0.0), (1.0, 1.0)]},
+    ),
+    "realtime_voice_changer_process_interleaved": _voice_changer("process_interleaved"),
+    "realtime_voice_changer_process_interleaved_with_carrier": _voice_changer(
+        "process_interleaved_with_carrier", carrier=_TONE[:128]
+    ),
+    "realtime_voice_changer_process_mono": _voice_changer("process_mono"),
+    "realtime_voice_changer_process_mono_with_carrier": _voice_changer(
+        "process_mono_with_carrier", carrier=_TONE[:128]
+    ),
+    "strip_add_send": lambda: (
+        _mixer_with_send().add_send,
+        {"strip": "a", "destination_bus_id": "b"},
+    ),
+    "strip_set_dual_pan": lambda: (
+        _mixer_with_send().set_dual_pan,
+        {"strip": "a", "left": 0.0, "right": 0.0},
+    ),
+    "strip_set_send_db": lambda: (
+        _mixer_with_send().set_send_db,
+        {"strip": "a", "index": 0, "db": 0.0},
+    ),
+}
+
+
+def _call(entry: str, spelling: str) -> tuple[Callable[..., Any], dict[str, Any]]:
+    """The facade call reaching ``entry``, with every argument but ``spelling`` given."""
+    if entry in _METHODS:
+        fn, given = _METHODS[entry]()
+        return fn, {k: v for k, v in given.items() if k != spelling}
     fn = getattr(libsonare, entry)
     params = inspect.signature(fn).parameters
-    args = [
-        _REQUIRED[name]
+    given = {
+        name: _REQUIRED[name]
         for name, p in params.items()
         if p.default is p.empty and p.kind is p.POSITIONAL_OR_KEYWORD and name != spelling
-    ]
+    }
+    return fn, given
+
+
+def _refusals(entry: str, spelling: str) -> list[str]:
     texts = []
     for value in _OUTSIDE:
+        fn, given = _call(entry, spelling)
         try:
-            fn(*args, **{spelling: value})
+            fn(**given, **{spelling: value})
         except (SonareError, TypeError, ValueError) as exc:
             texts.append(str(exc))
     return texts
@@ -67,14 +177,14 @@ def _refusals(entry: str, spelling: str) -> list[str]:
 
 def _names(text: str, word: str) -> bool:
     """Whether ``text`` names ``word`` where a refusal puts its subject, not inside its prose."""
-    return re.search(rf"(^[a-z_.]+: |unknown key |, |\{{){re.escape(word)}\b", text) is not None
+    return re.search(rf"(^[A-Za-z_.]+: |unknown key |, |\{{){re.escape(word)}\b", text) is not None
 
 
 @pytest.mark.parametrize(("entry", "subject", "spelling"), [(*k, v) for k, v in OVERRIDES.items()])
 def test_a_table_row_is_refused_under_the_callers_spelling(
     entry: str, subject: str, spelling: str
 ) -> None:
-    assert spelling in inspect.signature(getattr(libsonare, entry)).parameters
+    assert spelling in inspect.signature(_call(entry, spelling)[0]).parameters
     texts = _refusals(entry, spelling)
     leaked = [t for t in texts if _names(t, subject)]
     assert leaked == []

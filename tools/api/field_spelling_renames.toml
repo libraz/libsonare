@@ -36,3 +36,10 @@ reference_sample_rate = "sample_rate"
 # Retires when the C argument is renamed num_channels.
 channels = "num_channels"
 preset = "config"
+in_channels = "num_input_channels"
+audio_interleaved = "audio"
+id = ["marker_id", "warp_ref_id", "send_id"]
+input = "samples"
+left_pan = "left"
+right_pan = "right"
+send_db = "db"

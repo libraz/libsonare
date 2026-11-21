@@ -403,6 +403,8 @@ def _utf8_arg(value: str, name: str) -> bytes:
     The C side reads up to the first NUL, so a string containing one would arrive
     silently shortened; every string argument crosses the boundary through here.
     """
+    if not isinstance(value, str):
+        raise _refuse_type(f"{name} must be a str")
     if "\x00" in value:
         raise _refuse(f"{name} must not contain NUL")
     return value.encode("utf-8")
