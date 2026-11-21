@@ -1324,11 +1324,12 @@ def _call_float_array_transform(
     values: Sequence[float] | list[float] | np.ndarray,
     *args: object,
     arg_name: str = "samples",
+    flattened: str | None = None,
     respelled: Mapping[str, _Respelling] | None = None,
 ) -> np.ndarray:
     """Run a buffer-in, buffer-out C transform and return a ``float32`` ndarray.
 
-    ``respelled`` is passed to :func:`_check` for the bounds the entry converted.
+    ``flattened`` and ``respelled`` are passed to :func:`_check`.
     """
     lib = _get_lib()
     # `fn_name` is the C symbol, not the facade, so only the argument name goes on.
@@ -1341,7 +1342,7 @@ def _call_float_array_transform(
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
-        _check(rc, respelled=respelled)
+        _check(rc, flattened=flattened, respelled=respelled)
         return _from_c_float_array(out, out_length.value)
 
 

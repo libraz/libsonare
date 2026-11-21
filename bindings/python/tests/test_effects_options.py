@@ -33,7 +33,8 @@ def _samples() -> np.ndarray:
 def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, tuple[object, ...]]] = []
 
-    def fake_transform(name: str, *args: object) -> np.ndarray:
+    def fake_transform(name: str, *args: object, flattened: str | None = None) -> np.ndarray:
+        assert flattened == "options"
         calls.append((name, args))
         return np.zeros(1, dtype=np.float32)
 

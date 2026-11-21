@@ -615,6 +615,7 @@ def spectral_bandwidth(
         _to_c_int(n_fft, "n_fft"),
         _to_c_size_t(hop_length, "hop_length"),
         ctypes.byref(options),
+        flattened="options",
     )
 
 

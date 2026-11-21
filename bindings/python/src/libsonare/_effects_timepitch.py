@@ -85,6 +85,7 @@ def time_stretch(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(speed_ratio, "speed_ratio"),
         ctypes.byref(options),
+        flattened="options",
     )
 
 
@@ -123,6 +124,7 @@ def pitch_shift(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(pitch_semitones, "pitch_semitones"),
         ctypes.byref(options),
+        flattened="options",
     )
 
 
