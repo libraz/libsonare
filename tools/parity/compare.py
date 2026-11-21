@@ -280,7 +280,7 @@ _ALIAS_COVERAGE = {
     "audio_duration_sec": ("duration_sec", "get_duration_sec"),
     "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
-    "engine_drain_meter_telemetry": ("drain_meter_telemetry", "drain_meter_telemetry_wide"),
+    "engine_drain_meter_telemetry": ("drain_meter_telemetry",),
     "engine_prepare": ("prepare",),
     "engine_bind_midi_cc": ("bind_midi_cc",),
     "project_set_marker": ("set_marker",),

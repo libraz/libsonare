@@ -12,7 +12,7 @@
       "leaking_refusals": 37
     },
     "wasm": {
-      "leaking_refusals": 27
+      "leaking_refusals": 25
     }
   }
 }
