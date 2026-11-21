@@ -917,6 +917,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mel_to_stft(sample_rate)` | `mel_to_stft(sr)` |
 | `mfcc(sample_rate)` | `mfcc(sr)` |
 | `mfcc_to_audio(sample_rate)` | `mfcc_to_audio(sr)` |
+| `onset_envelope(sample_rate)` | `onset_strength(sr)` |
 | `pcen(sample_rate)` | `pcen(sr)` |
 | `piptrack(sample_rate)` | `piptrack(sr)` |
 | `plp(sample_rate)` | `plp(sr)` |
@@ -1084,9 +1085,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `BpmHypothesis.confidence` | `BpmCandidate.confidence` |
 | `BpmHypothesis.relation` | `AnalysisBpmCandidate.relation` |
 | `BpmHypothesis.value` | `BpmCandidate.bpm` |
-| `SectionResult` | removed: analyze_sections returns list[Section]; iterate it instead of .sections |
+| `SectionResult` | removed: analyze_sections returns SectionAnalysis, whose .sections is the list[Section] and whose .form is the form label |
 | `TranscribeResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
-| `analyze_sections` | returns list[Section] (1.x: SectionResult wrapping .sections) |
+| `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only) |
 | `estimate_meter(beat_strengths)` | removed: pass beats=analysis.beats (Beat records carry time_sec and strength) |
 | `estimate_meter(beat_times)` | `estimate_meter(beats)` |
 | `estimate_meter` | takes beats: Sequence[Beat] (time_sec and strength) instead of parallel beat_times and beat_strengths |
@@ -1537,7 +1538,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_repair_detect_reverb(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_detect_trim_range(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_detect_trim_range_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `mastering_repair_noise_band_bins(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
+| `mastering_repair_noise_band_bins(sample_rate)` | sample_rate is required (1.x defaulted to 22050) and is the first parameter, ahead of n_fft (1.x: n_fft first) |
 | `mastering_repair_trim_silence(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_trim_silence_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `normalize(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
@@ -1891,8 +1892,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
-| `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0 |
-| `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0 |
+| `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
+| `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
+| `voice_change_realtime` | a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
 
 ### Python: Mastering, mixing and loudness
 
@@ -2247,7 +2249,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingMasteringChain.prepare` | removed: pass sample_rate=, max_block_size= and num_channels= to the constructor |
-| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
+| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError |
 | `mastering_insert_param_names(name)` | `mastering_insert_param_names(insert)` |
 
 #### Stereo-only algorithms take left and right
@@ -2295,6 +2297,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `mix_source_class_names` | `mixing_assistant_source_class_names`: renamed to the C/JS name |
+
+#### Documents in a 1.x spelling are refused
+
+| 1.x | 2.0.0 |
+|---|---|
+| `mastering_process(params)` | `mastering_apply_processor(params)`: insert parameter keys are renamed and the old spelling is refused as an unknown key: effects.reverb.room and effects.acoustic.roomMorph maxSeconds -> maxSec; effects.modulation.rotary accelTauS/decelTauS -> accelTauSec/decelTauSec; effects.reverb.velvet reverbTimeS -> reverbTimeSec; dynamics.gate keyHpfHz -> keyHighPassHz; dynamics.deesser bandpassQ -> bandPassQ; voice.changer eqHighpassHz/retuneSemitones/retuneGrainSize -> eqHighPassHz/retunePitchSemitones/retuneGrainSizeSamples; effects.modulation.pitchShifter semitones/semitones2/cents/cents2 -> pitchSemitones/pitchSemitones2/pitchCents/pitchCents2; repair.trimSilence threshold (linear) -> thresholdDb (dBFS, default -60, [-890, 0]); the same keys apply to mastering_insert_timing(params), and dynamics.deesser.bandpassQ -> bandPassQ in master_audio(overrides) and StreamingMasteringChain(config) |
 
 #### Other individual changes
 

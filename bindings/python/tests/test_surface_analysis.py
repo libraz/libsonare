@@ -1020,6 +1020,14 @@ def test_sections_are_a_named_list() -> None:
     assert "canonical_name" not in {f.name for f in libsonare.Section.__dataclass_fields__.values()}
 
 
+def test_analyze_sections_returns_the_sections_and_their_form() -> None:
+    result = libsonare.analyze_sections(_tone(8.0), SR, min_section_sec=2.0)
+    assert isinstance(result, libsonare.SectionAnalysis)
+    assert isinstance(result.form, str)
+    assert len(result.form) in (0, len(result.sections))
+    assert not hasattr(libsonare, "SectionResult")
+
+
 def test_key_detection_names_the_chroma_high_pass() -> None:
     for name in ("detect_key", "detect_key_candidates"):
         parameters = inspect.signature(getattr(libsonare, name)).parameters
