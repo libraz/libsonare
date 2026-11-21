@@ -1,3 +1,4 @@
+#include "c_api/midi_input_domains.h"
 #include "c_api/project_internal.h"
 #include "util/parameter_checks.h"
 
@@ -32,14 +33,14 @@ void check_midi_event_pod(const SonareMidiEventPod& event, const std::string& pp
 }
 
 void check_u7(uint8_t value, const char* subject) {
-  check::integer_in_range(value, 0, 127, subject);
+  check::integer_within(value, sonare_c_detail::kMidiDataByteDomain, subject);
 }
 
 // Checks the fields every MIDI builder carries: the position, the group and the channel.
 void check_midi_head(double ppq, uint8_t group, uint8_t channel) {
   check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
-  check::integer_in_range(group, 0, 15, "group");
-  check::integer_in_range(channel, 0, 15, "channel");
+  check::integer_within(group, sonare_c_detail::kMidiUmpGroupDomain, "group");
+  check::integer_within(channel, sonare_c_detail::kMidiChannelDomain, "channel");
 }
 
 // Refuses through `check`, then `out` being NULL, then packs the event `build` makes into `out`.
@@ -69,8 +70,8 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
   if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize / 16), "count");
+        check::integer_within(static_cast<long long>(count), sonare_c_detail::kMidiEventCountDomain,
+                              "count");
       });
       err != SONARE_OK) {
     return err;
@@ -496,9 +497,10 @@ void check_cc_binding(const SonareMidiCcBinding& src, size_t index) {
   const auto subject = [index](const char* field) {
     return check::indexed_subject("bindings", index, field);
   };
-  check::integer_in_range(src.cc_number, 0, 127, subject("cc_number").c_str());
-  check::integer_in_range(src.param_id, 1, std::numeric_limits<uint32_t>::max(),
-                          subject("param_id").c_str());
+  check::integer_within(src.cc_number, sonare_c_detail::kMidiDataByteDomain,
+                        subject("cc_number").c_str());
+  check::integer_within(src.param_id, sonare_c_detail::kMidiTargetParamIdDomain,
+                        subject("param_id").c_str());
   if (src.kind > SONARE_MIDI_CC_NRPN) {
     check::refuse(subject("kind").c_str(), sonare::util::refusal::kDeclaredValuePredicate);
   }
@@ -514,7 +516,8 @@ void check_cc_binding(const SonareMidiCcBinding& src, size_t index) {
                            "{0} must be at least {1}");
   }
   if (src.kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
-    check::integer_in_range(src.cc_number, 0, 31, subject("cc_number").c_str());
+    check::integer_within(src.cc_number, sonare_c_detail::kMidiControl14NumberDomain,
+                          subject("cc_number").c_str());
     if (src.cc_lsb_number != src.cc_number + 32u) {
       check::refuse_relation({subject("cc_lsb_number"), subject("cc_number")},
                              "{0} must be {1} + 32");
@@ -696,9 +699,9 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (const SonareError err = run_validation([&] {
         check_midi_head(ppq, group, channel);
-        check::integer_in_range(bank_msb, 0, 127, "bank_msb");
-        check::integer_in_range(bank_lsb, 0, 127, "bank_lsb");
-        check::integer_in_range(program, 0, 127, "program");
+        check::integer_within(bank_msb, sonare_c_detail::kMidiDataByteDomain, "bank_msb");
+        check::integer_within(bank_lsb, sonare_c_detail::kMidiDataByteDomain, "bank_lsb");
+        check::integer_within(program, sonare_c_detail::kMidiDataByteDomain, "program");
       });
       err != SONARE_OK) {
     return err;
@@ -754,8 +757,8 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize / 16), "count");
+        check::integer_within(static_cast<long long>(count), sonare_c_detail::kMidiEventCountDomain,
+                              "count");
       });
       err != SONARE_OK) {
     return err;
@@ -844,15 +847,15 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
   // The core compares movement in 7-bit CC units, so a larger threshold could never be met.
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize / 16), "count");
-        check::integer_in_range(param_id, 1, std::numeric_limits<uint32_t>::max(), "param_id");
+        check::integer_within(static_cast<long long>(count), sonare_c_detail::kMidiEventCountDomain,
+                              "count");
+        check::integer_within(param_id, sonare_c_detail::kMidiTargetParamIdDomain, "param_id");
         check::finite_float(min_value, "min_value");
         check::finite_float(max_value, "max_value");
         if (max_value < min_value) {
           check::refuse_relation({"max_value", "min_value"}, "{0} must be at least {1}");
         }
-        check::integer_in_range(min_movement, 0, 127, "min_movement");
+        check::integer_within(min_movement, sonare_c_detail::kMidiDataByteDomain, "min_movement");
       });
       err != SONARE_OK) {
     return err;
@@ -922,9 +925,9 @@ SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t 
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(bindings, binding_count);
   if (const SonareError err = run_validation([&] {
         check_cc_bindings(bindings, binding_count);
-        check::integer_in_range(param_id, 1, std::numeric_limits<uint32_t>::max(), "param_id");
+        check::integer_within(param_id, sonare_c_detail::kMidiTargetParamIdDomain, "param_id");
         check::finite_float(unit_value, "unit_value");
-        check::integer_in_range(group, 0, 15, "group");
+        check::integer_within(group, sonare_c_detail::kMidiUmpGroupDomain, "group");
         check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
       });
       err != SONARE_OK) {
@@ -970,7 +973,7 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
       out, ppq,
       [&] {
         check_midi_head(ppq, group, channel);
-        check::integer_in_range(bend, 0, 16383, "bend");
+        check::integer_within(bend, sonare_c_detail::kMidiPitchBend14Domain, "bend");
       },
       [&] { return sonare::midi::make_midi1_pitch_bend(group, channel, bend); });
 #else
@@ -1208,9 +1211,9 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
   SONARE_C_REQUIRE_NONNULL(project);
   if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(group, 0, 15, "group");
-        check::integer_in_range(channel, 0, 15, "channel");
-        check::integer_in_range(program, 0, 127, "program");
+        check::integer_within(group, sonare_c_detail::kMidiUmpGroupDomain, "group");
+        check::integer_within(channel, sonare_c_detail::kMidiChannelDomain, "channel");
+        check::integer_within(program, sonare_c_detail::kMidiDataByteDomain, "program");
       });
       err != SONARE_OK) {
     return err;

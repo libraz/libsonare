@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -169,7 +170,7 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     check::refuse("request.stem_count", sonare::util::refusal::integer_range_predicate(
                                             1, static_cast<double>(kMaxSamples)));
   }
-  check::integer_at_least(request->sample_rate, 1, "request.sample_rate");
+  check::integer_within(request->sample_rate, kExternalStemSampleRateDomain, "request.sample_rate");
   sonare::arrangement::ExternalSeparatedStemSet input;
   input.sample_rate = request->sample_rate;
   std::set<std::string> names;
@@ -185,7 +186,8 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     if (!names.insert(desc.name).second) {
       check::refuse(member("name").c_str(), "must not repeat the name of another stem");
     }
-    check::integer_at_least<int64_t>(desc.start_frame, 0, member("start_frame").c_str());
+    check::integer_within(desc.start_frame, kExternalStemStartFrameDomain,
+                          member("start_frame").c_str());
     check::integer_in_range(desc.layout, SONARE_EXTERNAL_STEM_MONO, SONARE_EXTERNAL_STEM_STEREO,
                             member("layout").c_str());
     layout =

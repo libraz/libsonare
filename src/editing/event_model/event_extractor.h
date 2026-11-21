@@ -9,8 +9,13 @@
 #include "core/audio.h"
 #include "editing/event_model/percussive_event.h"
 #include "effects/hpss.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::event_model {
+
+/// @brief What the onset wait of percussive extraction accepts.
+inline constexpr util::check::NumericDomain kPercussiveOnsetWaitDomain =
+    util::check::integer_domain_of<int>(0);
 
 /// @brief The separation an event's signal is lifted out with.
 /// @details Extraction measures events against it and rendering has to repeat

@@ -3122,7 +3122,7 @@ TEST_CASE("project bounce refuses options and instrument members by their header
   options.sample_rate = 0;
   REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "options.sample_rate must be an integer in [1, 2147483647]");
+  CHECK(message() == "options.sample_rate must be an integer in [8000, 384000]");
   sonare_project_bounce_options_init(&options);
   options.struct_size = sizeof(options) - 1;
   REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==

@@ -1,9 +1,11 @@
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "util/parameter_checks.h"
 
 namespace check = sonare::util::check;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "analysis/music_analyzer.h"
 #include "arrangement/harmonic_limits.h"
 #include "core/resample.h"
 #include "feature/cqt.h"
@@ -90,8 +92,8 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* au
 void check_tempo_options(const SonareProjectTempoOptions& options) {
   sonare_c_detail::require_struct_size(options.struct_size, sizeof(SonareProjectTempoOptions),
                                        "options", "sonare_project_tempo_options_init");
-  check::integer_at_least(options.tempo_update_interval_beats, 1,
-                          "options.tempo_update_interval_beats");
+  check::integer_within(options.tempo_update_interval_beats, sonare::kMusicCountDomain,
+                        "options.tempo_update_interval_beats");
   check::at_least(options.ramp_threshold, 0.0, "options.ramp_threshold");
 }
 
@@ -260,7 +262,7 @@ SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double 
   if (const SonareError err = run_validation([&] {
         check::at_least(ppq, 0.0, "ppq");
         check::in_range(strength, 0.0, 1.0, "strength");
-        check::integer_in_range(division, 0, 1024, "division");
+        check::integer_within(division, kSnapDivisionDomain, "division");
       });
       err != SONARE_OK) {
     return err;
@@ -325,8 +327,7 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(keys, count);
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize), "count");
+        check::integer_within(static_cast<long long>(count), kAnnotationCountDomain, "count");
       });
       err != SONARE_OK) {
     return err;
@@ -367,8 +368,7 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(chords, count);
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(count), 0,
-                                static_cast<long long>(kMaxBufferSize), "count");
+        check::integer_within(static_cast<long long>(count), kAnnotationCountDomain, "count");
       });
       err != SONARE_OK) {
     return err;
@@ -439,8 +439,7 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
   if (out_extension_count) *out_extension_count = 0;
   if (out_slash_bass_pc) *out_slash_bass_pc = arr::kUnknownPitchClass;
   if (const SonareError err = run_validation([&] {
-        check::integer_in_range(static_cast<long long>(root), SONARE_PITCH_C, SONARE_PITCH_B,
-                                "root");
+        check::integer_within(static_cast<long long>(root), kChordRootPitchClassDomain, "root");
         check::integer_in_range(static_cast<long long>(quality), 0, SONARE_CHORD_QUALITY_COUNT - 1,
                                 "quality");
         check::integer_in_range(static_cast<long long>(bass), SONARE_PITCH_C, SONARE_PITCH_B,
@@ -576,10 +575,11 @@ SonareError sonare_align_take_to_reference_ex(
         sonare_c_detail::require_struct_size(resolved.struct_size, sizeof(SonareTakeAlignConfig),
                                              "config", "sonare_take_align_config_init");
         // The chroma is a constant-Q one, so its hop takes the transform's bound.
-        check::integer_in_range(resolved.hop_length, 1, sonare::kMaxCqtHopLength,
-                                "config.hop_length");
+        check::integer_within(resolved.hop_length, sonare::kCqtHopLengthDomain,
+                              "config.hop_length");
         // Chroma folds the grid into 12 classes, so a grid it cannot fold is refused by its member.
-        check::integer_at_least(resolved.bins_per_octave, 1, "config.bins_per_octave");
+        check::integer_within(resolved.bins_per_octave, sonare::kCqtCountDomain,
+                              "config.bins_per_octave");
         if (resolved.bins_per_octave % 12 != 0) {
           check::refuse("config.bins_per_octave", "must be a multiple of 12");
         }

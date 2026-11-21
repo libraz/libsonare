@@ -4,6 +4,7 @@
 #include <string>
 
 #include "arrangement/vocal_edit_sidecar.h"
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
@@ -375,10 +376,10 @@ void check_audio_payload(const AudioPayloadNames& n, const Desc* desc) {
   if (desc->audio_interleaved == nullptr && desc->audio_frames == 0) return;
   util::check::non_null_when_count(desc->audio_interleaved, static_cast<size_t>(desc->audio_frames),
                                    n.interleaved, n.frames);
-  util::check::integer_at_least<int64_t>(desc->audio_frames, 1, n.frames);
-  util::check::integer_at_least<int>(desc->audio_channels, 1, n.channels);
-  util::check::integer_in_range(desc->audio_sample_rate, kMinSampleRate, kMaxSampleRate,
-                                n.sample_rate);
+  util::check::integer_within(desc->audio_frames, kAudioPayloadFramesDomain, n.frames);
+  util::check::integer_within(desc->audio_channels, kAudioPayloadChannelsDomain, n.channels);
+  util::check::integer_within(desc->audio_sample_rate, sonare::kAudioSampleRateDomain,
+                              n.sample_rate);
   if (static_cast<uint64_t>(desc->audio_frames) >
           std::numeric_limits<size_t>::max() / static_cast<uint64_t>(desc->audio_channels) ||
       static_cast<uint64_t>(desc->audio_frames) * static_cast<uint64_t>(desc->audio_channels) >

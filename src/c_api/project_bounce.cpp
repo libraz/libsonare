@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -209,16 +210,19 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   }
   const bool derive_length = opts.total_frames == SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT;
   if (!derive_length) {
-    check::integer_at_least<int64_t>(opts.total_frames, 1, "options.total_frames");
+    check::integer_within(opts.total_frames, kProjectBounceTotalFramesDomain,
+                          "options.total_frames");
   }
-  check::integer_at_least(opts.block_size, 1, "options.block_size");
+  check::integer_within(opts.block_size, kProjectBounceBlockSizeDomain, "options.block_size");
   if (opts.num_channels != SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER) {
-    check::integer_at_least(opts.num_channels, 1, "options.num_channels");
+    check::integer_within(opts.num_channels, kProjectBounceChannelCountDomain,
+                          "options.num_channels");
   }
   if (opts.sample_rate != SONARE_PROJECT_SAMPLE_RATE_PROJECT) {
-    check::integer_at_least(opts.sample_rate, 1, "options.sample_rate");
+    check::integer_within(opts.sample_rate, sonare::kAudioSampleRateDomain, "options.sample_rate");
   }
-  check::integer_at_least(opts.instrument_latency_samples, 0, "options.instrument_latency_samples");
+  check::integer_within(opts.instrument_latency_samples, kProjectBounceInstrumentLatencyDomain,
+                        "options.instrument_latency_samples");
   const int block_size = opts.block_size;
   const int num_channels = opts.num_channels == SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER
                                ? master_output_channels(project->history.project().scene())
@@ -234,10 +238,6 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const double project_sr = project->history.project().sample_rate();
   const bool project_rate = opts.sample_rate == SONARE_PROJECT_SAMPLE_RATE_PROJECT;
   const double sample_rate = project_rate ? project_sr : static_cast<double>(opts.sample_rate);
-  if (!project_rate) {
-    check::integer_in_range(opts.sample_rate, sonare::kMinAudioSampleRate,
-                            sonare::kMaxAudioSampleRate, "options.sample_rate");
-  }
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     check::refuse("project", "must have a supported sample rate");
   }

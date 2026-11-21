@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "editing_input_domains.h"
 #include "feature/pitch.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
@@ -571,8 +572,10 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
     check::greater_than(v.segmentation_threshold_cents, 0.0,
                         "options.segmentation_threshold_cents");
     check::greater_than(v.min_note_ms, 0.0, "options.min_note_ms");
-    check::integer_at_least(v.frame_length_samples, 1, "options.frame_length_samples");
-    check::integer_at_least(v.hop_length_samples, 1, "options.hop_length_samples");
+    check::integer_within(v.frame_length_samples, sonare_c_detail::kVocalCreateFrameLengthDomain,
+                          "options.frame_length_samples");
+    check::integer_within(v.hop_length_samples, sonare_c_detail::kVocalCreateHopLengthDomain,
+                          "options.hop_length_samples");
     check::greater_than(v.fmin_hz, 0.0, "options.fmin_hz");
     if (!(std::isfinite(v.fmax_hz) && v.fmax_hz > v.fmin_hz))
       check::refuse_relation({"options.fmax_hz", "options.fmin_hz"},

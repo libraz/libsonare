@@ -15,6 +15,7 @@
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+#include "c_api/mixing_input_domains.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
@@ -50,12 +51,15 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
       if (track_sample_rates != nullptr && track_sample_rates[index] <= 0) {
         const std::string name = "track_sample_rates" + at();
         return run_validation([&] {
-          sonare::util::check::integer_at_least(track_sample_rates[index], 1, name.c_str());
+          sonare::util::check::integer_within(track_sample_rates[index],
+                                              kMixingAssistantTrackSampleRateDomain, name.c_str());
         });
       }
     }
-    if (const SonareError err = run_validation(
-            [&] { sonare::util::check::integer_at_least(sample_rate, 1, "sample_rate"); });
+    if (const SonareError err = run_validation([&] {
+          sonare::util::check::integer_within(sample_rate, kMixingAssistantSampleRateDomain,
+                                              "sample_rate");
+        });
         err != SONARE_OK) {
       return err;
     }

@@ -14,8 +14,13 @@
 
 #include "core/audio.h"
 #include "feature/pitch.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::pitch_editor {
+
+/// @brief What the hop length of an F0 track accepts.
+inline constexpr util::check::NumericDomain kF0TrackHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
 
 struct F0Track {
   std::vector<float> f0_hz;

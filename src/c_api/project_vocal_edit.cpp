@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "editing/vocal_edit/source_digest.h"
 #include "util/parameter_checks.h"
@@ -327,14 +328,12 @@ void check_original_input(const SonareProjectVocalOriginalSource& value, size_t 
     return check::indexed_subject("originals", index, field);
   };
   check_header(value, "originals[" + std::to_string(index) + "]");
-  check::integer_in_range(value.source_id, 1, std::numeric_limits<uint32_t>::max() - 1,
-                          member("source_id").c_str());
+  check::integer_within(value.source_id, kVocalSourceIdDomain, member("source_id").c_str());
   check::non_null(value.mono, member("mono").c_str());
-  check::integer_in_range(value.sample_count, 1,
-                          static_cast<long long>(sonare::kMaxAudioBufferSize),
-                          member("sample_count").c_str());
-  check::integer_in_range(value.sample_rate, sonare::kMinAudioSampleRate,
-                          sonare::kMaxAudioSampleRate, member("sample_rate").c_str());
+  check::integer_within(value.sample_count, kVocalSourceSampleCountDomain,
+                        member("sample_count").c_str());
+  check::integer_within(value.sample_rate, sonare::kAudioSampleRateDomain,
+                        member("sample_rate").c_str());
   const size_t count = static_cast<size_t>(value.sample_count);
   std::vector<float> samples(value.mono, value.mono + count);
   if (!finite_pcm(samples)) check::refuse(member("mono").c_str(), "must hold only finite samples");
@@ -390,17 +389,15 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   SONARE_C_REQUIRE_NONNULL(desc);
   if (const SonareError invalid = sonare_c_detail::run_validation([&] {
         namespace check = sonare::util::check;
-        constexpr uint32_t kMaxId = std::numeric_limits<uint32_t>::max() - 1;
         const auto max_payload = static_cast<long long>(
             sonare::resource::kDefaultProjectImportResourceLimits.max_decoded_payload_bytes);
         check_header(*desc, "desc");
-        check::integer_in_range(desc->clip_id, 1, kMaxId, "desc.clip_id");
-        check::integer_in_range(desc->take_id, 0, kMaxId, "desc.take_id");
-        check::integer_in_range(desc->expected_source_sample_rate, sonare::kMinAudioSampleRate,
-                                sonare::kMaxAudioSampleRate, "desc.expected_source_sample_rate");
-        check::integer_in_range(desc->expected_source_sample_count, 1,
-                                static_cast<long long>(sonare::kMaxAudioBufferSize),
-                                "desc.expected_source_sample_count");
+        check::integer_within(desc->clip_id, kVocalClipIdDomain, "desc.clip_id");
+        check::integer_within(desc->take_id, kVocalTakeIdDomain, "desc.take_id");
+        check::integer_within(desc->expected_source_sample_rate, sonare::kAudioSampleRateDomain,
+                              "desc.expected_source_sample_rate");
+        check::integer_within(desc->expected_source_sample_count, kVocalSourceSampleCountDomain,
+                              "desc.expected_source_sample_count");
         check::finite(desc->expected_clip_length_ppq, "desc.expected_clip_length_ppq");
         check::finite(desc->expected_source_offset_ppq, "desc.expected_source_offset_ppq");
         check::non_null(desc->rendered_mono, "desc.rendered_mono");

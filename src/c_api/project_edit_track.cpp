@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
@@ -81,7 +82,7 @@ void automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
                                  const SonareAutomationPoint* point_data, size_t point_count,
                                  sonare::automation::AutomationLane* out) {
   namespace check = sonare::util::check;
-  check::integer_at_least(target_param_id, 1, "desc.target_param_id");
+  check::integer_within(target_param_id, kAutomationTargetParamIdDomain, "desc.target_param_id");
   sonare::automation::AutomationTargetKind kind{};
   if (!ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
     check::refuse("desc.target_kind", sonare::util::refusal::kDeclaredValuePredicate);
@@ -144,8 +145,7 @@ void require_lane(const arr::Track& track, uint32_t target_param_id) {
 
 // Refuses an entity id the arrangement reserves as its exhausted-counter sentinel.
 void check_assignable_entity_id(uint32_t id, const char* subject) {
-  sonare::util::check::integer_in_range(
-      id, 0, static_cast<long long>(std::numeric_limits<uint32_t>::max()) - 1, subject);
+  sonare::util::check::integer_within(id, kAssignableEntityIdDomain, subject);
 }
 
 // Refuses a marker whose kind, position, id or key signature the project cannot store.
@@ -159,7 +159,7 @@ void check_marker(const SonareProjectMarker* marker) {
   // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
   // (7 flats to 7 sharps), so an out-of-range value would not serialize to a conformant SMF.
   if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE) {
-    check::integer_in_range(marker->key_fifths, -7, 7, "marker.key_fifths");
+    check::integer_within(marker->key_fifths, kMarkerKeyFifthsDomain, "marker.key_fifths");
   }
 }
 
@@ -301,8 +301,10 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
     const std::string prefix = "segments[" + std::to_string(i) + "].";
     check::in_range(in.start_ppq, 0.0, sonare::transport::kMaxPublicPpq,
                     (prefix + "start_ppq").c_str());
-    check::integer_at_least(in.numerator, 1, (prefix + "numerator").c_str());
-    check::integer_at_least(in.denominator, 1, (prefix + "denominator").c_str());
+    check::integer_within(in.numerator, kTimeSignatureNumeratorDomain,
+                          (prefix + "numerator").c_str());
+    check::integer_within(in.denominator, kTimeSignatureDenominatorDomain,
+                          (prefix + "denominator").c_str());
     if (in.start_ppq <= previous_start_ppq) {
       check::refuse_relation(
           {prefix + "start_ppq", "segments[" + std::to_string(i - 1) + "].start_ppq"},
@@ -480,7 +482,7 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
   namespace check = sonare::util::check;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(desc);
-  check::integer_at_least(desc->id, 1, "desc.id");
+  check::integer_within(desc->id, kWarpMapIdDomain, "desc.id");
   check::integer_in_range(static_cast<long long>(desc->anchor_count), 2,
                           static_cast<long long>(kMaxBufferSize), "desc.anchor_count");
   check::non_null(desc->anchors, "desc.anchors");

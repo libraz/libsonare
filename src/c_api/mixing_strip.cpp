@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <array>
 
+#include "c_api/engine_config_domains.h"
+#include "c_api/mixing_input_domains.h"
 #include "c_api/mixing_internal.h"
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
@@ -33,9 +35,8 @@ SonareError require_index_below(size_t index, size_t count, const char* subject,
 }
 
 SonareError require_curve(int curve, sonare::mixing::AutomationCurveType* out) {
-  constexpr int kLastCurve = static_cast<int>(sonare::mixing::AutomationCurveType::SCurve);
   const SonareError err = sonare_c_detail::run_validation(
-      [&] { check::integer_in_range(curve, 0, kLastCurve, "curve"); });
+      [&] { check::integer_within(curve, sonare_c_detail::kStripAutomationCurveDomain, "curve"); });
   if (err == SONARE_OK) *out = static_cast<sonare::mixing::AutomationCurveType>(curve);
   return err;
 }
@@ -59,9 +60,9 @@ SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer
   SONARE_C_ZERO_OUTS(out);
   if (max_block_size == 0) max_block_size = sonare::mixing::api::kMixerDefaultMaxBlock;
   if (const SonareError err = sonare_c_detail::run_validation([&] {
-        check::integer_in_range(sample_rate, static_cast<long long>(sonare::kMinAudioSampleRate),
-                                static_cast<long long>(sonare::kMaxAudioSampleRate), "sample_rate");
-        check::integer_in_range(max_block_size, 1, sonare::kMaxRealtimeBlockSize, "max_block_size");
+        check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
+        check::integer_within(max_block_size, sonare_c_detail::kMixerMaxBlockSizeDomain,
+                              "max_block_size");
       });
       err != SONARE_OK) {
     return err;
@@ -318,8 +319,8 @@ SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(strip);
   if (const SonareError err = sonare_c_detail::run_validation([&] {
-        check::integer_in_range(delay_samples, 0, sonare::mixing::kMaxAlignmentDelaySamples,
-                                "delay_samples");
+        check::integer_within(delay_samples, sonare_c_detail::kEngineAlignmentDelayDomain,
+                              "delay_samples");
       });
       err != SONARE_OK) {
     return err;
@@ -520,9 +521,10 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
     return err;
   }
   // Reject obviously corrupt ids before descriptor lookup.
-  constexpr unsigned int kMaxReasonableParamId = 65535u;
-  if (const SonareError err = sonare_c_detail::run_validation(
-          [&] { check::integer_in_range(param_id, 0, kMaxReasonableParamId, "param_id"); });
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        check::integer_within(param_id, sonare_c_detail::kStripInsertAutomationParamIdDomain,
+                              "param_id");
+      });
       err != SONARE_OK) {
     return err;
   }

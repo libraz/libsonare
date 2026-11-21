@@ -22,6 +22,7 @@
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/pitch_editor/scale_quantizer.h"
 #endif
+#include "editing_input_domains.h"
 #include "metering/basic.h"
 #include "metering/clipping.h"
 #include "metering/dynamic_range.h"
@@ -113,8 +114,9 @@ namespace {
 SonareError validate_silence_ratio_params(float threshold_db, int frame_length, int hop_length) {
   return run_validation([&] {
     util::check::finite_float(threshold_db, "threshold_db");
-    util::check::integer_at_least(frame_length, 1, "frame_length");
-    util::check::integer_at_least(hop_length, 1, "hop_length");
+    util::check::integer_within(frame_length, metering::kSilenceRatioFrameLengthDomain,
+                                "frame_length");
+    util::check::integer_within(hop_length, metering::kSilenceRatioHopLengthDomain, "hop_length");
   });
 }
 
@@ -661,7 +663,7 @@ namespace {
 
 SonareError validate_interleaved_audio(const float* samples, size_t frames, int num_channels) {
   return run_validation([&] {
-    util::check::integer_at_least(num_channels, 1, "num_channels");
+    util::check::integer_within(num_channels, kInterleavedChannelsDomain, "num_channels");
     util::check::non_null_when_count(samples, frames, "samples", "frames");
     if (frames > std::numeric_limits<size_t>::max() / static_cast<size_t>(num_channels)) {
       util::check::refuse_relation({"frames", "num_channels"},
@@ -793,8 +795,9 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
 
 SonareError validate_scale_args(int root, uint16_t mode_mask) {
   return run_validation([&] {
-    util::check::integer_in_range(root, 0, 11, "root");
-    util::check::integer_in_range(mode_mask, 1, 0x0FFF, "mode_mask");
+    util::check::integer_within(root, editing::pitch_editor::kScaleRootDomain, "root");
+    util::check::integer_within(mode_mask, editing::pitch_editor::kScaleModeMaskDomain,
+                                "mode_mask");
   });
 }
 #endif
@@ -855,8 +858,8 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
   SONARE_C_ZERO_OUTS(out_enabled);
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (const SonareError err = validate_scale_args(root, mode_mask); err != SONARE_OK) return err;
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_in_range(pitch_class, 0, 11, "pitch_class"); });
+  if (const SonareError err = run_validation(
+          [&] { util::check::integer_within(pitch_class, kScalePitchClassDomain, "pitch_class"); });
       err != SONARE_OK) {
     return err;
   }
@@ -876,7 +879,7 @@ SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_mask);
   SONARE_C_TRY
-  util::check::integer_in_range(root, SONARE_PITCH_C, SONARE_PITCH_B, "root");
+  util::check::integer_within(root, kScaleMaskRootDomain, "root");
   util::check::integer_in_range(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, "mode");
   const Mode core_mode = admitted_ordinal_to_enum<Mode>(mode);
   SONARE_C_REQUIRE_NONNULL(out_mask);

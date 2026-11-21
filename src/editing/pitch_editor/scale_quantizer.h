@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -13,6 +14,12 @@ namespace sonare::editing::pitch_editor {
 /// reference to an int, so the constructor and public entry points bound a
 /// caller-supplied origin to the MIDI note range before it reaches the cast.
 inline constexpr float kMaxReferenceMidi = 127.0f;
+
+/// @brief What the root pitch class of a scale accepts.
+inline constexpr util::check::NumericDomain kScaleRootDomain = util::check::integer_domain(0, 11);
+/// @brief What the pitch-class mask of a scale accepts: non-empty, twelve bits.
+inline constexpr util::check::NumericDomain kScaleModeMaskDomain =
+    util::check::integer_domain(1, 0x0FFF);
 
 struct ScaleQuantizerConfig {
   int root = 0;

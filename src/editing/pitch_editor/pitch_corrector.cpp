@@ -52,7 +52,7 @@ void validate_f0_track(const Audio& audio, const F0Track& track) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "f0_hz",
                                             "must not be empty");
   }
-  check::integer_at_least(track.hop_length, 1, "hop_length");
+  check::integer_within(track.hop_length, kF0TrackHopLengthDomain, "hop_length");
   if (track.f0_hz.size() != track.voiced.size()) {
     check::refuse_relation({"voiced", "f0_hz"}, "{0} must have the same length as {1}");
   }
@@ -157,8 +157,8 @@ Audio resynthesize_validated(const Audio& audio, const F0Track& track,
 }  // namespace
 
 PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {
-  check::integer_in_range(config_.scale.root, 0, 11, "scale.root");
-  check::integer_in_range(config_.scale.mode_mask, 1, 0x0FFF, "scale.mode_mask");
+  check::integer_within(config_.scale.root, kScaleRootDomain, "scale.root");
+  check::integer_within(config_.scale.mode_mask, kScaleModeMaskDomain, "scale.mode_mask");
   check::in_range(config_.scale.reference_midi, 0.0, kMaxReferenceMidi, "scale.reference_midi");
   check::in_range(config_.retune_amount, 0.0, 1.0, "retune_amount");
   check::at_least(config_.max_correction_semitones, 0.0, "max_correction_semitones");
