@@ -10,10 +10,12 @@ from . import _ffi_types_core as _ffi_core
 from . import _ffi_types_mastering_project as _ffi_project
 from ._engine_conversions import (
     _LATENCY_Q8_SCALE,
+    _POSITIVE_COUNT,
     _assign_marker_ids,
     _automation_points_to_c,
     _clips_to_c,
     _fixed_bytes,
+    _given_positive,
     _marker_from_c,
     _marker_to_c,
     _metronome_from_c,
@@ -75,7 +77,6 @@ from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    _INT64_MAX,
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
     _UINT8_MAX,
@@ -734,7 +735,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         The clip is validated like a :meth:`set_clips` entry; a refused clip
         raises and leaves the published set unchanged.
         """
-        raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c([clip])
+        raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c([clip], indexed=False)
         _check(_get_lib().sonare_engine_upsert_clip(self._require_handle(), raw_clips))
         provider = getattr(clip, "page_provider", None)
         if isinstance(provider, ClipPageProvider):
@@ -950,22 +951,24 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 )
             event_arrays.append(raw_events)
             track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
-            raw_clips[index] = _ffi_project.SonareEngineMidiClipSchedule(
-                _optional_positive_int(clip.id, "clip.id", _UINT32_MAX),
-                track_id,
-                clip.start_sample,
-                _narrow_double(clip.start_ppq, "clip.start_ppq"),
-                _optional_positive_int(clip.length_samples, "clip.length_samples", _INT64_MAX),
-                1 if clip.loop else 0,
-                _optional_positive_int(
-                    clip.loop_length_samples, "clip.loop_length_samples", _INT64_MAX
+            # An omitted length keeps the init's OPEN_ENDED and an omitted loop period its 0;
+            # a given 0 length is the C refusal's.
+            raw_clips[index] = _ffi_project.SonareEngineMidiClipSchedule._given(
+                id=_optional_positive_int(clip.id, "clip.id", _UINT32_MAX),
+                track_id=track_id,
+                start_sample=clip.start_sample,
+                start_ppq=_narrow_double(clip.start_ppq, "clip.start_ppq"),
+                length_samples=_given_positive(
+                    clip.length_samples, f"clips[{index}].length_samples", _POSITIVE_COUNT
                 ),
-                track_id if clip.destination_id is None else clip.destination_id,
-                raw_events,
-                len(clip.events),
-                _narrow_double(clip.gain, "clip.gain"),
-                clip.fade_in_samples,
-                clip.fade_out_samples,
+                loop=1 if clip.loop else 0,
+                loop_length_samples=clip.loop_length_samples,
+                destination_id=track_id if clip.destination_id is None else clip.destination_id,
+                events=raw_events,
+                event_count=len(clip.events),
+                gain=_narrow_double(clip.gain, "clip.gain"),
+                fade_in_samples=clip.fade_in_samples,
+                fade_out_samples=clip.fade_out_samples,
             )
         _check(
             lib.sonare_engine_set_midi_clips(

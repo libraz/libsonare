@@ -447,20 +447,17 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     throw WasmRangeError("source_sample_rate must equal the prepared sample rate " +
                          std::to_string(static_cast<long long>(engine_.sample_rate())));
   }
-  if (dither != 0 && dither_bits != 0 &&
-      (dither_bits < mastering::final::kMinDitherTargetBits ||
-       dither_bits > mastering::final::kMaxDitherTargetBits)) {
+  if (dither != 0 && (dither_bits < mastering::final::kMinDitherTargetBits ||
+                      dither_bits > mastering::final::kMaxDitherTargetBits)) {
     throw WasmRangeError("ditherBits out of range");
   }
   // Every option is read before the render, which consumes engine state.
   const bool normalize_lufs = boolProperty(options_val, "normalizeLufs", false);
-  // A non-finite target is refused (as on Node and Python); 0 is the C ABI's "use the default"
-  // sentinel and stays here.
-  float target_lufs = floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
-  if (target_lufs == 0.0f) {
-    target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
-  }
-  const auto requested_seed = uintProperty(options_val, "ditherSeed", 0);
+  // As in the C ABI, every finite target is literal and only absence selects the default.
+  const float target_lufs =
+      floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+  const uint32_t dither_seed =
+      uintProperty(options_val, "ditherSeed", SONARE_ENGINE_DEFAULT_DITHER_SEED);
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a
   // bounce is a one-shot render, so the first audible block must open at the
@@ -485,12 +482,8 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = ditherTypeFromInt(dither);
-    // A negative ditherBits was already rejected above; 0 is not an error for
-    // the oracle, so keep the "0 -> library default (16)" promotion here.
     config.target_bits = dither_bits;
-    if (config.target_bits <= 0) config.target_bits = 16;
-    // Match the C API: seed == 0 means "keep the library default seed".
-    if (requested_seed != 0) config.seed = requested_seed;
+    config.seed = dither_seed;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(num_channels), config);

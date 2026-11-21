@@ -7889,10 +7889,10 @@ test = "bindings/node/tests/surface/engine.test.ts::treats an explicit 0 on a ra
 [[entry]]
 kind = "field"
 old = "EngineBounceOptions.targetLufs"
-changed = "absent is -14 LUFS; an explicit 0 and a non-finite value are RangeErrors"
+changed = "absent is -14 LUFS; any finite value, 0 included, is a literal target; a non-finite value is a RangeError"
 domain = "engine"
 rule = "non-finite-is-absent"
-test = "bindings/node/tests/surface/engine.test.ts::reads targetLufs 0 as an error"
+test = "bindings/node/tests/surface/engine.test.ts::reads targetLufs 0 as a literal target"
 
 [[entry]]
 kind = "field"

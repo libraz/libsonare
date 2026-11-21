@@ -365,7 +365,7 @@ export interface EngineBounceOptions {
   sourceSampleRate?: number;
   /** Normalize the result to `targetLufs`. Default `false`. */
   normalizeLufs?: boolean;
-  /** Integrated loudness target in LUFS. Omit for -14; non-finite and an explicit `0` are refused. */
+  /** Integrated loudness target in LUFS. Omit for -14; any finite value, `0` included, is literal and a non-finite one is refused. */
   targetLufs?: number;
   /** Omit for no dither. */
   dither?: EngineDither;
@@ -658,7 +658,7 @@ export interface EngineMidiClipSchedule {
   lengthSamples?: number;
   /** Whether the clip repeats. Omitted: `false`. */
   loop?: boolean;
-  /** Length of one loop repeat in samples; meaningful when `loop` is set. Omitted: no loop length; `0` and a negative or fractional value are refused. */
+  /** Length of one loop repeat in samples, a positive whole number; required when `loop` is set and ignored otherwise. */
   loopLengthSamples?: number;
   /** Events with absolute render frames. */
   events: EngineMidiEvent[];
@@ -671,8 +671,8 @@ export interface EngineMidiClipSchedule {
   /**
    * Linear fade lengths over the clip's full length (not per internal loop
    * repeat). Absent defaults to `0` (no fade). `fadeOutSamples` above `0` is
-   * rejected when `lengthSamples` is absent or `<= 0` (open-ended): an
-   * open-ended clip has no end to fade out towards.
+   * rejected when `lengthSamples` is absent (open-ended): an open-ended clip
+   * has no end to fade out towards.
    */
   fadeInSamples?: number;
   /** Fade-out length in samples; see `fadeInSamples`. */

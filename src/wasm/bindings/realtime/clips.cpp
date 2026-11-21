@@ -211,12 +211,10 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
     throw WasmRangeError("clip offset is outside the source");
   }
   const int64_t default_length = source_samples - schedule.clip_offset_samples;
-  const int64_t requested_length = int64Property(clip_val, "lengthSamples", 0);
-  // Match the C ABI / Node / Python convention: zero selects the full
-  // remaining source from clipOffsetSamples rather than an empty clip.
-  schedule.length_samples = requested_length == 0 ? default_length : requested_length;
-  if (schedule.length_samples <= 0) {
-    throw WasmRangeError("clip offset or length is outside the source");
+  // As in the C ABI, only an absent length plays the source remaining after clipOffsetSamples.
+  schedule.length_samples = int64Property(clip_val, "lengthSamples", default_length);
+  if (schedule.length_samples < 1) {
+    throw WasmRangeError("clip lengthSamples must be an integer of at least 1");
   }
   schedule.loop = boolProperty(clip_val, "loop", schedule.loop);
   schedule.gain = floatProperty(clip_val, "gain", 1.0f);

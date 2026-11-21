@@ -141,7 +141,7 @@ def test_engine_fixed_identifiers_are_refused_rather_than_cut() -> None:
             )
         )
     with pytest.raises(SonareValueError, match="^id must be at most 63 UTF-8 bytes$"):
-        _graph_node_to_c(EngineGraphNode(id="n" * 64))
+        _graph_node_to_c(EngineGraphNode(id="n" * 64), 0)
 
 
 def test_clip_take_and_comp_lists_are_required_and_empty_clears() -> None:

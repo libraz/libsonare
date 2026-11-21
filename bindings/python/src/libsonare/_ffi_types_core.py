@@ -431,7 +431,10 @@ class SonareProjectAudioSourceMetadata(CStruct):
 class SonareEngineMetronomeConfig(CStruct):
     """Maps to SonareEngineMetronomeConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_engine_metronome_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("enabled", ctypes.c_int),
         ("beat_gain", ctypes.c_float),
         ("accent_gain", ctypes.c_float),
@@ -443,7 +446,10 @@ class SonareEngineMetronomeConfig(CStruct):
 class SonareEngineClip(CStruct):
     """Maps to SonareEngineClip in sonare_c.h."""
 
+    _c_init_ = "sonare_engine_clip_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("id", ctypes.c_uint32),
         ("track_id", ctypes.c_uint32),
         ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
@@ -536,7 +542,10 @@ class SonareEngineCaptureStatus(CStruct):
 class SonareEngineBounceOptions(CStruct):
     """Maps to SonareEngineBounceOptions in sonare_c.h."""
 
+    _c_init_ = "sonare_engine_bounce_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("total_frames", ctypes.c_int64),
         ("block_size", ctypes.c_int),
         ("num_channels", ctypes.c_int),
@@ -566,7 +575,10 @@ class SonareEngineBounceResult(CStruct):
 class SonareEngineFreezeOptions(CStruct):
     """Maps to SonareEngineFreezeOptions in sonare_c.h."""
 
+    _c_init_ = "sonare_engine_freeze_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("total_frames", ctypes.c_int64),
         ("block_size", ctypes.c_int),
         ("num_channels", ctypes.c_int),
@@ -589,7 +601,10 @@ class SonareEngineFreezeResult(CStruct):
 class SonareEngineGraphNode(CStruct):
     """Maps to SonareEngineGraphNode in sonare_c.h."""
 
+    _c_init_ = "sonare_engine_graph_node_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("id", ctypes.c_char * 64),
         ("type", ctypes.c_int),
         ("gain_db", ctypes.c_float),

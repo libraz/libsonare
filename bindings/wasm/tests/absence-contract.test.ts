@@ -379,6 +379,9 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
       engine.setMidiClips([
         clip({ lengthSamples: 100, loop: true, loopLengthSamples: 50 }),
       ] as never);
+      expect(() => engine.setMidiClips([clip({ loop: true })] as never)).toThrow(
+        /clip loopLengthSamples must be an integer of at least 1/,
+      );
     });
   });
 });

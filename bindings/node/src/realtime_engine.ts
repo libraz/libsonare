@@ -144,18 +144,6 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
-/** An optional number on a field where `0` would mean "the default": absent stays absent, `0` is refused. */
-function optionalNonZero(value: unknown, argName: string): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  const number = requireFinite(value, argName);
-  if (number === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
-  }
-  return number;
-}
-
 /** An optional uint32 id whose `0` would mean "none": absent stays `undefined`, and an explicit `0` is refused. */
 function optionalId(argName: string, value: unknown): number | undefined {
   if (isAbsent(value)) {
@@ -518,57 +506,6 @@ function parameterFromNative(native: Record<string, unknown>): Required<EnginePa
   } as Required<EngineParameterInfo>;
 }
 
-/**
- * A sample count on a MIDI clip schedule whose `0` would read as "not given": absent stays
- * absent, and `0`, a negative or a fraction is refused by name.
- */
-function scheduleSampleCount(
-  index: number,
-  field: string,
-  value: unknown,
-  meaning: string,
-): number | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  const where = `clips[${index}].${field}`;
-  if (typeof value !== 'number') {
-    throw refuseType(`${where} must be an integer`);
-  }
-  if (value === 0) {
-    throw refuse(`${where} must not be 0; omit it for ${meaning}`);
-  }
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(`${where} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
-  }
-  return value;
-}
-
-/** The schedule as the native layer reads it: an absent length is a missing key, never a `0`. */
-function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknown {
-  if (!Array.isArray(clips)) {
-    return clips;
-  }
-  return clips.map((clip, index) => {
-    if (typeof clip !== 'object' || clip === null) {
-      return clip;
-    }
-    const { lengthSamples, loopLengthSamples, ...rest } = clip;
-    const length = scheduleSampleCount(index, 'lengthSamples', lengthSamples, 'open-ended');
-    const loopLength = scheduleSampleCount(
-      index,
-      'loopLengthSamples',
-      loopLengthSamples,
-      'no loop length',
-    );
-    return {
-      ...rest,
-      ...(length === undefined ? {} : { lengthSamples: length }),
-      ...(loopLength === undefined ? {} : { loopLengthSamples: loopLength }),
-    };
-  });
-}
-
 function markerToNative(marker: EngineMarker, i: number): unknown {
   if (typeof marker !== 'object' || marker === null) {
     return marker;
@@ -649,14 +586,12 @@ function graphToNative(spec: EngineGraphSpec): unknown {
             return node;
           }
           graphName(`nodes[${i}].id`, node.id);
-          const { type, numPorts, ...rest } = node;
-          const ports = optionalCount(`nodes[${i}].numPorts`, numPorts);
+          const { type, ...rest } = node;
           return {
             ...rest,
             ...(isAbsent(type)
               ? {}
               : { type: requireToken(type, GRAPH_NODE_TYPE, `nodes[${i}].type`) }),
-            ...(ports === undefined ? {} : { numPorts: ports }),
           };
         })
       : nodes,
@@ -683,19 +618,6 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
   const fnName = 'bounceOffline';
   const request = requestObject(fnName, options, 'options', true);
   const native: Record<string, unknown> = { ...request };
-  for (const key of ['blockSize', 'targetSampleRate', 'sourceSampleRate'] as const) {
-    if (optionalNonZeroInteger(request[key], key) === undefined) {
-      delete native[key];
-    }
-  }
-  if (isAbsent(request.targetLufs)) {
-    delete native.targetLufs;
-  } else {
-    const lufs = requireFinite(request.targetLufs, 'targetLufs');
-    if (lufs === 0) {
-      throw refuse(`targetLufs must not be 0; omit it for -14 LUFS`);
-    }
-  }
   if (!isAbsent(request.dither)) {
     native.dither = requireToken(request.dither, DITHER, 'dither');
   }
@@ -1129,13 +1051,11 @@ export class RealtimeEngine {
     const request = requestObject('setMetronome', config, 'config', true);
     const { clickSec, ...rest } = request;
     const native: Record<string, unknown> = { ...rest };
-    const samples = optionalNonZeroInteger(request.clickSamples, 'clickSamples');
-    const seconds = optionalNonZero(clickSec, 'clickSec');
-    if (samples !== undefined && seconds !== undefined) {
+    if (!isAbsent(request.clickSamples) && !isAbsent(clickSec)) {
       throw refuse('give clickSamples or clickSec, not both');
     }
-    if (seconds !== undefined) {
-      native.clickSeconds = seconds;
+    if (!isAbsent(clickSec)) {
+      native.clickSeconds = requireFinite(clickSec, 'clickSec');
     }
     this.native.setMetronome(native);
   }
@@ -2092,9 +2012,6 @@ export class RealtimeEngine {
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     const fnName = 'freezeOffline';
     const native: Record<string, unknown> = { ...requestObject(fnName, options, 'options', true) };
-    if (optionalNonZeroInteger(native.blockSize, 'blockSize') === undefined) {
-      delete native.blockSize;
-    }
     if (optionalId('clipId', native.clipId) === undefined) {
       delete native.clipId;
     }
@@ -2276,7 +2193,7 @@ export class RealtimeEngine {
    * UMP events compiled for the engine timeline.
    */
   setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
-    this.native.setMidiClips(midiClipsToNative(clips) as never);
+    this.native.setMidiClips(clips);
   }
 
   /**

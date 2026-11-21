@@ -473,14 +473,17 @@ describe('absent versus zero', () => {
     });
   });
 
-  it('omits rate and loudness defaults and refuses an explicit zero', () => {
+  it('omits rate and loudness defaults, refuses a zero rate and reads a zero target', () => {
     withEngine((engine) => {
       const base = { totalFrames: 128, blockSize: BLOCK, numChannels: 2 };
-      for (const field of ['targetSampleRate', 'sourceSampleRate', 'targetLufs']) {
+      for (const field of ['targetSampleRate', 'sourceSampleRate']) {
         const error = caught(() => engine.bounceOffline({ ...base, [field]: 0 }));
         expect(error, field).toBeInstanceOf(RangeError);
         expect((error as Error).message).toContain('omit it for the default');
       }
+      expect(() =>
+        engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: 0 }),
+      ).not.toThrow();
       expect(() =>
         engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: Number.NaN }),
       ).toThrow(/targetLufs/);

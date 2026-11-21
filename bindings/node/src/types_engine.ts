@@ -748,21 +748,20 @@ export interface EngineMidiClipSchedule {
   lengthSamples?: number;
   /** Whether the clip repeats. Omitted: `false`. */
   loop?: boolean;
-  /** Length of one loop repeat in samples; meaningful when `loop` is set. Omitted: no loop length; `0` and a negative or fractional value are refused. */
+  /** Length of one loop repeat in samples, a positive whole number; required when `loop` is set and ignored otherwise. */
   loopLengthSamples?: number;
   /** Events with absolute render frames. */
   events: EngineMidiEvent[];
   /**
    * Linear gain applied to the destination instrument's rendered audio while
    * this clip is the most recently started active clip on it. Absent defaults
-   * to `1` (unity); a zero-initialized C struct is silent, so this facade's
-   * default deliberately differs from the ABI's own zero-init default.
+   * to `1` (unity).
    */
   gain?: number;
   /**
    * Linear fade lengths in samples over the clip's full length (not per
    * internal loop repeat). Absent defaults to `0` (no fade).
-   * `fadeOutSamples` must be `0` when `lengthSamples` is `0` (open-ended).
+   * `fadeOutSamples` must be `0` when `lengthSamples` is omitted (open-ended).
    */
   fadeInSamples?: number;
   /** Fade-out length in samples; see `fadeInSamples`. */

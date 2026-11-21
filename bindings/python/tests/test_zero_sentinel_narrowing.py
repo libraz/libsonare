@@ -284,7 +284,7 @@ def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take(
 
 
 def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_seconds() -> None:
-    """None on click_samples derives the click length from click_sec; 0 is refused."""
+    """None on click_samples derives the click length from click_sec; 0 and -1 are refused."""
 
     def stored(**kwargs) -> int | None:
         with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
@@ -296,7 +296,7 @@ def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_s
     omitted = stored()
     assert omitted is None
     assert stored(click_samples=64) == 64  # positive control
-    for value in (0, 0.5, 64.5):
+    for value in (0, -1, 0.5, 64.5):
         with pytest.raises(SonareValueError, match="click_samples"):
             stored(click_samples=value)
     assert stored() == omitted
@@ -341,7 +341,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
 
 
 def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channels() -> None:
-    """None on a graph node's num_ports takes the spec's channel count; 0 is refused."""
+    """None on a graph node's num_ports takes the spec's channel count; 0 and -1 are refused."""
 
     def build(num_ports) -> tuple[float, float]:
         node_kwargs = {} if num_ports is None else {"num_ports": num_ports}
@@ -374,7 +374,7 @@ def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channe
     # value changes the outcome rather than being ignored.
     with pytest.raises(ls.SonareError):
         build(1)
-    for value in (0, 0.5, 1.5):
+    for value in (0, -1, 0.5, 1.5):
         with pytest.raises(SonareValueError, match="num_ports"):
             build(value)
     assert build(None) == omitted
@@ -432,7 +432,7 @@ def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
 
 
 def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_default() -> None:
-    """0 on EngineBounceOptions.dither_bits keeps the default 16-bit word length."""
+    """EngineBounceOptions.dither_bits is literal: 0 and a fraction are refused under dither."""
     frames = 512
 
     def bounced(dither_bits) -> str:
@@ -458,10 +458,9 @@ def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_defa
             return _digest(result.interleaved)
 
     omitted = bounced(None)  # the dataclass default is already 16
-    assert bounced(0) == omitted
     assert bounced(16) == omitted
     assert bounced(8) != omitted  # positive control
-    for value in (0.5, 8.5):
+    for value in (0, 0.5, 8.5):
         with pytest.raises(SonareValueError, match="dither_bits"):
             bounced(value)
     assert bounced(None) == omitted

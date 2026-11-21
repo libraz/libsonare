@@ -2804,9 +2804,10 @@ export class RealtimeEngine {
 
   /**
    * Bounce the timeline to planar channels. `numChannels` above the
-   * prepared channel count throws a `RangeError`. `targetSampleRate`,
-   * `sourceSampleRate` and `targetLufs` are omitted for their defaults (the
-   * source rate, the engine rate, -14 LUFS); an explicit `0` is a `RangeError`.
+   * prepared channel count throws a `RangeError`. `blockSize`, `targetSampleRate`
+   * and `sourceSampleRate` are omitted for their defaults (the engine block, the
+   * source rate, the engine rate); an explicit `0` is a `RangeError`. An omitted
+   * `targetLufs` is -14 LUFS and any finite value is literal.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
@@ -2821,7 +2822,7 @@ export class RealtimeEngine {
       if (value === undefined || value === null) {
         continue;
       }
-      if (typeof value === 'number' && value === 0) {
+      if (typeof value === 'number' && value === 0 && name !== 'targetLufs') {
         throw refuse(`${name} must not be 0; omit it for the default`);
       }
       if (typeof value === 'number' && !Number.isFinite(value)) {

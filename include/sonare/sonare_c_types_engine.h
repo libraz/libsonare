@@ -291,16 +291,22 @@ static_assert(offsetof(SonareEngineMarker, ppq) == 8u, "SonareEngineMarker ppq o
 static_assert(offsetof(SonareEngineMarker, name) == 16u, "SonareEngineMarker name offset");
 #endif
 
-/// Metronome click settings.
+/// The click length taken from @c click_sec and the prepared sample rate. Outside the click
+/// length's real domain (a positive sample count), so it never reads as a length.
+#define SONARE_ENGINE_METRONOME_CLICK_FROM_SEC (-1)
+
+/// Metronome click settings. Start from @ref sonare_engine_metronome_config_init; every field is
+/// then read literally and checked against the range given beside it.
 typedef struct {
-  int enabled;        ///< Non-zero turns the click on.
-  float beat_gain;    ///< Linear gain of an ordinary beat click.
-  float accent_gain;  ///< Linear gain of the downbeat click.
-  /// Explicit click length in samples. 0 means "use the sample-rate-derived default" (the engine
-  /// derives the length from click_sec and the prepared sample rate). Valid range: 0..384000.
+  uint32_t struct_size;  ///< sizeof(SonareEngineMetronomeConfig); set by the init function.
+  int enabled;           ///< Non-zero turns the click on. Default 0.
+  float beat_gain;       ///< Linear gain of an ordinary beat click; finite, >= 0. Default 0.35.
+  float accent_gain;     ///< Linear gain of the downbeat click; finite, >= 0. Default 0.7.
+  /// Explicit click length in samples, in [1, 384000]. Default
+  /// @ref SONARE_ENGINE_METRONOME_CLICK_FROM_SEC, which derives it from @c click_sec.
   int click_samples;
-  /// Click duration in seconds, used when click_samples is 0 to derive the click length from the
-  /// prepared sample rate. Valid range: 0..1; defaults to 0.002 (2 ms).
+  /// Click duration in seconds, in (0, 1], used when @c click_samples is
+  /// @ref SONARE_ENGINE_METRONOME_CLICK_FROM_SEC. Default 0.002 (2 ms).
   double click_sec;
 } SonareEngineMetronomeConfig;
 
@@ -332,23 +338,27 @@ typedef struct {
   int64_t sample;    ///< Source sample position the missing page covers.
 } SonareClipPageRequest;
 
-/// One clip placed on a track's timeline. Unless page_provider is set, the engine copies the
-/// source audio during the call, so the buffers need not outlive it.
+/// The clip plays to the end of its source: num_samples - clip_offset_samples. Outside the
+/// length's real domain (a positive frame count), so it never reads as a length.
+#define SONARE_ENGINE_CLIP_LENGTH_TO_END (-1)
+
+/// One clip placed on a track's timeline. Start each element from @ref sonare_engine_clip_init.
+/// Unless page_provider is set, the engine copies the source audio during the call, so the
+/// buffers need not outlive it.
 typedef struct {
-  uint32_t id;        ///< Clip id, unique among the published clips.
-  uint32_t track_id;  ///< Id of the track lane the clip plays on.
+  uint32_t struct_size;  ///< sizeof(SonareEngineClip); set by the init function.
+  uint32_t id;           ///< Clip id, unique among the published clips.
+  uint32_t track_id;     ///< Id of the track lane the clip plays on.
   /// num_channels pointers to num_samples floats each; ignored when page_provider is set.
   const float* const* channels;
   int num_channels;             ///< Source channel count; ignored when page_provider is set.
   int64_t num_samples;          ///< Source length in frames; ignored when page_provider is set.
   double start_ppq;             ///< Timeline position of the clip start in quarter notes (PPQ).
   int64_t clip_offset_samples;  ///< Start offset into the source in frames, 0 <= offset < length.
-  /// Playback length in frames. 0 means "to the end of the source", i.e.
-  /// num_samples - clip_offset_samples. Any other non-positive value is
-  /// rejected with SONARE_ERROR_INVALID_PARAMETER.
+  /// Playback length in frames; positive. Default @ref SONARE_ENGINE_CLIP_LENGTH_TO_END.
   int64_t length_samples;
   int loop;                  ///< Non-zero repeats the clip over its length.
-  float gain;                ///< Linear clip gain, finite and >= 0.
+  float gain;                ///< Linear clip gain, finite and >= 0. Default 1.
   int64_t fade_in_samples;   ///< Fade-in length in frames; 0 for none.
   int64_t fade_out_samples;  ///< Fade-out length in frames; 0 for none.
   int warp_mode;             ///< A @ref SonareEngineWarpMode selecting the warp.
@@ -487,47 +497,46 @@ typedef struct {
   int64_t record_offset_samples;  ///< Capture window shift on the timeline, in samples.
 } SonareEngineCaptureStatus;
 
-/// Canonical fallback target loudness used by sonare_engine_bounce_offline when
-/// normalize_lufs is enabled but target_lufs is left at 0.0f (its zero-init
-/// sentinel). Matches streaming-platform reference loudness (Spotify/YouTube).
-/// Bindings (WASM, Node, Python) MUST surface this same default; do not
-/// hardcode a different value.
+/// Target loudness sonare_engine_bounce_offline normalizes to when normalize_lufs is set and
+/// target_lufs is NaN (not given). Bindings (WASM, Node, Python) MUST surface this same default.
 #define SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0f)
 
-/// Options for sonare_engine_bounce_offline. Initialise with
-/// sonare_engine_bounce_options_default.
+/// The default offline block: 128 frames, capped at the prepared maximum block size. Outside the
+/// block size's real domain (a positive frame count), so it never reads as a size.
+#define SONARE_ENGINE_BLOCK_SIZE_AUTO (-1)
+
+/// The engine's prepared sample rate. Outside the rate's real domain, so it never reads as a rate.
+#define SONARE_ENGINE_SAMPLE_RATE_PREPARED (-1)
+
+/// The dither's built-in noise seed, which @ref sonare_engine_bounce_options_init writes.
+#define SONARE_ENGINE_DEFAULT_DITHER_SEED 0x51A7E5u
+
+/// Options for sonare_engine_bounce_offline. Start from @ref sonare_engine_bounce_options_init;
+/// every field is then read literally and checked against the range given beside it.
 typedef struct {
-  int64_t total_frames;  ///< Frames to render, counted at source_sample_rate; positive.
-  /// 0 selects the default offline block: 128, capped at the prepared maximum
-  /// block size. Negative is refused.
+  uint32_t struct_size;  ///< sizeof(SonareEngineBounceOptions); set by the init function.
+  int64_t total_frames;  ///< Frames to render, counted at source_sample_rate; positive. Default 0.
+  /// Offline block in frames, in [1, prepared maximum block size]. Default
+  /// @ref SONARE_ENGINE_BLOCK_SIZE_AUTO.
   int block_size;
-  /// Required, positive; mono, stereo, 5.1 or 7.1. Left at 0 by
-  /// sonare_engine_bounce_options_default, so the caller must set it.
+  /// Required, positive; mono, stereo, 5.1 or 7.1. Left at 0 by the init function, so the caller
+  /// must set it.
   int num_channels;
-  /// Output sample rate. 0 keeps the source rate, so nothing is resampled; any
-  /// other value resamples to it. The result reports the rate actually returned.
+  /// Output sample rate; positive, and anything other than the source rate resamples to it.
+  /// Default @ref SONARE_ENGINE_SAMPLE_RATE_PREPARED, which keeps the source rate. The result
+  /// reports the rate actually returned.
   int target_sample_rate;
-  /// Rate total_frames is counted in. 0 means the engine's prepared rate. A
-  /// non-zero value must equal the prepared rate, because the render always runs
-  /// there; a different one, or a negative one, is refused with
-  /// SONARE_ERROR_INVALID_PARAMETER.
+  /// Rate total_frames is counted in. It must equal the prepared rate, because the render always
+  /// runs there. Default @ref SONARE_ENGINE_SAMPLE_RATE_PREPARED.
   int source_sample_rate;
-  int normalize_lufs;  ///< Non-zero normalizes the result to target_lufs.
-  /// Target integrated loudness in LUFS when normalize_lufs != 0. The value
-  /// 0.0f is treated as a "use default" sentinel and is normalized to
-  /// SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0 LUFS). A non-finite value resolves
-  /// to that same default rather than being reported: the loudness stage
-  /// multiplies every sample by a gain derived from this field and checks
-  /// nothing, so the substitution is what keeps a NaN out of the audio. Pass a
-  /// non-zero finite value to override. Call
-  /// sonare_engine_bounce_options_default() to obtain a fully-initialized
-  /// options struct with documented defaults.
+  int normalize_lufs;  ///< Non-zero normalizes the result to target_lufs. Default 0.
+  /// Target integrated loudness in LUFS when normalize_lufs != 0; finite. Default NaN (not given),
+  /// which normalizes to @ref SONARE_DEFAULT_BOUNCE_TARGET_LUFS.
   float target_lufs;
-  int dither;  ///< Dither type: 0 = none, 1 = RPDF, 2 = TPDF, 3 = noise-shaped.
-  /// Word length in bits the dither targets, 2..32, used when dither is not 0; 0 means 16.
-  /// The default seeder sets 16.
+  int dither;  ///< Dither type: 0 = none, 1 = RPDF, 2 = TPDF, 3 = noise-shaped. Default 0.
+  /// Word length in bits the dither targets, in [2, 32], read when dither is not 0. Default 16.
   int dither_bits;
-  /// Dither noise seed; 0 keeps the dither's built-in seed.
+  /// Dither noise seed, any value. Default @ref SONARE_ENGINE_DEFAULT_DITHER_SEED.
   uint32_t dither_seed;
 } SonareEngineBounceOptions;
 
@@ -543,16 +552,18 @@ typedef struct {
 } SonareEngineBounceResult;
 
 /// Options for sonare_engine_freeze_offline, which renders the engine's output into a new clip.
+/// Start from @ref sonare_engine_freeze_options_init.
 typedef struct {
-  int64_t total_frames;  ///< Frames to render; positive.
-  /// 0 selects the default offline block: 128, capped at the prepared maximum
-  /// block size. Negative is refused.
+  uint32_t struct_size;  ///< sizeof(SonareEngineFreezeOptions); set by the init function.
+  int64_t total_frames;  ///< Frames to render; positive. Default 0, so the caller must set it.
+  /// Offline block in frames, in [1, prepared maximum block size]. Default
+  /// @ref SONARE_ENGINE_BLOCK_SIZE_AUTO.
   int block_size;
-  /// Required, positive; at most the channel count the engine was prepared for.
+  /// Required, positive; at most the channel count the engine was prepared for. Default 0.
   int num_channels;
-  uint32_t clip_id;  ///< Id given to the frozen clip.
-  double start_ppq;  ///< Timeline position of the frozen clip in PPQ; finite, >= 0.
-  float gain;        ///< Linear gain of the frozen clip; finite, >= 0.
+  uint32_t clip_id;  ///< Id given to the frozen clip. Default 0, so the caller must set it.
+  double start_ppq;  ///< Timeline position of the frozen clip in PPQ; finite, >= 0. Default 0.
+  float gain;        ///< Linear gain of the frozen clip; finite, >= 0. Default 1.
 } SonareEngineFreezeOptions;
 
 /// Result of sonare_engine_freeze_offline.
@@ -562,13 +573,18 @@ typedef struct {
   int num_channels;  ///< Channel count of the clip.
 } SonareEngineFreezeResult;
 
-/// One node of an engine processing graph.
+/// The node has as many ports as the spec has channels. Outside the port count's real domain (a
+/// positive count), so it never reads as a count.
+#define SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC (-1)
+
+/// One node of an engine processing graph. Start each element from
+/// @ref sonare_engine_graph_node_init.
 typedef struct {
-  char id[64];    ///< NUL-terminated node name, referenced by connections and bindings.
-  int type;       ///< Node kind: 0 = pass-through, 1 = gain.
-  float gain_db;  ///< Gain in dB applied by a gain node (type 1).
-  /// Port count for this node. 0 means "use the spec's num_channels"; a negative
-  /// count is rejected with SONARE_ERROR_INVALID_PARAMETER.
+  uint32_t struct_size;  ///< sizeof(SonareEngineGraphNode); set by the init function.
+  char id[64];           ///< NUL-terminated node name, referenced by connections and bindings.
+  int type;              ///< Node kind: 0 = pass-through (default), 1 = gain.
+  float gain_db;         ///< Gain in dB applied by a gain node (type 1). Default 0.
+  /// Port count for this node; positive. Default @ref SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC.
   int num_ports;
 } SonareEngineGraphNode;
 

@@ -273,6 +273,7 @@ inline Napi::Array ChannelsToJs(Napi::Env env, const ChannelBlock& block) {
 // without touching `out`, refuse to throw on a pending exception) is what keeps
 // a rejected argument from reaching the C ABI as a dummy value, and a file-local
 // copy is how that contract went missing.
+using sonare_node::AbsentIsSentinel;
 using sonare_node::BoolProperty;
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;

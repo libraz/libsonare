@@ -84,6 +84,9 @@ namespace {
 // Refuses a clip the schedule cannot be built from; throws a refusal naming the field.
 void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
   const auto subject = [&](const char* member) { return prefix + member; };
+  require_struct_size(clip.struct_size, sizeof(SonareEngineClip),
+                      prefix.empty() ? std::string("clip") : prefix.substr(0, prefix.size() - 1),
+                      "sonare_engine_clip_init");
   const bool paged = clip.page_provider != nullptr;
   if (paged && !clip.page_provider->provider) {
     util::check::refuse(subject("page_provider").c_str(), "must hold a page provider");
@@ -99,6 +102,10 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
                         subject("start_ppq").c_str());
   util::check::integer_in_range(clip.clip_offset_samples, 0, source_samples - 1,
                                 subject("clip_offset_samples").c_str());
+  if (clip.length_samples != SONARE_ENGINE_CLIP_LENGTH_TO_END) {
+    util::check::integer_at_least<int64_t>(clip.length_samples, 1,
+                                           subject("length_samples").c_str());
+  }
   util::check::at_least(clip.gain, 0.0, subject("gain").c_str());
   util::check::integer_at_least<int64_t>(clip.fade_in_samples, 0,
                                          subject("fade_in_samples").c_str());
@@ -123,9 +130,6 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
   util::check::non_null_when_count(clip.warp_anchors, clip.warp_anchor_count,
                                    subject("warp_anchors").c_str(),
                                    subject("warp_anchor_count").c_str());
-  // Only 0 asks for the source length; any other non-positive length is refused
-  // rather than being read as that request.
-  util::check::integer_at_least<int64_t>(clip.length_samples, 0, subject("length_samples").c_str());
   for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
     const SonareEngineWarpAnchor& anchor = clip.warp_anchors[anchor_index];
     const std::string anchor_prefix =
@@ -156,11 +160,10 @@ SonareError build_clip_schedule(const SonareEngine& handle, const SonareEngineCl
       paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
   const int64_t source_samples =
       paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
-  // Compute the default only after validating the offset so the subtraction
-  // cannot overflow. Only 0 asks for the source length; check_clip refused any
-  // other non-positive length.
-  const int64_t effective_length =
-      clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
+  // Computed after check_clip validated the offset, so the subtraction cannot overflow.
+  const int64_t effective_length = clip.length_samples == SONARE_ENGINE_CLIP_LENGTH_TO_END
+                                       ? source_samples - clip.clip_offset_samples
+                                       : clip.length_samples;
   auto owned = std::make_shared<engine::ClipAudioStorage>();
   owned->channels.reserve(static_cast<size_t>(source_channels));
   owned->channel_ptrs.reserve(static_cast<size_t>(source_channels));
@@ -239,6 +242,15 @@ SonareError build_clip_schedule(const SonareEngine& handle, const SonareEngineCl
 }
 
 }  // namespace
+
+void sonare_engine_clip_init(SonareEngineClip* clip) {
+  if (clip == nullptr) return;
+  *clip = SonareEngineClip{};
+  clip->struct_size = sizeof(SonareEngineClip);
+  clip->length_samples = SONARE_ENGINE_CLIP_LENGTH_TO_END;
+  clip->gain = 1.0f;
+  clip->warp_mode = SONARE_ENGINE_WARP_MODE_OFF;
+}
 
 SonareError sonare_engine_set_clips(SonareEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count) {

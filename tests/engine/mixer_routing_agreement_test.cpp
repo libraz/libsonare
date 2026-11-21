@@ -339,7 +339,8 @@ SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
   const SonareEngineMidiEvent events[] = {
       {clip_start, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},  // note-on 60, vel 127
   };
-  SonareEngineMidiClipSchedule midi_clip{};
+  SonareEngineMidiClipSchedule midi_clip;
+  sonare_engine_midi_clip_schedule_init(&midi_clip);
   midi_clip.id = 1;
   midi_clip.track_id = kMidiTrack;
   midi_clip.start_sample = clip_start;
@@ -354,7 +355,8 @@ SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
   REQUIRE(sonare_engine_set_midi_clips(engine, &midi_clip, 1) == SONARE_OK);
 
   static const float* audio_channels[] = {audio_plane(0).data(), audio_plane(1).data()};
-  SonareEngineClip audio_clip{};
+  SonareEngineClip audio_clip;
+  sonare_engine_clip_init(&audio_clip);
   audio_clip.id = 2;
   audio_clip.track_id = kAudioTrack;
   audio_clip.channels = audio_channels;

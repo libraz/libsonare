@@ -15,6 +15,7 @@
 #include "engine/clip_page_limits.h"
 #include "engine/realtime_engine.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_engine_detail {
 
@@ -23,6 +24,25 @@ inline int resolve_offline_block(const sonare::engine::RealtimeEngine& engine, i
   return block_size == 0 ? std::min(sonare::engine::RealtimeEngine::kDefaultOfflineBlock,
                                     engine.max_block_size())
                          : block_size;
+}
+
+/// @brief Refuses an offline block that is neither positive nor @ref SONARE_ENGINE_BLOCK_SIZE_AUTO.
+inline void check_offline_block(int block_size, const char* subject) {
+  if (block_size != SONARE_ENGINE_BLOCK_SIZE_AUTO) {
+    sonare::util::check::integer_at_least(block_size, 1, subject);
+  }
+}
+
+/// @brief The core spelling of a checked C offline block: the automatic block becomes 0.
+inline int offline_block_from_c(int block_size) {
+  return block_size == SONARE_ENGINE_BLOCK_SIZE_AUTO ? 0 : block_size;
+}
+
+/// @brief Refuses a rate that is neither positive nor @ref SONARE_ENGINE_SAMPLE_RATE_PREPARED.
+inline void check_engine_rate(int sample_rate, const char* subject) {
+  if (sample_rate != SONARE_ENGINE_SAMPLE_RATE_PREPARED) {
+    sonare::util::check::integer_at_least(sample_rate, 1, subject);
+  }
 }
 
 /// Realtime page storage backing a clip's paged audio provider. Shared across

@@ -551,7 +551,7 @@ describe('Sonare WASM Module', () => {
           blockSize: 128,
           numChannels: 2,
           normalizeLufs: true,
-          targetLufs: 0,
+          targetLufs: Number.POSITIVE_INFINITY,
         }),
       ).toThrow(RangeError);
       engine.setClips([

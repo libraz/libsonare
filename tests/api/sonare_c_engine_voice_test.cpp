@@ -351,7 +351,8 @@ TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation fai
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
 
-  SonareEngineBounceOptions bad_options{};
+  SonareEngineBounceOptions bad_options;
+  sonare_engine_bounce_options_init(&bad_options);
   bad_options.total_frames = 16;
   bad_options.block_size = 16;
   bad_options.num_channels = 0;  // invalid -> early validation failure
@@ -379,15 +380,14 @@ TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the 
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = 4800;
   options.num_channels = 2;
   options.normalize_lufs = 1;
   options.target_lufs = std::numeric_limits<float>::quiet_NaN();
 
-  // A garbage (NaN) target must behave like the 0.0f "use default" sentinel
-  // instead of propagating NaN into the normalisation gain.
+  // A NaN target is "not given": it resolves to the default instead of reaching the gain.
   SonareEngineBounceResult result{};
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   bool all_finite = true;
@@ -499,7 +499,8 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
   parameter.rt_safe = 1;
   REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
 
-  SonareEngineGraphNode gain_nodes[3]{};
+  SonareEngineGraphNode gain_nodes[3];
+  for (auto& element : gain_nodes) sonare_engine_graph_node_init(&element);
   std::strncpy(gain_nodes[0].id, "in", sizeof(gain_nodes[0].id) - 1);
   gain_nodes[0].type = 0;
   gain_nodes[0].num_ports = 1;
@@ -541,7 +542,8 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
 
   // The second binding is invalid. The valid first binding must not be
   // committed, and the live graph + target table must remain untouched.
-  SonareEngineGraphNode pass_nodes[2]{};
+  SonareEngineGraphNode pass_nodes[2];
+  for (auto& element : pass_nodes) sonare_engine_graph_node_init(&element);
   std::strncpy(pass_nodes[0].id, "in", sizeof(pass_nodes[0].id) - 1);
   pass_nodes[0].type = 0;
   pass_nodes[0].num_ports = 1;
@@ -626,25 +628,33 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(marker_out.ppq == Catch::Approx(2.0));
   REQUIRE(sonare_engine_set_loop_from_markers(engine, 11, 12) == SONARE_OK);
   REQUIRE(sonare_engine_seek_marker(engine, 11, -1) == SONARE_OK);
-  SonareEngineMetronomeConfig metronome{};
+  SonareEngineMetronomeConfig metronome;
+  sonare_engine_metronome_config_init(&metronome);
   metronome.enabled = 1;
   metronome.beat_gain = 0.25f;
   metronome.accent_gain = 0.75f;
   metronome.click_samples = 16;
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_OK);
-  SonareEngineMetronomeConfig metronome_out{};
+  SonareEngineMetronomeConfig metronome_out;
+  sonare_engine_metronome_config_init(&metronome_out);
   REQUIRE(sonare_engine_metronome(engine, &metronome_out) == SONARE_OK);
   REQUIRE(metronome_out.enabled == 1);
   REQUIRE(metronome_out.click_samples == 16);
+  REQUIRE(metronome_out.struct_size == sizeof(SonareEngineMetronomeConfig));
+  metronome.click_samples = SONARE_ENGINE_METRONOME_CLICK_FROM_SEC;
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_OK);
+  REQUIRE(sonare_engine_metronome(engine, &metronome_out) == SONARE_OK);
+  REQUIRE(metronome_out.struct_size == sizeof(SonareEngineMetronomeConfig));
+  REQUIRE(metronome_out.click_samples == SONARE_ENGINE_METRONOME_CLICK_FROM_SEC);
   metronome.click_samples = 2000000000;
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
-  metronome.click_samples = 0;
+  metronome.click_samples = SONARE_ENGINE_METRONOME_CLICK_FROM_SEC;
   metronome.click_sec = 2.0;
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
   metronome.click_sec = std::numeric_limits<double>::quiet_NaN();
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
   metronome.click_samples = 16;
-  metronome.click_sec = 0.0;
+  metronome.click_sec = 0.002;
   int64_t count_in_end = 0;
   REQUIRE(sonare_engine_count_in_end_sample(engine, 0, 2, &count_in_end) == SONARE_OK);
   REQUIRE(count_in_end == 288000);
@@ -676,7 +686,8 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(lane_count == 1);
 
 #if defined(SONARE_WITH_GRAPH)
-  SonareEngineGraphNode graph_nodes[3]{};
+  SonareEngineGraphNode graph_nodes[3];
+  for (auto& element : graph_nodes) sonare_engine_graph_node_init(&element);
   std::strncpy(graph_nodes[0].id, "in", sizeof(graph_nodes[0].id) - 1);
   graph_nodes[0].type = 0;
   graph_nodes[0].num_ports = 2;
@@ -739,7 +750,8 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   clip_left.fill(0.125f);
   clip_right.fill(-0.125f);
   const float* clip_channels[] = {clip_left.data(), clip_right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 101;
   clip.channels = clip_channels;
   clip.num_channels = 2;
@@ -810,7 +822,8 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(telemetry[written - 1].timeline_sample == 48000 + 128);
 
   REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
-  SonareEngineBounceOptions bounce_options{};
+  SonareEngineBounceOptions bounce_options;
+  sonare_engine_bounce_options_init(&bounce_options);
   bounce_options.total_frames = 128;
   bounce_options.block_size = 128;
   bounce_options.num_channels = 2;
@@ -841,7 +854,8 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   clip_left.fill(0.5f);
   clip_right.fill(-0.5f);
   const float* clip_channels[] = {clip_left.data(), clip_right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 202;
   clip.channels = clip_channels;
   clip.num_channels = 2;
@@ -1045,7 +1059,8 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
   clip_left.fill(0.125f);
   clip_right.fill(-0.25f);
   const float* clip_channels[] = {clip_left.data(), clip_right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 7;
   clip.channels = clip_channels;
   clip.num_channels = 2;
@@ -1056,7 +1071,8 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  SonareEngineFreezeOptions freeze_options{};
+  SonareEngineFreezeOptions freeze_options;
+  sonare_engine_freeze_options_init(&freeze_options);
   freeze_options.total_frames = 128;
   freeze_options.block_size = 128;
   freeze_options.num_channels = 2;
@@ -1093,7 +1109,8 @@ TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
   std::array<float, 4> source{0.0f, 10.0f, 20.0f, 30.0f};
   const float* clip_channels[] = {source.data()};
   SonareEngineWarpAnchor anchors[] = {{0.0, 0.0}, {3.0, 1.5}};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 303;
   clip.channels = clip_channels;
   clip.num_channels = 1;
@@ -1135,7 +1152,8 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") 
     source[i] = std::sin(static_cast<float>(i) * 0.02f);
   }
   const float* clip_channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 304;
   clip.channels = clip_channels;
   clip.num_channels = 1;
@@ -1177,7 +1195,8 @@ TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = 305;
     clip.channels = clip_channels;
     clip.num_channels = 1;
@@ -1230,7 +1249,8 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
       {2048.0, 1024.0},
       {8192.0, 4096.0},
   };
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 305;
   clip.channels = clip_channels;
   clip.num_channels = 1;
@@ -1294,7 +1314,8 @@ TEST_CASE("sonare_engine streams paged clip providers and reports page misses", 
   const float* page0_channels[] = {page0.data()};
   REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
 
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 123;
   clip.start_ppq = 0.0;
   clip.clip_offset_samples = 0;
@@ -1407,18 +1428,19 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
   REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
   REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
 
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 321;
   clip.start_ppq = 0.0;
   clip.clip_offset_samples = 0;
-  clip.length_samples = 0;
+  clip.length_samples = SONARE_ENGINE_CLIP_LENGTH_TO_END;
   clip.gain = 1.0f;
   clip.page_provider = provider;
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  SonareEngineBounceOptions bounce_options{};
-  REQUIRE(sonare_engine_bounce_options_default(&bounce_options) == SONARE_OK);
+  SonareEngineBounceOptions bounce_options;
+  sonare_engine_bounce_options_init(&bounce_options);
   bounce_options.total_frames = 8;
   bounce_options.block_size = 4;
   bounce_options.num_channels = 1;
@@ -1435,7 +1457,8 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
 
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
-  SonareEngineFreezeOptions freeze_options{};
+  SonareEngineFreezeOptions freeze_options;
+  sonare_engine_freeze_options_init(&freeze_options);
   freeze_options.total_frames = 8;
   freeze_options.block_size = 4;
   freeze_options.num_channels = 1;
@@ -1474,7 +1497,8 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[
   clip_left.fill(0.5f);
   clip_right.fill(-0.5f);
   const float* clip_channels[] = {clip_left.data(), clip_right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 7;
   clip.channels = clip_channels;
   clip.num_channels = 2;
@@ -1485,7 +1509,8 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  SonareEngineFreezeOptions freeze_options{};
+  SonareEngineFreezeOptions freeze_options;
+  sonare_engine_freeze_options_init(&freeze_options);
   freeze_options.total_frames = 128;
   freeze_options.block_size = 128;
   freeze_options.num_channels = 2;

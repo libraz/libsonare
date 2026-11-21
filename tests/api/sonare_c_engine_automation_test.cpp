@@ -532,7 +532,8 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   std::array<float, kFrames> clip_l{};
   clip_l.fill(1.0f);
   const float* clip_channels[] = {clip_l.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = clip_channels;

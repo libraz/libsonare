@@ -9090,6 +9090,22 @@ test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_bl
 
 [[entry]]
 kind = "field"
+old = "EngineBounceOptions.target_lufs"
+changed = "float | None, default None: None normalizes to -14 LUFS and a given 0 is a 0 LUFS target instead of the default"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_bounce_content.py::test_bounce_omitted_target_lufs_is_the_shared_default_and_zero_is_literal"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.dither_seed"
+changed = "int | None, default None: None is the built-in dither seed and a given 0 is seed 0 instead of the built-in one"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_bounce_content.py::test_bounce_omitted_dither_seed_is_the_built_in_one_and_zero_is_literal"
+
+[[entry]]
+kind = "field"
 old = "EngineFreezeOptions.num_channels"
 changed = "required (was 2 by default)"
 domain = "engine"
@@ -12225,15 +12241,15 @@ old = "EngineMidiClipSchedule.length_samples"
 changed = "int | None, default None: None is open-ended, and 0 or a negative length raises SonareValueError instead of reading as open-ended"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_a_non_positive_given_length"
 
 [[entry]]
 kind = "field"
 old = "EngineMidiClipSchedule.loop_length_samples"
-changed = "int | None, default None: None is no loop length, a given length is read only with loop=True, and 0 or a negative length raises SonareValueError"
+changed = "int | None, default None: None is no loop length; a given length is read only with loop=True, where 0 or a negative length raises SonareValueError"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_a_non_positive_given_length"
 
 [[entry]]
 kind = "field"

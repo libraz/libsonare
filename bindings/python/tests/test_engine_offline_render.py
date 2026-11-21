@@ -25,13 +25,8 @@ from libsonare import (
 from ._helpers import _midi1_word, scene_strip
 
 
-def test_bounce_options_default_seeded_from_native_layer() -> None:
-    """Leaving ``target_lufs`` at its sentinel still tracks the C default.
-
-    The C ``sonare_engine_bounce_options_default`` maps ``target_lufs == 0.0``
-    to the -14 LUFS default; the Python wrapper seeds the raw options from it,
-    so a bounce request runs without raising regardless of the dataclass copy.
-    """
+def test_bounce_options_seeded_from_native_layer() -> None:
+    """An omitted ``target_lufs`` keeps the init's NaN, which the C ABI normalizes to -14 LUFS."""
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.play()
         bounced = engine.bounce_offline(

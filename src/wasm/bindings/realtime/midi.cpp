@@ -118,6 +118,10 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
             : sonare::midi::MidiLoopMode::kOneShot;
     clip.loop_length_samples =
         int64Property(clip_val, "loopLengthSamples", clip.loop_length_samples);
+    // As in the C ABI, a looping clip names its loop length.
+    if (clip.loop_mode == sonare::midi::MidiLoopMode::kLoop && clip.loop_length_samples < 1) {
+      throw WasmRangeError("clip loopLengthSamples must be an integer of at least 1");
+    }
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];
     const uint32_t event_count = static_cast<uint32_t>(wasmArrayLikeLength(events_val, "events"));

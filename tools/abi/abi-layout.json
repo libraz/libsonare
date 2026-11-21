@@ -2271,67 +2271,73 @@
     "align": 8,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "signed",
         "name": "total_frames",
-        "offset": 0,
+        "offset": 8,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "block_size",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "num_channels",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "target_sample_rate",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "source_sample_rate",
+        "name": "num_channels",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "normalize_lufs",
+        "name": "target_sample_rate",
         "offset": 24,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "target_lufs",
+        "kind": "signed",
+        "name": "source_sample_rate",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "dither",
+        "name": "normalize_lufs",
         "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "target_lufs",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "dither",
+        "offset": 40,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "dither_bits",
-        "offset": 36,
+        "offset": 44,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "dither_seed",
-        "offset": 40,
+        "offset": 48,
         "size": 4
       }
     ],
-    "size": 48
+    "size": 56
   },
   "SonareEngineBounceResult": {
     "align": 8,
@@ -2536,144 +2542,156 @@
     "fields": [
       {
         "kind": "unsigned",
-        "name": "id",
+        "name": "struct_size",
         "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "id",
+        "offset": 4,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "track_id",
-        "offset": 4,
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "channels",
-        "offset": 8,
+        "offset": 16,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "num_channels",
-        "offset": 16,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "num_samples",
-        "offset": 24,
+        "offset": 32,
         "size": 8
       },
       {
         "kind": "float",
         "name": "start_ppq",
-        "offset": 32,
-        "size": 8
-      },
-      {
-        "kind": "signed",
-        "name": "clip_offset_samples",
         "offset": 40,
         "size": 8
       },
       {
         "kind": "signed",
-        "name": "length_samples",
+        "name": "clip_offset_samples",
         "offset": 48,
         "size": 8
       },
       {
         "kind": "signed",
-        "name": "loop",
+        "name": "length_samples",
         "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "loop",
+        "offset": 64,
         "size": 4
       },
       {
         "kind": "float",
         "name": "gain",
-        "offset": 60,
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "fade_in_samples",
-        "offset": 64,
-        "size": 8
-      },
-      {
-        "kind": "signed",
-        "name": "fade_out_samples",
         "offset": 72,
         "size": 8
       },
       {
         "kind": "signed",
-        "name": "warp_mode",
+        "name": "fade_out_samples",
         "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "warp_mode",
+        "offset": 88,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "warp_anchors",
-        "offset": 88,
+        "offset": 96,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "warp_anchor_count",
-        "offset": 96,
+        "offset": 104,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "page_provider",
-        "offset": 104,
+        "offset": 112,
         "size": 8
       }
     ],
-    "size": 112
+    "size": 120
   },
   "SonareEngineFreezeOptions": {
     "align": 8,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "signed",
         "name": "total_frames",
-        "offset": 0,
+        "offset": 8,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "block_size",
-        "offset": 8,
+        "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "num_channels",
-        "offset": 12,
+        "offset": 20,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "clip_id",
-        "offset": 16,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
         "name": "start_ppq",
-        "offset": 24,
+        "offset": 32,
         "size": 8
       },
       {
         "kind": "float",
         "name": "gain",
-        "offset": 32,
+        "offset": 40,
         "size": 4
       }
     ],
-    "size": 40
+    "size": 48
   },
   "SonareEngineFreezeResult": {
     "align": 8,
@@ -2739,31 +2757,37 @@
     "align": 4,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "aggregate",
         "name": "id",
-        "offset": 0,
+        "offset": 4,
         "size": 64
       },
       {
         "kind": "signed",
         "name": "type",
-        "offset": 64,
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "float",
         "name": "gain_db",
-        "offset": 68,
+        "offset": 72,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "num_ports",
-        "offset": 72,
+        "offset": 76,
         "size": 4
       }
     ],
-    "size": 76
+    "size": 80
   },
   "SonareEngineGraphParameterBinding": {
     "align": 4,
@@ -2889,121 +2913,133 @@
     "align": 8,
     "fields": [
       {
-        "kind": "signed",
-        "name": "enabled",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "beat_gain",
+        "kind": "signed",
+        "name": "enabled",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "accent_gain",
+        "name": "beat_gain",
         "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "accent_gain",
+        "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "click_samples",
-        "offset": 12,
+        "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
         "name": "click_sec",
-        "offset": 16,
+        "offset": 24,
         "size": 8
       }
     ],
-    "size": 24
+    "size": 32
   },
   "SonareEngineMidiClipSchedule": {
     "align": 8,
     "fields": [
       {
         "kind": "unsigned",
-        "name": "id",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "unsigned",
-        "name": "track_id",
+        "name": "id",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "track_id",
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "start_sample",
-        "offset": 8,
+        "offset": 16,
         "size": 8
       },
       {
         "kind": "float",
         "name": "start_ppq",
-        "offset": 16,
-        "size": 8
-      },
-      {
-        "kind": "signed",
-        "name": "length_samples",
         "offset": 24,
         "size": 8
       },
       {
         "kind": "signed",
-        "name": "loop",
+        "name": "length_samples",
         "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "loop",
+        "offset": 40,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "loop_length_samples",
-        "offset": 40,
+        "offset": 48,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "destination_id",
-        "offset": 48,
+        "offset": 56,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "events",
-        "offset": 56,
+        "offset": 64,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "event_count",
-        "offset": 64,
+        "offset": 72,
         "size": 8
       },
       {
         "kind": "float",
         "name": "gain",
-        "offset": 72,
+        "offset": 80,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "fade_in_samples",
-        "offset": 80,
+        "offset": 88,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "fade_out_samples",
-        "offset": 88,
+        "offset": 96,
         "size": 8
       }
     ],
-    "size": 96
+    "size": 104
   },
   "SonareEngineMidiEvent": {
     "align": 8,

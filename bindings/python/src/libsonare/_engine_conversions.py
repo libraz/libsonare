@@ -11,10 +11,9 @@ from typing import cast
 
 from ._errors import _refuse, _refuse_type
 from ._ffi_types_core import SonareAutomationPoint
-from ._narrowing import _narrow_double, _optional_nonzero
+from ._narrowing import _INT64_MAX, _INT64_MIN, _narrow_double, _narrow_int
 from ._runtime import (
     _AUTOMATION_CURVES,
-    _C_INT_MAX,
     _UINT32_MAX,
     AutomationCurve,
     EngineClip,
@@ -68,6 +67,26 @@ from ._types_enums import (
     EngineTelemetryError,
     EngineTelemetryType,
 )
+
+# SONARE_ENGINE_METRONOME_CLICK_FROM_SEC: the click length is derived from click_sec.
+_METRONOME_CLICK_FROM_SEC = -1
+# The C ABI's wording for a positive int field and a positive int64 count.
+_POSITIVE_INT = "an integer in [1, 2147483647]"
+_POSITIVE_COUNT = "an integer of at least 1"
+
+
+def _given_positive(value: object, name: str, domain: str) -> int | None:
+    """A given positive engine field whose -1 is the C "not given" constant; None stays None.
+
+    A negative would alias that constant, so it is refused here in the C ABI's words; a 0 is
+    left to the C refusal.
+    """
+    if value is None:
+        return None
+    number = _narrow_int(value, name, _INT64_MIN, _INT64_MAX)
+    if number < 0:
+        raise _refuse(f"{name} must be {domain}")
+    return number
 
 
 def _track_monitor_mode_value(mode: EngineTrackMonitorMode, key: str) -> int:
@@ -220,13 +239,18 @@ def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
 
 def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:
     _require_instance(config, EngineMetronomeConfig, "config")
-    raw = SonareEngineMetronomeConfig()
-    raw.enabled = int(config.enabled)
-    raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
-    raw.accent_gain = _narrow_double(config.accent_gain, "config.accent_gain")
-    raw.click_samples = _optional_positive_int(config.click_samples, "click_samples", _C_INT_MAX)
-    raw.click_sec = _optional_nonzero(config.click_sec, "click_sec", "the default click length")
-    return raw
+    # An omitted click length keeps the init's CLICK_FROM_SEC / 2 ms; a given 0 is the C refusal's.
+    return SonareEngineMetronomeConfig._given(
+        enabled=int(config.enabled),
+        beat_gain=_narrow_double(config.beat_gain, "config.beat_gain"),
+        accent_gain=_narrow_double(config.accent_gain, "config.accent_gain"),
+        click_samples=_given_positive(
+            config.click_samples, "config.click_samples", "an integer in [1, 384000]"
+        ),
+        click_sec=None
+        if config.click_sec is None
+        else _narrow_double(config.click_sec, "config.click_sec"),
+    )
 
 
 def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig:
@@ -234,13 +258,16 @@ def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig
         enabled=bool(raw.enabled),
         beat_gain=float(raw.beat_gain),
         accent_gain=float(raw.accent_gain),
-        click_samples=int(raw.click_samples) or None,
+        click_samples=None
+        if raw.click_samples == _METRONOME_CLICK_FROM_SEC
+        else int(raw.click_samples),
         click_sec=float(raw.click_sec),
     )
 
 
 def _clips_to_c(
     clips: Sequence[EngineClip],
+    indexed: bool = True,
 ) -> tuple[
     ctypes.Array[SonareEngineClip],
     list[list[ctypes.Array[ctypes.c_float]]],
@@ -255,8 +282,10 @@ def _clips_to_c(
     channel_ptrs: list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]] = []
     warp_arrays: list[ctypes.Array[SonareEngineWarpAnchor]] = []
     raw_items: list[SonareEngineClip] = []
-    for clip in clips:
+    for index, clip in enumerate(clips):
         _require_instance(clip, EngineClip, "clip")
+        # The C ABI's subject: clips[i]. for a set, clip. for a single upsert.
+        length_name = f"clips[{index}].length_samples" if indexed else "clip.length_samples"
         page_provider = getattr(clip, "page_provider", None)
         if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
             raise _refuse_type("clip page_provider must be a ClipPageProvider")
@@ -272,7 +301,10 @@ def _clips_to_c(
             raw.num_samples = 0
             raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
             raw.clip_offset_samples = clip.clip_offset_samples
-            raw.length_samples = clip.length_samples if clip.length_samples is not None else 0
+            if clip.length_samples is not None:
+                raw.length_samples = _given_positive(
+                    clip.length_samples, length_name, _POSITIVE_COUNT
+                )
             raw.loop = 1 if clip.loop else 0
             raw.gain = _narrow_double(clip.gain, "clip.gain")
             raw.fade_in_samples = clip.fade_in_samples
@@ -300,8 +332,9 @@ def _clips_to_c(
         raw.num_samples = num_samples
         raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
         raw.clip_offset_samples = clip.clip_offset_samples
-        # An omitted length is 0, which C resolves to the source remaining after the offset.
-        raw.length_samples = clip.length_samples if clip.length_samples is not None else 0
+        # An omitted length keeps the init's LENGTH_TO_END: the source remaining after the offset.
+        if clip.length_samples is not None:
+            raw.length_samples = _given_positive(clip.length_samples, length_name, _POSITIVE_COUNT)
         raw.loop = 1 if clip.loop else 0
         raw.gain = _narrow_double(clip.gain, "clip.gain")
         raw.fade_in_samples = clip.fade_in_samples
@@ -327,13 +360,14 @@ def _clips_to_c(
     )
 
 
-def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
-    raw = SonareEngineGraphNode()
-    raw.id = _fixed_bytes(node.id, 64, "id")
-    raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "node.type")
-    raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
-    raw.num_ports = _optional_positive_int(node.num_ports, "num_ports", _C_INT_MAX)
-    return raw
+def _graph_node_to_c(node: EngineGraphNode, index: int) -> SonareEngineGraphNode:
+    # An omitted port count keeps the init's PORTS_FROM_SPEC.
+    return SonareEngineGraphNode._given(
+        id=_fixed_bytes(node.id, 64, "id"),
+        type=_token_ordinal(node.type, _GRAPH_NODE_TYPES, "node.type"),
+        gain_db=_narrow_double(node.gain_db, "node.gain_db"),
+        num_ports=_given_positive(node.num_ports, f"spec.nodes[{index}].num_ports", _POSITIVE_INT),
+    )
 
 
 def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGraphConnection:

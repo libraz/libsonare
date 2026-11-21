@@ -231,6 +231,13 @@ SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptu
   return SONARE_OK;
 }
 
+void sonare_engine_graph_node_init(SonareEngineGraphNode* node) {
+  if (node == nullptr) return;
+  *node = SonareEngineGraphNode{};
+  node->struct_size = sizeof(SonareEngineGraphNode);
+  node->num_ports = SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC;
+}
+
 SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGraphSpec* spec) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
@@ -252,16 +259,20 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
   auto graph = std::make_unique<graph::Graph>();
   for (size_t i = 0; i < spec->node_count; ++i) {
     const SonareEngineGraphNode& node = spec->nodes[i];
-    // Only 0 asks for the spec's width. A negative count is a caller error, and
-    // add_node would have refused it, so it must not reach the derivation.
     if (const SonareError err = run_validation([&] {
-          util::check::integer_at_least(node.num_ports, 0,
-                                        indexed_subject("spec.nodes", i, "num_ports").c_str());
+          require_struct_size(node.struct_size, sizeof(SonareEngineGraphNode),
+                              "spec.nodes[" + std::to_string(i) + "]",
+                              "sonare_engine_graph_node_init");
+          if (node.num_ports != SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC) {
+            util::check::integer_at_least(node.num_ports, 1,
+                                          indexed_subject("spec.nodes", i, "num_ports").c_str());
+          }
         });
         err != SONARE_OK) {
       return err;
     }
-    const int ports = node.num_ports == 0 ? spec->num_channels : node.num_ports;
+    const int ports =
+        node.num_ports == SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC ? spec->num_channels : node.num_ports;
     auto processor = make_graph_processor(node);
     if (!processor) {
       return run_validation([&] {

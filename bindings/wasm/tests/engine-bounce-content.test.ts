@@ -188,13 +188,13 @@ describe('RealtimeEngine offline bounce content', () => {
     }
   });
 
-  it('normalizes to the requested loudness and refuses an explicit 0', () => {
+  it('normalizes to the requested loudness and reads an explicit 0 as a target', () => {
     for (const targetLufs of [-20, -9]) {
       expect(bounce({ normalizeLufs: true, targetLufs }).lufs).toBeCloseTo(targetLufs, 1);
     }
-    // Omitting it takes the -14 default; an explicit 0 is refused, not read as the default.
+    // Omitting it takes the -14 default; an explicit 0 is a target of its own, not that default.
     expect(bounce({ normalizeLufs: true }).lufs).toBeCloseTo(-14, 1);
-    expect(() => bounce({ normalizeLufs: true, targetLufs: 0 })).toThrow(RangeError);
+    expect(bounce({ normalizeLufs: true, targetLufs: 0 }).lufs).not.toBeCloseTo(-14, 1);
     expect(() => bounce({ targetSampleRate: 0 })).toThrow(RangeError);
     expect(() => bounce({ sourceSampleRate: 0 })).toThrow(RangeError);
   });
@@ -226,6 +226,13 @@ describe('RealtimeEngine offline bounce content', () => {
     const other = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 2 });
     expect(Array.from(repeat.samples)).toEqual(Array.from(first.samples));
     expect(maxAbsDiff(other.samples, first.samples)).toBeGreaterThan(0);
+  });
+
+  it('reads ditherSeed 0 as a seed of its own and refuses ditherBits 0 under dither', () => {
+    const omitted = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS });
+    const zero = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 0 });
+    expect(maxAbsDiff(zero.samples, omitted.samples)).toBeGreaterThan(0);
+    expect(() => bounce({ dither: 'tpdf', ditherBits: 0 })).toThrow(RangeError);
   });
 
   it.each(['tpdf', 'noiseShaped'] as const)(

@@ -320,6 +320,24 @@ inline int IntProperty(const Napi::Object& obj, const char* key, ZeroIsSentinel)
   return node_narrow_int(obj.Env(), value, key);
 }
 
+/// @brief A C struct sentinel that only absence selects, written where a fallback would go.
+/// @details Absent returns @c value; a caller spelling the sentinel itself is passed on as 0,
+///   which the core refuses in the field's own domain text, so the sentinel never reads as a
+///   deliberate value.
+template <typename T>
+struct AbsentIsSentinel {
+  T value;
+};
+
+/// @brief Read an int property whose C sentinel only absence selects (@ref AbsentIsSentinel).
+inline int IntProperty(const Napi::Object& obj, const char* key, AbsentIsSentinel<int> sentinel) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return sentinel.value;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  const int read = node_narrow_int(obj.Env(), value, key);
+  return read == sentinel.value ? 0 : read;
+}
+
 /// @brief Read a raw 32-bit word property, accepting both the unsigned and the
 ///        bit-31-signed spelling (@ref node_narrow_word).
 inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t fallback) {
@@ -408,6 +426,16 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t f
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_int64(obj.Env(), value, key);
+}
+
+/// @brief Read an int64 property whose C sentinel only absence selects (@ref AbsentIsSentinel).
+inline int64_t Int64Property(const Napi::Object& obj, const char* key,
+                             AbsentIsSentinel<int64_t> sentinel) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return sentinel.value;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  const int64_t read = node_narrow_int64(obj.Env(), value, key);
+  return read == sentinel.value ? 0 : read;
 }
 
 /// @brief Read an int64 property whose 0 is the library default

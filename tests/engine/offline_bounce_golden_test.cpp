@@ -87,7 +87,8 @@ std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& 
 
   auto [left, right] = make_clip(signal);
   const float* clip_channels[] = {left.data(), right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.channels = clip_channels;
   clip.num_channels = 2;
@@ -99,7 +100,8 @@ std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
 
-  SonareEngineBounceOptions options{};
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlock;
   options.num_channels = 2;
@@ -277,7 +279,8 @@ struct AttenuatedLaneEngine {
     REQUIRE(sonare_engine_prepare(engine, kRate, kBlock, 256, 256) == SONARE_OK);
 
     const float* clip_channels[] = {left.data(), right.data()};
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = 1;
     clip.track_id = 10;
     clip.channels = clip_channels;
@@ -319,7 +322,8 @@ TEST_CASE("every offline entry point opens at settled parameter values",
 
   SECTION("bounce_offline") {
     Engine fixture;
-    SonareEngineBounceOptions options{};
+    SonareEngineBounceOptions options;
+    sonare_engine_bounce_options_init(&options);
     options.total_frames = Engine::kLength;
     options.block_size = Engine::kBlock;
     options.num_channels = 2;
@@ -342,7 +346,8 @@ TEST_CASE("every offline entry point opens at settled parameter values",
 
   SECTION("freeze_offline") {
     Engine fixture;
-    SonareEngineFreezeOptions freeze{};
+    SonareEngineFreezeOptions freeze;
+    sonare_engine_freeze_options_init(&freeze);
     freeze.total_frames = Engine::kLength;
     freeze.block_size = Engine::kBlock;
     freeze.num_channels = 2;
@@ -356,7 +361,8 @@ TEST_CASE("every offline entry point opens at settled parameter values",
     // frozen clip carries no track id, so bouncing it reads the capture back
     // without passing it through the lane a second time.
     REQUIRE(sonare_engine_seek_sample(fixture.engine, 0, -1) == SONARE_OK);
-    SonareEngineBounceOptions options{};
+    SonareEngineBounceOptions options;
+    sonare_engine_bounce_options_init(&options);
     options.total_frames = Engine::kLength;
     options.block_size = Engine::kBlock;
     options.num_channels = 2;

@@ -948,11 +948,13 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineMetronomeConfig config{};
-  config.enabled = BoolProperty(obj, "enabled", false) ? 1 : 0;
-  config.beat_gain = FloatProperty(obj, "beatGain", 0.35f);
-  config.accent_gain = FloatProperty(obj, "accentGain", 0.7f);
-  config.click_samples = IntProperty(obj, "clickSamples", kZeroIsSentinel);
-  config.click_sec = DoubleProperty(obj, "clickSeconds", 0.0);
+  sonare_engine_metronome_config_init(&config);
+  config.enabled = BoolProperty(obj, "enabled", config.enabled != 0) ? 1 : 0;
+  config.beat_gain = FloatProperty(obj, "beatGain", config.beat_gain);
+  config.accent_gain = FloatProperty(obj, "accentGain", config.accent_gain);
+  config.click_samples =
+      IntProperty(obj, "clickSamples", AbsentIsSentinel<int>{config.click_samples});
+  config.click_sec = DoubleProperty(obj, "clickSeconds", config.click_sec);
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_metronome(engine_, &config));
   return env.Undefined();

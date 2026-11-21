@@ -71,6 +71,18 @@ const REMOVED_FILTERS: ReadonlyArray<{
       'The same port count on the WASM surface, which mirrors the C ABI deliberately. Fixing either alone would turn a uniform defect into a cross-surface divergence, so the two entries move together.',
   },
   {
+    file: 'src/c_api/sonare_c_engine.cpp',
+    fields: ['click_sec'],
+    reason:
+      'Metronome click duration, read literally since the struct gained struct_size; a 0 used to keep the 2 ms default and is now refused.',
+  },
+  {
+    file: 'src/c_api/sonare_c_engine_render.cpp',
+    fields: ['dither_bits'],
+    reason:
+      'Dither target word length, refused outside [2, 32] while dither is on; a 0 used to keep the 16-bit default.',
+  },
+  {
     file: 'src/c_api/sonare_c_engine_clips.cpp',
     fields: ['length_samples'],
     reason:
@@ -228,18 +240,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'dB floor; 0 keeps the core default, negative and non-finite refused.',
   },
   {
-    file: 'src/c_api/sonare_c_engine.cpp',
-    field: 'click_sec',
-    reason:
-      'Metronome click duration; 0 keeps the 2 ms default. THE ONE ENTRY HERE WHOSE REFUSAL IS NOT ABOVE ITS FILTER: the filter sits in metronome_from_c and the rejection of anything outside [0, kMaxMetronomeClickSeconds] sits 433 lines below it in sonare_engine_set_metronome, a different function. It holds only because metronome_from_c is in an anonymous namespace with exactly one caller, which is that entry point after it has validated -- a property of the current call graph, not of the code. A second caller added later makes this field unrefused and nothing here would say so, because the check below only asks whether the file states a refusal.',
-    refusedAs: 'config->click_sec',
-  },
-  {
-    file: 'src/c_api/sonare_c_engine_render.cpp',
-    field: 'dither_bits',
-    reason: 'Dither target word length; 0 keeps the default (16), negative refused.',
-  },
-  {
     file: 'src/c_api/synth_patch_common.h',
     field: 'engine_mode',
     reason:
@@ -356,6 +356,10 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
   ],
   ['src/c_api/sonare_c_daw.cpp:total_envelope', 'A summed allocation size, as total_amplitude.'],
   [
+    'src/c_api/sonare_c_engine.cpp:click_samples',
+    'The core metronome value on its way out to the C struct, where 0 means a click derived from its duration; the getter reports that as SONARE_ENGINE_METRONOME_CLICK_FROM_SEC. Not a caller field.',
+  ],
+  [
     'src/c_api/sonare_c_engine_clips.cpp:anchor_index',
     'A loop index selecting whether a warp anchor has a predecessor to be ordered against.',
   ],
@@ -412,7 +416,7 @@ describe('a `> 0` sentinel filter is removed or answered', () => {
     // RED WHEN: the scan's regexes stop matching (a clang-format change that
     // wraps these comparisons, a rename of the shapes). Without this, a dead
     // regex would report an empty population and read as a clean tree.
-    expect(filterSites().length).toBeGreaterThan(40);
+    expect(filterSites().length).toBeGreaterThan(35);
     expect(new Set(filterSites().map((site) => site.file)).size).toBeGreaterThan(10);
   });
 

@@ -15119,7 +15119,7 @@ old = "EngineBounceOptions.targetSampleRate"
 changed = "absent keeps the source rate; an explicit 0 is a RangeError"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults, refuses a zero rate and reads a zero target"
 
 [[entry]]
 kind = "field"
@@ -15127,15 +15127,15 @@ old = "EngineBounceOptions.sourceSampleRate"
 changed = "absent means the engine rate; an explicit 0 is a RangeError"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults, refuses a zero rate and reads a zero target"
 
 [[entry]]
 kind = "field"
 old = "EngineBounceOptions.targetLufs"
-changed = "absent means -14; an explicit 0 is a RangeError and a non-finite value is refused"
+changed = "absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused"
 domain = "engine"
 rule = "non-finite-is-absent"
-test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults, refuses a zero rate and reads a zero target"
 
 [[entry]]
 kind = "field"

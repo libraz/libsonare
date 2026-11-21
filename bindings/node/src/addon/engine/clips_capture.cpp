@@ -154,7 +154,7 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   }
 
   SonareEngineClip& clip = *out_clip;
-  clip = SonareEngineClip{};
+  sonare_engine_clip_init(&clip);
   if (!RequiredUint32Property(env, obj, "id", &clip.id)) return false;
   clip.track_id = Uint32Property(obj, "trackId", 0);
   if (env.IsExceptionPending()) return false;
@@ -172,16 +172,16 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   }
   if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return false;
   clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", clip.clip_offset_samples);
-  clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
+  clip.length_samples =
+      Int64Property(obj, "lengthSamples", AbsentIsSentinel<int64_t>{clip.length_samples});
   clip.loop = BoolProperty(obj, "loop", clip.loop != 0) ? 1 : 0;
-  clip.gain = FloatProperty(obj, "gain", 1.0f);
-  clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
-  clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
+  clip.gain = FloatProperty(obj, "gain", clip.gain);
+  clip.fade_in_samples = Int64Property(obj, "fadeInSamples", clip.fade_in_samples);
+  clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", clip.fade_out_samples);
   // A wrong-typed optional field left one pending JS exception; stop before
   // ParseWarpMode can throw a second one on top of it (a fatal abort).
   if (env.IsExceptionPending()) return false;
-  clip.warp_mode =
-      obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
+  clip.warp_mode = obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : clip.warp_mode;
   if (env.IsExceptionPending()) return false;
   if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
     const Napi::Value anchors_value = obj.Get("warpAnchors");

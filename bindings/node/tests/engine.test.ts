@@ -680,13 +680,13 @@ describe('RealtimeEngine native binding', () => {
     expect(Number.isFinite(plain.lufs)).toBe(true);
 
     // Requested loudness is reached, an absent target is the shared -14 LUFS
-    // default, and an explicit 0 is refused rather than read as that default.
+    // default, and an explicit 0 is a target of its own rather than that default.
     for (const targetLufs of [-20, -9]) {
       const normalized = bounce({ normalizeLufs: true, targetLufs });
       expect(normalized.lufs).toBeCloseTo(targetLufs, 1);
     }
     expect(bounce({ normalizeLufs: true }).lufs).toBeCloseTo(-14, 1);
-    expect(() => bounce({ normalizeLufs: true, targetLufs: 0 })).toThrow(RangeError);
+    expect(bounce({ normalizeLufs: true, targetLufs: 0 }).lufs).not.toBeCloseTo(-14, 1);
     expect(() => bounce({ normalizeLufs: true, targetLufs: Number.NaN })).toThrow(RangeError);
     // A number is not a dither name.
     expect(() => bounce({ dither: 1 as never })).toThrow(TypeError);
@@ -727,6 +727,11 @@ describe('RealtimeEngine native binding', () => {
     expect(Array.from(repeat.samples)).toEqual(Array.from(tpdf.samples));
     const otherSeed = bounce({ dither: 'tpdf', ditherBits: bits, ditherSeed: 2 });
     expect(maxAbsDiff(otherSeed.samples, tpdf.samples)).toBeGreaterThan(0);
+    // Seed 0 is a seed of its own, not the default one an omitted seed selects.
+    const omittedSeed = bounce({ dither: 'tpdf', ditherBits: bits });
+    const zeroSeed = bounce({ dither: 'tpdf', ditherBits: bits, ditherSeed: 0 });
+    expect(maxAbsDiff(zeroSeed.samples, omittedSeed.samples)).toBeGreaterThan(0);
+    expect(() => bounce({ dither: 'tpdf', ditherBits: 0 })).toThrow(RangeError);
   });
 
   it('exposes transport state and live parameter injection', () => {

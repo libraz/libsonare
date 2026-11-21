@@ -61,11 +61,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     '0 is the unassigned track id: the clip player returns on it rather than substituting a track of its own.',
   ],
   [
-    'engine/clips_capture.cpp:fadeInSamples',
-    'A fade length in samples; 0 is no fade, a length the caller can mean.',
-  ],
-  ['engine/clips_capture.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
-  [
     'addon.cpp:word1',
     'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
   ],
@@ -96,10 +91,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_transcribe.cpp:minNoteDivision',
     'Same as maxPolyphony: the 0 an omitted key sends reads as "unset" in the C ABI, and a WRITTEN 0 is refused (1..128) after the presence check.',
-  ],
-  [
-    'engine/graph_offline.cpp:type',
-    'Graph node kind ordinal, where 0 is pass-through — a named member rather than an absent value.',
   ],
   [
     'project/vocal_edit.cpp:takeId',
@@ -280,7 +271,7 @@ describe('a literal-zero fallback is tagged or reasoned', () => {
   it('clears the floor it is sized for, so the sweep swept something', () => {
     const sites = zeroFallbackSites();
     expect(sites.filter((site) => site.tagged).length).toBeGreaterThan(20);
-    expect(sites.length).toBeGreaterThan(50);
+    expect(sites.length).toBeGreaterThan(40);
   });
 
   it('keeps the recorded reasons free of entries that no longer apply', () => {

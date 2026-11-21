@@ -99,18 +99,17 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
         ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
     if (env.IsExceptionPending()) return env.Undefined();
     SonareEngineMidiClipSchedule clip{};
+    sonare_engine_midi_clip_schedule_init(&clip);
     clip.id = Uint32Property(obj, "id", clip.id);
     clip.track_id = Uint32Property(obj, "trackId", clip.track_id);
     clip.start_sample = Int64Property(obj, "startSample", clip.start_sample);
     clip.start_ppq = DoubleProperty(obj, "startPpq", clip.start_ppq);
-    clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
+    clip.length_samples =
+        Int64Property(obj, "lengthSamples", AbsentIsSentinel<int64_t>{clip.length_samples});
     clip.loop = BoolProperty(obj, "loop", clip.loop != 0) ? 1 : 0;
-    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", kZeroIsSentinel);
+    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", clip.loop_length_samples);
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
-    // Same defaults as the audio clip's gain/fade fields (SetClips): a
-    // zero-initialized struct is silent, so an omitted gain reads as unity here
-    // rather than the C ABI's own zero-init default.
-    clip.gain = FloatProperty(obj, "gain", 1.0f);
+    clip.gain = FloatProperty(obj, "gain", clip.gain);
     clip.fade_in_samples = Int64Property(obj, "fadeInSamples", clip.fade_in_samples);
     clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", clip.fade_out_samples);
     if (env.IsExceptionPending()) return env.Undefined();

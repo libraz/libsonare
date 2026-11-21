@@ -97,7 +97,8 @@ std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) 
   SonareEngineBuiltinSynthConfig synth = engine_synth();
   REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
   const SonareEngineMidiEvent events[] = {{0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u}};
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 1;
   clip.track_id = kTrackId;

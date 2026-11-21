@@ -51,7 +51,8 @@ SonareEngine* make_routing_engine(std::initializer_list<DcTrack> tracks) {
   std::vector<SonareEngineClip> clips;
   uint32_t clip_id = 1;
   for (const DcTrack& track : tracks) {
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = clip_id++;
     clip.track_id = track.track_id;
     clip.channels = channels;
@@ -390,7 +391,8 @@ namespace {
 constexpr uint32_t kMidiDestination = 9;
 
 SonareEngineMidiClipSchedule held_note_clip(const SonareEngineMidiEvent* events) {
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.id = 42;
   clip.track_id = kMidiDestination;
   clip.length_samples = kRoutingFrames;
@@ -474,7 +476,7 @@ TEST_CASE("sonare_engine_set_midi_clips refuses a bad gain or fade", "[c_engine_
   CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == kInvalid);
   // An open-ended clip has no end to fade out towards; a fade-in is still fine.
   clip = good;
-  clip.length_samples = 0;
+  clip.length_samples = SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED;
   clip.fade_out_samples = 256;
   CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == kInvalid);
   clip.fade_out_samples = 0;

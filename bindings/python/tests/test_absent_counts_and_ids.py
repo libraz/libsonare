@@ -69,18 +69,8 @@ def test_engine_clip_track_is_none_when_unset_and_zero_is_refused() -> None:
             engine.set_clips([EngineClip(id=1, channels=[[0.5] * 128], start_ppq=0.0, track_id=0)])
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("id", 0),
-        ("track_id", 0),
-        ("length_samples", 0),
-        ("length_samples", -1),
-        ("loop_length_samples", 0),
-        ("loop_length_samples", -1),
-    ],
-)
-def test_midi_schedule_refuses_zero_where_none_is_absence(field: str, value: int) -> None:
+@pytest.mark.parametrize("field", ["id", "track_id"])
+def test_midi_schedule_refuses_zero_where_none_is_absence(field: str) -> None:
     with (
         RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
         pytest.raises(
@@ -88,8 +78,37 @@ def test_midi_schedule_refuses_zero_where_none_is_absence(field: str, value: int
             match=rf"^RealtimeEngine\.set_midi_clips: clip\.{field} must be an integer in \[1, ",
         ),
     ):
-        given: dict[str, Any] = {field: value}
+        given: dict[str, Any] = {field: 0}
         engine.set_midi_clips([EngineMidiClipSchedule(events=[], **given)])
+
+
+@pytest.mark.parametrize(
+    ("given", "field"),
+    [
+        ({"length_samples": 0}, "length_samples"),
+        # -1 is the C ABI's open-ended spelling, so a given one is refused rather than read as it.
+        ({"length_samples": -1}, "length_samples"),
+        ({"loop": True, "loop_length_samples": 0}, "loop_length_samples"),
+        ({"loop": True, "loop_length_samples": -1}, "loop_length_samples"),
+    ],
+)
+def test_midi_schedule_refuses_a_non_positive_given_length(
+    given: dict[str, Any], field: str
+) -> None:
+    with (
+        RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
+        pytest.raises(
+            SonareValueError,
+            match=rf"^RealtimeEngine\.set_midi_clips: clips\[0\]\.{field} must be an integer of "
+            r"at least 1$",
+        ),
+    ):
+        engine.set_midi_clips([EngineMidiClipSchedule(events=[], **given)])
+
+
+def test_midi_schedule_ignores_the_loop_period_of_a_one_shot_clip() -> None:
+    with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
+        engine.set_midi_clips([EngineMidiClipSchedule(events=[], loop_length_samples=0)])
 
 
 def test_midi_schedule_omitted_fields_are_accepted() -> None:
@@ -178,7 +197,7 @@ def test_metronome_click_seconds_omitted_is_the_library_length_and_zero_is_refus
         engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.004))
         assert engine.metronome().click_sec == pytest.approx(0.004)
         with pytest.raises(
-            SonareValueError, match="^RealtimeEngine.set_metronome: click_sec must not be 0"
+            SonareValueError, match=r"^RealtimeEngine\.set_metronome: config\.click_sec must be"
         ):
             engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.0))
 

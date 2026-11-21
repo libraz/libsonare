@@ -30,7 +30,8 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   parameter.rt_safe = 1;
   REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
 
-  SonareEngineGraphNode nodes[3]{};
+  SonareEngineGraphNode nodes[3];
+  for (auto& element : nodes) sonare_engine_graph_node_init(&element);
   std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
   nodes[0].type = 0;
   nodes[0].num_ports = 1;
@@ -219,7 +220,8 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
       {0, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0},
       {4096, midi1_word(0x8, 0, 60, 0), 0, 0, 0, 1, 0, 0, 0},
   };
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 42;
   clip.track_id = 9;
@@ -263,7 +265,8 @@ TEST_CASE("sonare_engine drains a MIDI 2.0 RPN as its four-message MIDI 1.0 sequ
   const sonare::midi::Ump rpn =
       sonare::midi::make_midi2_registered_controller(0, 1, 0, 0, (uint32_t{12} << 25));
   const SonareEngineMidiEvent events[] = {{0, rpn.words[0], rpn.words[1], 0, 0, 2, 0, 0, 0}};
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
@@ -307,7 +310,8 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
       {0, midi1_word(0x9, 1, 64, 110), 0, 0, 0, 1, 0, 0, 0},
       {48, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
   };
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
@@ -379,7 +383,8 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
       {0, note_on, 0, 0, 0, 1, static_cast<uint8_t>(kGroup), 0, 0},
       {48, note_off, 0, 0, 0, 1, 0, 0, 0},
   };
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
@@ -569,7 +574,8 @@ TEST_CASE("sonare_engine external MIDI stays monotonic across a loop wrap", "[c_
       {0, midi1_word(0x9, 1, 64, 110), 0, 0, 0, 1, 0, 0, 0},
       {12000, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
   };
-  SonareEngineMidiClipSchedule clip{};
+  SonareEngineMidiClipSchedule clip;
+  sonare_engine_midi_clip_schedule_init(&clip);
   clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
@@ -635,7 +641,8 @@ TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][e
 
   std::array<float, 4> clip_audio{1.0f, 0.0f, 0.0f, 0.0f};
   const float* clip_channels[] = {clip_audio.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.channels = clip_channels;
   clip.num_channels = 1;

@@ -622,10 +622,12 @@ describe('RealtimeEngine MIDI clip gain and fade', () => {
   });
 
   it('refuses a fade-out on an open-ended clip', () => {
-    // An omitted length is the open-ended clip; an explicit 0 is refused by name.
+    // An omitted length is the open-ended clip; an explicit 0 is refused by the core.
     expect(() => renderMidiClip({ lengthSamples: undefined, fadeOutSamples: 256 })).toThrow();
     // A fade-in on an open-ended clip is fine.
     expect(() => renderMidiClip({ lengthSamples: undefined, fadeInSamples: 256 })).not.toThrow();
-    expect(() => renderMidiClip({ lengthSamples: 0 })).toThrow(/lengthSamples must not be 0/);
+    expect(() => renderMidiClip({ lengthSamples: 0 })).toThrow(
+      /clips\[0\]\.lengthSamples must be an integer of at least 1$/,
+    );
   });
 });

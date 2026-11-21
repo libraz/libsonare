@@ -31,15 +31,16 @@ SonareEngine* prepared_engine() {
 }
 
 SonareEngineBounceOptions bounce_options() {
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = 64;
   options.num_channels = 2;
   return options;
 }
 
 SonareEngineFreezeOptions freeze_options() {
-  SonareEngineFreezeOptions options{};
+  SonareEngineFreezeOptions options;
+  sonare_engine_freeze_options_init(&options);
   options.total_frames = 64;
   options.num_channels = 2;
   options.clip_id = 1;
@@ -80,8 +81,9 @@ TEST_CASE("engine offline render refuses a NULL argument and an out-of-domain co
 
   CHECK(sonare_engine_finish_offline_render(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "engine must not be NULL");
-  CHECK(sonare_engine_bounce_options_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "options must not be NULL");
+  // A NULL options is ignored by the init functions.
+  sonare_engine_bounce_options_init(nullptr);
+  sonare_engine_freeze_options_init(nullptr);
 
   sonare_engine_destroy(engine);
 }
@@ -108,16 +110,24 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
   };
   CHECK(refused([](auto& o) { o.total_frames = 0; }) ==
         "options.total_frames must be an integer of at least 1");
-  CHECK(refused([](auto& o) { o.block_size = -1; }) ==
-        "options.block_size must be an integer in [0, 2147483647]");
+  CHECK(refused([](auto& o) { o.struct_size = 0; }) ==
+        "options.struct_size must be set by sonare_engine_bounce_options_init");
+  CHECK(refused([](auto& o) { o.block_size = 0; }) ==
+        "options.block_size must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.block_size = -2; }) ==
+        "options.block_size must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.num_channels = 0; }) ==
         "options.num_channels must be an integer in [1, 2147483647]");
-  CHECK(refused([](auto& o) { o.target_sample_rate = -1; }) ==
-        "options.target_sample_rate must be an integer in [0, 2147483647]");
-  CHECK(refused([](auto& o) { o.source_sample_rate = -1; }) ==
-        "options.source_sample_rate must be an integer in [0, 2147483647]");
-  CHECK(refused([](auto& o) { o.dither_bits = -1; }) ==
-        "options.dither_bits must be an integer in [0, 2147483647]");
+  CHECK(refused([](auto& o) { o.target_sample_rate = 0; }) ==
+        "options.target_sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.target_sample_rate = -2; }) ==
+        "options.target_sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.source_sample_rate = 0; }) ==
+        "options.source_sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.source_sample_rate = -2; }) ==
+        "options.source_sample_rate must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.target_lufs = std::numeric_limits<float>::infinity(); }) ==
+        "options.target_lufs must be finite");
   CHECK(refused([](auto& o) { o.total_frames = int64_t{1} << 40; }) ==
         "options.total_frames, options.num_channels, options.source_sample_rate and "
         "options.target_sample_rate give a result "
@@ -138,7 +148,7 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
         }) == "options.num_channels must be one of 1, 2, 6, 8");
   CHECK(refused([](auto& o) {
           o.dither = 4;
-          o.dither_bits = -1;
+          o.dither_bits = 0;
         }) == "options.dither must be one of 0, 1, 2, 3");
   SonareEngineBounceOptions zero_frames = good;
   zero_frames.total_frames = 0;
@@ -146,11 +156,21 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "options.total_frames must be an integer of at least 1");
 #if defined(SONARE_WITH_MASTERING)
-  CHECK(refused([](auto& o) {
-          o.dither = 1;
-          o.dither_bits = 99;
-        }) == "options.dither_bits must be 0 or an integer in [2, 32]");
+  for (const int bad_bits : {0, 1, 99}) {
+    CHECK(refused([bad_bits](auto& o) {
+            o.dither = 1;
+            o.dither_bits = bad_bits;
+          }) == "options.dither_bits must be an integer in [2, 32]");
+  }
 #endif
+  // The word length is read only when a dither is chosen.
+  {
+    SonareEngineBounceOptions undithered = good;
+    undithered.dither_bits = 0;
+    SonareEngineBounceResult undithered_result{};
+    CHECK(sonare_engine_bounce_offline(engine, &undithered, &undithered_result) == SONARE_OK);
+    sonare_free_engine_bounce_result(&undithered_result);
+  }
 
   sonare_engine_destroy(engine);
 }
@@ -177,8 +197,12 @@ TEST_CASE("engine freeze refuses each option by its member name", "[c_api][engin
   };
   CHECK(refused([](auto& o) { o.total_frames = 0; }) ==
         "options.total_frames must be an integer of at least 1");
-  CHECK(refused([](auto& o) { o.block_size = -1; }) ==
-        "options.block_size must be an integer in [0, 2147483647]");
+  CHECK(refused([](auto& o) { o.struct_size = 0; }) ==
+        "options.struct_size must be set by sonare_engine_freeze_options_init");
+  CHECK(refused([](auto& o) { o.block_size = 0; }) ==
+        "options.block_size must be an integer in [1, 2147483647]");
+  CHECK(refused([](auto& o) { o.block_size = -2; }) ==
+        "options.block_size must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.num_channels = 0; }) ==
         "options.num_channels must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.start_ppq = std::nan(""); }) ==
@@ -473,7 +497,8 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
 TEST_CASE("engine MIDI clips refuse each member by name", "[c_api][engine_refusal]") {
   SonareEngine* engine = prepared_engine();
   const SonareEngineMidiEvent event{0, 0x20906464u, 0, 0, 0, 1, 0, 0, 0};
-  SonareEngineMidiClipSchedule good{};
+  SonareEngineMidiClipSchedule good;
+  sonare_engine_midi_clip_schedule_init(&good);
   good.gain = 1.0f;
   good.length_samples = 1024;
   good.events = &event;
@@ -485,8 +510,18 @@ TEST_CASE("engine MIDI clips refuse each member by name", "[c_api][engine_refusa
     CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
     return last_error();
   };
+  CHECK(refused([](auto& c) { c.struct_size = 0; }) ==
+        "clips[0].struct_size must be set by sonare_engine_midi_clip_schedule_init");
   CHECK(refused([](auto& c) { c.start_ppq = std::nan(""); }) ==
         "clips[0].start_ppq must be finite");
+  CHECK(refused([](auto& c) { c.length_samples = 0; }) ==
+        "clips[0].length_samples must be an integer of at least 1");
+  CHECK(refused([](auto& c) { c.length_samples = -2; }) ==
+        "clips[0].length_samples must be an integer of at least 1");
+  CHECK(refused([](auto& c) {
+          c.loop = 1;
+          c.loop_length_samples = 0;
+        }) == "clips[0].loop_length_samples must be an integer of at least 1");
   CHECK(refused([](auto& c) { c.loop = -1; }) ==
         "clips[0].loop must be an integer in [0, 2147483647]");
   CHECK(refused([](auto& c) { c.events = nullptr; }) ==
@@ -497,9 +532,9 @@ TEST_CASE("engine MIDI clips refuse each member by name", "[c_api][engine_refusa
   CHECK(refused([](auto& c) { c.fade_out_samples = -1; }) ==
         "clips[0].fade_out_samples must be an integer of at least 0");
   CHECK(refused([](auto& c) {
-          c.length_samples = 0;
+          c.length_samples = SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED;
           c.fade_out_samples = 16;
-        }) == "clips[0].fade_out_samples must be 0 when clips[0].length_samples is not positive");
+        }) == "clips[0].fade_out_samples must be 0 when clips[0].length_samples is open-ended");
 
   SonareEngineMidiEvent bad_group = event;
   bad_group.group = 16;

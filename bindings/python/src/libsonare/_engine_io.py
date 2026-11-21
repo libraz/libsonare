@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ._engine_conversions import (
+    _POSITIVE_INT,
     _capture_source_name,
     _capture_source_value,
     _fixed_bytes,
+    _given_positive,
     _graph_connection_to_c,
     _graph_node_to_c,
     _graph_parameter_binding_to_c,
@@ -60,7 +62,6 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _narrow_int,
-    _optional_positive_int,
     _planar_channel_arrays,
     _require_instance,
     _resolve_render_frame,
@@ -72,7 +73,6 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint,
     _token_ordinal,
-    _validate_c_int_field,
 )
 from ._types_engine import (
     _ENGINE_DITHERS,
@@ -240,7 +240,7 @@ class _EngineIoMixin:
     def set_graph(self, spec: EngineGraphSpec) -> None:
         _require_instance(spec, EngineGraphSpec, "spec")
         nodes = (SonareEngineGraphNode * len(spec.nodes))(
-            *[_graph_node_to_c(node) for node in spec.nodes]
+            *[_graph_node_to_c(node, index) for index, node in enumerate(spec.nodes)]
         )
         connections = (SonareEngineGraphConnection * len(spec.connections))(
             *[_graph_connection_to_c(connection) for connection in spec.connections]
@@ -414,39 +414,30 @@ class _EngineIoMixin:
         """
         _require_instance(options, EngineBounceOptions, "options")
         lib = _get_lib()
-        raw_options = SonareEngineBounceOptions()
-        # Seeded from the C defaults so a field appended to the struct on the C
-        # side starts at its documented value rather than zero. Every field this
-        # facade knows about is then overwritten below, so for those the
-        # EngineBounceOptions dataclass defaults are the authority, not the C
-        # ones; test_bounce_dataclass_defaults_match_the_native_defaults keeps
-        # the two from diverging.
-        _check(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
-        # Assigned unconverted so the struct's own narrowing sees each caller
-        # value; int() would truncate a fraction past it. normalize_lufs is the
-        # one exception -- it is a documented bool, spelled 0/1 here.
-        raw_options.total_frames = options.total_frames
-        raw_options.block_size = _resolve_zero_default(options.block_size, "options.block_size")
-        raw_options.num_channels = options.num_channels
-        raw_options.target_sample_rate = _optional_positive_int(
-            options.target_sample_rate, "options.target_sample_rate", _C_INT_MAX
-        )
-        raw_options.source_sample_rate = _optional_positive_int(
-            options.source_sample_rate, "options.source_sample_rate", _C_INT_MAX
-        )
-        raw_options.normalize_lufs = 1 if options.normalize_lufs else 0
-        raw_options.target_lufs = _narrow_double(options.target_lufs, "options.target_lufs")
-        # The C ordinals put "none" at 0, ahead of the three shapes.
-        raw_options.dither = (
-            0
+        # Seeded by sonare_engine_bounce_options_init; a field left None keeps the init's value
+        # (BLOCK_SIZE_AUTO, SAMPLE_RATE_PREPARED, NaN for -14 LUFS, the built-in dither seed),
+        # and a given value is written unconverted so the struct's own narrowing sees it.
+        raw_options = SonareEngineBounceOptions._given(
+            total_frames=options.total_frames,
+            block_size=_given_positive(options.block_size, "options.block_size", _POSITIVE_INT),
+            num_channels=options.num_channels,
+            target_sample_rate=_given_positive(
+                options.target_sample_rate, "options.target_sample_rate", _POSITIVE_INT
+            ),
+            source_sample_rate=_given_positive(
+                options.source_sample_rate, "options.source_sample_rate", _POSITIVE_INT
+            ),
+            normalize_lufs=1 if options.normalize_lufs else 0,
+            target_lufs=None
+            if options.target_lufs is None
+            else _narrow_double(options.target_lufs, "options.target_lufs"),
+            # The C ordinals put "none" at 0, ahead of the three shapes.
+            dither=0
             if options.dither is None
-            else _token_ordinal(options.dither, _ENGINE_DITHERS, "options.dither") + 1
+            else _token_ordinal(options.dither, _ENGINE_DITHERS, "options.dither") + 1,
+            dither_bits=options.dither_bits,
+            dither_seed=options.dither_seed,
         )
-        # Same narrowing as the fields above, worded against this entry point:
-        # int(0.5) is the 0 this field reads as "keep the default 16", so a
-        # fractional word length would dither at 16 and report success.
-        raw_options.dither_bits = _validate_c_int_field(options.dither_bits, "dither_bits")
-        raw_options.dither_seed = options.dither_seed
         raw_result = SonareEngineBounceResult()
         _check(
             lib.sonare_engine_bounce_offline(
@@ -480,15 +471,16 @@ class _EngineIoMixin:
         still reaches the instruments.
         """
         _require_instance(options, EngineFreezeOptions, "options")
-        raw_options = SonareEngineFreezeOptions()
-        # Assigned unconverted so the struct's own narrowing sees each caller
-        # value; int() would truncate a fraction past it.
-        raw_options.total_frames = options.total_frames
-        raw_options.block_size = _resolve_zero_default(options.block_size, "options.block_size")
-        raw_options.num_channels = options.num_channels
-        raw_options.clip_id = options.clip_id
-        raw_options.start_ppq = _narrow_double(options.start_ppq, "options.start_ppq")
-        raw_options.gain = _narrow_double(options.gain, "options.gain")
+        # Seeded by sonare_engine_freeze_options_init, so an omitted block_size keeps
+        # BLOCK_SIZE_AUTO; the rest is written unconverted so the struct's own narrowing sees it.
+        raw_options = SonareEngineFreezeOptions._given(
+            total_frames=options.total_frames,
+            block_size=_given_positive(options.block_size, "options.block_size", _POSITIVE_INT),
+            num_channels=options.num_channels,
+            clip_id=options.clip_id,
+            start_ppq=_narrow_double(options.start_ppq, "options.start_ppq"),
+            gain=_narrow_double(options.gain, "options.gain"),
+        )
         raw_result = SonareEngineFreezeResult()
         _check(
             _get_lib().sonare_engine_freeze_offline(

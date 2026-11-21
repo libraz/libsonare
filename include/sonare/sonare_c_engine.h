@@ -333,15 +333,17 @@ SonareError sonare_engine_seek_marker(SonareEngine* engine, uint32_t marker_id,
 ///         not after the start marker.
 SonareError sonare_engine_set_loop_from_markers(SonareEngine* engine, uint32_t start_marker_id,
                                                 uint32_t end_marker_id);
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_engine_metronome_config_init(SonareEngineMetronomeConfig* config);
 /// @brief Sets the metronome configuration.
-/// @details Explicit click lengths are limited to 384000 samples or one second.
-///          The engine clamps accepted values further to one second at the
-///          prepared sample rate.
-/// @return @ref SONARE_ERROR_INVALID_PARAMETER for non-finite/negative gains,
-///         negative durations, or durations above the documented limits.
+/// @details @p config is started from @ref sonare_engine_metronome_config_init. Explicit click
+///          lengths are limited to 384000 samples or one second. The engine clamps accepted
+///          values further to one second at the prepared sample rate.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a struct_size below sizeof, non-finite or
+///         negative gains, or a click length outside the documented ranges.
 SonareError sonare_engine_set_metronome(SonareEngine* engine,
                                         const SonareEngineMetronomeConfig* config);
-/// @brief Reads the current metronome configuration.
+/// @brief Reads the current metronome configuration, struct_size included.
 SonareError sonare_engine_metronome(SonareEngine* engine, SonareEngineMetronomeConfig* out);
 /// @brief Returns the sample at which a count-in of @p bars bars starting at @p start_sample ends.
 /// @details Counting starts at the beginning of the bar containing @p start_sample, so a
@@ -351,6 +353,9 @@ SonareError sonare_engine_metronome(SonareEngine* engine, SonareEngineMetronomeC
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p start_sample.
 SonareError sonare_engine_count_in_end_sample(SonareEngine* engine, int64_t start_sample, int bars,
                                               int64_t* out_sample);
+/// @brief Fills @p clip with sizeof and the library defaults: no source, gain 1, the length to the
+///        end of the source, no fades, no warp. A NULL @p clip is ignored.
+void sonare_engine_clip_init(SonareEngineClip* clip);
 /// @brief Replaces the whole clip set with @p clip_count clips (control thread).
 /// @details Each clip is validated and its audio copied unless it names a page provider. A refused
 ///   clip returns its error and leaves the published set unchanged. @p clips may be NULL only when
@@ -936,6 +941,9 @@ SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, f
 SonareError sonare_engine_reset_capture(SonareEngine* engine);
 /// @brief Reads the capture state: frames recorded, overflow count, arming, punch and source.
 SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptureStatus* out);
+/// @brief Fills @p node with sizeof and the library defaults: an empty id, a pass-through node,
+///        0 dB and @ref SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC. A NULL @p node is ignored.
+void sonare_engine_graph_node_init(SonareEngineGraphNode* node);
 /// @brief Replaces the engine's processing graph from @p spec (control thread, allocates).
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL or empty spec, a non-positive channel count,
 /// an
@@ -1056,32 +1064,27 @@ SonareError sonare_engine_finish_offline_render(SonareEngine* engine);
 ///   so the longer of the two is what binds. Longer material renders in chunks
 ///   through sonare_engine_render_offline_ex.
 /// @param out Receives a heap-owned interleaved buffer; free with sonare_free_engine_bounce_result.
+/// @param options Started from @ref sonare_engine_bounce_options_init.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when the requested span exceeds the
-///         cap above, when a rate is negative, or when a non-zero
-///         @c source_sample_rate differs from the prepared rate (0 selects the
-///         prepared rate; a @c target_sample_rate of 0 keeps the source rate),
-///         when @c block_size exceeds the prepared block size, among the other option validations;
+///         cap above, when @c source_sample_rate is neither
+///         @ref SONARE_ENGINE_SAMPLE_RATE_PREPARED nor the prepared rate, when a rate is
+///         otherwise not positive, or when @c block_size exceeds the prepared block size,
+///         among the other option validations;
 ///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);
-/// @brief Fills @p options with documented defaults for sonare_engine_bounce_offline.
-/// @details This is the canonical source of bounce-option defaults for all
-///   language bindings. Callers should invoke this helper first and then
-///   override only the fields they care about, which guarantees the same
-///   normalization target (SONARE_DEFAULT_BOUNCE_TARGET_LUFS) across the C,
-///   Node, Python and WASM facades. Both sample rates are left at 0: the
-///   source is the engine's prepared rate and the output keeps it, and
-///   @c block_size is left at 0 (the default offline block: 128, capped at the
-///   prepared maximum). @c num_channels and @c total_frames are required and
-///   are left at 0, so the struct is refused until the caller sets them.
-/// @param options Output struct; must not be NULL.
-/// @return @c SONARE_OK on success or @c SONARE_ERROR_INVALID_PARAMETER if
-///         @p options is NULL.
-SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options);
+/// @brief Fills @p options with sizeof and the library defaults for sonare_engine_bounce_offline.
+/// @details @c num_channels and @c total_frames are required and are left at 0, so the struct is
+///   refused until the caller sets them. A NULL @p options is ignored.
+void sonare_engine_bounce_options_init(SonareEngineBounceOptions* options);
 /// @brief Free the heap-allocated buffer held by a bounce result.
 /// @param result Result whose @c interleaved buffer is deleted and nulled.
 void sonare_free_engine_bounce_result(SonareEngineBounceResult* result);
+/// @brief Fills @p options with sizeof and the library defaults for sonare_engine_freeze_offline.
+/// @details @c total_frames, @c num_channels and @c clip_id are left at 0 for the caller to set.
+///   A NULL @p options is ignored.
+void sonare_engine_freeze_options_init(SonareEngineFreezeOptions* options);
 /// @brief Renders the source layer over the span and installs it as the only clip.
 /// @details Bakes every audio clip and hosted MIDI instrument through the lane
 ///   strips, lane inserts and group buses. The master strip, the monitor bus, the
@@ -1095,8 +1098,8 @@ void sonare_free_engine_bounce_result(SonareEngineBounceResult* result);
 ///   The clip holds the span aligned to the timeline: the source layer's latency
 ///   (instrument PDC plus the lane and bus alignment) is rendered ahead and
 ///   dropped, because playback passes the clip through that latency again.
-/// @details @c block_size 0 selects the default offline block (128, capped at
-///   the prepared maximum); @c num_channels is required and must be positive.
+/// @details @p options is started from @ref sonare_engine_freeze_options_init;
+///   @c num_channels is required and must be positive.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @c block_size exceeds the
 ///   prepared block size or @c num_channels the prepared channel count;
 ///   @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
@@ -1295,32 +1298,44 @@ typedef struct {
   uint32_t sysex_handle;  ///< Handle identifying the event's SysEx payload, carried into the UMP
 } SonareEngineMidiEvent;
 
-/// @brief One compiled realtime MIDI clip schedule.
+/// The MIDI clip has no end: it plays until the schedule is replaced. Outside the length's real
+/// domain (a positive sample count), so it never reads as a length.
+#define SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED (-1)
+
+/// @brief One compiled realtime MIDI clip schedule. Start each element from
+///        @ref sonare_engine_midi_clip_schedule_init.
 /// @details Direct bindings expose the same RT-facing shape as
 ///          midi::MidiClipSchedule: PPQ has already been compiled to absolute
 ///          sample frames in @ref SonareEngineMidiEvent.render_frame.
 typedef struct {
-  uint32_t id;                  ///< Stable clip id
-  uint32_t track_id;            ///< Id of the source track; 0 is unset
-  int64_t start_sample;         ///< Clip start on the render timeline, in samples
-  double start_ppq;             ///< Clip start in quarter notes; must be finite, informational
-  int64_t length_samples;       ///< Clip length in samples; 0 is open-ended
-  int loop;                     ///< Non-zero loops the clip; negative is refused
-  int64_t loop_length_samples;  ///< Loop length in samples, used when @c loop is set and positive
-  uint32_t destination_id;      ///< Id of the instrument destination the events are sent to
+  uint32_t struct_size;  ///< sizeof(SonareEngineMidiClipSchedule); set by the init function.
+  uint32_t id;           ///< Stable clip id
+  uint32_t track_id;     ///< Id of the source track; 0 is unset
+  int64_t start_sample;  ///< Clip start on the render timeline, in samples
+  double start_ppq;      ///< Clip start in quarter notes; must be finite, informational
+  /// Clip length in samples; positive. Default @ref SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED.
+  int64_t length_samples;
+  int loop;  ///< Non-zero loops the clip; negative is refused. Default 0
+  /// Loop period in samples, read when @c loop is set; positive. Default 0, so a looping clip
+  /// must set it.
+  int64_t loop_length_samples;
+  uint32_t destination_id;  ///< Id of the instrument destination the events are sent to
   const SonareEngineMidiEvent*
       events;          ///< Events of the clip; may be NULL when @c event_count is 0
   size_t event_count;  ///< Number of entries in @c events
   /// Linear gain applied to the destination instrument's rendered audio while
-  /// this clip is the most recently started active clip on it. A
-  /// zero-initialized struct is silent; set 1.0 for unity.
+  /// this clip is the most recently started active clip on it; finite, >= 0. Default 1.
   float gain;
-  /// Linear fade length in samples over the clip's full length (not per internal loop).
+  /// Linear fade length in samples over the clip's full length (not per internal loop); >= 0.
   int64_t fade_in_samples;
-  /// Fade-out length in samples, over the clip's full length; must be 0 when
-  /// length_samples <= 0 (open-ended).
+  /// Fade-out length in samples, over the clip's full length; >= 0, and 0 when the clip is
+  /// open-ended.
   int64_t fade_out_samples;
 } SonareEngineMidiClipSchedule;
+
+/// @brief Fills @p clip with sizeof and the library defaults: open-ended, one-shot, gain 1, no
+///        events and no fades. A NULL @p clip is ignored.
+void sonare_engine_midi_clip_schedule_init(SonareEngineMidiClipSchedule* clip);
 
 /// @brief Replaces the engine's realtime MIDI clip schedule snapshot.
 /// @details Copies SysEx payloads and prepares instrument operations on the

@@ -166,10 +166,14 @@ void configure_engine(SonareEngine* engine, const BusStripCase& c, uint32_t trac
   const SonareEngineMidiEvent events[] = {
       {0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},  // note-on, note 60, vel 127, no note-off
   };
-  const SonareEngineMidiClipSchedule clips[] = {
-      {1, track_id, 0, 0.0, kTotalFrames * 2, 0, 0, kDestination, events, std::size(events), 1.0f,
-       0, 0},
-  };
+  SonareEngineMidiClipSchedule clips[1];
+  sonare_engine_midi_clip_schedule_init(&clips[0]);
+  clips[0].id = 1;
+  clips[0].track_id = track_id;
+  clips[0].length_samples = kTotalFrames * 2;
+  clips[0].destination_id = kDestination;
+  clips[0].events = events;
+  clips[0].event_count = std::size(events);
   REQUIRE(sonare_engine_set_midi_clips(engine, clips, std::size(clips)) == SONARE_OK);
 }
 

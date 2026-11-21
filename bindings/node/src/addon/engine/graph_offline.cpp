@@ -94,11 +94,12 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     }
     Napi::Object obj = entry.As<Napi::Object>();
     SonareEngineGraphNode node{};
+    sonare_engine_graph_node_init(&node);
     if (!RequiredStringProperty(env, obj, "id", &text)) return env.Undefined();
     if (!CopyString(env, node.id, sizeof(node.id), text, "graph node id")) return env.Undefined();
-    node.type = IntProperty(obj, "type", 0);
+    node.type = IntProperty(obj, "type", node.type);
     node.gain_db = FloatProperty(obj, "gainDb", node.gain_db);
-    node.num_ports = IntProperty(obj, "numPorts", kZeroIsSentinel);
+    node.num_ports = IntProperty(obj, "numPorts", AbsentIsSentinel<int>{node.num_ports});
     // A wrong-typed optional field left one pending JS exception; stop here so
     // no further N-API throw lands on top of it (that would be a fatal abort).
     if (env.IsExceptionPending()) return env.Undefined();
@@ -292,22 +293,23 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineBounceOptions options{};
-  ThrowIfError(env, sonare_engine_bounce_options_default(&options));
-  if (env.IsExceptionPending()) return env.Undefined();
+  sonare_engine_bounce_options_init(&options);
   if (!sonare_node::RequiredInt64Property(env, obj, "totalFrames", &options.total_frames)) {
     return env.Undefined();
   }
-  options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
+  options.block_size = IntProperty(obj, "blockSize", AbsentIsSentinel<int>{options.block_size});
   if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
     return env.Undefined();
   }
-  options.target_sample_rate = IntProperty(obj, "targetSampleRate", kZeroIsSentinel);
-  options.source_sample_rate = IntProperty(obj, "sourceSampleRate", kZeroIsSentinel);
+  options.target_sample_rate =
+      IntProperty(obj, "targetSampleRate", AbsentIsSentinel<int>{options.target_sample_rate});
+  options.source_sample_rate =
+      IntProperty(obj, "sourceSampleRate", AbsentIsSentinel<int>{options.source_sample_rate});
   options.normalize_lufs = BoolProperty(obj, "normalizeLufs", options.normalize_lufs != 0) ? 1 : 0;
   options.target_lufs = sonare_node::FiniteFloatProperty(obj, "targetLufs", options.target_lufs);
   options.dither = IntProperty(obj, "dither", options.dither);
   options.dither_bits = IntProperty(obj, "ditherBits", options.dither_bits);
-  options.dither_seed = Uint32Property(obj, "ditherSeed", kZeroIsSentinel);
+  options.dither_seed = Uint32Property(obj, "ditherSeed", options.dither_seed);
   SonareEngineBounceResult result{};
   ThrowIfError(env, sonare_engine_bounce_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -342,16 +344,17 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineFreezeOptions options{};
+  sonare_engine_freeze_options_init(&options);
   if (!sonare_node::RequiredInt64Property(env, obj, "totalFrames", &options.total_frames)) {
     return env.Undefined();
   }
-  options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
+  options.block_size = IntProperty(obj, "blockSize", AbsentIsSentinel<int>{options.block_size});
   if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
     return env.Undefined();
   }
   options.clip_id = Uint32Property(obj, "clipId", 1);
-  options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", 0.0);
-  options.gain = FloatProperty(obj, "gain", 1.0f);
+  options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", options.start_ppq);
+  options.gain = FloatProperty(obj, "gain", options.gain);
   SonareEngineFreezeResult result{};
   ThrowIfError(env, sonare_engine_freeze_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();

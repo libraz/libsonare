@@ -886,12 +886,10 @@ describe('RealtimeEngine offline render and bounce', () => {
     });
   });
 
-  it('reads targetLufs 0 as an error, absence as -14 and a non-finite value as an error', () => {
+  it('reads targetLufs 0 as a literal target, absence as -14 and a non-finite value as an error', () => {
     withEngine((engine) => {
       expect(() => bounce(engine, { normalizeLufs: true })).not.toThrow();
-      expect(caught(() => bounce(engine, { normalizeLufs: true, targetLufs: 0 }))).toBeInstanceOf(
-        RangeError,
-      );
+      expect(() => bounce(engine, { normalizeLufs: true, targetLufs: 0 })).not.toThrow();
       expect(
         caught(() => bounce(engine, { normalizeLufs: true, targetLufs: Number.NaN })),
       ).toBeInstanceOf(RangeError);

@@ -581,7 +581,9 @@ class EngineBounceOptions:
     refused. ``source_sample_rate`` and ``target_sample_rate`` both default to
     ``None``: the source is the engine's prepared rate, and the target is the
     source (no resampling). A given ``source_sample_rate`` must equal the
-    prepared rate, and an explicit 0 is refused for either.
+    prepared rate, and an explicit 0 is refused for either. ``target_lufs`` and
+    ``dither_seed`` are ``None`` for the library value (-14 LUFS and the
+    built-in seed); a given value is read literally, so ``0`` is 0 LUFS or seed 0.
     """
 
     total_frames: int
@@ -596,14 +598,14 @@ class EngineBounceOptions:
     """Rate the engine renders at, in Hz; None is the engine's prepared rate."""
     normalize_lufs: bool = False
     """Whether to normalize the result to :attr:`target_lufs`."""
-    target_lufs: float = -14.0
-    """Integrated loudness target in LUFS, applied when :attr:`normalize_lufs` is set."""
+    target_lufs: float | None = None
+    """Loudness target in LUFS, applied when :attr:`normalize_lufs` is set; None is -14."""
     dither: EngineDither | None = None
     """Dither shape, an :data:`EngineDither` token; None renders undithered."""
     dither_bits: int = 16
-    """Target bit depth the dither is shaped for."""
-    dither_seed: int = 0
-    """Seed of the dither noise generator."""
+    """Target bit depth the dither is shaped for, in [2, 32]."""
+    dither_seed: int | None = None
+    """Seed of the dither noise generator; None is the built-in seed."""
 
 
 @dataclass(frozen=True, slots=True)

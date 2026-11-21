@@ -96,8 +96,13 @@ void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
   copy_text(out->name, sizeof(out->name), marker.name);
 }
 
+// The core spells the derived click length as 0.
 SonareEngineMetronomeConfig metronome_to_c(const engine::MetronomeConfig& config) {
-  return {config.enabled ? 1 : 0, config.beat_gain, config.accent_gain, config.click_samples,
+  return {sizeof(SonareEngineMetronomeConfig),
+          config.enabled ? 1 : 0,
+          config.beat_gain,
+          config.accent_gain,
+          config.click_samples > 0 ? config.click_samples : SONARE_ENGINE_METRONOME_CLICK_FROM_SEC,
           config.click_seconds};
 }
 
@@ -139,14 +144,10 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
   out.enabled = config.enabled != 0;
   out.beat_gain = config.beat_gain;
   out.accent_gain = config.accent_gain;
-  // When click_samples is 0 the engine derives the length from click_sec and
-  // the prepared sample rate; a positive click_samples overrides that. Treat a
-  // non-positive click_sec as "use the default" so older callers that leave
-  // the field zero-initialized keep the 2 ms behavior.
-  out.click_samples = config.click_samples;
-  if (config.click_sec > 0.0) {
-    out.click_seconds = config.click_sec;
-  }
+  // The core spells the derived click length as 0.
+  out.click_samples =
+      config.click_samples == SONARE_ENGINE_METRONOME_CLICK_FROM_SEC ? 0 : config.click_samples;
+  out.click_seconds = config.click_sec;
   return out;
 }
 
@@ -713,20 +714,27 @@ SonareError sonare_engine_set_loop_from_markers(SonareEngine* engine, uint32_t s
   });
 }
 
+void sonare_engine_metronome_config_init(SonareEngineMetronomeConfig* config) {
+  if (config == nullptr) return;
+  *config = metronome_to_c(engine::MetronomeConfig{});
+}
+
 SonareError sonare_engine_set_metronome(SonareEngine* engine,
                                         const SonareEngineMetronomeConfig* config) {
   SONARE_C_API_ENTRY;
-  // Zero keeps the documented default sentinel. Reject hostile values at the
-  // public boundary; the core also clamps direct/internal configurations.
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(config);
   if (const SonareError err = run_validation([&] {
+        require_struct_size(config->struct_size, sizeof(SonareEngineMetronomeConfig), "config",
+                            "sonare_engine_metronome_config_init");
         util::check::at_least(config->beat_gain, 0.0, "config.beat_gain");
         util::check::at_least(config->accent_gain, 0.0, "config.accent_gain");
-        util::check::integer_in_range(config->click_samples, 0, engine::kMaxMetronomeClickSamples,
-                                      "config.click_samples");
-        util::check::in_range(config->click_sec, 0.0, engine::kMaxMetronomeClickSeconds,
-                              "config.click_sec");
+        if (config->click_samples != SONARE_ENGINE_METRONOME_CLICK_FROM_SEC) {
+          util::check::integer_in_range(config->click_samples, 1, engine::kMaxMetronomeClickSamples,
+                                        "config.click_samples");
+        }
+        util::check::in_interval(config->click_sec, 0.0, false, engine::kMaxMetronomeClickSeconds,
+                                 true, "config.click_sec");
       });
       err != SONARE_OK) {
     return err;

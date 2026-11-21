@@ -36,7 +36,8 @@ SonareEngine* make_dc_engine(std::initializer_list<uint32_t> track_ids) {
   std::vector<SonareEngineClip> clips;
   uint32_t clip_id = 1;
   for (uint32_t track_id : track_ids) {
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = clip_id++;
     clip.track_id = track_id;
     clip.channels = channels;

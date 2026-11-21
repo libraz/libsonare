@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -215,20 +216,29 @@ SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
   return SONARE_OK;
 }
 
-SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(options);
+#if defined(SONARE_WITH_MASTERING)
+static_assert(SONARE_ENGINE_DEFAULT_DITHER_SEED == mastering::final::DitherConfig{}.seed,
+              "SONARE_ENGINE_DEFAULT_DITHER_SEED must name the dither's built-in seed");
+#endif
+
+void sonare_engine_bounce_options_init(SonareEngineBounceOptions* options) {
+  if (options == nullptr) return;
   *options = SonareEngineBounceOptions{};
-  options->block_size = 0;
-  options->num_channels = 0;
-  options->target_sample_rate = 0;
-  options->source_sample_rate = 0;
-  options->normalize_lufs = 0;
-  options->target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
-  options->dither = 0;
+  options->struct_size = sizeof(SonareEngineBounceOptions);
+  options->block_size = SONARE_ENGINE_BLOCK_SIZE_AUTO;
+  options->target_sample_rate = SONARE_ENGINE_SAMPLE_RATE_PREPARED;
+  options->source_sample_rate = SONARE_ENGINE_SAMPLE_RATE_PREPARED;
+  options->target_lufs = std::numeric_limits<float>::quiet_NaN();
   options->dither_bits = 16;
-  options->dither_seed = 0;
-  return SONARE_OK;
+  options->dither_seed = SONARE_ENGINE_DEFAULT_DITHER_SEED;
+}
+
+void sonare_engine_freeze_options_init(SonareEngineFreezeOptions* options) {
+  if (options == nullptr) return;
+  *options = SonareEngineFreezeOptions{};
+  options->struct_size = sizeof(SonareEngineFreezeOptions);
+  options->block_size = SONARE_ENGINE_BLOCK_SIZE_AUTO;
+  options->gain = 1.0f;
 }
 
 SonareError sonare_engine_bounce_offline(SonareEngine* engine,
@@ -241,18 +251,12 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = run_validation([&] {
+        require_struct_size(options->struct_size, sizeof(SonareEngineBounceOptions), "options",
+                            "sonare_engine_bounce_options_init");
         util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
+        sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
+        util::check::integer_at_least(options->num_channels, 1, "options.num_channels");
       });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->block_size, 0, "options.block_size"); });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->num_channels, 1, "options.num_channels"); });
       err != SONARE_OK) {
     return err;
   }
@@ -267,13 +271,13 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     });
   }
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(options->target_sample_rate, 0, "options.target_sample_rate");
-      });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(options->source_sample_rate, 0, "options.source_sample_rate");
+        sonare_c_engine_detail::check_engine_rate(options->target_sample_rate,
+                                                  "options.target_sample_rate");
+        sonare_c_engine_detail::check_engine_rate(options->source_sample_rate,
+                                                  "options.source_sample_rate");
+        if (!std::isnan(options->target_lufs)) {
+          util::check::finite(options->target_lufs, "options.target_lufs");
+        }
       });
       err != SONARE_OK) {
     return err;
@@ -286,22 +290,15 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       util::check::one_of(options->dither, std::array<int, 4>{0, 1, 2, 3}, "options.dither");
     });
   }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->dither_bits, 0, "options.dither_bits"); });
-      err != SONARE_OK) {
-    return err;
-  }
   if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
-    if (options->dither_bits != 0 &&
-        (options->dither_bits < mastering::final::kMinDitherTargetBits ||
-         options->dither_bits > mastering::final::kMaxDitherTargetBits)) {
-      return run_validation([&] {
-        util::check::refuse("options.dither_bits",
-                            "must be 0 or an integer in [" +
-                                std::to_string(mastering::final::kMinDitherTargetBits) + ", " +
-                                std::to_string(mastering::final::kMaxDitherTargetBits) + "]");
-      });
+    if (const SonareError err = run_validation([&] {
+          util::check::integer_in_range(
+              options->dither_bits, mastering::final::kMinDitherTargetBits,
+              mastering::final::kMaxDitherTargetBits, "options.dither_bits");
+        });
+        err != SONARE_OK) {
+      return err;
     }
 #else
     set_last_error(SONARE_ERROR_NOT_SUPPORTED,
@@ -310,17 +307,17 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     return SONARE_ERROR_NOT_SUPPORTED;
 #endif
   }
-  // 0 selects the prepared rate for the source and the source rate for the target.
   // prepare admits only whole-hertz rates, so the prepared rate converts exactly.
-  const int source_sample_rate = options->source_sample_rate == 0
+  const int source_sample_rate = options->source_sample_rate == SONARE_ENGINE_SAMPLE_RATE_PREPARED
                                      ? static_cast<int>(engine->engine.sample_rate())
                                      : options->source_sample_rate;
-  const int target_sample_rate =
-      options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
+  const int target_sample_rate = options->target_sample_rate == SONARE_ENGINE_SAMPLE_RATE_PREPARED
+                                     ? source_sample_rate
+                                     : options->target_sample_rate;
   if (source_sample_rate <= 0) {
     return run_validation([&] {
       util::check::refuse("options.source_sample_rate",
-                          "must not be 0 when the engine has no prepared sample rate");
+                          "must name a rate when the engine has no prepared sample rate");
     });
   }
   // Every option-derived refusal precedes the render, which consumes engine state.
@@ -345,8 +342,8 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   // See sonare_engine_render_offline: bouncing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
-  const int block_size =
-      sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
+  const int block_size = sonare_c_engine_detail::resolve_offline_block(
+      engine->engine, sonare_c_engine_detail::offline_block_from_c(options->block_size));
   if (options->num_channels > engine->engine.prepared_channels()) {
     return run_validation([&] {
       util::check::integer_in_range(options->num_channels, 1, engine->engine.prepared_channels(),
@@ -360,7 +357,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     });
   }
   // The render runs at the prepared rate, which an explicit source_sample_rate must name exactly.
-  if (options->source_sample_rate > 0 &&
+  if (options->source_sample_rate != SONARE_ENGINE_SAMPLE_RATE_PREPARED &&
       engine->engine.sample_rate() != static_cast<double>(options->source_sample_rate)) {
     return run_validation([&] {
       util::check::refuse("options.source_sample_rate",
@@ -380,23 +377,11 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   channels = resample_channels(channels, source_sample_rate, target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);
   if (options->normalize_lufs) {
-    // target_lufs == 0.0f is the documented "use default" sentinel; promote it
-    // to the canonical SONARE_DEFAULT_BOUNCE_TARGET_LUFS so a zero-initialised
-    // SonareEngineBounceOptions normalises to the same target regardless of
-    // which binding (C, Node, Python, WASM) populated the struct. The
-    // static_assert below pins the macro to the value the WASM wrapper used
-    // to hardcode at the embind layer (see src/wasm/bindings.cpp::bounceOffline).
     static_assert(SONARE_DEFAULT_BOUNCE_TARGET_LUFS == -14.0f,
                   "SONARE_DEFAULT_BOUNCE_TARGET_LUFS must match the WASM/Node "
                   "facade default to keep cross-binding bounce behaviour identical");
-    // Non-finite targets (NaN/Inf) also fall back to the default so a
-    // garbage float can never propagate into the normalisation gain. Note the
-    // 0.0f sentinel makes an exact 0 LUFS target unrepresentable; that is an
-    // accepted trade-off documented on SonareEngineBounceOptions::target_lufs.
     const float effective_target_lufs =
-        (options->target_lufs == 0.0f || !std::isfinite(options->target_lufs))
-            ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS
-            : options->target_lufs;
+        std::isnan(options->target_lufs) ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS : options->target_lufs;
     metering::normalize_interleaved_to_lufs(interleaved, channels[0].size(), options->num_channels,
                                             target_sample_rate, effective_target_lufs);
   }
@@ -404,8 +389,8 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   if (options->dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = dither_type_from_int(options->dither);
-    config.target_bits = options->dither_bits > 0 ? options->dither_bits : 16;
-    config.seed = options->dither_seed == 0 ? config.seed : options->dither_seed;
+    config.target_bits = options->dither_bits;
+    config.seed = options->dither_seed;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(options->num_channels), config);
@@ -434,18 +419,12 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = run_validation([&] {
+        require_struct_size(options->struct_size, sizeof(SonareEngineFreezeOptions), "options",
+                            "sonare_engine_freeze_options_init");
         util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
+        sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
+        util::check::integer_at_least(options->num_channels, 1, "options.num_channels");
       });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->block_size, 0, "options.block_size"); });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->num_channels, 1, "options.num_channels"); });
       err != SONARE_OK) {
     return err;
   }
@@ -472,8 +451,8 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   // See sonare_engine_render_offline: freezing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
-  const int block_size =
-      sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
+  const int block_size = sonare_c_engine_detail::resolve_offline_block(
+      engine->engine, sonare_c_engine_detail::offline_block_from_c(options->block_size));
   if (options->num_channels > engine->engine.prepared_channels()) {
     return run_validation([&] {
       util::check::integer_in_range(options->num_channels, 1, engine->engine.prepared_channels(),

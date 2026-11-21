@@ -130,7 +130,8 @@ EnginePtr make_engine(Processor p, Placement placement) {
   REQUIRE(sonare_engine_prepare(engine.get(), kSampleRate, kBlock, 1024, 1024) == SONARE_OK);
 
   const float* clip_channels[] = {source().left.data(), source().right.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = kTrackId;
   clip.channels = clip_channels;
@@ -206,8 +207,8 @@ void dirty(SonareEngine* engine) {
 
 Planar bounce(SonareEngine* engine) {
   REQUIRE(sonare_engine_seek_sample(engine, kStartSample, -1) == SONARE_OK);
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kRenderFrames;
   options.block_size = kBlock;
   options.num_channels = kChannels;
@@ -231,7 +232,8 @@ Planar bounce(SonareEngine* engine) {
 // removed so no insert tail reaches the read-back.
 Planar freeze_and_read_back(SonareEngine* engine) {
   REQUIRE(sonare_engine_seek_sample(engine, kStartSample, -1) == SONARE_OK);
-  SonareEngineFreezeOptions options{};
+  SonareEngineFreezeOptions options;
+  sonare_engine_freeze_options_init(&options);
   options.total_frames = kRenderFrames;
   options.block_size = kBlock;
   options.num_channels = kChannels;

@@ -160,8 +160,8 @@ void stop_and_rewind(SonareEngine* engine) {
 /// Plays from the current position and bounces kFrames, then leaves the engine
 /// stopped at the start again.
 std::vector<float> engine_bounce(SonareEngine* engine) {
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlockSize;
   options.num_channels = 2;

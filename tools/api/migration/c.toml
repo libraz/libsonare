@@ -1300,10 +1300,9 @@ rule = "num-channels"
 [[entry]]
 kind = "function"
 old = "sonare_engine_bounce_options_default"
-changed = "leaves num_channels and block_size at 0; set num_channels before bouncing or freezing (a 0 width is refused), while block_size 0 selects the default offline block"
+removed = "call sonare_engine_bounce_options_init(&options) on a caller-owned struct instead; set num_channels before bouncing (a 0 width is refused)"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_bounce_offline resolves block_size 0 against the prepared block"
 
 [[entry]]
 kind = "function"
@@ -2277,3 +2276,51 @@ old = "sonare_vqt(fmin)"
 new = "sonare_vqt(fmin_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineMetronomeConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_metronome_config_init, after which every field is read literally: click_samples SONARE_ENGINE_METRONOME_CLICK_FROM_SEC (-1) derives the click from click_sec, and a click_samples or click_sec of 0 is refused; sonare_engine_metronome reports the struct the same way"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine metronome, monitor and offline priming refusals"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineBounceOptions"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_bounce_options_init, after which every field is read literally: block_size SONARE_ENGINE_BLOCK_SIZE_AUTO and the rates SONARE_ENGINE_SAMPLE_RATE_PREPARED (-1) take the defaults and 0 is refused; target_lufs NaN is the -14 LUFS default and any finite value is literal; dither_bits must be in range when dither is on; dither_seed is read literally (SONARE_ENGINE_DEFAULT_DITHER_SEED is the default)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine bounce refuses each option by its member name"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineFreezeOptions"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_freeze_options_init, after which every field is read literally: block_size SONARE_ENGINE_BLOCK_SIZE_AUTO (-1) takes the default offline block and 0 is refused"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine freeze refuses each option by its member name"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineClip"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_clip_init, after which every field is read literally: length_samples SONARE_ENGINE_CLIP_LENGTH_TO_END (-1) plays to the end of the source and 0 is refused"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_core_refusal_test.cpp::engine clip refusals name the clip field"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineMidiClipSchedule"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_midi_clip_schedule_init, after which every field is read literally: length_samples SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED (-1) is open-ended and 0 is refused; a looping clip needs loop_length_samples of at least 1, and an open-ended clip refuses a fade-out"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_render_midi_refusal_test.cpp::engine MIDI clips refuse each member by name"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineGraphNode"
+changed = "leads with uint32_t struct_size; prepare it with sonare_engine_graph_node_init, after which every field is read literally: num_ports SONARE_ENGINE_GRAPH_PORTS_FROM_SPEC (-1) takes the port count from the graph spec and 0 is refused"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_mixing_refusal_test.cpp::engine graph refuses its spec by name"

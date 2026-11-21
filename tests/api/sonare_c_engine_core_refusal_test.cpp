@@ -49,7 +49,8 @@ SonareParameterInfo valid_parameter(uint32_t id) {
 }
 
 SonareEngineClip valid_clip(const float* const* channels) {
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 1;
   clip.channels = channels;
@@ -332,7 +333,8 @@ TEST_CASE("engine metronome, monitor and offline priming refusals", "[c_api][eng
 
   CHECK(sonare_engine_set_metronome(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config must not be NULL");
-  SonareEngineMetronomeConfig config{};
+  SonareEngineMetronomeConfig config;
+  sonare_engine_metronome_config_init(&config);
   config.beat_gain = -1.0f;
   CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("config.beat_gain", refusal::at_least_predicate(0.0)));
@@ -344,11 +346,24 @@ TEST_CASE("engine metronome, monitor and offline priming refusals", "[c_api][eng
   config.click_samples = 384001;
   CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        refused("config.click_samples", refusal::integer_range_predicate(0, 384000)));
+        refused("config.click_samples", refusal::integer_range_predicate(1, 384000)));
   config.click_samples = 0;
+  CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        refused("config.click_samples", refusal::integer_range_predicate(1, 384000)));
+  config.click_samples = SONARE_ENGINE_METRONOME_CLICK_FROM_SEC;
   config.click_sec = 2.0;
   CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("config.click_sec", refusal::range_predicate(0.0, 1.0)));
+  CHECK(last_message() ==
+        refused("config.click_sec", refusal::interval_predicate(0.0, false, 1.0, true)));
+  config.click_sec = 0.0;
+  CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        refused("config.click_sec", refusal::interval_predicate(0.0, false, 1.0, true)));
+  config.click_sec = 0.002;
+  config.struct_size = 0;
+  CHECK(sonare_engine_set_metronome(engine, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.struct_size must be set by sonare_engine_metronome_config_init");
 
   CHECK(sonare_engine_set_track_monitor_mode(engine, 0,
                                              static_cast<SonareEngineTrackMonitorMode>(9),
@@ -434,10 +449,16 @@ TEST_CASE("engine clip refusals name the clip field", "[c_api][engine_refusal]")
   clip.loop = 1;
   CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "clip.loop must be 0 when clip.warp_mode is tempoSync");
+  for (const int64_t bad_length : {int64_t{0}, int64_t{-2}}) {
+    clip = valid_clip(channels);
+    clip.length_samples = bad_length;
+    CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "clip.length_samples must be an integer of at least 1");
+  }
   clip = valid_clip(channels);
-  clip.length_samples = -1;
+  clip.struct_size = 0;
   CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("clip.length_samples", int64_at_least_0));
+  CHECK(last_message() == "clip.struct_size must be set by sonare_engine_clip_init");
 
   clip = valid_clip(channels);
   clip.warp_anchor_count = 2;
@@ -490,6 +511,10 @@ TEST_CASE("engine clip refusals name the clip field", "[c_api][engine_refusal]")
   clip_set[1] = valid_clip(null_channel);
   CHECK(sonare_engine_set_clips(engine, clip_set, 2) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "clips[1].channels[0] must not be NULL");
+  clip_set[1] = valid_clip(channels);
+  clip_set[1].struct_size = 0;
+  CHECK(sonare_engine_set_clips(engine, clip_set, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "clips[1].struct_size must be set by sonare_engine_clip_init");
 
   CHECK(sonare_engine_remove_clip(engine, 99) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "clip_id must be the id of a clip in this engine");

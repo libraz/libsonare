@@ -798,7 +798,8 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
         {0, midi1_word(0xC, 0, program, 0), 0, 0, 0, 1, 0, 0, 0},
         {1, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0},
     };
-    SonareEngineMidiClipSchedule clip{};
+    SonareEngineMidiClipSchedule clip;
+    sonare_engine_midi_clip_schedule_init(&clip);
     clip.gain = 1.0f;
     clip.id = 1;
     clip.track_id = kDestination;
@@ -986,7 +987,8 @@ TEST_CASE("sonare_engine_upsert_clip and remove_clip change one clip and keep th
   const float* half_ch[] = {half.data()};
   const float* eighth_ch[] = {eighth.data()};
   const auto make_clip = [](uint32_t id, const float* const* channels) {
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = id;
     clip.channels = channels;
     clip.num_channels = 1;
@@ -1077,15 +1079,16 @@ TEST_CASE(
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepared block",
+TEST_CASE("sonare_engine_bounce_offline resolves the automatic block against the prepared block",
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
 
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
-  REQUIRE(options.block_size == 0);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
+  REQUIRE(options.struct_size == sizeof(SonareEngineBounceOptions));
+  REQUIRE(options.block_size == SONARE_ENGINE_BLOCK_SIZE_AUTO);
   options.total_frames = 256;
 
   // num_channels is required: the default-filled struct is refused until it is set.
@@ -1099,10 +1102,12 @@ TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepar
   REQUIRE(result.frames == 256);
   sonare_free_engine_bounce_result(&result);
 
-  options.block_size = -1;
-  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  sonare_free_engine_bounce_result(&result);
+  for (const int bad_block : {0, -2}) {
+    options.block_size = bad_block;
+    REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_engine_bounce_result(&result);
+  }
   sonare_engine_destroy(engine);
 }
 
@@ -1199,7 +1204,8 @@ TEST_CASE("sonare_engine_set_graph refuses a connection mix outside 0 and 1", "[
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
-  SonareEngineGraphNode nodes[2]{};
+  SonareEngineGraphNode nodes[2];
+  for (auto& element : nodes) sonare_engine_graph_node_init(&element);
   std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
   std::strncpy(nodes[1].id, "out", sizeof(nodes[1].id) - 1);
   nodes[0].num_ports = 1;

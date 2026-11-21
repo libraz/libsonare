@@ -286,10 +286,16 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   const SonareEngineMidiEvent events[] = {
       {0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},
   };
-  const SonareEngineMidiClipSchedule clips[] = {
-      {1, tracks[0], 0, 0.0, kFrames, 0, 0, kDestination, events, std::size(events), 1.0f, 0, 0},
-      {2, tracks[1], 0, 0.0, kFrames, 0, 0, kDestination, events, std::size(events), 1.0f, 0, 0},
-  };
+  SonareEngineMidiClipSchedule clips[2];
+  for (size_t i = 0; i < std::size(clips); ++i) {
+    sonare_engine_midi_clip_schedule_init(&clips[i]);
+    clips[i].id = static_cast<uint32_t>(i + 1);
+    clips[i].track_id = tracks[i];
+    clips[i].length_samples = kFrames;
+    clips[i].destination_id = kDestination;
+    clips[i].events = events;
+    clips[i].event_count = std::size(events);
+  }
   REQUIRE(sonare_engine_set_midi_clips(engine, clips, std::size(clips)) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 

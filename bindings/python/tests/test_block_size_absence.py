@@ -107,10 +107,16 @@ def test_engine_offline_block_size_takes_none_and_refuses_zero() -> None:
         assert len(engine.render_offline(planes)) == 2
         with pytest.raises(SonareValueError, match="block_size"):
             engine.render_offline(planes, block_size=0)
-        with pytest.raises(SonareValueError, match="block_size"):
-            engine.bounce_offline(
-                ls.EngineBounceOptions(total_frames=256, num_channels=2, block_size=0)
-            )
+        # -1 is the C ABI's automatic block, so a given one is refused rather than read as it.
+        for value in (0, -1):
+            with pytest.raises(SonareValueError, match="block_size"):
+                engine.bounce_offline(
+                    ls.EngineBounceOptions(total_frames=256, num_channels=2, block_size=value)
+                )
+            with pytest.raises(SonareValueError, match="block_size"):
+                engine.freeze_offline(
+                    ls.EngineFreezeOptions(total_frames=256, num_channels=2, block_size=value)
+                )
 
 
 @pytest.mark.parametrize(

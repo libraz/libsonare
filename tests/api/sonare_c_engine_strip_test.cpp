@@ -22,7 +22,8 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
   clip_l.fill(1.0f);
   clip_r.fill(1.0f);
   const float* clip_channels[] = {clip_l.data(), clip_r.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = clip_channels;
@@ -40,8 +41,8 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
                            R"("strips":[{"id":"s","surroundPan":{"azimuth":-110}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
 
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kFrames;
   options.block_size = kBlock;
   options.num_channels = 6;  // 5.1
@@ -81,8 +82,8 @@ namespace {
 std::array<double, 6> bounce_surround_energy(SonareEngine* engine, int frames, int block) {
   // A bounce leaves the transport at its end; rewind so every call renders the clip.
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = frames;
   options.block_size = block;
   options.num_channels = 6;
@@ -119,7 +120,8 @@ TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.
   clip_l.fill(1.0f);
   clip_r.fill(1.0f);
   const float* clip_channels[] = {clip_l.data(), clip_r.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = clip_channels;
@@ -193,7 +195,8 @@ SonareEngine* make_pre_roll_engine(const float* const* clip_channels, float fade
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
 
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = clip_channels;
@@ -226,8 +229,8 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   clip_r.fill(1.0f);
   const float* clip_channels[] = {clip_l.data(), clip_r.data()};
 
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kPreRollFrames;
   options.block_size = kPreRollBlock;
   options.num_channels = 2;
@@ -271,7 +274,8 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
 
   // The freeze path captures the same settled lane.
   SonareEngine* freeze_engine = make_pre_roll_engine(clip_channels, kFaderDb);
-  SonareEngineFreezeOptions freeze{};
+  SonareEngineFreezeOptions freeze;
+  sonare_engine_freeze_options_init(&freeze);
   freeze.total_frames = kPreRollFrames;
   freeze.block_size = kPreRollBlock;
   freeze.num_channels = 2;
@@ -314,7 +318,8 @@ SonareEngine* make_tape_bias_engine(const float* const* clip_channels, float bia
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
 
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = clip_channels;
@@ -349,8 +354,8 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
   }
   const float* clip_channels[] = {clip_l.data(), clip_r.data()};
 
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = kPreRollFrames;
   options.block_size = kPreRollBlock;
   options.num_channels = 2;
@@ -409,7 +414,8 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
   const float* a_channels[] = {a_l.data(), a_r.data()};
   const float* b_channels[] = {b_l.data(), b_r.data()};
 
-  SonareEngineClip clips[2]{};
+  SonareEngineClip clips[2];
+  for (auto& element : clips) sonare_engine_clip_init(&element);
   clips[0].id = 1;
   clips[0].track_id = 10;
   clips[0].channels = a_channels;
@@ -495,7 +501,8 @@ TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor b
   std::array<float, kFrames> source{};
   source.fill(1.0f);
   const float* source_channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = source_channels;
@@ -596,7 +603,8 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   std::array<float, kFrames> source{};
   source.fill(1.0f);
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -898,7 +906,8 @@ TEST_CASE("a track fader id held across a lane reorder keeps driving its own tra
   // Only track 20 sounds, so the output reads track 20's fader alone.
   std::vector<float> source(kFrames, 1.0f);
   const float* source_channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 20;
   clip.channels = source_channels;
@@ -953,7 +962,8 @@ TEST_CASE("a bus fader id held across a bus reorder keeps driving its own bus", 
   // Only track 20 sounds and it feeds bus 200, so the output reads bus 200's fader alone.
   std::vector<float> source(kFrames, 1.0f);
   const float* source_channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 20;
   clip.channels = source_channels;
@@ -1054,7 +1064,8 @@ TEST_CASE("a track insert lane set before a lane reorder survives a later automa
   std::array<float, kFrames> source{};
   source.fill(1.0f);
   const float* source_channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 20;
   clip.channels = source_channels;
@@ -1580,7 +1591,8 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
   const float* a_channels[] = {a.data()};
   const float* b_channels[] = {b.data()};
 
-  SonareEngineClip clips[2]{};
+  SonareEngineClip clips[2];
+  for (auto& element : clips) sonare_engine_clip_init(&element);
   clips[0].id = 1;
   clips[0].track_id = 10;
   clips[0].channels = a_channels;
@@ -1644,7 +1656,8 @@ TEST_CASE("sonare_engine_set_track_strip_insert_bypassed toggles track insert", 
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -1700,7 +1713,8 @@ TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -1763,7 +1777,8 @@ TEST_CASE("sonare_engine_set_master_strip_json processes master strip", "[c_api]
   const float* a_channels[] = {a.data()};
   const float* b_channels[] = {b.data()};
 
-  SonareEngineClip clips[2]{};
+  SonareEngineClip clips[2];
+  for (auto& element : clips) sonare_engine_clip_init(&element);
   clips[0].id = 1;
   clips[0].channels = a_channels;
   clips[0].num_channels = 1;
@@ -1836,7 +1851,8 @@ TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master E
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.channels = channels;
   clip.num_channels = 1;
@@ -1890,7 +1906,8 @@ TEST_CASE("sonare_engine_set_bus_strip_eq_band_json updates embedded bus EQ", "[
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -1961,7 +1978,8 @@ TEST_CASE(
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.channels = channels;
   clip.num_channels = 1;
@@ -2046,7 +2064,8 @@ TEST_CASE(
         std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -2171,7 +2190,8 @@ TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix
         std::sin(2.0f * kPi * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -2236,7 +2256,8 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
   std::array<float, kFrames> source{};
   source.fill(1.0f);
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -2306,7 +2327,8 @@ TEST_CASE("sonare_engine bus strip pan setters reflect in realtime", "[c_api][en
   std::array<float, kFrames> source{};
   source.fill(1.0f);
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -2421,7 +2443,8 @@ TEST_CASE("sonare_engine lane send timing taps pre or post fader", "[c_api][engi
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
 
-    SonareEngineClip clip{};
+    SonareEngineClip clip;
+    sonare_engine_clip_init(&clip);
     clip.id = 1;
     clip.track_id = 10;
     clip.channels = channels;
@@ -2484,7 +2507,8 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
         0.5f * std::sin(2.0f * kPi * kToneHz * static_cast<float>(i) / kSampleRate);
   }
   const float* channels[] = {tone.data(), tone.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;
@@ -2606,7 +2630,8 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
   std::array<float, kFrames> source{};
   source.fill(0.5f);
   const float* channels[] = {source.data()};
-  SonareEngineClip clip{};
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
   clip.id = 1;
   clip.track_id = 10;
   clip.channels = channels;

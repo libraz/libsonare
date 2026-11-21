@@ -478,7 +478,10 @@ class SonareEngineMidiEvent(CStruct):
 class SonareEngineMidiClipSchedule(CStruct):
     """Maps to SonareEngineMidiClipSchedule in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_engine_midi_clip_schedule_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("id", ctypes.c_uint32),
         ("track_id", ctypes.c_uint32),
         ("start_sample", ctypes.c_int64),
@@ -490,12 +493,10 @@ class SonareEngineMidiClipSchedule(CStruct):
         ("events", ctypes.POINTER(SonareEngineMidiEvent)),
         ("event_count", ctypes.c_size_t),
         # Linear gain applied to the destination instrument's rendered audio
-        # while this clip is the most recently started active clip on it. A
-        # zero-initialized struct is silent; 1.0 is unity.
+        # while this clip is the most recently started active clip on it.
         ("gain", ctypes.c_float),
         # Linear fade lengths over the clip's full length (not per internal
-        # loop); fade_out_samples must be 0 when length_samples <= 0
-        # (open-ended).
+        # loop); fade_out_samples must be 0 when the clip is open-ended.
         ("fade_in_samples", ctypes.c_int64),
         ("fade_out_samples", ctypes.c_int64),
     ]

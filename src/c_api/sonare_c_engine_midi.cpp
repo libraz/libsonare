@@ -208,6 +208,14 @@ void midi_event_from_c(const SonareEngineMidiEvent& src, const std::string& pref
 }  // namespace
 #endif
 
+void sonare_engine_midi_clip_schedule_init(SonareEngineMidiClipSchedule* clip) {
+  if (clip == nullptr) return;
+  *clip = SonareEngineMidiClipSchedule{};
+  clip->struct_size = sizeof(SonareEngineMidiClipSchedule);
+  clip->length_samples = SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED;
+  clip->gain = 1.0f;
+}
+
 SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                                          const SonareEngineMidiClipSchedule* clips,
                                          size_t clip_count) {
@@ -228,8 +236,19 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
     const std::string subject_prefix = "clips[" + std::to_string(i) + "].";
     const auto subject = [&](const char* member) { return subject_prefix + member; };
     if (const SonareError err = run_validation([&] {
+          require_struct_size(src.struct_size, sizeof(SonareEngineMidiClipSchedule),
+                              "clips[" + std::to_string(i) + "]",
+                              "sonare_engine_midi_clip_schedule_init");
           util::check::finite(src.start_ppq, subject("start_ppq").c_str());
+          if (src.length_samples != SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED) {
+            util::check::integer_at_least<int64_t>(src.length_samples, 1,
+                                                   subject("length_samples").c_str());
+          }
           util::check::integer_at_least(src.loop, 0, subject("loop").c_str());
+          if (src.loop != 0) {
+            util::check::integer_at_least<int64_t>(src.loop_length_samples, 1,
+                                                   subject("loop_length_samples").c_str());
+          }
           util::check::non_null_when_count(src.events, src.event_count, subject("events").c_str(),
                                            subject("event_count").c_str());
           util::check::at_least(src.gain, 0.0, subject("gain").c_str());
@@ -237,9 +256,10 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                                                  subject("fade_in_samples").c_str());
           util::check::integer_at_least<int64_t>(src.fade_out_samples, 0,
                                                  subject("fade_out_samples").c_str());
-          if (src.fade_out_samples > 0 && src.length_samples <= 0) {
+          if (src.fade_out_samples > 0 &&
+              src.length_samples == SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED) {
             util::check::refuse_relation({subject("fade_out_samples"), subject("length_samples")},
-                                         "{0} must be 0 when {1} is not positive");
+                                         "{0} must be 0 when {1} is open-ended");
           }
         });
         err != SONARE_OK) {
@@ -250,9 +270,11 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
     dst.track_id = src.track_id;
     dst.start_sample = src.start_sample;
     dst.start_ppq = src.start_ppq;
-    dst.length_samples = src.length_samples;
+    // The core spells an open-ended clip, and the loop period of a one-shot clip, as 0.
+    dst.length_samples =
+        src.length_samples == SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED ? 0 : src.length_samples;
     dst.loop_mode = src.loop ? midi::MidiLoopMode::kLoop : midi::MidiLoopMode::kOneShot;
-    dst.loop_length_samples = src.loop_length_samples;
+    dst.loop_length_samples = src.loop ? src.loop_length_samples : 0;
     dst.destination_id = src.destination_id;
     dst.gain = src.gain;
     dst.fade_in_samples = src.fade_in_samples;

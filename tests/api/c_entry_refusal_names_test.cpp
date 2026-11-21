@@ -123,8 +123,8 @@ TEST_CASE("a NULL project is refused by its parameter name on a clip edit", "[c_
 
 TEST_CASE("a bounce with no channels or no frames is refused by name", "[c_api][engine]") {
   PreparedEngine prepared;
-  SonareEngineBounceOptions options{};
-  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
   options.total_frames = 256;
   options.num_channels = 2;
 

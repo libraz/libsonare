@@ -8,6 +8,7 @@ These cases assert the audible content instead.
 
 from __future__ import annotations
 
+import ctypes
 import math
 
 import pytest
@@ -97,15 +98,16 @@ def test_bounce_normalizes_to_requested_loudness() -> None:
         assert abs(lufs - target) < 0.25
 
 
-def test_bounce_target_lufs_zero_resolves_to_shared_default() -> None:
-    # 0.0 is the documented "use default" sentinel, not a literal 0 LUFS target.
-    _, lufs = _bounce(normalize_lufs=True, target_lufs=0.0)
-    assert abs(lufs - (-14.0)) < 0.25
+def test_bounce_omitted_target_lufs_is_the_shared_default_and_zero_is_literal() -> None:
+    _, omitted = _bounce(normalize_lufs=True)
+    assert abs(omitted - (-14.0)) < 0.25
+    _, zero = _bounce(normalize_lufs=True, target_lufs=0.0)
+    assert abs(zero) < 0.25
 
 
 @pytest.mark.parametrize("target", [math.nan, math.inf, -math.inf])
 def test_bounce_non_finite_target_lufs_is_refused_by_name(target: float) -> None:
-    # A non-finite target must not be read as the -14 LUFS default.
+    # A given non-finite target must not be read as the -14 LUFS default; omitting it is.
     with pytest.raises(ValueError, match="target_lufs"):
         _bounce(normalize_lufs=True, target_lufs=target)
 
@@ -130,37 +132,41 @@ def test_bounce_dither_types_apply_their_documented_behaviour() -> None:
 
 
 def test_bounce_dataclass_defaults_match_the_native_defaults() -> None:
-    """The dataclass defaults are the authority, so they must track the C ones.
+    """A literal dataclass default must equal what ``sonare_engine_bounce_options_init`` writes.
 
-    ``bounce_offline`` seeds the raw options from
-    ``sonare_engine_bounce_options_default`` and then overwrites every field it
-    knows about, so a caller who leaves a field alone gets the dataclass value,
-    not the C one. Nothing else notices when the two drift apart.
+    A field left None keeps the init's value by construction, so only the literal defaults can
+    drift; ``dither``'s None is the C "none", ordinal 0.
     """
-    import ctypes
     import dataclasses
 
     from libsonare._ffi_types_core import SonareEngineBounceOptions
-    from libsonare._runtime import _get_lib
 
     native = SonareEngineBounceOptions()
-    lib = _get_lib()
-    assert lib.sonare_engine_bounce_options_default(ctypes.byref(native)) == 0
+    assert native.struct_size == ctypes.sizeof(SonareEngineBounceOptions)
+    assert native.dither == 0
 
     defaults = {
         field.name: field.default
         for field in dataclasses.fields(EngineBounceOptions)
-        if field.default is not dataclasses.MISSING
+        if field.default is not dataclasses.MISSING and field.default is not None
     }
+    assert "dither_bits" in defaults
     for name, expected in defaults.items():
         actual = getattr(native, name)
-        if expected is None:
-            expected = 0  # an absent field travels as the C default's 0
         if isinstance(expected, bool):
             actual = bool(actual)
         elif isinstance(expected, float):
             actual = float(actual)
         assert actual == expected, name
+
+
+def test_bounce_omitted_dither_seed_is_the_built_in_one_and_zero_is_literal() -> None:
+    built_in = 0x51A7E5  # SONARE_ENGINE_DEFAULT_DITHER_SEED
+    omitted, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS)
+    explicit, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=built_in)
+    zero, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=0)
+    assert _max_abs_diff(omitted, explicit) == 0.0
+    assert _max_abs_diff(zero, omitted) > 0.0
 
 
 def test_bounce_dither_seed_is_reproducible_and_effective() -> None:

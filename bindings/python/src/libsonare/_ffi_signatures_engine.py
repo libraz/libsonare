@@ -172,6 +172,10 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_uint32,
         ctypes.c_uint32,
     ]
+    lib.sonare_engine_metronome_config_init.restype = None
+    lib.sonare_engine_metronome_config_init.argtypes = [
+        ctypes.POINTER(SonareEngineMetronomeConfig),
+    ]
     lib.sonare_engine_set_metronome.restype = ctypes.c_int32
     lib.sonare_engine_set_metronome.argtypes = [
         ctypes.c_void_p,
@@ -189,6 +193,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_int64),
     ]
+    lib.sonare_engine_clip_init.restype = None
+    lib.sonare_engine_clip_init.argtypes = [ctypes.POINTER(SonareEngineClip)]
     lib.sonare_engine_set_clips.restype = ctypes.c_int32
     lib.sonare_engine_set_clips.argtypes = [
         ctypes.c_void_p,
@@ -667,6 +673,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(SonareEngineCaptureStatus),
     ]
+    lib.sonare_engine_graph_node_init.restype = None
+    lib.sonare_engine_graph_node_init.argtypes = [ctypes.POINTER(SonareEngineGraphNode)]
     lib.sonare_engine_set_graph.restype = ctypes.c_int32
     lib.sonare_engine_set_graph.argtypes = [
         ctypes.c_void_p,
@@ -716,10 +724,10 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.sonare_engine_finish_offline_render.restype = ctypes.c_int32
     lib.sonare_engine_finish_offline_render.argtypes = [ctypes.c_void_p]
-    lib.sonare_engine_bounce_options_default.restype = ctypes.c_int32
-    lib.sonare_engine_bounce_options_default.argtypes = [
-        ctypes.POINTER(SonareEngineBounceOptions),
-    ]
+    lib.sonare_engine_bounce_options_init.restype = None
+    lib.sonare_engine_bounce_options_init.argtypes = [ctypes.POINTER(SonareEngineBounceOptions)]
+    lib.sonare_engine_freeze_options_init.restype = None
+    lib.sonare_engine_freeze_options_init.argtypes = [ctypes.POINTER(SonareEngineFreezeOptions)]
     lib.sonare_engine_bounce_offline.restype = ctypes.c_int32
     lib.sonare_engine_bounce_offline.argtypes = [
         ctypes.c_void_p,
@@ -824,6 +832,10 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_uint32,
         ctypes.c_int,
         ctypes.c_int64,
+    ]
+    lib.sonare_engine_midi_clip_schedule_init.restype = None
+    lib.sonare_engine_midi_clip_schedule_init.argtypes = [
+        ctypes.POINTER(SonareEngineMidiClipSchedule),
     ]
     lib.sonare_engine_set_midi_clips.restype = ctypes.c_int32
     lib.sonare_engine_set_midi_clips.argtypes = [

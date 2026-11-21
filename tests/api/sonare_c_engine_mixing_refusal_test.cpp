@@ -98,7 +98,8 @@ TEST_CASE("capture punch, source and monitor refuse by name", "[c_api][engine_re
 
 TEST_CASE("engine graph refuses its spec by name", "[c_api][engine_refusal]") {
   SonareEngine* engine = make_engine();
-  SonareEngineGraphNode node{};
+  SonareEngineGraphNode node;
+  sonare_engine_graph_node_init(&node);
   std::snprintf(node.id, sizeof(node.id), "a");
   SonareEngineGraphSpec spec{};
   spec.nodes = &node;
@@ -141,9 +142,16 @@ TEST_CASE("engine graph refuses its spec by name", "[c_api][engine_refusal]") {
   bad = spec;
   bad.nodes = &odd;
 
-  odd.num_ports = -1;
+  odd.struct_size = 0;
   CHECK(sonare_engine_set_graph(engine, &bad) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "spec.nodes[0].num_ports must be an integer in [0, 2147483647]");
+  CHECK(last_message() == "spec.nodes[0].struct_size must be set by sonare_engine_graph_node_init");
+
+  for (const int bad_ports : {0, -2}) {
+    odd = node;
+    odd.num_ports = bad_ports;
+    CHECK(sonare_engine_set_graph(engine, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "spec.nodes[0].num_ports must be an integer in [1, 2147483647]");
+  }
 
   odd = node;
   odd.type = 5;
