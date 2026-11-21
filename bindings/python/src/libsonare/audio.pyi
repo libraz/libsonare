@@ -9,6 +9,7 @@ from .analyzer import (
     MasteringPreset,
     MasteringSoloParams,
     NormalizeMode,
+    RealtimeVoiceChangerConfig,
     RealtimeVoiceChangerPreset,
     SoloProcessor,
 )
@@ -164,7 +165,12 @@ class Audio:
         chroma_method: ChordChromaMethod = "cqt",
         tuning_cents: float | str = "auto",
     ) -> ChordAnalysisResult: ...
-    def hpss(self, kernel_harmonic: int = 31, kernel_percussive: int = 31) -> HpssResult: ...
+    def hpss(
+        self,
+        kernel_harmonic: int = 31,
+        kernel_percussive: int = 31,
+        with_residual: bool = False,
+    ) -> HpssResult: ...
     def harmonic(self) -> np.ndarray: ...
     def percussive(self) -> np.ndarray: ...
     def time_stretch(self, speed_ratio: float) -> np.ndarray: ...
@@ -197,8 +203,13 @@ class Audio:
         formant_factor: float = 1.0,
         formant_mode: Literal["relative", "absolute"] = "relative",
     ) -> np.ndarray: ...
-    def voice_change_realtime(
-        self, *, config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor"
+    def realtime_voice_changer_render(
+        self,
+        *,
+        config: VoicePresetId
+        | RealtimeVoiceChangerPreset
+        | RealtimeVoiceChangerConfig
+        | None = "neutralMonitor",
     ) -> np.ndarray: ...
     def normalize(
         self, *, mode: NormalizeMode = "peak", target_db: float | None = None

@@ -959,6 +959,8 @@ class HpssResult:
     """Length of each component, in samples."""
     sample_rate: int
     """Sample rate of both components, in Hz."""
+    residual: npt.NDArray[np.float32] | None = None
+    """What neither component claimed, ``length`` samples; ``None`` unless requested."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1038,12 +1040,11 @@ class TrimSilenceStereoResult:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NormalizeStereoResult:
-    """A normalized channel pair and the one gain that produced it.
+    """A normalized channel pair.
 
-    ``applied_gain_db`` is a single figure rather than one per channel: the
-    level is measured across both channels and the gain goes to both, which is
-    what keeps the stereo balance intact. A pair that is already silent comes
-    back untouched with the gain at 0.
+    The level is measured across both channels and one gain goes to both, which
+    keeps the stereo balance intact. A pair that is already silent comes back
+    untouched.
     """
 
     left: npt.NDArray[np.float32]
@@ -1052,5 +1053,3 @@ class NormalizeStereoResult:
     """Normalized right channel."""
     length: int
     """Length of each channel, in samples."""
-    applied_gain_db: float
-    """The single gain given to both channels, in dB; 0 for a silent pair."""

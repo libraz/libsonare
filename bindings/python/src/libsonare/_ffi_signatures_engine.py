@@ -712,15 +712,11 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int64,
         ctypes.c_int,
+        ctypes.POINTER(SonareEngineRenderOfflineOptions),
     ]
-    lib.sonare_engine_render_offline_ex.restype = ctypes.c_int32
-    lib.sonare_engine_render_offline_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.c_int,
-        ctypes.c_int64,
-        ctypes.c_int,
-        ctypes.c_int,
+    lib.sonare_engine_render_offline_options_init.restype = None
+    lib.sonare_engine_render_offline_options_init.argtypes = [
+        ctypes.POINTER(SonareEngineRenderOfflineOptions)
     ]
     lib.sonare_engine_finish_offline_render.restype = ctypes.c_int32
     lib.sonare_engine_finish_offline_render.argtypes = [ctypes.c_void_p]
@@ -763,25 +759,11 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_engine_drain_meter_telemetry_v2.restype = ctypes.c_int32
-    lib.sonare_engine_drain_meter_telemetry_v2.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareMeterTelemetryRecordV2),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
     lib.sonare_engine_meter_target_insert_gain_reduction.restype = ctypes.c_int32
     lib.sonare_engine_meter_target_insert_gain_reduction.argtypes = [
         ctypes.c_void_p,
         ctypes.c_uint32,
         ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-    lib.sonare_engine_drain_meter_telemetry_wide_v2.restype = ctypes.c_int32
-    lib.sonare_engine_drain_meter_telemetry_wide_v2.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareMeterTelemetryRecordWideV2),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]

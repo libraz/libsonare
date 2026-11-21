@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ctypes
 import re
 from typing import Any, cast
 
@@ -17,8 +16,8 @@ class _FakeNnlsLibrary:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
 
-    def sonare_nnls_chroma_ex2(self, *args: object) -> int:
-        self.calls.append(("ex2", args))
+    def sonare_nnls_chroma(self, *args: object) -> int:
+        self.calls.append(("nnls", args))
         return 0
 
 
@@ -28,24 +27,26 @@ class _FakeImpulseLibrary:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
 
-    def sonare_analyze_impulse_response_ex(self, *args: object) -> int:
-        self.calls.append(("ex", args))
+    def sonare_analyze_impulse_response(self, *args: object) -> int:
+        self.calls.append(("impulse", args))
         return 0
 
     def sonare_free_acoustic_result(self, _result: object) -> None:
         pass
 
 
-def test_nnls_chroma_routes_default_and_custom_hop_to_ex2(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The new symbol receives both the legacy default and an explicit hop."""
+def test_nnls_chroma_routes_default_and_custom_hop_through_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The options struct carries both the default hop and an explicit one."""
     lib = _FakeNnlsLibrary()
     monkeypatch.setattr(_conversions, "_get_lib", lambda: lib)
 
     _conversions.nnls_chroma([0.0], hop_length=512, sample_rate=22050)
     _conversions.nnls_chroma([0.0], hop_length=256, sample_rate=22050)
 
-    assert [name for name, _args in lib.calls] == ["ex2", "ex2"]
-    assert [cast(ctypes.c_int, args[6]).value for _name, args in lib.calls] == [512, 256]
+    assert [name for name, _args in lib.calls] == ["nnls", "nnls"]
+    assert [cast(Any, args[3])._obj.hop_length for _name, args in lib.calls] == [512, 256]
 
 
 @pytest.mark.parametrize(
@@ -63,24 +64,24 @@ def test_nnls_chroma_routes_default_and_custom_hop_to_ex2(monkeypatch: pytest.Mo
         ),
     ],
 )
-def test_nnls_chroma_validates_ex2_parameters(kwargs: dict[str, Any], message: str) -> None:
-    """Python rejects values that the ex2 C contract rejects before FFI."""
+def test_nnls_chroma_validates_parameters(kwargs: dict[str, Any], message: str) -> None:
+    """Python rejects values that the C contract rejects before FFI."""
     with pytest.raises(ValueError, match=re.escape(message)):
         _conversions.nnls_chroma([0.0], sample_rate=22050, **kwargs)
 
 
-def test_analyze_impulse_response_routes_default_and_custom_decay_to_ex(
+def test_analyze_impulse_response_routes_default_and_custom_decay_through_options(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The extended symbol receives the legacy default and explicit decay range."""
+    """The options struct carries the default decay range and an explicit one."""
     lib = _FakeImpulseLibrary()
     monkeypatch.setattr(_analysis_reports, "_get_lib", lambda: lib)
 
     _analysis_reports.analyze_impulse_response([0.0], min_decay_db=30.0, sample_rate=48000)
     _analysis_reports.analyze_impulse_response([0.0], min_decay_db=45.0, sample_rate=48000)
 
-    assert [name for name, _args in lib.calls] == ["ex", "ex"]
-    assert [cast(ctypes.c_float, args[4]).value for _name, args in lib.calls] == [30.0, 45.0]
+    assert [name for name, _args in lib.calls] == ["impulse", "impulse"]
+    assert [cast(Any, args[4])._obj.min_decay_db for _name, args in lib.calls] == [30.0, 45.0]
 
 
 @pytest.mark.parametrize(
@@ -91,9 +92,9 @@ def test_analyze_impulse_response_routes_default_and_custom_decay_to_ex(
         ({"n_octave_bands": -1}, r"n_octave_bands must be an integer in \[0, "),
     ],
 )
-def test_analyze_impulse_response_validates_ex_parameters(
+def test_analyze_impulse_response_validates_parameters(
     kwargs: dict[str, Any], message: str
 ) -> None:
-    """Python rejects values that the extended C contract rejects."""
+    """Python rejects values that the C contract rejects."""
     with pytest.raises(ValueError, match=message):
         _analysis_reports.analyze_impulse_response([0.0], sample_rate=48000, **kwargs)

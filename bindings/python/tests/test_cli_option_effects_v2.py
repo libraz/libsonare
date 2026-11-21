@@ -160,12 +160,13 @@ def test_hpss_residual_mode_writes_three_artifacts_and_conflicts_are_rejected(
     )
     monkeypatch.setattr(
         libsonare,
-        "hpss_with_residual",
-        lambda _samples, **_kwargs: libsonare.HpssWithResidualResult(
+        "hpss",
+        lambda _samples, **_kwargs: libsonare.HpssResult(
             harmonic=np.array([0.1], np.float32),
             percussive=np.array([0.2], np.float32),
-            residual=np.array([0.3], np.float32),
+            length=1,
             sample_rate=22050,
+            residual=np.array([0.3], np.float32),
         ),
     )
 

@@ -119,16 +119,18 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
     ]
 
-    for _name, _linked_cfg, _linked_report in (
+    for _name, _free_name, _linked_cfg, _linked_result in (
         (
             "sonare_mastering_repair_denoise_classical_linked",
+            "sonare_free_denoise_linked_result",
             SonareDenoiseClassicalConfig,
-            SonareDenoiseReport,
+            SonareDenoiseLinkedResult,
         ),
         (
             "sonare_mastering_repair_dereverb_classical_linked",
+            "sonare_free_dereverb_linked_result",
             SonareDereverbClassicalConfig,
-            SonareDereverbReport,
+            SonareDereverbLinkedResult,
         ),
     ):
         _fn = getattr(lib, _name)
@@ -139,9 +141,11 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_int,
             ctypes.POINTER(_linked_cfg),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(_linked_report),
+            ctypes.POINTER(_linked_result),
         ]
+        _free = getattr(lib, _free_name)
+        _free.restype = None
+        _free.argtypes = [ctypes.POINTER(_linked_result)]
 
     lib.sonare_mastering_repair_trim_silence_stereo.restype = ctypes.c_int32
     lib.sonare_mastering_repair_trim_silence_stereo.argtypes = [

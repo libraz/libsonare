@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
+from ._ffi import SONARE_AUTOMATION_TARGET_UNCHANGED
 from ._project_mir import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
@@ -55,7 +56,6 @@ from ._runtime import (
     _C_INT_MIN,
     _SIZE_T_MAX,
     _UINT32_MAX,
-    SonareAutomationLaneDescEx,
     SonareExternalStemDesc,
     SonareExternalStemImportRequest,
     SonareExternalStemImportResult,
@@ -1097,38 +1097,18 @@ class _ProjectEditMixin:
         or ``"trackPan"`` state the kind explicitly.
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
-        kind = (
-            None
-            if target_kind is None
-            else _automation_target_kind_value(target_kind, "target_kind")
+        desc.target_kind = (
+            0 if target_kind is None else _automation_target_kind_value(target_kind, "target_kind")
         )
-        lib = _get_lib()
         out_target_param_id = ctypes.c_uint32()
-        if kind is None:
-            # An absent kind is the untyped C call, which adds an opaque lane.
-            _check(
-                lib.sonare_project_add_automation_lane(
-                    self._require_handle(),
-                    _to_c_uint32(track_id, "track_id"),
-                    ctypes.byref(desc),
-                    ctypes.byref(out_target_param_id),
-                )
+        _check(
+            _get_lib().sonare_project_add_automation_lane(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                ctypes.byref(desc),
+                ctypes.byref(out_target_param_id),
             )
-        else:
-            desc_ex = SonareAutomationLaneDescEx(
-                target_param_id=desc.target_param_id,
-                target_kind=kind,
-                points=desc.points,
-                point_count=desc.point_count,
-            )
-            _check(
-                lib.sonare_project_add_automation_lane_ex(
-                    self._require_handle(),
-                    _to_c_uint32(track_id, "track_id"),
-                    ctypes.byref(desc_ex),
-                    ctypes.byref(out_target_param_id),
-                )
-            )
+        )
         del _backing
         return int(out_target_param_id.value)
 
@@ -1149,36 +1129,19 @@ class _ProjectEditMixin:
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
         target_id = _automation_target_param_id_value(target_param_id)
-        kind = (
-            None
+        desc.target_kind = (
+            SONARE_AUTOMATION_TARGET_UNCHANGED
             if target_kind is None
             else _automation_target_kind_value(target_kind, "target_kind")
         )
-        lib = _get_lib()
-        if kind is None:
-            _check(
-                lib.sonare_project_edit_automation_lane(
-                    self._require_handle(),
-                    _to_c_uint32(track_id, "track_id"),
-                    _to_c_uint32(target_id, "target_id"),
-                    ctypes.byref(desc),
-                )
+        _check(
+            _get_lib().sonare_project_edit_automation_lane(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint32(target_id, "target_id"),
+                ctypes.byref(desc),
             )
-        else:
-            desc_ex = SonareAutomationLaneDescEx(
-                target_param_id=desc.target_param_id,
-                target_kind=kind,
-                points=desc.points,
-                point_count=desc.point_count,
-            )
-            _check(
-                lib.sonare_project_edit_automation_lane_ex(
-                    self._require_handle(),
-                    _to_c_uint32(track_id, "track_id"),
-                    _to_c_uint32(target_id, "target_id"),
-                    ctypes.byref(desc_ex),
-                )
-            )
+        )
         del _backing
 
     @_entry("Project.remove_automation_lane")

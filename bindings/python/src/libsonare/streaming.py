@@ -279,7 +279,7 @@ class StreamAnalyzer:
         raw = _ffi_streaming.SonareStreamFramesU8()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_u8_ex(
+            lib.sonare_stream_analyzer_read_frames_u8(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
                 _to_c_size_t(max_frames, "max_frames"),
@@ -304,7 +304,7 @@ class StreamAnalyzer:
         raw = _ffi_streaming.SonareStreamFramesI16()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_i16_ex(
+            lib.sonare_stream_analyzer_read_frames_i16(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
                 _to_c_size_t(max_frames, "max_frames"),

@@ -364,19 +364,31 @@ def test_external_carrier_is_required_by_the_carrierless_entries() -> None:
             assert raised.value.code == int(ErrorCode.INVALID_STATE)
 
 
+def test_process_mono_with_a_carrier_keeps_the_output_shape_and_validates_its_length() -> None:
+    samples = _tone()
+    with _changer(_vocoder("external")) as changer:
+        out = changer.process_mono(samples, carrier=_tone(hz=110.0))
+        assert out.shape == samples.shape and out.dtype == np.float32
+        assert np.isfinite(out).all()
+        with pytest.raises(SonareValueError, match="carrier"):
+            changer.process_mono(samples, carrier=samples[:-1])
+        with pytest.raises(SonareValueError, match="carrier"):
+            changer.process_mono(samples, carrier=np.concatenate([samples, samples[:1]]))
+
+
 def test_carrier_entries_render_with_an_external_carrier() -> None:
     samples = _tone()
     carrier = _tone(hz=110.0)
     with _changer(_vocoder("external"), num_channels=2) as changer:
-        mono = changer.process_mono_with_carrier(samples, carrier)
+        mono = changer.process_mono(samples, carrier=carrier)
         assert mono.shape == samples.shape and mono.dtype == np.float32
         assert np.isfinite(mono).all()
         changer.reset()
-        interleaved = changer.process_interleaved_with_carrier(np.tile(samples, 2), carrier)
+        interleaved = changer.process_interleaved(np.tile(samples, 2), carrier=carrier)
         assert interleaved.shape == (2 * samples.shape[0],)
         assert np.isfinite(interleaved).all()
         changer.reset()
-        left, right = changer.process_planar_with_carrier([samples, samples], carrier)
+        left, right = changer.process_planar([samples, samples], carrier=carrier)
         assert left.shape == right.shape == samples.shape
         assert np.isfinite(left).all() and np.isfinite(right).all()
 
@@ -384,7 +396,7 @@ def test_carrier_entries_render_with_an_external_carrier() -> None:
 def test_carrier_is_ignored_by_an_internal_carrier_config() -> None:
     samples = _tone()
     with _changer(_vocoder("internal")) as with_carrier, _changer(_vocoder("internal")) as plain:
-        a = with_carrier.process_mono_with_carrier(samples, _tone(hz=300.0))
+        a = with_carrier.process_mono(samples, carrier=_tone(hz=300.0))
         b = plain.process_mono(samples)
         np.testing.assert_array_equal(a, b)
 
@@ -393,15 +405,15 @@ def test_carrier_length_must_match_the_input() -> None:
     samples = _tone()
     with _changer(_vocoder("external"), num_channels=2) as changer:
         with pytest.raises(SonareValueError, match="carrier"):
-            changer.process_mono_with_carrier(samples, samples[:-1])
+            changer.process_mono(samples, carrier=samples[:-1])
         with pytest.raises(SonareValueError, match="carrier"):
-            changer.process_interleaved_with_carrier(np.tile(samples, 2), samples[:-1])
+            changer.process_interleaved(np.tile(samples, 2), carrier=samples[:-1])
         with pytest.raises(SonareValueError, match="carrier"):
-            changer.process_planar_with_carrier([samples, samples], samples[:-1])
+            changer.process_planar([samples, samples], carrier=samples[:-1])
 
 
-def test_voice_change_realtime_renders_a_new_preset() -> None:
-    out = libsonare.voice_change_realtime(_tone(9600), SAMPLE_RATE, config="choirHarmony")
+def test_realtime_voice_changer_render_renders_a_new_preset() -> None:
+    out = libsonare.realtime_voice_changer_render(_tone(9600), SAMPLE_RATE, config="choirHarmony")
     assert out.shape == (9600,)
     assert np.isfinite(out).all()
 

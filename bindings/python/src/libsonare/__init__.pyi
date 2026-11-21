@@ -93,7 +93,6 @@ from .analyzer import DecomposeResult as DecomposeResult
 from .analyzer import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
 from .analyzer import DecomposeStemsResult as DecomposeStemsResult
 from .analyzer import FormantMode as FormantMode
-from .analyzer import HpssWithResidualResult as HpssWithResidualResult
 from .analyzer import MasteringAssistantParams as MasteringAssistantParams
 from .analyzer import MasteringParams as MasteringParams
 from .analyzer import MasteringParamValue as MasteringParamValue
@@ -261,9 +260,6 @@ from .analyzer import (
     decompose_stems_linked as decompose_stems_linked,
 )
 from .analyzer import (
-    decompose_with_init as decompose_with_init,
-)
-from .analyzer import (
     deemphasis as deemphasis,
 )
 from .analyzer import (
@@ -341,9 +337,6 @@ from .analyzer import (
     hpss as hpss,
 )
 from .analyzer import (
-    hpss_with_residual as hpss_with_residual,
-)
-from .analyzer import (
     hybrid_cqt as hybrid_cqt,
 )
 from .analyzer import (
@@ -400,12 +393,6 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
-)
-from .analyzer import (
-    mastering_assistant_suggest_chain as mastering_assistant_suggest_chain,
-)
-from .analyzer import (
-    mastering_assistant_suggest_chain_stereo as mastering_assistant_suggest_chain_stereo,
 )
 from .analyzer import (
     mastering_assistant_suggest_stereo as mastering_assistant_suggest_stereo,
@@ -567,9 +554,6 @@ from .analyzer import metering_peak_db as metering_peak_db
 from .analyzer import (
     metering_phase_scope as metering_phase_scope,
 )
-from .analyzer import (
-    metering_phase_scope_decimated as metering_phase_scope_decimated,
-)
 from .analyzer import metering_rms_db as metering_rms_db
 from .analyzer import metering_silence_ratio as metering_silence_ratio
 from .analyzer import (
@@ -587,9 +571,6 @@ from .analyzer import (
 from .analyzer import metering_true_peak_dbtp as metering_true_peak_dbtp
 from .analyzer import (
     metering_vectorscope as metering_vectorscope,
-)
-from .analyzer import (
-    metering_vectorscope_decimated as metering_vectorscope_decimated,
 )
 from .analyzer import (
     mfcc as mfcc,
@@ -698,6 +679,9 @@ from .analyzer import (
 )
 from .analyzer import (
     realtime_voice_changer_preset_names as realtime_voice_changer_preset_names,
+)
+from .analyzer import (
+    realtime_voice_changer_render as realtime_voice_changer_render,
 )
 from .analyzer import (
     reassigned_spectrogram as reassigned_spectrogram,
@@ -847,9 +831,6 @@ from .analyzer import (
 )
 from .analyzer import (
     voice_change as voice_change,
-)
-from .analyzer import (
-    voice_change_realtime as voice_change_realtime,
 )
 from .analyzer import (
     voice_changer_abi_version as voice_changer_abi_version,

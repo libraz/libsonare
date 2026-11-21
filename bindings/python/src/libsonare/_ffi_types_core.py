@@ -113,33 +113,6 @@ class SonareTimeSignature(CStruct):
     ]
 
 
-class SonareAnalysisBpmCandidate(CStruct):
-    """Maps to SonareAnalysisBpmCandidate in sonare_c.h."""
-
-    _fields_ = [
-        ("value", ctypes.c_float),
-        ("confidence", ctypes.c_float),
-        ("relation", ctypes.c_int32),
-    ]
-
-
-class SonareAnalysisResult(CStruct):
-    """Maps to SonareAnalysisResult in sonare_c.h."""
-
-    _fields_ = [
-        ("bpm", ctypes.c_float),
-        ("bpm_confidence", ctypes.c_float),
-        ("key", SonareKey),
-        ("time_signature", SonareTimeSignature),
-        ("beat_times", ctypes.POINTER(ctypes.c_float)),
-        ("beat_count", ctypes.c_size_t),
-        ("bpm_candidates", ctypes.POINTER(SonareAnalysisBpmCandidate)),
-        ("bpm_candidate_count", ctypes.c_size_t),
-        ("time_signature_candidates", ctypes.POINTER(SonareTimeSignature)),
-        ("time_signature_candidate_count", ctypes.c_size_t),
-    ]
-
-
 class SonareEngineTelemetry(CStruct):
     """Maps to SonareEngineTelemetry in sonare_c.h."""
 
@@ -185,6 +158,8 @@ class SonareMeterTelemetryRecord(CStruct):
         ("integrated_lufs", ctypes.c_float),
         ("gain_reduction_db", ctypes.c_float),
         ("dropped_records", ctypes.c_uint32),
+        ("input_peak_db_l", ctypes.c_float),
+        ("input_peak_db_r", ctypes.c_float),
     ]
 
 
@@ -194,54 +169,6 @@ SONARE_METER_MAX_INSERTS = 128
 
 class SonareMeterTelemetryRecordWide(CStruct):
     """Maps to SonareMeterTelemetryRecordWide in sonare_c.h."""
-
-    _fields_ = [
-        ("target_id", ctypes.c_uint32),
-        ("render_frame", ctypes.c_int64),
-        ("seq", ctypes.c_uint64),
-        ("num_channels", ctypes.c_int32),
-        ("peak_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
-        ("rms_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
-        ("true_peak_dbtp", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
-        ("max_true_peak_dbtp", ctypes.c_float),
-        ("correlation", ctypes.c_float),
-        ("mono_compat_width", ctypes.c_float),
-        ("momentary_lufs", ctypes.c_float),
-        ("short_term_lufs", ctypes.c_float),
-        ("integrated_lufs", ctypes.c_float),
-        ("gain_reduction_db", ctypes.c_float),
-        ("dropped_records", ctypes.c_uint32),
-    ]
-
-
-class SonareMeterTelemetryRecordV2(CStruct):
-    """Maps to the append-only V2 stereo meter telemetry ABI record."""
-
-    _fields_ = [
-        ("target_id", ctypes.c_uint32),
-        ("render_frame", ctypes.c_int64),
-        ("seq", ctypes.c_uint64),
-        ("peak_db_l", ctypes.c_float),
-        ("peak_db_r", ctypes.c_float),
-        ("rms_db_l", ctypes.c_float),
-        ("rms_db_r", ctypes.c_float),
-        ("true_peak_dbtp_l", ctypes.c_float),
-        ("true_peak_dbtp_r", ctypes.c_float),
-        ("max_true_peak_dbtp", ctypes.c_float),
-        ("correlation", ctypes.c_float),
-        ("mono_compat_width", ctypes.c_float),
-        ("momentary_lufs", ctypes.c_float),
-        ("short_term_lufs", ctypes.c_float),
-        ("integrated_lufs", ctypes.c_float),
-        ("gain_reduction_db", ctypes.c_float),
-        ("dropped_records", ctypes.c_uint32),
-        ("input_peak_db_l", ctypes.c_float),
-        ("input_peak_db_r", ctypes.c_float),
-    ]
-
-
-class SonareMeterTelemetryRecordWideV2(CStruct):
-    """Maps to the append-only V2 wide meter telemetry ABI record."""
 
     _fields_ = [
         ("target_id", ctypes.c_uint32),
@@ -308,9 +235,8 @@ class SonareTransportState(CStruct):
         ("loop_end_ppq", ctypes.c_double),
         ("sample_rate", ctypes.c_double),
         # Musical position derived from the tempo map (computed every block).
-        # Appended after the original fields to preserve struct layout.
         ("bar_start_ppq", ctypes.c_double),
-        ("bar_count", ctypes.c_int64),
+        ("bar_index", ctypes.c_int64),
         ("time_signature", SonareTimeSignature),
         # One-based beat within the bar plus the fractional beat position; see
         # SonareTransportState in sonare_c_types_engine.h.
@@ -646,4 +572,29 @@ class SonareEngineGraphSpec(CStruct):
         ("input_node", ctypes.c_char * 64),
         ("output_node", ctypes.c_char * 64),
         ("num_channels", ctypes.c_int),
+    ]
+
+
+class SonareEngineRenderOfflineOptions(CStruct):
+    """Maps to SonareEngineRenderOfflineOptions in sonare_c_types_engine.h."""
+
+    _c_init_ = "sonare_engine_render_offline_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("finalize", ctypes.c_int32),
+    ]
+
+
+class SonareMixerAddStripOptions(CStruct):
+    """Maps to SonareMixerAddStripOptions in sonare_c_mixing.h."""
+
+    _c_init_ = "sonare_mixer_add_strip_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("enable_metering", ctypes.c_int32),
+        ("measure_lufs", ctypes.c_int32),
+        ("measure_true_peak", ctypes.c_int32),
+        ("true_peak_oversample", ctypes.c_int32),
     ]

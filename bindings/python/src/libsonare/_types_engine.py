@@ -902,11 +902,11 @@ class TransportState:
     # Musical position derived from the tempo map (computed every block).
     bar_start_ppq: float
     """PPQ position of the start of the current bar."""
-    bar_count: int
+    bar_index: int
     """Zero-based index of the current bar."""
     time_signature: TimeSignature
     """Time signature in effect at the playhead."""
-    # One-based beat within the current bar; ``bar_count`` above is zero-based.
+    # One-based beat within the current bar; ``bar_index`` above is zero-based.
     beat: int
     """One-based beat within the current bar."""
     # Fractional position within the current beat, in [0, 1).

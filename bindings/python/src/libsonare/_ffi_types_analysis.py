@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 
 from ._cstruct import CStruct
-from ._ffi_types_core import SonareTimeSignature
+from ._ffi_types_core import SonareCancelCallback, SonareTimeSignature
 
 # Progress callback: void(float progress, const char* stage, void* user_data).
 # Maps to SonareAnalyzeProgressCallback in sonare_c.h.
@@ -257,17 +257,6 @@ class SonareRoomMorphConfig(CStruct):
     ]
 
 
-class SonareRoomMorphStereoResult(CStruct):
-    """Maps to SonareRoomMorphStereoResult in sonare_c_acoustic.h."""
-
-    _fields_ = [
-        ("left", ctypes.POINTER(ctypes.c_float)),
-        ("right", ctypes.POINTER(ctypes.c_float)),
-        ("length", ctypes.c_size_t),
-        ("sample_rate", ctypes.c_int),
-    ]
-
-
 class SonareRhythmResult(CStruct):
     """Maps to SonareRhythmResult in sonare_c.h."""
 
@@ -442,6 +431,10 @@ class SonareMusicAnalyzeOptions(CStruct):
         ("meter_denominator", ctypes.c_int),
         ("tuning_cents", ctypes.c_float),
         ("tuning_auto", ctypes.c_int),
+        ("progress_callback", SonareAnalyzeProgressCallback),
+        ("progress_user_data", ctypes.c_void_p),
+        ("cancel_callback", SonareCancelCallback),
+        ("cancel_user_data", ctypes.c_void_p),
     ]
 
 
@@ -459,4 +452,167 @@ class SonareMeterOptions(CStruct):
         ("measure_weight", ctypes.c_float),
         ("subdivision_weight", ctypes.c_float),
         ("compound_subdivision_threshold", ctypes.c_float),
+    ]
+
+
+class SonareAnalyzeImpulseResponseOptions(CStruct):
+    """Maps to SonareAnalyzeImpulseResponseOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_analyze_impulse_response_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("min_decay_db", ctypes.c_float),
+    ]
+
+
+class SonareAnalyzeMelodyOptions(CStruct):
+    """Maps to SonareAnalyzeMelodyOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_analyze_melody_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("use_pyin", ctypes.c_int32),
+        ("center", ctypes.c_int32),
+    ]
+
+
+class SonareChromaCensOptions(CStruct):
+    """Maps to SonareChromaCensOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_chroma_cens_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("bins_per_octave", ctypes.c_int32),
+    ]
+
+
+class SonareChromaCqtOptions(CStruct):
+    """Maps to SonareChromaCqtOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_chroma_cqt_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("bins_per_octave", ctypes.c_int32),
+    ]
+
+
+class SonareDetectKeyOptions(CStruct):
+    """Maps to SonareDetectKeyOptions in sonare_c_types_functions.h."""
+
+    _c_init_ = "sonare_detect_key_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("use_hpss", ctypes.c_int),
+        ("loudness_weighted", ctypes.c_int),
+        ("chroma_high_pass_hz", ctypes.c_float),
+        ("modes", ctypes.POINTER(ctypes.c_int32)),
+        ("mode_count", ctypes.c_size_t),
+        ("profile_type", ctypes.c_int32),
+        ("genre_hint", ctypes.c_char_p),
+        ("tuning_cents", ctypes.c_float),
+        ("tuning_auto", ctypes.c_int),
+    ]
+
+
+class SonareMelSpectrogramOptions(CStruct):
+    """Maps to SonareMelSpectrogramOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mel_spectrogram_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
+        ("htk", ctypes.c_int32),
+    ]
+
+
+class SonareMelToAudioOptions(CStruct):
+    """Maps to SonareMelToAudioOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mel_to_audio_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("htk", ctypes.c_int32),
+    ]
+
+
+class SonareMelToStftOptions(CStruct):
+    """Maps to SonareMelToStftOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mel_to_stft_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("htk", ctypes.c_int32),
+    ]
+
+
+class SonareMfccOptions(CStruct):
+    """Maps to SonareMfccOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mfcc_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
+        ("htk", ctypes.c_int32),
+        ("lifter", ctypes.c_float),
+    ]
+
+
+class SonareMfccToAudioOptions(CStruct):
+    """Maps to SonareMfccToAudioOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mfcc_to_audio_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("htk", ctypes.c_int32),
+        ("lifter", ctypes.c_float),
+    ]
+
+
+class SonareMfccToMelOptions(CStruct):
+    """Maps to SonareMfccToMelOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mfcc_to_mel_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("lifter", ctypes.c_float),
+    ]
+
+
+class SonareNnlsChromaOptions(CStruct):
+    """Maps to SonareNnlsChromaOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_nnls_chroma_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("enable_stft_blend", ctypes.c_int32),
+        ("stft_blend_weight", ctypes.c_float),
+        ("stft_blend_n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+    ]
+
+
+class SonareSpectralBandwidthOptions(CStruct):
+    """Maps to SonareSpectralBandwidthOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_spectral_bandwidth_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("p", ctypes.c_float),
     ]

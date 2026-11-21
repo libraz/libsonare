@@ -133,9 +133,6 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    lib.sonare_audio_analyze.restype = ctypes.c_int32
-    lib.sonare_audio_analyze.argtypes = [ctypes.c_void_p, ctypes.POINTER(SonareAnalysisResult)]
-
     # --- Metering (handle form) ---
 
     lib.sonare_audio_peak_db.restype = ctypes.c_int32
@@ -226,149 +223,29 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
-    # sonare_detect_key
     lib.sonare_detect_key.restype = ctypes.c_int32
     lib.sonare_detect_key.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.POINTER(SonareKey),
-    ]
-
-    # sonare_detect_key_with_options
-    lib.sonare_detect_key_with_options.restype = ctypes.c_int32
-    lib.sonare_detect_key_with_options.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(SonareKey),
-    ]
-
-    lib.sonare_detect_key_with_options_and_modes.restype = ctypes.c_int32
-    lib.sonare_detect_key_with_options_and_modes.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.POINTER(SonareKey),
-    ]
-
-    lib.sonare_detect_key_with_extended_options.restype = ctypes.c_int32
-    lib.sonare_detect_key_with_extended_options.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.c_int32,
-        ctypes.c_char_p,
-        ctypes.POINTER(SonareKey),
-    ]
-
-    lib.sonare_detect_key_with_tuning.restype = ctypes.c_int32
-    lib.sonare_detect_key_with_tuning.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.c_int32,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_int,
+        ctypes.POINTER(SonareDetectKeyOptions),
         ctypes.POINTER(SonareKey),
         ctypes.POINTER(ctypes.c_float),
     ]
+    lib.sonare_detect_key_options_init.restype = None
+    lib.sonare_detect_key_options_init.argtypes = [ctypes.POINTER(SonareDetectKeyOptions)]
 
     lib.sonare_detect_key_candidates.restype = ctypes.c_int32
     lib.sonare_detect_key_candidates.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
+        ctypes.POINTER(SonareDetectKeyOptions),
         ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
         ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_float),
     ]
 
-    lib.sonare_detect_key_candidates_with_modes.restype = ctypes.c_int32
-    lib.sonare_detect_key_candidates_with_modes.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_detect_key_candidates_with_extended_options.restype = ctypes.c_int32
-    lib.sonare_detect_key_candidates_with_extended_options.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.c_int32,
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_detect_key_candidates_with_tuning.restype = ctypes.c_int32
-    lib.sonare_detect_key_candidates_with_tuning.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int32),
-        ctypes.c_size_t,
-        ctypes.c_int32,
-        ctypes.c_char_p,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_float),
-    ]
     lib.sonare_free_key_candidates.restype = None
     lib.sonare_free_key_candidates.argtypes = [ctypes.POINTER(SonareKeyCandidate)]
 
@@ -393,19 +270,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_detect_onsets
     lib.sonare_detect_onsets.restype = ctypes.c_int32
     lib.sonare_detect_onsets.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-    lib.sonare_onset_detect_config_init.restype = None
-    lib.sonare_onset_detect_config_init.argtypes = [ctypes.POINTER(SonareOnsetDetectConfig)]
-    lib.sonare_detect_onsets_ex.restype = ctypes.c_int32
-    lib.sonare_detect_onsets_ex.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -413,17 +279,10 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_onset_detect_config_init.restype = None
+    lib.sonare_onset_detect_config_init.argtypes = [ctypes.POINTER(SonareOnsetDetectConfig)]
 
     # --- Full analysis ---
-
-    # sonare_analyze
-    lib.sonare_analyze.restype = ctypes.c_int32
-    lib.sonare_analyze.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareAnalysisResult),
-    ]
 
     lib.sonare_analyze_bpm.restype = ctypes.c_int32
     lib.sonare_analyze_bpm.argtypes = [
@@ -445,16 +304,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareAnalyzeImpulseResponseOptions),
         ctypes.POINTER(SonareAcousticResult),
     ]
-    lib.sonare_analyze_impulse_response_ex.restype = ctypes.c_int32
-    lib.sonare_analyze_impulse_response_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(SonareAcousticResult),
+    lib.sonare_analyze_impulse_response_options_init.restype = None
+    lib.sonare_analyze_impulse_response_options_init.argtypes = [
+        ctypes.POINTER(SonareAnalyzeImpulseResponseOptions)
     ]
 
     lib.sonare_detect_acoustic.restype = ctypes.c_int32
@@ -511,26 +366,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.POINTER(SonareChordDetectionOptions),
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
     lib.sonare_chord_detection_options_init.restype = None
     lib.sonare_chord_detection_options_init.argtypes = [ctypes.POINTER(SonareChordDetectionOptions)]
-    lib.sonare_detect_chords_ex.restype = ctypes.c_int32
-    lib.sonare_detect_chords_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareChordDetectionOptions),
-        ctypes.POINTER(SonareChordAnalysisResult),
-    ]
 
     lib.sonare_chord_functional_analysis.restype = ctypes.c_int32
     lib.sonare_chord_functional_analysis.argtypes = [
@@ -606,11 +447,9 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.POINTER(SonareRoomMorphConfig),
-        ctypes.POINTER(SonareRoomMorphStereoResult),
-    ]
-    lib.sonare_free_room_morph_stereo_result.restype = None
-    lib.sonare_free_room_morph_stereo_result.argtypes = [
-        ctypes.POINTER(SonareRoomMorphStereoResult)
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
 
     lib.sonare_section_options_init.restype = None
@@ -649,8 +488,11 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
+        ctypes.POINTER(SonareAnalyzeMelodyOptions),
         ctypes.POINTER(SonareMelodyResult),
     ]
+    lib.sonare_analyze_melody_options_init.restype = None
+    lib.sonare_analyze_melody_options_init.argtypes = [ctypes.POINTER(SonareAnalyzeMelodyOptions)]
     lib.sonare_free_melody_result.restype = None
     lib.sonare_free_melody_result.argtypes = [ctypes.POINTER(SonareMelodyResult)]
 
@@ -705,8 +547,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.sonare_free_cqt_result.restype = None
     lib.sonare_free_cqt_result.argtypes = [ctypes.POINTER(SonareCqtResult)]
-    lib.sonare_cqt_to_audio_checked.restype = ctypes.c_int32
-    lib.sonare_cqt_to_audio_checked.argtypes = [
+    lib.sonare_cqt_to_audio.restype = ctypes.c_int32
+    lib.sonare_cqt_to_audio.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -719,8 +561,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_vqt_to_audio_checked.restype = ctypes.c_int32
-    lib.sonare_vqt_to_audio_checked.argtypes = [
+    lib.sonare_vqt_to_audio.restype = ctypes.c_int32
+    lib.sonare_vqt_to_audio.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -740,29 +582,22 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_mel_to_stft.restype = ctypes.c_int32
     lib.sonare_mel_to_stft.argtypes = [
         ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.POINTER(SonareMelToStftOptions),
         ctypes.POINTER(SonareInverseResult),
     ]
-    lib.sonare_mel_to_stft_ex.restype = ctypes.c_int32
-    lib.sonare_mel_to_stft_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.POINTER(SonareInverseResult),
-    ]
+    lib.sonare_mel_to_stft_options_init.restype = None
+    lib.sonare_mel_to_stft_options_init.argtypes = [ctypes.POINTER(SonareMelToStftOptions)]
     lib.sonare_mel_to_audio.restype = ctypes.c_int32
     lib.sonare_mel_to_audio.argtypes = [
         ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
@@ -771,9 +606,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
+        ctypes.POINTER(SonareMelToAudioOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_mel_to_audio_options_init.restype = None
+    lib.sonare_mel_to_audio_options_init.argtypes = [ctypes.POINTER(SonareMelToAudioOptions)]
     lib.sonare_griffin_lim.restype = ctypes.c_int32
     lib.sonare_griffin_lim.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -788,41 +626,22 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_mel_to_audio_ex.restype = ctypes.c_int32
-    lib.sonare_mel_to_audio_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
     lib.sonare_mfcc_to_mel.restype = ctypes.c_int32
     lib.sonare_mfcc_to_mel.argtypes = [
         ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareMfccToMelOptions),
         ctypes.POINTER(SonareInverseResult),
     ]
-    lib.sonare_mfcc_to_mel_ex.restype = ctypes.c_int32
-    lib.sonare_mfcc_to_mel_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(SonareInverseResult),
-    ]
+    lib.sonare_mfcc_to_mel_options_init.restype = None
+    lib.sonare_mfcc_to_mel_options_init.argtypes = [ctypes.POINTER(SonareMfccToMelOptions)]
     lib.sonare_mfcc_to_audio.restype = ctypes.c_int32
     lib.sonare_mfcc_to_audio.argtypes = [
         ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
@@ -832,42 +651,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
+        ctypes.POINTER(SonareMfccToAudioOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_mfcc_to_audio_ex.restype = ctypes.c_int32
-    lib.sonare_mfcc_to_audio_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-    lib.sonare_mfcc_to_audio_ex2.restype = ctypes.c_int32
-    lib.sonare_mfcc_to_audio_ex2.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
+    lib.sonare_mfcc_to_audio_options_init.restype = None
+    lib.sonare_mfcc_to_audio_options_init.argtypes = [ctypes.POINTER(SonareMfccToAudioOptions)]
     lib.sonare_free_inverse_result.restype = None
     lib.sonare_free_inverse_result.argtypes = [ctypes.POINTER(SonareInverseResult)]
 
@@ -911,31 +700,19 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_stream_analyzer_read_frames_u8.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_read_frames_u8.argtypes = [
         ctypes.c_void_p,
+        ctypes.POINTER(SonareStreamQuantizeConfig),
         ctypes.c_size_t,
         ctypes.POINTER(SonareStreamFramesU8),
     ]
     lib.sonare_stream_analyzer_read_frames_i16.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_read_frames_i16.argtypes = [
         ctypes.c_void_p,
+        ctypes.POINTER(SonareStreamQuantizeConfig),
         ctypes.c_size_t,
         ctypes.POINTER(SonareStreamFramesI16),
     ]
     lib.sonare_stream_quantize_config_init.restype = None
     lib.sonare_stream_quantize_config_init.argtypes = [ctypes.POINTER(SonareStreamQuantizeConfig)]
-    lib.sonare_stream_analyzer_read_frames_u8_ex.restype = ctypes.c_int32
-    lib.sonare_stream_analyzer_read_frames_u8_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareStreamQuantizeConfig),
-        ctypes.c_size_t,
-        ctypes.POINTER(SonareStreamFramesU8),
-    ]
-    lib.sonare_stream_analyzer_read_frames_i16_ex.restype = ctypes.c_int32
-    lib.sonare_stream_analyzer_read_frames_i16_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareStreamQuantizeConfig),
-        ctypes.c_size_t,
-        ctypes.POINTER(SonareStreamFramesI16),
-    ]
     lib.sonare_stream_analyzer_reset.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_reset.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
     lib.sonare_stream_analyzer_stats.restype = ctypes.c_int32
@@ -987,10 +764,6 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     # sonare_free_floats
     lib.sonare_free_floats.restype = None
     lib.sonare_free_floats.argtypes = [ctypes.POINTER(ctypes.c_float)]
-
-    # sonare_free_analysis_result
-    lib.sonare_free_analysis_result.restype = None
-    lib.sonare_free_analysis_result.argtypes = [ctypes.POINTER(SonareAnalysisResult)]
 
     lib.sonare_free_bpm_analysis_result.restype = None
     lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]
@@ -1095,18 +868,11 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.POINTER(SonareMusicAnalyzeOptions),
         ctypes.POINTER(ctypes.c_char_p),
     ]
     lib.sonare_music_analyze_options_init.restype = None
     lib.sonare_music_analyze_options_init.argtypes = [ctypes.POINTER(SonareMusicAnalyzeOptions)]
-    lib.sonare_analyze_json_ex.restype = ctypes.c_int32
-    lib.sonare_analyze_json_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareMusicAnalyzeOptions),
-        ctypes.POINTER(ctypes.c_char_p),
-    ]
 
     # sonare_estimate_meter_json: meter estimation over a caller-supplied beat
     # series, with no audio and no re-analysis. Free *out_json with
@@ -1120,36 +886,6 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(SonareMeterOptions),
         ctypes.POINTER(ctypes.c_char_p),
-    ]
-
-    lib.sonare_analyze_json_ex_with_progress.restype = ctypes.c_int32
-    lib.sonare_analyze_json_ex_with_progress.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareMusicAnalyzeOptions),
-        SonareAnalyzeProgressCallback,
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_char_p),
-        SonareCancelCallback,
-        ctypes.c_void_p,
-    ]
-
-    # sonare_analyze_melody_ex: melody contour with selectable tracker (YIN/pYIN)
-    # and center-padding option.
-    lib.sonare_analyze_melody_ex.restype = ctypes.c_int32
-    lib.sonare_analyze_melody_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(SonareMelodyResult),
     ]
 
     # sonare_free_string: free a heap-allocated C string (e.g. JSON output).

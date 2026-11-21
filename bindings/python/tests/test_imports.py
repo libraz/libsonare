@@ -74,7 +74,7 @@ def test_realtime_voice_changer_symbols_exposed() -> None:
     import libsonare
 
     expected_callables = (
-        "voice_change_realtime",
+        "realtime_voice_changer_render",
         "realtime_voice_changer_preset_json",
         "realtime_voice_changer_preset_names",
         "validate_realtime_voice_changer_preset_json",
@@ -98,7 +98,7 @@ def test_realtime_voice_changer_symbols_in_all() -> None:
 
     expected = {
         "RealtimeVoiceChanger",
-        "voice_change_realtime",
+        "realtime_voice_changer_render",
         "realtime_voice_changer_preset_json",
         "realtime_voice_changer_preset_names",
         "validate_realtime_voice_changer_preset_json",

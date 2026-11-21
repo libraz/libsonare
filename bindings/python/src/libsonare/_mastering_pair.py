@@ -97,10 +97,9 @@ def mastering_apply_pair_processor(
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
     out = SonareMasteringResult()
-    # Reference masters are commonly a different length than the source; the _ex
-    # variant takes independent source/reference lengths (the pair primitives
-    # consume each buffer at its own length).
-    rc = lib.sonare_mastering_apply_pair_processor_ex(
+    # Reference masters are commonly a different length than the source; the
+    # pair primitives consume each buffer at its own length.
+    rc = lib.sonare_mastering_apply_pair_processor(
         _utf8_arg(processor, "processor"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
@@ -172,7 +171,7 @@ def mastering_apply_pair_processor_stereo(
         raise _refuse("reference_left and reference_right must have the same length")
     out = SonareMasteringStereoResult()
     try:
-        rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
+        rc = lib.sonare_mastering_apply_pair_processor_stereo(
             _utf8_arg(processor, "processor"),
             source_left_array,
             source_right_array,
@@ -238,8 +237,7 @@ def mastering_analyze_pair(
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
-    # Independent source/reference lengths (see mastering_apply_pair_processor).
-    rc = lib.sonare_mastering_analyze_pair_ex(
+    rc = lib.sonare_mastering_analyze_pair(
         _utf8_arg(analysis, "analysis"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
@@ -365,9 +363,8 @@ def mastering_ab_match_loudness_stereo(
         raise _refuse("source_left and source_right must have the same length")
     if reference_left_length != reference_right_length:
         raise _refuse("reference_left and reference_right must have the same length")
-    out = SonareMasteringStereoResult()
     match = SonareLoudnessMatch()
-    try:
+    with _out_float_array(lib) as (out_left, out_length), _out_float_array(lib) as (out_right, _):
         rc = lib.sonare_mastering_ab_match_loudness_stereo(
             source_left_array,
             source_right_array,
@@ -380,16 +377,16 @@ def mastering_ab_match_loudness_stereo(
                 "reference_sample_rate",
             ),
             _to_c_int(sample_rate, "sample_rate"),
-            ctypes.byref(out),
+            ctypes.byref(out_left),
+            ctypes.byref(out_right),
+            ctypes.byref(out_length),
             ctypes.byref(match),
         )
         _check(rc)
         matched = (
-            _from_c_float_array(out.left, out.length),
-            _from_c_float_array(out.right, out.length),
+            _from_c_float_array(out_left, out_length.value),
+            _from_c_float_array(out_right, out_length.value),
         )
-    finally:
-        lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
     return LoudnessMatchStereoResult(
         left=matched[0],
         right=matched[1],
@@ -637,8 +634,8 @@ def mastering_assistant_suggest(
     ``params`` accepts ``targetPlatform`` as a delivery-target name (see
     :func:`mastering_platform_names`) and ``preset`` as the mastering preset the
     suggestion starts from (default ``"streaming"``; restoration presets are
-    refused); every other key is numeric. ``chain_config`` is the chain document's params
-    :func:`mastering_assistant_suggest_chain` returns.
+    refused); every other key is numeric. ``chain_config`` is the chain document's params,
+    ready as ``overrides``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -664,39 +661,6 @@ def _document_params(document: Mapping[str, Any]) -> MasteringChainConfig:
 def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
     """The ``params`` of a version 2 chain document's text."""
     return _document_params(json.loads(json_text))
-
-
-@_entry("mastering_assistant_suggest_chain")
-@_guard_buffer("samples")
-def mastering_assistant_suggest_chain(
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    params: dict[str, float | int | bool | str] | None = None,
-) -> MasteringChainConfig:
-    """Suggest a mastering chain as the chain document's params, ready as ``overrides``.
-
-    Skips parsing the full profile+chain document :func:`mastering_assistant_suggest`
-    returns down to the chain config it already carries.
-    """
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _assistant_params(params)
-    json_ptr = ctypes.c_char_p()
-    rc = lib.sonare_mastering_assistant_suggest_chain_json(
-        c_array,
-        _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
-        param_array,
-        _to_c_size_t(param_count, "param_count"),
-        ctypes.byref(json_ptr),
-    )
-    _check(rc)
-    try:
-        json_text = ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
-    return _chain_config_from_document(json_text)
 
 
 @_entry("mastering_audio_profile")
@@ -822,32 +786,11 @@ def mastering_assistant_suggest_stereo(
     return _assistant_result_from_wire(json.loads(json_text))
 
 
-@_entry("mastering_assistant_suggest_chain_stereo")
-@_guard_buffer("left", "right")
-def mastering_assistant_suggest_chain_stereo(
-    left: Sequence[float] | list[float],
-    right: Sequence[float] | list[float],
-    sample_rate: int,
-    params: dict[str, float | int | bool | str] | None = None,
-) -> MasteringChainConfig:
-    """Stereo counterpart of :func:`mastering_assistant_suggest_chain`."""
-    param_array, param_count = _assistant_params(params)
-    json_text = _stereo_analysis_json(
-        "sonare_mastering_assistant_suggest_chain_json_stereo",
-        left,
-        right,
-        sample_rate,
-        param_array,
-        param_count,
-    )
-    return _chain_config_from_document(json_text)
-
-
 @_entry("mastering_preset_params")
 def mastering_preset_params(preset: str) -> MasteringChainConfig:
     """Return a built-in preset's chain configuration document's params.
 
-    The same shape :func:`mastering_assistant_suggest_chain` returns, so
+    The same shape as ``chain_config`` on :func:`mastering_assistant_suggest`, so
     the result's parameter set matches what the assistant would suggest and
     applies to :func:`master_audio` as overrides unchanged.
 

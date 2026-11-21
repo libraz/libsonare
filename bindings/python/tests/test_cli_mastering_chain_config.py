@@ -153,7 +153,7 @@ def test_config_out_writes_the_chain_config_the_core_reports(tmp_path, capsys) -
     planes = _write_source(source)
     written = _suggest_config(source, tmp_path / "chain.json", capsys)
 
-    expected = libsonare.mastering_assistant_suggest_chain(planes[0], _SAMPLE_RATE)
+    expected = libsonare.mastering_assistant_suggest(planes[0], _SAMPLE_RATE).chain_config
     assert expected, "the assistant reported no chain, so nothing was compared"
     assert written["params"] == expected
     assert written["version"] == 2

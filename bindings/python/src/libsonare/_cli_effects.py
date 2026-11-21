@@ -157,7 +157,7 @@ def _voice_preset_validate_refusal(args: argparse.Namespace) -> str | None:
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
-    from . import hpss, hpss_with_residual
+    from . import hpss
 
     modes = [
         name
@@ -174,9 +174,10 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
 
     if modes == ["with_residual"]:
-        separated = hpss_with_residual(
+        separated = hpss(
             samples,
             sample_rate=sr,
+            with_residual=True,
             **separation,
         )
         harmonic = _audio_array(separated.harmonic)
@@ -526,8 +527,8 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         RealtimeVoiceChanger,
         realtime_voice_changer_preset_json,
         realtime_voice_changer_preset_names,
+        realtime_voice_changer_render,
         voice_change,
-        voice_change_realtime,
     )
 
     raw_preset_id: object = getattr(args, "preset", None)
@@ -573,7 +574,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         # sample rate, so it must not be a hard-coded preset constant.
         with RealtimeVoiceChanger(sr, num_channels=1, config=config) as changer:
             latency_samples = max(int(changer.latency_samples), 0)
-        result = _audio_array(voice_change_realtime(samples, sample_rate=sr, config=config))
+        result = _audio_array(realtime_voice_changer_render(samples, sample_rate=sr, config=config))
         mode_metadata: dict[str, object] = {}
         if preset_id is not None and not preset_json and not preset_pack:
             mode_metadata["preset"] = preset_id

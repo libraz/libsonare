@@ -168,7 +168,7 @@ def align_take_to_reference(
     out_anchors = ctypes.POINTER(SonareProjectWarpAnchor)()
     out_count = ctypes.c_size_t()
     out_alignment = SonareTakeAlignment()
-    rc = lib.sonare_align_take_to_reference_ex(
+    rc = lib.sonare_align_take_to_reference(
         reference_array,
         _to_c_size_t(reference_len, "reference_len"),
         _to_c_int(sample_rate, "sample_rate"),

@@ -1172,7 +1172,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             loop_end_ppq=float(raw.loop_end_ppq),
             sample_rate=float(raw.sample_rate),
             bar_start_ppq=float(raw.bar_start_ppq),
-            bar_count=int(raw.bar_count),
+            bar_index=int(raw.bar_index),
             time_signature=TimeSignature(
                 numerator=int(raw.time_signature.numerator),
                 denominator=int(raw.time_signature.denominator),

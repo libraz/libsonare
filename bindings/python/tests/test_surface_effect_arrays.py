@@ -56,7 +56,7 @@ def test_audio_methods_return_float32_arrays(tone: np.ndarray) -> None:
         audio.note_stretch(0, len(tone) // 2, 1.5),
         audio.note_move(0, len(tone) // 2, 100),
         audio.voice_change(3.0),
-        audio.voice_change_realtime(),
+        audio.realtime_voice_changer_render(),
         audio.normalize(target_db=-3.0),
         audio.trim(),
     ]

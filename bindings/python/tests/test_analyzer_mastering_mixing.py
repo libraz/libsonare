@@ -759,7 +759,7 @@ def test_mastering_assistant_refuses_snake_case_param_names() -> None:
     samples = [0.2 * math.sin(2 * math.pi * 220 * i / 48000) for i in range(4800)]
     for earlier, current in (("target_lufs", "targetLufs"), ("target_platform", "targetPlatform")):
         with pytest.raises(SonareValueError, match=current) as raised:
-            libsonare.mastering_assistant_suggest_chain(samples, 48000, {earlier: 3.0})
+            libsonare.mastering_assistant_suggest(samples, 48000, {earlier: 3.0})
         assert raised.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
 

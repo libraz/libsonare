@@ -14,6 +14,7 @@ from ._errors import _entry, _refuse, _refuse_type, _require_open
 from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
+    SonareStreamingMasteringChainOptions,
 )
 from ._mastering_offline import _chain_config_json
 from ._narrowing import _resolve_zero_default
@@ -223,6 +224,7 @@ class StreamingMasteringChain:
         channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         config_json = _chain_config_json(config, "config")
         handle = ctypes.c_void_p()
+        options = SonareStreamingMasteringChainOptions()
         if loudness_static_gain_db is not None:
             # NaN is how the C ABI spells "no offline peak measured", so the
             # caller's own value is narrowed here rather than at the conversion:
@@ -232,14 +234,13 @@ class StreamingMasteringChain:
                 if loudness_static_gain_peak_dbtp is None
                 else _narrow_float(loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp")
             )
-            rc = lib.sonare_streaming_mastering_chain_create_ex(
-                config_json,
-                _to_c_float(loudness_static_gain_db, "loudness_static_gain_db"),
-                ctypes.c_float(peak),
-                ctypes.byref(handle),
+            options.loudness_static_gain_db = _to_c_float(
+                loudness_static_gain_db, "loudness_static_gain_db"
             )
-        else:
-            rc = lib.sonare_streaming_mastering_chain_create(config_json, ctypes.byref(handle))
+            options.loudness_static_gain_peak_dbtp = ctypes.c_float(peak)
+        rc = lib.sonare_streaming_mastering_chain_create(
+            config_json, ctypes.byref(options), ctypes.byref(handle)
+        )
         _check(rc)
         self._lib = lib
         self._handle = handle
@@ -647,7 +648,7 @@ class StreamingEqualizer:
         source_array, source_length = _to_c_float_array(source)
         reference_array, reference_length = _to_c_float_array(reference)
         source_rate = self.sample_rate if sample_rate is None else sample_rate
-        rc = self._lib.sonare_eq_match_ex(
+        rc = self._lib.sonare_eq_match(
             self._handle,
             source_array,
             _to_c_size_t(source_length, "source_length"),

@@ -479,7 +479,7 @@ def test_public_analysis_and_catalog_helpers_return_usable_values() -> None:
         analyze_impulse_response,
         chroma,
         cyclic_tempogram,
-        decompose_with_init,
+        decompose,
         detect_acoustic,
         detect_downbeats,
         detect_key_candidates,
@@ -512,7 +512,7 @@ def test_public_analysis_and_catalog_helpers_return_usable_values() -> None:
     assert tempogram.shape[1] > 0
     assert tempogram.shape[0] == 60
 
-    factors = decompose_with_init([1.0, 2.0, 3.0, 4.0], 2, 2, 1, n_iter=2, init="nndsvd")
+    factors = decompose([1.0, 2.0, 3.0, 4.0], 2, 2, 1, n_iter=2, init="nndsvd")
     assert factors.w.shape == (2, 1)
     assert factors.h.shape == (1, 2)
     assert "pop" in mastering_preset_names()

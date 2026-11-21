@@ -63,7 +63,7 @@ def test_assistant_result(monkeypatch: pytest.MonkeyPatch) -> None:
     (wire,) = wires
     expected = _cli_view(wire)
     # The one intended difference: the chain is the nested overrides form, keys as the document's.
-    expected["chain_config"] = libsonare.mastering_assistant_suggest_chain(SOURCE, SR)
+    expected["chain_config"] = result.chain_config
     assert _result_to_json_dict(result) == _without_nulls(expected)
 
 

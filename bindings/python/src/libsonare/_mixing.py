@@ -12,7 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._errors import _entry, _refuse, _refuse_type, _require_open
-from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
+from ._ffi import SonareMixerAddStripOptions, SonareMixGoniometerPoint, SonareSurroundPan
 from ._ffi_types_analysis import SonareMixerMasterMeterConfig
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
@@ -268,8 +268,8 @@ class Mixer:
         :meth:`process_stereo`) to rebuild. Returns the new strip's index.
 
         Raises:
-            RuntimeError: the id is already taken, or ``true_peak_oversample``
-                is not 0 (default), 4 or 8.
+            RuntimeError: the id is already taken, or a given
+                ``true_peak_oversample`` is not 4 or 8.
         """
         self._require()
         lib = _get_lib()
@@ -277,16 +277,19 @@ class Mixer:
         # whole failure signal -- the detail is in the thread-local error slot.
         # The pointer itself is mixer-owned and never surfaces: every strip op on
         # this facade addresses a strip by index or id.
-        handle = lib.sonare_mixer_add_strip_ex(
-            self._handle,
-            _utf8_arg(id, "id"),
-            _bool_flag(enabled, "enabled"),
-            _bool_flag(lufs, "lufs"),
-            _bool_flag(true_peak, "true_peak"),
-            _to_c_int(
+        options = SonareMixerAddStripOptions._given(
+            enable_metering=_bool_flag(enabled, "enabled"),
+            measure_lufs=_bool_flag(lufs, "lufs"),
+            measure_true_peak=_bool_flag(true_peak, "true_peak"),
+            true_peak_oversample=None
+            if true_peak_oversample is None
+            else _to_c_int(
                 _resolve_zero_default(true_peak_oversample, "true_peak_oversample"),
                 "true_peak_oversample",
             ),
+        )
+        handle = lib.sonare_mixer_add_strip(
+            self._handle, _utf8_arg(id, "id"), ctypes.byref(options)
         )
         if not handle:
             raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to add strip")
@@ -718,7 +721,7 @@ class Mixer:
         lib = _get_lib()
         snapshot = SonareMixMeterSnapshot()
         _check(
-            lib.sonare_strip_meter_tap(
+            lib.sonare_strip_meter(
                 handle, ctypes.c_int(_meter_tap_value(tap, "tap")), ctypes.byref(snapshot)
             )
         )
@@ -1268,7 +1271,7 @@ def mix_stereo(
     try:
         strip_handles: list[ctypes.c_void_p] = []
         for index in range(len(strips)):
-            handle = lib.sonare_mixer_add_strip(mixer, _utf8_arg(f"strip{index}", "strip_id"))
+            handle = lib.sonare_mixer_add_strip(mixer, _utf8_arg(f"strip{index}", "strip_id"), None)
             if not handle:
                 raise _last_error(int(ErrorCode.UNKNOWN), "failed to add mixer strip")
             strip_handles.append(ctypes.c_void_p(handle))
@@ -1346,7 +1349,13 @@ def mix_stereo(
         meters: list[MixMeterSnapshot] = []
         for handle in strip_handles:
             snapshot = SonareMixMeterSnapshot()
-            _check(lib.sonare_strip_meter(handle, ctypes.byref(snapshot)))
+            _check(
+                lib.sonare_strip_meter(
+                    handle,
+                    ctypes.c_int(_meter_tap_value("postFader", "tap")),
+                    ctypes.byref(snapshot),
+                )
+            )
             meters.append(_mix_meter_from_c(snapshot))
 
         return MixResult(

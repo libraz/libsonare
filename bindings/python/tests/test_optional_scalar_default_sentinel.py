@@ -53,7 +53,7 @@ def _mel(**kwargs: float | None) -> np.ndarray:
 
 
 class TestMelFrequencyBounds:
-    """sonare_mel_spectrogram_ex fmin / fmax, reached as fmin_hz / fmax_hz."""
+    """sonare_mel_spectrogram fmin / fmax, reached as fmin_hz / fmax_hz."""
 
     @pytest.mark.parametrize("value", REFUSED_VALUES)
     def test_refuses_a_negative_or_non_finite_lower_edge(self, value: float) -> None:

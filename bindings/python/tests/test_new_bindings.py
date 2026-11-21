@@ -259,9 +259,9 @@ def test_nn_filter_and_decompose_take_none_for_the_library_default() -> None:
         libsonare.nn_filter(spec, n_features, n_frames),
         libsonare.nn_filter(spec, n_features, n_frames, k=7, width=1),
     )
-    for fn in (libsonare.decompose, libsonare.decompose_with_init):
-        omitted = fn(spec, n_features, n_frames, 2)
-        stated = fn(spec, n_features, n_frames, 2, n_iter=50)
+    for init in (None, "random"):
+        omitted = libsonare.decompose(spec, n_features, n_frames, 2, init=init)
+        stated = libsonare.decompose(spec, n_features, n_frames, 2, n_iter=50, init=init)
         np.testing.assert_array_equal(omitted.w, stated.w)
         np.testing.assert_array_equal(omitted.h, stated.h)
 
@@ -270,12 +270,12 @@ def test_an_omitted_nmf_init_is_the_library_default_and_an_empty_one_is_refused(
     """init=None reaches the C ABI as NULL ("random"); "" is an unknown token, not absence."""
     rng = np.random.default_rng(2)
     spec = np.abs(rng.standard_normal((12, 20))).astype(np.float32).ravel()
-    omitted = libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5)
-    explicit = libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5, init="random")
+    omitted = libsonare.decompose(spec, 12, 20, 2, n_iter=5)
+    explicit = libsonare.decompose(spec, 12, 20, 2, n_iter=5, init="random")
     np.testing.assert_array_equal(omitted.w, explicit.w)
     np.testing.assert_array_equal(omitted.h, explicit.h)
     with pytest.raises(ValueError, match="init"):
-        libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5, init="")  # type: ignore[arg-type]
+        libsonare.decompose(spec, 12, 20, 2, n_iter=5, init="")  # type: ignore[arg-type]
 
 
 def test_an_omitted_nn_filter_aggregate_is_the_library_default() -> None:
@@ -296,7 +296,6 @@ def test_an_omitted_nn_filter_aggregate_is_the_library_default() -> None:
         (lambda spec: libsonare.nn_filter(spec, 12, 20, k=-1), "k"),
         (lambda spec: libsonare.nn_filter(spec, 12, 20, width=-1), "width"),
         (lambda spec: libsonare.decompose(spec, 12, 20, 2, n_iter=0), "n_iter"),
-        (lambda spec: libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=0), "n_iter"),
     ],
 )
 def test_a_sentinel_count_is_refused_by_name(call: Any, field: str) -> None:
@@ -325,7 +324,8 @@ def test_remix_refuses_intervals_not_shaped_n_by_2(intervals: Any) -> None:
 
 
 def test_hpss_with_residual_splits_three_ways() -> None:
-    res = libsonare.hpss_with_residual(_tone(), sample_rate=22050)
+    res = libsonare.hpss(_tone(), sample_rate=22050, with_residual=True)
+    assert res.residual is not None
     harmonic = np.asarray(res.harmonic, dtype=np.float32)
     percussive = np.asarray(res.percussive, dtype=np.float32)
     residual = np.asarray(res.residual, dtype=np.float32)
@@ -495,10 +495,10 @@ def test_stems_and_residual_results_are_records() -> None:
     x = _tone(440.0, 0.3)
     stems = libsonare.decompose_stems(x, SR, n_components=2, n_iter=5)
     linked = libsonare.decompose_stems_linked([x, x], SR, n_components=2, n_iter=5)
-    residual = libsonare.hpss_with_residual(x, SR)
+    residual = libsonare.hpss(x, SR, with_residual=True)
     assert isinstance(stems, libsonare.DecomposeStemsResult)
     assert isinstance(linked, libsonare.DecomposeStemsLinkedResult)
-    assert isinstance(residual, libsonare.HpssWithResidualResult)
+    assert isinstance(residual, libsonare.HpssResult)
     assert stems.sample_rate == linked.sample_rate == residual.sample_rate == SR
     assert np.asarray(linked.components[0]).shape == (2, len(x))
     with pytest.raises(dataclasses.FrozenInstanceError):

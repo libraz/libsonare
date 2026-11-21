@@ -83,6 +83,7 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("pseudo_cqt", "sample_rate"): "sr",
     ("realtime_voice_changer_process_interleaved", "input"): "samples",
     ("realtime_voice_changer_process_mono", "input"): "samples",
+    ("realtime_voice_changer_render", "channels"): "num_channels",
     ("reassigned_spectrogram", "sample_rate"): "sr",
     ("remix", "sample_rate"): "sr",
     ("spectral_bandwidth", "sample_rate"): "sr",

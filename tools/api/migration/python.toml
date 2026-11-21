@@ -885,6 +885,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "voice_change_realtime(sample_rate)"
+to = "realtime_voice_changer_render(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 48000)"
 domain = "effects"
 rule = "sample-rate-required"
@@ -924,14 +925,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
-old = "mastering_assistant_suggest_chain(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
 old = "mastering_audio_profile(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
@@ -941,14 +934,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_assistant_suggest_stereo(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
-old = "mastering_assistant_suggest_chain_stereo(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -1337,14 +1322,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
-old = "hpss_with_residual(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
 old = "phase_vocoder(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "effects"
@@ -1676,23 +1653,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
-old = "metering_vectorscope_decimated(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
 old = "metering_phase_scope(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
-old = "metering_phase_scope_decimated(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -2585,14 +2546,6 @@ test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_resu
 kind = "function"
 old = "decompose_stems_linked"
 changed = "returns DecomposeStemsLinkedResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute"
-domain = "effects"
-rule = "typed-results"
-test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_results_are_records"
-
-[[entry]]
-kind = "function"
-old = "hpss_with_residual"
-changed = "returns HpssWithResidualResult(harmonic, percussive, residual, sample_rate) instead of a dict keyed harmonic / percussive / residual / sampleRate; read the fields by attribute"
 domain = "effects"
 rule = "typed-results"
 test = "bindings/python/tests/test_new_bindings.py::test_stems_and_residual_results_are_records"
@@ -5473,7 +5426,7 @@ test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_preset_co
 [[entry]]
 kind = "option"
 old = "voice_change_realtime(preset)"
-to = "voice_change_realtime(config)"
+to = "realtime_voice_changer_render(config)"
 changed = "renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError; the preset ids are lowerCamel (default neutralMonitor) and a kebab id raises"
 domain = "effects"
 rule = "token-case"
@@ -5482,7 +5435,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_pre
 [[entry]]
 kind = "option"
 old = "Audio.voice_change_realtime(preset)"
-to = "Audio.voice_change_realtime(config)"
+to = "Audio.realtime_voice_changer_render(config)"
 changed = "renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError"
 domain = "core"
 rule = "one-input-form"
@@ -7776,22 +7729,6 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
-old = "mastering_assistant_suggest_chain"
-changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record; pass it to master_audio(overrides=) unchanged"
-domain = "mastering"
-rule = "typed-results"
-test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matches_the_suggestion_chain_config"
-
-[[entry]]
-kind = "function"
-old = "mastering_assistant_suggest_chain_stereo"
-changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record"
-domain = "mastering"
-rule = "typed-results"
-test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_stereo_matches_the_suggestion_chain_config"
-
-[[entry]]
-kind = "function"
 old = "mastering_preset_params"
 changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record"
 domain = "mastering"
@@ -8843,14 +8780,6 @@ test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_ref
 
 [[entry]]
 kind = "option"
-old = "decompose_with_init(n_iter)"
-changed = "None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError"
-domain = "effects"
-rule = "library-owned-defaults"
-test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
-
-[[entry]]
-kind = "option"
 old = "Project.add_loop_recording_takes(audio_sample_rate)"
 changed = "audio_sample_rate is required (1.x defaulted to 48000); a non-positive rate raises SonareValueError"
 domain = "project"
@@ -8875,23 +8804,7 @@ test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_m
 
 [[entry]]
 kind = "option"
-old = "metering_vectorscope_decimated(max_points)"
-changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
-domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
-
-[[entry]]
-kind = "option"
 old = "metering_phase_scope(max_points)"
-changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
-domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
-
-[[entry]]
-kind = "option"
-old = "metering_phase_scope_decimated(max_points)"
 changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -10346,6 +10259,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_
 [[entry]]
 kind = "method"
 old = "Audio.voice_change_realtime"
+to = "Audio.realtime_voice_changer_render"
 changed = "returns a float32 ndarray instead of list[float]"
 domain = "core"
 rule = "array-results"
@@ -12097,14 +12011,6 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_ho
 
 [[entry]]
 kind = "option"
-old = "hpss_with_residual(hop_length)"
-changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
-domain = "effects"
-rule = "library-owned-defaults"
-test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
-
-[[entry]]
-kind = "option"
 old = "phase_vocoder(hop_length)"
 changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "effects"
@@ -12241,14 +12147,6 @@ test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_ref
 
 [[entry]]
 kind = "option"
-old = "decompose_with_init(init)"
-changed = "an NmfInit token or None; omitted hands the core its default (was the literal \"random\"), and \"\" raises SonareValueError instead of selecting the default"
-domain = "effects"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_nmf_init_is_the_library_default_and_an_empty_one_is_refused"
-
-[[entry]]
-kind = "option"
 old = "spectral_edit(n_fft)"
 changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError instead of selecting the default"
 domain = "effects"
@@ -12375,13 +12273,6 @@ rule = "input-always-scanned"
 
 [[entry]]
 kind = "option"
-old = "hpss_with_residual(validate)"
-removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
-domain = "effects"
-rule = "input-always-scanned"
-
-[[entry]]
-kind = "option"
 old = "lufs(validate)"
 removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
 domain = "analysis"
@@ -12473,13 +12364,6 @@ rule = "input-always-scanned"
 
 [[entry]]
 kind = "option"
-old = "metering_phase_scope_decimated(validate)"
-removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
-domain = "mastering"
-rule = "input-always-scanned"
-
-[[entry]]
-kind = "option"
 old = "metering_rms_db(validate)"
 removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
 domain = "mastering"
@@ -12530,13 +12414,6 @@ rule = "input-always-scanned"
 [[entry]]
 kind = "option"
 old = "metering_vectorscope(validate)"
-removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
-domain = "mastering"
-rule = "input-always-scanned"
-
-[[entry]]
-kind = "option"
-old = "metering_vectorscope_decimated(validate)"
 removed = "every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
 domain = "mastering"
 rule = "input-always-scanned"
@@ -13056,7 +12933,7 @@ old = "analyze_impulse_response(n_octave_bands)"
 changed = "a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
 domain = "analysis"
 rule = "error-class-by-cause"
-test = "bindings/python/tests/test_python_feature_options.py::test_analyze_impulse_response_validates_ex_parameters"
+test = "bindings/python/tests/test_python_feature_options.py::test_analyze_impulse_response_validates_parameters"
 
 [[entry]]
 kind = "option"
@@ -13171,7 +13048,7 @@ rule = "num-channels"
 [[entry]]
 kind = "option"
 old = "voice_change_realtime(channels)"
-new = "voice_change_realtime(num_channels)"
+new = "realtime_voice_changer_render(num_channels)"
 domain = "effects"
 rule = "num-channels"
 
@@ -13240,6 +13117,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_renamed_
 [[entry]]
 kind = "function"
 old = "voice_change_realtime"
+to = "realtime_voice_changer_render"
 changed = "a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown"
 domain = "effects"
 rule = "individual"
@@ -13587,3 +13465,66 @@ old = "CapabilityCatalogChain.aliases"
 removed = "a chain key resolves through its descriptor or list; there is no alias table to read"
 domain = "core"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "function"
+old = "hpss_with_residual"
+removed = "call hpss(..., with_residual=True); the residual is HpssResult.residual"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "decompose_with_init"
+removed = "call decompose(..., init=...)"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "metering_vectorscope_decimated"
+removed = "call metering_vectorscope(..., max_points=n)"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "metering_phase_scope_decimated"
+removed = "call metering_phase_scope(..., max_points=n)"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest_chain"
+removed = "read mastering_assistant_suggest(...).chain_config"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest_chain_stereo"
+removed = "read mastering_assistant_suggest_stereo(...).chain_config"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "TransportState.bar_count"
+new = "TransportState.bar_index"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "NormalizeStereoResult.applied_gain_db"
+removed = "the C entry no longer reports the gain; compare the input and output levels if it is needed"
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "voice_change_realtime(samples)"
+new = "realtime_voice_changer_render(samples)"
+domain = "effects"
+rule = "one-entry-per-operation"

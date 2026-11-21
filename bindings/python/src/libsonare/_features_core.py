@@ -11,10 +11,15 @@ import numpy.typing as npt
 from ._errors import _entry, _refuse
 from ._features_transforms import _CQT_HOP_LENGTH_MAX
 from ._ffi import (
+    SonareChromaCensOptions,
+    SonareChromaCqtOptions,
     SonareChromaResult,
     SonareMelResult,
+    SonareMelSpectrogramOptions,
+    SonareMfccOptions,
     SonareMfccResult,
     SonareReassignedSpectrogramResult,
+    SonareSpectralBandwidthOptions,
     SonareStftResult,
 )
 from ._field_spelling import surface_spelling
@@ -252,16 +257,19 @@ def mel_spectrogram(
     sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareMelResult()
-    rc = lib.sonare_mel_spectrogram_ex(
+    options = SonareMelSpectrogramOptions._given(
+        fmin_hz=_to_c_float(fmin_hz, "fmin_hz"),
+        fmax_hz=_to_c_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
+        htk=1 if htk else 0,
+    )
+    rc = lib.sonare_mel_spectrogram(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
-        _to_c_float(fmin_hz, "fmin_hz"),
-        _to_c_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
-        ctypes.c_int(1 if htk else 0),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
@@ -314,7 +322,13 @@ def mfcc(
     sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareMfccResult()
-    rc = lib.sonare_mfcc_ex(
+    options = SonareMfccOptions._given(
+        fmin_hz=_to_c_float(fmin, "fmin"),
+        fmax_hz=_to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+        htk=1 if htk else 0,
+        lifter=_to_c_float(lifter, "lifter"),
+    )
+    rc = lib.sonare_mfcc(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
@@ -322,10 +336,7 @@ def mfcc(
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         _to_c_int(n_mfcc, "n_mfcc"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
-        ctypes.c_int(1 if htk else 0),
-        _to_c_float(lifter, "lifter"),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
@@ -433,6 +444,7 @@ def _chroma_variant(
     n_chroma: int,
     bins_per_octave: int | None = None,
     *,
+    options_cls: type[SonareChromaCensOptions] | type[SonareChromaCqtOptions] | None = None,
     wrapper_name: str,
 ) -> ChromaResult:
     # ``fn_name`` is the C symbol; ``wrapper_name`` is the public Python name the
@@ -448,8 +460,13 @@ def _chroma_variant(
         _narrow_int(hop_length, "hop_length", 1, _CQT_HOP_LENGTH_MAX),
         _to_c_int(n_chroma, "n_chroma"),
     ]
-    if bins_per_octave is not None:
-        args.append(_to_c_int(bins_per_octave, "bins_per_octave"))
+    if options_cls is not None:
+        options = options_cls._given(
+            bins_per_octave=None
+            if bins_per_octave is None
+            else _to_c_int(bins_per_octave, "bins_per_octave")
+        )
+        args.append(ctypes.byref(options))
     args.append(ctypes.byref(out))
     rc = getattr(lib, fn_name)(*args)
     _check(rc)
@@ -489,12 +506,13 @@ def chroma_cens(
         the mean energy of each class.
     """
     return _chroma_variant(
-        "sonare_chroma_cens_ex",
+        "sonare_chroma_cens",
         samples,
         sr,
         hop_length,
         n_chroma,
         bins_per_octave,
+        options_cls=SonareChromaCensOptions,
         wrapper_name="chroma_cens",
     )
 
@@ -524,12 +542,13 @@ def chroma_cqt(
         the mean energy of each class.
     """
     return _chroma_variant(
-        "sonare_chroma_cqt_ex",
+        "sonare_chroma_cqt",
         samples,
         sr,
         hop_length,
         n_chroma,
         bins_per_octave,
+        options_cls=SonareChromaCqtOptions,
         wrapper_name="chroma_cqt",
     )
 
@@ -620,13 +639,14 @@ def spectral_bandwidth(
     Returns:
         A float32 array of spectral bandwidth values, one per frame.
     """
+    options = SonareSpectralBandwidthOptions._given(p=_to_c_float(p, "p"))
     return _call_float_array_transform(
-        "sonare_spectral_bandwidth_ex",
+        "sonare_spectral_bandwidth",
         samples,
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        _to_c_float(p, "p"),
+        ctypes.byref(options),
     )
 
 

@@ -608,16 +608,16 @@ def test_an_omitted_inverse_hop_is_a_quarter_of_n_fft() -> None:
 
 
 def test_an_omitted_hpss_hop_is_a_quarter_of_n_fft() -> None:
-    """hpss and hpss_with_residual with n_fft 512 and no hop equal the hop-128 call."""
-    from libsonare import hpss, hpss_with_residual
+    """hpss with and without a residual, n_fft 512 and no hop equal the hop-128 call."""
+    from libsonare import hpss
 
     tone = _generate_sine(440, 22050, 0.5)
     omitted = hpss(tone, 22050, n_fft=512)
     explicit = hpss(tone, 22050, n_fft=512, hop_length=128)
     np.testing.assert_array_equal(omitted.harmonic, explicit.harmonic)
     np.testing.assert_array_equal(omitted.percussive, explicit.percussive)
-    with_residual = hpss_with_residual(tone, 22050, n_fft=512)
-    with_residual_explicit = hpss_with_residual(tone, 22050, n_fft=512, hop_length=128)
+    with_residual = hpss(tone, 22050, n_fft=512, with_residual=True)
+    with_residual_explicit = hpss(tone, 22050, n_fft=512, hop_length=128, with_residual=True)
     for key in ("harmonic", "percussive", "residual"):
         np.testing.assert_array_equal(
             getattr(with_residual, key), getattr(with_residual_explicit, key)

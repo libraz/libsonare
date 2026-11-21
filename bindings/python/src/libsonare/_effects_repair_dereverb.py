@@ -10,14 +10,13 @@ import numpy as np
 
 from ._effects_repair_common import (
     _linked_channel_planes,
-    _linked_output_planes,
     _run_detection,
     _run_repair,
 )
 from ._errors import _entry, _refuse
 from ._ffi import (
     SonareDereverbClassicalConfig,
-    SonareDereverbReport,
+    SonareDereverbLinkedResult,
     SonareDereverbResult,
     SonareDereverbStereoResult,
     SonareReverbDetection,
@@ -452,24 +451,28 @@ def mastering_repair_dereverb_classical_linked(
         ),
         wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
-    out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
-    report = SonareDereverbReport()  # noqa: F405
-    _check(
-        lib.sonare_mastering_repair_dereverb_classical_linked(
-            ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-            _to_c_size_t(len(arrays), "channel_count"),
-            _to_c_size_t(frame_count, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            ctypes.byref(config),
-            ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-            ctypes.byref(report),
-        ),
-        flattened="config",
-    )
-    return DereverbLinkedResult(
-        channels=out_buffers,
-        report=_extract_dereverb_report(report),
-    )
+    result = SonareDereverbLinkedResult()
+    try:
+        _check(
+            lib.sonare_mastering_repair_dereverb_classical_linked(
+                ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+                _to_c_size_t(len(arrays), "channel_count"),
+                _to_c_size_t(frame_count, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                ctypes.byref(config),
+                ctypes.byref(result),
+            ),
+            flattened="config",
+        )
+        return DereverbLinkedResult(
+            channels=[
+                _from_c_float_array(result.channels[index], result.length)
+                for index in range(result.num_channels)
+            ],
+            report=_extract_dereverb_report(result.report),
+        )
+    finally:
+        lib.sonare_free_dereverb_linked_result(ctypes.byref(result))
 
 
 @_entry("mastering_repair_dereverb_config_for_room")

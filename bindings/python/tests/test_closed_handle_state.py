@@ -44,7 +44,7 @@ def _make_retune() -> Any:
     from libsonare import StreamingRetune
 
     retune = StreamingRetune(pitch_semitones=2.0)
-    retune.prepare(48000.0, 128)
+    retune.prepare(48000, 128)
     return retune
 
 
@@ -80,7 +80,7 @@ _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]]
     "StreamingRetune": (
         _make_retune,
         [
-            ("prepare", (48000.0, 128)),
+            ("prepare", (48000, 128)),
             ("reset", ()),
             ("set_config", ()),
             ("config", ()),

@@ -24,7 +24,6 @@ from ._runtime import (
     SonareRoomEstimate,
     SonareRoomEstimateConfig,
     SonareRoomMorphConfig,
-    SonareRoomMorphStereoResult,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -713,24 +712,31 @@ def room_morph_stereo(
         air_humidity_percent=air_humidity_percent,
         receiver_spacing_m=spacing,
     )
-    out = SonareRoomMorphStereoResult()
+    out_left = ctypes.POINTER(ctypes.c_float)()
+    out_right = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
     rc = lib.sonare_room_morph_stereo(
         c_left,
         c_right,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(config),
-        ctypes.byref(out),
+        ctypes.byref(out_left),
+        ctypes.byref(out_right),
+        ctypes.byref(out_length),
     )
     _check(rc, flattened="config")
     try:
         # Read before any later C ABI call can overwrite the thread-local list.
         diagnostics = _read_diagnostics()
         return RoomMorphStereoResult(
-            left=_from_c_float_array(out.left, out.length),
-            right=_from_c_float_array(out.right, out.length),
-            sample_rate=int(out.sample_rate),
+            left=_from_c_float_array(out_left, out_length.value),
+            right=_from_c_float_array(out_right, out_length.value),
+            sample_rate=sample_rate,
             diagnostics=diagnostics,
         )
     finally:
-        lib.sonare_free_room_morph_stereo_result(ctypes.byref(out))
+        if out_left:
+            lib.sonare_free_floats(out_left)
+        if out_right:
+            lib.sonare_free_floats(out_right)

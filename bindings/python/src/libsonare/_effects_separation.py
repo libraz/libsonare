@@ -12,7 +12,12 @@ import numpy.typing as npt
 
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import _entry, _refuse, _refuse_type
-from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
+from ._ffi import (
+    SonareDecomposeOptions,
+    SonareDecomposeStemsConfig,
+    SonareHpssOptions,
+    SonareHpssResult,
+)
 from ._narrowing import (
     _narrow_double,
     _narrow_int,
@@ -57,7 +62,7 @@ _NN_FILTER_AGGREGATES: tuple[str, ...] = get_args(NnFilterAggregate)
 
 @dataclass(frozen=True, slots=True, eq=False)
 class DecomposeResult:
-    """Result of :func:`decompose` and :func:`decompose_with_init`."""
+    """Result of :func:`decompose`."""
 
     w: np.ndarray
     """Component matrix of shape ``(n_features, n_components)`` as float32."""
@@ -93,20 +98,6 @@ class DecomposeStemsLinkedResult:
     """Sample rate of the component signals, in Hz."""
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class HpssWithResidualResult:
-    """Result of :func:`hpss_with_residual`; the three signals add back up to the input."""
-
-    harmonic: np.ndarray
-    """Harmonic component as float32."""
-    percussive: np.ndarray
-    """Percussive component as float32."""
-    residual: np.ndarray
-    """What neither component claimed, as float32; silent under the default soft mask."""
-    sample_rate: int
-    """Sample rate of all three signals, in Hz."""
-
-
 @_entry("decompose")
 @_guard_buffer("s")
 def decompose(
@@ -116,6 +107,7 @@ def decompose(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
+    init: NmfInit | None = None,
 ) -> DecomposeResult:
     """Non-negative matrix factorisation (librosa.decompose.decompose).
 
@@ -127,6 +119,10 @@ def decompose(
         n_iter: Number of multiplicative-update iterations; None takes the
             library default (50). Must be greater than 0 when given.
         beta: Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
+        init: Initialisation strategy: ``"random"`` or ``"nndsvd"`` (the
+            SVD-based warm start, which tends to converge in fewer iterations).
+            Default: the library's (``"random"``). Any other string, the empty
+            one included, is refused.
 
     Returns:
         A :class:`DecomposeResult` of float32 arrays: ``w`` is the component
@@ -140,6 +136,9 @@ def decompose(
     # The C ABI refuses a non-positive extent by its domain before it reads s.
     if n_features > 0 and n_frames > 0 and length != n_features * n_frames:
         raise _refuse("s length must equal n_features * n_frames")
+    options = SonareDecomposeOptions._given(
+        init=None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init")
+    )
     with (
         _out_float_array(lib) as (out_w, out_w_length),
         _out_float_array(lib) as (out_h, out_h_length),
@@ -152,60 +151,7 @@ def decompose(
                 _to_c_int(n_components, "n_components"),
                 _to_c_int(_resolve_zero_default(n_iter, "n_iter"), "n_iter"),
                 _to_c_float(beta, "beta"),
-                ctypes.byref(out_w),
-                ctypes.byref(out_w_length),
-                ctypes.byref(out_h),
-                ctypes.byref(out_h_length),
-            )
-        )
-        w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
-        h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
-        return DecomposeResult(w=w, h=h)
-
-
-@_entry("decompose_with_init")
-@_guard_buffer("s")
-def decompose_with_init(
-    s: Sequence[float] | list[float],
-    n_features: int,
-    n_frames: int,
-    n_components: int,
-    n_iter: int | None = None,
-    beta: float = 2.0,
-    init: NmfInit | None = None,
-) -> DecomposeResult:
-    """NMF with a selectable initialiser (librosa.decompose.decompose, ``init``).
-
-    Identical to :func:`decompose` but exposes the initialisation strategy:
-    ``"random"`` or ``"nndsvd"`` (the SVD-based warm start, which tends to
-    converge in fewer iterations). Default: the library's (``"random"``). Any
-    other string, the empty one included, is refused.
-
-    Returns:
-        A :class:`DecomposeResult` of float32 arrays: ``w`` of shape
-        ``(n_features, n_components)`` and ``h`` of shape
-        ``(n_components, n_frames)``.
-    """
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(s)
-    n_features = _to_c_int(n_features, "n_features").value
-    n_frames = _to_c_int(n_frames, "n_frames").value
-    # The C ABI refuses a non-positive extent by its domain before it reads s.
-    if n_features > 0 and n_frames > 0 and length != n_features * n_frames:
-        raise _refuse("s length must equal n_features * n_frames")
-    with (
-        _out_float_array(lib) as (out_w, out_w_length),
-        _out_float_array(lib) as (out_h, out_h_length),
-    ):
-        _check(
-            lib.sonare_decompose_with_init(
-                c_array,
-                _to_c_int(n_features, "n_features"),
-                _to_c_int(n_frames, "n_frames"),
-                _to_c_int(n_components, "n_components"),
-                _to_c_int(_resolve_zero_default(n_iter, "n_iter"), "n_iter"),
-                _to_c_float(beta, "beta"),
-                None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init"),
+                ctypes.byref(options),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
@@ -407,7 +353,6 @@ def decompose_stems_linked(
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     channel_count = len(arrays)
     component_count = ctypes.c_size_t()
-    out_channel_count = ctypes.c_size_t()
     with (
         _out_float_array(lib) as (out, component_length),
         _out_float_array(lib) as (out_w, out_w_length),
@@ -422,7 +367,6 @@ def decompose_stems_linked(
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(component_count),
-                ctypes.byref(out_channel_count),
                 ctypes.byref(component_length),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
@@ -432,7 +376,7 @@ def decompose_stems_linked(
             flattened="config",
         )
         count = component_count.value
-        ch = out_channel_count.value
+        ch = channel_count
         per = component_length.value
         flat = _from_c_float_array(out, count * ch * per)
         components = [
@@ -616,8 +560,18 @@ def hpss(
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
     hard_mask: bool = False,
+    with_residual: bool = False,
 ) -> HpssResult:
     """Perform harmonic-percussive source separation.
+
+    With ``with_residual=True`` the result also carries the signal neither
+    component claimed, so harmonic, percussive and residual add back up to the
+    input. The residual is silent under the default soft mask, whose two masks
+    sum to one, so ``harmonic`` and ``percussive`` already carry everything. Pass
+    ``hard_mask=True`` for a residual that holds signal: its thresholded masks
+    leave the band where neither component dominates, measured at 3% of the
+    input energy on a voice-plus-kick signal. The harmonic and percussive
+    components are the same whether or not the residual is requested.
 
     Args:
         samples: Audio samples.
@@ -633,47 +587,55 @@ def hpss(
             so frames overlap by at least half a window. Default: ``n_fft / 4``,
             derived by the library.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
+        with_residual: Also return the residual signal (default ``False``).
 
     Returns:
-        HpssResult with harmonic and percussive components.
+        HpssResult with harmonic and percussive components, plus ``residual``
+        (a ``float32`` array of the same length) when ``with_residual`` is true
+        and ``None`` otherwise.
     """
     _validate_samples(samples)
     n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    hop_length = _effect_hop(hop_length)
+    hop = None if hop_length is None else _validate_effect_hop(hop_length)
     kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
         raise _refuse_type("hard_mask must be a bool")
+    if not isinstance(with_residual, bool):
+        raise _refuse_type("with_residual must be a bool")
 
     lib = _get_lib()
-    use_soft_mask = 0 if hard_mask else 1
+    options = SonareHpssOptions._given(
+        n_fft=n_fft, hop_length=hop, use_soft_mask=0 if hard_mask else 1
+    )
 
     c_array, length = _to_c_float_array(samples)
     out = SonareHpssResult()
-    rc = lib.sonare_hpss_ex(
+    residual = ctypes.POINTER(ctypes.c_float)()
+    rc = lib.sonare_hpss(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(kernel_harmonic, "kernel_harmonic"),
         _to_c_int(kernel_percussive, "kernel_percussive"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        _to_c_int(use_soft_mask, "use_soft_mask"),
-        ctypes.c_int(0),
+        ctypes.byref(options),
         ctypes.byref(out),
-        None,
+        ctypes.byref(residual) if with_residual else None,
     )
-    _check(rc)
     try:
-        n = out.length
+        _check(rc)
+        n = int(out.length)
         return HpssResult(
             harmonic=_from_c_float_array(out.harmonic, n),
             percussive=_from_c_float_array(out.percussive, n),
-            length=int(n),
+            length=n,
             sample_rate=int(out.sample_rate),
+            residual=_from_c_float_array(residual, n) if with_residual else None,
         )
     finally:
         lib.sonare_free_hpss_result(ctypes.byref(out))
+        if residual:
+            lib.sonare_free_floats(residual)
 
 
 @_entry("harmonic")
@@ -714,93 +676,6 @@ def percussive(
     return _call_float_array_transform(
         "sonare_percussive", samples, _to_c_int(sample_rate, "sample_rate")
     )
-
-
-@_entry("hpss_with_residual")
-def hpss_with_residual(
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    kernel_harmonic: int = 31,
-    kernel_percussive: int = 31,
-    n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int | None = None,
-    hard_mask: bool = False,
-) -> HpssWithResidualResult:
-    """HPSS into harmonic / percussive / residual signals.
-
-    The three outputs always add back up to the input. ``residual`` is silent
-    under the default soft mask, whose two masks sum to one, so ``harmonic`` and
-    ``percussive`` already carry everything; it is returned anyway so the result
-    shape does not change with the mask. Pass ``hard_mask=True`` for a residual
-    that holds signal -- its thresholded masks leave the band where neither
-    component dominates, measured at 3% of the input energy on a voice-plus-kick
-    signal.
-
-    Example:
-        >>> soft = hpss_with_residual(samples, sample_rate)
-        >>> # soft.residual is silence
-        >>> hard = hpss_with_residual(samples, sample_rate, hard_mask=True)
-        >>> # hard.residual carries what neither component claimed
-
-    Args:
-        samples: Input audio.
-        sample_rate: Sample rate in Hz.
-        kernel_harmonic: Horizontal median filter size, in STFT frames: a
-            positive odd integer at most 524287. The ceiling is 524288 and an
-            even kernel is refused, so 524287 is the largest legal value.
-        kernel_percussive: Vertical median filter size, in STFT bins, under the
-            same rule.
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
-            (default 2048).
-        hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft / 4``,
-            derived by the library.
-        hard_mask: Use binary harmonic/percussive masks (default ``False``).
-
-    Returns:
-        A :class:`HpssWithResidualResult` with ``harmonic`` / ``percussive`` /
-        ``residual`` float32 arrays (all the same length) and ``sample_rate``.
-    """
-    _validate_samples(samples)
-    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    hop_length = _effect_hop(hop_length)
-    kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
-    kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
-    if not isinstance(hard_mask, bool):
-        raise _refuse_type("hard_mask must be a bool")
-
-    lib = _get_lib()
-    use_soft_mask = 0 if hard_mask else 1
-
-    c_array, length = _to_c_float_array(samples)
-    out = SonareHpssResult()
-    residual = ctypes.POINTER(ctypes.c_float)()
-    rc = lib.sonare_hpss_ex(
-        c_array,
-        _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(kernel_harmonic, "kernel_harmonic"),
-        _to_c_int(kernel_percussive, "kernel_percussive"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        _to_c_int(use_soft_mask, "use_soft_mask"),
-        ctypes.c_int(1),
-        ctypes.byref(out),
-        ctypes.byref(residual),
-    )
-    try:
-        _check(rc)
-        n = int(out.length)
-        return HpssWithResidualResult(
-            harmonic=_from_c_float_array(out.harmonic, n),
-            percussive=_from_c_float_array(out.percussive, n),
-            residual=_from_c_float_array(residual, n),
-            sample_rate=int(out.sample_rate),
-        )
-    finally:
-        lib.sonare_free_hpss_result(ctypes.byref(out))
-        if residual:
-            lib.sonare_free_floats(residual)
 
 
 @_entry("phase_vocoder")

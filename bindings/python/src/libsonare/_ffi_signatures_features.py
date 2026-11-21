@@ -46,25 +46,12 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareMelSpectrogramOptions),
         ctypes.POINTER(SonareMelResult),
     ]
+    lib.sonare_mel_spectrogram_options_init.restype = None
+    lib.sonare_mel_spectrogram_options_init.argtypes = [ctypes.POINTER(SonareMelSpectrogramOptions)]
 
-    # sonare_mel_spectrogram_ex (explicit Mel range: fmin/fmax/htk)
-    lib.sonare_mel_spectrogram_ex.restype = ctypes.c_int32
-    lib.sonare_mel_spectrogram_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.POINTER(SonareMelResult),
-    ]
-
-    # sonare_mfcc
     lib.sonare_mfcc.restype = ctypes.c_int32
     lib.sonare_mfcc.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -74,25 +61,11 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareMfccOptions),
         ctypes.POINTER(SonareMfccResult),
     ]
-
-    # sonare_mfcc_ex (explicit Mel range: fmin/fmax/htk + cepstral lifter)
-    lib.sonare_mfcc_ex.restype = ctypes.c_int32
-    lib.sonare_mfcc_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(SonareMfccResult),
-    ]
+    lib.sonare_mfcc_options_init.restype = None
+    lib.sonare_mfcc_options_init.argtypes = [ctypes.POINTER(SonareMfccOptions)]
 
     # sonare_mel_delta
     lib.sonare_mel_delta.restype = ctypes.c_int32
@@ -104,17 +77,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
     ]
 
-    lib.sonare_spectral_bandwidth_ex.restype = ctypes.c_int32
-    lib.sonare_spectral_bandwidth_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
     lib.sonare_spectral_flux.restype = ctypes.c_int32
     lib.sonare_spectral_flux.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -254,18 +216,11 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareChromaCensOptions),
         ctypes.POINTER(SonareChromaResult),
     ]
-    lib.sonare_chroma_cens_ex.restype = ctypes.c_int32
-    lib.sonare_chroma_cens_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(SonareChromaResult),
-    ]
+    lib.sonare_chroma_cens_options_init.restype = None
+    lib.sonare_chroma_cens_options_init.argtypes = [ctypes.POINTER(SonareChromaCensOptions)]
 
     lib.sonare_chroma_cqt.restype = ctypes.c_int32
     lib.sonare_chroma_cqt.argtypes = [
@@ -274,18 +229,11 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareChromaCqtOptions),
         ctypes.POINTER(SonareChromaResult),
     ]
-    lib.sonare_chroma_cqt_ex.restype = ctypes.c_int32
-    lib.sonare_chroma_cqt_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(SonareChromaResult),
-    ]
+    lib.sonare_chroma_cqt_options_init.restype = None
+    lib.sonare_chroma_cqt_options_init.argtypes = [ctypes.POINTER(SonareChromaCqtOptions)]
 
     lib.sonare_bass_chroma.restype = ctypes.c_int32
     lib.sonare_bass_chroma.argtypes = [
@@ -319,8 +267,13 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareSpectralBandwidthOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_spectral_bandwidth_options_init.restype = None
+    lib.sonare_spectral_bandwidth_options_init.argtypes = [
+        ctypes.POINTER(SonareSpectralBandwidthOptions)
     ]
 
     # sonare_spectral_rolloff
@@ -516,18 +469,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_split_silence_common.restype = ctypes.c_int32
     lib.sonare_split_silence_common.argtypes = [
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_split_silence_common_ex.restype = ctypes.c_int32
-    lib.sonare_split_silence_common_ex.argtypes = [
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
@@ -781,35 +722,13 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.POINTER(SonareNnlsChromaOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
     ]
-    lib.sonare_nnls_chroma_ex.restype = ctypes.c_int32
-    lib.sonare_nnls_chroma_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
-    lib.sonare_nnls_chroma_ex2.restype = ctypes.c_int32
-    lib.sonare_nnls_chroma_ex2.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
+    lib.sonare_nnls_chroma_options_init.restype = None
+    lib.sonare_nnls_chroma_options_init.argtypes = [ctypes.POINTER(SonareNnlsChromaOptions)]
 
     # sonare_lufs
     lib.sonare_lufs.restype = ctypes.c_int32
@@ -931,15 +850,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.POINTER(SonareVectorscopeResult),
-    ]
-
-    lib.sonare_metering_vectorscope_decimated.restype = ctypes.c_int32
-    lib.sonare_metering_vectorscope_decimated.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
         ctypes.c_size_t,
         ctypes.POINTER(SonareVectorscopeResult),
     ]
@@ -949,15 +859,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_metering_phase_scope.restype = ctypes.c_int32
     lib.sonare_metering_phase_scope.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonarePhaseScopeResult),
-    ]
-
-    lib.sonare_metering_phase_scope_decimated.restype = ctypes.c_int32
-    lib.sonare_metering_phase_scope_decimated.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,

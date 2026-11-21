@@ -20,22 +20,12 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
-        ctypes.POINTER(SonareHpssResult),
-    ]
-    lib.sonare_hpss_ex.restype = ctypes.c_int32
-    lib.sonare_hpss_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.POINTER(SonareHpssOptions),
         ctypes.POINTER(SonareHpssResult),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
     ]
+    lib.sonare_hpss_options_init.restype = None
+    lib.sonare_hpss_options_init.argtypes = [ctypes.POINTER(SonareHpssOptions)]
 
     # sonare_harmonic
     lib.sonare_harmonic.restype = ctypes.c_int32
@@ -64,20 +54,12 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
+        ctypes.POINTER(SonareTimeStretchOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_time_stretch_ex.restype = ctypes.c_int32
-    lib.sonare_time_stretch_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
+    lib.sonare_time_stretch_options_init.restype = None
+    lib.sonare_time_stretch_options_init.argtypes = [ctypes.POINTER(SonareTimeStretchOptions)]
 
     # sonare_spectral_edit
     lib.sonare_spectral_edit.restype = ctypes.c_int32
@@ -99,20 +81,12 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
+        ctypes.POINTER(SonarePitchShiftOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_pitch_shift_ex.restype = ctypes.c_int32
-    lib.sonare_pitch_shift_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
+    lib.sonare_pitch_shift_options_init.restype = None
+    lib.sonare_pitch_shift_options_init.argtypes = [ctypes.POINTER(SonarePitchShiftOptions)]
 
     # sonare_pitch_correct_to_midi
     lib.sonare_pitch_correct_to_midi.restype = ctypes.c_int32
@@ -436,40 +410,27 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
+        ctypes.POINTER(SonareVoiceChangeConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_voice_change_config_init.restype = None
     lib.sonare_voice_change_config_init.argtypes = [ctypes.POINTER(SonareVoiceChangeConfig)]
-    lib.sonare_voice_change_ex.restype = ctypes.c_int32
-    lib.sonare_voice_change_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareVoiceChangeConfig),
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-    lib.sonare_voice_change_realtime.restype = ctypes.c_int32
-    lib.sonare_voice_change_realtime.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_char_p,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
 
-    lib.sonare_realtime_voice_changer_create_json.restype = ctypes.c_int32
-    lib.sonare_realtime_voice_changer_create_json.argtypes = [
+    lib.sonare_realtime_voice_changer_config_from_json.restype = ctypes.c_int32
+    lib.sonare_realtime_voice_changer_config_from_json.argtypes = [
         ctypes.c_char_p,
+        ctypes.POINTER(SonareRealtimeVoiceChangerConfig),
+    ]
+    lib.sonare_realtime_voice_changer_render.restype = ctypes.c_int32
+    lib.sonare_realtime_voice_changer_render.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.POINTER(SonareRealtimeVoiceChangerConfig),
         ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_realtime_voice_changer_preset_config.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_preset_config.argtypes = [
@@ -545,11 +506,10 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_realtime_voice_changer_destroy.argtypes = [ctypes.c_void_p]
     lib.sonare_realtime_voice_changer_reset.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_reset.argtypes = [ctypes.c_void_p]
-    lib.sonare_realtime_voice_changer_set_config_json.restype = ctypes.c_int32
-    lib.sonare_realtime_voice_changer_set_config_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.sonare_realtime_voice_changer_process_mono.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_process_mono.argtypes = [
         ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
@@ -559,35 +519,12 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
     ]
     lib.sonare_realtime_voice_changer_process_planar_stereo.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_process_planar_stereo.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-    ]
-    lib.sonare_realtime_voice_changer_process_mono_with_carrier.restype = ctypes.c_int32
-    lib.sonare_realtime_voice_changer_process_mono_with_carrier.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-    ]
-    lib.sonare_realtime_voice_changer_process_interleaved_with_carrier.restype = ctypes.c_int32
-    lib.sonare_realtime_voice_changer_process_interleaved_with_carrier.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-    ]
-    lib.sonare_realtime_voice_changer_process_planar_stereo_with_carrier.restype = ctypes.c_int32
-    lib.sonare_realtime_voice_changer_process_planar_stereo_with_carrier.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_float),
@@ -660,8 +597,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_normalize_stereo -- one length and one sample rate for the pair, and
-    # both channels come back inside the result struct.
+    # sonare_normalize_stereo -- one length and one sample rate for the pair.
     lib.sonare_normalize_stereo.restype = ctypes.c_int32
     lib.sonare_normalize_stereo.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -669,7 +605,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
-        ctypes.POINTER(SonareNormalizeStereoResult),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_normalize_rms_stereo.restype = ctypes.c_int32
     lib.sonare_normalize_rms_stereo.argtypes = [
@@ -678,10 +616,10 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
-        ctypes.POINTER(SonareNormalizeStereoResult),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_free_normalize_stereo_result.restype = None
-    lib.sonare_free_normalize_stereo_result.argtypes = [ctypes.POINTER(SonareNormalizeStereoResult)]
 
     # sonare_fade
     lib.sonare_fade.restype = ctypes.c_int32
@@ -733,17 +671,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
+        ctypes.POINTER(SonareTrimOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_trim_ex.restype = ctypes.c_int32
-    lib.sonare_trim_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_size_t,
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
+    lib.sonare_trim_options_init.restype = None
+    lib.sonare_trim_options_init.argtypes = [ctypes.POINTER(SonareTrimOptions)]

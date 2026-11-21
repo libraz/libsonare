@@ -265,8 +265,8 @@ def _require_typed_automation_api() -> None:
     missing = [
         name
         for name in (
-            "sonare_project_add_automation_lane_ex",
-            "sonare_project_edit_automation_lane_ex",
+            "sonare_project_add_automation_lane",
+            "sonare_project_edit_automation_lane",
         )
         if not hasattr(lib, name)
     ]
@@ -297,8 +297,8 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     assert typed_doc["version"] == 7
     assert typed_doc["tracks"][0]["automationLanes"][0]["targetKind"] == 1
 
-    # The absent kind must stay on the legacy C edit path; native semantics
-    # preserve the existing typed classification while replacing points.
+    # An absent kind keeps the lane's existing typed classification while
+    # replacing points.
     p.edit_automation_lane(track, typed_target, [AutomationPoint(0.0, 0.5, "hold")])
     edited_doc = json.loads(p.to_json())
     assert edited_doc["version"] == 7

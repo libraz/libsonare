@@ -942,7 +942,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.spectral_rolloff` | returns a float32 ndarray instead of list[float] |
 | `Audio.time_stretch` | returns a float32 ndarray instead of list[float] |
 | `Audio.trim` | returns a float32 ndarray instead of list[float] |
-| `Audio.voice_change_realtime` | returns a float32 ndarray instead of list[float] |
+| `Audio.voice_change_realtime` | `Audio.realtime_voice_changer_render`: returns a float32 ndarray instead of list[float] |
 | `Audio.voice_change` | returns a float32 ndarray instead of list[float] |
 | `Audio.zero_crossing_rate` | returns a float32 ndarray instead of list[float] |
 
@@ -1048,7 +1048,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Audio.master_audio` | preset, overrides and on_progress are keyword-only; preset defaults to None (was "pop"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError |
 | `Audio.normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
-| `Audio.voice_change_realtime(preset)` | `Audio.voice_change_realtime(config)`: renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError |
+| `Audio.voice_change_realtime(preset)` | `Audio.realtime_voice_changer_render(config)`: renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError |
 
 #### Historical aliases are removed
 
@@ -1578,6 +1578,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `mel_result_to_audio` | removed: call mel_to_audio(result.power, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
 | `mel_result_to_stft` | removed: call mel_to_stft(result.power, sr=result.sample_rate, n_fft=result.n_fft, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
+| `metering_phase_scope_decimated` | removed: call metering_phase_scope(..., max_points=n) |
+| `metering_vectorscope_decimated` | removed: call metering_vectorscope(..., max_points=n) |
 | `mfcc_result_to_audio` | removed: call mfcc_to_audio(result.coefficients, n_mels=result.n_mels, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
 | `mfcc_result_to_mel` | removed: call mfcc_to_mel(result.coefficients, n_mels=result.n_mels, lifter=result.lifter) |
 
@@ -1762,7 +1764,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `estimate_room(sample_rate)` | sample_rate is required (1.x defaulted to 48000) |
 | `harmonic(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `hpss(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `hpss_with_residual(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_analyze(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_apply(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_repair_declick(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
@@ -1804,7 +1805,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `time_stretch(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `trim(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `voice_change(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `voice_change_realtime(sample_rate)` | sample_rate is required (1.x defaulted to 48000) |
+| `voice_change_realtime(sample_rate)` | `realtime_voice_changer_render(sample_rate)`: sample_rate is required (1.x defaulted to 48000) |
 
 #### Sample rate is spelled sampleRate, sample_rate and --sample-rate
 
@@ -1901,9 +1902,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `decompose_stems_linked(n_components)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
 | `decompose_stems_linked(n_fft)` | omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError |
 | `decompose_stems_linked(n_iter)` | omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError |
-| `decompose_with_init(n_iter)` | None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError |
 | `hpss(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
-| `hpss_with_residual(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
 | `nn_filter(k)` | None takes the library default k (was the literal 7); k below 1 raises SonareValueError |
 | `nn_filter(width)` | None takes the library default width (was the literal 1); a negative width raises SonareValueError |
 | `phase_vocoder(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
@@ -1921,7 +1920,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `decompose_stems_linked(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `harmonic(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `hpss(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `hpss_with_residual(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `normalize(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `normalize_stereo(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `percussive(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
@@ -1939,7 +1937,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `estimate_room(mode)` | the impulse-response mode is impulseResponse; impulse_response raises SonareValueError |
 | `realtime_voice_changer_preset_config(preset)` | takes a VoicePresetId token (the lowerCamel preset ids) only; a kebab id raises SonareValueError and an int ordinal or a bool is TypeError |
 | `realtime_voice_changer_preset_names` | lists the preset ids in lowerCamel (neutralMonitor, brightIdol, ...) |
-| `voice_change_realtime(preset)` | `voice_change_realtime(config)`: renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError; the preset ids are lowerCamel (default neutralMonitor) and a kebab id raises |
+| `voice_change_realtime(preset)` | `realtime_voice_changer_render(config)`: renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError; the preset ids are lowerCamel (default neutralMonitor) and a kebab id raises |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -1949,7 +1947,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SpectralRegionOp.mode` | a SpectralEditMode token ("gain", "attenuate", "mute", "heal"); an int raises TypeError |
 | `decompose_stems(init)` | an NmfInit token or None; omitted hands the core its default (was the literal "random"), and "" raises SonareValueError instead of selecting the default |
 | `decompose_stems_linked(init)` | an NmfInit token or None; omitted hands the core its default (was the literal "random"), and "" raises SonareValueError instead of selecting the default |
-| `decompose_with_init(init)` | an NmfInit token or None; omitted hands the core its default (was the literal "random"), and "" raises SonareValueError instead of selecting the default |
 | `mastering_repair_decrackle(mode)` | takes a DecrackleMode token ("median" or "waveletShrinkage") only; an int ordinal is TypeError and "wavelet", "wavelet_shrinkage" raise SonareValueError |
 | `mastering_repair_decrackle_stereo(mode)` | takes a DecrackleMode token ("median" or "waveletShrinkage") only; an int ordinal is TypeError and "wavelet", "wavelet_shrinkage" raise SonareValueError |
 | `mastering_repair_dehum(mode)` | takes a DehumMode token ("subtract" or "notch") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError |
@@ -1982,7 +1979,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeVoiceChangerConfig.limiter_enable_isp_limiter` | a bool (was an int read as non-zero); an int, 0 and 1 included, raises TypeError, and RealtimeVoiceChangerConfig.vocoder_enabled is a bool the same way |
 | `decompose_stems_linked` | returns DecomposeStemsLinkedResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute |
 | `decompose_stems` | returns DecomposeStemsResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute |
-| `hpss_with_residual` | returns HpssWithResidualResult(harmonic, percussive, residual, sample_rate) instead of a dict keyed harmonic / percussive / residual / sampleRate; read the fields by attribute |
 | `mastering_repair_apply(stages)` | takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError |
 | `mastering_repair_declick` | returns a frozen DeclickResult (samples, report) instead of a bare ndarray; read .samples for the audio |
 | `mastering_repair_declip` | returns a frozen DeclipResult (samples, report) instead of a bare ndarray; read .samples for the audio |
@@ -2067,10 +2063,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `NormalizeStereoResult.applied_gain_db` | removed: the C entry no longer reports the gain; compare the input and output levels if it is needed |
 | `RealtimeVoiceChanger.process_planar_stereo` | removed: call process_planar([left, right]), which takes 1 or 2 equal-length planes (or a 2-D (channels, frames) array) and returns a list of float32 planes; process_planar_with_carrier(channels, carrier) adds the external vocoder carrier |
+| `decompose_with_init` | removed: call decompose(..., init=...) |
+| `hpss_with_residual` | removed: call hpss(..., with_residual=True); the residual is HpssResult.residual |
 | `normalize_rms_stereo` | removed: call normalize_stereo(left, right, sample_rate, mode="rms", target_db=...); an omitted target_db is -20.0 dBFS in rms mode |
 | `normalize_rms` | removed: call normalize(samples, sample_rate, mode="rms", target_db=...); an omitted target_db is -20.0 dBFS in rms mode |
 | `pitch_correct_to_midi_timevarying` | removed: call pitch_correct_timevarying(samples, sample_rate, f0_hz, hop_length, target_mode="midi", target_midi=...) |
+| `voice_change_realtime(samples)` | `realtime_voice_changer_render(samples)` |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -2085,7 +2085,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeVoiceChanger.constructor(channels)` | `RealtimeVoiceChanger.constructor(num_channels)` |
 | `RealtimeVoiceChanger.process_interleaved(channels)` | `RealtimeVoiceChanger.process_interleaved(num_channels)` |
 | `RealtimeVoiceChanger` | num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError |
-| `voice_change_realtime(channels)` | `voice_change_realtime(num_channels)` |
+| `voice_change_realtime(channels)` | `realtime_voice_changer_render(num_channels)` |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
@@ -2154,7 +2154,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
-| `voice_change_realtime` | a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
+| `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
 
 ### Python: Mastering, mixing and loudness
 
@@ -2172,8 +2172,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_ab_match_loudness(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_ab_match_loudness_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_assistant_suggest(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `mastering_assistant_suggest_chain(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `mastering_assistant_suggest_chain_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_assistant_suggest_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_audio_profile(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mastering_audio_profile_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
@@ -2195,7 +2193,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_dynamic_range(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_peak_db(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_phase_scope(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `metering_phase_scope_decimated(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_rms_db(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_silence_ratio(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_spectrum(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
@@ -2204,7 +2201,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_stereo_width(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `metering_true_peak_db(sample_rate)` | `metering_true_peak_dbtp(sample_rate)`: sample_rate is required (1.x defaulted to 22050) |
 | `metering_vectorscope(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `metering_vectorscope_decimated(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `mix_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 48000) |
 | `streaming_loudness_gain(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `streaming_loudness_gain_stereo(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
@@ -2249,7 +2245,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_dynamic_range(hop_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_dynamic_range(window_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_phase_scope(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
-| `metering_phase_scope_decimated(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
 | `metering_spectrum(db_amin)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_spectrum(db_ref)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_spectrum(n_fft)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
@@ -2260,7 +2255,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_spectrum_frame(octave_fraction)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_true_peak_db(oversample_factor)` | `metering_true_peak_dbtp(oversample_factor)`: None (the default) is 4; an explicit 0 raises SonareValueError |
 | `metering_vectorscope(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
-| `metering_vectorscope_decimated(max_points)` | omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel) |
 | `mix_source_class_from_name` | `mixing_assistant_source_class_from_name`: renamed to the C/JS name; an unknown name raises SonareValueError (returned -1) |
 | `suggest_mix_scene(tempo_bpm)` | `mixing_assistant_suggest(tempo_bpm)`: None selects the transport fallback tempo; 0 and negatives raise SonareValueError (0 was the fallback sentinel) |
 
@@ -2288,7 +2282,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_dynamic_range(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_peak_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_phase_scope(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_phase_scope_decimated(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_rms_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_silence_ratio(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_spectrum(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
@@ -2297,7 +2290,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `metering_stereo_width(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_true_peak_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `metering_vectorscope(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_vectorscope_decimated(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `waveform_peak_pyramid(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 | `waveform_peaks(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
@@ -2401,8 +2393,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `master_audio_stereo(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
 | `mastering_ab_match_loudness(with_match)` | removed: the match is always measured and returned in the LoudnessMatchResult; read samples for the audio alone |
 | `mastering_ab_match_loudness_stereo(with_match)` | removed: the match is always measured and returned in the LoudnessMatchStereoResult; read left and right for the audio alone |
-| `mastering_assistant_suggest_chain_stereo` | returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record |
-| `mastering_assistant_suggest_chain` | returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record; pass it to master_audio(overrides=) unchanged |
 | `mastering_assistant_suggest_stereo` | returns a MasteringAssistantResult record instead of a JSON string |
 | `mastering_assistant_suggest` | returns a MasteringAssistantResult record instead of a JSON string |
 | `mastering_audio_profile_stereo` | returns a MasteringAudioProfile record instead of a JSON string |
@@ -2504,6 +2494,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `mastering_assistant_suggest_chain_stereo` | removed: read mastering_assistant_suggest_stereo(...).chain_config |
+| `mastering_assistant_suggest_chain` | removed: read mastering_assistant_suggest(...).chain_config |
 | `mastering_chain_stereo` | removed: call master_audio_stereo(left, right, sample_rate, overrides=config) with no preset; overrides={} returns the input |
 | `mastering_chain` | removed: call master_audio(samples, sample_rate, overrides=config) with no preset; overrides={} returns the input |
 
@@ -3046,6 +3038,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_markers` | returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged |
 | `RealtimeEngine.set_track_strip_surround_pan(distance)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `RealtimeEngine.set_track_strip_surround_pan(elevation)` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `TransportState.bar_count` | `TransportState.bar_index` |
 
 ### Python: Projects, arrangement and vocal editing
 

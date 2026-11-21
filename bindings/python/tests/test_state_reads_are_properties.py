@@ -57,7 +57,7 @@ def test_process_planar_returns_a_list_of_planes(with_carrier: bool) -> None:
     tone = (0.2 * np.sin(np.arange(512) * 0.05)).astype(np.float32)
     with libsonare.RealtimeVoiceChanger(48_000, max_block_size=128, num_channels=2) as changer:
         if with_carrier:
-            result = changer.process_planar_with_carrier([tone, tone], tone)
+            result = changer.process_planar([tone, tone], carrier=tone)
         else:
             result = changer.process_planar([tone, tone])
     assert isinstance(result, list) and len(result) == 2

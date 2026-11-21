@@ -13,7 +13,7 @@ import numpy.typing as npt
 
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._errors import _BARE_TEXT, _entry, _refuse
-from ._ffi import SonareSilenceCommonReport
+from ._ffi import SonareNnlsChromaOptions, SonareSilenceCommonReport
 from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
@@ -451,6 +451,7 @@ def split_silence_common(
             _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_count),
+            None,
         )
         _check(rc)
         return _intervals_result(out, out_count.value)
@@ -489,7 +490,7 @@ def split_silence_common_with_report(
     lib = _get_lib()
     report = SonareSilenceCommonReport()
     with _out_int_array(lib) as (out, out_count):
-        rc = lib.sonare_split_silence_common_ex(
+        rc = lib.sonare_split_silence_common(
             signal_ptrs,
             _to_c_size_t(len(c_arrays), "signal_count"),
             length_array,
@@ -973,14 +974,17 @@ def nnls_chroma(
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_nnls_chroma_ex2(
+        options = SonareNnlsChromaOptions._given(
+            enable_stft_blend=int(enable_stft_blend),
+            stft_blend_weight=blend_weight_c,
+            stft_blend_n_fft=stft_blend_n_fft_value,
+            hop_length=hop_length_value,
+        )
+        rc = lib.sonare_nnls_chroma(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
-            ctypes.c_float(blend_weight_c),
-            _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
-            _to_c_int(hop_length_value, "hop_length_value"),
+            ctypes.byref(options),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),

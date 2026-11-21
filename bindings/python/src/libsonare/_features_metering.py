@@ -577,12 +577,11 @@ def metering_vectorscope(
     """Mid/side point series for a (left, right) stereo pair.
 
     By default emits one point per input sample. Pass a ``max_points`` of at least 1
-    to deterministically decimate the point cloud to a display size (matching
-    the Node/WASM ``meteringVectorscope`` shape); a value >= the buffer length
-    yields full resolution, and 0 or a negative is refused.
+    to deterministically decimate the point cloud to a display size (keeping the
+    largest-radius sample of each contiguous bucket, matching the Node/WASM
+    ``meteringVectorscope`` shape); a value >= the buffer length yields full
+    resolution, and 0 or a negative is refused.
     """
-    if max_points is not None:
-        return metering_vectorscope_decimated(left, right, sample_rate, max_points)
     left_buf = _validate_samples(left, arg_name="left")
     right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
@@ -592,44 +591,6 @@ def metering_vectorscope(
         raise _refuse("left and right must have the same length")
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope(
-        left_array,
-        right_array,
-        _to_c_size_t(left_len, "left_len"),
-        _to_c_int(sample_rate, "sample_rate"),
-        ctypes.byref(out),
-    )
-    _check(rc)
-    try:
-        columns = _scope_point_columns(out.points, int(out.point_count), SonareVectorscopePoint)
-        return VectorscopeReport(mid=columns["mid"], side=columns["side"])
-    finally:
-        lib.sonare_free_vectorscope_result(ctypes.byref(out))
-
-
-@_entry("metering_vectorscope_decimated")
-def metering_vectorscope_decimated(
-    left: Sequence[float] | list[float],
-    right: Sequence[float] | list[float],
-    sample_rate: int,
-    max_points: int | None = None,
-) -> VectorscopeReport:
-    """Display-sized mid/side vectorscope for a (left, right) stereo pair.
-
-    ``max_points`` upper-bounds the returned point count; omit it (or pass a
-    value >= the buffer length) for one point per sample (identical to
-    :func:`metering_vectorscope`), and 0 or a negative is refused. Otherwise
-    the input is deterministically decimated, keeping the largest-radius
-    sample of each contiguous bucket.
-    """
-    left_buf = _validate_samples(left, arg_name="left")
-    right_buf = _validate_samples(right, arg_name="right")
-    lib = _get_lib()
-    left_array, left_len = _to_c_float_array(left_buf)
-    right_array, right_len = _to_c_float_array(right_buf)
-    if left_len != right_len:
-        raise _refuse("left and right must have the same length")
-    out = SonareVectorscopeResult()
-    rc = lib.sonare_metering_vectorscope_decimated(
         left_array,
         right_array,
         _to_c_size_t(left_len, "left_len"),
@@ -655,13 +616,11 @@ def metering_phase_scope(
     """Phase-scope point series plus summary stats for a stereo pair.
 
     By default emits one point per input sample. Pass a ``max_points`` of at least 1
-    to deterministically decimate the point cloud to a display size (matching
-    the Node/WASM ``meteringPhaseScope`` shape); a value >= the buffer length
-    yields full resolution, and 0 or a negative is refused. The summary stats
-    are always computed over the full-resolution signal.
+    to deterministically decimate the point cloud to a display size (largest-radius
+    sample per bucket, matching the Node/WASM ``meteringPhaseScope`` shape); a value
+    >= the buffer length yields full resolution, and 0 or a negative is refused. The
+    summary stats are always computed over the full-resolution signal.
     """
-    if max_points is not None:
-        return metering_phase_scope_decimated(left, right, sample_rate, max_points)
     left_buf = _validate_samples(left, arg_name="left")
     right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
@@ -671,52 +630,6 @@ def metering_phase_scope(
         raise _refuse("left and right must have the same length")
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope(
-        left_array,
-        right_array,
-        _to_c_size_t(left_len, "left_len"),
-        _to_c_int(sample_rate, "sample_rate"),
-        ctypes.byref(out),
-    )
-    _check(rc)
-    try:
-        columns = _scope_point_columns(out.points, int(out.point_count), SonarePhaseScopePoint)
-        return PhaseScopeReport(
-            mid=columns["mid"],
-            side=columns["side"],
-            radius=columns["radius"],
-            angle_rad=columns["angle_rad"],
-            correlation=float(out.correlation),
-            average_abs_angle_rad=float(out.average_abs_angle_rad),
-            max_radius=float(out.max_radius),
-        )
-    finally:
-        lib.sonare_free_phase_scope_result(ctypes.byref(out))
-
-
-@_entry("metering_phase_scope_decimated")
-def metering_phase_scope_decimated(
-    left: Sequence[float] | list[float],
-    right: Sequence[float] | list[float],
-    sample_rate: int,
-    max_points: int | None = None,
-) -> PhaseScopeReport:
-    """Display-sized phase-scope (Lissajous + summary stats) for a stereo pair.
-
-    ``max_points`` upper-bounds the returned point count; omit it (or pass a
-    value >= the buffer length) for one point per sample, and 0 or a negative
-    is refused. Otherwise the point cloud is deterministically decimated
-    (largest-radius sample per bucket). The summary stats are always computed
-    over the full-resolution signal.
-    """
-    left_buf = _validate_samples(left, arg_name="left")
-    right_buf = _validate_samples(right, arg_name="right")
-    lib = _get_lib()
-    left_array, left_len = _to_c_float_array(left_buf)
-    right_array, right_len = _to_c_float_array(right_buf)
-    if left_len != right_len:
-        raise _refuse("left and right must have the same length")
-    out = SonarePhaseScopeResult()
-    rc = lib.sonare_metering_phase_scope_decimated(
         left_array,
         right_array,
         _to_c_size_t(left_len, "left_len"),

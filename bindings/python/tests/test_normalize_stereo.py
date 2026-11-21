@@ -82,8 +82,11 @@ class TestNormalizeStereoBalance:
         assert _peak_db(result.left) == pytest.approx(-15.0, abs=0.01)
         assert _peak_db(result.right) - _peak_db(result.left) == pytest.approx(_GAP_DB, abs=0.01)
 
-        # One gain, and it is the one the louder channel needed.
-        assert result.applied_gain_db == pytest.approx(-3.0 - _peak_db(right), abs=0.01)
+        # One gain for both channels, and it is the one the louder channel needed.
+        gain_right = _peak_db(result.right) - _peak_db(right)
+        gain_left = _peak_db(result.left) - _peak_db(left)
+        assert gain_right == pytest.approx(-3.0 - _peak_db(right), abs=0.01)
+        assert gain_left == pytest.approx(gain_right, abs=0.01)
 
     def test_the_mono_normalizer_puts_the_quiet_channel_somewhere_else(self) -> None:
         """Control: the same channel, normalized on its own gain, lands at the target.
@@ -129,7 +132,12 @@ class TestNormalizeRmsStereoLevel:
         right_rms = float(np.sqrt(np.mean(right64**2)))
         joint_db = float(20.0 * np.log10(np.sqrt((left_rms**2 + right_rms**2) / 2.0)))
 
-        assert result.applied_gain_db == pytest.approx(-20.0 - joint_db, abs=0.01)
+        out_left = np.asarray(result.left, dtype=np.float64)
+        out_right = np.asarray(result.right, dtype=np.float64)
+        out_joint_db = float(
+            20.0 * np.log10(np.sqrt((np.mean(out_left**2) + np.mean(out_right**2)) / 2.0))
+        )
+        assert out_joint_db == pytest.approx(-20.0, abs=0.01)
 
         mean_of_db = (_rms_db(left) + _rms_db(right)) / 2.0
         mean_of_linear = float(20.0 * np.log10((left_rms + right_rms) / 2.0))
@@ -139,14 +147,11 @@ class TestNormalizeRmsStereoLevel:
     def test_an_rms_target_that_overshoots_full_scale_is_hard_clipped(self) -> None:
         """Peaks sit above the RMS, so a loud RMS target saturates -- as documented.
 
-        ``applied_gain_db`` reports the gain that was applied, which is the
-        unclipped figure; the achieved RMS is therefore below the target.
+        The achieved RMS is therefore below the target.
         """
         tone = sine(440.0, 0.1, sr=SR, amp=0.5)
         result = _RMS_STEREO(tone, tone, SR, target_db=0.0)
 
-        unclipped_peak = 0.5 * 10.0 ** (result.applied_gain_db / 20.0)
-        assert unclipped_peak > 1.0
         assert np.max(np.abs(result.left)) == pytest.approx(1.0, abs=1e-6)
         assert np.max(np.abs(result.right)) == pytest.approx(1.0, abs=1e-6)
         assert _rms_db(result.left) < -1.0
@@ -160,13 +165,10 @@ class TestNormalizeStereoSilence:
             (_RMS_STEREO, -20.0),
         ],
     )
-    def test_a_silent_pair_comes_back_untouched_at_zero_gain(
-        self, call: object, target_db: float
-    ) -> None:
+    def test_a_silent_pair_comes_back_untouched(self, call: object, target_db: float) -> None:
         silence = np.zeros(512, dtype=np.float32)
         result = call(silence, silence, SR, target_db=target_db)  # type: ignore[operator]
 
-        assert result.applied_gain_db == 0.0
         assert result.length == len(silence)
         assert np.array_equal(np.asarray(result.left, dtype=np.float32), silence)
         assert np.array_equal(np.asarray(result.right, dtype=np.float32), silence)
@@ -179,17 +181,17 @@ class TestNormalizeStereoSilence:
         ],
     )
     def test_a_quiet_but_not_silent_pair_does_move(self, call: object, target_db: float) -> None:
-        """Control for the silence case: 0.0 dB must mean silence, not "quiet".
+        """Control for the silence case: untouched must mean silence, not "quiet".
 
         At -80 dBFS the pair is far below anything audible and still sits well
-        above the silence epsilon, so a zero gain here would mean the
+        above the silence epsilon, so an untouched result here would mean the
         short-circuit had swallowed a real signal.
         """
         quiet = _alternating(1e-4, 512)
         result = call(quiet, quiet, SR, target_db=target_db)  # type: ignore[operator]
 
-        assert result.applied_gain_db == pytest.approx(target_db + 80.0, abs=0.01)
-        assert result.applied_gain_db != 0.0
+        assert float(np.max(np.abs(result.left))) > 100.0 * 1e-4
+        assert not np.array_equal(np.asarray(result.left, dtype=np.float32), quiet)
 
 
 class TestNormalizeStereoPairRefusals:

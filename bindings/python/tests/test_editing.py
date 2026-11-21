@@ -366,7 +366,7 @@ def test_realtime_voice_changer_function_and_class() -> None:
     sr = 22050
     samples = _tone(sr, duration=0.1)
 
-    result = libsonare.voice_change_realtime(samples, sample_rate=sr, config="brightIdol")
+    result = libsonare.realtime_voice_changer_render(samples, sample_rate=sr, config="brightIdol")
     # numpy fast path: results are returned as numpy arrays (Sequence-compatible).
     assert hasattr(result, "__len__")
     assert hasattr(result, "__iter__")
@@ -421,7 +421,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
         interleaved.append(s)
         interleaved.append(s)
 
-    result = libsonare.voice_change_realtime(
+    result = libsonare.realtime_voice_changer_render(
         interleaved, sample_rate=sr, num_channels=2, config="brightIdol"
     )
     assert len(result) == len(interleaved)
@@ -434,7 +434,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
 
 def test_realtime_voice_changer_rejects_odd_interleaved_stereo_length() -> None:
     with pytest.raises(ValueError, match="samples length must be a multiple of num_channels"):
-        libsonare.voice_change_realtime([0.0, 0.1, 0.2], num_channels=2, sample_rate=48000)
+        libsonare.realtime_voice_changer_render([0.0, 0.1, 0.2], num_channels=2, sample_rate=48000)
 
 
 @pytest.mark.parametrize("num_channels", [0, 3])
@@ -442,7 +442,9 @@ def test_realtime_voice_changer_refuses_a_channel_count_outside_mono_and_stereo(
     num_channels: int,
 ) -> None:
     with pytest.raises(ValueError, match=r"num_channels must be an integer in \[1, 2\]"):
-        libsonare.voice_change_realtime([0.0] * 6, num_channels=num_channels, sample_rate=48000)
+        libsonare.realtime_voice_changer_render(
+            [0.0] * 6, num_channels=num_channels, sample_rate=48000
+        )
 
 
 def test_editing_audio_methods() -> None:
@@ -460,7 +462,7 @@ def test_editing_audio_methods() -> None:
         changed = audio.voice_change(pitch_semitones=5.0, formant_factor=1.1)
         assert len(changed) > 0
 
-        realtime_changed = audio.voice_change_realtime(config="brightIdol")
+        realtime_changed = audio.realtime_voice_changer_render(config="brightIdol")
         assert len(realtime_changed) == len(samples)
     finally:
         audio.close()
@@ -520,7 +522,9 @@ def test_a_voice_changer_config_string_is_a_preset_id_and_a_mapping_is_a_documen
         with pytest.raises(TypeError, match="json.loads"):
             changer.set_config(3)  # type: ignore[arg-type]
     with pytest.raises(libsonare.SonareValueError, match="config must be one of "):
-        libsonare.voice_change_realtime([0.0] * 64, sample_rate=48000, config=json.dumps(document))
+        libsonare.realtime_voice_changer_render(
+            [0.0] * 64, sample_rate=48000, config=json.dumps(document)
+        )
 
 
 def test_realtime_voice_changer_invalid_json_config() -> None:
@@ -550,10 +554,10 @@ def test_realtime_voice_changer_close_then_process() -> None:
     changer.close()
 
 
-def test_voice_change_realtime_default_preset_matches_every_entry_point() -> None:
+def test_realtime_voice_changer_render_default_preset_matches_every_entry_point() -> None:
     """One named operation, one default, wherever it is exposed.
 
-    ``Audio.voice_change_realtime`` defaulted to ``"brightIdol"`` while the
+    ``Audio.realtime_voice_changer_render`` defaulted to ``"brightIdol"`` while the
     module function, the CLI, the Node and WASM facades and ordinal 0 of the C
     ABI's preset enum all defaulted to ``"neutralMonitor"``. The two Python
     entry points therefore rendered the same buffer audibly differently, with
@@ -563,11 +567,15 @@ def test_voice_change_realtime_default_preset_matches_every_entry_point() -> Non
         (Path(__file__).resolve().parents[3] / "tests/conformance/binding_defaults.json").read_text(
             encoding="utf-8"
         )
-    )["defaults"]["voice_change_realtime.preset"]
+    )["defaults"]["realtime_voice_changer_render.config"]
 
-    module_default = inspect.signature(libsonare.voice_change_realtime).parameters["config"].default
+    module_default = (
+        inspect.signature(libsonare.realtime_voice_changer_render).parameters["config"].default
+    )
     handle_default = (
-        inspect.signature(libsonare.Audio.voice_change_realtime).parameters["config"].default
+        inspect.signature(libsonare.Audio.realtime_voice_changer_render)
+        .parameters["config"]
+        .default
     )
     assert module_default == expected
     assert handle_default == expected
@@ -578,6 +586,6 @@ def test_voice_change_realtime_default_preset_matches_every_entry_point() -> Non
     sr = 22050
     samples = _tone(sr, duration=0.05)
     audio = libsonare.Audio.from_buffer(samples, sr)
-    assert list(audio.voice_change_realtime()) == list(
-        libsonare.voice_change_realtime(samples, sample_rate=sr, config=expected)
+    assert list(audio.realtime_voice_changer_render()) == list(
+        libsonare.realtime_voice_changer_render(samples, sample_rate=sr, config=expected)
     )

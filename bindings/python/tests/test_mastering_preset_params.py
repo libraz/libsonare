@@ -1,7 +1,7 @@
 """Tests for :func:`libsonare.mastering_preset_params`.
 
-The referent for the key-set assertion is
-:func:`libsonare.mastering_assistant_suggest_chain`, which walks the same
+The referent for the key-set assertion is the ``chain_config`` of
+:func:`libsonare.mastering_assistant_suggest`, which walks the same
 ``chain_config_to_json`` document shape from a different C entry point.
 """
 
@@ -11,7 +11,7 @@ import pytest
 
 from libsonare import (
     SonareError,
-    mastering_assistant_suggest_chain,
+    mastering_assistant_suggest,
     mastering_preset_names,
     mastering_preset_params,
 )
@@ -27,7 +27,9 @@ SAMPLES = sine(220.0, 0.2, sr=SR, amp=0.2)
 
 def test_every_preset_key_set_matches_the_assistant_suggested_chain() -> None:
     """Each preset's params carry the same leaves the assistant would suggest."""
-    suggested = _chain_config_paths(mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR))
+    suggested = _chain_config_paths(
+        mastering_assistant_suggest(SAMPLES, sample_rate=SR).chain_config
+    )
     for preset in mastering_preset_names():
         params = _chain_config_paths(mastering_preset_params(preset))
         assert set(params) == set(suggested), preset

@@ -44,6 +44,7 @@ from ._runtime import (
     SonareProjectCompileResult,
     SonareProjectKeySegment,
     SonareProjectMarker,
+    SonareProjectSnapToGridOptions,
     SonareProjectSource,
     SonareProjectTempoCandidate,
     SonareProjectTempoOptions,
@@ -153,7 +154,7 @@ class _ProjectInspectionMixin:
             include_octave_candidates,
         )
         _check(
-            _get_lib().sonare_project_analyze_tempo_with_options(
+            _get_lib().sonare_project_analyze_tempo(
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
@@ -216,7 +217,7 @@ class _ProjectInspectionMixin:
             include_octave_candidates,
         )
         _check(
-            _get_lib().sonare_project_auto_tempo_with_options(
+            _get_lib().sonare_project_auto_tempo(
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
@@ -239,12 +240,13 @@ class _ProjectInspectionMixin:
         is in ``[0, 1]`` (0 = no snap, 1 = exact grid line).
         """
         out_ppq = ctypes.c_double()
+        options = SonareProjectSnapToGridOptions._given(division=_to_c_int(division, "division"))
         _check(
-            _get_lib().sonare_project_snap_to_grid_ex(
+            _get_lib().sonare_project_snap_to_grid(
                 self._require_handle(),
                 _narrow_double(ppq, "ppq"),
                 _narrow_double(strength, "strength"),
-                _to_c_int(division, "division"),
+                ctypes.byref(options),
                 ctypes.byref(out_ppq),
             )
         )
@@ -755,9 +757,9 @@ class _ProjectInspectionMixin:
         """Read a tempo-map segment by 0-based stored index.
 
         Returns the keys :meth:`set_tempo_segments` accepts, so a segment read
-        back can be written straight to another project. ``start_sample`` is not
-        among them: a project stores musical positions only, and sample
-        positions are derived when it is compiled.
+        back can be written straight to another project. A project stores
+        musical positions only; sample positions are derived when it is
+        compiled.
 
         Raises:
             SonareValueError: If ``index`` is past the stored segments.

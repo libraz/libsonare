@@ -9,6 +9,7 @@ from typing import Any, cast
 import numpy as np
 
 from ._errors import _entry, _refuse
+from ._ffi_types_analysis import SonareDetectKeyOptions
 from ._ffi_types_core import (
     SonareKey,
     SonareKeyCandidate,
@@ -112,6 +113,46 @@ def detect_bpm(
     return float(out_bpm.value)
 
 
+def _detect_key_options(
+    *,
+    n_fft: int,
+    hop_length: int,
+    use_hpss: bool,
+    loudness_weighted: bool,
+    chroma_high_pass_hz: float,
+    modes: Sequence[KeyMode] | str | None,
+    profile: KeyProfile | None,
+    genre_hint: GenreHint | None,
+    tuning_cents: float | str,
+) -> SonareDetectKeyOptions:
+    """Build the key-detection options, keeping the mode array and hint string alive."""
+    mode_values = _mode_values(modes)
+    mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
+    genre_bytes = (
+        None
+        if genre_hint is None
+        else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint")
+    )
+    options = SonareDetectKeyOptions._given(
+        n_fft=_to_c_int(n_fft, "n_fft"),
+        hop_length=_to_c_int(hop_length, "hop_length"),
+        use_hpss=1 if use_hpss else 0,
+        loudness_weighted=1 if loudness_weighted else 0,
+        chroma_high_pass_hz=_to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
+        mode_count=_to_c_size_t(mode_count, "mode_count"),
+        profile_type=_profile_value(profile, "profile"),
+        tuning_cents=_to_c_float(tuning_value, "tuning_cents"),
+        tuning_auto=_to_c_int(tuning_auto, "tuning_auto"),
+    )
+    if mode_array is not None:
+        options.modes = ctypes.cast(mode_array, ctypes.POINTER(ctypes.c_int32))
+        options._mode_array = mode_array
+    if genre_bytes is not None:
+        options.genre_hint = genre_bytes
+    return options
+
+
 @_entry("detect_key")
 @_guard_buffer("samples")
 def detect_key(
@@ -166,28 +207,24 @@ def detect_key(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values(modes)
-    mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
+    options = _detect_key_options(
+        n_fft=n_fft,
+        hop_length=hop_length,
+        use_hpss=use_hpss,
+        loudness_weighted=loudness_weighted,
+        chroma_high_pass_hz=chroma_high_pass_hz,
+        modes=modes,
+        profile=profile,
+        genre_hint=genre_hint,
+        tuning_cents=tuning_cents,
+    )
     out_key = SonareKey()
     out_tuning = ctypes.c_float()
-    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
-    rc = lib.sonare_detect_key_with_tuning(
+    rc = lib.sonare_detect_key(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        ctypes.c_int(1 if use_hpss else 0),
-        ctypes.c_int(1 if loudness_weighted else 0),
-        _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
-        mode_array,
-        _to_c_size_t(mode_count, "mode_count"),
-        ctypes.c_int32(_profile_value(profile, "profile")),
-        None
-        if genre_hint is None
-        else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
-        _to_c_float(tuning_value, "tuning_cents"),
-        _to_c_int(tuning_auto, "tuning_auto"),
+        ctypes.byref(options),
         ctypes.byref(out_key),
         ctypes.byref(out_tuning),
     )
@@ -222,28 +259,24 @@ def detect_key_candidates(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values(modes)
-    mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
+    options = _detect_key_options(
+        n_fft=n_fft,
+        hop_length=hop_length,
+        use_hpss=use_hpss,
+        loudness_weighted=loudness_weighted,
+        chroma_high_pass_hz=chroma_high_pass_hz,
+        modes=modes,
+        profile=profile,
+        genre_hint=genre_hint,
+        tuning_cents=tuning_cents,
+    )
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()
-    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
-    rc = lib.sonare_detect_key_candidates_with_tuning(
+    rc = lib.sonare_detect_key_candidates(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        ctypes.c_int(1 if use_hpss else 0),
-        ctypes.c_int(1 if loudness_weighted else 0),
-        _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
-        mode_array,
-        _to_c_size_t(mode_count, "mode_count"),
-        ctypes.c_int32(_profile_value(profile, "profile")),
-        None
-        if genre_hint is None
-        else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
-        _to_c_float(tuning_value, "tuning_cents"),
-        _to_c_int(tuning_auto, "tuning_auto"),
+        ctypes.byref(options),
         ctypes.byref(out_candidates),
         ctypes.byref(out_count),
         None,
@@ -380,7 +413,7 @@ def detect_onsets(
         # An omitted threshold keeps the init's NaN, which selects the adaptive path.
         if threshold is not None:
             config.threshold = threshold
-        rc = lib.sonare_detect_onsets_ex(
+        rc = lib.sonare_detect_onsets(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),

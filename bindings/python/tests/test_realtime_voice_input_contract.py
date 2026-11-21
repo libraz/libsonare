@@ -22,13 +22,14 @@ BLOCK_SIZE = 128
 
 # Explicit profiles make additions to RealtimeVoiceChanger.process_* visible: a
 # test below requires this registry to equal the public process_* method set.
+# A "[carrier]" profile calls the same method with a carrier.
 REALTIME_VOICE_PROCESS_PROFILES: dict[str, tuple[str, bool]] = {
     "RealtimeVoiceChanger.process_interleaved": ("interleaved", False),
-    "RealtimeVoiceChanger.process_interleaved_with_carrier": ("interleaved", True),
+    "RealtimeVoiceChanger.process_interleaved[carrier]": ("interleaved", True),
     "RealtimeVoiceChanger.process_mono": ("mono", False),
-    "RealtimeVoiceChanger.process_mono_with_carrier": ("mono", True),
+    "RealtimeVoiceChanger.process_mono[carrier]": ("mono", True),
     "RealtimeVoiceChanger.process_planar": ("planar", False),
-    "RealtimeVoiceChanger.process_planar_with_carrier": ("planar", True),
+    "RealtimeVoiceChanger.process_planar[carrier]": ("planar", True),
 }
 _CARRIER_PROFILES = tuple(
     name for name, (_, with_carrier) in REALTIME_VOICE_PROCESS_PROFILES.items() if with_carrier
@@ -108,11 +109,8 @@ def _process(
     else:
         right = np.zeros(FRAME_COUNT, dtype=np.float32) if raw_main else _stereo_right(samples)
         args = [[audio, right]]
-    if use_carrier:
-        args.append(carrier)
-
-    method = f"process_{layout}" + ("_with_carrier" if use_carrier else "")
-    return getattr(changer, method)(*args)
+    kwargs = {"carrier": carrier} if use_carrier else {}
+    return getattr(changer, f"process_{layout}")(*args, **kwargs)
 
 
 def _output_arrays(output: np.ndarray | list[np.ndarray]) -> tuple[np.ndarray, ...]:
@@ -143,7 +141,8 @@ def test_realtime_process_profiles_match_public_methods() -> None:
         for name in dir(libsonare.RealtimeVoiceChanger)
         if name.startswith("process_") and callable(getattr(libsonare.RealtimeVoiceChanger, name))
     }
-    assert discovered == set(REALTIME_VOICE_PROCESS_PROFILES)
+    registered = {name.removesuffix("[carrier]") for name in REALTIME_VOICE_PROCESS_PROFILES}
+    assert discovered == registered
 
 
 @pytest.mark.parametrize("profile_name", sorted(REALTIME_VOICE_PROCESS_PROFILES))

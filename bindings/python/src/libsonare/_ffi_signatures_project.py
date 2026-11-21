@@ -341,6 +341,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_align_take_to_reference.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
+        ctypes.c_int,
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -351,20 +352,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.sonare_free_project_warp_anchors.restype = None
     lib.sonare_free_project_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
-
-    lib.sonare_align_take_to_reference_ex.restype = ctypes.c_int32
-    lib.sonare_align_take_to_reference_ex.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareTakeAlignConfig),
-        ctypes.POINTER(ctypes.POINTER(SonareProjectWarpAnchor)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(SonareTakeAlignment),
-    ]
 
     lib.sonare_chord_symbol_from_analysis.restype = ctypes.c_int32
     lib.sonare_chord_symbol_from_analysis.argtypes = [
@@ -519,28 +506,12 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_uint32),
     ]
 
-    lib.sonare_project_add_automation_lane_ex.restype = ctypes.c_int32
-    lib.sonare_project_add_automation_lane_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(SonareAutomationLaneDescEx),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-
     lib.sonare_project_edit_automation_lane.restype = ctypes.c_int32
     lib.sonare_project_edit_automation_lane.argtypes = [
         ctypes.c_void_p,
         ctypes.c_uint32,
         ctypes.c_uint32,
         ctypes.POINTER(SonareAutomationLaneDesc),
-    ]
-
-    lib.sonare_project_edit_automation_lane_ex.restype = ctypes.c_int32
-    lib.sonare_project_edit_automation_lane_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.POINTER(SonareAutomationLaneDescEx),
     ]
 
     lib.sonare_project_remove_automation_lane.restype = ctypes.c_int32
@@ -719,6 +690,9 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.POINTER(SonareProjectTempoOptions),
+        ctypes.c_size_t,
+        ctypes.c_uint8,
         ctypes.POINTER(ctypes.c_float),
     ]
     lib.sonare_project_analyze_tempo.restype = ctypes.c_int32
@@ -727,62 +701,25 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.POINTER(SonareProjectTempoOptions),
         ctypes.POINTER(SonareProjectTempoCandidate),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_project_auto_tempo_ex.restype = ctypes.c_int32
-    lib.sonare_project_auto_tempo_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_size_t,
-        ctypes.c_uint8,
-        ctypes.POINTER(ctypes.c_float),
-    ]
-
     lib.sonare_project_tempo_options_init.restype = None
     lib.sonare_project_tempo_options_init.argtypes = [ctypes.POINTER(SonareProjectTempoOptions)]
-    lib.sonare_project_analyze_tempo_with_options.restype = ctypes.c_int32
-    lib.sonare_project_analyze_tempo_with_options.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareProjectTempoOptions),
-        ctypes.POINTER(SonareProjectTempoCandidate),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-    lib.sonare_project_auto_tempo_with_options.restype = ctypes.c_int32
-    lib.sonare_project_auto_tempo_with_options.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.POINTER(SonareProjectTempoOptions),
-        ctypes.c_size_t,
-        ctypes.c_uint8,
-        ctypes.POINTER(ctypes.c_float),
-    ]
-
     lib.sonare_project_snap_to_grid.restype = ctypes.c_int32
     lib.sonare_project_snap_to_grid.argtypes = [
         ctypes.c_void_p,
         ctypes.c_double,
         ctypes.c_double,
+        ctypes.POINTER(SonareProjectSnapToGridOptions),
         ctypes.POINTER(ctypes.c_double),
     ]
-    lib.sonare_project_snap_to_grid_ex.restype = ctypes.c_int32
-    lib.sonare_project_snap_to_grid_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_double,
-        ctypes.c_double,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_double),
+    lib.sonare_project_snap_to_grid_options_init.restype = None
+    lib.sonare_project_snap_to_grid_options_init.argtypes = [
+        ctypes.POINTER(SonareProjectSnapToGridOptions)
     ]
-
     lib.sonare_project_annotate_keys.restype = ctypes.c_int32
     lib.sonare_project_annotate_keys.argtypes = [
         ctypes.c_void_p,
@@ -964,13 +901,6 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.c_uint32,
         ctypes.c_char_p,
-    ]
-
-    lib.sonare_project_bake_midi_fx_ex.restype = ctypes.c_int32
-    lib.sonare_project_bake_midi_fx_ex.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_char_p,
         ctypes.POINTER(ctypes.c_int32),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
@@ -1004,15 +934,6 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_project_set_marker.restype = ctypes.c_int32
     lib.sonare_project_set_marker.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_double,
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-
-    lib.sonare_project_set_marker_ex.restype = ctypes.c_int32
-    lib.sonare_project_set_marker_ex.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareProjectMarker),
         ctypes.POINTER(ctypes.c_uint32),

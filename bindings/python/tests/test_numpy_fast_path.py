@@ -278,11 +278,11 @@ def test_process_planar_returns_one_ndarray_per_channel() -> None:
     np.testing.assert_array_equal(out_left, out_right)
 
 
-def test_voice_change_realtime_returns_ndarray() -> None:
+def test_realtime_voice_changer_render_returns_ndarray() -> None:
     """The offline convenience wrapper must surface the ndarray result."""
     sr = 48000
     samples = _sine(1024, sr=sr)
-    out = libsonare.voice_change_realtime(samples, sample_rate=sr, config="neutralMonitor")
+    out = libsonare.realtime_voice_changer_render(samples, sample_rate=sr, config="neutralMonitor")
     assert isinstance(out, np.ndarray)
     assert out.shape == (1024,)
     # Preserves length even via the wrapper path (existing test_editing.py
@@ -308,7 +308,7 @@ def test_large_buffer_processes_under_budget() -> None:
     n = 1_000_000
     samples = _sine(n, sr=sr)
     start = time.perf_counter()
-    out = libsonare.voice_change_realtime(samples, sample_rate=sr, config="neutralMonitor")
+    out = libsonare.realtime_voice_changer_render(samples, sample_rate=sr, config="neutralMonitor")
     elapsed = time.perf_counter() - start
     assert isinstance(out, np.ndarray)
     assert out.shape == (n,)

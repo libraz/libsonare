@@ -58,7 +58,7 @@ from libsonare import (
     waveform_peaks,
     zero_crossings,
 )
-from libsonare._effects import voice_change, voice_change_realtime
+from libsonare._effects import realtime_voice_changer_render, voice_change
 from libsonare._runtime import SonareError, SonareValueError
 
 SR = 22050
@@ -99,7 +99,9 @@ _SAMPLE_WRAPPERS = {
     "pitch_pyin": lambda buf: pitch_pyin(buf, SR),
     "pitch_yin": lambda buf: pitch_yin(buf, SR),
     "voice_change": lambda buf: voice_change(buf, sample_rate=22050),
-    "voice_change_realtime": lambda buf: voice_change_realtime(buf, sample_rate=48000),
+    "realtime_voice_changer_render": lambda buf: realtime_voice_changer_render(
+        buf, sample_rate=48000
+    ),
     "mastering_dynamics_compressor": lambda buf: mastering_dynamics_compressor(buf, SR),
     "mastering_dynamics_gate": lambda buf: mastering_dynamics_gate(buf, SR),
     "mastering_dynamics_transient_shaper": lambda buf: mastering_dynamics_transient_shaper(buf, SR),
@@ -175,9 +177,11 @@ class TestEmptyGuards:
         with pytest.raises(ValueError, match=r"voice_change: samples must not be empty"):
             voice_change(np.empty(0, dtype=np.float32), sample_rate=22050)
 
-    def test_voice_change_realtime_rejects_empty(self):
-        with pytest.raises(ValueError, match=r"voice_change_realtime: samples must not be empty"):
-            voice_change_realtime(np.empty(0, dtype=np.float32), sample_rate=48000)
+    def test_realtime_voice_changer_render_rejects_empty(self):
+        with pytest.raises(
+            ValueError, match=r"realtime_voice_changer_render: samples must not be empty"
+        ):
+            realtime_voice_changer_render(np.empty(0, dtype=np.float32), sample_rate=48000)
 
 
 class TestNanInfGuards:

@@ -36,9 +36,10 @@ from ._ffi_types_core import (
     SonareEngineGraphNode,
     SonareEngineGraphParameterBinding,
     SonareEngineGraphSpec,
+    SonareEngineRenderOfflineOptions,
     SonareEngineTelemetry,
-    SonareMeterTelemetryRecordV2,
-    SonareMeterTelemetryRecordWideV2,
+    SonareMeterTelemetryRecord,
+    SonareMeterTelemetryRecordWide,
     SonareScopeTelemetryRecord,
 )
 from ._narrowing import _narrow_double, _resolve_zero_default
@@ -357,14 +358,15 @@ class _EngineIoMixin:
         only bit-identity is lost.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
+        options = SonareEngineRenderOfflineOptions._given(finalize=1 if finalize else 0)
         _check(
-            _get_lib().sonare_engine_render_offline_ex(
+            _get_lib().sonare_engine_render_offline(
                 self._require_handle(),
                 ptrs,
                 _to_c_int(len(arrays), "num_channels"),
                 _to_c_int64(frame_count, "frame_count"),
                 _to_c_int(_resolve_zero_default(block_size, "block_size"), "block_size"),
-                1 if finalize else 0,
+                ctypes.byref(options),
             )
         )
         return _plane_arrays(arrays, frame_count)
@@ -597,10 +599,10 @@ class _EngineIoMixin:
             return []
         lib = _get_lib()
         capacity = _to_c_size_t(max_records, "max_records")
-        raw = (SonareMeterTelemetryRecordV2 * capacity.value)()
+        raw = (SonareMeterTelemetryRecord * capacity.value)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_engine_drain_meter_telemetry_v2(
+            lib.sonare_engine_drain_meter_telemetry(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
@@ -618,10 +620,10 @@ class _EngineIoMixin:
             return []
         lib = _get_lib()
         capacity = _to_c_size_t(max_records, "max_records")
-        raw = (SonareMeterTelemetryRecordWideV2 * capacity.value)()
+        raw = (SonareMeterTelemetryRecordWide * capacity.value)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_engine_drain_meter_telemetry_wide_v2(
+            lib.sonare_engine_drain_meter_telemetry_wide(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )

@@ -45,9 +45,9 @@ def test_constructed_insert_value_and_invalid_id() -> None:
 
 def test_wide_input_peak_conversion() -> None:
     from libsonare._engine_conversions import _meter_telemetry_wide_from_c
-    from libsonare._ffi_types_core import SonareMeterTelemetryRecordWideV2
+    from libsonare._ffi_types_core import SonareMeterTelemetryRecordWide
 
-    raw = SonareMeterTelemetryRecordWideV2()
+    raw = SonareMeterTelemetryRecordWide()
     raw.num_channels = 2
     raw.input_peak_db[0] = -6.0
     raw.input_peak_db[1] = -12.0

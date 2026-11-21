@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._ffi import SonareBiquadFilterConfig, SonareNormalizeStereoResult
+from ._ffi import SonareBiquadFilterConfig, SonareTrimOptions
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -114,26 +114,32 @@ def _run_normalize_stereo(
     right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
         raise _refuse("left and right must have the same length")
-    out = SonareNormalizeStereoResult()
+    out_left = ctypes.POINTER(ctypes.c_float)()
+    out_right = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
     rc = getattr(lib, symbol)(
         left_array,
         right_array,
         _to_c_size_t(left_length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(target_db_c),
-        ctypes.byref(out),
+        ctypes.byref(out_left),
+        ctypes.byref(out_right),
+        ctypes.byref(out_length),
     )
     try:
         _check(rc)
-        length = int(out.length)
+        length = int(out_length.value)
         return NormalizeStereoResult(
-            left=_from_c_float_array(out.left, length),
-            right=_from_c_float_array(out.right, length),
+            left=_from_c_float_array(out_left, length),
+            right=_from_c_float_array(out_right, length),
             length=length,
-            applied_gain_db=float(out.applied_gain_db),
         )
     finally:
-        lib.sonare_free_normalize_stereo_result(ctypes.byref(out))
+        if out_left:
+            lib.sonare_free_floats(out_left)
+        if out_right:
+            lib.sonare_free_floats(out_right)
 
 
 @_entry("normalize")
@@ -203,7 +209,7 @@ def normalize_stereo(
     A pair that cannot be processed together is refused: either channel empty,
     or the two lengths unequal. The C entry takes one sample rate for the pair,
     so the two channels cannot disagree on it here. A silent pair comes back
-    untouched with ``applied_gain_db`` at 0.0.
+    untouched.
 
     A legacy library that lacks the native ``sonare_normalize_stereo`` entry
     point cannot provide the operation, so it raises ``SonareError(NotSupported)``.
@@ -217,16 +223,16 @@ def normalize_stereo(
             ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
 
     Returns:
-        :class:`NormalizeStereoResult` with the two normalized channels, their
-        shared length, and the one gain that was applied to both.
+        :class:`NormalizeStereoResult` with the two normalized channels and their
+        shared length.
 
     Example:
         >>> import libsonare
         >>> quiet = [0.05, -0.05] * 512
         >>> loud = [0.2, -0.2] * 512
         >>> result = libsonare.normalize_stereo(quiet, loud, 22050, target_db=-3.0)
-        >>> round(result.applied_gain_db, 2)  # 0.2 -> -3 dBFS
-        10.98
+        >>> round(max(abs(v) for v in result.right), 3)  # 0.2 -> -3 dBFS
+        0.708
         >>> round(max(abs(v) for v in result.left), 3)  # the quiet side keeps its distance
         0.177
     """
@@ -262,16 +268,16 @@ def trim(
     """
     _validate_samples(samples)
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
+    options = SonareTrimOptions._given(frame_length=frame_length, hop_length=hop_length)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_trim_ex(
+        rc = lib.sonare_trim(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_float(threshold_db, "threshold_db"),
-            _to_c_size_t(frame_length, "frame_length"),
-            _to_c_size_t(hop_length, "hop_length"),
+            ctypes.byref(options),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )

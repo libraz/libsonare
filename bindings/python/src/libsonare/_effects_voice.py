@@ -149,7 +149,7 @@ def voice_change(
         formant_mode=_FORMANT_MODES[formant_mode],
     )
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_voice_change_ex(
+        rc = lib.sonare_voice_change(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -180,6 +180,17 @@ def _voice_config_to_json(config: object) -> bytes:
     raise _refuse_type(
         "config must be a preset id or a mapping (parse JSON text with json.loads first)"
     )
+
+
+def _voice_config_to_pod(lib: ctypes.CDLL, config: object) -> SonareRealtimeVoiceChangerConfig:
+    """Resolve a preset id or a document mapping into the flat C config."""
+    pod = SonareRealtimeVoiceChangerConfig()
+    _check(
+        lib.sonare_realtime_voice_changer_config_from_json(
+            _voice_config_to_json(config), ctypes.byref(pod)
+        )
+    )
+    return pod
 
 
 class RealtimeVoiceChanger:
@@ -217,19 +228,14 @@ class RealtimeVoiceChanger:
             _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
         )
         c_channels = _to_c_int(self._channels, "num_channels")
-        if isinstance(config, RealtimeVoiceChangerConfig):
-            pod = config._to_pod()
-            rc = self._lib.sonare_realtime_voice_changer_create(
-                ctypes.byref(pod), c_sample_rate, c_block, c_channels, ctypes.byref(self._handle)
-            )
-        else:
-            rc = self._lib.sonare_realtime_voice_changer_create_json(
-                _voice_config_to_json(config),
-                c_sample_rate,
-                c_block,
-                c_channels,
-                ctypes.byref(self._handle),
-            )
+        pod = (
+            config._to_pod()
+            if isinstance(config, RealtimeVoiceChangerConfig)
+            else _voice_config_to_pod(self._lib, config)
+        )
+        rc = self._lib.sonare_realtime_voice_changer_create(
+            ctypes.byref(pod), c_sample_rate, c_block, c_channels, ctypes.byref(self._handle)
+        )
         _check(rc)
 
     @_entry("RealtimeVoiceChanger.close")
@@ -275,9 +281,9 @@ class RealtimeVoiceChanger:
         if isinstance(config, RealtimeVoiceChangerConfig):
             self._set_record(config)
             return
-        rc = self._lib.sonare_realtime_voice_changer_set_config_json(
-            self._require_handle(),
-            _voice_config_to_json(config),
+        pod = _voice_config_to_pod(self._lib, config)
+        rc = self._lib.sonare_realtime_voice_changer_set_config(
+            self._require_handle(), ctypes.byref(pod)
         )
         _check(rc)
 
@@ -364,8 +370,18 @@ class RealtimeVoiceChanger:
         _check(rc)
 
     @_entry("RealtimeVoiceChanger.process_mono")
-    def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
+    def process_mono(
+        self,
+        samples: Sequence[float] | list[float] | np.ndarray,
+        carrier: Sequence[float] | list[float] | np.ndarray | None = None,
+    ) -> np.ndarray:
         """Process a mono buffer block-by-block and return the result as ndarray.
+
+        ``carrier`` is an external vocoder carrier of the same length as
+        ``samples``. It is read only while the vocoder runs with the ``"external"``
+        carrier source; with ``"internal"`` it is ignored. A carrier of a different
+        length raises ``SonareValueError``. With an external carrier configured and
+        none given, the call raises ``SonareError`` (invalid state) and writes nothing.
 
         Returns a ``numpy.ndarray`` of dtype ``float32`` (changed from
         ``list[float]`` in the prior implementation). The realtime path is
@@ -380,25 +396,9 @@ class RealtimeVoiceChanger:
         (the caller must chunk). Keep this in mind when porting realtime code
         between surfaces.
         """
-        return self._process_mono(_as_float32_buffer(samples), None)
-
-    @_entry("RealtimeVoiceChanger.process_mono_with_carrier")
-    def process_mono_with_carrier(
-        self,
-        samples: Sequence[float] | list[float] | np.ndarray,
-        carrier: Sequence[float] | list[float] | np.ndarray,
-    ) -> np.ndarray:
-        """Process a mono buffer with an external vocoder ``carrier`` of equal length.
-
-        The carrier is read only while the vocoder runs with the ``"external"``
-        carrier source; with ``"internal"`` it is ignored. A carrier of a
-        different length raises ``SonareValueError``. With an external carrier
-        configured, the carrier-less ``process_*`` methods raise ``SonareError``
-        (invalid state) and write nothing.
-        """
         in_buf = _as_float32_buffer(samples)
-        carrier_buf = _as_float32_buffer(carrier, arg_name="carrier")
-        if int(carrier_buf.shape[0]) != int(in_buf.shape[0]):
+        carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
+        if carrier_buf is not None and int(carrier_buf.shape[0]) != int(in_buf.shape[0]):
             raise _refuse("carrier must have the same length as samples")
         return self._process_mono(in_buf, carrier_buf)
 
@@ -414,15 +414,14 @@ class RealtimeVoiceChanger:
             # contiguous 1-D float32 array are guaranteed contiguous.
             c_in = (ctypes.c_float * length).from_buffer(in_block)
             c_out = (ctypes.c_float * length).from_buffer(out_block)
-            if carrier_buf is None:
-                rc = self._lib.sonare_realtime_voice_changer_process_mono(
-                    self._require_handle(), c_in, c_out, _to_c_size_t(length, "length")
-                )
-            else:
-                c_carrier = (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
-                rc = self._lib.sonare_realtime_voice_changer_process_mono_with_carrier(
-                    self._require_handle(), c_in, c_carrier, c_out, _to_c_size_t(length, "length")
-                )
+            c_carrier = (
+                None
+                if carrier_buf is None
+                else (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
+            )
+            rc = self._lib.sonare_realtime_voice_changer_process_mono(
+                self._require_handle(), c_in, c_carrier, c_out, _to_c_size_t(length, "length")
+            )
             _check_realtime(rc)
         return out_buf
 
@@ -431,25 +430,14 @@ class RealtimeVoiceChanger:
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
         num_channels: int | None = None,
+        carrier: Sequence[float] | list[float] | np.ndarray | None = None,
     ) -> np.ndarray:
         """Process an interleaved (LRLR...) buffer block-by-block.
 
         Returns a ``numpy.ndarray`` of dtype ``float32`` in the same
-        interleaved layout as the input.
-        """
-        return self._process_interleaved(samples, num_channels, None)
-
-    @_entry("RealtimeVoiceChanger.process_interleaved_with_carrier")
-    def process_interleaved_with_carrier(
-        self,
-        samples: Sequence[float] | list[float] | np.ndarray,
-        carrier: Sequence[float] | list[float] | np.ndarray,
-        num_channels: int | None = None,
-    ) -> np.ndarray:
-        """Process an interleaved buffer with a mono external vocoder ``carrier``.
-
-        ``carrier`` has one sample per frame and is shared by every channel; a
-        different length raises ``SonareValueError``.
+        interleaved layout as the input. ``carrier`` is a mono external vocoder
+        carrier with one sample per frame, shared by every channel; a different
+        length raises ``SonareValueError``.
         """
         return self._process_interleaved(samples, num_channels, carrier)
 
@@ -484,51 +472,39 @@ class RealtimeVoiceChanger:
             out_block = out_buf[start:end]
             c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(in_block)
             c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(out_block)
-            if carrier_buf is None:
-                rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
-                    self._require_handle(),
-                    c_in,
-                    c_out,
-                    _to_c_size_t(block_frames, "block_frames"),
-                    _to_c_int(ch, "ch"),
-                )
-            else:
-                c_carrier = (ctypes.c_float * block_frames).from_buffer(
+            c_carrier = (
+                None
+                if carrier_buf is None
+                else (ctypes.c_float * block_frames).from_buffer(
                     carrier_buf[frame : frame + block_frames]
                 )
-                rc = self._lib.sonare_realtime_voice_changer_process_interleaved_with_carrier(
-                    self._require_handle(),
-                    c_in,
-                    c_carrier,
-                    c_out,
-                    _to_c_size_t(block_frames, "block_frames"),
-                    _to_c_int(ch, "ch"),
-                )
+            )
+            rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
+                self._require_handle(),
+                c_in,
+                c_carrier,
+                c_out,
+                _to_c_size_t(block_frames, "block_frames"),
+                _to_c_int(ch, "ch"),
+            )
             _check_realtime(rc)
         return out_buf
 
     @_entry("RealtimeVoiceChanger.process_planar")
-    def process_planar(self, channels: PlanarChannels) -> list[np.ndarray]:
+    def process_planar(
+        self,
+        channels: PlanarChannels,
+        carrier: Sequence[float] | list[float] | np.ndarray | None = None,
+    ) -> list[np.ndarray]:
         """Process planar audio (one buffer per channel, 1 or 2, equal lengths) block-by-block.
 
         One channel takes the mono path and two the stereo path; the inputs are not
         modified, and the processed planes come back as ``float32`` ndarrays in the
         input order. Another channel count or unequal lengths raise
         ``SonareValueError``; two channels on a changer prepared for one raise
-        ``SonareError`` (invalid state).
-        """
-        return self._process_planar(channels, None)
-
-    @_entry("RealtimeVoiceChanger.process_planar_with_carrier")
-    def process_planar_with_carrier(
-        self,
-        channels: PlanarChannels,
-        carrier: Sequence[float] | list[float] | np.ndarray,
-    ) -> list[np.ndarray]:
-        """Process planar audio with a mono external vocoder ``carrier``.
-
-        ``carrier`` holds one sample per frame and is shared by every channel; a
-        different length raises ``SonareValueError``.
+        ``SonareError`` (invalid state). ``carrier`` is a mono external vocoder
+        carrier with one sample per frame, shared by every channel; a different
+        length raises ``SonareValueError``.
         """
         return self._process_planar(channels, carrier)
 
@@ -563,19 +539,18 @@ class RealtimeVoiceChanger:
             length = min(step, total - pos)
             c_left = (ctypes.c_float * length).from_buffer(out_left[pos : pos + length])
             c_right = (ctypes.c_float * length).from_buffer(out_right[pos : pos + length])
-            if carrier_buf is None:
-                rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
-                    self._require_handle(), c_left, c_right, _to_c_size_t(length, "length")
-                )
-            else:
-                c_carrier = (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
-                rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
-                    self._require_handle(),
-                    c_left,
-                    c_right,
-                    c_carrier,
-                    _to_c_size_t(length, "length"),
-                )
+            c_carrier = (
+                None
+                if carrier_buf is None
+                else (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
+            )
+            rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
+                self._require_handle(),
+                c_left,
+                c_right,
+                c_carrier,
+                _to_c_size_t(length, "length"),
+            )
             _check_realtime(rc)
         return planes
 
@@ -613,15 +588,22 @@ class RealtimeVoiceChanger:
         )
 
 
-@_entry("voice_change_realtime")
-def voice_change_realtime(
+@_entry("realtime_voice_changer_render")
+def realtime_voice_changer_render(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
+    config: VoicePresetId
+    | RealtimeVoiceChangerPreset
+    | RealtimeVoiceChangerConfig
+    | None = "neutralMonitor",
     num_channels: int = 1,
 ) -> np.ndarray:
     """Apply the realtime voice changer to a buffer offline.
+
+    ``config`` takes the same values as :class:`RealtimeVoiceChanger`: a preset id,
+    a configuration document mapping or a :class:`RealtimeVoiceChangerConfig`
+    record; ``None`` selects the neutral monitor.
 
     When ``num_channels`` is 2 the input must be interleaved (LRLR…) and the
     output is returned interleaved in the same layout.
@@ -643,13 +625,19 @@ def voice_change_realtime(
         raise _refuse("samples length must be a multiple of num_channels")
     lib = _get_lib()
     c_array, length = _to_c_float_array(in_buf)
+    if config is None:
+        pod = None
+    elif isinstance(config, RealtimeVoiceChangerConfig):
+        pod = config._to_pod()
+    else:
+        pod = _voice_config_to_pod(lib, config)
     with _out_float_array(lib) as (out, out_length):
         _check(
-            lib.sonare_voice_change_realtime(
+            lib.sonare_realtime_voice_changer_render(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
-                _voice_config_to_json(config),
+                None if pod is None else ctypes.byref(pod),
                 _to_c_int(num_channels, "num_channels"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),

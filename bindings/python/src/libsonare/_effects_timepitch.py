@@ -16,6 +16,8 @@ from ._ffi import (
     SONARE_PITCH_TARGET_SCALE,
     SonareKey,
     SonarePitchCorrectionConfig,
+    SonarePitchShiftOptions,
+    SonareTimeStretchOptions,
 )
 from ._narrowing import _narrow_double
 from ._runtime import (
@@ -26,7 +28,6 @@ from ._runtime import (
     _UINT32_MAX,
     _call_float_array_transform,
     _check,
-    _effect_hop,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -40,6 +41,7 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _token_arg,
+    _validate_effect_hop,
     _validate_samples,
 )
 from ._types_analysis import AutoTuneResult, Key
@@ -73,14 +75,16 @@ def time_stretch(
     """
     _validate_samples(samples)
     n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    hop_length = _effect_hop(hop_length)
+    options = SonareTimeStretchOptions._given(
+        n_fft=n_fft,
+        hop_length=None if hop_length is None else _validate_effect_hop(hop_length),
+    )
     return _call_float_array_transform(
-        "sonare_time_stretch_ex",
+        "sonare_time_stretch",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(speed_ratio, "speed_ratio"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        ctypes.byref(options),
     )
 
 
@@ -109,14 +113,16 @@ def pitch_shift(
     """
     _validate_samples(samples)
     n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    hop_length = _effect_hop(hop_length)
+    options = SonarePitchShiftOptions._given(
+        n_fft=n_fft,
+        hop_length=None if hop_length is None else _validate_effect_hop(hop_length),
+    )
     return _call_float_array_transform(
-        "sonare_pitch_shift_ex",
+        "sonare_pitch_shift",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(pitch_semitones, "pitch_semitones"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
+        ctypes.byref(options),
     )
 
 

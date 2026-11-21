@@ -16,6 +16,7 @@ from ._cancellation import (
 )
 from ._errors import ErrorCode, _entry, _refuse, _refuse_type
 from ._ffi import (
+    SonareMasterAudioOptions,
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
     SonareMasteringConfig,
@@ -24,7 +25,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _call_string,
     _check,
@@ -330,14 +331,12 @@ def mastering_insert_param_info(
     the 48 kHz probe. A rate outside the supported range raises.
     """
     lib = _get_lib()
-    if sample_rate is None:
-        raw = _call_string(lib.sonare_mastering_insert_param_info, _utf8_arg(insert, "insert"))
-    else:
-        raw = _call_string(
-            lib.sonare_mastering_insert_param_info_at_rate,
-            _utf8_arg(insert, "insert"),
-            _to_c_int(sample_rate, "sample_rate"),
-        )
+    # The C 0 is the rate-less query, so an explicit 0 is refused here rather than read as it.
+    raw = _call_string(
+        lib.sonare_mastering_insert_param_info,
+        _utf8_arg(insert, "insert"),
+        _to_c_int(_resolve_zero_default(sample_rate, "sample_rate"), "sample_rate"),
+    )
     return [_from_wire(MasteringInsertParamInfo, entry) for entry in json.loads(raw)]
 
 
@@ -744,21 +743,23 @@ def _run_mastering(
     out: Any,
     release: Callable[[Any], None],
 ) -> None:
-    """Call ``symbol`` or its progress variant with ``head`` plus the overrides into ``out``."""
+    """Call ``symbol`` with ``head``, the overrides and progress/cancel options into ``out``."""
     tail = (_chain_config_json(overrides, "overrides"),)
     state = CancellationState(cancel)
-    if on_progress is None and cancel is None:
-        rc = getattr(lib, symbol)(*head, *tail, ctypes.byref(out))
-    else:
+    options = SonareMasterAudioOptions()
+    # The callback objects stay referenced here for the whole native call.
+    cb = None
+    cancel_cb = None
+    if on_progress is not None or cancel is not None:
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
             else SonareMasteringProgressCallback(0)
         )
         cancel_cb = make_cancel_trampoline(state)
-        rc = getattr(lib, f"{symbol}_with_progress_ex")(
-            *head, *tail, cb, None, ctypes.byref(out), cancel_cb, None
-        )
+        options.progress_callback = cb
+        options.cancel_callback = cancel_cb
+    rc = getattr(lib, symbol)(*head, *tail, ctypes.byref(options), ctypes.byref(out))
     raise_callback_error(state, rc, lambda: release(ctypes.byref(out)))
     _check(rc)
 

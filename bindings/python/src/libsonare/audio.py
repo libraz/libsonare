@@ -127,6 +127,9 @@ from .analyzer import (
     pitch_yin as _pitch_yin,
 )
 from .analyzer import (
+    realtime_voice_changer_render as _realtime_voice_changer_render,
+)
+from .analyzer import (
     resample as _resample,
 )
 from .analyzer import (
@@ -163,9 +166,6 @@ from .analyzer import (
     voice_change as _voice_change,
 )
 from .analyzer import (
-    voice_change_realtime as _voice_change_realtime,
-)
-from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
 )
 from .types import (
@@ -200,7 +200,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ._effects_voice import RealtimeVoiceChangerPreset
+    from ._effects_voice import RealtimeVoiceChangerConfig, RealtimeVoiceChangerPreset
     from ._types_enums import VoicePresetId
 
 # Plane count of each layout, the same table as the core's channel_count().
@@ -894,9 +894,19 @@ class Audio:
         self,
         kernel_harmonic: int = 31,
         kernel_percussive: int = 31,
+        with_residual: bool = False,
     ) -> HpssResult:
-        """Perform harmonic-percussive source separation."""
-        return _hpss(self.data, self.sample_rate, kernel_harmonic, kernel_percussive)
+        """Perform harmonic-percussive source separation.
+
+        ``with_residual`` adds the residual component to the result.
+        """
+        return _hpss(
+            self.data,
+            self.sample_rate,
+            kernel_harmonic,
+            kernel_percussive,
+            with_residual=with_residual,
+        )
 
     @_entry("Audio.harmonic")
     def harmonic(self) -> np.ndarray:
@@ -981,9 +991,14 @@ class Audio:
             self.data, self.sample_rate, pitch_semitones, formant_factor, formant_mode
         )
 
-    @_entry("Audio.voice_change_realtime")
-    def voice_change_realtime(
-        self, *, config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor"
+    @_entry("Audio.realtime_voice_changer_render")
+    def realtime_voice_changer_render(
+        self,
+        *,
+        config: VoicePresetId
+        | RealtimeVoiceChangerPreset
+        | RealtimeVoiceChangerConfig
+        | None = "neutralMonitor",
     ) -> np.ndarray:
         """Apply the integrated realtime voice changer chain offline.
 
@@ -993,7 +1008,7 @@ class Audio:
         a named character preset such as ``"brightIdol"`` additionally applies
         retune, a formant lift, EQ and reverb.
         """
-        return _voice_change_realtime(self.data, self.sample_rate, config=config)
+        return _realtime_voice_changer_render(self.data, self.sample_rate, config=config)
 
     @_entry("Audio.normalize")
     def normalize(

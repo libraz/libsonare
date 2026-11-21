@@ -209,13 +209,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
         {"anchors": [(0.0, 0.0), (1.0, 1.0)]},
     ),
     "realtime_voice_changer_process_interleaved": _voice_changer("process_interleaved"),
-    "realtime_voice_changer_process_interleaved_with_carrier": _voice_changer(
-        "process_interleaved_with_carrier", carrier=_TONE[:128]
-    ),
     "realtime_voice_changer_process_mono": _voice_changer("process_mono"),
-    "realtime_voice_changer_process_mono_with_carrier": _voice_changer(
-        "process_mono_with_carrier", carrier=_TONE[:128]
-    ),
     "stream_analyzer_process_with_offset": lambda: (
         libsonare.StreamAnalyzer(sample_rate=22050).process_with_offset,
         {"samples": _TONE[:512]},

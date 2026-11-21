@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 
 from ._cstruct import CStruct
-from ._ffi_types_core import SonareAutomationPoint
+from ._ffi_types_core import SonareAutomationPoint, SonareCancelCallback
 
 
 class SonareMasteringConfig(CStruct):
@@ -514,12 +514,11 @@ class SonareEngineMidiClipSchedule(CStruct):
 
 
 class SonareProjectTempoSegment(CStruct):
-    """Maps to SonareProjectTempoSegment in sonare_c_project.h (sizeof 32)."""
+    """Maps to SonareProjectTempoSegment in sonare_c_project.h (sizeof 24)."""
 
     _fields_ = [
         ("start_ppq", ctypes.c_double),
         ("bpm", ctypes.c_double),
-        ("start_sample", ctypes.c_double),
         ("end_bpm", ctypes.c_double),
     ]
 
@@ -963,21 +962,6 @@ class SonareAutomationLaneDesc(CStruct):
 
     _fields_ = [
         ("target_param_id", ctypes.c_uint32),
-        ("points", ctypes.POINTER(SonareAutomationPoint)),
-        ("point_count", ctypes.c_size_t),
-    ]
-
-
-SONARE_AUTOMATION_TARGET_OPAQUE = 0
-SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1
-SONARE_AUTOMATION_TARGET_TRACK_PAN = 2
-
-
-class SonareAutomationLaneDescEx(CStruct):
-    """Maps to SonareAutomationLaneDescEx in sonare_c_project.h."""
-
-    _fields_ = [
-        ("target_param_id", ctypes.c_uint32),
         # C enums use the implementation's signed-int representation; retaining
         # that signedness lets the ABI-layout guard catch an enum-width/sign
         # drift even though all currently valid ordinals are non-negative.
@@ -985,6 +969,12 @@ class SonareAutomationLaneDescEx(CStruct):
         ("points", ctypes.POINTER(SonareAutomationPoint)),
         ("point_count", ctypes.c_size_t),
     ]
+
+
+SONARE_AUTOMATION_TARGET_UNCHANGED = -1
+SONARE_AUTOMATION_TARGET_OPAQUE = 0
+SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1
+SONARE_AUTOMATION_TARGET_TRACK_PAN = 2
 
 
 class SonareProjectKeySegment(CStruct):
@@ -1043,3 +1033,40 @@ SONARE_ERROR_ENCODE_FAILED = 9
 SONARE_ERROR_ABI_MISMATCH = 10
 SONARE_ERROR_STALE_RESULT = 11
 SONARE_ERROR_UNKNOWN = 99
+
+
+class SonareProjectSnapToGridOptions(CStruct):
+    """Maps to SonareProjectSnapToGridOptions in sonare_c_project_annotate.h."""
+
+    _c_init_ = "sonare_project_snap_to_grid_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("division", ctypes.c_int),
+    ]
+
+
+class SonareStreamingMasteringChainOptions(CStruct):
+    """Maps to SonareStreamingMasteringChainOptions in sonare_c_mastering.h."""
+
+    _c_init_ = "sonare_streaming_mastering_chain_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("loudness_static_gain_db", ctypes.c_float),
+        ("loudness_static_gain_peak_dbtp", ctypes.c_float),
+    ]
+
+
+class SonareMasterAudioOptions(CStruct):
+    """Maps to SonareMasterAudioOptions in sonare_c_mastering.h."""
+
+    _c_init_ = "sonare_master_audio_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("progress_callback", SonareMasteringProgressCallback),
+        ("progress_user_data", ctypes.c_void_p),
+        ("cancel_callback", SonareCancelCallback),
+        ("cancel_user_data", ctypes.c_void_p),
+    ]

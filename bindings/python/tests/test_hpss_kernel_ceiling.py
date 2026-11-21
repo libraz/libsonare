@@ -15,6 +15,7 @@ each. Each is asserted for what it actually produces rather than flattened.
 
 from __future__ import annotations
 
+import functools
 import math
 
 import numpy as np
@@ -27,10 +28,12 @@ from libsonare import (
     SonareValueError,
     extract_percussive_events,
     hpss,
-    hpss_with_residual,
 )
 
 from ._helpers import LIB_AVAILABLE
+
+# The plain call and the residual-returning call share one validation path.
+HPSS_ENTRIES = [hpss, functools.partial(hpss, with_residual=True)]
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -137,7 +140,7 @@ def _event_outcome(hits, **separation) -> str:
     return repr([(event.onset_sample, event.offset_sample) for event in events])
 
 
-@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("entry", HPSS_ENTRIES)
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 @pytest.mark.parametrize("kernel", [INT_MAX, FIRST_ABOVE_CEILING])
 def test_oversized_odd_kernel_is_refused_by_name(entry, direction, kernel, tone) -> None:
@@ -151,7 +154,7 @@ def test_oversized_odd_kernel_is_refused_by_name(entry, direction, kernel, tone)
     _assert_names_ceiling(raised.value, direction, kernel)
 
 
-@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("entry", HPSS_ENTRIES)
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 @pytest.mark.parametrize("kernel", [INT_MAX_MINUS_ONE, CEILING])
 def test_even_kernel_is_refused_for_parity_not_for_the_ceiling(
@@ -172,7 +175,7 @@ def test_even_kernel_is_refused_for_parity_not_for_the_ceiling(
     assert str(CEILING) not in str(raised.value)
 
 
-@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("entry", HPSS_ENTRIES)
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 def test_a_kernel_past_the_signed_range_is_refused_rather_than_wrapped(
     entry, direction, tone
@@ -189,7 +192,7 @@ def test_a_kernel_past_the_signed_range_is_refused_rather_than_wrapped(
     assert f"kernel_{direction} must be an odd integer in [1, 2147483647]" in str(raised.value)
 
 
-@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("entry", HPSS_ENTRIES)
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 @pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
 def test_a_wrapping_kernel_is_refused_by_name(entry, direction, passed, truncates_to, tone) -> None:
@@ -202,7 +205,7 @@ def test_a_wrapping_kernel_is_refused_by_name(entry, direction, passed, truncate
     assert "exceeds the maximum" not in str(raised.value)
 
 
-@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("entry", HPSS_ENTRIES)
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 @pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
 def test_a_wrapping_kernel_never_separates_as_the_truncated_one(
@@ -241,8 +244,9 @@ def test_an_ordinary_kernel_still_separates(tone) -> None:
     assert result.length == len(tone)
     assert any(value != 0.0 for value in result.harmonic)
 
-    residual = hpss_with_residual(tone, SR)
+    residual = hpss(tone, SR, with_residual=True)
     assert residual.sample_rate == SR
+    assert residual.residual is not None
     assert len(residual.harmonic) == len(tone)
 
 

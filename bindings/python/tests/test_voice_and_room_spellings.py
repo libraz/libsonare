@@ -215,9 +215,9 @@ def _preset_document() -> dict[str, object]:
 def test_a_preset_document_is_read_at_schema_version_4_only() -> None:
     document = _preset_document()
     assert document["schemaVersion"] == 4
-    libsonare.voice_change_realtime(np.zeros(4800, np.float32), SR, config=document)
+    libsonare.realtime_voice_changer_render(np.zeros(4800, np.float32), SR, config=document)
     with pytest.raises(libsonare.SonareError, match=r"schemaVersion must be 4") as refused:
-        libsonare.voice_change_realtime(
+        libsonare.realtime_voice_changer_render(
             np.zeros(4800, np.float32), SR, config={**document, "schemaVersion": 2}
         )
     assert refused.value.code_name == "InvalidFormat"
@@ -230,9 +230,9 @@ def test_a_preset_document_names_the_grain_in_samples() -> None:
     retune = dsp["retune"]
     old = {**document, "dsp": {**dsp, "retune": {**retune, "grainSize": 64}}}
     with pytest.raises(libsonare.SonareError, match=r"unknown key dsp\.retune\.grainSize$"):
-        libsonare.voice_change_realtime(np.zeros(4800, np.float32), SR, config=old)
+        libsonare.realtime_voice_changer_render(np.zeros(4800, np.float32), SR, config=old)
     zero = {**document, "dsp": {**dsp, "retune": {**retune, "grainSizeSamples": 0}}}
     with pytest.raises(libsonare.SonareError, match=r"dsp\.retune\.grainSizeSamples must not be 0"):
-        libsonare.voice_change_realtime(np.zeros(4800, np.float32), SR, config=zero)
+        libsonare.realtime_voice_changer_render(np.zeros(4800, np.float32), SR, config=zero)
     given = {**document, "dsp": {**dsp, "retune": {**retune, "grainSizeSamples": 64}}}
-    libsonare.voice_change_realtime(np.zeros(4800, np.float32), SR, config=given)
+    libsonare.realtime_voice_changer_render(np.zeros(4800, np.float32), SR, config=given)

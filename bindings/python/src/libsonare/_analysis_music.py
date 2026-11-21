@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from ._errors import _entry, _refuse, _unknown_error
 from ._ffi import (
+    SonareAnalyzeMelodyOptions,
     SonareBoundaryOptions,
     SonareBoundaryResult,
     SonareChord,
@@ -148,7 +149,7 @@ def detect_chords(
         tuning_value,
         tuning_auto,
     )
-    rc = lib.sonare_detect_chords_ex(
+    rc = lib.sonare_detect_chords(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -544,7 +545,10 @@ def analyze_melody(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareMelodyResult()
-    rc = lib.sonare_analyze_melody_ex(
+    options = SonareAnalyzeMelodyOptions._given(
+        use_pyin=1 if use_pyin else 0, center=1 if center else 0
+    )
+    rc = lib.sonare_analyze_melody(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -553,8 +557,7 @@ def analyze_melody(
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(threshold, "threshold"),
-        ctypes.c_int(1 if use_pyin else 0),
-        ctypes.c_int(1 if center else 0),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)

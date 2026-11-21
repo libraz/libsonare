@@ -674,3 +674,63 @@ class SonareSilenceCommonReport(CStruct):
         ("max_signal_intervals", ctypes.c_int32),
         ("min_signal_intervals", ctypes.c_int32),
     ]
+
+
+class SonareDecomposeOptions(CStruct):
+    """Maps to SonareDecomposeOptions in sonare_c_effects.h."""
+
+    _c_init_ = "sonare_decompose_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("init", ctypes.c_char_p),
+    ]
+
+
+class SonareHpssOptions(CStruct):
+    """Maps to SonareHpssOptions in sonare_c_effects.h."""
+
+    _c_init_ = "sonare_hpss_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
+        ("use_soft_mask", ctypes.c_int32),
+    ]
+
+
+class SonarePitchShiftOptions(CStruct):
+    """Maps to SonarePitchShiftOptions in sonare_c_effects.h."""
+
+    _c_init_ = "sonare_pitch_shift_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
+    ]
+
+
+class SonareTimeStretchOptions(CStruct):
+    """Maps to SonareTimeStretchOptions in sonare_c_effects.h."""
+
+    _c_init_ = "sonare_time_stretch_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_size_t),
+    ]
+
+
+class SonareTrimOptions(CStruct):
+    """Maps to SonareTrimOptions in sonare_c_effects.h."""
+
+    _c_init_ = "sonare_trim_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("frame_length", ctypes.c_size_t),
+        ("hop_length", ctypes.c_size_t),
+    ]

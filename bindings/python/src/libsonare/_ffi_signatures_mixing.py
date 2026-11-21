@@ -16,17 +16,10 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_void_p),
     ]
     lib.sonare_mixer_add_strip.restype = ctypes.c_void_p
-    lib.sonare_mixer_add_strip.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-    # The metering-configured form Mixer.add_strip calls. Both return the
-    # mixer-owned strip pointer, with NULL as the whole failure signal.
-    lib.sonare_mixer_add_strip_ex.restype = ctypes.c_void_p
-    lib.sonare_mixer_add_strip_ex.argtypes = [
+    lib.sonare_mixer_add_strip.argtypes = [
         ctypes.c_void_p,
         ctypes.c_char_p,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.POINTER(SonareMixerAddStripOptions),
     ]
     lib.sonare_strip_set_input_trim_db.restype = ctypes.c_int32
     lib.sonare_strip_set_input_trim_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
@@ -86,11 +79,6 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_strip_remove_send.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     lib.sonare_strip_meter.restype = ctypes.c_int32
     lib.sonare_strip_meter.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareMixMeterSnapshot),
-    ]
-    lib.sonare_strip_meter_tap.restype = ctypes.c_int32
-    lib.sonare_strip_meter_tap.argtypes = [
         ctypes.c_void_p,
         ctypes.c_int,
         ctypes.POINTER(SonareMixMeterSnapshot),

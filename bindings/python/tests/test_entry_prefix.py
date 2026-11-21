@@ -240,7 +240,7 @@ def test_a_method_a_classmethod_and_a_constructor_name_their_entry() -> None:
     ("native", "bare"),
     [
         ("project_add_clip: clip id is unknown", "clip id is unknown"),
-        ("mel_spectrogram_ex: sample_rate is out of range", "sample_rate is out of range"),
+        ("mel_spectrogram: sample_rate is out of range", "sample_rate is out of range"),
         ("sonare_eq_set_band: band index is out of range", "band index is out of range"),
         ("mixer: unknown strip id", "mixer: unknown strip id"),
         ("StftConfig: n_fft must be even", "StftConfig: n_fft must be even"),

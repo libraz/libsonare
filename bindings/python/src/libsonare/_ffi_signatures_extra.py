@@ -117,7 +117,7 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
-    # --- Effects / decomposition - decompose / nn_filter / remix / pv / hpss+res ---
+    # --- Effects / decomposition - decompose / nn_filter / remix / pv ---
 
     # sonare_decompose (two flat matrices W, H)
     lib.sonare_decompose.restype = ctypes.c_int32
@@ -128,27 +128,14 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_float,
+        ctypes.POINTER(SonareDecomposeOptions),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
-
-    # sonare_decompose_with_init (selectable NMF initialiser; two flat matrices)
-    lib.sonare_decompose_with_init.restype = ctypes.c_int32
-    lib.sonare_decompose_with_init.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
+    lib.sonare_decompose_options_init.restype = None
+    lib.sonare_decompose_options_init.argtypes = [ctypes.POINTER(SonareDecomposeOptions)]
 
     # sonare_decompose_stems (phase-carrying NMF stems: flat components + W/H)
     lib.sonare_decompose_stems.restype = ctypes.c_int32
@@ -175,7 +162,6 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonareDecomposeStemsConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
@@ -221,21 +207,6 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
         ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    # sonare_hpss_with_residual (three audio buffers)
-    lib.sonare_hpss_with_residual.restype = ctypes.c_int32
-    lib.sonare_hpss_with_residual.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
     ]
 
     # sonare_phase_vocoder (audio)

@@ -449,7 +449,12 @@ class _ProjectMidiMixin:
         if not with_source_index:
             _check(
                 _get_lib().sonare_project_bake_midi_fx(
-                    handle, _to_c_uint32(clip_id, "clip_id"), config_json
+                    handle,
+                    _to_c_uint32(clip_id, "clip_id"),
+                    config_json,
+                    None,
+                    ctypes.c_size_t(0),
+                    None,
                 )
             )
             return None
@@ -457,7 +462,7 @@ class _ProjectMidiMixin:
         buffer = (ctypes.c_int32 * expected)() if expected else None
         written = ctypes.c_size_t(0)
         _check(
-            _get_lib().sonare_project_bake_midi_fx_ex(
+            _get_lib().sonare_project_bake_midi_fx(
                 handle,
                 _to_c_uint32(clip_id, "clip_id"),
                 config_json,

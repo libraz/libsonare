@@ -67,33 +67,33 @@ def test_metering_vectorscope_returns_float32_arrays() -> None:
 
 
 def test_metering_scope_max_points_folds_into_primary() -> None:
-    # Passing max_points to the primary function bounds the point count and
-    # matches the *_decimated variant (Node/WASM-shape parity).
+    # Passing max_points bounds the point count; omitting it is the per-sample call.
     left = _sine(440.0, 0.1)
     max_points = 64
     vs = libsonare.metering_vectorscope(left, left, SR, max_points)
     assert vs.mid.shape[0] <= max_points
-    vs_dec = libsonare.metering_vectorscope_decimated(left, left, SR, max_points)
-    assert np.array_equal(vs.mid, vs_dec.mid)
-    assert np.array_equal(vs.side, vs_dec.side)
 
     ps = libsonare.metering_phase_scope(left, left, SR, max_points)
     assert ps.radius.shape[0] <= max_points
-    ps_dec = libsonare.metering_phase_scope_decimated(left, left, SR, max_points)
-    assert np.array_equal(ps.radius, ps_dec.radius)
 
-    # An omitted max_points stays full resolution.
-    assert libsonare.metering_vectorscope(left, left, SR).mid.shape == left.shape
-    assert libsonare.metering_vectorscope_decimated(left, left, SR).mid.shape == left.shape
+    # An omitted max_points is the per-sample call: one point per input sample.
+    full_vs = libsonare.metering_vectorscope(left, left, SR)
+    full_ps = libsonare.metering_phase_scope(left, left, SR)
+    assert full_vs.mid.shape == left.shape
+    assert full_ps.radius.shape == left.shape
+    # A max_points of the buffer length or more is the same per-sample result.
+    big_vs = libsonare.metering_vectorscope(left, left, SR, left.shape[0] + 10)
+    big_ps = libsonare.metering_phase_scope(left, left, SR, left.shape[0] + 10)
+    assert np.array_equal(big_vs.mid, full_vs.mid)
+    assert np.array_equal(big_vs.side, full_vs.side)
+    assert np.array_equal(big_ps.radius, full_ps.radius)
 
 
 @pytest.mark.parametrize(
     "fn",
     [
         libsonare.metering_vectorscope,
-        libsonare.metering_vectorscope_decimated,
         libsonare.metering_phase_scope,
-        libsonare.metering_phase_scope_decimated,
     ],
 )
 @pytest.mark.parametrize("max_points", [0, -1])
@@ -195,18 +195,8 @@ _B = [0.1] * 4799
             "left and right",
         ),
         (
-            "metering_vectorscope_decimated",
-            lambda: libsonare.metering_vectorscope_decimated(_A, _B, 48000),
-            "left and right",
-        ),
-        (
             "metering_phase_scope",
             lambda: libsonare.metering_phase_scope(_A, _B, 48000),
-            "left and right",
-        ),
-        (
-            "metering_phase_scope_decimated",
-            lambda: libsonare.metering_phase_scope_decimated(_A, _B, 48000),
             "left and right",
         ),
         (

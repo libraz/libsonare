@@ -20,7 +20,6 @@ from ._effects_percussive import PercussiveEventEdit as PercussiveEventEdit
 from ._effects_separation import DecomposeResult as DecomposeResult
 from ._effects_separation import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
 from ._effects_separation import DecomposeStemsResult as DecomposeStemsResult
-from ._effects_separation import HpssWithResidualResult as HpssWithResidualResult
 from ._effects_spectral import SpectralRegionOp as SpectralRegionOp
 from ._effects_voice import CharacterType as CharacterType
 from ._effects_voice import FormantMode as FormantMode
@@ -725,6 +724,7 @@ def hpss(
     n_fft: int = 2048,
     hop_length: int | None = None,
     hard_mask: bool = False,
+    with_residual: bool = False,
 ) -> HpssResult: ...
 def harmonic(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
 def percussive(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
@@ -942,11 +942,14 @@ def spectral_edit(
 
 RealtimeVoiceChangerPreset = dict[str, Any]
 
-def voice_change_realtime(
+def realtime_voice_changer_render(
     samples: FloatSamples,
     sample_rate: int,
     *,
-    config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
+    config: VoicePresetId
+    | RealtimeVoiceChangerPreset
+    | RealtimeVoiceChangerConfig
+    | None = "neutralMonitor",
     num_channels: int = 1,
 ) -> np.ndarray: ...
 def realtime_voice_changer_preset_names() -> list[str]: ...
@@ -1007,11 +1010,6 @@ def mastering_assistant_suggest(
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> MasteringAssistantResult: ...
-def mastering_assistant_suggest_chain(
-    samples: FloatSamples,
-    sample_rate: int,
-    params: MasteringAssistantParams | None = None,
-) -> MasteringChainConfig: ...
 def mastering_audio_profile(
     samples: FloatSamples,
     sample_rate: int,
@@ -1026,12 +1024,6 @@ def mastering_assistant_suggest_stereo(
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> MasteringAssistantResult: ...
-def mastering_assistant_suggest_chain_stereo(
-    left: FloatSamples,
-    right: FloatSamples,
-    sample_rate: int,
-    params: MasteringAssistantParams | None = None,
-) -> MasteringChainConfig: ...
 def mastering_audio_profile_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1488,14 +1480,6 @@ def decompose(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
-) -> DecomposeResult: ...
-def decompose_with_init(
-    s: FloatSamples,
-    n_features: int,
-    n_frames: int,
-    n_components: int,
-    n_iter: int | None = None,
-    beta: float = 2.0,
     init: NmfInit | None = None,
 ) -> DecomposeResult: ...
 def decompose_stems(
@@ -1540,15 +1524,6 @@ def remix_aligned_intervals(
     intervals: npt.ArrayLike,
     align_zeros: bool = True,
 ) -> np.ndarray[Any, Any]: ...
-def hpss_with_residual(
-    samples: FloatSamples,
-    sample_rate: int,
-    kernel_harmonic: int = 31,
-    kernel_percussive: int = 31,
-    n_fft: int = 2048,
-    hop_length: int | None = None,
-    hard_mask: bool = False,
-) -> HpssWithResidualResult: ...
 def phase_vocoder(
     samples: FloatSamples,
     sample_rate: int,
@@ -2053,19 +2028,7 @@ def metering_vectorscope(
     sample_rate: int,
     max_points: int | None = None,
 ) -> VectorscopeReport: ...
-def metering_vectorscope_decimated(
-    left: FloatSamples,
-    right: FloatSamples,
-    sample_rate: int,
-    max_points: int | None = None,
-) -> VectorscopeReport: ...
 def metering_phase_scope(
-    left: FloatSamples,
-    right: FloatSamples,
-    sample_rate: int,
-    max_points: int | None = None,
-) -> PhaseScopeReport: ...
-def metering_phase_scope_decimated(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,

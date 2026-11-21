@@ -37,8 +37,8 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
         calls.append((name, args))
         return np.zeros(1, dtype=np.float32)
 
-    stretch = SimpleNamespace(sonare_time_stretch_ex=object())
-    shift = SimpleNamespace(sonare_pitch_shift_ex=object())
+    stretch = SimpleNamespace(sonare_time_stretch=object())
+    shift = SimpleNamespace(sonare_pitch_shift=object())
     monkeypatch.setattr(timepitch, "_call_float_array_transform", fake_transform)
 
     monkeypatch.setattr(timepitch, "_get_lib", lambda: stretch)
@@ -56,16 +56,16 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
         [0.0],
     )
 
-    assert calls[0][0] == "sonare_time_stretch_ex"
-    assert [int(value.value) for value in calls[0][1][3:]] == [1024, 256]
-    assert calls[1][0] == "sonare_pitch_shift_ex"
-    assert [int(value.value) for value in calls[1][1][3:]] == [1024, 256]
+    for index, name in enumerate(("sonare_time_stretch", "sonare_pitch_shift")):
+        assert calls[index][0] == name
+        options = calls[index][1][3]._obj
+        assert (options.n_fft, options.hop_length) == (1024, 256)
 
 
 def test_hpss_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> None:
     new_call = _Call()
     new = SimpleNamespace(
-        sonare_hpss_ex=new_call,
+        sonare_hpss=new_call,
         sonare_free_hpss_result=lambda *_args: None,
     )
     monkeypatch.setattr(separation, "_get_lib", lambda: new)
@@ -74,45 +74,55 @@ def test_hpss_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert result.length == 0
     assert len(new_call.calls) == 1
-    assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 0]
+    options = new_call.calls[0][5]._obj
+    assert (options.n_fft, options.hop_length, options.use_soft_mask) == (1024, 256, 0)
+    assert new_call.calls[0][7] is None
 
 
-def test_an_omitted_hpss_hop_reaches_the_native_call_as_auto(
+def test_an_omitted_hpss_hop_reaches_the_native_call_as_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     new_call = _Call()
     new = SimpleNamespace(
-        sonare_hpss_ex=new_call,
+        sonare_hpss=new_call,
         sonare_free_hpss_result=lambda *_args: None,
     )
     monkeypatch.setattr(separation, "_get_lib", lambda: new)
     separation.hpss(_samples(), n_fft=1024, sample_rate=22050)
-    # SONARE_STFT_HOP_AUTO; the C ABI refuses a hop of 0.
-    assert int(new_call.calls[0][6].value) == -1
+    # A hop of 0 in the options struct is "absent": the core derives it.
+    assert new_call.calls[0][5]._obj.hop_length == 0
 
 
 def test_hpss_with_residual_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> None:
     new_call = _Call()
     new = SimpleNamespace(
-        sonare_hpss_ex=new_call,
+        sonare_hpss=new_call,
         sonare_free_hpss_result=lambda *_args: None,
         sonare_free_floats=lambda *_args: None,
     )
     monkeypatch.setattr(separation, "_get_lib", lambda: new)
-    result = separation.hpss_with_residual(
-        _samples(), n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    result = separation.hpss(
+        _samples(),
+        n_fft=1024,
+        hop_length=256,
+        hard_mask=True,
+        with_residual=True,
+        sample_rate=22050,
     )
-    assert isinstance(result, separation.HpssWithResidualResult)
+    assert result.residual is not None
     assert len(new_call.calls) == 1
-    assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 1]
+    options = new_call.calls[0][5]._obj
+    assert (options.n_fft, options.hop_length, options.use_soft_mask) == (1024, 256, 0)
+    assert new_call.calls[0][7] is not None
 
 
 def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     trim_call = _Call()
-    trim_lib = SimpleNamespace(sonare_trim_ex=trim_call)
+    trim_lib = SimpleNamespace(sonare_trim=trim_call)
     monkeypatch.setattr(level, "_get_lib", lambda: trim_lib)
     assert level.trim(_samples(), frame_length=64, hop_length=16, sample_rate=22050).size == 0
-    assert [int(trim_call.calls[0][index].value) for index in (4, 5)] == [64, 16]
+    options = trim_call.calls[0][4]._obj
+    assert (options.frame_length, options.hop_length) == (64, 16)
 
     rms_call = _Call()
     rms_lib = SimpleNamespace(sonare_normalize_rms=rms_call)
@@ -138,7 +148,7 @@ def test_invalid_options_are_rejected_before_library_lookup(
     with pytest.raises(ValueError, match="kernel_harmonic"):
         separation.hpss(_samples(), kernel_harmonic=2**32 + 1, sample_rate=22050)
     with pytest.raises(ValueError, match="hop_length"):
-        separation.hpss_with_residual(_samples(), hop_length=2**32, sample_rate=22050)
+        separation.hpss(_samples(), hop_length=2**32, with_residual=True, sample_rate=22050)
 
     monkeypatch.setattr(level, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="frame_length"):
@@ -171,8 +181,13 @@ def test_extended_effects_work_with_fresh_library() -> None:
     separated = separation.hpss(
         samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
     )
-    separated_residual = separation.hpss_with_residual(
-        samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    separated_residual = separation.hpss(
+        samples,
+        n_fft=1024,
+        hop_length=256,
+        hard_mask=True,
+        with_residual=True,
+        sample_rate=22050,
     )
     normalized = level.normalize(samples, sample_rate=22050, mode="rms", target_db=-12.0)
     trimmed = level.trim(
@@ -193,8 +208,8 @@ def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
 
     for call in (
         lambda: separation.hpss(samples, n_fft=1024, hop_length=1024, sample_rate=22050),
-        lambda: separation.hpss_with_residual(
-            samples, n_fft=1024, hop_length=1024, sample_rate=22050
+        lambda: separation.hpss(
+            samples, n_fft=1024, hop_length=1024, with_residual=True, sample_rate=22050
         ),
         lambda: timepitch.time_stretch(
             samples, speed_ratio=1.2, n_fft=512, hop_length=2048, sample_rate=22050
@@ -298,3 +313,16 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
         ).samples.shape
         == samples.shape
     )
+
+
+@pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
+def test_hpss_residual_request_leaves_the_components_unchanged() -> None:
+    samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
+    plain = separation.hpss(samples, sample_rate=22050)
+    with_residual = separation.hpss(samples, sample_rate=22050, with_residual=True)
+    assert plain.residual is None
+    assert with_residual.residual is not None
+    # The residual path masks in a different order, so agreement is to float rounding.
+    atol = 1e-6 * float(np.max(np.abs(samples)))
+    np.testing.assert_allclose(plain.harmonic, with_residual.harmonic, rtol=0, atol=atol)
+    np.testing.assert_allclose(plain.percussive, with_residual.percussive, rtol=0, atol=atol)

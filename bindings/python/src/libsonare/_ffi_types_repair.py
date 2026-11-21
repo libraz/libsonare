@@ -214,6 +214,21 @@ class SonareDenoiseStereoResult(CStruct):
     ]
 
 
+class SonareDenoiseLinkedResult(CStruct):
+    """Maps to SonareDenoiseLinkedResult in sonare_c_mastering.h.
+
+    ``channels`` holds ``num_channels`` heap-allocated planes of ``length``
+    samples; release with ``sonare_free_denoise_linked_result``.
+    """
+
+    _fields_ = [
+        ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ("num_channels", ctypes.c_size_t),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDenoiseReport),
+    ]
+
+
 class SonareDeclipConfig(CStruct):
     """Maps to SonareDeclipConfig in sonare_c.h."""
 
@@ -485,6 +500,21 @@ SONARE_TRIM_SILENCE_MODE_PEAK = 0
 SONARE_TRIM_SILENCE_MODE_LUFS_GATED = 1
 
 
+class SonareDereverbLinkedResult(CStruct):
+    """Maps to SonareDereverbLinkedResult in sonare_c_mastering.h.
+
+    ``channels`` holds ``num_channels`` heap-allocated planes of ``length``
+    samples; release with ``sonare_free_dereverb_linked_result``.
+    """
+
+    _fields_ = [
+        ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ("num_channels", ctypes.c_size_t),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDereverbReport),
+    ]
+
+
 class SonareTrimSilenceConfig(CStruct):
     """Maps to SonareTrimSilenceConfig in sonare_c.h."""
 
@@ -557,23 +587,6 @@ class SonareTrimSilenceStereoResult(CStruct):
         ("report", SonareTrimReport),
         ("left_range", SonareTrimRange),
         ("right_range", SonareTrimRange),
-    ]
-
-
-class SonareNormalizeStereoResult(CStruct):
-    """Maps to SonareNormalizeStereoResult in sonare_c_effects.h.
-
-    One ``applied_gain_db`` rather than a per-channel pair: the level is measured
-    across both channels and the one gain goes to both, so the field would
-    otherwise read as though the two could differ. A silent pair comes back
-    untouched with the gain at 0.
-    """
-
-    _fields_ = [
-        ("left", ctypes.POINTER(ctypes.c_float)),
-        ("right", ctypes.POINTER(ctypes.c_float)),
-        ("length", ctypes.c_size_t),
-        ("applied_gain_db", ctypes.c_float),
     ]
 
 

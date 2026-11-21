@@ -478,12 +478,12 @@ def test_buffer_entry_point_floor() -> None:
 
 
 def test_realtime_voice_process_profiles_match_discovered_methods() -> None:
-    """The four flat-buffer process methods stay in the derived, guarded family.
+    """The two flat-buffer process methods stay in the derived, guarded family.
 
-    ``process_planar`` and its carrier variant take ``PlanarChannels`` rather than
-    one flat buffer, so their input contract lives in the realtime voice tests.
+    ``process_planar`` takes ``PlanarChannels`` rather than one flat buffer, so
+    its input contract lives in the realtime voice tests.
     """
-    assert len(_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS) == 4
+    assert len(_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS) == 2
     assert set(_GUARDED) >= _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS
     assert _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS.isdisjoint(
         set(_EMPTY_INPUT_IS_DEFINED) | _NO_PITCH_IS_A_VALUE

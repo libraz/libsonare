@@ -13,6 +13,10 @@ from ._errors import _entry
 from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
+    SonareMelToAudioOptions,
+    SonareMelToStftOptions,
+    SonareMfccToAudioOptions,
+    SonareMfccToMelOptions,
 )
 from ._field_spelling import surface_spelling
 from ._narrowing import _domain_float, _narrow_float
@@ -199,7 +203,7 @@ def cqt_to_audio(
     length = n_bins * n_frames
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_cqt_to_audio_checked(
+    rc = lib.sonare_cqt_to_audio(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(n_bins, "n_bins"),
@@ -252,29 +256,19 @@ def mel_to_stft(
     lib = _get_lib()
     c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel")
     out = SonareInverseResult()
-    if htk:
-        rc = lib.sonare_mel_to_stft_ex(
-            c_array,
-            _to_c_int(n_mels, "n_mels"),
-            _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sr, "sr"),
-            _to_c_int(n_fft, "n_fft"),
-            _to_c_float(fmin, "fmin"),
-            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
-            ctypes.c_int(1),
-            ctypes.byref(out),
-        )
-    else:
-        rc = lib.sonare_mel_to_stft(
-            c_array,
-            _to_c_int(n_mels, "n_mels"),
-            _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sr, "sr"),
-            _to_c_int(n_fft, "n_fft"),
-            _to_c_float(fmin, "fmin"),
-            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
-            ctypes.byref(out),
-        )
+    options = SonareMelToStftOptions._given(htk=1 if htk else 0)
+    rc = lib.sonare_mel_to_stft(
+        c_array,
+        _to_c_size_t(n_mels * n_frames, "input_length"),
+        _to_c_int(n_mels, "n_mels"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(sr, "sr"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+        ctypes.byref(options),
+        ctypes.byref(out),
+    )
     _check(rc)
     try:
         return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
@@ -284,23 +278,22 @@ def mel_to_stft(
 
 def _inverse_audio(
     lib: ctypes.CDLL,
-    base_name: str,
-    extended_name: str,
+    function_name: str,
     c_array: object,
+    input_length: int,
     args: tuple[object, ...],
     n_iter: int,
-    htk: bool,
+    options: ctypes.Structure,
 ) -> np.ndarray:
-    """Call a Griffin-Lim inverse wrapper with shared HTK/output handling."""
-    function_name = extended_name if htk else base_name
-    htk_arg = (ctypes.c_int(1),) if htk else ()
+    """Call a Griffin-Lim inverse wrapper with shared output handling."""
     with _out_float_array(lib) as (out, out_length):
         _check(
             getattr(lib, function_name)(
                 c_array,
+                _to_c_size_t(input_length, "input_length"),
                 *args,
-                *htk_arg,
                 _to_c_int(n_iter, "n_iter"),
+                ctypes.byref(options),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -340,8 +333,8 @@ def mel_to_audio(
     return _inverse_audio(
         lib,
         "sonare_mel_to_audio",
-        "sonare_mel_to_audio_ex",
         c_array,
+        n_mels * n_frames,
         (
             _to_c_int(n_mels, "n_mels"),
             _to_c_int(n_frames, "n_frames"),
@@ -355,7 +348,7 @@ def mel_to_audio(
             _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
         ),
         n_iter,
-        htk,
+        SonareMelToAudioOptions._given(htk=1 if htk else 0),
     )
 
 
@@ -419,12 +412,14 @@ def mfcc_to_mel(
     lib = _get_lib()
     c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
     out = SonareInverseResult()
-    rc = lib.sonare_mfcc_to_mel_ex(
+    options = SonareMfccToMelOptions._given(lifter=_to_c_float(lifter, "lifter"))
+    rc = lib.sonare_mfcc_to_mel(
         c_array,
+        _to_c_size_t(n_mfcc * n_frames, "input_length"),
         _to_c_int(n_mfcc, "n_mfcc"),
         _to_c_int(n_frames, "n_frames"),
         _to_c_int(n_mels, "n_mels"),
-        _to_c_float(lifter, "lifter"),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
@@ -467,48 +462,27 @@ def mfcc_to_audio(
     lib = _get_lib()
     c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
     hop_length = _effect_hop(hop_length)
-    if lifter == 0.0:
-        return _inverse_audio(
-            lib,
-            "sonare_mfcc_to_audio",
-            "sonare_mfcc_to_audio_ex",
-            c_array,
-            (
-                _to_c_int(n_mfcc, "n_mfcc"),
-                _to_c_int(n_frames, "n_frames"),
-                _to_c_int(n_mels, "n_mels"),
-                _to_c_int(sr, "sr"),
-                _to_c_int(n_fft, "n_fft"),
-                _to_c_int(hop_length, "hop_length"),
-                _to_c_float(fmin, "fmin"),
-                _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
-            ),
-            n_iter,
-            htk,
-        )
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_mfcc_to_audio_ex2(
-        c_array,
-        _to_c_int(n_mfcc, "n_mfcc"),
-        _to_c_int(n_frames, "n_frames"),
-        _to_c_int(n_mels, "n_mels"),
-        _to_c_int(sr, "sr"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
-        ctypes.c_int(1 if htk else 0),
-        _to_c_float(lifter, "lifter"),
-        _to_c_int(n_iter, "n_iter"),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
+    options = SonareMfccToAudioOptions._given(
+        htk=1 if htk else 0, lifter=_to_c_float(lifter, "lifter")
     )
-    _check(rc)
-    try:
-        return _from_c_float_array(out, out_length.value)
-    finally:
-        lib.sonare_free_floats(out)
+    return _inverse_audio(
+        lib,
+        "sonare_mfcc_to_audio",
+        c_array,
+        n_mfcc * n_frames,
+        (
+            _to_c_int(n_mfcc, "n_mfcc"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(n_mels, "n_mels"),
+            _to_c_int(sr, "sr"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_float(fmin, "fmin"),
+            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
+        ),
+        n_iter,
+        options,
+    )
 
 
 @_entry("vqt")
@@ -583,7 +557,7 @@ def vqt_to_audio(
     length = n_bins * n_frames
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_vqt_to_audio_checked(
+    rc = lib.sonare_vqt_to_audio(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(n_bins, "n_bins"),

@@ -164,7 +164,7 @@ def test_a_saturating_controller_value_is_refused() -> None:
 def test_a_saturating_retune_control_is_refused_on_the_argument_that_carried_it() -> None:
     """The streaming path, whose native refusal cannot say which control was wrong."""
     with ls.StreamingRetune(pitch_semitones=2.0, mix=1.0) as retune:
-        retune.prepare(float(SAMPLE_RATE), 256)
+        retune.prepare(SAMPLE_RATE, 256)
         assert retune.config()["pitch_semitones"] == pytest.approx(2.0)  # positive control
         retune.set_config(pitch_semitones=-4.5)
         assert retune.config()["pitch_semitones"] == pytest.approx(-4.5)  # positive control
@@ -294,7 +294,7 @@ def test_a_non_finite_double_argument_is_refused_by_name() -> None:
         )
 
     with ls.StreamingRetune(pitch_semitones=2.0, mix=1.0) as retune:
-        retune.prepare(float(SAMPLE_RATE), 256)  # positive control
+        retune.prepare(SAMPLE_RATE, 256)  # positive control
         for value in NON_FINITE:
             _refuses("sample_rate", ("max_block_size",), retune.prepare, value, 256)
 

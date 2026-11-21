@@ -23,6 +23,7 @@ from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
     SonareAcousticResult,
+    SonareAnalyzeImpulseResponseOptions,
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareDynamicsResult,
@@ -286,7 +287,7 @@ def analyze(
 
     out_json = ctypes.c_char_p()
     _check(
-        lib.sonare_analyze_json_ex(
+        lib.sonare_analyze_json(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -324,7 +325,7 @@ def _analyze_with_callbacks(
     on_progress: ProgressCallback | None,
     cancel: CancelCallback | None,
 ) -> AnalysisResult:
-    """Run the cancellation-capable analysis entry point and parse its result."""
+    """Run the analysis with the callbacks set on its options and parse the result."""
 
     out_json = ctypes.c_char_p()
     state = CancellationState(cancel)
@@ -334,16 +335,16 @@ def _analyze_with_callbacks(
         else SonareAnalyzeProgressCallback(0)
     )
     cancel_cb = make_cancel_trampoline(state)
-    rc = lib.sonare_analyze_json_ex_with_progress(
+    options.progress_callback = c_cb
+    options.progress_user_data = None
+    options.cancel_callback = cancel_cb
+    options.cancel_user_data = None
+    rc = lib.sonare_analyze_json(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
-        c_cb,
-        None,
         ctypes.byref(out_json),
-        cancel_cb,
-        None,
     )
     raise_callback_error(state, rc, lambda: _free_json(lib, out_json))
     _check(rc, flattened="options")
@@ -597,12 +598,13 @@ def analyze_impulse_response(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareAcousticResult()
-    rc = lib.sonare_analyze_impulse_response_ex(
+    options = SonareAnalyzeImpulseResponseOptions._given(min_decay_db=decay_db_c)
+    rc = lib.sonare_analyze_impulse_response(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
-        ctypes.c_float(decay_db_c),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
