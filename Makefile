@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
+       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes \
@@ -623,7 +623,9 @@ test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test
 # can be reachable through a second enabled feature, so a break that needs two
 # options off together is invisible to a matrix that only turns one off at a
 # time. Tests are excluded so a failure points at the shipped library and the
-# CLI rather than at test code that assumes a full-feature build.
+# CLI rather than at test code that assumes a full-feature build. That row also
+# builds the shared library and holds its exports to the header declarations
+# (tools/abi/check_c_exports.py), since a gated entry must stub, not vanish.
 #
 # Each row checks that its option actually went off before spending a build on
 # it. A dependency rule in CMakeLists.txt may force an option back ON -- which
@@ -675,10 +677,12 @@ build-feature-matrix:
 	  fi; \
 	done; \
 	echo "=== all features OFF (build-feature-all-off) ==="; \
-	if ! $(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 \
+	if ! $(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -DBUILD_SHARED=ON $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 \
 	   || ! $(CMAKE) --build build-feature-all-off --parallel $(HARDENING_JOBS) >> build-feature-all-off.log 2>&1; then \
 	  cat build-feature-all-off.log; \
 	  broken="$$broken ALL_OFF"; \
+	elif ! python3 tools/abi/check_c_exports.py build-feature-all-off/lib; then \
+	  broken="$$broken ALL_OFF_EXPORTS"; \
 	fi; \
 	rc=0; \
 	if test -n "$$broken"; then \
@@ -932,6 +936,7 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
 	$(CHECK) python3 -m unittest tests/conformance/test_playback_cli.py
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	$(CHECK) python3 -m unittest tools/abi/test_check_c_exports.py
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
 	$(CHECK) python3 -m unittest tests/conformance/test_capability_feature_gates.py
 	$(CHECK) python3 -m unittest tests/conformance/test_binding_warning_flags.py
@@ -1125,6 +1130,13 @@ abi-layout-check:
 
 # Verify the ABI-version mirror literals in every binding match the C source of
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.
+# Fail unless a built shared library exports exactly the sonare_* functions the
+# public headers declare. Defaults to the Python dylib; C_EXPORTS_LIB=<path> names another.
+C_EXPORTS_LIB ?= $(firstword $(wildcard build-python-shared/lib/libsonare.dylib build-python-shared/lib/libsonare.so))
+check-c-exports:
+	@test -n "$(C_EXPORTS_LIB)" || { echo "check-c-exports: no shared library; build build-python-shared/ or pass C_EXPORTS_LIB=<path>" >&2; exit 1; }
+	python3 tools/abi/check_c_exports.py $(C_EXPORTS_LIB)
+
 check-abi-version:
 	python3 tools/abi/check_abi_versions.py
 
