@@ -393,6 +393,16 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.chroma_method must be an integer in [0, 2]");
   options.chroma_method = SONARE_CHROMA_METHOD_STFT;
+  options.min_duration_sec = -1.0f;
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().rfind("options.min_duration_sec ", 0) == 0);
+  options.min_duration_sec = 0.0f;
+  options.hmm_beam_width = -1;
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().rfind("options.hmm_beam_width ", 0) == 0);
+  options.hmm_beam_width = 0;
 
   SonareStringArray roman{};
   SonareStringArray functions{};

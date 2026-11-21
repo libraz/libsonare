@@ -57,10 +57,20 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
   return config;
 }
 
+/// The core chord config refuses its members under its own names; the C entries take them in
+/// their options struct, so they refuse them under it.
+const std::array<CName, 6> kChordOptionNames{{{"min_duration", "options.min_duration_sec"},
+                                              {"smoothing_window", "options.smoothing_window_sec"},
+                                              {"threshold", "options.threshold"},
+                                              {"n_fft", "options.n_fft"},
+                                              {"hop_length", "options.hop_length"},
+                                              {"hmm_beam_width", "options.hmm_beam_width"}}};
+
 SonareError check_chord_detection_options(const SonareChordDetectionOptions& options) {
   return run_validation([&] {
     validate_chord_detection_options(options);
-    validate_chord_config(chord_config_from_options(options));
+    with_c_names(kChordOptionNames,
+                 [&] { validate_chord_config(chord_config_from_options(options)); });
   });
 }
 

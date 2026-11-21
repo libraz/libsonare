@@ -194,9 +194,9 @@ SonareError probe_detect_key_candidates(const std::string& param, double value) 
 SonareChordDetectionOptions chord_options(const std::string& param, double value) {
   SonareChordDetectionOptions options{};
   sonare_chord_detection_options_init(&options);
-  if (is_param(param, "n_fft")) options.n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) options.hop_length = as_size(value);
-  if (is_param(param, "hmm_beam_width")) options.hmm_beam_width = static_cast<int>(value);
+  if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
+  if (is_param(param, "options.hmm_beam_width")) options.hmm_beam_width = static_cast<int>(value);
   return options;
 }
 
