@@ -139,7 +139,7 @@ class StreamAnalyzerWrapper {
     // wasmIndexArg rather than wasmCountArg: this names a position, so a request
     // past the addressable range is reported instead of saturating onto the last
     // address and corrupting the initial timestamp base.
-    const size_t offset = wasmIndexArg(sample_offset, "sampleOffset");
+    const size_t offset = wasmIndexArg(sample_offset, "startSample");
     std::vector<float> data = float32ArrayToVector(samples);
     analyzer_->process(data.data(), data.size(), offset);
   }
@@ -225,7 +225,7 @@ class StreamAnalyzerWrapper {
 
   void reset(const val& base_sample_offset) {
     analyzer_->reset(
-        static_cast<std::size_t>(checkedUintFromVal(base_sample_offset, "baseSampleOffset")));
+        static_cast<std::size_t>(checkedUintFromVal(base_sample_offset, "startSample")));
   }
 
   val stats() {

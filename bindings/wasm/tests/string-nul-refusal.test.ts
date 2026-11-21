@@ -493,6 +493,18 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'error-subject label built from literals and an index',
     },
     {
+      file: 'mixing/mixing_processing.cpp',
+      text: 'left_subject.c_str()',
+      count: 1,
+      reason: 'error-subject label built from a literal name and a strip index',
+    },
+    {
+      file: 'mixing/mixing_processing.cpp',
+      text: 'right_subject.c_str()',
+      count: 1,
+      reason: 'error-subject label built from a literal name and a strip index',
+    },
+    {
       file: 'mixing/mixing.cpp',
       text: '("strip" + std::to_string(index)).c_str()',
       count: 1,
@@ -507,7 +519,7 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'common/common.cpp',
       text: 'channel_name.c_str()',
-      count: 1,
+      count: 2,
       reason: 'refusal name built from the caller-supplied literal name and a channel index',
     },
     {

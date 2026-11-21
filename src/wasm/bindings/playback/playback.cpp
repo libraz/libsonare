@@ -58,8 +58,8 @@ void checkPlayback(SonareError err) {
 // itself, not rejected up front. This loader checks structure only -- array
 // shape and matching channel lengths -- and leaves content (emptiness,
 // finiteness) to the renderer, matching processInterleaved's own contract.
-std::vector<Audio> loadPlaybackChannelSet(const val& channels, int sample_rate) {
-  return loadChannelSet("channels", channels, sample_rate, ChannelSetValidation::StructureOnly);
+std::vector<Audio> loadPlaybackChannelSet(const val& planes, int sample_rate) {
+  return loadChannelSet("planes", planes, sample_rate, ChannelSetValidation::StructureOnly);
 }
 
 // Structural sibling of the channel loader above, for the offline (interleaved) render
@@ -68,6 +68,7 @@ std::vector<float> loadPlaybackInterleaved(val samples, int channels, std::size_
   if (channels <= 0) {
     throw WasmRangeError("channels must be an integer in [1, 2147483647]");
   }
+  wasmFloat32ArrayLength(samples, "samples");
   std::vector<float> data = float32ArrayToVector(samples);
   if (data.size() % static_cast<std::size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
@@ -172,6 +173,7 @@ class PlaybackRendererWasm {
     if (in_channels <= 0) {
       throw WasmRangeError("inChannels must be an integer in [1, 2147483647]");
     }
+    wasmFloat32ArrayLength(samples, "samples");
     const std::vector<float> input = float32ArrayToVector(samples);
     if (input.size() % static_cast<size_t>(in_channels) != 0) {
       throw WasmRangeError("interleaved sample count must be a whole number of frames");

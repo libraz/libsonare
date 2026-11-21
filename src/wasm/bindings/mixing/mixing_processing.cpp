@@ -20,6 +20,7 @@ void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
 
 // A C INVALID_PARAMETER from the mixer is an argument refusal, not object state.
 [[noreturn]] void throwMixerProcessError(SonareError err) {
+  rethrowLastCRefusal();
   const std::string message = cErrorMessage(err);
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
     throw WasmRangeError(message);
@@ -34,8 +35,8 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   // mixer instance may legitimately be configured with zero strips, and the
   // `count > 0` guard below already treats that as a no-op rather than an
   // error.
-  const int count = requireMatchedLength(
-      left_channels, right_channels, "leftChannels and rightChannels", /*require_non_zero=*/false);
+  const int count = requireMatchedLength(left_channels, right_channels,
+                                         "leftInputs and rightInputs", /*require_non_zero=*/false);
   requireInputCountWithinStrips(static_cast<size_t>(count), stripCount());
 
   std::vector<std::vector<float>> left_inputs;
@@ -46,13 +47,15 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   size_t length = 0;
   size_t cumulative_count = 0;
   for (int index = 0; index < count; ++index) {
-    const size_t left_length =
-        accumulateWasmFloat32ArrayLength(left_channels[index], "left channel", &cumulative_count);
-    const size_t right_length =
-        accumulateWasmFloat32ArrayLength(right_channels[index], "right channel", &cumulative_count);
+    const std::string at = "[" + std::to_string(index) + "]";
+    const std::string left_subject = "leftInputs" + at;
+    const std::string right_subject = "rightInputs" + at;
+    const size_t left_length = accumulateWasmFloat32ArrayLength(
+        left_channels[index], left_subject.c_str(), &cumulative_count);
+    const size_t right_length = accumulateWasmFloat32ArrayLength(
+        right_channels[index], right_subject.c_str(), &cumulative_count);
     if (left_length != right_length) {
-      const std::string at = "[" + std::to_string(index) + "]";
-      throw WasmRangeError("leftChannels" + at + " and rightChannels" + at +
+      throw WasmRangeError("leftInputs" + at + " and rightInputs" + at +
                            " must have the same length");
     }
     if (index == 0) {

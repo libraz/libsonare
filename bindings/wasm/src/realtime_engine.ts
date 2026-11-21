@@ -113,6 +113,7 @@ import type {
   WasmRealtimeEngine,
 } from './sonare.js';
 import {
+  assertClosedToken,
   assertFloatValue,
   assertSurroundPan,
   C_INT_MAX,
@@ -2387,6 +2388,7 @@ export class RealtimeEngine {
    */
   resolveStripAutomationId(ref: StripRef, kind: 'faderDb' | 'pan' | 'width'): number {
     const target = stripTarget(ref);
+    assertClosedToken(kind, ['faderDb', 'pan', 'width'], 'kind');
     if (target.master) {
       return this.native.resolveMasterAutomationId(kind);
     }

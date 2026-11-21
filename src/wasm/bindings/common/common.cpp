@@ -209,12 +209,13 @@ std::vector<Audio> loadValidatedChannelSet(const char* name, const val& channels
 
 std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sample_rate,
                                   ChannelSetValidation validation) {
+  const std::string set_name(name);
   if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError("channels must be an array of Float32Array");
+    throw WasmTypeError(set_name + " must be an array of Float32Array");
   }
-  const std::size_t count = wasmArrayLikeLength(channels, "channels");
+  const std::size_t count = wasmArrayLikeLength(channels, name);
   if (count == 0) {
-    throw WasmRangeError("channels must hold at least one channel");
+    throw WasmRangeError(set_name + " must hold at least one channel");
   }
   std::vector<Audio> loaded;
   loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
@@ -222,19 +223,18 @@ std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sam
   std::size_t length = 0;
   for (std::size_t index = 0; index < count; ++index) {
     const val channel = channels[index];
+    const std::string channel_name = set_name + "[" + std::to_string(index) + "]";
     if (channel.isUndefined() || channel.isNull()) {
-      throw WasmTypeError("channels[" + std::to_string(index) + "] must be a Float32Array");
+      throw WasmTypeError(channel_name + " must be a Float32Array");
     }
     const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(channel, "channels entry", &cumulative);
+        accumulateWasmFloat32ArrayLength(channel, channel_name.c_str(), &cumulative);
     if (index == 0) {
       length = frames;
     } else if (frames != length) {
-      throw WasmRangeError("channels[" + std::to_string(index) +
-                           "] must have the same length as channels[0]");
+      throw WasmRangeError(channel_name + " must have the same length as " + set_name + "[0]");
     }
     if (validation == ChannelSetValidation::Offline) {
-      const std::string channel_name = std::string(name) + "[" + std::to_string(index) + "]";
       loaded.push_back(loadValidatedAudio(channel_name.c_str(), channel, sample_rate));
     } else {
       loaded.push_back(Audio::from_vector(float32ArrayToVector(channel), sample_rate));
