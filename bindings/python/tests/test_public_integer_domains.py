@@ -102,11 +102,9 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     # The field and option validators, which add a domain on top of the range.
     "_validate_c_int_field": ((1.5, "probe"), (7, "probe")),
     "_validate_hpss_kernel": ((31.5, "probe"), (31, "probe")),
-    "_validate_stft_n_fft": ((2048.5,), (2048,)),
     "_validate_effect_hop": ((512.5,), (512,)),
     "_validate_scalar": ((math.nan, "probe"), (1.5, "probe")),
     "_validate_samples": (([math.nan],), ([0.1, 0.2],)),
-    "_require_power_of_two": ((1024.5, "probe"), (1024, "probe")),
     # The closed-domain resolvers. A fraction is neither an ordinal nor a name,
     # so it leaves the domain the way an unknown spelling does.
     "_synth_enum_value": ((1.5, {"alpha": 3}, "probe"), ("alpha", {"alpha": 3}, "probe")),

@@ -22,6 +22,7 @@ from ._narrowing import (
 )
 from ._runtime import (
     _C_INT_MAX,
+    _C_INT_MIN,
     _DEFAULT_EFFECT_N_FFT,
     _call_float_array_transform,
     _check,
@@ -43,7 +44,6 @@ from ._runtime import (
     _validate_effect_hop,
     _validate_hpss_kernel,
     _validate_samples,
-    _validate_stft_n_fft,
 )
 from .types import HpssResult, NmfInit, NnFilterAggregate
 
@@ -135,7 +135,10 @@ def decompose(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
-    if length != n_features * n_frames:
+    n_features = _to_c_int(n_features, "n_features").value
+    n_frames = _to_c_int(n_frames, "n_frames").value
+    # The C ABI refuses a non-positive extent by its domain before it reads s.
+    if n_features > 0 and n_frames > 0 and length != n_features * n_frames:
         raise _refuse("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
@@ -185,7 +188,10 @@ def decompose_with_init(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
-    if length != n_features * n_frames:
+    n_features = _to_c_int(n_features, "n_features").value
+    n_frames = _to_c_int(n_frames, "n_frames").value
+    # The C ABI refuses a non-positive extent by its domain before it reads s.
+    if n_features > 0 and n_frames > 0 and length != n_features * n_frames:
         raise _refuse("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
@@ -237,7 +243,7 @@ def _stems_config(
             raise _refuse("mask_power must be at least 1")
     return SonareDecomposeStemsConfig._given(
         n_components=c_counts["n_components"],
-        n_fft=None if n_fft is None else _validate_stft_n_fft(n_fft),
+        n_fft=None if n_fft is None else _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX),
         hop_length=None if hop_length is None else _validate_effect_hop(hop_length),
         n_iter=c_counts["n_iter"],
         beta=None if beta is None else _narrow_double(beta, "beta"),
@@ -472,7 +478,10 @@ def nn_filter(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
-    if length != n_features * n_frames:
+    n_features = _to_c_int(n_features, "n_features").value
+    n_frames = _to_c_int(n_frames, "n_frames").value
+    # The C ABI refuses a non-positive extent by its domain before it reads s.
+    if n_features > 0 and n_frames > 0 and length != n_features * n_frames:
         raise _refuse("s length must equal n_features * n_frames")
     aggregate_bytes = (
         None
@@ -629,7 +638,7 @@ def hpss(
         HpssResult with harmonic and percussive components.
     """
     _validate_samples(samples)
-    n_fft = _validate_stft_n_fft(n_fft)
+    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length = _effect_hop(hop_length)
     kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
@@ -753,7 +762,7 @@ def hpss_with_residual(
         ``residual`` float32 arrays (all the same length) and ``sample_rate``.
     """
     _validate_samples(samples)
-    n_fft = _validate_stft_n_fft(n_fft)
+    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length = _effect_hop(hop_length)
     kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
@@ -820,7 +829,7 @@ def phase_vocoder(
         The time-stretched audio as a 1-D float32 array.
     """
     _validate_samples(samples)
-    n_fft = _validate_stft_n_fft(n_fft)
+    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length = _effect_hop(hop_length)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

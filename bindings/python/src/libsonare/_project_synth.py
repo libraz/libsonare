@@ -18,7 +18,7 @@ from typing import Literal, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type, _require_open, _unknown_error
+from ._errors import _entry, _refuse, _refuse_integer, _refuse_type, _require_open, _unknown_error
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double, _optional_nonzero
 from ._runtime import (
@@ -497,7 +497,7 @@ def _unsigned(value: int, name: str, limit: int) -> int:
     """
     if isinstance(value, bool) or not isinstance(value, int):
         message = f"{name} must be an integer"
-        raise _refuse(message) if _is_number(value) else _refuse_type(message)
+        raise _refuse_integer(name, message) if _is_number(value) else _refuse_type(message)
     if value < 0 or value > limit:
         raise _refuse(f"{name} must be in [0, {limit}]")
     return value

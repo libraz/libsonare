@@ -24,7 +24,6 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _out_float_array,
-    _require_power_of_two,
     _resolve_sample_bound,
     _Respelling,
     _respellings,
@@ -141,14 +140,9 @@ def spectral_edit(
     c_n_fft = c_hop = c_heal = None
     if n_fft is not None:
         c_n_fft = _validate_c_int_field(n_fft, "n_fft")
-        # spectral_edit.cpp requires a power of two, stricter than the shared even-size rule.
-        _require_power_of_two(c_n_fft, "n_fft")
-        if c_n_fft < 4:
-            raise _refuse("n_fft must be a power of two >= 4")
     if hop_length is not None:
-        c_hop = _validate_c_int_field(hop_length, "hop_length")
-        if c_hop <= 0 or (c_n_fft and c_hop > c_n_fft // 2):
-            raise _refuse("hop_length must satisfy 0 < hop_length <= n_fft / 2")
+        # 0 is the C ABI's spelling of the default, so a given hop starts at 1.
+        c_hop = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     if heal_radius_frames is not None:
         c_heal = _narrow_int(heal_radius_frames, "heal_radius_frames", 1, _C_INT_MAX)
     window_value = _token_ordinal(window, _WINDOW_TYPES, "window")

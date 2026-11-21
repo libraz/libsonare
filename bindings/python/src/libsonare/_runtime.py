@@ -16,7 +16,7 @@ from typing import Any, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
-from ._errors import _BARE_TEXT, _refuse, _refuse_type
+from ._errors import _BARE_TEXT, _refuse, _refuse_integer, _refuse_type
 
 # _runtime is the shared re-export hub: feature submodules do
 # `from ._runtime import *`, so forward the full C-struct and public type
@@ -997,8 +997,8 @@ def _int_refusal(value: object, arg_name: str, domain: str) -> TypeError | Sonar
     """
     if isinstance(value, bool) or not isinstance(value, SupportsIndex):
         message = f"{arg_name} must be an integer"
-        return _refuse(message) if _is_number(value) else _refuse_type(message)
-    return _refuse(f"{arg_name} {domain}")
+        return _refuse_integer(arg_name, message) if _is_number(value) else _refuse_type(message)
+    return _refuse_integer(arg_name, f"{arg_name} {domain}")
 
 
 def _validate_c_int_field(value: object, arg_name: str) -> int:
@@ -1066,58 +1066,6 @@ def _validate_hpss_kernel(value: int, arg_name: str) -> int:
     if kernel <= 0 or kernel % 2 == 0:
         raise _refuse(f"{arg_name} {domain}")
     return kernel
-
-
-def _require_power_of_two(value: object, name: str) -> int:
-    """Validate a positive power-of-two integer with a consistent error.
-
-    Narrowed before the bit test, which raises a bare :class:`TypeError` on a
-    float rather than this family's refusal, and which a caller would otherwise
-    reach only after ``int()`` had already truncated the value.
-    """
-    narrowed = _narrow_int(value, name, _C_INT_MIN, _C_INT_MAX)
-    if narrowed <= 0 or (narrowed & (narrowed - 1)) != 0:
-        raise _refuse(f"{name} must be a positive power of two")
-    return narrowed
-
-
-def _validate_stft_n_fft(n_fft: int) -> int:
-    """Validate an STFT size against the domain the core accepts.
-
-    The core FFT is mixed-radix, so any even size transforms exactly; only the
-    real one-sided spectrum's ``n_fft / 2 + 1`` bin layout needs the evenness, and
-    four is the smallest size whose symmetric Hann synthesis window is not all
-    zeros. A power-of-two restriction here would reject sizes the C ABI and the
-    native CLI accept, which makes the facade diverge rather than merely be
-    stricter.
-
-    This is the single definition of the even-and-at-least-four domain, so the
-    entry points that hold it cannot drift apart. It is not the binding's only
-    STFT size domain: other STFT-framed entry points deliberately require a power
-    of two, and they are not stricter versions of this one -- adopt this domain
-    for a new entry point only after checking which of the two the C ABI behind
-    it accepts.
-
-    Args:
-        fn_name: Caller name, used to prefix the error message.
-        n_fft: Requested STFT size.
-
-    Returns:
-        The validated size as a plain ``int``.
-
-    Raises:
-        TypeError: If ``n_fft`` is not a number.
-        SonareValueError: If ``n_fft`` is not an even integer in
-            ``[4, 2**31 - 2]``.
-    """
-    domain = f"must be an even integer in [4, {_C_INT_MAX - 1}]"
-    try:
-        size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(n_fft, "n_fft", domain) from exc
-    if size < 4 or size % 2 != 0:
-        raise _refuse(f"n_fft {domain}")
-    return size
 
 
 # The STFT size every spectral effect entry point defaults to.

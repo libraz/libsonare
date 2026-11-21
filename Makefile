@@ -453,6 +453,7 @@ lint:
 # committed declarations alone, so drift is a static fact.
 	python3 tools/parity/gen_c_entry_names.py --check
 	python3 tools/api/gen_field_spelling.py --check
+	python3 tools/api/gen_integer_domains.py --check
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror

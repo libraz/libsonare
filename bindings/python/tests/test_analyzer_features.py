@@ -559,7 +559,7 @@ def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
         griffin_lim(magnitude, 22050, n_fft=2048, hop_length=256, n_iter=1)
     with pytest.raises(
         SonareValueError,
-        match=r"^griffin_lim: n_fft must be an even integer in \[4, 2147483647\]$",
+        match=r"^griffin_lim: n_fft must be an even integer in \[4, 524288\]$",
     ):
         griffin_lim(magnitude, 22050, n_fft=1025, hop_length=256, n_iter=1)
 
@@ -673,7 +673,7 @@ def test_phase_vocoder_refuses_an_n_fft_outside_the_stft_domain(n_fft: int) -> N
 
     with pytest.raises(SonareValueError) as caught:
         phase_vocoder(_generate_sine(440, 22050, 0.25), 22050, 1.25, n_fft=n_fft)
-    assert str(caught.value) == "phase_vocoder: n_fft must be an even integer in [4, 2147483646]"
+    assert str(caught.value) == "phase_vocoder: n_fft must be an even integer in [4, 524288]"
 
 
 def test_spectral_rolloff() -> None:

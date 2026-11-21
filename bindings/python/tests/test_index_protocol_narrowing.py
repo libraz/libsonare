@@ -133,7 +133,7 @@ def _refusal(entry, error=SonareValueError, **kwargs) -> str:
     ("keyword", "domain"),
     [
         ("kernel_harmonic", "hpss: kernel_harmonic must be an odd integer in [1, 2147483647]"),
-        ("n_fft", "hpss: n_fft must be an even integer in [4, 2147483646]"),
+        ("n_fft", "hpss: n_fft must be an even integer in [4, 524288]"),
         ("hop_length", "hpss: hop_length must be an integer in [1, 2147483647]"),
     ],
 )

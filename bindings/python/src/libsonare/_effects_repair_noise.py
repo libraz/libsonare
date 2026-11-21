@@ -39,7 +39,6 @@ from ._runtime import (
     _guard_buffer,
     _narrow_int,
     _planar_channel_arrays,
-    _require_power_of_two,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -120,9 +119,7 @@ def mastering_repair_denoise_classical(
         ``n_fft``, ``hop_length`` below 1, or ``hop_length`` above
         ``n_fft // 2``).
     """
-    # The core requires a power of two here (denoise_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     # Narrowed, not int()-coerced: int() takes 256.7 as 256, a hop nobody asked for.
     hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
 
@@ -224,9 +221,7 @@ def mastering_repair_detect_noise_floor(
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
     """
-    # The core requires a power of two here (denoise_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode, "mode"),
@@ -301,9 +296,6 @@ def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.
         SonareError: If the C call rejects the request, which includes a
             ``sample_rate`` of 0 or less.
     """
-    # The same power-of-two rule the denoise config validator applies; check it
-    # eagerly so the message names the argument.
-    _require_power_of_two(n_fft, "n_fft")
     out_bins = (ctypes.c_int * _NOISE_BAND_EDGE_COUNT)()
     rc = _get_lib().sonare_mastering_repair_noise_band_bins(
         _to_c_int(n_fft, "n_fft"),
@@ -393,9 +385,7 @@ def mastering_repair_denoise_classical_stereo(
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
     """
-    # The core requires a power of two here (denoise_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
@@ -527,9 +517,7 @@ def mastering_repair_denoise_classical_linked(
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
     """
-    # The core requires a power of two here (denoise_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",

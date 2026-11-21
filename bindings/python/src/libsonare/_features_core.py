@@ -352,8 +352,6 @@ def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
     ``features`` is a 2-D array of shape ``(n_features, n_frames)``; the result is
     a float32 array of the same shape.
     """
-    if width < 3 or width % 2 == 0:
-        raise _refuse("width must be an odd integer of at least 3")
     lib = _get_lib()
     c_array, n_features, n_frames = _to_c_float_matrix(features, arg_name="features")
     out = ctypes.POINTER(ctypes.c_float)()

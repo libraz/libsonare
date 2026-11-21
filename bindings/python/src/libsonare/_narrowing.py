@@ -13,7 +13,7 @@ import numbers
 import operator
 from typing import NamedTuple, SupportsFloat, SupportsIndex
 
-from ._errors import _refuse, _refuse_type
+from ._errors import _refuse, _refuse_integer, _refuse_type
 
 
 def _narrow_int(value: object, name: str, low: int, high: int) -> int:
@@ -54,9 +54,9 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
         else:
             if low <= integer <= high:
                 return integer
-            raise _refuse(_narrowing_error(name, low, high))
+            raise _refuse_integer(name, _narrowing_error(name, low, high))
     if _is_number(value):
-        raise _refuse(_narrowing_error(name, low, high))
+        raise _refuse_integer(name, _narrowing_error(name, low, high))
     raise _refuse_type(f"{name} must be an integer")
 
 
@@ -275,7 +275,7 @@ def _resolve_sample_bound(
         name = sample_name
         respelled = {}
     if not signed and value < 0:
-        raise _refuse(f"{name} must be at least 0")
+        raise _refuse_integer(name, f"{name} must be at least 0")
     return _SampleBound(value, respelled)
 
 

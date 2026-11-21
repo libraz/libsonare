@@ -132,18 +132,9 @@ def test_invalid_options_are_rejected_before_library_lookup(
     # one left unpatched would still raise, from a path the guard never saw.
     monkeypatch.setattr(timepitch, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft"):
-        timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=1001, sample_rate=22050)
-    with pytest.raises(ValueError, match="n_fft"):
         timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=2**32, sample_rate=22050)
-    # A two-point symmetric Hann synthesis window is all zeros.
-    with pytest.raises(ValueError, match=r"n_fft must be an even integer in \[4, 2147483646\]"):
-        timepitch.pitch_shift(
-            _samples(), pitch_semitones=0.0, n_fft=2, hop_length=1, sample_rate=22050
-        )
 
     monkeypatch.setattr(separation, "_get_lib", fail_lookup)
-    with pytest.raises(ValueError, match=r"n_fft must be an even integer in \[4, 2147483646\]"):
-        separation.hpss(_samples(), n_fft=2, hop_length=1, sample_rate=22050)
     with pytest.raises(ValueError, match="kernel_harmonic"):
         separation.hpss(_samples(), kernel_harmonic=2**32 + 1, sample_rate=22050)
     with pytest.raises(ValueError, match="hop_length"):

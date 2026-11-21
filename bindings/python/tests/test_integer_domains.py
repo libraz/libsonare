@@ -1,0 +1,220 @@
+"""An integer keyword refuses a fraction, a NaN or a value out of range in the core's domain text.
+
+The table is generated from the core's numeric-domain dump. Each row is driven twice:
+by a number the binding refuses before the core sees it, and by an integer just outside
+the domain, which the core (or the binding's own copy of the check) refuses. Both must
+state the row's domain, so a row that disagrees with the core fails here.
+"""
+
+from __future__ import annotations
+
+import inspect
+import math
+import re
+from typing import Any
+
+import numpy as np
+import pytest
+
+import libsonare
+from libsonare import SonareError
+from libsonare._integer_domains import DOMAINS
+
+from ._helpers import LIB_AVAILABLE
+
+pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
+
+_SR = 22050
+_TONE = (0.5 * np.sin(2 * np.pi * 440 * np.arange(_SR // 8) / _SR)).astype(np.float32)
+
+# A valid value for each required argument a swept entry takes.
+_REQUIRED: dict[str, Any] = {
+    "samples": _TONE,
+    "y": _TONE,
+    "audio": _TONE,
+    "left": _TONE,
+    "right": _TONE,
+    "onset_envelope": np.abs(_TONE[:2048]),
+    "mel": np.ones((128, 4), np.float32),
+    "coefficients": np.ones((20, 4), np.float32),
+    "values": np.ones((8, 4), np.float32),
+    "tempogram": np.ones((384, 4), np.float32),
+    "times": [0.1],
+    "frames": 1,
+    "time_sec": 0.1,
+    "intervals": np.array([[0, 100]]),
+    "sample_rate": _SR,
+    "sr": _SR,
+    "channels": [_TONE, _TONE],
+    "magnitude": np.ones((1025, 4), np.float32),
+    "s": np.ones((64, 8), np.float32),
+    "data": np.ones((64, 8), np.float32),
+    "frame_length": 256,
+    "hop_length": 128,
+    "speed_ratio": 1.0,
+    "pitch_semitones": 0.0,
+    "recurrence": np.eye(8, dtype=np.float32),
+    "boundaries": [0, 4],
+    "ops": [],
+    "win": 3,
+    "midi": 60.0,
+    "root": 0,
+    "mode_mask": 0xAB5,
+    "pitch_class": 0,
+    "key_root": libsonare.PitchClass.C,
+    "mode": "major",
+    "features": np.ones((4, 16), np.float32),
+    "reference": _TONE,
+    "take": _TONE,
+    "frequencies": [440.0],
+    "signals": [_TONE],
+    "num_channels": 1,
+    "num_samples": 1024,
+    "page_frames": 256,
+    "notes": [],
+    "targets": [],
+    "beats": [libsonare.Beat(time_sec=0.5 * i, strength=1.0) for i in range(8)],
+}
+
+# Entries whose required argument of a shared name needs another shape.
+_ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
+    "segment_cross_similarity": {
+        "x": np.ones((8, 16), np.float32),
+        "y": np.ones((8, 16), np.float32),
+    },
+    "render_percussive_events": {
+        "events": [libsonare.PercussiveEvent(onset_sample=0, offset_sample=64)]
+    },
+    "decompose": {
+        "s": np.ones(64 * 8, np.float32),
+        "n_features": 64,
+        "n_frames": 8,
+        "n_components": 2,
+    },
+    "decompose_with_init": {
+        "s": np.ones(64 * 8, np.float32),
+        "n_features": 64,
+        "n_frames": 8,
+        "n_components": 2,
+    },
+    "nn_filter": {
+        "s": np.ones(64 * 8, np.float32),
+        "n_features": 64,
+        "n_frames": 8,
+        "n_components": 2,
+    },
+}
+
+
+# The C types' own ranges, which a binding reader states when no core domain applies.
+_TYPE_RANGES = {
+    "in [-2147483648, 2147483647]",
+    "in [0, 4294967295]",
+    "in [-9223372036854775808, 9223372036854775807]",
+    "in [0, 18446744073709551615]",
+}
+
+
+def _integer_keywords(fn: Any) -> list[str]:
+    return [
+        name
+        for name, p in inspect.signature(fn).parameters.items()
+        if p.default is not p.empty
+        and "int" in str(p.annotation)
+        and not any(t in str(p.annotation) for t in ("float", "bool"))
+    ]
+
+
+def _callable_entries() -> list[str]:
+    names = []
+    for name in sorted(libsonare.__all__):
+        fn = getattr(libsonare, name)
+        if not inspect.isfunction(fn):
+            continue
+        params = inspect.signature(fn).parameters.items()
+        required = [
+            n for n, p in params if p.default is p.empty and p.kind is p.POSITIONAL_OR_KEYWORD
+        ]
+        if all(n in _REQUIRED for n in required):
+            names.append(name)
+    return names
+
+
+_KINDS = {
+    None: "an integer",
+    "power_of_two": "a power of two",
+    "even": "an even integer",
+    "odd": "an odd integer",
+}
+
+
+def _rows() -> list[tuple[str, str, int, int | None, str | None]]:
+    return [
+        (entry, keyword, lo, hi, stricter)
+        for (entry, keyword), (lo, hi, stricter) in DOMAINS.items()
+        if keyword in inspect.signature(getattr(libsonare, entry, lambda: None)).parameters
+    ]
+
+
+def _refusal(entry: str, keyword: str, value: object) -> str:
+    fn = getattr(libsonare, entry)
+    given = _ENTRY_REQUIRED.get(entry, {})
+    kwargs = {
+        name: given.get(name, _REQUIRED.get(name))
+        for name, p in inspect.signature(fn).parameters.items()
+        if p.default is p.empty
+        and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+        and name != keyword
+    }
+    with pytest.raises((SonareError, TypeError, ValueError)) as caught:
+        fn(**kwargs, **{keyword: value})
+    return str(caught.value)
+
+
+def _domain_text(keyword: str, lo: int, hi: int | None, stricter: str | None = None) -> str:
+    if hi is None:
+        return f"{keyword} must be an integer of at least {lo}"
+    return f"{keyword} must be {_KINDS[stricter]} in [{lo}, {hi}]"
+
+
+def test_the_table_reaches_the_public_entries() -> None:
+    assert len(_rows()) >= len(DOMAINS) // 2
+
+
+@pytest.mark.parametrize(("entry", "keyword", "lo", "hi", "stricter"), _rows())
+def test_a_non_integer_is_refused_in_the_core_domain(
+    entry: str, keyword: str, lo: int, hi: int | None, stricter: str | None
+) -> None:
+    expected = _domain_text(keyword, lo, hi, stricter)
+    # 2 ** 40 is in a domain open above, so it only probes a bounded one.
+    for value in (2.5, math.nan) if hi is None else (2.5, math.nan, 2.0**40, 2**40):
+        assert expected in _refusal(entry, keyword, value), value
+
+
+@pytest.mark.parametrize(("entry", "keyword", "lo", "hi", "stricter"), _rows())
+def test_the_core_refuses_an_integer_outside_the_row_in_the_same_text(
+    entry: str, keyword: str, lo: int, hi: int | None, stricter: str | None
+) -> None:
+    assert _domain_text(keyword, lo, hi, stricter) in _refusal(entry, keyword, lo - 1)
+
+
+@pytest.mark.slow
+def test_every_integer_keyword_the_core_bounds_has_a_row() -> None:
+    """Drive each integer keyword out of domain; a core domain refusal must come with a row."""
+    missing = []
+    for entry in _callable_entries():
+        for keyword in _integer_keywords(getattr(libsonare, entry)):
+            if (entry, keyword) in DOMAINS:
+                continue
+            for value in (0, -1):
+                try:
+                    text = _refusal(entry, keyword, value)
+                except pytest.fail.Exception:
+                    continue
+                stated = re.search(
+                    rf"{keyword} must be an integer (in \[[^]]*\]|of at least -?\d+)", text
+                )
+                if stated and stated.group(1) not in _TYPE_RANGES:
+                    missing.append(f"{entry}({keyword}): {text}")
+                    break
+    assert missing == []

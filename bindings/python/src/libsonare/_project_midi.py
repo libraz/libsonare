@@ -64,25 +64,14 @@ from ._runtime import (
 )
 from ._types_engine import AutomationPoint, MidiFxConfig
 
-# Widths of the MIDI fields the packers and lookups accept: a UMP group or channel
-# is a nibble, a MIDI 1.0 data byte 7 bits, a pitch bend or a bank number 14 bits.
-_MIDI_NIBBLE_MAX = 15
+# Widths the bank-number argument and the static GM lookups still narrow in Python: a
+# bank number is 14 bits, a GM data byte 7 bits. The packers leave the domain to the C ABI.
 _MIDI_14BIT_MAX = 16383
-
-
-def _midi_nibble(value: object, key: str) -> int:
-    """A UMP group or channel, refused by name outside [0, 15]."""
-    return _narrow_int(value, key, 0, _MIDI_NIBBLE_MAX)
 
 
 def _midi_bank(bank: object) -> int:
     """An optional 14-bit bank number; ``None`` is the C ABI's absent ``-1``."""
     return _C_ABSENT if bank is None else _narrow_int(bank, "bank", 0, _MIDI_14BIT_MAX)
-
-
-def _midi_data(value: object, key: str) -> int:
-    """A 7-bit MIDI data value, refused by name outside [0, 127]."""
-    return _narrow_int(value, key, 0, _MIDI_DATA_MAX)
 
 
 # Domains of the static GM tables: a number outside is refused, one inside that
@@ -412,7 +401,7 @@ class _ProjectMidiMixin:
             _get_lib().sonare_project_set_program(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                _midi_data(program, "program"),
+                _to_c_int(program, "program"),
                 _midi_bank(bank),
             )
         )
@@ -426,9 +415,9 @@ class _ProjectMidiMixin:
             _get_lib().sonare_project_set_program_on_channel(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                _midi_nibble(group, "group"),
-                _midi_nibble(channel, "channel"),
-                _midi_data(program, "program"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_int(program, "program"),
                 _midi_bank(bank),
             )
         )
@@ -528,10 +517,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_note_on",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
-            _midi_data(velocity, "velocity"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(velocity, "velocity"),
         )
 
     @staticmethod
@@ -543,10 +532,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_note_off",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
-            _midi_data(velocity, "velocity"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(velocity, "velocity"),
         )
 
     @staticmethod
@@ -558,10 +547,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_cc",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(controller, "controller"),
-            _midi_data(value, "value"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(controller, "controller"),
+            _to_c_uint8(value, "value"),
         )
 
     @staticmethod
@@ -573,10 +562,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_poly_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
-            _midi_data(pressure, "pressure"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(pressure, "pressure"),
         )
 
     @staticmethod
@@ -586,9 +575,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_program",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(program, "program"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(program, "program"),
         )
 
     @staticmethod
@@ -600,9 +589,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_channel_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(pressure, "pressure"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(pressure, "pressure"),
         )
 
     @staticmethod
@@ -613,9 +602,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _narrow_int(bend, "bend", 0, _MIDI_14BIT_MAX),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint16(bend, "bend"),
         )
 
     @staticmethod
@@ -633,9 +622,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_note_on",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint16(velocity16, "velocity16"),
             _to_c_uint8(attribute_type, "attribute_type"),
             _to_c_uint16(attribute_data, "attribute_data"),
@@ -650,9 +639,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_note_off",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint16(velocity16, "velocity16"),
         )
 
@@ -665,9 +654,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_cc",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(controller, "controller"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(controller, "controller"),
             _to_c_uint32(value32, "value32"),
         )
 
@@ -680,9 +669,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_poly_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint32(pressure32, "pressure32"),
         )
 
@@ -695,8 +684,8 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_channel_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
             _to_c_uint32(pressure32, "pressure32"),
         )
 
@@ -707,8 +696,8 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
             _to_c_uint32(bend32, "bend32"),
         )
 
@@ -732,12 +721,12 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_program",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(program, "program"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(program, "program"),
             _to_c_int(1 if bank_valid else 0, "bank_valid"),
-            _midi_data(bank_msb, "bank_msb"),
-            _midi_data(bank_lsb, "bank_lsb"),
+            _to_c_uint8(bank_msb, "bank_msb"),
+            _to_c_uint8(bank_lsb, "bank_lsb"),
         )
 
     @staticmethod
@@ -749,10 +738,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_registered_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(bank, "bank"),
-            _midi_data(index, "index"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
             _to_c_uint32(value32, "value32"),
         )
 
@@ -765,10 +754,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_assignable_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(bank, "bank"),
-            _midi_data(index, "index"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
             _to_c_uint32(value32, "value32"),
         )
 
@@ -781,10 +770,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_relative_registered_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(bank, "bank"),
-            _midi_data(index, "index"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
             _to_c_int32(delta32, "delta32"),
         )
 
@@ -797,10 +786,10 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_relative_assignable_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(bank, "bank"),
-            _midi_data(index, "index"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
             _to_c_int32(delta32, "delta32"),
         )
 
@@ -813,9 +802,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_registered_per_note_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint8(index, "index"),
             _to_c_uint32(value32, "value32"),
         )
@@ -829,9 +818,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_assignable_per_note_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint8(index, "index"),
             _to_c_uint32(value32, "value32"),
         )
@@ -845,9 +834,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_per_note_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_uint32(bend32, "bend32"),
         )
 
@@ -863,9 +852,9 @@ class _ProjectMidiMixin:
         return _midi_event_packed(
             "sonare_midi2_per_note_management",
             _validate_midi_event_ppq(ppq, "ppq"),
-            _midi_nibble(group, "group"),
-            _midi_nibble(channel, "channel"),
-            _midi_data(note, "note"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
             _to_c_int(1 if detach else 0, "detach"),
             _to_c_int(1 if reset else 0, "reset"),
         )
@@ -1051,11 +1040,11 @@ class _ProjectMidiMixin:
         _check(
             lib.sonare_midi_bank_program(
                 _validate_midi_event_ppq(ppq, "ppq"),
-                _midi_nibble(group, "group"),
-                _midi_nibble(channel, "channel"),
-                _midi_data(bank_msb, "bank_msb"),
-                _midi_data(bank_lsb, "bank_lsb"),
-                _midi_data(program, "program"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_int(bank_msb, "bank_msb"),
+                _to_c_int(bank_lsb, "bank_lsb"),
+                _to_c_int(program, "program"),
                 events,
                 ctypes.c_size_t(3),
                 ctypes.byref(out_count),
@@ -1138,7 +1127,7 @@ class _ProjectMidiMixin:
             _to_c_uint32(param_id, "param_id"),
             _to_c_float(min_value, "min_value"),
             _to_c_float(max_value, "max_value"),
-            ctypes.c_uint8(_narrow_int(min_movement, "min_movement", 0, 127)),
+            _to_c_uint8(min_movement, "min_movement"),
             ctypes.byref(out_binding),
         )
         if rc == SONARE_ERROR_INVALID_STATE:
@@ -1198,7 +1187,7 @@ class _ProjectMidiMixin:
             _to_c_size_t(m, "m"),
             _to_c_uint32(param_id, "param_id"),
             _to_c_float(unit_value, "unit_value"),
-            _midi_nibble(group, "group"),
+            _to_c_uint8(group, "group"),
             _validate_midi_event_ppq(ppq, "ppq"),
             ctypes.byref(out_event),
         )

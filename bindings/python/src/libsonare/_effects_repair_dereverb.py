@@ -33,7 +33,6 @@ from ._runtime import (
     _guard_buffer,
     _narrow_int,
     _planar_channel_arrays,
-    _require_power_of_two,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -69,13 +68,9 @@ def mastering_repair_dereverb_classical(
     wpe_strength: float = 0.7,
 ) -> DereverbResult:
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
-    # The core requires a power of two here (dereverb_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
-    # Narrowed ahead of the range check: int() takes 256.7 as 256, a hop nobody asked for.
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
+    # Narrowed, not int()-coerced: int() takes 256.7 as 256, a hop nobody asked for.
     hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise _refuse("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -186,12 +181,8 @@ def mastering_repair_detect_reverb(
             non-finite sample.
         SonareError: If the C call rejects the request.
     """
-    # The core requires a power of two here (dereverb_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise _refuse("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -290,17 +281,13 @@ def mastering_repair_dereverb_classical_stereo(
             is outside ``(0, n_fft // 2]``, or if the two channels differ in length.
         SonareError: If the C call rejects the request.
     """
-    # The core requires a power of two here (dereverb_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise _refuse("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -430,17 +417,13 @@ def mastering_repair_dereverb_classical_linked(
             a non-finite sample.
         SonareError: If the C call rejects the request.
     """
-    # The core requires a power of two here (dereverb_classical.cpp), narrower
-    # than the shared even-size rule; check it eagerly so the message names it.
-    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    n_fft_value = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise _refuse("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     planes = _linked_channel_planes(channels)

@@ -41,7 +41,6 @@ from ._runtime import (
     _to_c_size_t,
     _token_arg,
     _validate_samples,
-    _validate_stft_n_fft,
 )
 from ._types_analysis import AutoTuneResult, Key
 from ._types_enums import KeyMode, PitchClass, PitchTargetMode
@@ -73,7 +72,7 @@ def time_stretch(
         ``float32`` array of time-stretched samples.
     """
     _validate_samples(samples)
-    n_fft = _validate_stft_n_fft(n_fft)
+    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length = _effect_hop(hop_length)
     return _call_float_array_transform(
         "sonare_time_stretch_ex",
@@ -109,7 +108,7 @@ def pitch_shift(
         ``float32`` array of pitch-shifted samples.
     """
     _validate_samples(samples)
-    n_fft = _validate_stft_n_fft(n_fft)
+    n_fft = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     hop_length = _effect_hop(hop_length)
     return _call_float_array_transform(
         "sonare_pitch_shift_ex",

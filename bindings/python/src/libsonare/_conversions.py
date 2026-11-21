@@ -956,17 +956,11 @@ def nnls_chroma(
     controls the CQT hop used by the NNLS analysis and defaults to the legacy
     512-sample hop.
     """
-    # One refusal per property, through the shared narrowing rather than a local
-    # copy of it: 512.7 is positive and 2 ** 31 is even, so a single message for
-    # each argument names a property the offending value already has.
+    # Narrowed, not int()-coerced; the core refuses an odd or too small stft_blend_n_fft.
     hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     stft_blend_n_fft_value = _narrow_int(
         stft_blend_n_fft, "stft_blend_n_fft", _C_INT_MIN, _C_INT_MAX
     )
-    if stft_blend_n_fft_value < 2:
-        raise _refuse("stft_blend_n_fft must be at least 2")
-    if (stft_blend_n_fft_value & 1) != 0:
-        raise _refuse("stft_blend_n_fft must be an even integer")
     try:
         blend_weight = _narrow_double(stft_blend_weight, "stft_blend_weight")
         blend_weight_c = ctypes.c_float(blend_weight).value

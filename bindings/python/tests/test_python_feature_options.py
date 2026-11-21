@@ -51,16 +51,15 @@ def test_nnls_chroma_routes_default_and_custom_hop_to_ex2(monkeypatch: pytest.Mo
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        # One row per property, because one message for all of them would name a
-        # property the offending value has: 1.5 is positive and 2 ** 31 is even.
+        # Every refusal states the member's whole domain, whichever property the value breaks.
         ({"hop_length": 0}, "hop_length must be an integer in [1, 2147483647]"),
         ({"hop_length": 1.5}, "hop_length must be an integer in [1, 2147483647]"),
         ({"stft_blend_weight": float("nan")}, "stft_blend_weight must be finite"),
-        ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer"),
-        ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be at least 2"),
+        ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer in [2, 2147483647]"),
+        ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be an even integer in [2, 2147483647]"),
         (
             {"stft_blend_n_fft": 2**31},
-            "stft_blend_n_fft must be an integer in [-2147483648, 2147483647]",
+            "stft_blend_n_fft must be an even integer in [2, 2147483647]",
         ),
     ],
 )

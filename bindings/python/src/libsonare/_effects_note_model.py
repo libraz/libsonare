@@ -10,7 +10,7 @@ from numbers import Integral
 
 import numpy as np
 
-from ._errors import _refuse, _refuse_type
+from ._errors import _refuse, _refuse_integer, _refuse_type
 from ._ffi import (
     SonareNoteEdit,
     SonareNoteExtractorConfig,
@@ -603,9 +603,9 @@ def _note_set_index(arg_name: str, value: int) -> int:
     """
     if isinstance(value, bool) or not isinstance(value, Integral):
         message = f"{arg_name} must be an integer"
-        raise _refuse(message) if _is_number(value) else _refuse_type(message)
+        raise _refuse_integer(arg_name, message) if _is_number(value) else _refuse_type(message)
     if int(value) < 0:
-        raise _refuse(f"{arg_name} must be an integer in [0, {_SIZE_T_MAX}]")
+        raise _refuse_integer(arg_name, f"{arg_name} must be an integer in [0, {_SIZE_T_MAX}]")
     return int(value)
 
 

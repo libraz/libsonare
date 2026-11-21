@@ -7,6 +7,8 @@ from collections.abc import Callable
 from enum import IntEnum
 from typing import Literal, ParamSpec, TypeVar, cast
 
+from ._integer_domains import DOMAINS as _INTEGER_DOMAINS
+
 _Handle = TypeVar("_Handle")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -106,6 +108,8 @@ class SonareValueError(SonareError, ValueError):
 _BARE_TEXT = "_sonare_bare_text"
 # The public name an entry wrapper carries, read by the roster test.
 _ENTRY_NAME = "__sonare_entry__"
+# The keyword an integer refusal names, so the entry can state that keyword's core domain.
+_INTEGER_SUBJECT = "_sonare_integer_subject"
 
 
 def _refuse(message: str) -> SonareValueError:
@@ -113,6 +117,44 @@ def _refuse(message: str) -> SonareValueError:
     exc = SonareValueError(message)
     setattr(exc, _BARE_TEXT, message)
     return exc
+
+
+def _refuse_integer(name: str, message: str) -> SonareValueError:
+    """Build the refusal of a number that is not an integer of ``name``'s domain.
+
+    ``message`` is the reader's own text; an entry whose keyword ``name`` has a core
+    domain replaces it with that domain's text.
+    """
+    exc = _refuse(message)
+    setattr(exc, _INTEGER_SUBJECT, name)
+    return exc
+
+
+# The core's wording of each kind of integer domain, by the row's ``stricter`` tag.
+_KINDS = {
+    None: "an integer",
+    "power_of_two": "a power of two",
+    "even": "an even integer",
+    "odd": "an odd integer",
+}
+
+
+def _integer_domain_text(entry: str, exc: BaseException) -> None:
+    """Restate an integer refusal raised beneath ``entry`` in the keyword's core domain."""
+    name = getattr(exc, _INTEGER_SUBJECT, None)
+    if name is None:
+        return
+    domain = _INTEGER_DOMAINS.get((entry, name))
+    if domain is None:
+        return
+    lo, hi, stricter = domain
+    bare = (
+        f"{name} must be an integer of at least {lo}"
+        if hi is None
+        else f"{name} must be {_KINDS[stricter]} in [{lo}, {hi}]"
+    )
+    setattr(exc, _BARE_TEXT, bare)
+    delattr(exc, _INTEGER_SUBJECT)
 
 
 def _refuse_type(message: str) -> TypeError:
@@ -138,6 +180,7 @@ def _entry(name: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
             try:
                 return fn(*args, **kwargs)
             except (SonareError, TypeError) as exc:
+                _integer_domain_text(name, exc)
                 bare = getattr(exc, _BARE_TEXT, None)
                 if bare is not None:
                     text = f"{name}: {bare}"
