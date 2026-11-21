@@ -141,3 +141,28 @@ describe('RealtimeEngine strip controls refuse an omitted required argument', ()
     });
   });
 });
+
+describe('an instrument config that repeats the destination id', () => {
+  // RED WHEN: a destinationId inside the config is read, dropped, or refused in other words than
+  // the WASM package uses.
+  it('is a TypeError naming the first argument on every instrument binder', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      const refusal = (entry: string) =>
+        new TypeError(
+          `RealtimeEngine.${entry}: destinationId is the first argument; remove it from the config`,
+        );
+      expect(() =>
+        engine.setBuiltinInstrument(0, { destinationId: 1, waveform: 'saw' } as never),
+      ).toThrow(refusal('setBuiltinInstrument'));
+      expect(() => engine.setSynthInstrument(0, { destinationId: 1 } as never)).toThrow(
+        refusal('setSynthInstrument'),
+      );
+      expect(() => engine.setSf2Instrument(0, { destinationId: 1 } as never)).toThrow(
+        refusal('setSf2Instrument'),
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+});

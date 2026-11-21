@@ -25,7 +25,6 @@ import {
   type Respelled,
   refuse,
   refuseType,
-  refuseUnknownKey,
 } from './internal/entry.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
@@ -677,6 +676,18 @@ function bandJson(band: unknown): string {
   return eqBandJson(band as object);
 }
 
+/** A config object that must not repeat the destination id the call already names. */
+function withoutDestinationId<T extends object>(config: T): T {
+  if (
+    typeof config === 'object' &&
+    config !== null &&
+    (config as { destinationId?: unknown }).destinationId !== undefined
+  ) {
+    throw refuseType('destinationId is the first argument; remove it from the config');
+  }
+  return config;
+}
+
 /**
  * Sample-accurate realtime engine: clips, MIDI instruments, a track mixer and
  * automation, rendered block by block or offline.
@@ -876,9 +887,7 @@ export class RealtimeEngine {
     destinationId?: number | null,
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
-    if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw refuseUnknownKey('config.destinationId', ['the destinationId argument']);
-    }
+    withoutDestinationId(config);
     refuseBuiltinSynthOrdinals(config);
     this.native.setBuiltinInstrument(destinationId ?? 0, config);
   }
@@ -902,7 +911,10 @@ export class RealtimeEngine {
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSynthInstrument(destinationId?: number | null, patch: SynthPatch = {}): void {
-    this.native.setSynthInstrument(destinationId ?? 0, normalizeSynthInstrument(patch));
+    this.native.setSynthInstrument(
+      destinationId ?? 0,
+      normalizeSynthInstrument(withoutDestinationId(patch)),
+    );
   }
 
   /**
@@ -934,10 +946,7 @@ export class RealtimeEngine {
     destinationId?: number | null,
     config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
-    if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw refuseUnknownKey('config.destinationId', ['the destinationId argument']);
-    }
-    this.native.setSf2Instrument(destinationId ?? 0, config);
+    this.native.setSf2Instrument(destinationId ?? 0, withoutDestinationId(config));
   }
 
   /**
