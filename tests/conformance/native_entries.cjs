@@ -91,7 +91,8 @@ function nativeNames(surface) {
         wrapToClass.set(m[1], m[2]);
         if (!classes.has(m[2])) classes.set(m[2], new Set());
       }
-      for (const block of text.matchAll(/class_<(\w+)[^>]*>[^;{]*?(?:\(|&\s*\w+\s*\)\s*\{)([\s\S]*?);\s*(?:\n\s*\}|\n\n)/g)) {
+      // A block never runs into the next class_<>, so a bare `class_<X>("X");` keeps no methods.
+      for (const block of text.matchAll(/class_<(\w+)[^>]*>[^;{]*?(?:\(|&\s*\w+\s*\)\s*\{)((?:(?!class_<)[\s\S])*?);\s*(?:\n\s*\}|\n\n|(?=\n\s*class_<))/g)) {
         for (const m of block[2].matchAll(/\.(?:function|class_function)\(\s*"(\w+)"/g)) addMethod(block[1], m[1]);
       }
     }
