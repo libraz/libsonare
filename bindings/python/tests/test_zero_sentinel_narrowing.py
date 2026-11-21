@@ -149,7 +149,7 @@ def test_a_fractional_decompose_count_is_refused_rather_than_read_as_the_default
         # nndsvd rather than the default random init, so the content is a
         # deterministic function of the two counts under test.
         result = ls.decompose_stems(mixture, SAMPLE_RATE, init="nndsvd", **kwargs)
-        components = np.asarray(result["components"], dtype=np.float32)
+        components = np.asarray(result.components, dtype=np.float32)
         return components.shape, _digest(components)
 
     omitted = factored()
