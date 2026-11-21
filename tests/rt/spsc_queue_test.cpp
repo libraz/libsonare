@@ -128,7 +128,7 @@ TEST_CASE("Realtime command records keep POD ABI properties", "[rt][command]") {
   command.sample_time = 128;
   command.arg.i = 48000;
 
-  REQUIRE(sonare::rt::kEngineAbiVersion == 3);
+  REQUIRE(sonare::rt::kEngineAbiVersion == 4);
   REQUIRE(command.type == CommandType::kTransportSeekSample);
   REQUIRE(command.target_id == 7);
   REQUIRE(command.sample_time == 128);

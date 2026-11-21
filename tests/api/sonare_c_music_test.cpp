@@ -889,7 +889,7 @@ TEST_CASE("sonare_section_options_init mirrors the core section defaults", "[c_a
   sonare_section_options_init(&options);
   const sonare::SectionConfig config;
   CHECK(options.n_fft == config.n_fft);
-  CHECK(options.hop_length == config.hop_length);
+  CHECK(options.hop_length == static_cast<size_t>(config.hop_length));
   CHECK(options.min_section_sec == config.min_section_sec);
   CHECK(options.threshold == sonare::kSectionBoundaryThreshold);
   // Sections snap to downbeats and keep a minimum length, so they take a lower bar.
