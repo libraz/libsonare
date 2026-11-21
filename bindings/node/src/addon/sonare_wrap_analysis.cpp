@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "analysis/acoustic_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/music_analyzer.h"
@@ -584,9 +585,15 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   int n_octave_bands{};
-  if (!OptionalIntArg(env, info, 2, "nOctaveBands", 6, &n_octave_bands)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "nOctaveBands", 6, sonare::kAcousticBandCountDomain,
+                         &n_octave_bands)) {
+    return env.Undefined();
+  }
   float min_decay_db{};
-  if (!OptionalFloatArg(env, info, 3, "minDecayDb", 30.0f, &min_decay_db)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 3, "minDecayDb", 30.0f, sonare::kAcousticMinDecayDbDomain,
+                         &min_decay_db)) {
+    return env.Undefined();
+  }
 
   SonareAcousticResult acoustic{};
   SonareError err = sonare_analyze_impulse_response_ex(data, length, sample_rate, n_octave_bands,
@@ -631,15 +638,25 @@ Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   int n_octave_bands{};
-  if (!OptionalIntArg(env, info, 2, "nOctaveBands", 6, &n_octave_bands)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 2, "nOctaveBands", 6, sonare::kAcousticBandCountDomain,
+                         &n_octave_bands)) {
+    return env.Undefined();
+  }
   int n_third_octave_subbands{};
-  if (!OptionalIntArg(env, info, 3, "nThirdOctaveSubbands", 24, &n_third_octave_subbands))
+  if (!OptionalDomainArg(env, info, 3, "nThirdOctaveSubbands", 24, sonare::kAcousticBandCountDomain,
+                         &n_third_octave_subbands)) {
     return env.Undefined();
+  }
   float min_decay_db{};
-  if (!OptionalFloatArg(env, info, 4, "minDecayDb", 30.0f, &min_decay_db)) return env.Undefined();
-  float noise_floor_margin_db{};
-  if (!OptionalFloatArg(env, info, 5, "noiseFloorMarginDb", 10.0f, &noise_floor_margin_db))
+  if (!OptionalDomainArg(env, info, 4, "minDecayDb", 30.0f, sonare::kAcousticMinDecayDbDomain,
+                         &min_decay_db)) {
     return env.Undefined();
+  }
+  float noise_floor_margin_db{};
+  if (!OptionalDomainArg(env, info, 5, "noiseFloorMarginDb", 10.0f,
+                         sonare::kAcousticNoiseFloorMarginDbDomain, &noise_floor_margin_db)) {
+    return env.Undefined();
+  }
 
   SonareAcousticResult acoustic{};
   SonareError err =

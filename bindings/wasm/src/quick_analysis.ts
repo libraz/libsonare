@@ -55,7 +55,6 @@ import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertFiniteScalar,
   assertFloatFields,
   assertFloatValue,
   assertFrequencyBounds,
@@ -934,11 +933,8 @@ export function analyzeImpulseResponse(
 export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
   return withEntry('analyzeImpulseResponse', () => {
     const request = sampleOneShot<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
-    // Only `undefined` takes the default. `null` falls through to
-    // assertFiniteScalar, which refuses it with the same wording as any other
-    // non-finite value.
+    // Only `undefined` takes the default; the module's reader refuses `null` by name.
     const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
-    assertFiniteScalar(resolvedMinDecayDb, 'minDecayDb');
     assertAudioInput(request.samples, request.sampleRate, request);
     const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
       request.samples,

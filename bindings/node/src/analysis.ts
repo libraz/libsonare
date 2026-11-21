@@ -59,12 +59,10 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
-  assertFiniteScalar,
   assertFloatFields,
   assertFloatValue,
   assertInt32,
   assertInt64,
-  assertNonNegativeSafeInteger,
   assertPitchClass,
   assertPositiveInteger,
   assertSampleRate,
@@ -1234,19 +1232,11 @@ export function analyzeImpulseResponse(
 export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
   return withEntry('analyzeImpulseResponse', () => {
     const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
-    const minDecayDb = request.minDecayDb ?? 30.0;
-    if (typeof minDecayDb === 'number' && !(Number.isFinite(minDecayDb) && minDecayDb > 0)) {
-      throw refuse('minDecayDb must be finite and greater than 0');
-    }
-    assertFiniteScalar(minDecayDb, 'minDecayDb');
-    // Zero is degenerate but legal: the C ABI refuses only a negative count, so
-    // refusing it here would narrow the domain the other surfaces accept.
-    assertNonNegativeSafeInteger(request.nOctaveBands ?? 6, 'nOctaveBands');
     return addon.analyzeImpulseResponse(
       request.samples,
       request.sampleRate,
       request.nOctaveBands ?? 6,
-      minDecayDb,
+      request.minDecayDb ?? 30.0,
     );
   });
 }
@@ -1261,8 +1251,6 @@ export function detectAcoustic(
 export function detectAcoustic(...args: unknown[]): AcousticResult {
   return withEntry('detectAcoustic', () => {
     const request = audioCall<DetectAcousticRequest>('detectAcoustic', args);
-    assertNonNegativeSafeInteger(request.nOctaveBands ?? 6, 'nOctaveBands');
-    assertNonNegativeSafeInteger(request.nThirdOctaveSubbands ?? 24, 'nThirdOctaveSubbands');
     return addon.detectAcoustic(
       request.samples,
       request.sampleRate,

@@ -34,8 +34,10 @@ val acousticParametersToVal(const AcousticParameters& params) {
 val js_analyze_impulse_response_ex(val samples, const val& sample_rate_val,
                                    const val& n_octave_bands_val, const val& min_decay_db_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
-  const float min_decay_db = checkedFloatFromVal(min_decay_db_val, "minDecayDb");
+  const int n_octave_bands =
+      domainNumberFromVal<int>(n_octave_bands_val, "nOctaveBands", kAcousticBandCountDomain);
+  const float min_decay_db =
+      domainNumberFromVal<float>(min_decay_db_val, "minDecayDb", kAcousticMinDecayDbDomain);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
   config.min_decay_db = min_decay_db;
@@ -52,12 +54,14 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
                        const val& n_third_octave_subbands_val, const val& min_decay_db_val,
                        const val& noise_floor_margin_db_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
-  const int n_third_octave_subbands =
-      checkedIntFromVal(n_third_octave_subbands_val, "nThirdOctaveSubbands");
-  const float min_decay_db = checkedFloatFromVal(min_decay_db_val, "minDecayDb");
-  const float noise_floor_margin_db =
-      checkedFloatFromVal(noise_floor_margin_db_val, "noiseFloorMarginDb");
+  const int n_octave_bands =
+      domainNumberFromVal<int>(n_octave_bands_val, "nOctaveBands", kAcousticBandCountDomain);
+  const int n_third_octave_subbands = domainNumberFromVal<int>(
+      n_third_octave_subbands_val, "nThirdOctaveSubbands", kAcousticBandCountDomain);
+  const float min_decay_db =
+      domainNumberFromVal<float>(min_decay_db_val, "minDecayDb", kAcousticMinDecayDbDomain);
+  const float noise_floor_margin_db = domainNumberFromVal<float>(
+      noise_floor_margin_db_val, "noiseFloorMarginDb", kAcousticNoiseFloorMarginDbDomain);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = n_octave_bands;
