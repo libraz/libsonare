@@ -66,6 +66,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
   util::check::integer_within(n_iter, kInverseIterationsDomain, "n_iter");
+  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sr");
   // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
   // no additional square root is applied here before Griffin-Lim.
   std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
@@ -136,6 +137,7 @@ Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig
   // The frame and FFT ranges mel_to_stft inverts, stated before mfcc_to_mel's own floors.
   util::check::integer_within(n_frames, kMelToStftFramesDomain, "n_frames");
   util::check::integer_within(mel_config.n_fft, kMelToStftFftSizeDomain, "n_fft");
+  util::check::integer_within(sr, kInverseAudioSampleRateDomain, "sr");
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, mel_config.n_mels, lifter);
   return mel_to_audio(mel.data(), mel_config.n_mels, n_frames, mel_config, n_iter, sr);
 }

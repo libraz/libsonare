@@ -16,9 +16,13 @@ namespace sonare {
 /// @brief The most frames @ref mel_to_stft inverts at once.
 inline constexpr int kMaxInverseFrames = 4096;
 
-/// @brief The sample rates the inverse transforms take (sr): at least 1.
+/// @brief The sample rates @ref mel_to_stft takes (sr): at least 1.
 inline constexpr util::check::NumericDomain kInverseSampleRateDomain =
     util::check::integer_domain_of<int>(1);
+
+/// @brief The sample rates @ref mel_to_audio and @ref mfcc_to_audio resynthesize at: the audio
+///        rates, since they produce audio.
+inline constexpr util::check::NumericDomain kInverseAudioSampleRateDomain = kAudioSampleRateDomain;
 
 /// @brief The FFT sizes @ref mel_to_stft inverts: [1, 8192].
 inline constexpr util::check::NumericDomain kMelToStftFftSizeDomain =

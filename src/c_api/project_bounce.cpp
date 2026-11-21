@@ -219,7 +219,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
                           "options.num_channels");
   }
   if (opts.sample_rate != SONARE_PROJECT_SAMPLE_RATE_PROJECT) {
-    check::integer_within(opts.sample_rate, sonare::kAudioSampleRateDomain, "options.sample_rate");
+    check::integer_within(opts.sample_rate, kProjectBounceSampleRateDomain, "options.sample_rate");
   }
   check::integer_within(opts.instrument_latency_samples, kProjectBounceInstrumentLatencyDomain,
                         "options.instrument_latency_samples");

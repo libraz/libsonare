@@ -57,7 +57,10 @@ SonareError validate_mel_inverse(int n_mels, int n_frames, int n_fft, int sample
     } else {
       check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
     }
-    check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
+    check::integer_within(
+        sample_rate,
+        resynthesis ? sonare::kInverseAudioSampleRateDomain : sonare::kInverseSampleRateDomain,
+        "sample_rate");
   });
 }
 
@@ -303,7 +306,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   if (const SonareError err = run_validation([&] {
         check::even_within(n_fft, sonare::kMelToAudioFftSizeDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
-        check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
+        check::integer_within(sample_rate, sonare::kInverseAudioSampleRateDomain, "sample_rate");
       });
       err != SONARE_OK) {
     return err;

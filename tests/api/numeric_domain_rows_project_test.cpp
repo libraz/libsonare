@@ -112,10 +112,12 @@ SonareError probe_vocal_session_create(const std::string& param, double value) {
 #if defined(SONARE_WITH_MIXING)
 
 SonareError probe_mixer_create(const std::string& param, double value) {
+  int sample_rate = 48000;
   int max_block_size = 256;
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
   if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
   SonareMixer* mixer = nullptr;
-  const SonareError err = sonare_mixer_create(48000, max_block_size, &mixer);
+  const SonareError err = sonare_mixer_create(sample_rate, max_block_size, &mixer);
   sonare_mixer_destroy(mixer);
   return err;
 }
@@ -495,6 +497,7 @@ SonareError probe_add_clip(const std::string& param, double value) {
   desc.audio_sample_rate = 48000;
   if (is_param(param, "desc.audio_frames")) desc.audio_frames = to_i64(value);
   if (is_param(param, "desc.audio_channels")) desc.audio_channels = static_cast<int>(value);
+  if (is_param(param, "desc.audio_sample_rate")) desc.audio_sample_rate = static_cast<int>(value);
   uint32_t out = 0;
   return sonare_project_add_clip(project.handle, &desc, &out);
 }
@@ -510,6 +513,7 @@ SonareError probe_add_loop_recording_takes(const std::string& param, double valu
   desc.audio_sample_rate = 48000;
   if (is_param(param, "desc.audio_frames")) desc.audio_frames = to_i64(value);
   if (is_param(param, "desc.audio_channels")) desc.audio_channels = static_cast<int>(value);
+  if (is_param(param, "desc.audio_sample_rate")) desc.audio_sample_rate = static_cast<int>(value);
   uint32_t clip = 0;
   size_t takes = 0;
   return sonare_project_add_loop_recording_takes(project.handle, &desc, &clip, &takes);
@@ -520,9 +524,11 @@ SonareError probe_set_source_audio(const std::string& param, double value) {
   int64_t frames = 1;
   int channels = 1;
   if (is_param(param, "frames")) frames = to_i64(value);
+  int sample_rate = 48000;
   if (is_param(param, "channels")) channels = static_cast<int>(value);
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
   return sonare_project_set_source_audio(project.handle, 1, payload_buffer(), frames, channels,
-                                         48000);
+                                         sample_rate);
 }
 
 SonareError probe_annotate_chords(const std::string&, double value) {
@@ -619,6 +625,7 @@ SonareError bounce_options_with(const std::string& param, double value, Bounce&&
   if (is_param(param, "options.total_frames")) options.total_frames = to_i64(value);
   if (is_param(param, "options.block_size")) options.block_size = static_cast<int>(value);
   if (is_param(param, "options.num_channels")) options.num_channels = static_cast<int>(value);
+  if (is_param(param, "options.sample_rate")) options.sample_rate = static_cast<int>(value);
   if (is_param(param, "options.instrument_latency_samples")) {
     options.instrument_latency_samples = static_cast<int>(value);
   }
@@ -708,6 +715,9 @@ SonareError probe_apply_vocal_edit(const std::string& param, double value) {
   desc.expected_source_sample_count = 1;
   if (is_param(param, "desc.clip_id")) desc.clip_id = to_u32(value);
   if (is_param(param, "desc.take_id")) desc.take_id = to_u32(value);
+  if (is_param(param, "desc.expected_source_sample_rate")) {
+    desc.expected_source_sample_rate = to_u32(value);
+  }
   if (is_param(param, "desc.expected_source_sample_count")) {
     desc.expected_source_sample_count = to_i64(value);
   }
@@ -726,6 +736,7 @@ SonareError probe_rehydrate_vocal_edits(const std::string& param, double value) 
   original.sample_rate = 48000;
   if (is_param(param, "originals[].source_id")) original.source_id = to_u32(value);
   if (is_param(param, "originals[].sample_count")) original.sample_count = to_i64(value);
+  if (is_param(param, "originals[].sample_rate")) original.sample_rate = to_u32(value);
   SonareProjectVocalRehydrateResult result;
   sonare_project_vocal_rehydrate_result_init(&result);
   const SonareError err =
@@ -894,6 +905,7 @@ double inside_value(const NumericDomainRow& row) {
   const std::string param = row.param;
   if (entry == "mixing_assistant_suggest") return 48000.0;
   if (entry == "project_import_external_stems" && param == "request.sample_rate") return 48000.0;
+  if (param.find("sample_rate") != std::string::npos && entry != "mixer_create") return 48000.0;
   if (entry == "transcribe" || entry == "project_transcribe_to_clip") {
     // A frequency pair must stay ordered, and the level floor domain has no lower edge.
     if (param == "config.f0_min_hz") return 100.0;

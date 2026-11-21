@@ -144,12 +144,14 @@ inline constexpr sonare::util::check::NumericDomain kEngineDitherBitsDomain =
 inline constexpr sonare::util::check::NumericDomain kEngineMaxBlockSizeDomain =
     sonare::util::check::with_sentinel(
         sonare::util::check::integer_domain(1, sonare::kMaxRealtimeBlockSize), 0);
-/// @brief What prepare's command_capacity accepts.
+/// @brief What prepare's command_capacity accepts; 0 takes the engine default.
 inline constexpr sonare::util::check::NumericDomain kEngineCommandCapacityDomain =
-    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_COMMAND_CAPACITY);
-/// @brief What prepare's telemetry_capacity accepts.
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_COMMAND_CAPACITY), 0);
+/// @brief What prepare's telemetry_capacity accepts; 0 takes the engine default.
 inline constexpr sonare::util::check::NumericDomain kEngineTelemetryCapacityDomain =
-    sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_TELEMETRY_CAPACITY);
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(0, SONARE_ENGINE_MAX_TELEMETRY_CAPACITY), 0);
 /// @brief What prepare's max_channels accepts; 0 takes the engine default.
 inline constexpr sonare::util::check::NumericDomain kEngineMaxChannelsDomain =
     sonare::util::check::with_sentinel(

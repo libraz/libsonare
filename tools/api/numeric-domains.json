@@ -1714,7 +1714,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare",
@@ -1736,7 +1736,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1747,7 +1747,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "engine_prepare_with_channels",
@@ -1780,7 +1780,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "engine_prime_offline_parameters",
@@ -3579,8 +3579,8 @@
       "entry": "mel_to_audio",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3634,8 +3634,8 @@
       "entry": "mel_to_audio_checked",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3689,8 +3689,8 @@
       "entry": "mel_to_audio_checked_ex",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3744,8 +3744,8 @@
       "entry": "mel_to_audio_ex",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4118,8 +4118,8 @@
       "entry": "mfcc_to_audio",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4184,8 +4184,8 @@
       "entry": "mfcc_to_audio_checked",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4250,8 +4250,8 @@
       "entry": "mfcc_to_audio_checked_ex",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4316,8 +4316,8 @@
       "entry": "mfcc_to_audio_checked_ex2",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4382,8 +4382,8 @@
       "entry": "mfcc_to_audio_ex",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4448,8 +4448,8 @@
       "entry": "mfcc_to_audio_ex2",
       "param": "sample_rate",
       "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5578,6 +5578,17 @@
       "sentinel": 0
     },
     {
+      "entry": "mixer_create",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "mixing_assistant_suggest",
       "param": "sample_rate",
       "kind": "integer",
@@ -6073,6 +6084,17 @@
       "sentinel": null
     },
     {
+      "entry": "project_add_clip",
+      "param": "desc.audio_sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_add_loop_recording_takes",
       "param": "desc.audio_channels",
       "kind": "integer",
@@ -6089,6 +6111,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_loop_recording_takes",
+      "param": "desc.audio_sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -6151,6 +6184,17 @@
     },
     {
       "entry": "project_apply_vocal_edit",
+      "param": "desc.expected_source_sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_apply_vocal_edit",
       "param": "desc.take_id",
       "kind": "integer",
       "lo": 0,
@@ -6158,7 +6202,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": 0
     },
     {
       "entry": "project_auto_tempo_with_options",
@@ -6202,7 +6246,18 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_bounce",
@@ -6213,7 +6268,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -6312,7 +6367,18 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
+    },
+    {
+      "entry": "project_bounce_with_builtin_instruments",
+      "param": "options.sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_builtin_instruments",
@@ -6323,7 +6389,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -6356,7 +6422,18 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
+    },
+    {
+      "entry": "project_bounce_with_instruments",
+      "param": "options.sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_instruments",
@@ -6367,7 +6444,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -6455,7 +6532,18 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
+    },
+    {
+      "entry": "project_bounce_with_sf2_instruments",
+      "param": "options.sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_sf2_instruments",
@@ -6466,7 +6554,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -6499,7 +6587,18 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
+    },
+    {
+      "entry": "project_bounce_with_synth_instruments",
+      "param": "options.sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_bounce_with_synth_instruments",
@@ -6510,7 +6609,7 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
-      "sentinel": null
+      "sentinel": -1
     },
     {
       "entry": "project_edit_automation_lane",
@@ -6562,6 +6661,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_rehydrate_vocal_edits",
+      "param": "originals[].sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -6705,6 +6815,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_source_audio",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

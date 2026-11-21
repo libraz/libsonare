@@ -14,15 +14,21 @@
 
 namespace sonare_c_detail {
 
-/// @brief What the render length of a project bounce accepts when it is given explicitly.
+/// @brief What the render length of a project bounce accepts;
+///        SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) is "not given".
 inline constexpr sonare::util::check::NumericDomain kProjectBounceTotalFramesDomain =
-    sonare::util::check::integer_domain_of<int64_t>(1);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int64_t>(1), -1);
 /// @brief What the block size of a project bounce accepts.
 inline constexpr sonare::util::check::NumericDomain kProjectBounceBlockSizeDomain =
     sonare::util::check::integer_domain_of<int>(1);
-/// @brief What the channel count of a project bounce accepts when it is given explicitly.
+/// @brief What the channel count of a project bounce accepts;
+///        SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) is "not given".
 inline constexpr sonare::util::check::NumericDomain kProjectBounceChannelCountDomain =
-    sonare::util::check::integer_domain_of<int>(1);
+    sonare::util::check::with_sentinel(sonare::util::check::integer_domain_of<int>(1), -1);
+/// @brief What the sample rate of a project bounce accepts: the audio rates;
+///        SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) is "not given".
+inline constexpr sonare::util::check::NumericDomain kProjectBounceSampleRateDomain =
+    sonare::util::check::with_sentinel(sonare::kAudioSampleRateDomain, -1);
 /// @brief What the instrument latency of a project bounce accepts.
 inline constexpr sonare::util::check::NumericDomain kProjectBounceInstrumentLatencyDomain =
     sonare::util::check::integer_domain_of<int>(0);
@@ -81,8 +87,10 @@ inline constexpr sonare::util::check::NumericDomain kVocalSourceSampleCountDomai
 /// @brief What the clip id of a vocal edit binding accepts.
 inline constexpr sonare::util::check::NumericDomain kVocalClipIdDomain =
     sonare::util::check::integer_domain(1, std::numeric_limits<uint32_t>::max() - 1);
-/// @brief What the take id of a vocal edit binding accepts, 0 being the clip's base source.
+/// @brief What the take id of a vocal edit binding accepts; 0 (not given) is the clip's base
+///        source.
 inline constexpr sonare::util::check::NumericDomain kVocalTakeIdDomain =
-    sonare::util::check::integer_domain(0, std::numeric_limits<uint32_t>::max() - 1);
+    sonare::util::check::with_sentinel(
+        sonare::util::check::integer_domain(0, std::numeric_limits<uint32_t>::max() - 1), 0);
 
 }  // namespace sonare_c_detail
