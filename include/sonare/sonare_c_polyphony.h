@@ -100,7 +100,7 @@ typedef struct {
   /// Partial-series stretch assumed while scoring candidates. Default 0; non-negative.
   float salience_inharmonicity;
 
-  // Estimation: how many voices a frame is allowed, at most 64, and when to stop.
+  // Estimation: how many voices a frame is allowed, and when to stop.
 
   /// Most voices estimated in one frame. Default 4, in [1, 64].
   int32_t max_polyphony;

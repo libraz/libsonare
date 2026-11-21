@@ -102,7 +102,7 @@ SonareEngineMetronomeConfig metronome_to_c(const engine::MetronomeConfig& config
           config.enabled ? 1 : 0,
           config.beat_gain,
           config.accent_gain,
-          config.click_samples > 0 ? config.click_samples : SONARE_ENGINE_METRONOME_CLICK_FROM_SEC,
+          config.click_samples == 0 ? SONARE_ENGINE_METRONOME_CLICK_FROM_SEC : config.click_samples,
           config.click_seconds};
 }
 

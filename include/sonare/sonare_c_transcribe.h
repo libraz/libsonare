@@ -102,7 +102,7 @@ typedef struct {
   /// selects the transcription default, which is not the editing chain's
   /// (@ref SonarePolyphonicConfig).
   ///
-  /// Voices one frame may hold, 1..64; @ref SONARE_MAX_POLYPHONY_UNSET (the default) takes 10.
+  /// Voices one frame may hold, at most 64; @ref SONARE_MAX_POLYPHONY_UNSET (the default) takes 10.
   int32_t max_polyphony;
   /// Stops a frame's search below this share of its first peak, in [0, 1]; NaN (the default)
   /// takes 0.20.

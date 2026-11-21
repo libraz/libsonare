@@ -355,6 +355,7 @@ SonareError sonare_engine_count_in_end_sample(SonareEngine* engine, int64_t star
                                               int64_t* out_sample);
 /// @brief Fills @p clip with sizeof and the library defaults: no source, gain 1, the length to the
 ///        end of the source, no fades, no warp. A NULL @p clip is ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
 void sonare_engine_clip_init(SonareEngineClip* clip);
 /// @brief Replaces the whole clip set with @p clip_count clips (control thread).
 /// @details Each clip is validated and its audio copied unless it names a page provider. A refused
@@ -1335,6 +1336,7 @@ typedef struct {
 
 /// @brief Fills @p clip with sizeof and the library defaults: open-ended, one-shot, gain 1, no
 ///        events and no fades. A NULL @p clip is ignored.
+/// @details Allocates nothing and does not transfer ownership; every pointer it writes is NULL.
 void sonare_engine_midi_clip_schedule_init(SonareEngineMidiClipSchedule* clip);
 
 /// @brief Replaces the engine's realtime MIDI clip schedule snapshot.

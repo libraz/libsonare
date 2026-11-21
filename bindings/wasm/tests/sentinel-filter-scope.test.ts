@@ -356,10 +356,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
   ],
   ['src/c_api/sonare_c_daw.cpp:total_envelope', 'A summed allocation size, as total_amplitude.'],
   [
-    'src/c_api/sonare_c_engine.cpp:click_samples',
-    'The core metronome value on its way out to the C struct, where 0 means a click derived from its duration; the getter reports that as SONARE_ENGINE_METRONOME_CLICK_FROM_SEC. Not a caller field.',
-  ],
-  [
     'src/c_api/sonare_c_engine_clips.cpp:anchor_index',
     'A loop index selecting whether a warp anchor has a predecessor to be ordered against.',
   ],
