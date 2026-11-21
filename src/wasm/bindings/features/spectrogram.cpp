@@ -53,11 +53,13 @@ std::vector<float> load_validated_matrix(val input, int rows, int frames, const 
 // Features - Spectrogram
 // ============================================================================
 
+// A true `db` also returns the magnitude in decibels as `db`; undefined/null (or false) omits it.
 val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
-            const val& hop_length_val) {
+            const val& hop_length_val, const val& db_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
+  const bool with_db = optionalBool(db_val, "db").value_or(false);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -74,27 +76,9 @@ val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
   out.set("sampleRate", spec.sample_rate());
   out.set("magnitude", vectorToFloat32Array(spec.magnitude()));
   out.set("power", vectorToFloat32Array(spec.power()));
-
-  return out;
-}
-
-val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
-               const val& hop_length_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
-  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-
-  StftConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-
-  Spectrogram spec = Spectrogram::compute(audio, config);
-
-  val out = val::object();
-  out.set("nBins", spec.n_bins());
-  out.set("nFrames", spec.n_frames());
-  out.set("db", vectorToFloat32Array(spec.to_db()));
+  if (with_db) {
+    out.set("db", vectorToFloat32Array(spec.to_db()));
+  }
 
   return out;
 }
@@ -430,7 +414,6 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
 
 void registerFeatureSpectrogramBindings() {
   function("stft", &js_stft);
-  function("stftDb", &js_stft_db);
   function("melSpectrogram", &js_mel_spectrogram);
   function("mfcc", &js_mfcc);
   function("melDelta", &js_mel_delta);

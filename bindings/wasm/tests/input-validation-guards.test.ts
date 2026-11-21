@@ -490,11 +490,20 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
     expect(() => engine.setClips([{ ...validClip(), lengthSamples: undefined }])).not.toThrow();
   });
 
-  it('rejects a non-finite setParameter / setParameterSmoothed value', () => {
+  it('rejects a non-finite setParameter value', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setParameter(7, Number.NaN, 0)).toThrow();
     expect(() => engine.setParameter(7, Number.POSITIVE_INFINITY, 0)).toThrow();
-    expect(() => engine.setParameterSmoothed(7, Number.NaN, 0)).toThrow();
+    expect(() => engine.setParameter(7, Number.NaN, 0, { smoothed: true })).toThrow();
+  });
+
+  it('setParameter takes smoothed as an option', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expect(() => engine.setParameter(7, 1, 0)).not.toThrow();
+    expect(() => engine.setParameter(7, 1, 0, { smoothed: true })).not.toThrow();
+    expect(() => engine.setParameter(7, 1, 0, { smoothed: 'yes' as never })).toThrow(TypeError);
+    expect(() => engine.setParameter(7, 1, 0, { smooth: true } as never)).toThrow(TypeError);
+    expect(() => engine.setParameter(7, Number.NaN, 0, { smoothed: true })).toThrow();
   });
 
   it('rejects an inverted addParameter range', () => {

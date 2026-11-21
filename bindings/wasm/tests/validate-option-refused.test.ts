@@ -218,7 +218,6 @@ const ROSTER: Record<string, keyof typeof RECIPES> = {
   splitNote: 'mono',
   splitSilence: 'mono',
   stft: 'mono',
-  stftDb: 'mono',
   streamingLoudnessGain: 'mono',
   streamingLoudnessGainStereo: 'stereo',
   tempogramRatio: 'tempogram',

@@ -65,27 +65,18 @@ void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
                                        const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
-                      val::undefined());
+  prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity, val::undefined());
 }
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
                                        const val& command_capacity, const val& telemetry_capacity,
                                        const val& max_channels) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
-                      max_channels);
+  prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels);
 }
 
-void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size,
-                                 const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
-                      val::undefined());
-}
-
-void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_block_size_val,
-                                             const val& command_capacity_val,
-                                             const val& telemetry_capacity_val,
-                                             const val& max_channels_val) {
+void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size_val,
+                                 const val& command_capacity_val, const val& telemetry_capacity_val,
+                                 const val& max_channels_val) {
   using sonare::engine::RealtimeEngine;
   // An omitted maxBlockSize or maxChannels takes the engine default; a written one is read in its
   // domain. The two capacities read 0 as their default.
@@ -127,8 +118,7 @@ void registerRealtimeEngineBindings() {
   // parameter as a small legal one and build an engine nobody asked for.
   cls.constructor<double, const val&, const val&, const val&>()
       .constructor<double, const val&, const val&, const val&, const val&>()
-      .function("prepare", &RealtimeEngineWasm::prepare)
-      .function("prepareWithChannels", &RealtimeEngineWasm::prepareWithChannels);
+      .function("prepare", &RealtimeEngineWasm::prepare);
   registerRealtimeEngineTransport(cls);
   registerRealtimeEngineParams(cls);
   registerRealtimeEngineMidi(cls);

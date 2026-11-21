@@ -186,7 +186,7 @@ uint32_t ProjectWasm::setMarker(val marker) {
   const std::string name = stringProperty(marker, "name", "");
   uint32_t out_id = 0;
   const SonareError err =
-      sonare_project_set_marker_ex_name(project_.get(), &desc, wasmCString(name, "name"), &out_id);
+      sonare_project_set_marker(project_.get(), &desc, wasmCString(name, "name"), &out_id);
   if (err != SONARE_OK) {
     throwCodedCErrorFlattening(err, "marker");
   }

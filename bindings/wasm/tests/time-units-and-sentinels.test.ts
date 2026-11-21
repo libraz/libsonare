@@ -450,22 +450,16 @@ describe('absent is omission and -1 is refused', () => {
     );
   });
 
-  it('project setProgram bank: omitted is no Bank Select, negative is refused', () => {
+  it('project setProgram bank: omitted is no Bank Select, out-of-range is refused', () => {
     const project = new Project();
     try {
       project.setSampleRate(48000);
       const { clipId } = project.addMidiClip(0, 4);
       expect(() => project.setProgram(clipId, 24)).not.toThrow();
-      expect(() => project.setProgram(clipId, 24, 0)).not.toThrow();
-      expect(() => project.setProgram(clipId, 24, -1)).toThrow(RangeError);
-      expect(() =>
-        project.setProgramOnChannel(clipId, {
-          group: 0,
-          channel: 0,
-          program: 24,
-          bank: { msb: -1, lsb: 0 },
-        }),
-      ).toThrow(RangeError);
+      expect(() => project.setProgram(clipId, 24, { bank: { msb: 0, lsb: 0 } })).not.toThrow();
+      expect(() => project.setProgram(clipId, 24, { bank: { msb: -1, lsb: 0 } })).toThrow(
+        RangeError,
+      );
     } finally {
       project.destroy();
     }

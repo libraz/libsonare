@@ -63,7 +63,6 @@ import {
   splitSilenceCommon,
   splitSilenceCommonWithReport,
   stft,
-  stftDb,
   tempogram,
   timeToFrames,
   tone,
@@ -123,7 +122,6 @@ beforeAll(async () => {
 describe('analysis features: sample-taking one-shots', () => {
   const sampleTaking: Array<[string, AnyFn, Record<string, unknown>]> = [
     ['stft', stft, {}],
-    ['stftDb', stftDb, {}],
     ['melSpectrogram', melSpectrogram, {}],
     ['mfcc', mfcc, {}],
     ['chroma', chroma, {}],
@@ -393,11 +391,26 @@ describe('analysis features: scalar conversions are positional only', () => {
   });
 });
 
+describe('analysis features: stft db', () => {
+  it('stft without db returns no db plane and the same magnitude as with db', () => {
+    const plain = stft(samples, sr);
+    const withDb = stft(samples, sr, { db: true });
+    expect('db' in plain).toBe(false);
+    expect(plain.magnitude).toEqual(withDb.magnitude);
+    expect(plain.power).toEqual(withDb.power);
+    const db = withDb.db as Matrix2D;
+    expect(isMatrix(db)).toBe(true);
+    expect(db.rows).toBe(withDb.magnitude.rows);
+    expect(db.cols).toBe(withDb.magnitude.cols);
+    expect(db.rows).toBe(plain.nFft / 2 + 1);
+  });
+});
+
 describe('analysis features: Matrix2D results', () => {
   it.each([
     ['stft magnitude', () => stft(samples, sr).magnitude],
     ['stft power', () => stft(samples, sr).power],
-    ['stftDb', () => stftDb(samples, sr)],
+    ['stft db', () => stft(samples, sr, { db: true }).db],
     ['melSpectrogram power', () => melSpectrogram(samples, sr).power],
     ['melSpectrogram db', () => melSpectrogram(samples, sr).db],
     ['mfcc coefficients', () => mfcc(samples, sr).coefficients],
@@ -704,7 +717,7 @@ describe('analysis features: segmentation matrices', () => {
 describe('analysis features: types', () => {
   it('declares the shapes the table names', () => {
     expectTypeOf(stft(samples, sr).magnitude).toEqualTypeOf<Matrix2D>();
-    expectTypeOf(stftDb(samples, sr)).toEqualTypeOf<Matrix2D>();
+    expectTypeOf(stft(samples, sr, { db: true }).db).toEqualTypeOf<Matrix2D | undefined>();
     expectTypeOf(melToStft({ power: matrix(1, 1) })).toEqualTypeOf<Matrix2D>();
     expectTypeOf(mfccToMel({ coefficients: matrix(1, 1) })).toEqualTypeOf<Matrix2D>();
     expectTypeOf(frameSignal).returns.toEqualTypeOf<Matrix2D>();

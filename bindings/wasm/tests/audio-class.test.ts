@@ -7,6 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { Matrix2D } from '../dist/index.js';
 import {
   Audio,
   analyze,
@@ -407,7 +408,7 @@ describe('Audio class', () => {
 
     it('should compute STFT in dB', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const result = audio.stftDb();
+      const result = audio.stft({ db: true }).db as Matrix2D;
       expect(result.rows).toBeGreaterThan(0);
       expect(result.cols).toBeGreaterThan(0);
       expect(result.data).toBeInstanceOf(Float32Array);

@@ -866,7 +866,9 @@ describe('Sonare WASM Module', () => {
       expect(processed[0].at(-1)).toBeGreaterThan(0.75);
       expect(processed[0].at(-1)).toBeLessThan(1.25);
 
-      engine.setParameterSmoothed(engine.resolveStripAutomationId(10, 'faderDb'), -12);
+      engine.setParameter(engine.resolveStripAutomationId(10, 'faderDb'), -12, undefined, {
+        smoothed: true,
+      });
       for (let block = 0; block < 6; block += 1) {
         processed = engine.process([new Float32Array(256), new Float32Array(256)]);
       }

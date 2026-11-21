@@ -642,12 +642,8 @@ export interface WasmStftResult {
   sampleRate: number;
   magnitude: Float32Array;
   power: Float32Array;
-}
-
-export interface WasmStftDbResult {
-  nBins: number;
-  nFrames: number;
-  db: Float32Array;
+  /** Present only when the call asked for it. */
+  db?: Float32Array;
 }
 
 export interface WasmMelResult {
@@ -1194,44 +1190,6 @@ export interface WasmEngineTelemetry {
   value: number;
 }
 
-export interface WasmEngineMeterTelemetry {
-  /**
-   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
-   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
-   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
-   * `targetId - 1` index into a 32-entry lane array runs past its end.
-   */
-  targetId: number;
-  renderFrame: number;
-  seq: number;
-  peakDbL: number;
-  peakDbR: number;
-  rmsDbL: number;
-  rmsDbR: number;
-  /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
-   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
-   * behind the block, so every value has its whole stencil and the reading does not depend on the
-   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
-   */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
-  maxTruePeakDb: number;
-  correlation: number;
-  monoCompatWidth: number;
-  momentaryLufs: number;
-  shortTermLufs: number;
-  integratedLufs: number;
-  gainReductionDb: number;
-  /** Maximum pre-trim input peak for the left channel, in dBFS. */
-  inputPeakDbL: number;
-  /** Maximum pre-trim input peak for the right channel, in dBFS. */
-  inputPeakDbR: number;
-  droppedRecords: number;
-}
-
 export interface WasmEngineMeterTelemetryWide {
   /**
    * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
@@ -1424,12 +1382,18 @@ export interface WasmExternalMidiEvent {
 export interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
-    maxBlockSize: number,
+    maxBlockSize: number | undefined,
     commandCapacity: number,
     telemetryCapacity: number,
+    maxChannels: number | undefined,
   ) => void;
-  setParameter: (paramId: number, value: number, renderFrame?: number) => void;
-  setParameterSmoothed: (paramId: number, value: number, renderFrame?: number) => void;
+  /** `smoothed` true queues a ramp; undefined queues a step. */
+  setParameter: (
+    paramId: number,
+    value: number,
+    renderFrame: number | undefined,
+    smoothed: boolean | undefined,
+  ) => void;
   setParamSmoothingMs: (smoothingMs: number) => void;
   setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number) => void;
   setTrackMonitorMode: (laneIndex: number, mode: number, renderFrame?: number) => void;
@@ -1619,14 +1583,7 @@ export interface WasmRealtimeEngine {
   setSf2Instrument: (destinationId: number, config: object) => void;
   clearMidiInstrument: (destinationId: number) => void;
   midiInstrumentCount: () => number;
-  bindMidiCc: (
-    channel: number,
-    controller: number,
-    paramId: number,
-    minValue: number,
-    maxValue: number,
-  ) => void;
-  bindMidiCcBinding: (binding: import('./project_types.js').ProjectMidiCcBinding) => void;
+  bindMidiCc: (binding: import('./project_types.js').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
   setControllerProfile: (destinationId: number, presetName: string) => void;
@@ -1793,21 +1750,16 @@ export interface WasmRealtimeEngine {
   externalMidiScratchByteCount: () => number;
   consumeExternalMidiScratch: () => void;
   clearParameters: () => void;
-  process: (channels: Float32Array[]) => Float32Array[];
-  prepareWithChannels: (
-    sampleRate: number,
-    maxBlockSize: number | undefined,
-    commandCapacity: number,
-    telemetryCapacity: number,
-    maxChannels: number | undefined,
-  ) => void;
+  /** `withMonitor` true returns the program and cue buses apart; undefined folds the cue in. */
+  process: (
+    channels: Float32Array[],
+    withMonitor: boolean | undefined,
+  ) => Float32Array[] | WasmEngineProcessWithMonitorResult;
   prepareChannels: (numChannels: number, maxFrames: number) => void;
   getChannelBuffer: (channel: number, numFrames: number) => Float32Array;
-  processPrepared: (numFrames: number) => void;
+  processPrepared: (numFrames: number, withMonitor: boolean | undefined) => void;
   prepareMonitorChannels: (numChannels: number, maxFrames: number) => void;
   getMonitorChannelBuffer: (channel: number, numFrames: number) => Float32Array;
-  processPreparedWithMonitor: (numFrames: number) => void;
-  processWithMonitor: (channels: Float32Array[]) => WasmEngineProcessWithMonitorResult;
   renderOffline: (
     channels: Float32Array[],
     blockSize: number | undefined,
@@ -1831,8 +1783,7 @@ export interface WasmRealtimeEngine {
   meterScratchValue: (field: number) => number;
   meterScratchInputPeakDbL: () => number;
   meterScratchInputPeakDbR: () => number;
-  drainMeterTelemetry: (maxRecords: number | undefined) => WasmEngineMeterTelemetry[];
-  drainMeterTelemetryWide: (maxRecords: number | undefined) => WasmEngineMeterTelemetryWide[];
+  drainMeterTelemetry: (maxRecords: number | undefined) => WasmEngineMeterTelemetryWide[];
   meterTargetInsertGainReduction: (targetId: number) => number[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
   drainScopeTelemetry: (maxRecords: number | undefined) => WasmEngineScopeTelemetry[];
@@ -2632,8 +2583,7 @@ export interface SonareModule {
   masteringInsertNames: () => string[];
   masteringInsertParamNames: (name: string) => string[];
   // These return JSON the facade parses; the raw module has no object shape here.
-  masteringInsertParamInfo: (name: string) => string;
-  masteringInsertParamInfoAtRate: (name: string, sampleRate: number) => string;
+  masteringInsertParamInfo: (name: string, sampleRate: number | undefined) => string;
   masteringProcessorCatalog: () => string;
   masteringAmpPresetCatalog: () => string;
   masteringEnumValue: (processor: string, key: string, choice: string) => number | null;
@@ -3003,18 +2953,14 @@ export interface SonareModule {
   ) => Float32Array;
 
   // Features - Spectrogram
+  /** `db` true also returns the magnitude in decibels as `db`; undefined omits it. */
   stft: (
     samples: Float32Array,
     sampleRate: number,
     nFft: number,
     hopLength: number,
+    db: boolean | undefined,
   ) => WasmStftResult;
-  stftDb: (
-    samples: Float32Array,
-    sampleRate: number,
-    nFft: number,
-    hopLength: number,
-  ) => WasmStftDbResult;
 
   // Features - Mel Spectrogram
   melSpectrogram: (
@@ -3851,21 +3797,23 @@ export interface WasmRealtimeVoiceChanger {
   noteOff: (note: number) => void;
   allNotesOff: () => void;
   getCarrierBuffer: (numFrames: number) => Float32Array;
-  processPreparedMonoWithCarrier: (numSamples: number) => void;
-  processPreparedInterleavedWithCarrier: (numFrames: number, numChannels: number) => void;
-  processPreparedPlanarWithCarrier: (numFrames: number) => void;
   // Zero-copy "prepared" path. The returned Float32Array is a typed_memory_view
   // backed by the WASM heap; it is only valid until the next call to a method
   // that may grow the underlying scratch buffer (i.e. another get*Buffer with a
   // larger length) or until delete().
   getMonoInputBuffer: (numSamples: number) => Float32Array;
   getMonoOutputBuffer: (numSamples: number) => Float32Array;
-  processPreparedMono: (numSamples: number) => void;
+  /** `withCarrier` true reads the carrier view from getCarrierBuffer; undefined is none. */
+  processPreparedMono: (numSamples: number, withCarrier: boolean | undefined) => void;
   getInterleavedInputBuffer: (numFrames: number, numChannels: number) => Float32Array;
   getInterleavedOutputBuffer: (numFrames: number, numChannels: number) => Float32Array;
-  processPreparedInterleaved: (numFrames: number, numChannels: number) => void;
+  processPreparedInterleaved: (
+    numFrames: number,
+    numChannels: number,
+    withCarrier: boolean | undefined,
+  ) => void;
   getPlanarChannelBuffer: (channel: number, numFrames: number) => Float32Array;
-  processPreparedPlanar: (numFrames: number) => void;
+  processPreparedPlanar: (numFrames: number, withCarrier: boolean | undefined) => void;
   delete: () => void;
 }
 
@@ -4136,9 +4084,7 @@ export interface WasmStreamFramesI16 {
 
 export interface WasmStreamAnalyzer {
   /** Throws (invalid state) when the stream was already finalized; reset first. */
-  process: (samples: Float32Array) => void;
-  /** Rejects a gap, a seek, a mode switch, and a chunk fed after finalize. */
-  processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
+  process: (samples: Float32Array, sampleOffset: number | undefined) => void;
   /** Idempotent on success; a failed call leaves the stream un-finalized. */
   finalize: () => void;
   availableFrames: () => number;

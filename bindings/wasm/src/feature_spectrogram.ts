@@ -46,18 +46,8 @@ export interface StftRequest {
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
-}
-
-/** STFT-in-dB request. */
-export interface StftDbRequest {
-  /** Mono audio samples. */
-  samples: Float32Array;
-  /** Sample rate of `samples` in Hz. */
-  sampleRate: number;
-  /** FFT size. Default 2048. */
-  nFft?: number;
-  /** Hop in samples. Default 512. */
-  hopLength?: number;
+  /** When true the result also carries `db`, the magnitude in decibels. Default false. */
+  db?: boolean;
 }
 
 /** STFT chromagram request. */
@@ -327,7 +317,8 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
 /**
  * Short-time Fourier transform.
  *
- * @returns Magnitude and power matrices whose rows are `nFft / 2 + 1` bins and cols are frames.
+ * @returns Magnitude and power matrices whose rows are `nFft / 2 + 1` bins and cols are frames;
+ *   `db` (the magnitude in decibels, same shape) is present only when requested.
  */
 export function stft(request: StftRequest): StftResult;
 export function stft(
@@ -340,35 +331,24 @@ export function stft(...args: unknown[]): StftResult {
     const r = sampleOneShot<StftRequest>('stft', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const fft = resolveFftOptions(r.nFft, r.hopLength);
-    const native = requireModule().stft(r.samples, r.sampleRate, fft.nFft, fft.hopLength);
-    return {
+    const native = requireModule().stft(
+      r.samples,
+      r.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      optionalBoolean(r.db, 'db', false) ? true : undefined,
+    );
+    const result: StftResult = {
       nFft: native.nFft,
       hopLength: native.hopLength,
       sampleRate: native.sampleRate,
       magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
       power: toMatrix2D(native.power, native.nBins, native.nFrames),
     };
-  });
-}
-
-/**
- * STFT magnitude in decibels.
- *
- * @returns {@link Matrix2D} whose rows are `nFft / 2 + 1` bins and cols are frames.
- */
-export function stftDb(request: StftDbRequest): Matrix2D;
-export function stftDb(
-  samples: Float32Array,
-  sampleRate: number,
-  options?: OptionsOf<StftDbRequest>,
-): Matrix2D;
-export function stftDb(...args: unknown[]): Matrix2D {
-  return withEntry('stftDb', () => {
-    const r = sampleOneShot<StftDbRequest>('stftDb', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    const fft = resolveFftOptions(r.nFft, r.hopLength);
-    const native = requireModule().stftDb(r.samples, r.sampleRate, fft.nFft, fft.hopLength);
-    return toMatrix2D(native.db, native.nBins, native.nFrames);
+    if (native.db !== undefined) {
+      result.db = toMatrix2D(native.db, native.nBins, native.nFrames);
+    }
+    return result;
   });
 }
 

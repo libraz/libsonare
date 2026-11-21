@@ -17,7 +17,6 @@ import {
   phaseVocoder,
   pitchShift,
   stft,
-  stftDb,
   timeStretch,
   trim,
 } from '../src/index';
@@ -97,7 +96,9 @@ describe('additive effect and feature options', () => {
       hopLength: 256,
       hardMask: true,
     });
-    expect(Array.from(changedResidual.residual)).not.toEqual(Array.from(residual.residual));
+    expect(Array.from(changedResidual.residual as Float32Array)).not.toEqual(
+      Array.from(residual.residual as Float32Array),
+    );
 
     const chroma = nnlsChroma(samples, sampleRate);
     const changedChroma = nnlsChroma(samples, sampleRate, { hopLength: 256 });
@@ -231,7 +232,6 @@ describe('feature entry points share one nFft rule', () => {
 
     featureEntryPoints = {
       stft: (f) => stft({ samples, sampleRate, ...f }),
-      stftDb: (f) => stftDb({ samples, sampleRate, ...f }),
       melSpectrogram: (f) => melSpectrogram({ samples, sampleRate, nMels, ...f }),
       mfcc: (f) => mfcc({ samples, sampleRate, nMels, nMfcc, ...f }),
       chroma: (f) => chromaStft({ samples, sampleRate, ...f }),
@@ -261,7 +261,7 @@ describe('feature entry points share one nFft rule', () => {
         }),
     };
     names = Object.keys(featureEntryPoints);
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(9);
   });
 
   // Named rather than derived from the map, because `it.each` is collected
@@ -269,7 +269,6 @@ describe('feature entry points share one nFft rule', () => {
   // undefined entry point instead of silently shrinking the population.
   const entryPointNames = [
     'stft',
-    'stftDb',
     'melSpectrogram',
     'mfcc',
     'chroma',

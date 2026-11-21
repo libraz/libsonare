@@ -994,7 +994,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
       // Sample-accurate + smoothed parameter changes queue without throwing.
       expect(() => engine.setParameter(5, 6)).not.toThrow();
-      expect(() => engine.setParameterSmoothed(5, -3)).not.toThrow();
+      expect(() => engine.setParameter(5, -3, undefined, { smoothed: true })).not.toThrow();
       expect(engine.midiCcBindingCount).toBe(0);
       expect(() =>
         engine.bindMidiCc({ channel: 0, ccNumber: 74, paramId: 5, minValue: -60, maxValue: 12 }),

@@ -84,28 +84,20 @@ val ProjectWasm::exportClipFile() {
   return vectorToUint8Array(out);
 }
 
-void ProjectWasm::setProgram(const val& clip_id_val, const val& program_val, const val& bank_val) {
+void ProjectWasm::setProgram(const val& clip_id_val, const val& program_val, const val& bank_val,
+                             const val& group_val, const val& channel_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const int program = checkedIntFromVal(program_val, "program");
-  const int bank = checkedIntFromVal(bank_val, "bank");
-  const SonareError err = sonare_project_set_program(project_.get(), clip_id, program, bank);
-  if (err != SONARE_OK) {
-    throwCError(err);
-  }
-}
-
-void ProjectWasm::setProgramOnChannel(const val& clip_id_val, const val& group_val,
-                                      const val& channel_val, const val& program_val,
-                                      const val& bank_val) {
-  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  // An absent group or channel is group 0, channel 0.
   const uint8_t group =
-      domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
+      optionalDomainValue<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain)
+          .value_or(0);
   const uint8_t channel =
-      domainNumberFromVal<uint8_t>(channel_val, "channel", sonare_c_detail::kMidiChannelDomain);
+      optionalDomainValue<uint8_t>(channel_val, "channel", sonare_c_detail::kMidiChannelDomain)
+          .value_or(0);
   const int program = checkedIntFromVal(program_val, "program");
   const int bank = checkedIntFromVal(bank_val, "bank");
   const SonareError err =
-      sonare_project_set_program_on_channel(project_.get(), clip_id, group, channel, program, bank);
+      sonare_project_set_program(project_.get(), clip_id, group, channel, program, bank);
   if (err != SONARE_OK) {
     throwCError(err);
   }
@@ -526,7 +518,6 @@ void registerProjectMidi(class_<ProjectWasm>& cls) {
       .function("importClipFile", &ProjectWasm::importClipFile)
       .function("exportClipFile", &ProjectWasm::exportClipFile)
       .function("setProgram", &ProjectWasm::setProgram)
-      .function("setProgramOnChannel", &ProjectWasm::setProgramOnChannel)
       .function("bakeMidiFx", &ProjectWasm::bakeMidiFx)
       .function("previewMidiFxCount", &ProjectWasm::previewMidiFxCount)
       .function("setMidiFx", &ProjectWasm::setMidiFx)

@@ -102,39 +102,7 @@ sonare::midi::NoteTracking* wasmNoteTrackingField(sonare::midi::ControllerProfil
 
 }  // namespace
 
-void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controller_val,
-                                    const val& param_id_val, const val& min_value_val,
-                                    const val& max_value_val) {
-#if defined(SONARE_WITH_ARRANGEMENT)
-  const int channel = checkedIntFromVal(channel_val, "channel");
-  const int controller = checkedIntFromVal(controller_val, "controller");
-  const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
-  const float min_value = checkedFloatFromVal(min_value_val, "minValue");
-  const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
-  if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
-      max_value < min_value) {
-    throw WasmRangeError(
-        "channel in [0,15], controller in [0,127], paramId "
-        "non-zero, maxValue >= minValue");
-  }
-  if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
-    throw WasmRangeError("paramId " + std::to_string(param_id) + " is reserved");
-  }
-  if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
-                            param_id, min_value, max_value)) {
-    throwMidiCcBindFailure(engine_, "failed to bind MIDI CC");
-  }
-#else
-  (void)channel_val;
-  (void)controller_val;
-  (void)param_id_val;
-  (void)min_value_val;
-  (void)max_value_val;
-  throwMidiEngineUnavailable();
-#endif
-}
-
-void RealtimeEngineWasm::bindMidiCcBinding(val object) {
+void RealtimeEngineWasm::bindMidiCc(val object) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   sonare::midi::CcBinding binding{};
   binding.cc_number = domainNumberFromVal<uint8_t>(object["ccNumber"], "ccNumber",
@@ -517,7 +485,6 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
 
 void registerRealtimeEngineMidiControl(class_<RealtimeEngineWasm>& cls) {
   cls.function("bindMidiCc", &RealtimeEngineWasm::bindMidiCc)
-      .function("bindMidiCcBinding", &RealtimeEngineWasm::bindMidiCcBinding)
       .function("clearMidiCcBindings", &RealtimeEngineWasm::clearMidiCcBindings)
       .function("midiCcBindingCount", &RealtimeEngineWasm::midiCcBindingCount)
       // destinationId first, matching the C ABI's own argument order minus the

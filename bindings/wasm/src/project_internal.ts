@@ -450,13 +450,12 @@ export interface WasmProject {
   exportSmf: () => Uint8Array<ArrayBuffer>;
   importClipFile: (data: Uint8Array) => number;
   exportClipFile: () => Uint8Array<ArrayBuffer>;
-  setProgram: (clipId: number, program: number, bank: number) => void;
-  setProgramOnChannel: (
+  setProgram: (
     clipId: number,
-    group: number,
-    channel: number,
     program: number,
     bank: number,
+    group: number | undefined,
+    channel: number | undefined,
   ) => void;
   bakeMidiFx: {
     (clipId: number, configJson: string, withSourceIndex?: false | null): void;
@@ -483,29 +482,25 @@ export interface WasmProject {
     options: ProjectTempoOptions | undefined,
   ) => number;
   snapToGrid: (ppq: number, strength: number, division: number) => number;
-  compile: () => NativeProjectCompileResult;
-  compileTimeline: () => NativeProjectCompileTimelineResult;
-  bounce: (options: NativeProjectBounceOptions) => NativeProjectBounce;
-  bounceWithBuiltinInstrument: (
-    bindings: ReadonlyArray<NativeInstrumentBinding<BuiltinSynthConfig>>,
+  compile: {
+    (withTimeline: undefined): NativeProjectCompileResult;
+    (withTimeline: true): NativeProjectCompileTimelineResult;
+  };
+  /**
+   * Each trailing list binds one instrument kind (undefined binds none); only the callback
+   * list can answer `{ instrumentFailure }`.
+   */
+  bounce: (
     options: NativeProjectBounceOptions,
-  ) => NativeProjectBounce;
-  bounceWithInstruments: (
-    bindings: ReadonlyArray<NativeInstrumentBinding<ExternalInstrument>>,
-    options: NativeProjectBounceOptions,
+    builtinBindings: ReadonlyArray<NativeInstrumentBinding<BuiltinSynthConfig>> | undefined,
+    instrumentBindings: ReadonlyArray<NativeInstrumentBinding<ExternalInstrument>> | undefined,
+    synthBindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>> | undefined,
+    sf2Bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>> | undefined,
   ) => NativeProjectBounce | { instrumentFailure: unknown };
-  bounceWithSynthInstrument: (
-    bindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>>,
-    options: NativeProjectBounceOptions,
-  ) => NativeProjectBounce;
   loadSoundFont: (data: Uint8Array) => void;
   clearSoundFont: () => void;
   soundFontPresetCount: () => number;
   soundFontManifest: () => Sf2ProgramStatus[];
-  bounceWithSf2Instrument: (
-    bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>>,
-    options: NativeProjectBounceOptions,
-  ) => NativeProjectBounce;
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (

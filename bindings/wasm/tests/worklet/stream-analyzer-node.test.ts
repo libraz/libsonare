@@ -402,14 +402,14 @@ describe('SonareStreamAnalyzerNode', () => {
     const direct = new StreamAnalyzer(CONFIG);
     const expected: StreamFrames[] = [];
     const drain = () => expected.push(direct.readFrames(direct.availableFrames));
-    direct.processWithOffset(a.slice(0, CHUNK), 0);
-    direct.processWithOffset(a.slice(CHUNK), CHUNK);
+    direct.process(a.slice(0, CHUNK), 0);
+    direct.process(a.slice(CHUNK), CHUNK);
     drain();
     direct.reset(CHUNK * 5);
-    direct.processWithOffset(b, CHUNK * 5);
+    direct.process(b, CHUNK * 5);
     drain();
     direct.reset(CHUNK * 6);
-    direct.processWithOffset(c, CHUNK * 6);
+    direct.process(c, CHUNK * 6);
     drain();
     direct.destroy();
 

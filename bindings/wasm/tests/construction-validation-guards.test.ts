@@ -760,7 +760,13 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     }
   });
 
-  type NativeBounce = (bindings: unknown, options: object) => Float32Array;
+  type NativeBounce = (
+    options: object,
+    builtin: unknown,
+    instruments: unknown,
+    synth: unknown,
+    sf2: unknown,
+  ) => Float32Array;
   /** The embind handle, for a reader the facade's own checks no longer reach. */
   function nativeOf(project: Project): Record<string, NativeBounce> {
     return (project as unknown as { native: Record<string, NativeBounce> }).native;
@@ -802,7 +808,9 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     // guard is reached through the facade and through the native handle alike.
     const attack = buildMidiProject();
     expectRangeRefusal(() => attack.bounceWithBuiltinInstruments(hugeArray() as never, {}));
-    expectRangeRefusal(() => nativeOf(attack).bounceWithBuiltinInstrument(hugeArray(), {}));
+    expectRangeRefusal(() =>
+      nativeOf(attack).bounce({}, hugeArray(), undefined, undefined, undefined),
+    );
     attack.destroy();
   });
 
@@ -825,7 +833,9 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     two.destroy();
     const attack = buildMidiProject();
     expectRangeRefusal(() => attack.bounceWithSynthInstruments(hugeArray() as never, {}));
-    expectRangeRefusal(() => nativeOf(attack).bounceWithSynthInstrument(hugeArray(), {}));
+    expectRangeRefusal(() =>
+      nativeOf(attack).bounce({}, undefined, undefined, hugeArray(), undefined),
+    );
     attack.destroy();
   });
 
@@ -848,7 +858,9 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     two.destroy();
     const attack = buildMidiProject();
     expectRangeRefusal(() => attack.bounceWithSf2Instruments(hugeArray() as never, {}));
-    expectRangeRefusal(() => nativeOf(attack).bounceWithSf2Instrument(hugeArray(), {}));
+    expectRangeRefusal(() =>
+      nativeOf(attack).bounce({}, undefined, undefined, undefined, hugeArray()),
+    );
     attack.destroy();
   });
 

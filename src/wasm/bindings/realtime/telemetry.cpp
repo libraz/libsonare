@@ -65,45 +65,6 @@ int RealtimeEngineWasm::graphLatencySamplesQ8() const { return engine_.graph_lat
 
 uint32_t RealtimeEngineWasm::telemetryScratchValue() const { return telemetry_scratch_.value; }
 
-val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
-  const int max_records =
-      max_records_val.isUndefined()
-          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
-          : checkedIntFromVal(max_records_val, "maxRecords");
-  val out = val::array();
-  if (max_records <= 0) return out;
-#if defined(SONARE_WITH_MIXING)
-  sonare::engine::MeterTelemetryRecord meter{};
-  int count = 0;
-  while (count < max_records && engine_.pop_meter_telemetry(meter)) {
-    val item = val::object();
-    item.set("targetId", meter.target_id);
-    item.set("renderFrame", static_cast<double>(meter.render_frame));
-    item.set("seq", static_cast<double>(meter.seq));
-    item.set("peakDbL", meter.peak_db[0]);
-    item.set("peakDbR", meter.peak_db[1]);
-    item.set("rmsDbL", meter.rms_db[0]);
-    item.set("rmsDbR", meter.rms_db[1]);
-    item.set("truePeakDbL", meter.true_peak_db[0]);
-    item.set("truePeakDbR", meter.true_peak_db[1]);
-    item.set("maxTruePeakDb", meter.max_true_peak_db);
-    item.set("correlation", meter.correlation);
-    item.set("monoCompatWidth", meter.mono_compat_width);
-    item.set("momentaryLufs", meter.momentary_lufs);
-    item.set("shortTermLufs", meter.short_term_lufs);
-    item.set("integratedLufs", meter.integrated_lufs);
-    item.set("gainReductionDb", meter.gain_reduction_db);
-    item.set("inputPeakDbL", meter.input_peak_db[0]);
-    item.set("inputPeakDbR", meter.input_peak_db[1]);
-    item.set("droppedRecords", meter.dropped_records);
-    out.set(count++, item);
-  }
-#else
-  (void)max_records;
-#endif
-  return out;
-}
-
 val RealtimeEngineWasm::meterTargetInsertGainReduction(const val& target_id_val) const {
   const uint32_t target_id = checkedUintFromVal(target_id_val, "targetId");
   val out = val::array();
@@ -198,9 +159,8 @@ float RealtimeEngineWasm::meterScratchInputPeakDbR() const {
 }
 
 // Per-plane meter drain: peakDb/rmsDb/truePeakDb/inputPeakDb are JS arrays of
-// channelCount planes (canonical WAVE order), stereo being planes 0/1. It is the
-// one drain; drainMeterTelemetry consumes the same queue and stays for compatibility.
-val RealtimeEngineWasm::drainMeterTelemetryWide(const val& max_records_val) {
+// channelCount planes (canonical WAVE order), stereo being planes 0/1.
+val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
   const int max_records =
       max_records_val.isUndefined()
           ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
@@ -362,7 +322,6 @@ void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
       .function("meterScratchValue", &RealtimeEngineWasm::meterScratchValue)
       .function("meterScratchInputPeakDbL", &RealtimeEngineWasm::meterScratchInputPeakDbL)
       .function("meterScratchInputPeakDbR", &RealtimeEngineWasm::meterScratchInputPeakDbR)
-      .function("drainMeterTelemetryWide", &RealtimeEngineWasm::drainMeterTelemetryWide)
       .function("meterTargetInsertGainReduction",
                 &RealtimeEngineWasm::meterTargetInsertGainReduction)
       .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)

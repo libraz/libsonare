@@ -117,6 +117,5 @@ export {
   mfcc,
   reassignedSpectrogram,
   stft,
-  stftDb,
   trim,
 } from './feature_spectrogram.js';

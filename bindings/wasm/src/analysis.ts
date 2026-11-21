@@ -77,7 +77,6 @@ export {
   mfcc,
   reassignedSpectrogram,
   stft,
-  stftDb,
 } from './feature_spectrogram.js';
 export * from './metering.js';
 export * from './public_types.js';

@@ -186,7 +186,7 @@ export class SonareStreamAnalyzerNode {
       this.lastFrameCount = 0;
     }
     this.expectedSample = startSample + samples.length;
-    this.analyzer.processWithOffset(samples, startSample);
+    this.analyzer.process(samples, startSample);
     this.node.port.postMessage({ type: 'recycle', samples }, [samples.buffer]);
     // Frames wait in the analyzer's bounded queue until someone listens.
     if (this.frameListeners.size > 0) {

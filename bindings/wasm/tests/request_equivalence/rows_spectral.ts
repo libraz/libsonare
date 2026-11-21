@@ -232,20 +232,6 @@ export const ROWS: Row[] = [
     invalid: { hopLength: 0 },
   },
   {
-    name: 'stftDb',
-    fn: sonare.stftDb,
-    form: 'sampleOptions',
-    params: 'samples sampleRate nFft? hopLength? ...options?',
-    values: {
-      samples: SIG,
-      sampleRate: ALT_SR,
-      nFft: 1024,
-      hopLength: 256,
-    },
-    invalid: { hopLength: 0 },
-    inert: { sampleRate: 'bins and frames are counted, not labelled in Hz' },
-  },
-  {
     name: 'chromaCens',
     fn: sonare.chromaCens,
     form: 'sampleOptions',

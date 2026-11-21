@@ -1969,15 +1969,15 @@ describe('SonareRealtimeEngineNode', () => {
         const zeroes = () => [new Float32Array(blockSize), new Float32Array(blockSize)];
         const rejectedFirst = rejected.offline.process(zeroes());
         const baselineFirst = baseline.offline.process(zeroes());
-        rejected.offline.setParameterSmoothed(rejected.automationId, -12);
+        rejected.offline.setParameter(rejected.automationId, -12, undefined, { smoothed: true });
         rejected.offline.flushControlCommands();
-        baseline.offline.setParameterSmoothed(baseline.automationId, -12);
+        baseline.offline.setParameter(baseline.automationId, -12, undefined, { smoothed: true });
         baseline.offline.flushControlCommands();
         const rejectedPriming = rejected.offline.process(zeroes());
         const baselinePriming = baseline.offline.process(zeroes());
-        rejected.offline.setParameterSmoothed(rejected.automationId, 12);
+        rejected.offline.setParameter(rejected.automationId, 12, undefined, { smoothed: true });
         rejected.offline.flushControlCommands();
-        baseline.offline.setParameterSmoothed(baseline.automationId, 12);
+        baseline.offline.setParameter(baseline.automationId, 12, undefined, { smoothed: true });
         baseline.offline.flushControlCommands();
         const expected = baseline.offline.process(zeroes());
         const expectedNext = baseline.offline.process(zeroes());
@@ -2064,10 +2064,10 @@ describe('SonareRealtimeEngineNode', () => {
         const zeroes = () => [new Float32Array(blockSize), new Float32Array(blockSize)];
         for (const { offline, automationId } of [accepted, untouchedBaseline]) {
           offline.process(zeroes());
-          offline.setParameterSmoothed(automationId, -12);
+          offline.setParameter(automationId, -12, undefined, { smoothed: true });
           offline.flushControlCommands();
           offline.process(zeroes());
-          offline.setParameterSmoothed(automationId, 12);
+          offline.setParameter(automationId, 12, undefined, { smoothed: true });
           offline.flushControlCommands();
         }
         // The accepted topology change keeps the in-flight ramp instead of snapping it.

@@ -155,9 +155,9 @@ struct ProjectWasm {
   val exportSmf();
   uint32_t importClipFile(val data);
   val exportClipFile();
-  void setProgram(const val& clip_id, const val& program, const val& bank);
-  void setProgramOnChannel(const val& clip_id, const val& group, const val& channel,
-                           const val& program, const val& bank);
+  // @p group / @p channel (undefined/null) are UMP group 0 and channel 0.
+  void setProgram(const val& clip_id, const val& program, const val& bank, const val& group,
+                  const val& channel);
   // @p with_source_index (undefined/null = false) returns the per-event provenance as an
   // Int32Array: entry i is the input event index transformed event i derives from, or -1
   // when it has none. Otherwise returns undefined.
@@ -182,12 +182,10 @@ struct ProjectWasm {
   double snapToGrid(double ppq, double strength, const val& division);
 
   // Compiles the project into a renderable timeline, returning a small JS
-  // object { diagnosticCount, hasTimeline, messages }.
-  val compile();
-
-  // compile() plus the compiled timeline: the result gains `timeline`, a
-  // ProjectTimeline handle, or null when compilation produced none.
-  val compileTimeline();
+  // object { diagnosticCount, hasTimeline, messages }. A true `withTimeline` also keeps the
+  // compiled timeline: the result gains `timeline`, a ProjectTimeline handle, or null when
+  // compilation produced none.
+  val compile(const val& with_timeline);
 
   // Parses a JS bounce-options object into the flat C POD. A missing /
   // null/undefined object leaves the zero-init defaults (which the C ABI maps to
@@ -201,7 +199,7 @@ struct ProjectWasm {
   // "square"/"triangle"); an unknown name throws, matching Node/Python.
   static SonareBuiltinInstrumentBinding builtinBindingFromVal(val desc);
 
-  // Normalizes the bounceWithBuiltinInstrument `instrument(s)` argument into a
+  // Normalizes the built-in `instrument(s)` argument of bounce() into a
   // vector of bindings. Accepts an array of binding objects (an explicitly empty
   // array yields ZERO bindings -> silent bounce, matching Node/Python and the
   // documented contract), a single binding object (treated as one element), or
@@ -209,47 +207,28 @@ struct ProjectWasm {
   // argument of `{}` supplies the single default-sine patch for the no-arg call.
   static std::vector<SonareBuiltinInstrumentBinding> builtinBindingsFromVal(val bindings);
 
-  // Compiles + renders the project offline to interleaved float audio (silent
-  // for MIDI tracks, which have no instrument bound). Uses C-ABI defaults
+  // Compiles + renders the project offline to interleaved float audio. Uses C-ABI defaults
   // (project sample rate, 2 channels, block 128) when no options are provided.
   // When totalFrames is omitted (or <= 0) the C ABI auto-derives the render
   // length from the arrangement, so an arrangement with content renders without
   // the caller computing a frame count; an empty project yields an empty buffer.
-  // To make MIDI tracks audible use bounceWithBuiltinInstrument.
-  val bounce(val options);
-
-  // Compiles + renders the project, routing MIDI tracks through the built-in
-  // oscillator synth so a MIDI-only arrangement bounces to audible audio.
-  // @p bindings is an array of { destinationId?, ...synthConfig } objects (a
-  // single object is accepted too); an explicitly empty array (or null /
-  // undefined) produces zero bindings, so MIDI tracks render silently. Every
-  // synth-config
-  // field is optional and "0 => sensible default" per the C ABI. When
-  // options.totalFrames is omitted the render length is auto-derived from the
-  // arrangement plus the synth release tail.
-  val bounceWithBuiltinInstrument(val bindings, val options);
-
-  // Compiles + renders the project, driving MIDI tracks through JS instruments
-  // whose { prepare?, onEvent?, render } callbacks run synchronously on this
-  // thread. @p bindings is an array of instrument objects (each may carry
-  // destinationId / latencySamples / tailSamples), a single one, or
-  // null/undefined for none. A throwing callback (or one returning a Promise)
-  // stops further callbacks and is returned as `{ instrumentFailure }` for the
-  // TypeScript facade to rethrow.
-  val bounceWithInstruments(val bindings, val options);
-
-  // Compiles + renders the project, routing MIDI tracks through the
-  // patch-driven NativeSynth (the full synthesizer; see the SynthPatch TS
-  // type). @p bindings is a SynthPatch object, a preset-name string
-  // ("sawLead" / "va:sawLead"), or an array of either (each entry may carry
-  // a destinationId). An empty array / null / undefined produces zero
-  // bindings. Unknown preset names throw.
   //
-  // An entry may also carry `sampleBankId`, the id of a live SampleBank handle
-  // the sample engine reads its PCM from; the TS facade resolves the public
-  // `sampleBank` object to that id. Zero and omission both mean no bank, and
-  // an id whose handle has been released throws.
-  val bounceWithSynthInstrument(val bindings, val options);
+  // The four trailing arguments bind the instruments MIDI tracks render through; each is an
+  // array of binding objects, a single object, or null/undefined for none. MIDI tracks with
+  // no instrument bound render silently.
+  // - builtinBindings: { destinationId?, waveform?, gain?, ...synthConfig } built-in synths.
+  // - instrumentBindings: JS instruments whose { prepare?, onEvent?, render } callbacks run
+  //   synchronously on this thread (each may carry destinationId / latencySamples /
+  //   tailSamples). A throwing callback (or one returning a Promise) stops further callbacks
+  //   and is returned as `{ instrumentFailure }` for the TypeScript facade to rethrow.
+  // - synthBindings: SynthPatch objects or preset-name strings ("sawLead" / "va:sawLead"),
+  //   each optionally carrying a destinationId and `sampleBankId`, the id of a live SampleBank
+  //   the sample engine reads its PCM from (zero / omitted means no bank; a released id
+  //   throws). Unknown preset names throw.
+  // - sf2Bindings: GS-compatible SoundFont players fed by the project's loaded SoundFont;
+  //   programs it does not cover play through the built-in GM fallback bank.
+  val bounce(val options, val builtin_bindings, val instrument_bindings, val synth_bindings,
+             val sf2_bindings);
 
   // Loads (parses) SoundFont 2 bytes into the project (presets / sample PCM),
   // replacing any previously loaded SoundFont. The host copies the .sf2 bytes
@@ -273,14 +252,6 @@ struct ProjectWasm {
   // sonare_sf2_instrument_config_init: an omitted key keeps the default and a given value is
   // read literally by the C entry.
   static SonareSf2InstrumentBinding sf2BindingFromVal(val desc);
-
-  // Like bounceWithBuiltinInstrument, but each bound destination renders
-  // through a GS-compatible SoundFont player fed by the project's loaded
-  // SoundFont. Programs the SoundFont does not cover — including bouncing
-  // with no SoundFont loaded at all — play through the built-in synthesizer
-  // GM fallback bank (the data-free floor). Accepts an array of binding
-  // objects, a single object, or null/undefined (zero bindings -> silence).
-  val bounceWithSf2Instrument(val bindings, val options);
 
   // --------------------------------------------------------------------------
   // Edit operations (undoable; route through EditHistory commands)

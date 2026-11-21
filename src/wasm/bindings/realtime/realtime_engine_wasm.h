@@ -50,12 +50,10 @@ class RealtimeEngineWasm {
                      const emscripten::val& command_capacity,
                      const emscripten::val& telemetry_capacity,
                      const emscripten::val& max_channels);
+  /// @param max_channels undefined/null takes the engine default.
   void prepare(double sample_rate, const emscripten::val& max_block_size,
-               const emscripten::val& command_capacity, const emscripten::val& telemetry_capacity);
-  void prepareWithChannels(double sample_rate, const emscripten::val& max_block_size,
-                           const emscripten::val& command_capacity,
-                           const emscripten::val& telemetry_capacity,
-                           const emscripten::val& max_channels);
+               const emscripten::val& command_capacity, const emscripten::val& telemetry_capacity,
+               const emscripten::val& max_channels);
 
   // ---- Transport & timing (realtime_engine_transport.cpp) --------------
   void play(const emscripten::val& render_frame_val);
@@ -98,10 +96,9 @@ class RealtimeEngineWasm {
   emscripten::val parameterInfo(double id) const;
   void setAutomationLane(double param_id, emscripten::val points);
   int automationLaneCount() const;
+  /// @param smoothed_val undefined/null (or false) queues a step; true queues a ramp.
   void setParameter(double param_id, const emscripten::val& value_val,
-                    const emscripten::val& render_frame_val);
-  void setParameterSmoothed(double param_id, const emscripten::val& value_val,
-                            const emscripten::val& render_frame_val);
+                    const emscripten::val& render_frame_val, const emscripten::val& smoothed_val);
   void setParamSmoothingMs(const emscripten::val& smoothing_ms_val);
   void setSoloMute(const emscripten::val& lane_index_val, bool solo, bool mute,
                    const emscripten::val& render_frame_val);
@@ -123,10 +120,7 @@ class RealtimeEngineWasm {
 #endif
   void clearMidiInstrument(const emscripten::val& destination_id_val);
   size_t midiInstrumentCount() const;
-  void bindMidiCc(const emscripten::val& channel_val, const emscripten::val& controller_val,
-                  const emscripten::val& param_id_val, const emscripten::val& min_value_val,
-                  const emscripten::val& max_value_val);
-  void bindMidiCcBinding(emscripten::val binding);
+  void bindMidiCc(emscripten::val binding);
   void clearMidiCcBindings();
   size_t midiCcBindingCount() const;
   void setControllerProfile(const emscripten::val& destination_id_val,
@@ -384,18 +378,21 @@ class RealtimeEngineWasm {
   void setGraph(emscripten::val spec);
   int graphNodeCount() const;
   int graphConnectionCount() const;
-  emscripten::val process(emscripten::val channels_val);
+  /// @param with_monitor_val undefined/null (or false) returns the program planes; true returns
+  ///        `{ output, monitor }` with the cue bus kept out of the program output.
+  emscripten::val process(emscripten::val channels_val, const emscripten::val& with_monitor_val);
   void prepareChannels(const emscripten::val& num_channels_val,
                        const emscripten::val& max_frames_val);
   emscripten::val getChannelBuffer(const emscripten::val& channel_val,
                                    const emscripten::val& num_frames_val);
-  void processPrepared(const emscripten::val& num_frames_val);
+  /// @param with_monitor_val true writes the cue bus into the prepared monitor planes instead of
+  ///        folding it into the program planes.
+  void processPrepared(const emscripten::val& num_frames_val,
+                       const emscripten::val& with_monitor_val);
   void prepareMonitorChannels(const emscripten::val& num_channels_val,
                               const emscripten::val& max_frames_val);
   emscripten::val getMonitorChannelBuffer(const emscripten::val& channel_val,
                                           const emscripten::val& num_frames_val);
-  void processPreparedWithMonitor(const emscripten::val& num_frames_val);
-  emscripten::val processWithMonitor(emscripten::val channels_val);
   emscripten::val renderOffline(emscripten::val channels_val, const emscripten::val& block_size_val,
                                 bool finalize);
   void finishOfflineRender();
@@ -426,7 +423,6 @@ class RealtimeEngineWasm {
   float meterScratchValue(const emscripten::val& field_val) const;
   float meterScratchInputPeakDbL() const;
   float meterScratchInputPeakDbR() const;
-  emscripten::val drainMeterTelemetryWide(const emscripten::val& max_records_val);
   // Per-insert gain reduction (dB <= 0, pre->post order) of a meter target's strip
   // from the last rendered block. Throws on a target id outside the encoded range.
   emscripten::val meterTargetInsertGainReduction(const emscripten::val& target_id_val) const;
@@ -463,6 +459,8 @@ class RealtimeEngineWasm {
 
   static ChannelBlock readChannels(emscripten::val channels_val);
   static emscripten::val channelsToJs(const ChannelBlock& block);
+  emscripten::val processBlockWithMonitor(ChannelBlock& block);
+  void processPreparedWithMonitor(int num_frames);
   static std::vector<float> interleave(const std::vector<std::vector<float>>& channels);
   static mastering::final::DitherType ditherTypeFromInt(int value);
   static emscripten::val parameterToVal(const sonare::automation::ParameterInfo& info);

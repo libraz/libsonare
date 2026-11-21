@@ -124,7 +124,7 @@ export type {
   ProjectMoveClipOptions,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
-  ProjectProgramInput,
+  ProjectProgramOptions,
   ProjectSource,
   ProjectSourceAudioInput,
   ProjectSourceKind,

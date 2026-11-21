@@ -45,7 +45,7 @@ export function resolveInsertParams(
   processor: string,
   params: object,
 ): Record<string, number | boolean | string | number[]> {
-  const info = JSON.parse(getSonareModule().masteringInsertParamInfo(processor)) as {
+  const info = JSON.parse(getSonareModule().masteringInsertParamInfo(processor, undefined)) as {
     name: string;
     type: string;
   }[];

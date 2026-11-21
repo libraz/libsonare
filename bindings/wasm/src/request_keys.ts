@@ -137,7 +137,6 @@ import type {
   MelSpectrogramRequest,
   MfccRequest,
   ReassignedSpectrogramRequest,
-  StftDbRequest,
   StftRequest,
   TrimRequest,
 } from './feature_spectrogram.js';
@@ -224,7 +223,7 @@ import type {
   ProjectMidiFxBakeRequest,
   ProjectMidiFxPreviewRequest,
   ProjectMoveClipOptions,
-  ProjectProgramInput,
+  ProjectProgramOptions,
   ProjectSourceAudioInput,
   ProjectTranscribeRequest,
 } from './project_types.js';
@@ -242,6 +241,7 @@ import type {
   EngineGraphSpec,
   EngineLoop,
   EngineMetronomeConfig,
+  EngineSetParameterOptions,
   RealtimeEngineConfig,
   RenderOfflineRequest,
   SidechainSource,
@@ -441,8 +441,7 @@ const SplitSilenceCommonWithReportRequestKeys = keysOf<SplitSilenceCommonWithRep
   'frameLength',
   'hopLength',
 ]);
-const StftRequestKeys = keysOf<StftRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
-const StftDbRequestKeys = keysOf<StftDbRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
+const StftRequestKeys = keysOf<StftRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength', 'db']);
 const ChromaRequestKeys = keysOf<ChromaRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
 const ChromaCensRequestKeys = keysOf<ChromaCensRequest>()([
   'samples',
@@ -2309,6 +2308,7 @@ const FreezeOfflineRequestKeys = keysOf<EngineFreezeOptions>()([
   'startPpq',
   'gain',
 ]);
+const SetParameterRequestKeys = keysOf<EngineSetParameterOptions>()(['smoothed']);
 const SetLoopRequestKeys = keysOf<EngineLoop>()(['startPpq', 'endPpq', 'enabled']);
 const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([
   'enabled',
@@ -2615,12 +2615,7 @@ const ProjectSetClipLoopRequestKeys = keysOf<ProjectClipLoopInput>()([
   'loopLengthPpq',
   'loopCrossfadePpq',
 ]);
-const ProjectSetProgramOnChannelRequestKeys = keysOf<ProjectProgramInput>()([
-  'group',
-  'channel',
-  'program',
-  'bank',
-]);
+const ProjectSetProgramRequestKeys = keysOf<ProjectProgramOptions>()(['bank', 'group', 'channel']);
 const ProjectSetSourceAudioRequestKeys = keysOf<ProjectSourceAudioInput>()([
   'sourceId',
   'channels',
@@ -2744,6 +2739,7 @@ export const REQUEST_SHAPES = {
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },
   freezeOffline: { keys: FreezeOfflineRequestKeys },
+  setParameter: { keys: SetParameterRequestKeys },
   setLoop: { keys: SetLoopRequestKeys },
   setMetronome: { keys: SetMetronomeRequestKeys },
   setTrackSoloMute: { keys: SetTrackSoloMuteRequestKeys },
@@ -2802,8 +2798,8 @@ export const REQUEST_SHAPES = {
   'Project.setClipTakes': { keys: ProjectSetClipTakesRequestKeys },
   'Project.setClipFade': { keys: ProjectSetClipFadeRequestKeys },
   'Project.setClipLoop': { keys: ProjectSetClipLoopRequestKeys },
-  'Project.setProgramOnChannel': {
-    keys: ProjectSetProgramOnChannelRequestKeys,
+  'Project.setProgram': {
+    keys: ProjectSetProgramRequestKeys,
     nested: { bank: ['msb', 'lsb'] },
   },
   'Project.setSourceAudio': { keys: ProjectSetSourceAudioRequestKeys },
@@ -3030,7 +3026,6 @@ export const REQUEST_SHAPES = {
   splitSilenceCommon: { keys: SplitSilenceCommonRequestKeys },
   splitSilenceCommonWithReport: { keys: SplitSilenceCommonWithReportRequestKeys },
   stft: { keys: StftRequestKeys },
-  stftDb: { keys: StftDbRequestKeys },
   streamingLoudnessGain: { keys: StreamingLoudnessGainRequestKeys },
   streamingLoudnessGainStereo: { keys: StreamingLoudnessGainStereoRequestKeys },
   synthesizeRir: { keys: SynthesizeRirRequestKeys },

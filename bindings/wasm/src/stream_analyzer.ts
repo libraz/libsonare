@@ -233,8 +233,8 @@ function assertReferenceHz(referenceHz: unknown): asserts referenceHz is number 
  * console.log('Chord progression:', stats.estimate.chordProgression);
  * ```
  *
- * The native analyzer supports one serialized producer (`process`,
- * `processWithOffset`, or `finalize`) concurrently with one serialized consumer
+ * The native analyzer supports one serialized producer (`process` or
+ * `finalize`) concurrently with one serialized consumer
  * (`availableFrames`, a `readFrames*` method, `stats`, `frameCount`, or
  * `currentTimeSec`) when a threaded WASM host shares the native instance.
  * Publication is allocation-free release/acquire. `reset`, setters, and
@@ -243,7 +243,7 @@ function assertReferenceHz(referenceHz: unknown): asserts referenceHz is number 
  * browser builds remain single-threaded unless the host explicitly provisions
  * shared-memory worker support.
  */
-@entryClass('StreamAnalyzer', ['process', 'processWithOffset', 'analyzer'])
+@entryClass('StreamAnalyzer', ['process', 'analyzer'])
 export class StreamAnalyzer {
   private analyzerHandle: WasmStreamAnalyzer;
   private released = false;
@@ -325,25 +325,17 @@ export class StreamAnalyzer {
   /**
    * Process audio samples.
    *
-   * Feeding a finalized analyzer is an invalid-state error; call `reset()`
-   * first to start a new stream.
-   *
-   * @param samples - Audio samples (mono, float32)
-   */
-  process(samples: Float32Array): void {
-    this.analyzer.process(samples);
-  }
-
-  /**
-   * Process audio samples with a contiguous explicit sample offset. A gap,
-   * seek, or switch from `process()` requires `reset()` first, as does feeding
-   * a finalized analyzer.
+   * Without `startSample` the analyzer tracks the stream offset itself. With
+   * it, the chunk is anchored at that cumulative sample count; a gap, seek, or
+   * switch between the two forms requires `reset()` first. Feeding a finalized
+   * analyzer is an invalid-state error; call `reset()` first to start a new
+   * stream.
    *
    * @param samples - Audio samples (mono, float32)
    * @param startSample - Cumulative sample count at the start of this chunk
    */
-  processWithOffset(samples: Float32Array, startSample: number): void {
-    this.analyzer.processWithOffset(samples, startSample);
+  process(samples: Float32Array, startSample?: number): void {
+    this.analyzer.process(samples, startSample);
   }
 
   /**

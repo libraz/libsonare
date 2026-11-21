@@ -358,13 +358,14 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_output_.data()));
   }
 
-  void processPreparedMono(const val& num_samples_val) {
-    process_prepared_mono(num_samples_val, false);
+  /// `with_carrier` true reads the carrier view (getCarrierBuffer); undefined/null/false is none.
+  void processPreparedMono(const val& num_samples_val, const val& with_carrier_val) {
+    process_prepared_mono(num_samples_val, carrier_flag(with_carrier_val));
   }
 
-  /// Carrier view counterpart to getMonoInputBuffer: fill it, then call
-  /// processPreparedMonoWithCarrier / processPreparedInterleavedWithCarrier /
-  /// processPreparedPlanarWithCarrier. One mono carrier is shared by every channel.
+  /// Carrier view counterpart to getMonoInputBuffer: fill it, then call processPreparedMono /
+  /// processPreparedInterleaved / processPreparedPlanar with `withCarrier` true. One mono
+  /// carrier is shared by every channel.
   val getCarrierBuffer(const val& num_samples_val) {
     const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
@@ -373,10 +374,6 @@ class RealtimeVoiceChangerWrapper {
     }
     ensure_mono_capacity(static_cast<size_t>(num_samples));
     return val(typed_memory_view(static_cast<size_t>(num_samples), carrier_.data()));
-  }
-
-  void processPreparedMonoWithCarrier(const val& num_samples_val) {
-    process_prepared_mono(num_samples_val, true);
   }
 
   val getInterleavedInputBuffer(const val& num_frames_val, const val& num_channels_val) {
@@ -411,13 +408,9 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(length, interleaved_output_.data()));
   }
 
-  void processPreparedInterleaved(const val& num_frames_val, const val& num_channels_val) {
-    process_prepared_interleaved(num_frames_val, num_channels_val, false);
-  }
-
-  void processPreparedInterleavedWithCarrier(const val& num_frames_val,
-                                             const val& num_channels_val) {
-    process_prepared_interleaved(num_frames_val, num_channels_val, true);
+  void processPreparedInterleaved(const val& num_frames_val, const val& num_channels_val,
+                                  const val& with_carrier_val) {
+    process_prepared_interleaved(num_frames_val, num_channels_val, carrier_flag(with_carrier_val));
   }
 
   // ---- Planar zero-copy stereo path -----------------------------------
@@ -443,15 +436,15 @@ class RealtimeVoiceChangerWrapper {
                                  planar_[static_cast<size_t>(channel)].data()));
   }
 
-  void processPreparedPlanar(const val& num_frames_val) {
-    process_prepared_planar(num_frames_val, false);
-  }
-
-  void processPreparedPlanarWithCarrier(const val& num_frames_val) {
-    process_prepared_planar(num_frames_val, true);
+  void processPreparedPlanar(const val& num_frames_val, const val& with_carrier_val) {
+    process_prepared_planar(num_frames_val, carrier_flag(with_carrier_val));
   }
 
  private:
+  static bool carrier_flag(const val& with_carrier_val) {
+    return optionalBool(with_carrier_val, "withCarrier").value_or(false);
+  }
+
   static void require_note_accepted(bool accepted) {
     if (!accepted) {
       throw sonare::SonareException(
@@ -769,12 +762,6 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("noteOff", &RealtimeVoiceChangerWrapper::noteOff)
       .function("allNotesOff", &RealtimeVoiceChangerWrapper::allNotesOff)
       .function("getCarrierBuffer", &RealtimeVoiceChangerWrapper::getCarrierBuffer)
-      .function("processPreparedMonoWithCarrier",
-                &RealtimeVoiceChangerWrapper::processPreparedMonoWithCarrier)
-      .function("processPreparedInterleavedWithCarrier",
-                &RealtimeVoiceChangerWrapper::processPreparedInterleavedWithCarrier)
-      .function("processPreparedPlanarWithCarrier",
-                &RealtimeVoiceChangerWrapper::processPreparedPlanarWithCarrier)
       .function("getMonoInputBuffer", &RealtimeVoiceChangerWrapper::getMonoInputBuffer)
       .function("getMonoOutputBuffer", &RealtimeVoiceChangerWrapper::getMonoOutputBuffer)
       .function("processPreparedMono", &RealtimeVoiceChangerWrapper::processPreparedMono)

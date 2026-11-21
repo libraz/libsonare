@@ -196,8 +196,11 @@ int RealtimeEngineWasm::graphConnectionCount() const {
 #endif
 }
 
-val RealtimeEngineWasm::process(val channels_val) {
+val RealtimeEngineWasm::process(val channels_val, const val& with_monitor_val) {
   ChannelBlock block = readChannels(channels_val);
+  if (optionalBool(with_monitor_val, "withMonitor").value_or(false)) {
+    return processBlockWithMonitor(block);
+  }
   engine_.process(block.pointers.data(), static_cast<int>(block.storage.size()), block.frames);
   return channelsToJs(block);
 }
@@ -247,8 +250,12 @@ val RealtimeEngineWasm::getChannelBuffer(const val& channel_val, const val& num_
                                prepared_storage_[static_cast<size_t>(channel)].data()));
 }
 
-void RealtimeEngineWasm::processPrepared(const val& num_frames_val) {
+void RealtimeEngineWasm::processPrepared(const val& num_frames_val, const val& with_monitor_val) {
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
+  if (optionalBool(with_monitor_val, "withMonitor").value_or(false)) {
+    processPreparedWithMonitor(num_frames);
+    return;
+  }
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "prepareChannels() must be "
@@ -262,7 +269,7 @@ void RealtimeEngineWasm::processPrepared(const val& num_frames_val) {
 
 // Cue-bus companion to the prepared path. process() folds the monitor bus into
 // the program output for historical compatibility, so a host that wants PFL/AFL
-// as a SEPARATE AudioWorklet output must drive processPreparedWithMonitor()
+// as a SEPARATE AudioWorklet output must call processPrepared(numFrames, true)
 // instead: the program plane stays untouched and the cue lands in its own
 // planes. Call prepareMonitorChannels() once, off the audio thread, after
 // prepareChannels().
@@ -298,8 +305,7 @@ val RealtimeEngineWasm::getMonitorChannelBuffer(const val& channel_val, const va
                                monitor_storage_[static_cast<size_t>(channel)].data()));
 }
 
-void RealtimeEngineWasm::processPreparedWithMonitor(const val& num_frames_val) {
-  const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
+void RealtimeEngineWasm::processPreparedWithMonitor(int num_frames) {
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "prepareChannels() "
@@ -326,8 +332,7 @@ void RealtimeEngineWasm::processPreparedWithMonitor(const val& num_frames_val) {
                                num_frames);
 }
 
-val RealtimeEngineWasm::processWithMonitor(val channels_val) {
-  ChannelBlock block = readChannels(channels_val);
+val RealtimeEngineWasm::processBlockWithMonitor(ChannelBlock& block) {
   ChannelBlock monitor;
   monitor.frames = block.frames;
   monitor.storage.assign(block.storage.size(),
@@ -577,8 +582,6 @@ void registerRealtimeEngineProcessing(class_<RealtimeEngineWasm>& cls) {
       .function("processPrepared", &RealtimeEngineWasm::processPrepared)
       .function("prepareMonitorChannels", &RealtimeEngineWasm::prepareMonitorChannels)
       .function("getMonitorChannelBuffer", &RealtimeEngineWasm::getMonitorChannelBuffer)
-      .function("processPreparedWithMonitor", &RealtimeEngineWasm::processPreparedWithMonitor)
-      .function("processWithMonitor", &RealtimeEngineWasm::processWithMonitor)
       .function("renderOffline", &RealtimeEngineWasm::renderOffline)
       .function("finishOfflineRender", &RealtimeEngineWasm::finishOfflineRender)
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)

@@ -162,9 +162,11 @@ int RealtimeEngineWasm::automationLaneCount() const {
 }
 
 void RealtimeEngineWasm::setParameter(double param_id_number, const val& value_val,
-                                      const val& render_frame_val) {
+                                      const val& render_frame_val, const val& smoothed_val) {
   const uint32_t param_id = checkedUintFromVal(val(param_id_number), "paramId");
   const float value = checkedFloatFromVal(value_val, "value");
+  // Absent is a step; a given value is read as a boolean and selects the ramp.
+  const bool smoothed = optionalBool(smoothed_val, "smoothed").value_or(false);
   if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id)) {
     throw WasmRangeError("parameter id names no mixer strip");
   }
@@ -172,28 +174,8 @@ void RealtimeEngineWasm::setParameter(double param_id_number, const val& value_v
     throw WasmRangeError("parameter is not realtime safe");
   }
   sonare::rt::Command command{};
-  command.type = sonare::rt::CommandType::kSetParam;
-  command.target_id = param_id;
-  command.sample_time = renderFrameFromVal(render_frame_val);
-  command.arg.f = value;
-  if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to queue set parameter command");
-  }
-}
-
-void RealtimeEngineWasm::setParameterSmoothed(double param_id_number, const val& value_val,
-                                              const val& render_frame_val) {
-  const uint32_t param_id = checkedUintFromVal(val(param_id_number), "paramId");
-  const float value = checkedFloatFromVal(value_val, "value");
-  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id)) {
-    throw WasmRangeError("parameter id names no mixer strip");
-  }
-  if (registeredParameterRejectsRealtime(param_id)) {
-    throw WasmRangeError("parameter is not realtime safe");
-  }
-  sonare::rt::Command command{};
-  command.type = sonare::rt::CommandType::kSetParamSmoothed;
+  command.type =
+      smoothed ? sonare::rt::CommandType::kSetParamSmoothed : sonare::rt::CommandType::kSetParam;
   command.target_id = param_id;
   command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.f = value;
@@ -319,7 +301,6 @@ bool RealtimeEngineWasm::registeredParameterRejectsRealtime(uint32_t param_id) c
 
 void registerRealtimeEngineParams(class_<RealtimeEngineWasm>& cls) {
   cls.function("setParameter", &RealtimeEngineWasm::setParameter)
-      .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
       .function("setParamSmoothingMs", &RealtimeEngineWasm::setParamSmoothingMs)
       .function("setSoloMute", &RealtimeEngineWasm::setSoloMute)
       .function("setTrackMonitorMode", &RealtimeEngineWasm::setTrackMonitorMode)

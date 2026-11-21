@@ -325,7 +325,7 @@ describe('each entry point reads back which value it was constructed with', () =
     const exceeded = (maxBlockSize: number): number[] => {
       const engine = newEngine4({ maxBlockSize });
       try {
-        engine.process([new Float32Array(256)]);
+        engine.process([new Float32Array(256)], undefined);
         return engine
           .drainTelemetry(16)
           .filter((record) => record.error === MAX_BLOCK_EXCEEDED)
@@ -358,7 +358,7 @@ describe('each entry point reads back which value it was constructed with', () =
     const inspect = (overrides: AnalyzerOverrides) => {
       const analyzer = newAnalyzer(overrides);
       try {
-        analyzer.process(new Float32Array(2048));
+        analyzer.process(new Float32Array(2048), undefined);
         return {
           sampleRate: analyzer.sampleRate(),
           frames: analyzer.frameCount(),

@@ -347,11 +347,31 @@ describe('stream analyzer surface', () => {
     }
   });
 
-  it('anchors processWithOffset and reset on startSample', () => {
+  it('process takes an optional startSample', () => {
+    const tracked = analyzer();
+    const explicit = analyzer();
+    try {
+      const chunk = triad(0.5);
+      tracked.process(chunk);
+      explicit.process(chunk, 0);
+      expect(Array.from(explicit.readFrames(64).timestampsSec)).toEqual(
+        Array.from(tracked.readFrames(64).timestampsSec),
+      );
+      expect(() => explicit.process(chunk, 7)).toThrow();
+      explicit.reset(sampleRate);
+      explicit.process(chunk, sampleRate);
+      expect(explicit.readFrames(1).timestampsSec[0]).toBeGreaterThan(0.5);
+    } finally {
+      tracked.destroy();
+      explicit.destroy();
+    }
+  });
+
+  it('anchors process(samples, startSample) and reset on startSample', () => {
     const a = analyzer();
     try {
       a.reset(sampleRate);
-      a.processWithOffset(triad(1), sampleRate);
+      a.process(triad(1), sampleRate);
       const frames = a.readFrames(a.availableFrames);
       expect(frames.timestampsSec[0]).toBeGreaterThan(0.5);
       a.reset();

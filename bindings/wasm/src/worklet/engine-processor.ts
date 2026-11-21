@@ -1162,10 +1162,11 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case SonareEngineCommandType.SetParamSmoothed:
-        this.engine.setParameterSmoothed(
+        this.engine.setParameter(
           Math.trunc(Number(command.targetId ?? 0)),
           Number(command.argFloat ?? 0),
           renderFrame,
+          { smoothed: true },
         );
         break;
       case SonareEngineCommandType.TransportPlay:

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { Matrix2D } from '../dist/index.js';
 import {
   analyze,
   chroma,
@@ -51,7 +52,6 @@ import {
   spectralFlux,
   spectralRolloff,
   stft,
-  stftDb,
   timeStretch,
   timeToFrames,
   trim,
@@ -834,7 +834,7 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('STFT dB', () => {
     it('should return finite dB values with correct shape', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = stftDb(tone, SR, { nFft: 2048, hopLength: 512 });
+      const result = stft(tone, SR, { nFft: 2048, hopLength: 512, db: true }).db as Matrix2D;
 
       expect(result.rows).toBe(1025);
       expect(result.cols).toBeGreaterThan(0);

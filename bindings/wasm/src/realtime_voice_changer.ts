@@ -372,11 +372,11 @@ export class RealtimeVoiceChanger {
       },
       process: () => {
         fresh();
-        this.changer.processPreparedMono(numSamples);
+        this.changer.processPreparedMono(numSamples, undefined);
       },
       processWithCarrier: () => {
         fresh();
-        this.changer.processPreparedMonoWithCarrier(numSamples);
+        this.changer.processPreparedMono(numSamples, true);
       },
     };
   }
@@ -425,11 +425,11 @@ export class RealtimeVoiceChanger {
       numChannels,
       process: () => {
         fresh();
-        this.changer.processPreparedInterleaved(numFrames, numChannels);
+        this.changer.processPreparedInterleaved(numFrames, numChannels, undefined);
       },
       processWithCarrier: () => {
         fresh();
-        this.changer.processPreparedInterleavedWithCarrier(numFrames, numChannels);
+        this.changer.processPreparedInterleaved(numFrames, numChannels, true);
       },
     };
   }
@@ -476,11 +476,11 @@ export class RealtimeVoiceChanger {
       },
       process: () => {
         fresh();
-        this.changer.processPreparedPlanar(numFrames);
+        this.changer.processPreparedPlanar(numFrames, undefined);
       },
       processWithCarrier: () => {
         fresh();
-        this.changer.processPreparedPlanarWithCarrier(numFrames);
+        this.changer.processPreparedPlanar(numFrames, true);
       },
     };
   }

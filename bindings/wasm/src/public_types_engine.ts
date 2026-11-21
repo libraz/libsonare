@@ -346,6 +346,12 @@ export interface EngineTransportState {
   beatFraction: number;
 }
 
+/** Options for {@link RealtimeEngine.setParameter}. */
+export interface EngineSetParameterOptions {
+  /** Ramp to the value through the engine smoother (kSetParamSmoothed) instead of applying it at once. Default `false`. */
+  smoothed?: boolean;
+}
+
 /** Offline bounce settings for {@link RealtimeEngine.bounceOffline}. */
 export interface EngineBounceOptions {
   /**

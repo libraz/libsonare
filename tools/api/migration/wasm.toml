@@ -1851,19 +1851,17 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "stftDb"
-changed = "returns Matrix2D; sampleRate is required (1.x defaulted to 22050)"
+removed = "Call stft({ samples, sampleRate, db: true }); the result then also carries db."
 domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "stftDb"
-changed = "returns Matrix2D; sampleRate is required (1.x defaulted to 22050)"
+removed = "Call stft({ samples, sampleRate, db: true }); the result then also carries db."
 domain = "analysis"
-rule = "matrix-2d"
+rule = "one-entry-per-operation"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
 
 [[entry]]
 kind = "function"
@@ -5403,53 +5401,6 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "stft(sampleRate)"
-changed = "required second argument (was optional / later position)"
-domain = "analysis"
-rule = "sample-rate-required"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "option"
-old = "stftDb(hopLength)"
-removed = "pass hopLength as a field of StftDbRequest"
-domain = "analysis"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "stftDb(hopLength)"
-removed = "pass hopLength as a field of StftDbRequest"
-domain = "analysis"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "stftDb(nFft)"
-removed = "pass nFft as a field of StftDbRequest"
-domain = "analysis"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "stftDb(nFft)"
-removed = "pass nFft as a field of StftDbRequest"
-domain = "analysis"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "option"
-old = "stftDb(sampleRate)"
-changed = "required second argument (was optional / later position)"
-domain = "analysis"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "option"
-old = "stftDb(sampleRate)"
 changed = "required second argument (was optional / later position)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -6436,14 +6387,14 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "type"
 old = "SpectrogramRequest"
-removed = "Use the request type of the function: StftRequest, StftDbRequest, ChromaRequest or MelSpectrogramRequest."
+removed = "Use the request type of the function: StftRequest, ChromaRequest or MelSpectrogramRequest."
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "SpectrogramRequest"
-removed = "Use the request type of the function: StftRequest, StftDbRequest, ChromaRequest or MelSpectrogramRequest."
+removed = "Use the request type of the function: StftRequest, ChromaRequest or MelSpectrogramRequest."
 domain = "analysis"
 rule = "type-names"
 entry = "./analysis"
@@ -13722,13 +13673,6 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::takes an untyped co
 
 [[entry]]
 kind = "option"
-old = "StreamAnalyzer.processWithOffset(sampleOffset)"
-new = "StreamAnalyzer.processWithOffset(startSample)"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "option"
 old = "StreamAnalyzer.reset(baseSampleOffset)"
 new = "StreamAnalyzer.reset(startSample)"
 domain = "analysis"
@@ -14401,10 +14345,9 @@ test = "bindings/wasm/tests/surface/analysis-audio.test.ts::delegation equivalen
 [[entry]]
 kind = "method"
 old = "Audio.stftDb"
-changed = "takes (options?: Omit<StftDbRequest,'samples'|'sampleRate'>)"
+removed = "Call audio.stft({ db: true }); the result then also carries db."
 domain = "core"
-rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
@@ -14745,20 +14688,6 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
-old = "Audio.stftDb(hopLength)"
-removed = "pass hopLength as a field of StftDbRequest"
-domain = "core"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "Audio.stftDb(nFft)"
-removed = "pass nFft as a field of StftDbRequest"
-domain = "core"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
 old = "Audio.zeroCrossingRate(frameLength)"
 removed = "pass frameLength as a field of ZeroCrossingRateRequest"
 domain = "core"
@@ -14831,6 +14760,13 @@ old = "ClipPageStreamer.constructor(engine)"
 removed = "pass the engine in the one options object: new ClipPageStreamer({ engine, readAheadPages, retainBehindPages, maxRequestsPerPump })"
 domain = "project"
 rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setParameterSmoothed"
+removed = "Call setParameter(paramId, value, renderFrame, { smoothed: true })."
+domain = "engine"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
@@ -20903,10 +20839,16 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audi
 [[entry]]
 kind = "method"
 old = "Project.setProgramOnChannel"
-changed = "setProgramOnChannel takes one { group, channel, program, bank?: { msb, lsb } } object; bank is no longer a 14-bit number"
+removed = "Call setProgram(clipId, program, { bank, group, channel })."
 domain = "project"
-rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "Project.setProgram(bank)"
+removed = "bank moves into options as { msb, lsb }: setProgram(clipId, program, { bank: { msb, lsb } })"
+domain = "project"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
@@ -31885,34 +31827,6 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
-old = "Project.setProgramOnChannel(group)"
-removed = "pass group as a field of ProjectProgramInput"
-domain = "project"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "Project.setProgramOnChannel(channel)"
-removed = "pass channel as a field of ProjectProgramInput"
-domain = "project"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "Project.setProgramOnChannel(program)"
-removed = "pass program as a field of ProjectProgramInput"
-domain = "project"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
-old = "Project.setProgramOnChannel(bank)"
-removed = "pass bank as a field of ProjectProgramInput"
-domain = "project"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "option"
 old = "Project.bakeMidiFx(clipId)"
 removed = "pass clipId as a field of ProjectMidiFxBakeRequest"
 domain = "project"
@@ -35415,3 +35329,10 @@ new = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.processWithOffset"
+removed = "Call process(samples, startSample)."
+domain = "analysis"
+rule = "one-entry-per-operation"

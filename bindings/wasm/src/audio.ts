@@ -32,7 +32,6 @@ import type {
   ChromaRequest,
   MelSpectrogramRequest,
   MfccRequest,
-  StftDbRequest,
   StftRequest,
   TrimRequest,
 } from './feature_spectrogram.js';
@@ -55,7 +54,6 @@ import {
   spectralFlatness,
   spectralRolloff,
   stft,
-  stftDb,
   trim,
   zeroCrossingRate,
 } from './features.js';
@@ -699,14 +697,9 @@ export class Audio {
 
   // -- Features --
 
-  /** Short-time Fourier transform of the held audio. */
+  /** Short-time Fourier transform of the held audio; `db: true` adds the magnitude in decibels. */
   stft(options?: OptionsOf<StftRequest>): StftResult {
     return stft(audioRequest('stft', this.samples, this.sampleRate, options));
-  }
-
-  /** Rows are frequency bins, cols are frames. */
-  stftDb(options?: OptionsOf<StftDbRequest>): Matrix2D {
-    return stftDb(audioRequest('stftDb', this.samples, this.sampleRate, options));
   }
 
   /** Mel spectrogram of the held audio. */

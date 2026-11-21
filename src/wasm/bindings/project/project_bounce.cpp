@@ -339,22 +339,12 @@ double SampleBankWasm::setCount() const {
   return static_cast<double>(count);
 }
 
-val ProjectWasm::compile() {
-  SonareProjectCompileResult result{};
-  const SonareError err = sonare_project_compile(project_.get(), &result);
-  if (err != SONARE_OK) {
-    sonare_free_project_compile_result(&result);
-    throwCError(err);
-  }
-  val out = projectCompileResultToVal(result);
-  sonare_free_project_compile_result(&result);
-  return out;
-}
-
-val ProjectWasm::compileTimeline() {
+val ProjectWasm::compile(const val& with_timeline_val) {
+  const bool with_timeline = optionalBool(with_timeline_val, "withTimeline").value_or(false);
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
-  const SonareError err = sonare_project_compile_timeline(project_.get(), &result, &timeline);
+  const SonareError err =
+      sonare_project_compile(project_.get(), &result, with_timeline ? &timeline : nullptr);
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
     sonare_project_timeline_destroy(timeline);
@@ -362,10 +352,12 @@ val ProjectWasm::compileTimeline() {
   }
   val out = projectCompileResultToVal(result);
   sonare_free_project_compile_result(&result);
-  if (timeline != nullptr) {
-    out.set("timeline", ProjectTimelineWasm(timeline));
-  } else {
-    out.set("timeline", val::null());
+  if (with_timeline) {
+    if (timeline != nullptr) {
+      out.set("timeline", ProjectTimelineWasm(timeline));
+    } else {
+      out.set("timeline", val::null());
+    }
   }
   return out;
 }
@@ -454,90 +446,35 @@ std::vector<SonareBuiltinInstrumentBinding> ProjectWasm::builtinBindingsFromVal(
   return out;
 }
 
-val ProjectWasm::bounce(val options) {
-  SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  const SonareError err =
-      sonare_project_bounce(project_.get(), &opts, &interleaved, &len, &num_channels);
-  if (err != SONARE_OK) {
-    sonare_free_floats(interleaved);
-    throwCError(err);
-  }
-  std::vector<float> samples(interleaved, interleaved + len);
-  sonare_free_floats(interleaved);
-  return bounceResultToVal(samples, num_channels);
-}
-
-val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
-  std::vector<SonareBuiltinInstrumentBinding> synths = builtinBindingsFromVal(bindings);
-  SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  const SonareError err = sonare_project_bounce_with_builtin_instruments(
-      project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(), &interleaved,
-      &len, &num_channels);
-  if (err != SONARE_OK) {
-    sonare_free_floats(interleaved);
-    throwCError(err);
-  }
-  std::vector<float> samples(interleaved, interleaved + len);
-  sonare_free_floats(interleaved);
-  return bounceResultToVal(samples, num_channels);
-}
-
-val ProjectWasm::bounceWithInstruments(val bindings, val options) {
+val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindings,
+                        val synth_bindings, val sf2_bindings) {
   // A callback may delete() the JS project wrapper mid-bounce; the local copy
   // keeps the C handle alive until the bounce and the result conversion finish.
   const auto project_keepalive = project_;
+  std::vector<SonareBuiltinInstrumentBinding> builtins = builtinBindingsFromVal(builtin_bindings);
+
   InstrumentFailure failure;
   std::vector<JsInstrumentSlot> slots;
   std::vector<SonareInstrumentBinding> instruments;
-  if (!bindings.isUndefined() && !bindings.isNull()) {
-    const bool isList = val::global("Array").call<bool>("isArray", bindings);
-    const size_t count = isList ? wasmArrayLikeLength(bindings, "bindings") : 1;
+  if (!instrument_bindings.isUndefined() && !instrument_bindings.isNull()) {
+    const bool isList = val::global("Array").call<bool>("isArray", instrument_bindings);
+    const size_t count = isList ? wasmArrayLikeLength(instrument_bindings, "bindings") : 1;
     slots.reserve(count);
     instruments.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       SonareInstrumentBinding binding{};
-      slots.push_back(instrumentSlotFromVal(isList ? bindings[i] : bindings, &failure, &binding));
+      slots.push_back(instrumentSlotFromVal(isList ? instrument_bindings[i] : instrument_bindings,
+                                            &failure, &binding));
       instruments.push_back(binding);
     }
     // The slots vector no longer grows, so these addresses stay valid.
     for (size_t i = 0; i < slots.size(); ++i) instruments[i].callbacks.user_data = &slots[i];
   }
-  SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  const SonareError err = sonare_project_bounce_with_instruments(
-      project_keepalive.get(), &opts, instruments.empty() ? nullptr : instruments.data(),
-      instruments.size(), &interleaved, &len, &num_channels);
-  // A JS throw from here would skip every destructor in this frame, so a
-  // throwing callback is returned as data and the TypeScript facade rethrows it.
-  // The native failure is reported ahead of a callback's, as in the Python binding.
-  if (err != SONARE_OK) {
-    sonare_free_floats(interleaved);
-    throwCError(err);
-  }
-  if (failure.failed) {
-    sonare_free_floats(interleaved);
-    val result = val::object();
-    result.set("instrumentFailure", failure.error);
-    return result;
-  }
-  std::vector<float> samples(interleaved, interleaved + len);
-  sonare_free_floats(interleaved);
-  return bounceResultToVal(samples, num_channels);
-}
 
-val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
   std::vector<SonareSynthInstrumentBinding> synths;
   // Owns the keys behind each binding's engine_params; alive across the C call.
   std::vector<sonare_wasm_synth::SynthPatchStorage> patch_storage;
-  if (!bindings.isUndefined() && !bindings.isNull()) {
+  if (!synth_bindings.isUndefined() && !synth_bindings.isNull()) {
     auto bindingFromVal = [&patch_storage](val desc) {
       SonareSynthInstrumentBinding binding{};
       if (desc.typeOf().as<std::string>() == "object") {
@@ -552,24 +489,54 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
       binding.patch = patch_storage.back().patch;
       return binding;
     };
-    if (val::global("Array").call<bool>("isArray", bindings)) {
-      const size_t count = wasmArrayLikeLength(bindings, "bindings");
+    if (val::global("Array").call<bool>("isArray", synth_bindings)) {
+      const size_t count = wasmArrayLikeLength(synth_bindings, "bindings");
       synths.reserve(count);
-      for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(bindings[i]));
+      for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(synth_bindings[i]));
     } else {
-      synths.push_back(bindingFromVal(bindings));
+      synths.push_back(bindingFromVal(synth_bindings));
     }
   }
+
+  std::vector<SonareSf2InstrumentBinding> players;
+  if (!sf2_bindings.isUndefined() && !sf2_bindings.isNull()) {
+    if (val::global("Array").call<bool>("isArray", sf2_bindings)) {
+      const size_t count = wasmArrayLikeLength(sf2_bindings, "bindings");
+      players.reserve(count);
+      for (size_t i = 0; i < count; ++i) {
+        players.push_back(sf2BindingFromVal(sf2_bindings[i]));
+      }
+    } else {
+      players.push_back(sf2BindingFromVal(sf2_bindings));
+    }
+  }
+
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+  opts.instruments = instruments.empty() ? nullptr : instruments.data();
+  opts.instrument_count = instruments.size();
+  opts.builtin_instruments = builtins.empty() ? nullptr : builtins.data();
+  opts.builtin_instrument_count = builtins.size();
+  opts.synth_instruments = synths.empty() ? nullptr : synths.data();
+  opts.synth_instrument_count = synths.size();
+  opts.sf2_instruments = players.empty() ? nullptr : players.data();
+  opts.sf2_instrument_count = players.size();
   float* interleaved = nullptr;
   size_t len = 0;
   int num_channels = 0;
-  const SonareError err = sonare_project_bounce_with_synth_instruments(
-      project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(), &interleaved,
-      &len, &num_channels);
+  const SonareError err =
+      sonare_project_bounce(project_keepalive.get(), &opts, &interleaved, &len, &num_channels);
+  // A JS throw from here would skip every destructor in this frame, so a
+  // throwing callback is returned as data and the TypeScript facade rethrows it.
+  // The native failure is reported ahead of a callback's, as in the Python binding.
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
     throwCError(err);
+  }
+  if (failure.failed) {
+    sonare_free_floats(interleaved);
+    val result = val::object();
+    result.set("instrumentFailure", failure.error);
+    return result;
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -654,35 +621,6 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   return binding;
 }
 
-val ProjectWasm::bounceWithSf2Instrument(val bindings, val options) {
-  std::vector<SonareSf2InstrumentBinding> players;
-  if (!bindings.isUndefined() && !bindings.isNull()) {
-    if (val::global("Array").call<bool>("isArray", bindings)) {
-      const size_t count = wasmArrayLikeLength(bindings, "bindings");
-      players.reserve(count);
-      for (size_t i = 0; i < count; ++i) {
-        players.push_back(sf2BindingFromVal(bindings[i]));
-      }
-    } else {
-      players.push_back(sf2BindingFromVal(bindings));
-    }
-  }
-  SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
-  float* interleaved = nullptr;
-  size_t len = 0;
-  int num_channels = 0;
-  const SonareError err = sonare_project_bounce_with_sf2_instruments(
-      project_.get(), &opts, players.empty() ? nullptr : players.data(), players.size(),
-      &interleaved, &len, &num_channels);
-  if (err != SONARE_OK) {
-    sonare_free_floats(interleaved);
-    throwCError(err);
-  }
-  std::vector<float> samples(interleaved, interleaved + len);
-  sonare_free_floats(interleaved);
-  return bounceResultToVal(samples, num_channels);
-}
-
 // NativeSynth preset catalog ('\n'-joined program-lifetime string from the C
 // ABI) split into a JS string[].
 val js_synth_preset_names() {
@@ -751,16 +689,11 @@ val js_synth_patch_round_trip(val desc) {
 
 void registerProjectBounce(class_<ProjectWasm>& cls) {
   cls.function("compile", &ProjectWasm::compile)
-      .function("compileTimeline", &ProjectWasm::compileTimeline)
       .function("bounce", &ProjectWasm::bounce)
-      .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
-      .function("bounceWithInstruments", &ProjectWasm::bounceWithInstruments)
-      .function("bounceWithSynthInstrument", &ProjectWasm::bounceWithSynthInstrument)
       .function("loadSoundFont", &ProjectWasm::loadSoundFont)
       .function("clearSoundFont", &ProjectWasm::clearSoundFont)
       .function("soundFontPresetCount", &ProjectWasm::soundFontPresetCount)
-      .function("soundFontManifest", &ProjectWasm::soundFontManifest)
-      .function("bounceWithSf2Instrument", &ProjectWasm::bounceWithSf2Instrument);
+      .function("soundFontManifest", &ProjectWasm::soundFontManifest);
 }
 
 ProjectTimelineWasm::ProjectTimelineWasm(SonareProjectTimeline* adopted) {

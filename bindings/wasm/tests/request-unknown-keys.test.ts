@@ -78,6 +78,7 @@ const METHOD_SHAPES = [
   'setBusSidechain',
   'setLoop',
   'setMetronome',
+  'setParameter',
   'setPartRig',
   'setPolarityInvert',
   'setStripInsertBypassed',
@@ -146,7 +147,7 @@ const PROJECT_LEADING_ARGS: Partial<Record<string, unknown[]>> = {
   'Project.setClipFade': [0],
   'Project.setClipLoop': [0],
   'Project.setClipTakes': [0, []],
-  'Project.setProgramOnChannel': [0],
+  'Project.setProgram': [0, 0],
 };
 
 describe('a class-method request refuses its keys through an instance', () => {
@@ -307,7 +308,6 @@ const SAMPLE_OPTIONS = [
   'shortTermLufs',
   'spectralEdit',
   'stft',
-  'stftDb',
   'timeStretch',
   'trim',
   'voiceChange',

@@ -272,17 +272,10 @@ describe('edits', () => {
     withProject((project) => {
       const { clipId } = project.addMidiClip(0, 4);
       expect(() =>
-        project.setProgramOnChannel(clipId, {
-          group: 0,
-          channel: 0,
-          program: 5,
-          bank: { msb: 0, lsb: 1 },
-        }),
+        project.setProgram(clipId, 5, { group: 0, channel: 0, bank: { msb: 0, lsb: 1 } }),
       ).not.toThrow();
-      expect(() => loose(project).setProgramOnChannel(clipId, 0, 0, 5, 1)).toThrow(TypeError);
-      expect(() =>
-        project.setProgramOnChannel(clipId, { group: 0, channel: 0, program: 5, bank: 1 as never }),
-      ).toThrow(TypeError);
+      expect(() => loose(project).setProgram(clipId, 5, 1)).toThrow(TypeError);
+      expect(() => project.setProgram(clipId, 5, { bank: 1 as never })).toThrow(TypeError);
 
       expect(() => project.setPartRig({ destinationId: 1, part: 0, mode: 'none' })).not.toThrow();
       expect(project.partRig({ destinationId: 1, part: 0 })?.mode).toBe('none');

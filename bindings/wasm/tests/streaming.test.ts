@@ -848,7 +848,7 @@ describe('StreamAnalyzer', () => {
     });
   });
 
-  describe('processWithOffset', () => {
+  describe('process with startSample', () => {
     it('preserves buffered frame timestamps and rejects gaps until reset', () => {
       const sampleRate = 22050;
       const audio = new Float32Array(4096);
@@ -858,16 +858,16 @@ describe('StreamAnalyzer', () => {
 
       const analyzer = new StreamAnalyzer({ sampleRate });
       for (let offset = 0; offset < audio.length; offset += 128) {
-        analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
+        analyzer.process(audio.subarray(offset, offset + 128), offset);
       }
       const actual = analyzer.readFrames(64).timestampsSec;
       expect(Array.from(actual)).toEqual(Array.from(expected));
 
       analyzer.reset();
-      analyzer.processWithOffset(audio.subarray(0, 128), 1000);
-      expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
+      analyzer.process(audio.subarray(0, 128), 1000);
+      expect(() => analyzer.process(audio.subarray(128, 256), 1129)).toThrow();
       analyzer.reset(5000);
-      expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
+      expect(() => analyzer.process(audio.subarray(0, 128), 5000)).not.toThrow();
 
       analyzer.destroy();
       reference.destroy();
@@ -892,7 +892,7 @@ describe('StreamAnalyzer', () => {
       // Pushing a short buffer (shorter than one analysis window) must not
       // regress the counter into negative/garbage territory either.
       const audio = new Float32Array(512);
-      analyzer.processWithOffset(audio, baseOffset);
+      analyzer.process(audio, baseOffset);
       const stats = analyzer.stats();
       expect(stats.totalSamples).toBeGreaterThanOrEqual(baseOffset);
       expect(Number.isFinite(stats.totalSamples)).toBe(true);

@@ -718,6 +718,8 @@ export interface StftResult {
   magnitude: Matrix2D;
   /** Rows are `nFft / 2 + 1` bins, cols are frames. */
   power: Matrix2D;
+  /** Magnitude in decibels, rows are bins and cols are frames; present only when `db` was requested. */
+  db?: Matrix2D;
 }
 
 /**

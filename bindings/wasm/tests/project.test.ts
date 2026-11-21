@@ -971,12 +971,7 @@ describe('Sonare WASM Project', () => {
         config: { transposeSemitones: 12, quantizePpq: 0.25, quantizeStrength: 1 },
       });
       project.setProgram(clipId, 42);
-      project.setProgramOnChannel(clipId, {
-        group: 0,
-        channel: 3,
-        program: 24,
-        bank: { msb: 2, lsb: 0x23 },
-      });
+      project.setProgram(clipId, 24, { channel: 3, bank: { msb: 2, lsb: 0x23 } });
       const smf = project.exportSmf();
       expect(smf[0]).toBe(0x4d);
       // The export goes straight into a Blob, which is how a browser consumer
@@ -1013,6 +1008,37 @@ describe('Sonare WASM Project', () => {
       }
     } finally {
       sysexProject.destroy();
+    }
+  });
+
+  it('setProgram takes bank, group and channel as options', () => {
+    const exportBytes = (apply: (project: Project, clipId: number) => void): string => {
+      const project = buildProject();
+      try {
+        const { clipId } = project.addMidiClip(0, 2);
+        apply(project, clipId);
+        return Array.from(project.exportSmf()).join(',');
+      } finally {
+        project.destroy();
+      }
+    };
+    const plain = exportBytes((p, id) => p.setProgram(id, 42));
+    expect(plain).toContain('192,42');
+    // Without a bank option no Bank Select controller (CC 0 / CC 32) precedes the program.
+    expect(plain).not.toContain('176,0,');
+    const banked = exportBytes((p, id) => p.setProgram(id, 42, { bank: { msb: 2, lsb: 0x23 } }));
+    expect(banked).toContain('192,42');
+    expect(banked.length).toBeGreaterThan(plain.length);
+    expect(banked).toContain('176,0,2');
+    const routed = exportBytes((p, id) => p.setProgram(id, 24, { group: 1, channel: 3 }));
+    expect(routed).toContain('195,24');
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 2);
+      // @ts-expect-error a bare bank number is no longer accepted
+      expect(() => project.setProgram(clipId, 24, 5)).toThrow(TypeError);
+    } finally {
+      project.destroy();
     }
   });
 

@@ -87,6 +87,7 @@ import type {
   EngineParameterInfo,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
+  EngineSetParameterOptions,
   EngineTelemetry,
   EngineTelemetryError,
   EngineTelemetryType,
@@ -107,7 +108,6 @@ import type {
   WasmClipPageProvider,
   WasmEngineBus,
   WasmEngineClip,
-  WasmEngineMeterTelemetry,
   WasmEngineMeterTelemetryWide,
   WasmEngineTrackSend,
   WasmRealtimeEngine,
@@ -154,6 +154,7 @@ export type {
   EngineParameterInfo,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
+  EngineSetParameterOptions,
   EngineTelemetry,
   EngineTelemetryError,
   EngineTelemetryType,
@@ -533,14 +534,23 @@ function telemetryFromNative(record: {
   };
 }
 
-function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): EngineMeterTelemetry {
-  const { truePeakDbL, truePeakDbR, maxTruePeakDb, ...rest } = record;
+/** Level a plane the target does not carry reads as, matching the engine's meter floor. */
+const METER_FLOOR_DB = -120;
+
+/** The stereo view of a per-plane record: planes 0 and 1, the floor where a plane is absent. */
+function meterTelemetryFromWide(wide: EngineMeterTelemetryWide): EngineMeterTelemetry {
+  const { numChannels: _numChannels, peakDb, rmsDb, truePeakDbtp, inputPeakDb, ...rest } = wide;
   return {
     ...rest,
-    truePeakDbtpL: truePeakDbL,
-    truePeakDbtpR: truePeakDbR,
-    maxTruePeakDbtp: maxTruePeakDb,
-  };
+    peakDbL: peakDb[0] ?? METER_FLOOR_DB,
+    peakDbR: peakDb[1] ?? METER_FLOOR_DB,
+    rmsDbL: rmsDb[0] ?? METER_FLOOR_DB,
+    rmsDbR: rmsDb[1] ?? METER_FLOOR_DB,
+    truePeakDbtpL: truePeakDbtp[0] ?? METER_FLOOR_DB,
+    truePeakDbtpR: truePeakDbtp[1] ?? METER_FLOOR_DB,
+    inputPeakDbL: inputPeakDb[0] ?? METER_FLOOR_DB,
+    inputPeakDbR: inputPeakDb[1] ?? METER_FLOOR_DB,
+  } as unknown as EngineMeterTelemetry;
 }
 
 function meterTelemetryWideFromNative(
@@ -735,7 +745,7 @@ export class RealtimeEngine {
    */
   prepare(config: RealtimeEngineConfig): void {
     const settings = normalizeEngineConfig('prepare', config);
-    this.native.prepareWithChannels(
+    this.native.prepare(
       settings.sampleRate,
       settings.maxBlockSize,
       settings.commandCapacity,
@@ -750,19 +760,31 @@ export class RealtimeEngine {
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
    * throws a `RangeError`; resolve ids with {@link resolveStripAutomationId},
    * {@link resolveBusAutomationId} and {@link resolveStripInsertAutomationId}.
+   * `{ smoothed: true }` queues the change as a smoothed one (engine
+   * kSetParamSmoothed); a non-boolean `smoothed` or an unknown key is a `TypeError`.
    */
-  setParameter(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameter(paramId, value, resolveRenderFrame(renderFrame));
-  }
-
-  /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
-  setParameterSmoothed(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameterSmoothed(paramId, value, resolveRenderFrame(renderFrame));
+  setParameter(
+    paramId: number,
+    value: number,
+    renderFrame?: number,
+    options?: EngineSetParameterOptions,
+  ): void {
+    let smoothed = false;
+    if (options !== undefined) {
+      requestObject('setParameter', options, 'options', true);
+      smoothed = optionalBoolean(options.smoothed, 'smoothed', false);
+    }
+    this.native.setParameter(
+      paramId,
+      value,
+      resolveRenderFrame(renderFrame),
+      smoothed ? true : undefined,
+    );
   }
 
   /**
    * Set the ramp time (ms) of the engine-level smoother. It governs only
-   * `setParameterSmoothed` on parameters bound through the automation engine.
+   * smoothed `setParameter` on parameters bound through the automation engine.
    * Reserved engine targets — track and bus faders, pan and width, and insert and
    * instrument parameters — keep their own fixed smoothing whatever this is set
    * to, and MIDI-CC mappings apply their values directly. The default is 20 ms;
@@ -927,7 +949,7 @@ export class RealtimeEngine {
    */
   bindMidiCc(binding: ProjectMidiCcBinding): void {
     assertMidiCcBindingBytes(binding);
-    this.native.bindMidiCcBinding(binding);
+    this.native.bindMidiCc(binding);
   }
 
   /** Removes every live MIDI CC / RPN / NRPN binding. */
@@ -2696,7 +2718,7 @@ export class RealtimeEngine {
    * when it contains no upstream input.
    */
   process(channels: Float32Array[]): Float32Array[] {
-    return this.native.process(channels);
+    return this.native.process(channels, undefined) as Float32Array[];
   }
 
   /**
@@ -2725,7 +2747,7 @@ export class RealtimeEngine {
    * `prepareChannels`.
    */
   processPrepared(numFrames: number): void {
-    this.native.processPrepared(numFrames);
+    this.native.processPrepared(numFrames, undefined);
   }
 
   /**
@@ -2755,7 +2777,7 @@ export class RealtimeEngine {
    * `prepareChannels` and `prepareMonitorChannels`.
    */
   processPreparedWithMonitor(numFrames: number): void {
-    this.native.processPreparedWithMonitor(numFrames);
+    this.native.processPrepared(numFrames, true);
   }
 
   /**
@@ -2765,7 +2787,7 @@ export class RealtimeEngine {
    * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
    */
   processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
-    return this.native.processWithMonitor(channels);
+    return this.native.process(channels, true) as EngineProcessWithMonitorResult;
   }
 
   /**
@@ -2869,7 +2891,7 @@ export class RealtimeEngine {
    * @param maxRecords Most records to return (non-negative integer). Omitted: 1024. 0 returns an empty array.
    */
   drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
-    return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryFromNative);
+    return this.drainMeterTelemetryWide(maxRecords).map(meterTelemetryFromWide);
   }
 
   /**
@@ -2882,7 +2904,7 @@ export class RealtimeEngine {
    * the SharedArrayBuffer meter paths.
    */
   drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
-    return this.native.drainMeterTelemetryWide(maxRecords).map(meterTelemetryWideFromNative);
+    return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryWideFromNative);
   }
 
   /**

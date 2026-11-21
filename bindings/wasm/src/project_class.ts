@@ -96,7 +96,7 @@ import type {
   ProjectMoveClipOptions,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
-  ProjectProgramInput,
+  ProjectProgramOptions,
   ProjectSource,
   ProjectSourceAudioInput,
   ProjectTempoCandidate,
@@ -767,22 +767,14 @@ export class Project {
   }
 
   /**
-   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. Omit `bank` for
-   * no Bank Select, matching `setProgramOnChannel` and the Node/Python surfaces;
-   * pass `>= 0` to emit a Bank Select. A negative `bank` is refused.
+   * Set a MIDI clip's program at source PPQ 0 on one UMP group and channel
+   * (both default to 0). Pass `options.bank` to emit a Bank Select; omit it for none.
    */
-  setProgram(clipId: number, program: number, bank?: number): void {
-    this.native.setProgram(clipId, program, resolveOptionalNonNegative(bank, 'bank'));
-  }
-
-  /** Set a MIDI clip's program / bank for one UMP group and channel. */
-  setProgramOnChannel(clipId: number, input: ProjectProgramInput): void {
-    const { group, channel, program, bank } = requestObject(
-      'Project.setProgramOnChannel',
-      input,
-      'input',
-      true,
-    );
+  setProgram(clipId: number, program: number, options?: ProjectProgramOptions): void {
+    const { group, channel, bank } =
+      options === undefined
+        ? ({} as ProjectProgramOptions)
+        : requestObject('Project.setProgram', options, 'options', true);
     if (bank !== undefined && (typeof bank !== 'object' || bank === null)) {
       throw refuseType('bank must be an object { msb, lsb }');
     }
@@ -791,12 +783,12 @@ export class Project {
       bank === undefined
         ? undefined
         : (assertU7(bank.msb, 'bank.msb') << 7) | assertU7(bank.lsb, 'bank.lsb');
-    this.native.setProgramOnChannel(
+    this.native.setProgram(
       clipId,
-      group,
-      channel,
       program,
       resolveOptionalNonNegative(packed, 'bank'),
+      group,
+      channel,
     );
   }
 
@@ -921,7 +913,7 @@ export class Project {
 
   /** Compile the project into a renderable timeline, surfacing diagnostics. */
   compile(): ProjectCompileResult {
-    return projectCompileResultFromNative(this.native.compile());
+    return projectCompileResultFromNative(this.native.compile(undefined));
   }
 
   /**
@@ -931,7 +923,7 @@ export class Project {
    * means nothing compiled.
    */
   compileTimeline(): ProjectCompileTimelineResult {
-    const { timeline, ...result } = this.native.compileTimeline();
+    const { timeline, ...result } = this.native.compile(true);
     const compiled = projectCompileResultFromNative(result);
     if (timeline === null) {
       return compiled;
@@ -998,7 +990,9 @@ export class Project {
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
     const native = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounce(native));
+    return this.bounceResult(
+      this.native.bounce(native, undefined, undefined, undefined, undefined) as NativeProjectBounce,
+    );
   }
 
   /**
@@ -1030,7 +1024,9 @@ export class Project {
       return instrument;
     });
     const native = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounceWithBuiltinInstrument(bindings, native));
+    return this.bounceResult(
+      this.native.bounce(native, bindings, undefined, undefined, undefined) as NativeProjectBounce,
+    );
   }
 
   /**
@@ -1076,9 +1072,9 @@ export class Project {
     const nativeOptions = this.bounceRequest(options);
     const native = this.native;
     this.instrumentBounceActive = true;
-    let result: ReturnType<WasmProject['bounceWithInstruments']>;
+    let result: ReturnType<WasmProject['bounce']>;
     try {
-      result = native.bounceWithInstruments(bindings, nativeOptions);
+      result = native.bounce(nativeOptions, undefined, bindings, undefined, undefined);
     } finally {
       this.instrumentBounceActive = false;
     }
@@ -1115,7 +1111,9 @@ export class Project {
       (instrument) => normalizeSynthInstrument(instrument) as NativeSynthBinding,
     );
     const native = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounceWithSynthInstrument(bindings, native));
+    return this.bounceResult(
+      this.native.bounce(native, undefined, undefined, bindings, undefined) as NativeProjectBounce,
+    );
   }
 
   /**
@@ -1169,7 +1167,9 @@ export class Project {
   ): ProjectBounceResult {
     const bindings = normalizeInstrumentBindings(instruments, (instrument) => instrument);
     const native = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounceWithSf2Instrument(bindings, native));
+    return this.bounceResult(
+      this.native.bounce(native, undefined, undefined, undefined, bindings) as NativeProjectBounce,
+    );
   }
 
   /** Remove a clip (undoable). */

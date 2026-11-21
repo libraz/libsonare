@@ -1,5 +1,6 @@
 import type { Project, ProjectTimeline } from './project_class.js';
 import type { MidiFxConfig } from './public_types_engine.js';
+import type { MidiBank } from './public_types_midi_messages.js';
 import type { AutomationCurve } from './public_types_mixing.js';
 import type { KeyMode } from './public_types_music.js';
 
@@ -225,21 +226,14 @@ export interface ProjectClipLoopInput {
   loopCrossfadePpq?: number;
 }
 
-/** Input of {@link Project.setProgramOnChannel}. */
-export interface ProjectProgramInput {
-  /** UMP group, `0..15`. */
-  group: number;
-  /** MIDI channel, `0..15`. */
-  channel: number;
-  /** Program number, `0..127`. */
-  program: number;
-  /** Bank select. Omit for no Bank Select. */
-  bank?: {
-    /** Bank Select MSB (CC 0), `0..127`. */
-    msb: number;
-    /** Bank Select LSB (CC 32), `0..127`. */
-    lsb: number;
-  };
+/** Options of {@link Project.setProgram}. */
+export interface ProjectProgramOptions {
+  /** Bank Select to emit with the program change; omitted emits none. */
+  bank?: MidiBank;
+  /** UMP group, `0`..`15`; defaults to 0. */
+  group?: number;
+  /** MIDI channel, `0`..`15`; defaults to 0. */
+  channel?: number;
 }
 
 /** Input of {@link Project.setSourceAudio}. */

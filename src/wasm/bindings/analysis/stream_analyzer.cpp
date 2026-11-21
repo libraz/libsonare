@@ -130,16 +130,19 @@ class StreamAnalyzerWrapper {
   /// @brief Returns the sample rate.
   int sampleRate() const { return config_.sample_rate; }
 
-  void process(val samples) {
-    std::vector<float> data = float32ArrayToVector(samples, "samples");
-    analyzer_->process(data.data(), data.size());
-  }
-
-  void processWithOffset(val samples, double sample_offset) {
+  /// @param sample_offset Cumulative sample count at the start of the chunk; undefined/null keeps
+  ///        the analyzer's own tracking.
+  void process(val samples, const val& sample_offset_val) {
+    if (!given(sample_offset_val)) {
+      std::vector<float> data = float32ArrayToVector(samples, "samples");
+      analyzer_->process(data.data(), data.size());
+      return;
+    }
     // wasmIndexArg rather than wasmCountArg: this names a position, so a request
     // past the addressable range is reported instead of saturating onto the last
     // address and corrupting the initial timestamp base.
-    const size_t offset = wasmIndexArg(sample_offset, "startSample");
+    const size_t offset =
+        wasmIndexArg(numberFromVal(sample_offset_val, "startSample"), "startSample");
     std::vector<float> data = float32ArrayToVector(samples, "samples");
     analyzer_->process(data.data(), data.size(), offset);
   }
@@ -365,7 +368,6 @@ void registerStreamAnalyzerBindings() {
                    const val&, const val&, const val&, const val&, const val&, const val&,
                    const val&, const val&, const val&, const val&, const val&>()
       .function("process", &StreamAnalyzerWrapper::process)
-      .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)
       .function("availableFrames", &StreamAnalyzerWrapper::availableFrames)
       .function("readFramesSoa", &StreamAnalyzerWrapper::readFramesSoa)

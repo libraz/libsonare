@@ -167,7 +167,7 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
     syncMixer: (insertBaseResets, oneShotInsertParamOverrides) =>
       syncMixerFacade(mixer, false, insertBaseResets, oneShotInsertParamOverrides),
     sendSmoothedParam: (paramId, value) => {
-      engine.setParameterSmoothed(paramId, value);
+      engine.setParameter(paramId, value, undefined, { smoothed: true });
       return true;
     },
     getMasterStripJson: () => undefined,
@@ -274,8 +274,8 @@ describe('strip continuity (real WASM engine)', () => {
     try {
       const gainId = edited.engine.resolveStripInsertAutomationId(TRACK_ID, 0, 'levelDb');
       expect(gainId).toBeGreaterThan(0);
-      edited.engine.setParameterSmoothed(gainId, -12);
-      control.engine.setParameterSmoothed(gainId, -12);
+      edited.engine.setParameter(gainId, -12, undefined, { smoothed: true });
+      control.engine.setParameter(gainId, -12, undefined, { smoothed: true });
 
       const editedBlocks: Array<[Float32Array, Float32Array]> = [];
       const controlBlocks: Array<[Float32Array, Float32Array]> = [];

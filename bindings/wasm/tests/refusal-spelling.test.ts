@@ -28,6 +28,7 @@ import {
   RealtimeVoiceChanger,
   realtimeVoiceChangerRender,
   StreamAnalyzer,
+  stft,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
@@ -143,7 +144,7 @@ const DRIVERS: Record<string, Driver> = {
   downmix: (_spelling, value) => downmix(value as Float32Array[], 'mono'),
   engine_drain_external_midi: (_spelling, value) =>
     withEngine((engine) => engine.drainExternalMidi(value as number)),
-  engine_process_with_monitor: (_spelling, value) =>
+  engine_process: (_spelling, value) =>
     using(new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 }), (engine) =>
       engine.processWithMonitor(value as Float32Array[]),
     ),
@@ -199,8 +200,9 @@ const DRIVERS: Record<string, Driver> = {
     using(new Project(), (project) => project.setOverlapPolicy(value as never)),
   realtime_voice_changer_process_mono: (_spelling, value) =>
     withChanger((changer) => changer.processMono(value as Float32Array)),
-  stream_analyzer_process_with_offset: (_spelling, value) =>
-    withAnalyzer((analyzer) => analyzer.processWithOffset(BLOCK, value as number)),
+  stream_analyzer_process: (_spelling, value) =>
+    withAnalyzer((analyzer) => analyzer.process(BLOCK, value as number)),
+  stft: (spelling, value) => stft({ samples: TONE, sampleRate: RATE, [spelling]: value } as never),
   stream_analyzer_reset: (_spelling, value) =>
     withAnalyzer((analyzer) => analyzer.reset(value as number)),
   strip_remove_send: (_spelling, value) =>

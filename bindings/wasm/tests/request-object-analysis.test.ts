@@ -42,7 +42,6 @@ import {
   spectralFlatness,
   spectralRolloff,
   stft,
-  stftDb,
   tempogram,
   tempogramRatio,
   vqt,
@@ -226,7 +225,9 @@ describe('WASM basic analysis request objects', () => {
       );
     }
     expect(stft({ samples, sampleRate, ...frame })).toEqual(stft(samples, sampleRate, frame));
-    expect(stftDb({ samples, sampleRate, ...frame })).toEqual(stftDb(samples, sampleRate, frame));
+    expect(stft({ samples, sampleRate, ...frame, db: true })).toEqual(
+      stft(samples, sampleRate, { ...frame, db: true }),
+    );
     const chromaOptions = { hopLength: 256, nChroma: 12 };
     // A union of the overloaded functions keeps only the request-object call
     // signature, so the positional side names the shared one it drops.

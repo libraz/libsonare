@@ -57,16 +57,14 @@ val js_mastering_insert_param_names(std::string name) {
 // order, then every other construction key sorted by name with "id" null and "rtSafe" false. See
 // sonare_mastering_insert_param_info (the C ABI oracle for this JSON's semantics) for the full
 // field contract.
-std::string js_mastering_insert_param_info(std::string name) {
+// An omitted `sample_rate_val` is the rate-less query; a given rate resolves the
+// Nyquist-following ceilings and throws outside the supported range.
+std::string js_mastering_insert_param_info(std::string name, const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
-  return mastering::api::insert_param_info_json(name);
-}
-
-// js_mastering_insert_param_info with the Nyquist-following ceilings resolved for
-// `sample_rate` (see sonare_mastering_insert_param_info_at_rate). Throws for a
-// rate outside the supported range.
-std::string js_mastering_insert_param_info_at_rate(std::string name, double sample_rate) {
-  wasmRefuseEmbeddedNul(name, "name");
+  if (sample_rate_val.isUndefined() || sample_rate_val.isNull()) {
+    return mastering::api::insert_param_info_json(name);
+  }
+  const double sample_rate = sample_rate_val.as<double>();
   if (!(sample_rate >= sonare::kMinAudioSampleRate && sample_rate <= sonare::kMaxAudioSampleRate)) {
     throw WasmRangeError("sampleRate " + std::to_string(sample_rate) + " is out of range");
   }
@@ -730,7 +728,6 @@ void registerMasteringApiBindings() {
   function("masteringInsertNames", &js_mastering_insert_names);
   function("masteringInsertParamNames", &js_mastering_insert_param_names);
   function("masteringInsertParamInfo", &js_mastering_insert_param_info);
-  function("masteringInsertParamInfoAtRate", &js_mastering_insert_param_info_at_rate);
   function("masteringInsertTiming", &js_mastering_insert_timing);
   function("masteringEnumValue", &js_mastering_enum_value);
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);

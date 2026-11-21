@@ -494,10 +494,7 @@ export function masteringInsertParamInfo(
     if (r.sampleRate !== undefined && r.sampleRate !== null) {
       assertSampleRate(r.sampleRate);
     }
-    const json =
-      r.sampleRate === undefined || r.sampleRate === null
-        ? module.masteringInsertParamInfo(r.insert)
-        : module.masteringInsertParamInfoAtRate(r.insert, r.sampleRate);
+    const json = module.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
     return parseRecordJson(json) as MasteringInsertParamInfo[];
   });
 }
