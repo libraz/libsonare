@@ -343,8 +343,10 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         beats = [{"time": beat.time_sec, "strength": beat.strength} for beat in r.beats]
         # The downbeats are the beats that open a bar; the document spells them
         # as positions in ``beats``.
-        downbeat_ids = {id(beat) for beat in r.downbeats}
-        downbeat_indices = [i for i, beat in enumerate(r.beats) if id(beat) in downbeat_ids]
+        # Both lists are decoded from one wire document, so a downbeat carries
+        # its beat's time exactly.
+        downbeat_times = {beat.time_sec for beat in r.downbeats}
+        downbeat_indices = [i for i, beat in enumerate(r.beats) if beat.time_sec in downbeat_times]
         chords = [
             {
                 "name": chord.name,

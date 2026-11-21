@@ -403,7 +403,7 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     )
 
 
-def _split_silence_takes(args: argparse.Namespace) -> tuple[list[list[float]], int]:
+def _split_silence_takes(args: argparse.Namespace) -> tuple[list[np.ndarray], int]:
     """Load the takes ``split-silence`` measures together, in command-line order."""
     first, *others = args.file
     samples, sr = _load_audio(first)
@@ -420,7 +420,7 @@ def _split_silence_takes(args: argparse.Namespace) -> tuple[list[list[float]], i
     return takes, sr
 
 
-def _split_silence_slice(take: list[float], start: int, end: int) -> list[float]:
+def _split_silence_slice(take: np.ndarray, start: int, end: int) -> np.ndarray:
     """One interval of one take, padded where the take ended before it.
 
     A take shorter than the interval is silent past its end -- the rule the union
@@ -429,7 +429,7 @@ def _split_silence_slice(take: list[float], start: int, end: int) -> list[float]
     """
     window = take[start:end]
     if len(window) < end - start:
-        window = window + [0.0] * (end - start - len(window))
+        window = np.concatenate([window, np.zeros(end - start - len(window), dtype=window.dtype)])
     return window
 
 

@@ -1005,6 +1005,23 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     }
 
 
+def test_analyze_json_indexes_downbeats_decoded_as_their_own_records(monkeypatch, capsys) -> None:
+    """A downbeat is a separate record carrying its beat's time, and still indexes that beat."""
+    import libsonare
+    from libsonare import _cli_analysis, cli
+
+    times = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+    result = _minimal_analysis_result()
+    result.beats = [SimpleNamespace(time_sec=t, strength=1.0) for t in times]
+    result.downbeats = [SimpleNamespace(time_sec=t, strength=1.0) for t in (times[1], times[5])]
+    monkeypatch.setattr(libsonare, "analyze", lambda samples, **kwargs: result)
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+
+    args = cli._build_parser().parse_args(["analyze", "--json", "input.wav"])
+    assert cli.cmd_analyze(args) == 0
+    assert json.loads(capsys.readouterr().out)["downbeat_indices"] == [1, 5]
+
+
 @pytest.mark.parametrize("command", ["analyze", "spectral"])
 @pytest.mark.parametrize("option", ["-o", "--output"])
 def test_analysis_commands_reject_ignored_output_option(tmp_path, command, option) -> None:

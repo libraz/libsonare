@@ -413,6 +413,31 @@ def test_split_silence_cli_write_takes_slices_every_take(tmp_path) -> None:
         assert written[0] != written[1]
 
 
+def test_split_silence_cli_write_takes_pads_a_take_that_ends_early(tmp_path) -> None:
+    """A take ending inside the last interval is written padded with silence to that interval."""
+    sample_rate = 22050
+    take_a = str(tmp_path / "take_a.wav")
+    take_b = str(tmp_path / "take_b.wav")
+    prefix = str(tmp_path / "slice_")
+    _write_test_wav(
+        take_a, _blocked_sine([(0.5, 0.30), (0.0, 0.40), (0.5, 0.30)], sample_rate), sample_rate
+    )
+    # Ends a tenth of a second into the last interval take 1 sounds in.
+    _write_test_wav(
+        take_b, _blocked_sine([(0.2, 0.30), (0.0, 0.40), (0.2, 0.10)], sample_rate), sample_rate
+    )
+
+    result = _run_cli(["split-silence", take_a, take_b, "--write-takes", prefix, "--json"])
+    assert result.returncode == 0, result.stderr
+    intervals = json.loads(result.stdout)
+    last = len(intervals)
+    expected_frames = intervals[-1]["end_sample"] - intervals[-1]["start_sample"]
+    with wave.open(f"{prefix}02_{last:03d}.wav", "rb") as handle:
+        assert handle.getnframes() == expected_frames
+        frames = handle.readframes(handle.getnframes())
+    assert frames[-64:] == bytes(64)
+
+
 def test_split_silence_cli_refuses_a_take_at_another_rate(tmp_path) -> None:
     """Frame indices from two rates are not comparable, so the take is refused."""
     take_a = str(tmp_path / "take_a.wav")
