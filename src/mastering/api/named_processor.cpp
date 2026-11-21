@@ -677,7 +677,7 @@ bool try_run_effects_insert_mono(const std::string& name, const std::vector<Para
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown mastering processor: " + name + retired_processor_note(name));
   }
-  detail::refuse_unread_params(name, unread, insert_param_names(name));
+  detail::refuse_unread_params(unread, insert_param_names(name));
   internal::run_processor_mono(*processor, samples, sample_rate);
   latency_samples = processor->latency_samples();
   return true;
@@ -693,7 +693,7 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown mastering processor: " + name + retired_processor_note(name));
   }
-  detail::refuse_unread_params(name, unread, insert_param_names(name));
+  detail::refuse_unread_params(unread, insert_param_names(name));
   internal::run_processor_stereo(*processor, left, right, sample_rate);
   latency_samples = processor->latency_samples();
   return true;
@@ -789,7 +789,7 @@ MonoResult apply_named_processor(const std::string& name, const float* samples, 
     if (!try_configure_processor(name, map, ChannelSet(result.samples), sample_rate, outcome)) {
       throw_missing_branch(name, /*mono_entry_point=*/true);
     }
-    detail::refuse_unread_params(name, map);
+    detail::refuse_unread_params(map);
   }
   result.apply(outcome);
   result.output_lufs = lufs_for(result.samples, sample_rate);
@@ -932,7 +932,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
                             "stereo processor produced mismatched channel lengths: " + name);
     }
   }
-  if (!effects_insert) detail::refuse_unread_params(name, map);
+  if (!effects_insert) detail::refuse_unread_params(map);
   result.apply(outcome);
 
   result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
@@ -982,7 +982,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair processor: " + name);
   }
-  detail::refuse_unread_params(name, map);
+  detail::refuse_unread_params(map);
 
   MonoResult result;
   result.samples.assign(out.data(), out.data() + out.size());
@@ -1026,7 +1026,7 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
   const ::sonare::mastering::match::StereoAudioPair reference{
       reference_at_rate(reference_left, reference_length, reference_sample_rate, sample_rate),
       reference_at_rate(reference_right, reference_length, reference_sample_rate, sample_rate)};
-  detail::refuse_unread_params(name, map);
+  detail::refuse_unread_params(map);
   const auto mixed = ::sonare::mastering::match::ab_crossfade_stereo(source, reference, mix);
 
   StereoResult result;
@@ -1120,7 +1120,7 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
   }
-  detail::refuse_unread_params(name, map);
+  detail::refuse_unread_params(map);
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
@@ -1170,7 +1170,7 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown mastering stereo analysis: " + name);
   }
-  detail::refuse_unread_params(name, map);
+  detail::refuse_unread_params(map);
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 

@@ -622,19 +622,17 @@ std::pair<ErrorCode, std::string> dot_key_refusal(const char* key, double value)
 
 }  // namespace
 
-TEST_CASE("The linear denoise floor spelling is refused, naming the depth key",
-          "[mastering][chain]") {
+TEST_CASE("The linear denoise floor spelling is refused as an unknown key", "[mastering][chain]") {
   for (const char* key : {"repair.denoise.gainFloor", "repair.gainFloor"}) {
     CAPTURE(key);
     const auto [code, message] = dot_key_refusal(key, 0.1);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE_THAT(message, ContainsSubstring(key));
-    REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
+    REQUIRE(message == std::string("unknown key ") + key);
   }
   const std::string document = "{\"version\":2,\"params\":{\"repair.denoise.gainFloor\":0.1}}";
   const auto [code, message] = refusal_of([&] { (void)chain_config_from_json(document); });
   REQUIRE(code == ErrorCode::InvalidFormat);
-  REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
+  REQUIRE(message == "unknown key params.repair.denoise.gainFloor");
 
   Param current[] = {{"repair.denoise.reductionDb", 12.0}};
   REQUIRE_THAT(parse_chain_config_params(current, 1).repair.denoise.config.reduction_db,
@@ -662,14 +660,13 @@ TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
 
   const auto [code, message] = dot_key_refusal("repair.declip.clipThreshold", 0.9);
   REQUIRE(code == ErrorCode::InvalidParameter);
-  REQUIRE_THAT(message, ContainsSubstring("repair.declip.clipThreshold"));
-  REQUIRE_THAT(message, ContainsSubstring("repair.declip.clipThresholdDb"));
+  REQUIRE(message == "unknown key repair.declip.clipThreshold");
   const auto [doc_code, doc_message] = refusal_of([] {
     (void)chain_config_from_json(
         "{\"version\":2,\"params\":{\"repair.declip.clipThreshold\":0.9}}");
   });
   REQUIRE(doc_code == ErrorCode::InvalidFormat);
-  REQUIRE_THAT(doc_message, ContainsSubstring("repair.declip.clipThresholdDb"));
+  REQUIRE(doc_message == "unknown key params.repair.declip.clipThreshold");
 }
 
 TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering][chain]") {
@@ -705,14 +702,13 @@ TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering]
     CAPTURE(old_key);
     const auto [code, message] = dot_key_refusal(old_key, 1.0);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE_THAT(message, ContainsSubstring(old_key));
-    REQUIRE_THAT(message, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
+    REQUIRE(message == std::string("unknown key ") + old_key);
     const auto [doc_code, doc_message] = refusal_of([&] {
       (void)chain_config_from_json(std::string("{\"version\":2,\"params\":{\"") + old_key +
                                    "\":1}}");
     });
     REQUIRE(doc_code == ErrorCode::InvalidFormat);
-    REQUIRE_THAT(doc_message, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
+    REQUIRE(doc_message == std::string("unknown key params.") + old_key);
   }
 }
 
@@ -746,8 +742,7 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
     const std::string old_key = std::string("dynamics.multibandComp.bands.1.") + old_field;
     const auto [code, message] = dot_key_refusal(old_key.c_str(), 1.0);
     REQUIRE(code == ErrorCode::InvalidParameter);
-    REQUIRE_THAT(message, ContainsSubstring(old_key));
-    REQUIRE_THAT(message, ContainsSubstring(high_pass_key));
+    REQUIRE(message == "unknown key " + old_key);
 
     // The same field inside a band record of the structured document.
     std::string with_old_field = document;
@@ -758,8 +753,8 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
     const auto [doc_code, doc_message] =
         refusal_of([&] { (void)chain_config_from_json(with_old_field); });
     REQUIRE(doc_code == ErrorCode::InvalidFormat);
-    REQUIRE_THAT(doc_message, ContainsSubstring("sidechainHighPassHz"));
     REQUIRE_THAT(doc_message, ContainsSubstring(old_field));
+    REQUIRE_THAT(doc_message, !ContainsSubstring("renamed"));
   }
 }
 
@@ -2370,10 +2365,9 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowCutoffHz", 250.0),
                       SonareException);
     REQUIRE_THROWS_WITH(chain.set_parameter("dynamics.multibandComp.lowThresholdDb", -20.0),
-                        ContainsSubstring("dynamics.multibandComp.lowThresholdDb") &&
-                            ContainsSubstring("dynamics.multibandComp.bands.0.thresholdDb"));
+                        "unknown key dynamics.multibandComp.lowThresholdDb");
     REQUIRE_THROWS_WITH(chain.set_parameter("dynamics.multibandComp.band0.thresholdDb", -20.0),
-                        ContainsSubstring("dynamics.multibandComp.bands.0.thresholdDb"));
+                        "unknown key dynamics.multibandComp.band0.thresholdDb");
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowMakeupGainDb", 2.0),
                       SonareException);
     REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.band3ThresholdDb", -20.0),
@@ -3277,24 +3271,19 @@ TEST_CASE("flat multiband scalar spellings and shorthand edit in place",
     CHECK(multiband.config.crossover.slope == multiband::CrossoverSlope::LR8);
   }
 
-  SECTION("a retired spelling is refused naming the current key") {
-    const std::vector<std::pair<std::string, std::string>> retired = {
-        {"lowRatio", "bands.0.ratio"},
-        {"midThresholdDb", "bands.1.thresholdDb"},
-        {"highAttackMs", "bands.2.attackMs"},
-        {"highReleaseMs", "bands.2.releaseMs"},
-        {"band0.ratio", "bands.0.ratio"},
-        {"band11.detector", "bands.11.detector"},
-        {"slope", "crossover.slope"},
-        {"mode", "crossover.mode"},
-        {"firKernelSize", "crossover.firKernelSize"},
-        {"lowCutoffHz", "crossover.cutoffsHz.0"},
-        {"highCutoffHz", "crossover.cutoffsHz.1"}};
-    for (const auto& [old_key, current] : retired) {
+  SECTION("a retired spelling is refused as any other unknown key") {
+    for (const char* old_key :
+         {"lowRatio", "midThresholdDb", "highAttackMs", "highReleaseMs", "band0.ratio",
+          "band11.detector", "slope", "mode", "firKernelSize", "lowCutoffHz", "highCutoffHz"}) {
       CAPTURE(old_key);
-      const std::string old_full = mb_key(old_key.c_str());
-      const std::string current_full = mb_key(current.c_str());
-      require_refused([&] { parse({{old_full, 2.0}}); }, {old_full.c_str(), current_full.c_str()});
+      const std::string old_full = mb_key(old_key);
+      try {
+        parse({{old_full, 2.0}});
+        FAIL("expected an InvalidParameter refusal");
+      } catch (const SonareException& error) {
+        CHECK(error.code() == ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what()) == "unknown key " + old_full);
+      }
     }
   }
 

@@ -346,63 +346,23 @@ inline ParamMap make_map(const std::vector<Param>& params) {
   return map;
 }
 
-/// @brief The current key for a parameter of @p owner that was renamed, else empty.
-/// @details A row with an empty owner holds for every processor; the rest only for the one named,
-///   since an old spelling such as `semitones` is a live key elsewhere.
-inline std::string renamed_param_successor(const std::string& owner, const std::string& key) {
-  struct Renamed {
-    const char* owner;
-    const char* old_key;
-    const char* new_key;
-  };
-  static const Renamed kRenamed[] = {
-      {"", "clipThreshold", "clipThresholdDb"},
-      {"", "sidechainHpfHz", "sidechainHighPassHz"},
-      {"", "ceilingDb", "ceilingDbtp"},
-      {"dynamics.deesser", "bandpassQ", "bandPassQ"},
-      {"dynamics.gate", "keyHpfHz", "keyHighPassHz"},
-      {"effects.acoustic.roomMorph", "maxSeconds", "maxSec"},
-      {"effects.reverb.room", "maxSeconds", "maxSec"},
-      {"effects.modulation.pitchShifter", "semitones", "pitchSemitones"},
-      {"effects.modulation.pitchShifter", "semitones2", "pitchSemitones2"},
-      {"effects.modulation.pitchShifter", "cents", "pitchCents"},
-      {"effects.modulation.pitchShifter", "cents2", "pitchCents2"},
-      {"effects.modulation.rotary", "accelTauS", "accelTauSec"},
-      {"effects.modulation.rotary", "decelTauS", "decelTauSec"},
-      {"effects.reverb.velvet", "reverbTimeS", "reverbTimeSec"},
-      {"repair.trimSilence", "threshold", "thresholdDb"},
-      {"voice.changer", "eqHighpassHz", "eqHighPassHz"},
-      {"voice.changer", "retuneSemitones", "retunePitchSemitones"},
-      {"voice.changer", "retuneGrainSize", "retuneGrainSizeSamples"},
-  };
-  for (const Renamed& row : kRenamed) {
-    const bool applies = row.owner[0] == '\0' || owner == row.owner;
-    if (applies && key == row.old_key) return row.new_key;
-  }
-  return std::string();
-}
-
-/// @brief Refuses the first of the supplied keys @p name never read (@p keys is sorted) as an
-///        unknown key, naming its successor when it was renamed and otherwise the keys @p name
-///        reads; no-op when @p keys is empty.
-inline void refuse_unread_params(const std::string& name, const std::vector<std::string>& keys,
+/// @brief Refuses the first of the supplied keys a processor never read (@p keys is sorted) as an
+///        unknown key, listing the keys it reads (@p read_keys); no-op when @p keys is empty.
+inline void refuse_unread_params(const std::vector<std::string>& keys,
                                  const std::vector<std::string>& read_keys) {
   if (keys.empty()) return;
-  const std::string& key = keys.front();
-  const std::string successor = renamed_param_successor(name, key);
-  throw SonareParameterRefusal::unknown(
-      ErrorCode::InvalidParameter, key, successor,
-      successor.empty() ? sonare::util::json::schema::expected_keys(read_keys) : std::string())
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, keys.front(), std::string(),
+                                        sonare::util::json::schema::expected_keys(read_keys))
       .as_caller_spelled();
 }
 
 /// @brief refuse_unread_params() for the keys a configuration read from @p map, which lists the
 ///        keys it read as the expected ones.
-inline void refuse_unread_params(const std::string& name, const ParamMap& map) {
+inline void refuse_unread_params(const ParamMap& map) {
   const std::vector<std::string> unread = map.unprobed_keys();
   if (unread.empty()) return;
   const auto& probed = map.probed_keys();
-  refuse_unread_params(name, unread, std::vector<std::string>(probed.begin(), probed.end()));
+  refuse_unread_params(unread, std::vector<std::string>(probed.begin(), probed.end()));
 }
 
 inline float f(const ParamMap& params, const char* key, float default_value) {

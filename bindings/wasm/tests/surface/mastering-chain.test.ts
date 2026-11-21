@@ -57,6 +57,8 @@ function expectRefused(fn: () => unknown, cls: ErrorConstructor, message: string
   expect(error).toBeInstanceOf(cls);
   expect(error).not.toBeInstanceOf(SonareError);
   expect((error as Error).message).toContain(message);
+  // An undeclared key never points at a successor; UPGRADING carries the old -> new map.
+  expect((error as Error).message).not.toContain('(renamed to');
 }
 
 function expectClose(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-4): void {
@@ -403,53 +405,57 @@ describe('chain config: nested form only, tokens only', () => {
     [
       'boolean denoise shorthand',
       { repair: { denoise: true } },
-      'masterAudio: unknown key overrides.repair.denoise (renamed to overrides.repair.denoise.enabled)',
+      'masterAudio: unknown key overrides.repair.denoise',
     ],
-    ['flat repair.nFft', { repair: { nFft: 1024 } }, '(renamed to overrides.repair.denoise.nFft)'],
+    [
+      'flat repair.nFft',
+      { repair: { nFft: 1024 } },
+      'masterAudio: unknown key overrides.repair.nFft',
+    ],
     [
       'flat repair.hopLength',
       { repair: { hopLength: 256 } },
-      '(renamed to overrides.repair.denoise.hopLength)',
+      'masterAudio: unknown key overrides.repair.hopLength',
     ],
     [
       'flat repair.ddAlpha',
       { repair: { ddAlpha: 0.9 } },
-      '(renamed to overrides.repair.denoise.ddAlpha)',
+      'masterAudio: unknown key overrides.repair.ddAlpha',
     ],
     [
       'flat repair.reductionDb',
       { repair: { reductionDb: 12 } },
-      '(renamed to overrides.repair.denoise.reductionDb)',
+      'masterAudio: unknown key overrides.repair.reductionDb',
     ],
     [
       'flat repair.gainFloor',
       { repair: { gainFloor: 0.2 } },
-      '(renamed to overrides.repair.denoise.reductionDb)',
+      'masterAudio: unknown key overrides.repair.gainFloor',
     ],
     [
       'denoise.gainFloor',
       { repair: { denoise: { gainFloor: 0.2 } } },
-      '(renamed to overrides.repair.denoise.reductionDb)',
+      'masterAudio: unknown key overrides.repair.denoise.gainFloor',
     ],
-    ['eq.tiltDb', { eq: { tiltDb: 1 } }, '(renamed to overrides.eq.tilt.tiltDb)'],
-    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, '(renamed to overrides.eq.tilt.pivotHz)'],
+    ['eq.tiltDb', { eq: { tiltDb: 1 } }, 'masterAudio: unknown key overrides.eq.tiltDb'],
+    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, 'masterAudio: unknown key overrides.eq.pivotHz'],
     [
       'declip.clipThreshold',
       { repair: { declip: { clipThreshold: 0.9 } } },
-      '(renamed to overrides.repair.declip.clipThresholdDb)',
+      'masterAudio: unknown key overrides.repair.declip.clipThreshold',
     ],
     [
       'band sidechainHpfHz',
       { dynamics: { multibandComp: { bands: [{ sidechainHpfHz: 100 }] } } },
-      '(renamed to overrides.dynamics.multibandComp.bands.0.sidechainHighPassHz)',
+      'masterAudio: unknown key overrides.dynamics.multibandComp.bands.0.sidechainHpfHz',
     ],
     [
       'band sidechainHpfEnabled',
       { dynamics: { multibandComp: { bands: [{ sidechainHpfEnabled: true }] } } },
-      '(renamed to overrides.dynamics.multibandComp.bands.0.sidechainHighPassHz)',
+      'masterAudio: unknown key overrides.dynamics.multibandComp.bands.0.sidechainHpfEnabled',
     ],
   ])(
-    'the core refuses the removed spelling %s as an argument, naming its successor',
+    'the core refuses the removed spelling %s as any other unknown key',
     (_name, overrides, message) => {
       expectRefused(
         () =>
@@ -598,25 +604,24 @@ describe('chain config: nested form only, tokens only', () => {
     );
   });
 
-  it('refuses a renamed chain key by its new name, the same way offline and streaming', () => {
-    for (const [bad, oldKey, newKey] of [
-      [{ loudness: { ceilingDb: -1 } }, 'loudness.ceilingDb', 'loudness.ceilingDbtp'],
+  it('refuses a renamed chain key as any other unknown key, the same way offline and streaming', () => {
+    for (const [bad, oldKey] of [
+      [{ loudness: { ceilingDb: -1 } }, 'loudness.ceilingDb'],
       [
         { maximizer: { truePeakLimiter: { ceilingDb: -1 } } },
         'maximizer.truePeakLimiter.ceilingDb',
-        'maximizer.truePeakLimiter.ceilingDbtp',
       ],
     ] as const) {
       expectRefused(
         () => sonare.masterAudio({ samples: left, sampleRate, overrides: bad as never }),
         TypeError,
-        `unknown key overrides.${oldKey} (renamed to overrides.${newKey})`,
+        `masterAudio: unknown key overrides.${oldKey}`,
       );
       expectRefused(
         () =>
           new sonare.StreamingMasteringChain({ sampleRate, numChannels: 1, ...(bad as object) }),
         TypeError,
-        `unknown key ${oldKey} (renamed to ${newKey})`,
+        `StreamingMasteringChain: unknown key ${oldKey}`,
       );
     }
   });

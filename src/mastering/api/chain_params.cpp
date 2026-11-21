@@ -173,75 +173,55 @@ bool internal_multiband_key(std::string_view key, std::string* storage) {
   return true;
 }
 
-// The spelling that replaced @p key, or empty when @p key was never a chain key.
-std::string retired_chain_key_successor(const std::string& key) {
-  static const std::pair<std::string_view, std::string_view> kRenamed[] = {
-      {"repair.denoise", "repair.denoise.enabled"},
-      {"repair.nFft", "repair.denoise.nFft"},
-      {"repair.hopLength", "repair.denoise.hopLength"},
-      {"repair.ddAlpha", "repair.denoise.ddAlpha"},
-      {"repair.reductionDb", "repair.denoise.reductionDb"},
-      {"repair.gainFloor", "repair.denoise.reductionDb"},
-      {"repair.denoise.gainFloor", "repair.denoise.reductionDb"},
-      {"repair.declip.clipThreshold", "repair.declip.clipThresholdDb"},
-      {"dynamics.compressor.sidechainHpfEnabled", "dynamics.compressor.sidechainHighPassHz"},
-      {"dynamics.compressor.sidechainHpfHz", "dynamics.compressor.sidechainHighPassHz"},
-      {"dynamics.deesser.bandpassQ", "dynamics.deesser.bandPassQ"},
-      {"eq.tiltDb", "eq.tilt.tiltDb"},
-      {"eq.pivotHz", "eq.tilt.pivotHz"},
-      {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.0"},
-      {"dynamics.multibandComp.highCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.1"},
-      {"loudness.ceilingDb", "loudness.ceilingDbtp"},
-      {"maximizer.truePeakLimiter.ceilingDb", "maximizer.truePeakLimiter.ceilingDbtp"},
+// Whether @p key is an earlier chain key; it is refused like any key the chain never declared.
+bool retired_chain_key(const std::string& key) {
+  static const std::string_view kRetired[] = {
+      "repair.denoise",
+      "repair.nFft",
+      "repair.hopLength",
+      "repair.ddAlpha",
+      "repair.reductionDb",
+      "repair.gainFloor",
+      "repair.denoise.gainFloor",
+      "repair.declip.clipThreshold",
+      "dynamics.compressor.sidechainHpfEnabled",
+      "dynamics.compressor.sidechainHpfHz",
+      "dynamics.deesser.bandpassQ",
+      "eq.tiltDb",
+      "eq.pivotHz",
+      "dynamics.multibandComp.lowCutoffHz",
+      "dynamics.multibandComp.highCutoffHz",
+      "loudness.ceilingDb",
+      "maximizer.truePeakLimiter.ceilingDb",
   };
-  for (const auto& [retired, current] : kRenamed) {
-    if (key == retired) return std::string(current);
+  for (const std::string_view retired : kRetired) {
+    if (key == retired) return true;
   }
   std::string_view rest;
-  if (!multiband_rest(key, &rest)) return std::string();
-  if (rest == "slope" || rest == "mode" || rest == "firKernelSize") {
-    return std::string(kMultibandPrefix) + "crossover." + std::string(rest);
-  }
+  if (!multiband_rest(key, &rest)) return false;
+  if (rest == "slope" || rest == "mode" || rest == "firKernelSize") return true;
   std::size_t index = 0;
   std::string_view field;
-  // The band's sidechain high-pass is one optional key; its two earlier keys name it.
-  const bool retired_high_pass = parse_band_field(rest, "bands.", &index, &field) &&
-                                 (field == "sidechainHpfEnabled" || field == "sidechainHpfHz");
-  if (retired_high_pass) {
-    return std::string(kMultibandPrefix) + "bands." + std::to_string(index) +
-           ".sidechainHighPassHz";
+  // The band's two earlier sidechain high-pass keys, and the internal per-band spelling.
+  if (parse_band_field(rest, "bands.", &index, &field) &&
+      (field == "sidechainHpfEnabled" || field == "sidechainHpfHz")) {
+    return true;
   }
-  if (parse_band_field(rest, "band", &index, &field)) {
-    if (field == "sidechainHpfEnabled" || field == "sidechainHpfHz") field = "sidechainHighPassHz";
-    return std::string(kMultibandPrefix) + "bands." + std::to_string(index) + "." +
-           std::string(field);
-  }
+  if (parse_band_field(rest, "band", &index, &field)) return true;
   // The low/mid/high shorthand of the default split's three bands.
-  static const std::pair<std::string_view, std::string_view> kBandWords[] = {
-      {"low", "0"}, {"mid", "1"}, {"high", "2"}};
-  static const std::pair<std::string_view, std::string_view> kBandFields[] = {
-      {"ThresholdDb", "thresholdDb"},
-      {"Ratio", "ratio"},
-      {"AttackMs", "attackMs"},
-      {"ReleaseMs", "releaseMs"}};
-  for (const auto& [word, band] : kBandWords) {
-    for (const auto& [suffix, leaf] : kBandFields) {
-      if (rest == std::string(word) + std::string(suffix)) {
-        return std::string(kMultibandPrefix) + "bands." + std::string(band) + "." +
-               std::string(leaf);
-      }
+  for (const std::string_view word : {"low", "mid", "high"}) {
+    for (const std::string_view suffix : {"ThresholdDb", "Ratio", "AttackMs", "ReleaseMs"}) {
+      if (rest == std::string(word) + std::string(suffix)) return true;
     }
   }
-  return std::string();
+  return false;
 }
 
 }  // namespace
 
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
-  const std::string successor = retired_chain_key_successor(key);
-  if (!successor.empty()) {
-    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, successor)
-        .as_caller_spelled();
+  if (retired_chain_key(key)) {
+    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key).as_caller_spelled();
   }
   if (internal_multiband_key(key, storage)) return *storage;
   return key;

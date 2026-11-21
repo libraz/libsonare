@@ -187,7 +187,7 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown insert processor: " + name + retired_processor_note(name));
   }
-  detail::refuse_unread_params(name, unknown, insert_param_names(name));
+  detail::refuse_unread_params(unknown, insert_param_names(name));
   processor->prepare(sample_rate, kInsertProbeBlockSize);
   return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
 }

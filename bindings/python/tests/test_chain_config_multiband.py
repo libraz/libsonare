@@ -216,19 +216,19 @@ def test_a_v2_document_refuses_a_number_for_a_token() -> None:
 
 
 @pytest.mark.parametrize(
-    ("config", "current"),
+    ("config", "retired"),
     [
-        ({"lowCutoffHz": 200.0}, "crossover.cutoffsHz.0"),
-        ({"highCutoffHz": 5000.0}, "crossover.cutoffsHz.1"),
-        ({"band2": {"detector": "rms"}}, "bands.2.detector"),
+        ({"lowCutoffHz": 200.0}, "lowCutoffHz"),
+        ({"highCutoffHz": 5000.0}, "highCutoffHz"),
+        ({"band2": {"detector": "rms"}}, "band2.detector"),
     ],
 )
-def test_multiband_shorthand_keys_are_refused_naming_the_current_key(
-    config: dict, current: str
+def test_multiband_shorthand_keys_are_refused_as_any_other_unknown_key(
+    config: dict, retired: str
 ) -> None:
-    """The three-band shorthand is gone; the refusal names the list spelling."""
+    """The three-band shorthand is gone; the refusal never points at a successor."""
     with raises_coded(
         ErrorCode.INVALID_PARAMETER,
-        match=r"\(renamed to " + re.escape(f"overrides.{MB}.{current}") + r"\)$",
+        match=r"unknown key " + re.escape(f"overrides.{MB}.{retired}") + r"$",
     ):
         master_audio(LEFT, SR, overrides={"dynamics": {"multibandComp": config}})

@@ -395,13 +395,12 @@ def test_streaming_mastering_chain_refuses_a_whole_signal_repair_stage(stage: st
     assert not isinstance(refused.value, SonareValueError)
 
 
-def test_streaming_mastering_chain_names_the_new_spelling_of_a_renamed_key() -> None:
+def test_streaming_mastering_chain_refuses_a_renamed_key_as_any_other_unknown_key() -> None:
     from libsonare import SonareError, StreamingMasteringChain
 
     with pytest.raises(
         SonareError,
-        match=r"unknown key config\.dynamics\.deesser\.bandpassQ "
-        r"\(renamed to config\.dynamics\.deesser\.bandPassQ\)$",
+        match=r"unknown key config\.dynamics\.deesser\.bandpassQ$",
     ):
         StreamingMasteringChain(
             {"dynamics": {"deesser": {"enabled": True, "bandpassQ": 2.0}}},
@@ -666,7 +665,7 @@ _CHAIN_CONTENT_REFUSALS = {
     ),
     "earlier_true_peak_ceiling_spelling": (
         {"loudness": {"ceilingDb": -1.0}},
-        r"{root}\.loudness\.ceilingDb.*ceilingDbtp",
+        r"unknown key {root}\.loudness\.ceilingDb$",
     ),
 }
 

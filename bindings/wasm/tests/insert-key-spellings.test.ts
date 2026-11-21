@@ -32,14 +32,32 @@ const RENAMED: readonly (readonly [MasteringInsertName, string, string])[] = [
   ['effects.modulation.pitchShifter', 'cents2', 'pitchCents2'],
 ];
 
+/** The refusal of an undeclared key: the accepted list, never a pointer to a successor. */
+function unknownKeyRefusal(call: () => unknown, key: string, current: string): void {
+  let caught: unknown;
+  try {
+    call();
+  } catch (error) {
+    caught = error;
+  }
+  const message = (caught as Error | undefined)?.message ?? '';
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  expect(message).toMatch(
+    new RegExp(`unknown key ${escape(key)} \\(expected [^)]*\\b${escape(current)}\\b`),
+  );
+  expect(message).not.toMatch(/renamed to/);
+}
+
 describe('insert key spellings', () => {
   it.each(RENAMED)('%s names %s as %s', (insert, old, current) => {
     const names = masteringInsertParamNames(insert);
     expect(names).toContain(current);
     expect(names).not.toContain(old);
-    expect(() =>
-      masteringInsertTiming({ insert, params: { [old]: 1 } as never, sampleRate: 48000 }),
-    ).toThrow(`${old} (renamed to ${current})`);
+    unknownKeyRefusal(
+      () => masteringInsertTiming({ insert, params: { [old]: 1 } as never, sampleRate: 48000 }),
+      old,
+      current,
+    );
   });
 
   it('reads the repair.trimSilence threshold as thresholdDb in dBFS', () => {
@@ -52,14 +70,17 @@ describe('insert key spellings', () => {
       params: { thresholdDb: -26 },
     });
     expect(trimmed.samples.length).toBeLessThan(samples.length);
-    expect(() =>
-      masteringApplyProcessor({
-        processor: 'repair.trimSilence',
-        samples,
-        sampleRate: 48000,
-        params: { threshold: 0.05 } as never,
-      }),
-    ).toThrow('threshold (renamed to thresholdDb)');
+    unknownKeyRefusal(
+      () =>
+        masteringApplyProcessor({
+          processor: 'repair.trimSilence',
+          samples,
+          sampleRate: 48000,
+          params: { threshold: 0.05 } as never,
+        }),
+      'threshold',
+      'thresholdDb',
+    );
   });
 
   it('reads the de-esser band Q in a chain document as dynamics.deesser.bandPassQ', () => {
@@ -67,10 +88,14 @@ describe('insert key spellings', () => {
       '{"version":2,"params":{"dynamics.deesser.bandPassQ":2}}',
     );
     expect(config.dynamics?.deesser?.bandPassQ).toBe(2);
+    // A chain document names the refused key alone; its accepted set is the whole catalog.
     expect(() =>
       masteringChainConfigFromJson('{"version":2,"params":{"dynamics.deesser.bandpassQ":2}}'),
     ).toThrow(
-      'unknown key params.dynamics.deesser.bandpassQ (renamed to params.dynamics.deesser.bandPassQ)',
+      expect.objectContaining({
+        name: 'SonareError',
+        message: 'masteringChainConfigFromJson: unknown key params.dynamics.deesser.bandpassQ',
+      }),
     );
   });
 });

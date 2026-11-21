@@ -239,18 +239,19 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
         ("repair.trimSilence", "threshold", "thresholdDb"),
     ],
 )
-def test_a_renamed_insert_key_is_refused_with_its_new_spelling(
+def test_a_renamed_insert_key_is_refused_with_the_keys_the_insert_reads(
     processor: str, old: str, new: str
 ) -> None:
-    """The old spelling is refused rather than read, and the refusal names the new one."""
+    """The old spelling is refused rather than read, listing the accepted keys, new one included."""
     import libsonare
 
-    hint = rf"{re.escape(old)} \(renamed to {re.escape(new)}\)$"
-    with pytest.raises(libsonare.SonareValueError, match=hint):
+    listed = rf"unknown key {re.escape(old)} \(expected [^)]*\b{re.escape(new)}\b"
+    with pytest.raises(libsonare.SonareValueError, match=listed) as caught:
         libsonare.mastering_apply_processor(processor, np.zeros(4800, np.float32), 48000, {old: 1})
+    assert "renamed" not in str(caught.value)
 
 
-def test_a_key_renamed_only_on_another_insert_gets_no_hint() -> None:
+def test_a_key_renamed_only_on_another_insert_lists_that_inserts_keys() -> None:
     import libsonare
 
     with pytest.raises(libsonare.SonareValueError) as caught:
@@ -406,15 +407,15 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     [
         (
             {"name": "S", "targetLufs": -14.0, "ceiling_dbtp": -1.0},
-            "unknown key platforms[0].targetLufs (renamed to platforms[0].target_lufs)",
+            "unknown key platforms[0].targetLufs (expected name, target_lufs, ceiling_dbtp)",
         ),
         (
             {"name": "S", "target_lufs": -14.0, "ceilingDb": -1.0},
-            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
         ),
         (
             {"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0},
-            "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
+            "unknown key platforms[0].ceiling_db (expected name, target_lufs, ceiling_dbtp)",
         ),
         ({"name": "S", "target_lufs": -14.0}, "platforms[0].ceiling_dbtp must be given"),
         ({"target_lufs": -14.0}, "platforms[0].name must be given"),

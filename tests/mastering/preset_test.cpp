@@ -422,16 +422,26 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
           "params.repair.declip.clipThresholdDb must be finite and in [-890, 0]");
   refused(R"({"params":{"repair.declip.enabled":false,"repair.declip.clipThresholdDb":3}})",
           "params.repair.declip.clipThresholdDb must be finite and in [-890, 0]");
-  refused(R"({"params":{"dynamics.multibandComp.lowCutoffHz":200}})",
-          "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.0");
-  refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
-          "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.1");
-  refused(R"({"params":{"loudness":{"ceilingDb":-1}}})", "renamed to params.loudness.ceilingDbtp");
-  refused(R"({"params":{"dynamics.deesser.bandpassQ":2}})",
-          "unknown key params.dynamics.deesser.bandpassQ (renamed to "
-          "params.dynamics.deesser.bandPassQ)");
-  refused(R"({"params":{"maximizer.truePeakLimiter.ceilingDb":-1}})",
-          "renamed to params.maximizer.truePeakLimiter.ceilingDbtp");
+  // A retired key is refused as any other undeclared key, never naming its successor.
+  for (const auto& [document, path] : std::vector<std::pair<std::string, std::string>>{
+           {R"({"params":{"dynamics.multibandComp.lowCutoffHz":200}})",
+            "params.dynamics.multibandComp.lowCutoffHz"},
+           {R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
+            "params.dynamics.multibandComp.highCutoffHz"},
+           {R"({"params":{"loudness":{"ceilingDb":-1}}})", "params.loudness.ceilingDb"},
+           {R"({"params":{"dynamics.deesser.bandpassQ":2}})", "params.dynamics.deesser.bandpassQ"},
+           {R"({"params":{"maximizer.truePeakLimiter.ceilingDb":-1}})",
+            "params.maximizer.truePeakLimiter.ceilingDb"},
+       }) {
+    INFO(document);
+    try {
+      (void)chain_config_from_json(document);
+      FAIL("expected a refusal");
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK(std::string(error.what()) == "unknown key " + path);
+    }
+  }
   refused(R"({"params":{},"extra":1})", "unknown key extra");
 
   // Annotation keys pass at any depth, and a non-positive threshold is the declipper's own.

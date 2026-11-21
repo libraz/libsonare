@@ -1252,11 +1252,20 @@ std::string refusal_of(Fn&& call) {
   return {};
 }
 
-// Whether @p message refuses @p key as an unknown key; @p key may carry its " (renamed to ...)".
+// Whether @p message refuses @p key as an unknown key.
 bool names_unread_key(const std::string& message, const std::string& key) {
   const std::string lead = "unknown key " + key;
   return message.compare(0, lead.size(), lead) == 0 &&
          (message.size() == lead.size() || message[lead.size()] == ' ');
+}
+
+// Whether @p message refuses @p key with the accepted list naming @p current, and no successor.
+bool lists_current_key(const std::string& message, const std::string& key,
+                       const std::string& current) {
+  const std::string lead = "unknown key " + key + " (expected ";
+  return message.compare(0, lead.size(), lead) == 0 &&
+         message.find(current, lead.size()) != std::string::npos &&
+         message.find("renamed") == std::string::npos;
 }
 
 }  // namespace
@@ -1403,7 +1412,7 @@ TEST_CASE("every key the catalog publishes for an offline processor is one it re
   CHECK(ran >= 60);
 }
 
-TEST_CASE("a renamed processor parameter is refused naming its successor",
+TEST_CASE("a renamed processor parameter is refused with the keys the processor reads",
           "[mastering][param_wiring]") {
   namespace api = sonare::mastering::api;
   const std::vector<float> samples(2048, 0.25f);
@@ -1422,7 +1431,7 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
     CHECK(message.find("clipThresholdDb") != std::string::npos);
   }
 
-  SECTION("an insert key renamed for 2.0 names its successor on that insert only") {
+  SECTION("an insert key renamed for 2.0 is refused with the keys that insert reads") {
     const std::vector<std::vector<std::string>> rows = {
         {"dynamics.deesser", "bandpassQ", "bandPassQ"},
         {"effects.acoustic.roomMorph", "maxSeconds", "maxSec"},
@@ -1442,9 +1451,9 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
       CAPTURE(row[0], row[1]);
       const std::string message =
           refusal_of([&] { (void)api::insert_timing(row[0], "{\"" + row[1] + "\":1}", 48000.0); });
-      CHECK(names_unread_key(message, row[1] + " (renamed to " + row[2] + ")"));
+      CHECK(lists_current_key(message, row[1], row[2]));
     }
-    // The old spelling is a live key elsewhere, so another insert gives no hint.
+    // The old spelling is a live key elsewhere, so another insert lists its own keys.
     const std::string elsewhere = refusal_of(
         [&] { (void)api::insert_timing("effects.reverb.velvet", "{\"semitones\":1}", 48000.0); });
     CHECK(names_unread_key(elsewhere, "semitones"));
@@ -1454,7 +1463,7 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
       api::apply_named_processor("repair.trimSilence", samples.data(), samples.size(), 48000,
                                  {{"threshold", 0.001}});
     });
-    CHECK(names_unread_key(trim, "threshold (renamed to thresholdDb)"));
+    CHECK(lists_current_key(trim, "threshold", "thresholdDb"));
   }
 
   SECTION("the true-peak ceilings are named in dBTP") {
@@ -1465,7 +1474,7 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
         api::apply_named_processor(processor, samples.data(), samples.size(), 48000,
                                    {{"ceilingDb", -1.0}});
       });
-      CHECK(names_unread_key(message, "ceilingDb (renamed to ceilingDbtp)"));
+      CHECK(lists_current_key(message, "ceilingDb", "ceilingDbtp"));
     }
   }
 

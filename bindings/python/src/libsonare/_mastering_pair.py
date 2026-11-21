@@ -445,13 +445,6 @@ def mastering_analyze_stereo(
 
 
 _PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
-# The camelCase spellings a platform record does not take, with the key that replaces each.
-_PLATFORM_RENAMED = {
-    "targetLufs": "target_lufs",
-    "ceilingDb": "ceiling_dbtp",
-    "ceilingDbtp": "ceiling_dbtp",
-    "ceiling_db": "ceiling_dbtp",
-}
 
 
 def _platform_fields(platform: Mapping[str, Any], where: str) -> tuple[str, float, float]:
@@ -459,10 +452,6 @@ def _platform_fields(platform: Mapping[str, Any], where: str) -> tuple[str, floa
     if not isinstance(platform, Mapping):
         raise _refuse_type(f"{where} must be a mapping")
     for key in platform:
-        if key in _PLATFORM_RENAMED:
-            raise _refuse(
-                f"unknown key {where}.{key} (renamed to {where}.{_PLATFORM_RENAMED[key]})"
-            )
         if key not in _PLATFORM_KEYS:
             raise _refuse(f"unknown key {where}.{key} (expected {', '.join(_PLATFORM_KEYS)})")
     for key in _PLATFORM_KEYS:

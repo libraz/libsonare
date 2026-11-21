@@ -99,14 +99,14 @@ describe('masteringChainConfigFromJson', () => {
       'unknown key params.loudness.bogusKey',
     ],
     [
-      'a retired key, naming its current spelling',
+      'a retired key, as any other unknown key',
       '{"version":2,"params":{"eq.tiltDb":1}}',
-      'unknown key params.eq.tiltDb (renamed to params.eq.tilt.tiltDb)',
+      'unknown key params.eq.tiltDb',
     ],
     [
-      'a linear declip threshold, naming its decibel spelling',
+      'a linear declip threshold, as any other unknown key',
       '{"params":{"repair.declip.clipThreshold":0.5}}',
-      'unknown key params.repair.declip.clipThreshold (renamed to params.repair.declip.clipThresholdDb)',
+      'unknown key params.repair.declip.clipThreshold',
     ],
   ])('refuses %s as InvalidFormat', (_label, document, message) => {
     const error = refusal(() => masteringChainConfigFromJson(document));

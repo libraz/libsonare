@@ -35,7 +35,9 @@ def test_a_version_1_document_is_refused_as_invalid_format() -> None:
 
 def test_an_earlier_key_spelling_is_refused_as_invalid_format() -> None:
     document = json.dumps({"version": 2, "params": {"dynamics.multibandComp.slope": "lr4"}})
-    with raises_coded(ErrorCode.INVALID_FORMAT, match="crossover.slope"):
+    with raises_coded(
+        ErrorCode.INVALID_FORMAT, match=r"unknown key params\.dynamics\.multibandComp\.slope$"
+    ):
         libsonare.mastering_chain_config_from_json(document)
 
 

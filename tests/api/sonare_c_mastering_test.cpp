@@ -1174,8 +1174,7 @@ TEST_CASE("sonare_mastering_chain_config_from_json refuses a document as Invalid
   char* json = nullptr;
   REQUIRE(sonare_mastering_chain_config_from_json(R"({"version":2,"params":{"eq.tiltDb":1}})",
                                                   &json) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE_THAT(std::string(sonare_last_error_message()),
-               Catch::Matchers::ContainsSubstring("eq.tilt.tiltDb"));
+  REQUIRE(std::string(sonare_last_error_message()) == "unknown key params.eq.tiltDb");
   REQUIRE(sonare_mastering_chain_config_from_json(nullptr, &json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(json == nullptr);

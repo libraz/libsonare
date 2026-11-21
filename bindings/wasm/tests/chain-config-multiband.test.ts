@@ -145,18 +145,19 @@ describe('typed multiband crossover + bands', () => {
   });
 
   it.each([
-    ['lowCutoffHz', 200, 'crossover.cutoffsHz.0'],
-    ['highCutoffHz', 4000, 'crossover.cutoffsHz.1'],
-    ['lowThresholdDb', -20, 'bands.0.thresholdDb'],
-    ['midRatio', 3, 'bands.1.ratio'],
-    ['highReleaseMs', 80, 'bands.2.releaseMs'],
-  ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
+    ['lowCutoffHz', 200],
+    ['highCutoffHz', 4000],
+    ['lowThresholdDb', -20],
+    ['midRatio', 3],
+    ['highReleaseMs', 80],
+  ] as const)('refuses the retired %s shorthand as any other unknown key', (key, value) => {
     const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
     expect(() => masterAudio({ samples: left, sampleRate, overrides })).toThrow(
-      refusedAs(
-        TypeError,
-        `masterAudio: unknown key overrides.${MB}.${key} (renamed to overrides.${MB}.${current})`,
-      ),
+      // The whole text: an undeclared key never points at its successor.
+      expect.objectContaining({
+        name: 'TypeError',
+        message: `masterAudio: unknown key overrides.${MB}.${key}`,
+      }),
     );
   });
 

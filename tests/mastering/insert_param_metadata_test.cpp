@@ -1898,16 +1898,11 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
     CHECK(mastering_enum_value("", "dynamics.multibandComp.bands." + index + ".detector",
                                "logRms") == 2.0);
   }
-  // A retired spelling is refused with the current key named.
-  const std::vector<std::pair<std::string, std::string>> retired_keys = {
-      {"dynamics.multibandComp.slope", "dynamics.multibandComp.crossover.slope"},
-      {"dynamics.multibandComp.mode", "dynamics.multibandComp.crossover.mode"},
-      {"dynamics.multibandComp.band3.detector", "dynamics.multibandComp.bands.3.detector"}};
-  for (const auto& [retired, current] : retired_keys) {
+  // A retired spelling is refused as any other unknown key.
+  for (const std::string retired : {"dynamics.multibandComp.slope", "dynamics.multibandComp.mode",
+                                    "dynamics.multibandComp.band3.detector"}) {
     INFO(retired);
-    CHECK_THROWS_WITH(
-        mastering_enum_value("", retired, "lr2"),
-        Catch::Matchers::ContainsSubstring(retired) && Catch::Matchers::ContainsSubstring(current));
+    CHECK_THROWS_WITH(mastering_enum_value("", retired, "lr2"), "unknown key " + retired);
   }
   CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.cutoff0Hz", "x").has_value());
   CHECK_FALSE(mastering_enum_value("", "dynamics.compressor.ratio", "x").has_value());

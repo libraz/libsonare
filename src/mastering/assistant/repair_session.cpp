@@ -173,13 +173,10 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
 
 #undef SONARE_WRITE_SETTING
 
-/// Refuses an unknown setting, with the current key as a path when the catalog renamed it.
+/// Refuses an unknown setting by its path.
 [[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key) {
-  const std::string path = schema::child_path(stage_path, key);
-  const std::string renamed = api::detail::renamed_param_successor("", key);
-  throw SonareParameterRefusal::unknown(
-      ErrorCode::InvalidFormat, path,
-      renamed.empty() ? std::string() : schema::child_path(stage_path, renamed));
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat,
+                                        schema::child_path(stage_path, key));
 }
 
 std::string choice_names(const std::vector<api::detail::EnumChoice>& choices) {
