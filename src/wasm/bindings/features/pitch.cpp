@@ -89,11 +89,11 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
   if (has_prob == has_flags) {
     throw WasmRangeError("exactly one of voicedProb and voicedFlags must be given");
   }
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   std::vector<float> probabilities;
   std::vector<int32_t> flags;
   if (has_prob) {
-    probabilities = float32ArrayToVector(voiced_prob);
+    probabilities = float32ArrayToVector(voiced_prob, "voicedProb");
     if (probabilities.size() != f0.size()) {
       throw WasmRangeError("voicedProb must have the same length as f0Hz");
     }
@@ -140,7 +140,7 @@ float js_pitch_tuning(val frequencies, const val& resolution_val, const val& bin
   const int bins_per_octave =
       domainNumberFromVal<int>(bins_per_octave_val, "binsPerOctave", kPitchCountDomain);
   const float resolution = checkedFloatFromVal(resolution_val, "resolution");
-  std::vector<float> data = float32ArrayToVector(frequencies);
+  std::vector<float> data = float32ArrayToVector(frequencies, "frequencies");
   return pitch_tuning(data, resolution, bins_per_octave);
 }
 

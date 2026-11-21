@@ -187,7 +187,7 @@ export function nnlsChroma(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
-    const result = requireModule().nnlsChromaEx(
+    const result = requireModule().nnlsChroma(
       request.samples,
       request.sampleRate,
       optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),

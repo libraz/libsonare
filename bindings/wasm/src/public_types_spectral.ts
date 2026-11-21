@@ -884,6 +884,11 @@ export interface HpssResult {
   harmonic: Float32Array;
   /** Percussive component, the same length as the input. */
   percussive: Float32Array;
+  /**
+   * What neither component claimed (input - harmonic - percussive), the same
+   * length as the input. Present only when the call set `withResidual: true`.
+   */
+  residual?: Float32Array;
   /** Sample rate in Hz of both components. */
   sampleRate: number;
 }

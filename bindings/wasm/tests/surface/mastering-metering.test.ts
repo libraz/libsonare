@@ -549,8 +549,6 @@ describe('mastering metering surface', () => {
 
   describe('native still uses the old spelling', () => {
     const module = () => getSonareModule();
-    const wasmSource = (path: string) =>
-      readFileSync(new URL(`../../../../src/wasm/bindings/${path}`, import.meta.url), 'utf8');
 
     const rawCases: Array<[string, () => Record<string, unknown>, string, string | null]> = [
       [
@@ -616,12 +614,6 @@ describe('mastering metering surface', () => {
         report.magnitude.reduce((sum, v) => sum + v, 0);
       expect(energy(early)).toBe(0);
       expect(energy(late)).toBeGreaterThan(0);
-    });
-
-    it.each([
-      ['the vectorscope decimation entry', 'metering/metering.cpp', 'meteringVectorscopeDecimated'],
-    ])('%s is still spelled the old way in the embind source', (_label, path, spelling) => {
-      expect(wasmSource(path)).toContain(spelling);
     });
 
     it('the meter ring header keeps its channel-count slot', async () => {

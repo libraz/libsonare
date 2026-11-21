@@ -15,6 +15,7 @@ import {
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
+  realtimeVoiceChangerRender,
   realtimeVoiceChangerValidatePresetJson,
   type ScaleKind,
   StreamingRetune,
@@ -25,7 +26,6 @@ import {
   type VoiceEngine,
   type VoicePresetId,
   voiceChange,
-  voiceChangeRealtime,
   voiceCharacterPresetId,
 } from '../../dist/index.js';
 import * as workletModule from '../../dist/worklet.js';
@@ -200,6 +200,10 @@ describe('voice changer surface', () => {
       'processPreparedPlanarWithCarrier',
       'processInterleaved',
       'processInterleavedWithCarrier',
+      'processMonoWithCarrier',
+      'processMonoWithCarrierInto',
+      'processPlanarWithCarrier',
+      'processInterleavedWithCarrierInto',
     ])('no longer has the method %s', (name) => {
       const c = changer();
       try {
@@ -266,24 +270,24 @@ describe('voice changer surface', () => {
       }
     });
 
-    it('processPlanarWithCarrier equals processMonoWithCarrier for one channel', () => {
+    it('processPlanar with a carrier equals processMono with a carrier for one channel', () => {
       const input = tone(BLOCK);
       const carrier = tone(BLOCK, 110, 0.3);
       const a = changer();
       const b = changer();
       try {
-        const [out] = a.processPlanarWithCarrier([input], carrier);
-        expectClose(out as Float32Array, b.processMonoWithCarrier(input, carrier));
+        const [out] = a.processPlanar([input], carrier);
+        expectClose(out as Float32Array, b.processMono(input, carrier));
       } finally {
         a.destroy();
         b.destroy();
       }
     });
 
-    it('processPlanarWithCarrier returns two planes for stereo', () => {
+    it('processPlanar with a carrier returns two planes for stereo', () => {
       const a = changer({ numChannels: 2 });
       try {
-        const out = a.processPlanarWithCarrier([tone(BLOCK), tone(BLOCK, 300)], tone(BLOCK, 110));
+        const out = a.processPlanar([tone(BLOCK), tone(BLOCK, 300)], tone(BLOCK, 110));
         expect(out).toHaveLength(2);
         expect((out[1] as Float32Array).length).toBe(BLOCK);
         expectTypeOf(out).toEqualTypeOf<Float32Array[]>();
@@ -309,16 +313,16 @@ describe('voice changer surface', () => {
       }
     });
 
-    it('processInterleavedInto and its carrier twin require numChannels 1 or 2', () => {
+    it('processInterleavedInto with and without a carrier require numChannels 1 or 2', () => {
       const a = changer({ numChannels: 2 });
       try {
         const buf = new Float32Array(BLOCK * 2);
         expect(caught(() => a.processInterleavedInto(buf, 3 as never, buf)).name).toBe(
           'RangeError',
         );
-        expect(
-          caught(() => a.processInterleavedWithCarrierInto(buf, tone(BLOCK), 0 as never, buf)).name,
-        ).toBe('RangeError');
+        expect(caught(() => a.processInterleavedInto(buf, 0 as never, buf, tone(BLOCK))).name).toBe(
+          'RangeError',
+        );
         expect(caught(() => a.processInterleavedInto(buf, '2' as never, buf)).name).toBe(
           'TypeError',
         );
@@ -342,7 +346,7 @@ describe('voice changer surface', () => {
         buf.input.set(input);
         buf.carrier.set(carrier);
         buf.processWithCarrier();
-        expectClose(buf.output, b.processMonoWithCarrier(input, carrier));
+        expectClose(buf.output, b.processMono(input, carrier));
       } finally {
         a.destroy();
         b.destroy();
@@ -615,26 +619,34 @@ describe('voice changer surface', () => {
       ).toBe('TypeError');
     });
 
-    it('voiceChangeRealtime is request-only and planar', () => {
+    it('realtimeVoiceChangerRender is request-only and planar', () => {
       const left = tone(sampleRate / 4);
       const right = tone(sampleRate / 4, 330);
-      const stereo = voiceChangeRealtime({ channels: [left, right], sampleRate });
+      const stereo = realtimeVoiceChangerRender({ channels: [left, right], sampleRate });
       expect(stereo).toHaveLength(2);
       expect((stereo[0] as Float32Array).length).toBe(left.length);
       expect((stereo[1] as Float32Array).length).toBe(right.length);
-      const mono = voiceChangeRealtime({ channels: [left], sampleRate, config: 'neutralMonitor' });
+      const mono = realtimeVoiceChangerRender({
+        channels: [left],
+        sampleRate,
+        config: 'neutralMonitor',
+      });
       expect(mono).toHaveLength(1);
       expectClose(
-        voiceChangeRealtime({ channels: [left], sampleRate })[0] as Float32Array,
+        realtimeVoiceChangerRender({ channels: [left], sampleRate })[0] as Float32Array,
         mono[0] as Float32Array,
       );
       expectTypeOf(stereo).toEqualTypeOf<Float32Array[]>();
     });
 
-    it('voiceChangeRealtime accepts a flat config and a preset id alike', () => {
+    it('realtimeVoiceChangerRender accepts a flat config and a preset id alike', () => {
       const input = tone(sampleRate / 4);
-      const byId = voiceChangeRealtime({ channels: [input], sampleRate, config: 'hardTune' });
-      const byConfig = voiceChangeRealtime({
+      const byId = realtimeVoiceChangerRender({
+        channels: [input],
+        sampleRate,
+        config: 'hardTune',
+      });
+      const byConfig = realtimeVoiceChangerRender({
         channels: [input],
         sampleRate,
         config: realtimeVoiceChangerPresetConfig('hardTune'),
@@ -666,8 +678,8 @@ describe('voice changer surface', () => {
         { channels: [tone(64)], sampleRate, config: 'bright-idol' },
         'RangeError',
       ],
-    ])('voiceChangeRealtime refuses %s', (_name, request, errorName) => {
-      expect(caught(() => voiceChangeRealtime(request as never)).name).toBe(errorName);
+    ])('realtimeVoiceChangerRender refuses %s', (_name, request, errorName) => {
+      expect(caught(() => realtimeVoiceChangerRender(request as never)).name).toBe(errorName);
     });
   });
 

@@ -53,7 +53,8 @@ export const ROWS: Row[] = [
     name: 'hpss',
     fn: sonare.hpss,
     form: 'sampleOptions',
-    params: 'samples sampleRate kernelHarmonic? kernelPercussive? nFft? hopLength? hardMask?',
+    params:
+      'samples sampleRate kernelHarmonic? kernelPercussive? nFft? hopLength? hardMask? withResidual?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -62,6 +63,7 @@ export const ROWS: Row[] = [
       nFft: 1024,
       hopLength: 128,
       hardMask: true,
+      withResidual: true,
     },
     invalid: { nFft: 0 },
   },
@@ -171,8 +173,8 @@ export const ROWS: Row[] = [
     invalid: { sampleRate: 0 },
   },
   {
-    name: 'voiceChangeRealtime',
-    fn: sonare.voiceChangeRealtime,
+    name: 'realtimeVoiceChangerRender',
+    fn: sonare.realtimeVoiceChangerRender,
     form: 'requestOnly',
     params: 'channels sampleRate config?',
     values: {

@@ -8,7 +8,7 @@ import {
   estimateTuning,
   fixFrames,
   fixLength,
-  hpssWithResidual,
+  hpss,
   init,
   lufs,
   lufsMultichannel,
@@ -68,8 +68,8 @@ describe('remaining feature request-object compatibility', () => {
     expect(
       phaseVocoder({ samples, speedRatio: 1.1, sampleRate, nFft: 512, hopLength: 128 }),
     ).toEqual(phaseVocoder(samples, sampleRate, { speedRatio: 1.1, nFft: 512, hopLength: 128 }));
-    expect(hpssWithResidual({ samples, sampleRate })).toEqual(
-      hpssWithResidual(samples, sampleRate),
+    expect(hpss({ samples, sampleRate, withResidual: true })).toEqual(
+      hpss(samples, sampleRate, { withResidual: true }),
     );
     expect(remix({ samples, sampleRate, intervals: new Int32Array([0, 100]) })).toEqual(
       remix(samples, sampleRate, { intervals: new Int32Array([0, 100]) }),

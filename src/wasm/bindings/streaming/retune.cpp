@@ -88,10 +88,10 @@ class StreamingRetuneWrapper {
   int latencySamples() const { return retune_.latency_samples(); }
 
   val processMono(val samples) {
-    const std::size_t length = wasmFloat32ArrayLength(samples, "process block");
+    const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
     ensurePrepared();
     validateBlockLength(length);
-    std::vector<float> block = float32ArrayToVector(samples);
+    std::vector<float> block = float32ArrayToVector(samples, "samples");
     // Refuse a non-finite sample rather than zeroing it. Zeroing kept the grain
     // history clean but told the caller nothing, so a block silently became a
     // different block; the C ABI reports it, and a surface that quietly repairs

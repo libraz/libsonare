@@ -97,14 +97,19 @@ inline emscripten::val masteringStereoResultToVal(
 }
 
 /// @brief Install the JS progress and cancel callbacks on a chain. A callback
-/// that is null or undefined is left uninstalled rather than wrapped.
+/// that is null or undefined is left uninstalled rather than wrapped, except that a cancel
+/// callback alone installs a no-op progress sink: an empty chain polls cancel only beside one.
 inline void installMasteringChainCallbacks(sonare::mastering::api::MasteringChain& chain,
                                            const emscripten::val& progress_callback,
                                            const emscripten::val& cancel_callback) {
-  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
+  const bool has_progress = !progress_callback.isNull() && !progress_callback.isUndefined();
+  const bool has_cancel = !cancel_callback.isNull() && !cancel_callback.isUndefined();
+  if (has_progress) {
     chain.set_progress_callback([progress_callback](float progress, const char* stage) {
       progress_callback(progress, std::string(stage ? stage : ""));
     });
+  } else if (has_cancel) {
+    chain.set_progress_callback([](float, const char*) {});
   }
   if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
     chain.set_cancel_callback(

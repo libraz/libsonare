@@ -8,7 +8,6 @@ import {
   estimateRoom,
   harmonic,
   hpss,
-  hpssWithResidual,
   init,
   nnFilter,
   normalize,
@@ -86,7 +85,6 @@ describe('effects separation: sample-taking one-shots', () => {
     ['hpss', hpss, samples, {}],
     ['harmonic', harmonic, samples, {}],
     ['percussive', percussive, samples, {}],
-    ['hpssWithResidual', hpssWithResidual, samples, {}],
     ['decomposeStems', decomposeStems, samples, { nComponents: 2 }],
     ['trim', trim, samples, {}],
     ['normalize', normalize, samples, {}],
@@ -293,10 +291,10 @@ describe('effects separation: Matrix2D results and closed sets', () => {
       'mean' | 'median' | 'min' | 'max' | undefined
     >();
     expectTypeOf<Parameters<typeof decompose>[0]['s']>().toEqualTypeOf<Matrix2D>();
-    expectTypeOf<ReturnType<typeof hpssWithResidual>>().toEqualTypeOf<{
+    expectTypeOf<ReturnType<typeof hpss>>().toEqualTypeOf<{
       harmonic: Float32Array;
       percussive: Float32Array;
-      residual: Float32Array;
+      residual?: Float32Array;
       sampleRate: number;
     }>();
     const typeOnly = () => {
@@ -328,20 +326,43 @@ describe('effects separation: renamed and moved fields', () => {
     ).toBeInstanceOf(RangeError);
   });
 
-  it('hpss and hpssWithResidual take hardMask inside the options', () => {
+  it('hpss takes hardMask and withResidual inside the options', () => {
     const hard = hpss(samples, sr, { hardMask: true });
     const viaRequest = hpss({ samples, sampleRate: sr, hardMask: true });
     expect(maxAbsDiff(hard.harmonic, viaRequest.harmonic)).toBeLessThan(1e-6);
-    const residual = hpssWithResidual(samples, sr, { hardMask: true }).residual;
-    expect(residual.length).toBe(samples.length);
+    const residual = hpss(samples, sr, { hardMask: true, withResidual: true }).residual;
+    expect(residual?.length).toBe(samples.length);
     expect(caught(() => hpss(samples, sr, { hardMask: 1 } as never))).toBeInstanceOf(TypeError);
+  });
+
+  it('hpss returns residual only when withResidual is set', () => {
+    const plain = hpss({ samples, sampleRate: sr });
+    expect('residual' in plain).toBe(false);
+    const tol = 1e-5 * samples.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+    const withSoft = hpss({ samples, sampleRate: sr, withResidual: true });
+    expect(maxAbsDiff(withSoft.harmonic, plain.harmonic)).toBeLessThanOrEqual(tol);
+    expect(maxAbsDiff(withSoft.percussive, plain.percussive)).toBeLessThanOrEqual(tol);
+    const hard = hpss({ samples, sampleRate: sr, hardMask: true, withResidual: true });
+    const residual = hard.residual as Float32Array;
+    expect(residual.length).toBe(samples.length);
+    const rebuilt = new Float32Array(samples.length);
+    for (let i = 0; i < rebuilt.length; i++) {
+      rebuilt[i] = hard.harmonic[i] + hard.percussive[i] + residual[i];
+    }
+    expect(maxAbsDiff(rebuilt, samples)).toBeLessThanOrEqual(tol);
+    const refused = caught(() => hpss({ samples, sampleRate: sr, withResidual: 'yes' } as never));
+    expect(refused).toBeInstanceOf(TypeError);
+    expect((refused as Error).message).toContain('withResidual');
   });
 
   it('derives an omitted hop as a quarter of nFft', () => {
     const common = { samples, sampleRate: sr, nFft: 512 };
     const calls: Array<[string, (hop?: number) => Float32Array]> = [
       ['hpss', (hop) => hpss({ ...common, hopLength: hop }).harmonic],
-      ['hpssWithResidual', (hop) => hpssWithResidual({ ...common, hopLength: hop }).residual],
+      [
+        'hpss withResidual',
+        (hop) => hpss({ ...common, hopLength: hop, withResidual: true }).residual as Float32Array,
+      ],
       ['timeStretch', (hop) => sonare.timeStretch({ ...common, speedRatio: 1.25, hopLength: hop })],
       ['pitchShift', (hop) => sonare.pitchShift({ ...common, pitchSemitones: 2, hopLength: hop })],
     ];

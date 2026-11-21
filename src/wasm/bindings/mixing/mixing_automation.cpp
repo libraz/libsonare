@@ -37,23 +37,13 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   }
 }
 
-// Reads a meter snapshot at the given tap point. tap: 0 = pre-fader,
+// Reads a strip's meter snapshot at the given tap point. tap: 0 = pre-fader,
 // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
-val MixerWasm::meterTap(const val& strip_index_val, const val& tap_val) {
+val MixerWasm::stripMeter(const val& strip_index_val, const val& tap_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const int tap = checkedIntFromVal(tap_val, "tap");
   SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_strip_meter_tap(stripAt(strip_index), tap, &snapshot));
-  return mixMeterSnapshotToVal(snapshot);
-}
-
-// Reads the strip's current (post-fader) meter snapshot. Tap-less, mirroring
-// the Node/Python stripMeter contract which calls sonare_strip_meter; the
-// tap-selectable variant is meterTap.
-val MixerWasm::stripMeter(const val& strip_index_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
-  SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_strip_meter(stripAt(strip_index), &snapshot));
+  checkStripError(sonare_strip_meter(stripAt(strip_index), tap, &snapshot));
   return mixMeterSnapshotToVal(snapshot);
 }
 
@@ -65,21 +55,21 @@ val MixerWasm::busMeter(std::string bus_id) {
 
 // Number of blocks in which the strip discarded recursive state because a
 // non-finite value had reached it. See sonare_strip_non_finite_discard_count.
-uint32_t MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
+double MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
-  uint32_t count = 0;
+  size_t count = 0;
   checkStripError(sonare_strip_non_finite_discard_count(stripAt(strip_index), &count));
-  return count;
+  return static_cast<double>(count);
 }
 
 // Number of blocks in which a bus discarded recursive state because a
 // non-finite value had reached it. See
 // sonare_mixer_bus_non_finite_discard_count.
-uint32_t MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
-  uint32_t count = 0;
+double MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
+  size_t count = 0;
   checkStripError(
       sonare_mixer_bus_non_finite_discard_count(mixer_, wasmCString(bus_id, "busId"), &count));
-  return count;
+  return static_cast<double>(count);
 }
 
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
@@ -162,7 +152,6 @@ val MixerWasm::readGoniometerLatest(const val& strip_index_val, double max_point
 
 void registerMixerAutomationMeters(class_<MixerWasm>& cls) {
   cls.function("scheduleInsertAutomation", &MixerWasm::scheduleInsertAutomation)
-      .function("meterTap", &MixerWasm::meterTap)
       .function("stripMeter", &MixerWasm::stripMeter)
       .function("busMeter", &MixerWasm::busMeter)
       .function("stripNonFiniteDiscardCount", &MixerWasm::stripNonFiniteDiscardCount)

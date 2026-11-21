@@ -31,23 +31,19 @@ val acousticParametersToVal(const AcousticParameters& params) {
   return out;
 }
 
-val js_analyze_impulse_response_ex(val samples, const val& sample_rate_val,
-                                   const val& n_octave_bands_val, const val& min_decay_db_val) {
+val js_analyze_impulse_response(val samples, const val& sample_rate_val,
+                                const val& n_octave_bands_val, const val& min_decay_db_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_octave_bands =
       domainNumberFromVal<int>(n_octave_bands_val, "nOctaveBands", kAcousticBandCountDomain);
-  const float min_decay_db =
-      domainNumberFromVal<float>(min_decay_db_val, "minDecayDb", kAcousticMinDecayDbDomain);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
-  config.min_decay_db = min_decay_db;
+  config.min_decay_db =
+      optionalDomainValue<float>(min_decay_db_val, "minDecayDb", kAcousticMinDecayDbDomain)
+          .value_or(30.0f);
   validate_acoustic_config(config);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   return acousticParametersToVal(analyze_impulse_response(audio, config));
-}
-
-val js_analyze_impulse_response(val samples, const val& sample_rate, const val& n_octave_bands) {
-  return js_analyze_impulse_response_ex(samples, sample_rate, n_octave_bands, val(30.0f));
 }
 
 val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_octave_bands_val,
@@ -102,10 +98,10 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
                         "materialPreset");
   request.has_preset = material_preset_from_selector(material_preset, &request.preset);
   if (hasProperty(opts, "bandAbsorption")) {
-    request.absorption_bands = float32ArrayToVector(opts["bandAbsorption"]);
+    request.absorption_bands = float32ArrayToVector(opts["bandAbsorption"], "bandAbsorption");
   }
   if (hasProperty(opts, "bandScattering")) {
-    request.scattering_bands = float32ArrayToVector(opts["bandScattering"]);
+    request.scattering_bands = float32ArrayToVector(opts["bandScattering"], "bandScattering");
   }
   request.absorption = floatProperty(opts, "absorption", def_absorption);
   return make_uniform_room(dims, request);
@@ -170,7 +166,7 @@ Audio acousticAudioFromVector(const char* name, std::vector<float> data, int sam
 
 // Loads a JS buffer under the shared offline-input policy, refusing it as a RangeError.
 Audio loadAcousticAudio(const char* name, val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, name);
   return acousticAudioFromVector(name, std::move(data), sample_rate);
 }
 
@@ -346,8 +342,8 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  std::vector<float> left_data = float32ArrayToVector(left);
-  std::vector<float> right_data = float32ArrayToVector(right);
+  std::vector<float> left_data = float32ArrayToVector(left, "left");
+  std::vector<float> right_data = float32ArrayToVector(right, "right");
   if (left_data.size() != right_data.size()) {
     throw WasmRangeError("left and right must have the same length");
   }
@@ -398,7 +394,8 @@ val js_room_geometry_from_estimate(val estimate) {
   listener.set("z", placement.listener.z);
   out.set("listener", listener);
   if (hasProperty(estimate, "bandAbsorption")) {
-    const std::vector<float> bands = float32ArrayToVector(estimate["bandAbsorption"]);
+    const std::vector<float> bands =
+        float32ArrayToVector(estimate["bandAbsorption"], "bandAbsorption");
     const float mean = sonare::acoustic::mean_finite_absorption(bands.data(), bands.size());
     if (std::isfinite(mean)) out.set("absorption", mean);
     if (sonare::acoustic::estimated_absorption_measured(bands.data(), bands.size())) {
@@ -425,7 +422,6 @@ val js_acoustic_selector_names() {
 void registerRoomAcousticsBindings() {
   function("acousticSelectorNames", &js_acoustic_selector_names);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);
-  function("analyzeImpulseResponseEx", &js_analyze_impulse_response_ex);
   function("detectAcoustic", &js_detect_acoustic);
 #ifdef SONARE_WITH_ACOUSTIC_SIM
   function("synthesizeRir", &js_synthesize_rir);

@@ -395,7 +395,7 @@ export class Project {
     // WASM object leaks.
     const restored = (() => {
       try {
-        return projectModule().Project.fromJson(json);
+        return projectModule().Project.fromJson(json, undefined);
       } catch (error) {
         project.native.delete();
         throw error;
@@ -414,7 +414,7 @@ export class Project {
     const project = new Project();
     const restored = (() => {
       try {
-        return projectModule().Project.fromJsonWithDiagnostics(json);
+        return projectModule().Project.fromJson(json, true);
       } catch (error) {
         project.native.delete();
         throw error;
@@ -815,10 +815,10 @@ export class Project {
     );
     const configJson = midiFxConfigJson(config);
     if (!optionalBoolean(withSourceIndex, 'withSourceIndex', false)) {
-      this.native.bakeMidiFx(clipId, configJson);
+      this.native.bakeMidiFx(clipId, configJson, undefined);
       return {};
     }
-    return { sourceIndex: this.native.bakeMidiFxWithSourceIndex(clipId, configJson) };
+    return { sourceIndex: this.native.bakeMidiFx(clipId, configJson, true) };
   }
 
   /**
@@ -1414,7 +1414,7 @@ export class Project {
     if (name === '') {
       throw refuse('marker name must not be empty; omit it for an unnamed marker');
     }
-    return this.native.setMarkerEx({
+    return this.native.setMarker({
       id: optionalId('id', id) ?? 0,
       ppq,
       name: name ?? '',

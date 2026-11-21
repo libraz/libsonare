@@ -1548,7 +1548,7 @@ export class RealtimeEngine {
       loopEndPpq: state.loopEndPpq,
       sampleRate: state.sampleRate,
       barStartPpq: state.barStartPpq,
-      barCount: state.barCount,
+      barIndex: state.barIndex,
       timeSignature: { ...state.timeSignature },
       beat: state.beat,
       beatFraction: state.beatFraction,

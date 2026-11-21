@@ -132,11 +132,11 @@ export type {
   MasteringStreamingPreviewStereoRequest,
   MixStereoRequest,
   MixStereoStrip,
+  RealtimeVoiceChangerRenderRequest,
   TransientShaperOptions,
   TrimSilenceMode,
   TrimSilenceOptions,
   VoiceChangeOptions,
-  VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
 } from './effects_mastering.js';
 export {
@@ -224,6 +224,7 @@ export {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchShift,
+  realtimeVoiceChangerRender,
   renderNotes,
   renderPercussiveEvents,
   spectralEdit,
@@ -232,7 +233,6 @@ export {
   streamingLoudnessGainStereo,
   timeStretch,
   voiceChange,
-  voiceChangeRealtime,
 } from './effects_mastering.js';
 export type {
   AssignNoteTargetsRequest,
@@ -297,8 +297,6 @@ export type {
   DecomposeStemsLinkedResult,
   DecomposeStemsRequest,
   DecomposeStemsResult,
-  HpssWithResidualRequest,
-  HpssWithResidualResult,
   NmfInit,
   NnFilterAggregate,
   NnFilterRequest,
@@ -413,7 +411,6 @@ export {
   framesToSamples,
   framesToTime,
   griffinLim,
-  hpssWithResidual,
   hybridCqt,
   hzToMel,
   hzToMidi,

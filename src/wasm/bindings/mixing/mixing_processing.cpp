@@ -68,8 +68,8 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     throw WasmRangeError("block length exceeds the mixer's configured block size");
   }
   for (int index = 0; index < count; ++index) {
-    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
-    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
+    left_inputs.push_back(float32ArrayToVector(left_channels[index], "leftInputs"));
+    right_inputs.push_back(float32ArrayToVector(right_channels[index], "rightInputs"));
   }
 
   std::vector<const float*> left_ptrs(static_cast<size_t>(count));

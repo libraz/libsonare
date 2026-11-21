@@ -103,7 +103,7 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
     // shared safe-integer + budget guard, and cap the pre-reserve so a
     // fabricated length cannot allocate storage the array does not back. A
     // longer genuine array still works — the vector grows as ops are read.
-    const std::size_t n = wasmArrayLikeLength(ops, "spectral edit ops");
+    const std::size_t n = wasmArrayLikeLength(ops, "ops");
     region_ops.reserve(std::min(n, kMaxWasmObjectArrayReserve));
     for (std::size_t i = 0; i < n; ++i) {
       val op = ops[i];

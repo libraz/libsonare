@@ -562,7 +562,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
   std::vector<float> packed;
   size_t frames = 0;
   for (size_t index = 0; index < count; ++index) {
-    const std::vector<float> plane = float32ArrayToVector(channels[index]);
+    const std::vector<float> plane = float32ArrayToVector(channels[index], "channels");
     if (index == 0) {
       frames = plane.size();
       packed.reserve(frames * count);

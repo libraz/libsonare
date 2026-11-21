@@ -31,7 +31,7 @@ inline std::vector<float> noteEnvelopeFromVal(const val& edit, std::size_t* cumu
   const val envelope = objectProperty(edit, "amplitudeEnvelope");
   if (envelope.isUndefined()) return {};
   accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", cumulative_count);
-  return float32ArrayToVector(envelope);
+  return float32ArrayToVector(envelope, "amplitudeEnvelope");
 }
 
 /// @brief Reads a JS edit object.

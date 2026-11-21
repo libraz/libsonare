@@ -140,7 +140,20 @@ std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char*
   return static_cast<std::size_t>(length);
 }
 
+// A typed buffer argument is its own typed array or a plain JS array; a string,
+// another typed array or any other array-like is refused as the wrong type.
+static void requireTypedOrPlainArray(const val& arr, const char* subject, const char* type_name,
+                                     const char* article) {
+  if (!arr.isNull() && !arr.isUndefined() &&
+      (arr.instanceof
+       (val::global(type_name)) || val::global("Array").call<bool>("isArray", arr))) {
+    return;
+  }
+  throw WasmTypeError(std::string(subject) + " must be " + article + " " + type_name);
+}
+
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
+  requireTypedOrPlainArray(arr, subject, "Float32Array", "a");
   return wasmArrayLikeLength(arr, subject);
 }
 
@@ -174,7 +187,8 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
   const std::size_t second_count =
       accumulateWasmFloat32ArrayLength(second, second_subject, &cumulative_count);
   if (require_matching_lengths && first_count != second_count) {
-    throw WasmRangeError("left and right must have the same length");
+    throw WasmRangeError(std::string(first_subject) + " and " + second_subject +
+                         " must have the same length");
   }
 }
 
@@ -182,8 +196,8 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
 // a freshly-allocated std::vector<float>. The single boundary crossing is
 // `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
 // vector's storage so no intermediate buffer is allocated.
-std::vector<float> float32ArrayToVector(val arr) {
-  const size_t n = wasmFloat32ArrayLength(arr);
+std::vector<float> float32ArrayToVector(val arr, const char* subject) {
+  const size_t n = wasmFloat32ArrayLength(arr, subject);
   std::vector<float> result(n);
   if (n == 0) return result;
   // Build a Float32Array view onto the destination vector's storage. The view
@@ -200,7 +214,7 @@ static Audio validatedAudioFromVector(const char* name, std::vector<float> data,
 }
 
 Audio loadValidatedAudio(const char* name, val samples, int sample_rate) {
-  return validatedAudioFromVector(name, float32ArrayToVector(samples), sample_rate);
+  return validatedAudioFromVector(name, float32ArrayToVector(samples, name), sample_rate);
 }
 
 std::vector<Audio> loadValidatedChannelSet(const char* name, const val& channels, int sample_rate) {
@@ -237,13 +251,15 @@ std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sam
     if (validation == ChannelSetValidation::Offline) {
       loaded.push_back(loadValidatedAudio(channel_name.c_str(), channel, sample_rate));
     } else {
-      loaded.push_back(Audio::from_vector(float32ArrayToVector(channel), sample_rate));
+      loaded.push_back(
+          Audio::from_vector(float32ArrayToVector(channel, channel_name.c_str()), sample_rate));
     }
   }
   return loaded;
 }
 
-std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::size_t count) {
+std::vector<float> float32ArrayWindowToVector(val arr, const char* subject, std::size_t start,
+                                              std::size_t count) {
   std::vector<float> result(count);
   if (count == 0) return result;
   // Ask the source for the span rather than for everything: a typed array's
@@ -259,7 +275,7 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
   } else if (arr["slice"].typeOf().as<std::string>() == "function") {
     source = arr.call<val>("slice", first, last);
   } else {
-    const std::vector<float> whole = float32ArrayToVector(arr);
+    const std::vector<float> whole = float32ArrayToVector(arr, subject);
     std::copy(whole.begin() + static_cast<std::ptrdiff_t>(start),
               whole.begin() + static_cast<std::ptrdiff_t>(start + count), result.begin());
     return result;
@@ -271,13 +287,13 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
 
 Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
                                std::size_t scan_offset, std::size_t scan_count) {
-  const std::size_t length = wasmFloat32ArrayLength(samples);
+  const std::size_t length = wasmFloat32ArrayLength(samples, name);
   // The extent rules are asked about the whole buffer, as they are on the C ABI;
   // only the finiteness scan -- and the copy that feeds it -- narrows.
   validate_offline_audio_extent(name, length, sample_rate);
   const std::size_t begin = std::min(scan_offset, length);
   const std::size_t count = std::min(scan_count, length - begin);
-  std::vector<float> window = float32ArrayWindowToVector(samples, begin, count);
+  std::vector<float> window = float32ArrayWindowToVector(samples, name, begin, count);
   // An offset at or past the end leaves no sample to read, which the core
   // answers with a zero-padded frame rather than a refusal.
   if (count != 0) {
@@ -291,7 +307,7 @@ std::vector<float> loadValidatedInterleaved(const char* name, val samples, int c
   if (channels <= 0) {
     throw WasmRangeError("channels must be an integer in [1, 2147483647]");
   }
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, name);
   validate_offline_audio_input(name, data.data(), data.size(), sample_rate);
   if (data.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
@@ -305,8 +321,9 @@ std::vector<float> loadValidatedInterleaved(const char* name, val samples, int c
 // round-tripped through float32 — values above 2^24 lose precision as float.
 // The typed_memory_view<int32_t> wraps the destination vector's storage so the
 // single boundary crossing (view.set(arr)) copies the raw 32-bit integers.
-std::vector<int32_t> int32ArrayToVector(val arr) {
-  const size_t n = wasmArrayLikeLength(arr, "Int32Array");
+std::vector<int32_t> int32ArrayToVector(val arr, const char* subject) {
+  requireTypedOrPlainArray(arr, subject, "Int32Array", "an");
+  const size_t n = wasmArrayLikeLength(arr, subject);
   std::vector<int32_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
@@ -315,7 +332,10 @@ std::vector<int32_t> int32ArrayToVector(val arr) {
 }
 
 std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject) {
-  const size_t n = wasmArrayLikeLength(arr, subject, "byteLength");
+  requireTypedOrPlainArray(arr, subject, "Uint8Array", "a");
+  // A plain array has no byteLength; its length is its byte count.
+  const bool plain = val::global("Array").call<bool>("isArray", arr);
+  const size_t n = wasmArrayLikeLength(arr, subject, plain ? "length" : "byteLength");
   std::vector<uint8_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
@@ -734,6 +754,14 @@ std::optional<bool> optionalBool(const val& v, const char* key) {
     throw WasmTypeError(std::string(key) + " must be a boolean");
   }
   return v.as<bool>();
+}
+
+bool callbackGiven(const val& callback, const char* key) {
+  if (callback.isUndefined() || callback.isNull()) return false;
+  if (callback.typeOf().as<std::string>() != "function") {
+    throw WasmTypeError(std::string(key) + " must be a function");
+  }
+  return true;
 }
 
 bool cancelCallbackRequested(const val& callback) {

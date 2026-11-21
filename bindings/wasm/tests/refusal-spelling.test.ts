@@ -26,8 +26,8 @@ import {
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
+  realtimeVoiceChangerRender,
   StreamAnalyzer,
-  voiceChangeRealtime,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
@@ -159,8 +159,8 @@ const DRIVERS: Record<string, Driver> = {
     withEngine((engine) => engine.setMidiDestinationExternal(0, value as boolean)),
   engine_set_track_output_bus: (_spelling, value) =>
     withEngine((engine) => engine.setTrackOutputBus(1, value as number)),
-  mel_to_audio: (spelling, value) => melToAudio({ [spelling]: value } as never),
-  mel_to_stft: (spelling, value) => melToStft({ [spelling]: value } as never),
+  mel_to_audio: (spelling, value) => melToAudio({ power: MEL, [spelling]: value } as never),
+  mel_to_stft: (spelling, value) => melToStft({ power: MEL, [spelling]: value } as never),
   metering_spectrum_frame: (spelling, value) =>
     meteringSpectrumFrame({ samples: TONE, sampleRate: RATE, [spelling]: value } as never),
   mixer_add_strip: (spelling, value) =>
@@ -199,10 +199,6 @@ const DRIVERS: Record<string, Driver> = {
     using(new Project(), (project) => project.setOverlapPolicy(value as never)),
   realtime_voice_changer_process_mono: (_spelling, value) =>
     withChanger((changer) => changer.processMono(value as Float32Array)),
-  realtime_voice_changer_process_mono_with_carrier: (_spelling, value) =>
-    withChanger((changer) =>
-      changer.processMonoWithCarrier(value as Float32Array, new Float32Array(4)),
-    ),
   stream_analyzer_process_with_offset: (_spelling, value) =>
     withAnalyzer((analyzer) => analyzer.processWithOffset(BLOCK, value as number)),
   stream_analyzer_reset: (_spelling, value) =>
@@ -211,8 +207,12 @@ const DRIVERS: Record<string, Driver> = {
     withSendMixer((mixer) => mixer.removeSend('a', value as number)),
   strip_set_send_db: (_spelling, value) =>
     withSendMixer((mixer) => mixer.setSendDb('a', value as number, 0)),
-  voice_change_realtime: (spelling, value) =>
-    voiceChangeRealtime({ channels: [BLOCK], sampleRate: 48000, [spelling]: value } as never),
+  realtime_voice_changer_render: (spelling, value) =>
+    realtimeVoiceChangerRender({
+      channels: [BLOCK],
+      sampleRate: 48000,
+      [spelling]: value,
+    } as never),
   waveform_peak_pyramid: (spelling, value) => waveformPeakPyramid({ [spelling]: value } as never),
   waveform_peaks: (spelling, value) => waveformPeaks({ [spelling]: value } as never),
 };

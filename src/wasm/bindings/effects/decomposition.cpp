@@ -37,11 +37,12 @@ DecomposeStemsConfig readDecomposeStemsConfig(val options) {
 }  // namespace
 
 // NMF decomposition of a non-negative spectrogram. Mirrors the C ABI
-// sonare_decompose / librosa.decompose.decompose. Returns the two factor
-// matrices as { w, h }: w is [n_features x n_components] row-major and h is
-// [n_components x n_frames] row-major (both flat Float32Array buffers).
+// sonare_decompose / librosa.decompose.decompose, with the initialiser "random" (default,
+// deterministic seed) or "nndsvd" (SVD-based warm start). Returns { w, h }: w is
+// [n_features x n_components] row-major and h is [n_components x n_frames] row-major.
 val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
-                 const val& n_components_val, const val& n_iter_val, const val& beta_val) {
+                 const val& n_components_val, const val& n_iter_val, const val& beta_val,
+                 std::string init) {
   const int n_features =
       domainNumberFromVal<int>(n_features_val, "nFeatures", sonare::kDecomposeNFeaturesDomain);
   const int n_frames =
@@ -52,39 +53,7 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
   const int n_iter = optionalDomainValue<int>(n_iter_val, "nIter", sonare::kDecomposeIterDomain)
                          .value_or(kDecomposeDefaultIter);
   const float beta = checkedFloatFromVal(beta_val, "beta");
-  std::vector<float> data = float32ArrayToVector(s);
-  if (static_cast<size_t>(n_features) >
-          std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
-      static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
-    throw WasmRangeError("spectrogram dimensions exceed input");
-  }
-  DecomposeResult result =
-      decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta);
-
-  val out = val::object();
-  out.set("w", vectorToFloat32Array(result.W));
-  out.set("h", vectorToFloat32Array(result.H));
-  return out;
-}
-
-// NMF decomposition with a selectable initialiser. Mirrors the C ABI
-// sonare_decompose_with_init / librosa.decompose.decompose (init). Identical to
-// js_decompose but exposes the initialisation strategy: "random" (default,
-// deterministic seed) or "nndsvd" (SVD-based warm start). Returns { w, h }.
-val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames_val,
-                           const val& n_components_val, const val& n_iter_val, const val& beta_val,
-                           std::string init) {
-  const int n_features =
-      domainNumberFromVal<int>(n_features_val, "nFeatures", sonare::kDecomposeNFeaturesDomain);
-  const int n_frames =
-      domainNumberFromVal<int>(n_frames_val, "nFrames", sonare::kDecomposeNFramesDomain);
-  const int n_components = domainNumberFromVal<int>(n_components_val, "nComponents",
-                                                    sonare::kDecomposeNComponentsDomain);
-  // An omitted (undefined or null) iteration count takes the core default.
-  const int n_iter = optionalDomainValue<int>(n_iter_val, "nIter", sonare::kDecomposeIterDomain)
-                         .value_or(kDecomposeDefaultIter);
-  const float beta = checkedFloatFromVal(beta_val, "beta");
-  std::vector<float> data = float32ArrayToVector(s);
+  std::vector<float> data = float32ArrayToVector(s, "s");
   if (static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
@@ -171,7 +140,7 @@ val js_nn_filter(val s, const val& n_features_val, const val& n_frames_val, std:
   const int width = width_val.isUndefined() || width_val.isNull()
                         ? kNnFilterDefaultWidth
                         : checkedIntFromVal(width_val, "width");
-  std::vector<float> data = float32ArrayToVector(s);
+  std::vector<float> data = float32ArrayToVector(s, "s");
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
@@ -208,7 +177,7 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
   // Sample indices must survive as exact integers: converting through float32
   // would round any boundary above 2^24 (16,777,216) and silently misalign the
   // slice. Read the Int32Array straight into int32 storage instead.
-  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
+  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals, "intervals");
   if (interval_ints.size() % 2 != 0) {
     throw WasmRangeError("remix intervals must be (start, end) pairs");
   }
@@ -230,7 +199,7 @@ val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rat
   const bool align_zeros = alignZerosFromVal(align_zeros_val);
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
+  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals, "intervals");
   if (interval_ints.size() % 2 != 0) {
     throw WasmRangeError("remix intervals must be (start, end) pairs");
   }
@@ -252,7 +221,6 @@ val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rat
 
 void registerEffectsDecompositionBindings() {
   function("decompose", &js_decompose);
-  function("decomposeWithInit", &js_decompose_with_init);
   function("decomposeStems", &js_decompose_stems);
   function("decomposeStemsLinked", &js_decompose_stems_linked);
   function("nnFilter", &js_nn_filter);

@@ -150,9 +150,9 @@ class EqualizerWrapper {
   // DynamicParams::external_sidechain. The samples are copied into an owned
   // buffer so they remain valid until the next set/clear call.
   void setSidechainMono(val samples) {
-    const std::size_t length = wasmFloat32ArrayLength(samples, "mono sidechain");
+    const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
     validateBlockLength(length, "sidechain");
-    std::vector<float> staged_left = float32ArrayToVector(samples);
+    std::vector<float> staged_left = float32ArrayToVector(samples, "samples");
     if (staged_left.empty()) return clearSidechain();
     validateSidechainBuffer("samples", staged_left);
 
@@ -167,8 +167,8 @@ class EqualizerWrapper {
 
   // Borrows a stereo external sidechain key. Both channels must match in length.
   void setSidechainStereo(val left_samples, val right_samples) {
-    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left sidechain");
-    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right sidechain");
+    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left");
+    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right");
     validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
       throw WasmRangeError("left and right must have the same length");
@@ -176,8 +176,8 @@ class EqualizerWrapper {
     if (left_length == 0) return clearSidechain();
     validateBlockLength(left_length, "sidechain");
 
-    std::vector<float> staged_left = float32ArrayToVector(left_samples);
-    std::vector<float> staged_right = float32ArrayToVector(right_samples);
+    std::vector<float> staged_left = float32ArrayToVector(left_samples, "left");
+    std::vector<float> staged_right = float32ArrayToVector(right_samples, "right");
     validateSidechainBuffer("left", staged_left);
     validateSidechainBuffer("right", staged_right);
     sidechain_left_.swap(staged_left);
@@ -204,9 +204,9 @@ class EqualizerWrapper {
   uint32_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
 
   val processMono(val samples) {
-    const std::size_t length = wasmFloat32ArrayLength(samples, "mono process block");
+    const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
     validateBlockLength(length, "process block");
-    std::vector<float> block = float32ArrayToVector(samples);
+    std::vector<float> block = float32ArrayToVector(samples, "samples");
     if (!block.empty()) {
       float* channels[] = {block.data()};
       processor_.process(channels, 1, static_cast<int>(block.size()));
@@ -215,15 +215,15 @@ class EqualizerWrapper {
   }
 
   val processStereo(val left_samples, val right_samples) {
-    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left process block");
-    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right process block");
+    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left");
+    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right");
     validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
       throw WasmRangeError("left and right must have the same length");
     }
     validateBlockLength(left_length, "process block");
-    std::vector<float> left = float32ArrayToVector(left_samples);
-    std::vector<float> right = float32ArrayToVector(right_samples);
+    std::vector<float> left = float32ArrayToVector(left_samples, "left");
+    std::vector<float> right = float32ArrayToVector(right_samples, "right");
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       processor_.process(channels, 2, static_cast<int>(left.size()));
@@ -239,7 +239,7 @@ class EqualizerWrapper {
   // wrapper stays a marshaller and the naming lives in the TS facade.
   val magnitudeResponse(const val& placement, val frequencies_hz) const {
     const int placement_id = checkedIntFromVal(placement, "placement");
-    std::vector<float> frequencies = float32ArrayToVector(frequencies_hz);
+    std::vector<float> frequencies = float32ArrayToVector(frequencies_hz, "frequenciesHz");
     std::vector<float> out(frequencies.size(), 0.0f);
     processor_.magnitude_response_db(eqPlacementFromInt(placement_id), frequencies.data(),
                                      frequencies.size(), out.data());
@@ -276,9 +276,9 @@ class EqualizerWrapper {
   }
 
   void match(val source, val reference, val options) {
-    validateWasmFloat32ArrayPair(source, "source samples", reference, "reference samples", false);
-    std::vector<float> src = float32ArrayToVector(source);
-    std::vector<float> ref = float32ArrayToVector(reference);
+    validateWasmFloat32ArrayPair(source, "source", reference, "reference", false);
+    std::vector<float> src = float32ArrayToVector(source, "source");
+    std::vector<float> ref = float32ArrayToVector(reference, "reference");
     const int sample_rate =
         intProperty(options, "sampleRate", static_cast<int>(std::lround(sample_rate_)));
     // An omitted reference rate is the source's.

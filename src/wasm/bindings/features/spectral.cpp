@@ -20,7 +20,7 @@ std::vector<float> load_segment_matrix(val input, int rows, int cols, const char
       wasmFloat32ArrayLength(input, data_name) != expected) {
     throw WasmRangeError(std::string(data_name) + " length must equal rows * cols");
   }
-  std::vector<float> data = float32ArrayToVector(input);
+  std::vector<float> data = float32ArrayToVector(input, data_name);
   for (std::size_t i = 0; i < data.size(); ++i) {
     if (!std::isfinite(data[i])) {
       throw WasmRangeError(std::string(data_name) + " contains a non-finite value at index " +
@@ -217,7 +217,7 @@ val js_poly_features(val samples, const val& sample_rate_val, const val& n_fft_v
 val js_zero_crossings(val samples, const val& threshold_val, bool ref_magnitude, bool pad,
                       bool zero_pos) {
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   std::vector<int> indices =
       zero_crossings(data.data(), data.size(), threshold, ref_magnitude, pad, zero_pos);
   return vectorToInt32Array(indices);
@@ -292,7 +292,7 @@ val js_segment_subsegment(val data, const val& rows_val, const val& cols_val, va
   const int n_segments = domainNumberFromVal<int>(n_segments_val, "nSegments",
                                                   sonare_c_detail::kSubsegmentCountDomain);
   std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
-  const std::vector<int32_t> source = int32ArrayToVector(boundaries);
+  const std::vector<int32_t> source = int32ArrayToVector(boundaries, "boundaries");
   const std::vector<int> points(source.begin(), source.end());
   return vectorToInt32Array(subsegment(values.data(), rows, cols, points, n_segments));
 }

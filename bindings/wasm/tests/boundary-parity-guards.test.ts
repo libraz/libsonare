@@ -13,8 +13,8 @@ import {
   meteringTruePeakDbtp,
   phaseVocoder,
   RealtimeEngine,
+  realtimeVoiceChangerRender,
   remix,
-  voiceChangeRealtime,
 } from '../src/index';
 
 const SR = 22050;
@@ -178,10 +178,10 @@ describe('meteringTruePeakDbtp oversample-factor guard', () => {
   });
 });
 
-describe('voiceChangeRealtime empty-input guard', () => {
+describe('realtimeVoiceChangerRender empty-input guard', () => {
   it('rejects an empty buffer', () => {
     expect(() =>
-      voiceChangeRealtime({
+      realtimeVoiceChangerRender({
         channels: [new Float32Array(0)],
         sampleRate: 48000,
         config: 'neutralMonitor',

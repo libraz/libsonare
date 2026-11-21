@@ -23,14 +23,19 @@ void MixerWasm::addStrip(std::string id, val metering) {
   const bool enabled = boolProperty(metering, "enabled", true);
   const bool lufs = boolProperty(metering, "lufs", true);
   const bool true_peak = boolProperty(metering, "truePeak", true);
-  // 0 selects the library default (4x), the sentinel the C ABI documents.
+  // 0 (omitted) keeps the library default oversample factor.
   const int true_peak_oversample = intProperty(metering, "truePeakOversample", 0);
   // Returns the strip pointer rather than a SonareError, so NULL is the whole
   // failure signal and the detail is in the thread-local error slot. The pointer
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
-  if (sonare_mixer_add_strip_ex(mixer_, wasmCString(id, "id"), enabled ? 1 : 0, lufs ? 1 : 0,
-                                true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    throwLastCError();
+  SonareMixerAddStripOptions strip_options;
+  sonare_mixer_add_strip_options_init(&strip_options);
+  strip_options.enable_metering = enabled ? 1 : 0;
+  strip_options.measure_lufs = lufs ? 1 : 0;
+  strip_options.measure_true_peak = true_peak ? 1 : 0;
+  if (true_peak_oversample != 0) strip_options.true_peak_oversample = true_peak_oversample;
+  if (sonare_mixer_add_strip(mixer_, wasmCString(id, "id"), &strip_options) == nullptr) {
+    throwLastCErrorFlattening("options");
   }
   // Size the new strip's scratch planes before a realtime caller asks for its views.
   ensureScratchBuffers();

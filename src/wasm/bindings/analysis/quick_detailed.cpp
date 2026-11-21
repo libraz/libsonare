@@ -168,7 +168,7 @@ val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
 
 val js_detect_key_candidates_default(val samples, const val& sample_rate) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   const auto candidates = quick::detect_key_candidates(data.data(), data.size(), rate, KeyConfig{});
   val out = val::array();
   for (const auto& cand : candidates) {

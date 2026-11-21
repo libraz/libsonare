@@ -845,20 +845,19 @@ export class Mixer {
   /**
    * Read a strip's meter snapshot.
    *
-   * With no `tap` this reads the strip's own (post-fader) meter. Pass a
-   * {@link MeterTap} to read the tap-selectable snapshot instead.
+   * With no `tap` this reads the strip's post-fader meter. Pass a
+   * {@link MeterTap} to read the other tap.
    *
    * @param strip - Strip index or id
    * @param tap - `'preFader'` or `'postFader'`; a number is refused with a `TypeError`
    */
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     const index = this.stripIndex(strip);
-    if (isAbsent(tap)) {
-      return this.mixer.stripMeter(index);
-    }
-    return this.mixer.meterTap(
+    return this.mixer.stripMeter(
       index,
-      tokenArg(tap, (token) => meterTapCode(token as MeterTap, 'tap')),
+      isAbsent(tap)
+        ? meterTapCode('postFader', 'tap')
+        : tokenArg(tap, (token) => meterTapCode(token as MeterTap, 'tap')),
     );
   }
 

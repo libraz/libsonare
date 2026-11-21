@@ -66,7 +66,7 @@ uint32_t ProjectWasm::addClip(val desc) {
                             : 0;
   if (hasProperty(desc, "audio")) {
     d.audio_channels = requireIntProperty(desc, "audioChannels", "descriptor");
-    audio = float32ArrayToVector(desc["audio"]);
+    audio = float32ArrayToVector(desc["audio"], "audio");
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
@@ -101,7 +101,7 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
     throw WasmRangeError("partialTail must be 'keep' or 'drop'");
   }
   if (hasProperty(desc, "audio")) {
-    audio = float32ArrayToVector(desc["audio"]);
+    audio = float32ArrayToVector(desc["audio"], "audio");
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
@@ -241,14 +241,14 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
         domainNumberFromVal<int>(config["binsPerOctave"], "binsPerOctave", sonare::kCqtCountDomain);
   }
 
-  validateWasmFloat32ArrayPair(reference, "reference samples", take, "take samples", false);
-  const std::vector<float> reference_buffer = float32ArrayToVector(reference);
-  const std::vector<float> take_buffer = float32ArrayToVector(take);
+  validateWasmFloat32ArrayPair(reference, "reference", take, "take", false);
+  const std::vector<float> reference_buffer = float32ArrayToVector(reference, "reference");
+  const std::vector<float> take_buffer = float32ArrayToVector(take, "take");
 
   SonareProjectWarpAnchor* rows = nullptr;
   size_t count = 0;
   SonareTakeAlignment alignment{};
-  const SonareError err = sonare_align_take_to_reference_ex(
+  const SonareError err = sonare_align_take_to_reference(
       reference_buffer.empty() ? nullptr : reference_buffer.data(), reference_buffer.size(),
       sample_rate, take_buffer.empty() ? nullptr : take_buffer.data(), take_buffer.size(),
       take_sample_rate, &resolved, &rows, &count, &alignment);

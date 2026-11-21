@@ -355,8 +355,7 @@ describe('embedded NUL refusal, scan', () => {
   const REFUSING: { file: string; head: string }[] = [
     { file: 'mixing/mixing.cpp', head: 'std::string js_mixing_scene_preset_json(' },
     { file: 'features/core.cpp', head: 'float js_note_to_hz(' },
-    { file: 'project/project.cpp', head: 'ProjectWasm ProjectWasm::fromJson(' },
-    { file: 'project/project.cpp', head: 'val ProjectWasm::fromJsonWithDiagnostics(' },
+    { file: 'project/project.cpp', head: 'val ProjectWasm::fromJson(' },
     {
       file: 'effects/realtime_voice_changer.cpp',
       head: 'std::string realtimeVoiceChangerPresetJson(',
@@ -519,7 +518,7 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'common/common.cpp',
       text: 'channel_name.c_str()',
-      count: 2,
+      count: 3,
       reason: 'refusal name built from the caller-supplied literal name and a channel index',
     },
     {

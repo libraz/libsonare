@@ -69,7 +69,7 @@ std::vector<float> loadPlaybackInterleaved(val samples, int channels, std::size_
     throw WasmRangeError("channels must be an integer in [1, 2147483647]");
   }
   wasmFloat32ArrayLength(samples, "samples");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   if (data.size() % static_cast<std::size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
   }
@@ -174,7 +174,7 @@ class PlaybackRendererWasm {
       throw WasmRangeError("inChannels must be an integer in [1, 2147483647]");
     }
     wasmFloat32ArrayLength(samples, "samples");
-    const std::vector<float> input = float32ArrayToVector(samples);
+    const std::vector<float> input = float32ArrayToVector(samples, "samples");
     if (input.size() % static_cast<size_t>(in_channels) != 0) {
       throw WasmRangeError("interleaved sample count must be a whole number of frames");
     }
@@ -334,7 +334,7 @@ class PlaybackLoudnessMeterWasm {
 
   void pushInterleaved(const val& samples) {
     wasmFloat32ArrayLength(samples, "samples");
-    const std::vector<float> input = float32ArrayToVector(samples);
+    const std::vector<float> input = float32ArrayToVector(samples, "samples");
     if (input.size() % static_cast<size_t>(channels_) != 0) {
       throw WasmRangeError("interleaved sample count must be a whole number of frames");
     }

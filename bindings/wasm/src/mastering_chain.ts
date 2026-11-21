@@ -74,7 +74,7 @@ export function normalize(...args: unknown[]): Float32Array {
     const r = sampleOneShot<NormalizeRequest>('normalize', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const mode = resolveNormalizeMode(r.mode);
-    return requireModule().normalizeEx(
+    return requireModule().normalize(
       r.samples,
       r.sampleRate,
       r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
@@ -229,7 +229,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  *   sampleRate: 48000,
  *   numChannels: 1,
  *   loudnessStaticGainDb,
- *   loudnessStaticGainPeakDb: truePeakDbtp,
+ *   loudnessStaticGainPeakDbtp: truePeakDbtp,
  * });
  * ```
  */
@@ -435,17 +435,13 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
     const module = requireModule();
-    return (
-      progress || cancel
-        ? module.masterAudioWithProgress(
-            preset,
-            r.samples,
-            r.sampleRate,
-            overrides,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : module.masterAudio(preset, r.samples, r.sampleRate, overrides)
+    return module.masterAudio(
+      preset,
+      r.samples,
+      r.sampleRate,
+      overrides,
+      progress,
+      cancel,
     ) as MasteringChainResult;
   });
 }
@@ -483,18 +479,14 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
     const module = requireModule();
-    return (
-      progress || cancel
-        ? module.masterAudioStereoWithProgress(
-            preset,
-            r.left,
-            r.right,
-            r.sampleRate,
-            overrides,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
+    return module.masterAudioStereo(
+      preset,
+      r.left,
+      r.right,
+      r.sampleRate,
+      overrides,
+      progress,
+      cancel,
     ) as MasteringChainStereoResult;
   });
 }

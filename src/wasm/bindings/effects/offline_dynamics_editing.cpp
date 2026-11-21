@@ -74,7 +74,7 @@ val makeDynamicsResult(const std::vector<float>& samples, int latency_samples) {
 
 val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
@@ -121,7 +121,7 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
 
 val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
@@ -155,7 +155,7 @@ val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val opti
 
 val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
@@ -255,7 +255,7 @@ bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,
 val js_resample(val samples, const val& src_sr_val, const val& target_sr_val) {
   const int src_sr = checkedIntFromVal(src_sr_val, "srcSr");
   const int target_sr = checkedIntFromVal(target_sr_val, "targetSr");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   std::vector<float> result = resample_checked(data.data(), data.size(), src_sr, target_sr);
   return vectorToFloat32Array(result);
 }

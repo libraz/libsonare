@@ -75,7 +75,7 @@ struct StereoInput {
 StereoInput loadStereoInput(const char* left_name, const char* right_name, val left_samples,
                             val right_samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
   Audio left = loadValidatedAudio(left_name, left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_name, right_samples, sample_rate);
   return {std::move(left), std::move(right)};
@@ -735,7 +735,8 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
     val bands = estimate["rt60Bands"];
     // Absent bands are an empty set, which the measurement treats as "did not
     // converge" rather than as a zero reverberation time.
-    if (!bands.isUndefined() && !bands.isNull()) rt60_bands = float32ArrayToVector(bands);
+    if (!bands.isUndefined() && !bands.isNull())
+      rt60_bands = float32ArrayToVector(bands, "rt60Bands");
   }
   // apply_room_measurement takes a non-positive or non-finite volume as "no
   // measurement" and leaves lateDelayMs at the caller's value, which is also

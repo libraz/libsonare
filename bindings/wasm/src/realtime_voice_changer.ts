@@ -138,11 +138,8 @@ function assertPlanes(channels: unknown, carrier?: unknown): Float32Array[] {
 /** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
 @entryClass('RealtimeVoiceChanger', [
   'processInterleavedInto',
-  'processInterleavedWithCarrierInto',
   'processMono',
   'processMonoInto',
-  'processMonoWithCarrier',
-  'processMonoWithCarrierInto',
   'changer',
 ])
 export class RealtimeVoiceChanger {
@@ -253,94 +250,60 @@ export class RealtimeVoiceChanger {
     return this.changer.nonFiniteDiscardCount();
   }
 
-  /** Processes a mono block and returns a new array of the same length. */
-  processMono(samples: Float32Array): Float32Array {
-    return this.changer.processMono(samples);
-  }
-
-  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `samples`. */
-  processMonoInto(samples: Float32Array, output: Float32Array): void {
-    this.changer.processMonoInto(samples, output);
-  }
-
   /**
-   * Mono block with an external vocoder carrier of the same length. The carrier is read only
-   * while the vocoder is enabled with `vocoderCarrierSource: 'external'`; otherwise it is ignored.
+   * Processes a mono block and returns a new array of the same length. `carrier` is an external
+   * vocoder carrier of the same length, read only while the vocoder is enabled with
+   * `vocoderCarrierSource: 'external'`; otherwise it is ignored.
    *
    * @throws RangeError when `carrier.length` differs from `samples.length`.
    */
-  processMonoWithCarrier(samples: Float32Array, carrier: Float32Array): Float32Array {
-    return this.changer.processMonoWithCarrier(samples, carrier);
+  processMono(samples: Float32Array, carrier?: Float32Array): Float32Array {
+    return this.changer.processMono(samples, carrier);
   }
 
-  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `samples`. */
-  processMonoWithCarrierInto(
-    samples: Float32Array,
-    carrier: Float32Array,
-    output: Float32Array,
-  ): void {
-    this.changer.processMonoWithCarrierInto(samples, carrier, output);
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `samples`. */
+  processMonoInto(samples: Float32Array, output: Float32Array, carrier?: Float32Array): void {
+    this.changer.processMonoInto(samples, carrier, output);
   }
 
   /**
    * Processes planar blocks (one `Float32Array` per channel, 1 or 2, equal lengths) and returns
-   * the processed planes without touching the inputs.
+   * the processed planes without touching the inputs. `carrier` is one mono external vocoder
+   * carrier of one sample per frame, shared by every channel.
    *
    * @throws TypeError for a wrong-typed argument; RangeError for another channel count or
    *   unequal lengths; SonareError `InvalidState` when more channels are given than the changer
    *   was prepared for.
    */
-  processPlanar(channels: Float32Array[]): Float32Array[] {
-    const planes = assertPlanes(channels);
-    if (planes.length === 1) {
-      return [this.changer.processMono(planes[0] as Float32Array)];
-    }
-    return deinterleavePlanes(this.changer.processInterleaved(interleavePlanes(planes), 2), 2);
-  }
-
-  /**
-   * {@link processPlanar} with one mono external vocoder `carrier` of one sample per frame,
-   * shared by every channel.
-   */
-  processPlanarWithCarrier(channels: Float32Array[], carrier: Float32Array): Float32Array[] {
+  processPlanar(channels: Float32Array[], carrier?: Float32Array): Float32Array[] {
     const planes = assertPlanes(channels, carrier);
     if (planes.length === 1) {
-      return [this.changer.processMonoWithCarrier(planes[0] as Float32Array, carrier)];
+      return [this.changer.processMono(planes[0] as Float32Array, carrier)];
     }
     return deinterleavePlanes(
-      this.changer.processInterleavedWithCarrier(interleavePlanes(planes), carrier, 2),
+      this.changer.processInterleaved(interleavePlanes(planes), carrier, 2),
       2,
     );
   }
 
   /**
    * Realtime hot path: processes an interleaved block (L0,R0,L1,R1,...) into `output`, which has
-   * the length of `input`.
+   * the length of `input`. `carrier` is a mono carrier of one sample per frame shared by every channel.
    *
    * @throws RangeError unless `numChannels` is 1 or 2.
    */
-  processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void {
+  processInterleavedInto(
+    input: Float32Array,
+    numChannels: 1 | 2,
+    output: Float32Array,
+    carrier?: Float32Array,
+  ): void {
     try {
       assertChannelCount(numChannels);
     } catch (error) {
       throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedInto');
     }
-    this.changer.processInterleavedInto(input, numChannels, output);
-  }
-
-  /** {@link processInterleavedInto} with a mono carrier of one sample per frame shared by every channel. */
-  processInterleavedWithCarrierInto(
-    input: Float32Array,
-    carrier: Float32Array,
-    numChannels: 1 | 2,
-    output: Float32Array,
-  ): void {
-    try {
-      assertChannelCount(numChannels);
-    } catch (error) {
-      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedWithCarrierInto');
-    }
-    this.changer.processInterleavedWithCarrierInto(input, carrier, numChannels, output);
+    this.changer.processInterleavedInto(input, carrier, numChannels, output);
   }
 
   /**

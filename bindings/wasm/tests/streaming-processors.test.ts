@@ -91,7 +91,7 @@ describe('Sonare WASM Module', () => {
         eq: { tilt: { tiltDb: 1.0 } },
         loudness: { targetLufs: -18, ceilingDbtp: -1, truePeakOversample: 4 },
         loudnessStaticGainDb: 3.0,
-        loudnessStaticGainPeakDb: -6.0,
+        loudnessStaticGainPeakDbtp: -6.0,
       });
       try {
         const block = new Float32Array(512);

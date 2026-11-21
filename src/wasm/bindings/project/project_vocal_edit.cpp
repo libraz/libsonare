@@ -114,7 +114,7 @@ std::string fixedText(const char* value, size_t capacity) {
 std::vector<float> copyMono(const val& value, const char* field) {
   const size_t count = wasmFloat32ArrayLength(value, field);
   if (count == 0) invalid(std::string(field) + " must not be empty");
-  std::vector<float> result = float32ArrayToVector(value);
+  std::vector<float> result = float32ArrayToVector(value, field);
   for (float sample : result) {
     if (!std::isfinite(sample)) invalid(std::string(field) + " must contain finite samples");
   }

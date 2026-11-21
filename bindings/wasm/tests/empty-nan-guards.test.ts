@@ -20,12 +20,12 @@ import {
   pcen,
   pitchYin,
   plp,
+  realtimeVoiceChangerRender,
   resample,
   StreamingEqualizer,
   tempogram,
   tempogramRatio,
   voiceChange,
-  voiceChangeRealtime,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
@@ -112,9 +112,9 @@ describe('empty-sample guards (WASM)', () => {
       /voiceChange: samples must not be empty/,
     );
   });
-  it('voiceChangeRealtime rejects unequal channel lengths', () => {
+  it('realtimeVoiceChangerRender rejects unequal channel lengths', () => {
     expect(() =>
-      voiceChangeRealtime({
+      realtimeVoiceChangerRender({
         channels: [new Float32Array(3), new Float32Array(2)],
         sampleRate: 48000,
         config: 'neutralMonitor',

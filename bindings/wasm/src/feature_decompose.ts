@@ -4,14 +4,12 @@
  */
 
 import { refuse, withEntry } from './internal/entry.js';
-import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioChannels,
   assertAudioInput,
-  assertHpssKernels,
   assertMatrix2D,
   optionalBoolean,
   optionalToken,
@@ -165,40 +163,6 @@ export interface RemixRequest {
   alignZeros?: boolean;
 }
 
-/** Request for {@link hpssWithResidual}. */
-export interface HpssWithResidualRequest {
-  /** Mono audio samples. */
-  samples: Float32Array;
-  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
-  sampleRate: number;
-  /**
-   * Horizontal median filter size, in STFT frames: a positive odd integer at
-   * most 524287. Default 31. The ceiling is 524288 and an even kernel is
-   * refused, so 524287 is the largest legal value.
-   */
-  kernelHarmonic?: number;
-  /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
-  kernelPercussive?: number;
-  /** FFT size in samples. Default 2048. */
-  nFft?: number;
-  /** Hop in samples. Default `nFft / 4`, rounded down. */
-  hopLength?: number;
-  /** Threshold the masks into binary ones instead of the soft split. Default `false`. */
-  hardMask?: boolean;
-}
-
-/** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
-export interface HpssWithResidualResult {
-  /** Harmonic component, the length of the input. */
-  harmonic: Float32Array;
-  /** Percussive component, the length of the input. */
-  percussive: Float32Array;
-  /** Remainder of the input after subtracting the harmonic and percussive components. */
-  residual: Float32Array;
-  /** Sample rate of the returned signals in Hz. */
-  sampleRate: number;
-}
-
 /**
  * Non-negative matrix factorisation of a spectrogram
  * (librosa.decompose.decompose). `init` selects the initialiser: `'random'`
@@ -215,7 +179,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
     const s = assertMatrix2D(r.s, 's');
     // An empty token is the embind reader's spelling of the library's initialiser.
     const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';
-    const native = requireModule().decomposeWithInit(
+    const native = requireModule().decompose(
       s.data,
       s.rows,
       s.cols,
@@ -445,55 +409,6 @@ export function remixAlignedIntervals(...args: unknown[]): Int32Array {
     const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
     const intervals = toInt32Array(r.intervals, 'intervals');
     return requireModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
-  });
-}
-
-/**
- * HPSS into harmonic / percussive / residual signals.
- *
- * The three outputs always add back up to the input. `residual` is silent under
- * the default soft mask, whose two masks sum to one, so `harmonic` and
- * `percussive` already carry everything; it is returned anyway so the result
- * shape does not change with the mask. Pass `hardMask: true` for a residual that
- * holds signal — its thresholded masks leave the band where neither component
- * dominates, measured at 3 % of the input energy on a voice-plus-kick signal.
- *
- * @example
- * ```ts
- * const soft = hpssWithResidual({ samples, sampleRate });
- * // soft.residual is silence
- * const hard = hpssWithResidual({ samples, sampleRate, hardMask: true });
- * // hard.residual carries what neither component claimed
- * ```
- *
- * @throws RangeError on a kernel that is not an integer
- *   within the signed 32-bit range, or one the core rejects as even,
- *   non-positive or above its ceiling
- */
-export function hpssWithResidual(request: HpssWithResidualRequest): HpssWithResidualResult;
-export function hpssWithResidual(
-  samples: Float32Array,
-  sampleRate: number,
-  options?: OptionsOf<HpssWithResidualRequest>,
-): HpssWithResidualResult;
-export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
-  return withEntry('hpssWithResidual', () => {
-    const r = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
-    const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    const hardMask = optionalBoolean(r.hardMask, 'hardMask', false);
-    const kernelHarmonic = r.kernelHarmonic ?? 31;
-    const kernelPercussive = r.kernelPercussive ?? 31;
-    assertHpssKernels(kernelHarmonic, kernelPercussive);
-    return requireModule().hpssWithResidualEx(
-      r.samples,
-      r.sampleRate,
-      kernelHarmonic,
-      kernelPercussive,
-      fftOptions.nFft,
-      fftOptions.hopLength,
-      hardMask,
-    );
   });
 }
 

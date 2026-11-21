@@ -44,7 +44,7 @@ std::vector<float> load_validated_matrix(val input, int rows, int frames, const 
   if (expected != actual) {
     throw WasmRangeError(std::string(data_name) + " length must equal rows * nFrames");
   }
-  return float32ArrayToVector(input);
+  return float32ArrayToVector(input, data_name);
 }
 
 }  // namespace

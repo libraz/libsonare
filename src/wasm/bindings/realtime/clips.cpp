@@ -64,7 +64,7 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     auto page = std::make_unique<Page>();
     page->channels.reserve(static_cast<size_t>(channels_));
     for (int ch = 0; ch < channel_count; ++ch) {
-      std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
+      std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
       if (ch == 0) {
         page->frames = static_cast<int64_t>(channel.size());
         const int64_t page_start = page_index * page_frames_;
@@ -175,7 +175,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   }
   int64_t num_samples = 0;
   for (int ch = 0; ch < channel_count; ++ch) {
-    std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
+    std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
     if (ch == 0) {
       num_samples = static_cast<int64_t>(channel.size());
       if (num_samples <= 0) {

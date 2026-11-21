@@ -13473,7 +13473,7 @@ export interface MasteringNormalizeLoudnessOptions {
  * `loudnessStaticGainDb` equals the gain {@link masterAudio} applies, ceiling
  * clamp included, and 0 for a silent or below-gate stage input. Pass it and
  * `truePeakDbtp` as the chain config's `loudnessStaticGainDb` and
- * `loudnessStaticGainPeakDb`.
+ * `loudnessStaticGainPeakDbtp`.
  */
 export interface StreamingLoudnessGainResult {
   /** Static gain in dB the offline loudness stage applies. */
@@ -14023,12 +14023,12 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   /**
    * True peak (dBTP) of the loudness stage's input the static gain was computed
    * for (`truePeakDbtp` of {@link streamingLoudnessGain}). When provided, the
-   * static gain is clamped to `(loudness.ceilingDbtp - loudnessStaticGainPeakDb) +
+   * static gain is clamped to `(loudness.ceilingDbtp - loudnessStaticGainPeakDbtp) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview does
    * not drive the loudness limiter harder than the offline chain. When omitted
    * the static gain is applied verbatim.
    */
-  loudnessStaticGainPeakDb?: number;
+  loudnessStaticGainPeakDbtp?: number;
 }
 
 /** Gain reduction reported by a single dynamics/maximizer chain stage. */

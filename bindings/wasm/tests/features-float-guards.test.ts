@@ -16,9 +16,9 @@
  * before they ever reach the WASM boundary under test here and throw a plain
  * `RangeError` instead of the branded `SonareError` this file asserts. Driving
  * the module directly measures the embind parameter itself, independent of
- * that JS-side duplicate. `nnlsChroma`'s non-`Ex` embind function has no TS
- * facade at all reaching it (the facade always calls `nnlsChromaEx`), so it is
- * only reachable this way regardless.
+ * that JS-side duplicate. `nnlsChroma` called without `hopLength` has no TS
+ * facade reaching it (the facade always passes a hop), so it is only
+ * reachable this way regardless.
  *
  * Acceptance is asserted by reading a value back, never by "it did not
  * throw" — a function that ignored its argument entirely would satisfy every
@@ -149,6 +149,8 @@ const DOMAIN_FIELDS: Array<FloatField & { domain: string; holds: (value: number)
 interface FloatField {
   entry: string;
   key: string;
+  /** Tells apart two rows that drive one entry's field through different argument shapes. */
+  variant?: string;
   run: (value: number) => unknown;
 }
 
@@ -232,12 +234,14 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'nnlsChroma',
     key: 'stftBlendWeight',
-    run: (v) => m().nnlsChroma(threePartials, SR, true, v, 512),
+    variant: 'without hopLength',
+    run: (v) => m().nnlsChroma(threePartials, SR, true, v, 512, undefined),
   },
   {
-    entry: 'nnlsChromaEx',
+    entry: 'nnlsChroma',
     key: 'stftBlendWeight',
-    run: (v) => m().nnlsChromaEx(threePartials, SR, true, v, 512, 256),
+    variant: 'with hopLength',
+    run: (v) => m().nnlsChroma(threePartials, SR, true, v, 512, 256),
   },
 ];
 
@@ -250,7 +254,7 @@ describe('every converted float parameter refuses a value the float type cannot 
     // A field dropped from the table stops being covered without anything
     // going red, which is the one way this file could quietly shrink.
     expect(FLOAT_FIELDS).toHaveLength(17);
-    const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
+    const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}.${field.variant ?? ''}`);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
@@ -515,14 +519,14 @@ describe('pseudoCqt and hybridCqt consume the fmin they accept', () => {
 // measured against.
 const nnlsBlendSignal = mixTones([{ freqHz: 220, amp: 0.8 }], 22050, 44100);
 
-describe('nnlsChroma and nnlsChromaEx consume the stftBlendWeight they accept', () => {
+describe('nnlsChroma consumes the stftBlendWeight they accept', () => {
   it('nnlsChroma reads three weights as three increasing L1 distances from the NNLS-only chroma', () => {
     // 0/0.5/1 rather than a 0-vs-1 binary: a two-point comparison cannot tell
     // "the weight is read as a blend fraction" from "the weight is compared
     // against some cutoff". The three ordered distances rule that out.
-    const base = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0, 512).data;
-    const mid = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0.5, 512).data;
-    const full = m().nnlsChroma(nnlsBlendSignal, 22050, true, 1, 512).data;
+    const base = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0, 512, undefined).data;
+    const mid = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0.5, 512, undefined).data;
+    const full = m().nnlsChroma(nnlsBlendSignal, 22050, true, 1, 512, undefined).data;
     const toMid = l1Distance(base, mid);
     const toFull = l1Distance(base, full);
     expect(toMid).toBeGreaterThan(0);
@@ -533,15 +537,15 @@ describe('nnlsChroma and nnlsChromaEx consume the stftBlendWeight they accept', 
     // The blend branch in nnls_chroma.cpp only runs when enable_stft_blend is
     // true; with it false, stftBlendWeight has nothing left to select
     // between, so the two weights must produce bit-identical output.
-    const w0 = m().nnlsChroma(nnlsBlendSignal, 22050, false, 0, 512).data;
-    const w1 = m().nnlsChroma(nnlsBlendSignal, 22050, false, 1, 512).data;
+    const w0 = m().nnlsChroma(nnlsBlendSignal, 22050, false, 0, 512, undefined).data;
+    const w1 = m().nnlsChroma(nnlsBlendSignal, 22050, false, 1, 512, undefined).data;
     expect(l1Distance(w0, w1)).toBe(0);
   });
 
-  it('nnlsChromaEx reads the same weight the same way', () => {
-    const base = m().nnlsChromaEx(nnlsBlendSignal, 22050, true, 0, 512, 256).data;
-    const mid = m().nnlsChromaEx(nnlsBlendSignal, 22050, true, 0.5, 512, 256).data;
-    const full = m().nnlsChromaEx(nnlsBlendSignal, 22050, true, 1, 512, 256).data;
+  it('nnlsChroma reads the same weight the same way with an explicit hop', () => {
+    const base = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0, 512, 256).data;
+    const mid = m().nnlsChroma(nnlsBlendSignal, 22050, true, 0.5, 512, 256).data;
+    const full = m().nnlsChroma(nnlsBlendSignal, 22050, true, 1, 512, 256).data;
     const toMid = l1Distance(base, mid);
     const toFull = l1Distance(base, full);
     expect(toMid).toBeGreaterThan(0);

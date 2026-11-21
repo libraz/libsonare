@@ -335,8 +335,8 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   size_t length = 0;
   size_t total_input_elements = 0;
   for (int index = 0; index < count; ++index) {
-    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "left channel");
-    const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "right channel");
+    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "leftChannels");
+    const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "rightChannels");
     if (left_length != right_length) {
       const std::string at = "strips[" + std::to_string(index) + "]";
       throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
@@ -356,8 +356,8 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     total_input_elements += right_length;
   }
   for (int index = 0; index < count; ++index) {
-    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
-    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
+    left_inputs.push_back(float32ArrayToVector(left_channels[index], "leftChannels"));
+    right_inputs.push_back(float32ArrayToVector(right_channels[index], "rightChannels"));
   }
 
   std::vector<float> out_left(length, 0.0f);
@@ -380,7 +380,8 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   try {
     strips.reserve(static_cast<size_t>(count));
     for (int index = 0; index < count; ++index) {
-      SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
+      SonareStrip* strip =
+          sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str(), nullptr);
       if (strip == nullptr) {
         throwLastCError();
       }
@@ -436,7 +437,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     // were flushed, so the reading matches the whole-signal true peak exactly.
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};
-      sonare_strip_meter(strips[index], &snapshot);
+      sonare_strip_meter(strips[index], SONARE_METER_TAP_POST_FADER, &snapshot);
       meters.call<void>("push", MixerWasm::mixMeterSnapshotToVal(snapshot));
     }
   } catch (...) {

@@ -54,7 +54,7 @@ describe('StreamingMasteringChain from the worklet entry', () => {
       numChannels: 2,
       loudness: { targetLufs: -14 },
       loudnessStaticGainDb: -3,
-      loudnessStaticGainPeakDb: -1,
+      loudnessStaticGainPeakDbtp: -1,
     });
     try {
       const left = block(256);

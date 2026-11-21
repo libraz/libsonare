@@ -397,7 +397,7 @@ export interface RealtimeVoiceChangerConfig {
   /** Amount of sibilance passed through the vocoder. */
   vocoderSibilance: number;
   /**
-   * `'external'` reads the carrier passed to the `*WithCarrier` process methods (the worklet's
+   * `'external'` reads the `carrier` passed to the process methods (the worklet's
    * second input); a carrier-less process call is then refused with an `InvalidState` error.
    */
   vocoderCarrierSource: VocoderCarrierSource;

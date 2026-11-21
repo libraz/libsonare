@@ -28,7 +28,10 @@ import type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
-import type { VoiceChangeRealtimeRequest, VoiceChangeRequest } from './effects_voice_change.js';
+import type {
+  RealtimeVoiceChangerRenderRequest,
+  VoiceChangeRequest,
+} from './effects_voice_change.js';
 import type {
   AmplitudeToDbRequest,
   ChirpRequest,
@@ -60,7 +63,6 @@ import type {
   DecomposeRequest,
   DecomposeStemsLinkedRequest,
   DecomposeStemsRequest,
-  HpssWithResidualRequest,
   NnFilterRequest,
   RemixRequest,
   SegmentAgglomerativeRequest,
@@ -978,15 +980,7 @@ const HpssRequestKeys = keysOf<HpssRequest>()([
   'nFft',
   'hopLength',
   'hardMask',
-]);
-const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
-  'samples',
-  'sampleRate',
-  'kernelHarmonic',
-  'kernelPercussive',
-  'nFft',
-  'hopLength',
-  'hardMask',
+  'withResidual',
 ]);
 const LufsRequestKeys = keysOf<LufsRequest>()(['samples', 'sampleRate']);
 const LufsMultichannelRequestKeys = keysOf<LufsMultichannelRequest>()(['channels', 'sampleRate']);
@@ -2181,7 +2175,7 @@ const VoiceChangeRequestKeys = keysOf<VoiceChangeRequest>()([
   'formantFactor',
   'formantMode',
 ]);
-const VoiceChangeRealtimeRequestKeys = keysOf<VoiceChangeRealtimeRequest>()([
+const RealtimeVoiceChangerRenderRequestKeys = keysOf<RealtimeVoiceChangerRenderRequest>()([
   'channels',
   'sampleRate',
   'config',
@@ -2882,7 +2876,6 @@ export const REQUEST_SHAPES = {
   griffinLim: { keys: GriffinLimRequestKeys },
   harmonic: { keys: HarmonicRequestKeys },
   hpss: { keys: HpssRequestKeys },
-  hpssWithResidual: { keys: HpssWithResidualRequestKeys },
   hybridCqt: { keys: HybridCqtRequestKeys },
   lufs: { keys: LufsRequestKeys },
   lufsMultichannel: { keys: LufsMultichannelRequestKeys },
@@ -3051,7 +3044,7 @@ export const REQUEST_SHAPES = {
   trimSilence: { keys: TrimSilenceRequestKeys },
   vectorNormalize: { keys: VectorNormalizeRequestKeys },
   voiceChange: { keys: VoiceChangeRequestKeys },
-  voiceChangeRealtime: { keys: VoiceChangeRealtimeRequestKeys },
+  realtimeVoiceChangerRender: { keys: RealtimeVoiceChangerRenderRequestKeys },
   vqt: { keys: VqtRequestKeys },
   vqtToAudio: { keys: VqtToAudioRequestKeys },
   waveformPeakPyramid: { keys: WaveformPeakPyramidRequestKeys },

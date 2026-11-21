@@ -67,14 +67,27 @@ const refusedAs = (cls: ErrorConstructor, message: string) =>
 describe('typed multiband crossover + bands', () => {
   it('masterAudio mono: nested equals the native dotted document bit-for-bit', () => {
     const a = masterAudio({ samples: left, sampleRate, overrides: typed });
-    const b = getSonareModule().masteringChain(left, sampleRate, dottedJson());
+    const b = getSonareModule().masteringChain(
+      left,
+      sampleRate,
+      dottedJson(),
+      undefined,
+      undefined,
+    );
     expect(a.stages).toContain(MB);
     expect(Array.from(a.samples)).toEqual(Array.from(b.samples));
   });
 
   it('masterAudioStereo: nested equals the native dotted document bit-for-bit', () => {
     const a = masterAudioStereo({ left, right, sampleRate, overrides: typed });
-    const b = getSonareModule().masteringChainStereo(left, right, sampleRate, dottedJson());
+    const b = getSonareModule().masteringChainStereo(
+      left,
+      right,
+      sampleRate,
+      dottedJson(),
+      undefined,
+      undefined,
+    );
     expect(Array.from(a.left)).toEqual(Array.from(b.left));
     expect(Array.from(a.right)).toEqual(Array.from(b.right));
   });

@@ -458,8 +458,10 @@ export interface WasmProject {
     program: number,
     bank: number,
   ) => void;
-  bakeMidiFx: (clipId: number, configJson: string) => void;
-  bakeMidiFxWithSourceIndex: (clipId: number, configJson: string) => Int32Array;
+  bakeMidiFx: {
+    (clipId: number, configJson: string, withSourceIndex?: false | null): void;
+    (clipId: number, configJson: string, withSourceIndex: true): Int32Array;
+  };
   previewMidiFxCount: (clipId: number, configJson: string) => number;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
   transcribeToClip: (
@@ -560,7 +562,7 @@ export interface WasmProject {
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
   setMixerSceneJson: (sceneJson: string) => void;
-  setMarkerEx: (marker: {
+  setMarker: (marker: {
     id: number;
     ppq: number;
     name: string;
@@ -589,8 +591,10 @@ export interface WasmProject {
 export interface ProjectModule {
   Project: {
     new (): WasmProject;
-    fromJson: (json: string) => WasmProject;
-    fromJsonWithDiagnostics: (json: string) => { project: WasmProject; diagnostics: string };
+    fromJson: {
+      (json: string, withDiagnostics?: false | null): WasmProject;
+      (json: string, withDiagnostics: true): { project: WasmProject; diagnostics: string };
+    };
   };
   SampleBank: { new (): WasmSampleBank };
   projectAbiVersion: () => number;

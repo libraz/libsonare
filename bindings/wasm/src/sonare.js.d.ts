@@ -607,18 +607,12 @@ export interface WasmRoomMorphStereoOptions extends WasmRoomMorphOptions {
 export interface WasmHpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
+  residual?: Float32Array;
   sampleRate: number;
 }
 
 export interface WasmAudioFromMemoryResult {
   samples: Float32Array;
-  sampleRate: number;
-}
-
-export interface WasmHpssWithResidualResult {
-  harmonic: Float32Array;
-  percussive: Float32Array;
-  residual: Float32Array;
   sampleRate: number;
 }
 
@@ -1314,10 +1308,10 @@ export interface WasmEngineTransportState {
   /** PPQ of the current bar's downbeat (derived from the tempo map). */
   barStartPpq: number;
   /** Zero-based index of the current bar. */
-  barCount: number;
+  barIndex: number;
   /** Time signature in effect at the current PPQ. */
   timeSignature: { numerator: number; denominator: number; confidence: number };
-  /** One-based beat within the current bar (`barCount` is zero-based). */
+  /** One-based beat within the current bar (`barIndex` is zero-based). */
   beat: number;
   /** Fractional position within the current beat, in [0, 1). */
   beatFraction: number;
@@ -2005,7 +1999,13 @@ export interface SonareModule {
     keyMode: number,
   ) => { roman: string[]; functions: string[] };
   acousticSelectorNames: () => { materialPreset: string[]; mode: string[] };
-  analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
+  analyze: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+    progressCallback?: ProgressCallback | null,
+    cancelCallback?: (() => boolean) | null,
+  ) => WasmAnalysisResult;
   estimateMeter: (
     beatTimes: ArrayLike<number>,
     beatStrengths: ArrayLike<number>,
@@ -2084,12 +2084,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     nOctaveBands: number,
-  ) => WasmAcousticResult;
-  analyzeImpulseResponseEx: (
-    samples: Float32Array,
-    sampleRate: number,
-    nOctaveBands: number,
-    minDecayDb: number,
+    minDecayDb?: number | null,
   ) => WasmAcousticResult;
   detectAcoustic: (
     samples: Float32Array,
@@ -2124,13 +2119,6 @@ export interface SonareModule {
     heightM: number;
     bandAbsorption?: Float32Array | number[];
   }) => Omit<WasmRoomGeometryOptions, 'materialPreset'>;
-  analyzeWithProgress: (
-    samples: Float32Array,
-    sampleRate: number,
-    options: object,
-    progressCallback: ProgressCallback | null,
-    cancelCallback: (() => boolean) | null,
-  ) => WasmAnalysisResult;
   analyzeBpm: (
     samples: Float32Array,
     sampleRate: number,
@@ -2233,27 +2221,9 @@ export interface SonareModule {
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-  ) => { mid: Float32Array; side: Float32Array };
-  meteringVectorscopeDecimated: (
-    left: Float32Array,
-    right: Float32Array,
-    sampleRate: number,
     maxPoints: number,
   ) => { mid: Float32Array; side: Float32Array };
   meteringPhaseScope: (
-    left: Float32Array,
-    right: Float32Array,
-    sampleRate: number,
-  ) => {
-    mid: Float32Array;
-    side: Float32Array;
-    radius: Float32Array;
-    angleRad: Float32Array;
-    correlation: number;
-    averageAbsAngleRad: number;
-    maxRadius: number;
-  };
-  meteringPhaseScopeDecimated: (
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
@@ -2348,40 +2318,12 @@ export interface SonareModule {
     sampleRate: number,
     kernelHarmonic: number,
     kernelPercussive: number,
-  ) => WasmHpssResult;
-  hpssEx: (
-    samples: Float32Array,
-    sampleRate: number,
-    kernelHarmonic: number,
-    kernelPercussive: number,
     nFft: number,
     hopLength: number,
     hardMask: boolean,
+    withResidual: boolean,
   ) => WasmHpssResult;
-  hpssWithResidual: (
-    samples: Float32Array,
-    sampleRate: number,
-    kernelHarmonic: number,
-    kernelPercussive: number,
-  ) => WasmHpssWithResidualResult;
-  hpssWithResidualEx: (
-    samples: Float32Array,
-    sampleRate: number,
-    kernelHarmonic: number,
-    kernelPercussive: number,
-    nFft: number,
-    hopLength: number,
-    hardMask: boolean,
-  ) => WasmHpssWithResidualResult;
   decompose: (
-    s: Float32Array,
-    nFeatures: number,
-    nFrames: number,
-    nComponents: number,
-    nIter: number,
-    beta: number,
-  ) => WasmDecomposeResult;
-  decomposeWithInit: (
     s: Float32Array,
     nFeatures: number,
     nFrames: number,
@@ -2455,16 +2397,14 @@ export interface SonareModule {
   ) => Float32Array;
   harmonic: (samples: Float32Array, sampleRate: number) => Float32Array;
   percussive: (samples: Float32Array, sampleRate: number) => Float32Array;
-  timeStretch: (samples: Float32Array, sampleRate: number, rate: number) => Float32Array;
-  timeStretchEx: (
+  timeStretch: (
     samples: Float32Array,
     sampleRate: number,
     rate: number,
     nFft: number,
     hopLength: number,
   ) => Float32Array;
-  pitchShift: (samples: Float32Array, sampleRate: number, pitchSemitones: number) => Float32Array;
-  pitchShiftEx: (
+  pitchShift: (
     samples: Float32Array,
     sampleRate: number,
     pitchSemitones: number,
@@ -2657,14 +2597,13 @@ export interface SonareModule {
     formantFactor: number,
     formantMode: string,
   ) => Float32Array;
-  voiceChangeRealtime: (
+  realtimeVoiceChangerRender: (
     samples: Float32Array,
     sampleRate: number,
     preset: string,
     channels: number,
   ) => Float32Array;
-  normalize: (samples: Float32Array, sampleRate: number, targetDb: number) => Float32Array;
-  normalizeEx: (
+  normalize: (
     samples: Float32Array,
     sampleRate: number,
     targetDb: number,
@@ -2971,12 +2910,16 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     configJson: string | null,
+    progressCallback?: ProgressCallback | null,
+    cancelCallback?: (() => boolean) | null,
   ) => WasmMasteringChainResult;
   masteringChainStereo: (
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
     configJson: string | null,
+    progressCallback?: ProgressCallback | null,
+    cancelCallback?: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   masteringStreamingLoudnessGain: (
     samples: Float32Array,
@@ -2989,21 +2932,6 @@ export interface SonareModule {
     sampleRate: number,
     configJson: string | null,
   ) => WasmStreamingLoudnessGainResult;
-  masteringChainWithProgress: (
-    samples: Float32Array,
-    sampleRate: number,
-    configJson: string | null,
-    progressCallback: ProgressCallback | null,
-    cancelCallback: (() => boolean) | null,
-  ) => WasmMasteringChainResult;
-  masteringChainStereoWithProgress: (
-    left: Float32Array,
-    right: Float32Array,
-    sampleRate: number,
-    configJson: string | null,
-    progressCallback: ProgressCallback | null,
-    cancelCallback: (() => boolean) | null,
-  ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
   masteringPresetParams: (preset: string) => string;
   masteringChainConfigParams: (document: string) => string;
@@ -3013,6 +2941,8 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     overridesJson: string | null,
+    progressCallback?: ProgressCallback | null,
+    cancelCallback?: (() => boolean) | null,
   ) => WasmMasteringChainResult;
   masterAudioStereo: (
     preset: string | null,
@@ -3020,23 +2950,8 @@ export interface SonareModule {
     right: Float32Array,
     sampleRate: number,
     overridesJson: string | null,
-  ) => WasmMasteringStereoChainResult;
-  masterAudioWithProgress: (
-    preset: string | null,
-    samples: Float32Array,
-    sampleRate: number,
-    overridesJson: string | null,
-    progressCallback: ProgressCallback | null,
-    cancelCallback: (() => boolean) | null,
-  ) => WasmMasteringChainResult;
-  masterAudioStereoWithProgress: (
-    preset: string | null,
-    left: Float32Array,
-    right: Float32Array,
-    sampleRate: number,
-    overridesJson: string | null,
-    progressCallback: ProgressCallback | null,
-    cancelCallback: (() => boolean) | null,
+    progressCallback?: ProgressCallback | null,
+    cancelCallback?: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   mixingScenePresetNames: () => string[];
   mixingScenePresetJson: (presetName: string) => string;
@@ -3057,7 +2972,6 @@ export interface SonareModule {
   ) => string;
   mixingAssistantSourceClassNames: () => string[];
   mixingAssistantSourceClassFromName: (name: string) => number;
-  trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
   fade: (
     samples: Float32Array,
     sampleRate: number,
@@ -3074,7 +2988,7 @@ export interface SonareModule {
     centerHz: number | undefined,
     bandwidthHz: number | undefined,
   ) => Float32Array;
-  trimEx: (
+  trim: (
     samples: Float32Array,
     sampleRate: number,
     thresholdDb: number,
@@ -3421,18 +3335,22 @@ export interface SonareModule {
     frameLength: number,
     hopLength: number,
   ) => Int32Array;
-  splitSilenceCommon: (
-    signals: Float32Array[],
-    topDb: number,
-    frameLength: number,
-    hopLength: number,
-  ) => Int32Array;
-  splitSilenceCommonWithReport: (
-    signals: Float32Array[],
-    topDb: number,
-    frameLength: number,
-    hopLength: number,
-  ) => SplitSilenceCommonWithReportResult;
+  splitSilenceCommon: {
+    (
+      signals: Float32Array[],
+      topDb: number,
+      frameLength: number,
+      hopLength: number,
+      withReport?: false | null,
+    ): Int32Array;
+    (
+      signals: Float32Array[],
+      topDb: number,
+      frameLength: number,
+      hopLength: number,
+      withReport: true,
+    ): SplitSilenceCommonWithReportResult;
+  };
   frameSignal: (samples: Float32Array, frameLength: number, hopLength: number) => WasmFrameResult;
   tone: (
     frequency: number,
@@ -3527,14 +3445,7 @@ export interface SonareModule {
     enableStftBlend: boolean,
     stftBlendWeight: number,
     stftBlendNFft: number,
-  ) => WasmNnlsChromaResult;
-  nnlsChromaEx: (
-    samples: Float32Array,
-    sampleRate: number,
-    enableStftBlend: boolean,
-    stftBlendWeight: number,
-    stftBlendNFft: number,
-    hopLength: number,
+    hopLength?: number | null,
   ) => WasmNnlsChromaResult;
   cqt: (
     samples: Float32Array,
@@ -3758,7 +3669,7 @@ export interface SonareModule {
   // Streaming - StreamingMasteringChain
   createStreamingMasteringChain: (
     configJson: string | null,
-    options?: { loudnessStaticGainDb?: number; loudnessStaticGainPeakDb?: number },
+    options?: { loudnessStaticGainDb?: number; loudnessStaticGainPeakDbtp?: number },
   ) => WasmStreamingMasteringChain;
 
   // Streaming - StreamingEqualizer
@@ -3918,25 +3829,21 @@ export interface WasmRealtimeVoiceChanger {
   maxBlockSize: () => number;
   nonFiniteDiscardCount: () => number;
   bufferGeneration: () => number;
-  processMono: (samples: Float32Array) => Float32Array;
-  processMonoInto: (samples: Float32Array, output: Float32Array) => void;
-  processInterleaved: (samples: Float32Array, channels: number) => Float32Array;
-  processInterleavedInto: (samples: Float32Array, channels: number, output: Float32Array) => void;
-  // External-carrier variants: the carrier is mono and as long as the input (frames).
-  processMonoWithCarrier: (samples: Float32Array, carrier: Float32Array) => Float32Array;
-  processMonoWithCarrierInto: (
+  // `carrier` is a mono external vocoder carrier as long as the input (frames), or undefined.
+  processMono: (samples: Float32Array, carrier: Float32Array | undefined) => Float32Array;
+  processMonoInto: (
     samples: Float32Array,
-    carrier: Float32Array,
+    carrier: Float32Array | undefined,
     output: Float32Array,
   ) => void;
-  processInterleavedWithCarrier: (
+  processInterleaved: (
     samples: Float32Array,
-    carrier: Float32Array,
+    carrier: Float32Array | undefined,
     channels: number,
   ) => Float32Array;
-  processInterleavedWithCarrierInto: (
+  processInterleavedInto: (
     samples: Float32Array,
-    carrier: Float32Array,
+    carrier: Float32Array | undefined,
     channels: number,
     output: Float32Array,
   ) => void;
@@ -4060,8 +3967,7 @@ export interface WasmMixer {
   ) => number;
   setSendDb: (stripIndex: number, sendIndex: number, sendDb: number) => void;
   removeSend: (stripIndex: number, sendIndex: number) => void;
-  meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
-  stripMeter: (stripIndex: number) => WasmMixMeterSnapshot;
+  stripMeter: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
   busMeter: (busId: string) => WasmMixMeterSnapshot;
   stripNonFiniteDiscardCount: (stripIndex: number) => number;
   busNonFiniteDiscardCount: (busId: string) => number;

@@ -21,10 +21,11 @@
 // Effects
 // ============================================================================
 
-// HPSS - Harmonic/Percussive Source Separation
-val js_hpss_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
-               const val& kernel_percussive, const val& n_fft, const val& hop_length,
-               bool hard_mask) {
+// HPSS - Harmonic/Percussive Source Separation. With @p with_residual the result also
+// carries `residual`; the plain split stays on hpss(), as the C entry does.
+val js_hpss(val samples, const val& sample_rate, const val& kernel_harmonic,
+            const val& kernel_percussive, const val& n_fft, const val& hop_length, bool hard_mask,
+            bool with_residual) {
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
@@ -37,25 +38,20 @@ val js_hpss_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
   stft_config.n_fft = checkedIntFromVal(n_fft, "nFft");
   stft_config.hop_length = resynthesisHopFromVal(hop_length);
 
-  HpssAudioResult result = hpss(audio, config, stft_config);
-
   val out = val::object();
-
-  // Harmonic audio
+  if (with_residual) {
+    HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+    out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
+    out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
+    out.set("residual", vectorToFloat32Array(result.residual.data(), result.residual.size()));
+    out.set("sampleRate", result.harmonic.sample_rate());
+    return out;
+  }
+  HpssAudioResult result = hpss(audio, config, stft_config);
   out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
-
-  // Percussive audio
   out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
-
   out.set("sampleRate", result.harmonic.sample_rate());
-
   return out;
-}
-
-val js_hpss(val samples, const val& sample_rate, const val& kernel_harmonic,
-            const val& kernel_percussive) {
-  return js_hpss_ex(samples, sample_rate, kernel_harmonic, kernel_percussive,
-                    val(constants::kDefaultNFft), val(constants::kDefaultHopLength), false);
 }
 
 // Get harmonic component only
@@ -75,8 +71,8 @@ val js_percussive(val samples, const val& sample_rate) {
 }
 
 // Time stretch
-val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val, const val& n_fft,
-                       const val& hop_length) {
+val js_time_stretch(val samples, const val& sample_rate, const val& rate_val, const val& n_fft,
+                    const val& hop_length) {
   const float rate = checkedFloatFromVal(rate_val, "speedRatio");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -88,14 +84,9 @@ val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val,
   return vectorToFloat32Array(result.data(), result.size());
 }
 
-val js_time_stretch(val samples, const val& sample_rate, const val& rate) {
-  return js_time_stretch_ex(samples, sample_rate, rate, val(constants::kDefaultNFft),
-                            val(constants::kDefaultHopLength));
-}
-
 // Pitch shift
-val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semitones_val,
-                      const val& n_fft, const val& hop_length) {
+val js_pitch_shift(val samples, const val& sample_rate_val, const val& semitones_val,
+                   const val& n_fft, const val& hop_length) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float semitones = checkedFloatFromVal(semitones_val, "semitones");
   PitchShiftPlan plan;
@@ -109,11 +100,6 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semito
   config.backend = StretchBackend::NativeSpectral;
   Audio result = pitch_shift(audio, semitones, config);
   return vectorToFloat32Array(result.data(), result.size());
-}
-
-val js_pitch_shift(val samples, const val& sample_rate, const val& semitones) {
-  return js_pitch_shift_ex(samples, sample_rate, semitones, val(constants::kDefaultNFft),
-                           val(constants::kDefaultHopLength));
 }
 
 // Pitch-editor bindings (pitch-correct / note stretch / note move).
@@ -187,11 +173,13 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   if (has_prob) {
     accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", &cumulative_count);
   }
-  std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
+  std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   const size_t n_frames = f0.size();
-  std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
-  std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
+  std::vector<float> voiced_vec =
+      has_voiced ? float32ArrayToVector(voiced, "voiced") : std::vector<float>{};
+  std::vector<float> prob_vec =
+      has_prob ? float32ArrayToVector(voiced_prob, "voicedProb") : std::vector<float>{};
   if (has_voiced && voiced_vec.size() != n_frames) {
     throw WasmRangeError("voiced must have the same length as f0Hz");
   }
@@ -232,8 +220,8 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   if (has_prob) {
     accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", &cumulative_count);
   }
-  std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
+  std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   const size_t n_frames = f0.size();
 
   editing::pitch_editor::PitchCorrectionConfig config{};
@@ -275,8 +263,8 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     config.retune_speed_ms = floatProperty(options, "retuneSpeedMs", config.retune_speed_ms);
     config.vibrato_threshold_cents =
         floatProperty(options, "vibratoThresholdCents", config.vibrato_threshold_cents);
-    if (has_voiced) voiced_vec = float32ArrayToVector(voiced);
-    if (has_prob) prob_vec = float32ArrayToVector(voiced_prob);
+    if (has_voiced) voiced_vec = float32ArrayToVector(voiced, "voiced");
+    if (has_prob) prob_vec = float32ArrayToVector(voiced_prob, "voicedProb");
   }
   if (has_voiced && voiced_vec.size() != n_frames) {
     throw WasmRangeError("voiced must have the same length as f0Hz");
@@ -377,16 +365,20 @@ val js_voice_change(val samples, const val& sample_rate, const val& pitch_semito
   return vectorToFloat32Array(result.data(), result.size());
 }
 
-val js_voice_change_realtime(val samples, const val& sample_rate, std::string preset,
-                             const val& channels) {
+val js_realtime_voice_changer_render(val samples, const val& sample_rate, std::string preset,
+                                     const val& channels) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   const int channel_count = checkedIntFromVal(channels, "channels");
-  std::vector<float> input = float32ArrayToVector(samples);
+  std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err =
-      sonare_voice_change_realtime(input.data(), input.size(), rate, wasmCString(preset, "preset"),
-                                   channel_count, &output, &output_length);
+  SonareRealtimeVoiceChangerConfig config;
+  SonareError err =
+      sonare_realtime_voice_changer_config_from_json(wasmCString(preset, "preset"), &config);
+  if (err == SONARE_OK) {
+    err = sonare_realtime_voice_changer_render(input.data(), input.size(), rate, &config,
+                                               channel_count, &output, &output_length);
+  }
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     // The C code and its recorded detail, as on Node, so a host can branch on `err.code`.
@@ -395,42 +387,6 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
   std::vector<float> result(output, output + output_length);
   sonare_free_floats(output);
   return vectorToFloat32Array(result);
-}
-
-// HPSS with residual: separates audio into harmonic, percussive and residual
-// signals (residual = original - harmonic - percussive). Mirrors the C ABI
-// sonare_hpss_with_residual. Returns { harmonic, percussive, residual,
-// sampleRate } where all three buffers share the same length and sample rate.
-val js_hpss_with_residual_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
-                             const val& kernel_percussive, const val& n_fft, const val& hop_length,
-                             bool hard_mask) {
-  Audio audio =
-      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
-
-  HpssConfig config;
-  config.kernel_size_harmonic = checkedIntFromVal(kernel_harmonic, "kernelHarmonic");
-  config.kernel_size_percussive = checkedIntFromVal(kernel_percussive, "kernelPercussive");
-  config.use_soft_mask = !hard_mask;
-
-  StftConfig stft_config;
-  stft_config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  stft_config.hop_length = resynthesisHopFromVal(hop_length);
-
-  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
-
-  val out = val::object();
-  out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
-  out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
-  out.set("residual", vectorToFloat32Array(result.residual.data(), result.residual.size()));
-  out.set("sampleRate", result.harmonic.sample_rate());
-  return out;
-}
-
-val js_hpss_with_residual(val samples, const val& sample_rate, const val& kernel_harmonic,
-                          const val& kernel_percussive) {
-  return js_hpss_with_residual_ex(samples, sample_rate, kernel_harmonic, kernel_percussive,
-                                  val(constants::kDefaultNFft), val(constants::kDefaultHopLength),
-                                  false);
 }
 
 // Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
@@ -465,8 +421,8 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
 }
 
 // Normalize
-val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_val,
-                    const std::string& mode) {
+val js_normalize(val samples, const val& sample_rate, const val& target_db_val,
+                 const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
     throw WasmRangeError("mode must be 'peak' or 'rms'");
   }
@@ -476,10 +432,6 @@ val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_va
   Audio result =
       mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
   return vectorToFloat32Array(result.data(), result.size());
-}
-
-val js_normalize(val samples, const val& sample_rate, const val& target_db) {
-  return js_normalize_ex(samples, sample_rate, target_db, "peak");
 }
 
 // Normalizing the two channels separately would lift the quieter one until the
@@ -493,7 +445,7 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
   }
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
   Audio left = loadValidatedAudio("left", left_samples, sample_rate);
   Audio right = loadValidatedAudio("right", right_samples, sample_rate);
   const NormalizeStereoResult result = mode == "rms"
@@ -507,8 +459,8 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
 }
 
 // Trim silence
-val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
-               const val& frame_length, const val& hop_length) {
+val js_trim(val samples, const val& sample_rate, const val& threshold_db, const val& frame_length,
+            const val& hop_length) {
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = trim_absolute(
@@ -518,17 +470,12 @@ val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
   return vectorToFloat32Array(result.data(), result.size());
 }
 
-val js_trim(val samples, const val& sample_rate, const val& threshold_db) {
-  return js_trim_ex(samples, sample_rate, threshold_db, val(constants::kDefaultNFft),
-                    val(constants::kDefaultHopLength));
-}
-
 // Fade and biquad filter: audio is read unvalidated so the C side's refusal is the one reported.
 val js_fade(val samples, const val& sample_rate, const val& fade_in_sec, const val& fade_out_sec) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   const float fade_in = checkedFloatFromVal(fade_in_sec, "fadeInSec");
   const float fade_out = checkedFloatFromVal(fade_out_sec, "fadeOutSec");
-  std::vector<float> input = float32ArrayToVector(samples);
+  std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError err =
@@ -556,7 +503,7 @@ val js_biquad_filter(val samples, const val& sample_rate, const val& type, const
   config.center_hz = optionalDomainNumber(center_hz, "centerHz").value_or(config.center_hz);
   config.bandwidth_hz =
       optionalDomainNumber(bandwidth_hz, "bandwidthHz").value_or(config.bandwidth_hz);
-  std::vector<float> input = float32ArrayToVector(samples);
+  std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError err =
@@ -572,13 +519,10 @@ val js_biquad_filter(val samples, const val& sample_rate, const val& type, const
 
 void registerEffectsAudioBindings() {
   function("hpss", &js_hpss);
-  function("hpssEx", &js_hpss_ex);
   function("harmonic", &js_harmonic);
   function("percussive", &js_percussive);
   function("timeStretch", &js_time_stretch);
-  function("timeStretchEx", &js_time_stretch_ex);
   function("pitchShift", &js_pitch_shift);
-  function("pitchShiftEx", &js_pitch_shift_ex);
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
   function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
   function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
@@ -586,15 +530,11 @@ void registerEffectsAudioBindings() {
   function("noteStretch", &js_note_stretch);
   function("noteMove", &js_note_move);
   function("voiceChange", &js_voice_change);
-  function("voiceChangeRealtime", &js_voice_change_realtime);
-  function("hpssWithResidual", &js_hpss_with_residual);
-  function("hpssWithResidualEx", &js_hpss_with_residual_ex);
+  function("realtimeVoiceChangerRender", &js_realtime_voice_changer_render);
   function("phaseVocoder", &js_phase_vocoder);
   function("normalize", &js_normalize);
-  function("normalizeEx", &js_normalize_ex);
   function("normalizeStereo", &js_normalize_stereo);
   function("trim", &js_trim);
-  function("trimEx", &js_trim_ex);
   function("fade", &js_fade);
   function("biquadFilter", &js_biquad_filter);
 }

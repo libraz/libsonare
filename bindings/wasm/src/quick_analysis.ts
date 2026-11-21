@@ -795,16 +795,13 @@ export function analyze(...args: unknown[]): AnalysisResult {
       nativeOptions.tuningCents = nativeTuning(tuningCents);
     }
     const module = requireModule();
-    const result =
-      onProgress == null && cancel == null
-        ? module.analyze(request.samples, request.sampleRate, nativeOptions)
-        : module.analyzeWithProgress(
-            request.samples,
-            request.sampleRate,
-            nativeOptions,
-            onProgress ?? (() => {}),
-            cancel ?? (() => false),
-          );
+    const result = module.analyze(
+      request.samples,
+      request.sampleRate,
+      nativeOptions,
+      onProgress ?? undefined,
+      cancel ?? undefined,
+    );
     return convertAnalysisResult(result);
   });
 }
@@ -937,7 +934,7 @@ export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
     // Only `undefined` takes the default; the module's reader refuses `null` by name.
     const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
+    const result: WasmAcousticResult = requireModule().analyzeImpulseResponse(
       request.samples,
       request.sampleRate,
       request.nOctaveBands ?? 6,

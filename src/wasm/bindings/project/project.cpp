@@ -32,24 +32,9 @@ std::string ProjectWasm::toJson() const {
   return out;
 }
 
-ProjectWasm ProjectWasm::fromJson(const std::string& json) {
-  wasmRefuseEmbeddedNul(json, "json");
-  SonareProject* handle = nullptr;
-  char* diag = nullptr;
-  const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
-  if (err != SONARE_OK || handle == nullptr) {
-    std::string message = diag != nullptr ? std::string(diag) : std::string("invalid project JSON");
-    sonare_free_string(diag);
-    sonare_project_destroy(handle);
-    // The C return code, as on every other surface.
-    if (err != SONARE_OK) throwCErrorMessage(err, message);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
-  }
-  sonare_free_string(diag);
-  return ProjectWasm(handle);
-}
-
-val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
+val ProjectWasm::fromJson(const std::string& json, const val& with_diagnostics_val) {
+  const bool with_diagnostics =
+      optionalBool(with_diagnostics_val, "withDiagnostics").value_or(false);
   wasmRefuseEmbeddedNul(json, "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
@@ -60,9 +45,11 @@ val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
     sonare_project_destroy(handle);
     const std::string message =
         diagnostics.empty() ? std::string("invalid project JSON") : diagnostics;
+    // The C return code, as on every other surface.
     if (err != SONARE_OK) throwCErrorMessage(err, message);
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
   }
+  if (!with_diagnostics) return val(ProjectWasm(handle));
   val out = val::object();
   out.set("project", ProjectWasm(handle));
   out.set("diagnostics", diagnostics);
@@ -82,7 +69,6 @@ void registerProjectBindings() {
   class_<ProjectWasm> cls("Project");
   cls.constructor<>()
       .class_function("fromJson", &ProjectWasm::fromJson)
-      .class_function("fromJsonWithDiagnostics", &ProjectWasm::fromJsonWithDiagnostics)
       .function("toJson", &ProjectWasm::toJson)
       .function("setSampleRate", &ProjectWasm::setSampleRate);
   registerProjectArrange(cls);

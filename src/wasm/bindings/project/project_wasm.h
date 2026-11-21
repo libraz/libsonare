@@ -112,10 +112,9 @@ struct ProjectWasm {
   std::string toJson() const;
 
   // Deserializes project JSON into a NEW project. Throws on malformed input,
-  // surfacing the joined diagnostic messages to JS.
-  static ProjectWasm fromJson(const std::string& json);
-
-  static val fromJsonWithDiagnostics(const std::string& json);
+  // surfacing the joined diagnostic messages to JS. @p with_diagnostics
+  // (undefined/null = false) returns { project, diagnostics } instead of the project.
+  static val fromJson(const std::string& json, const val& with_diagnostics);
 
   // Sets the project sample rate in Hz. Must be in [8000, 384000]; anything
   // outside that range throws (the C ABI rejects it).
@@ -159,10 +158,10 @@ struct ProjectWasm {
   void setProgram(const val& clip_id, const val& program, const val& bank);
   void setProgramOnChannel(const val& clip_id, const val& group, const val& channel,
                            const val& program, const val& bank);
-  void bakeMidiFx(const val& clip_id, const std::string& config_json);
-  // Bakes and returns the per-event provenance as an Int32Array: entry i is the
-  // input event index transformed event i derives from, or -1 when it has none.
-  val bakeMidiFxWithSourceIndex(const val& clip_id, const std::string& config_json);
+  // @p with_source_index (undefined/null = false) returns the per-event provenance as an
+  // Int32Array: entry i is the input event index transformed event i derives from, or -1
+  // when it has none. Otherwise returns undefined.
+  val bakeMidiFx(const val& clip_id, const std::string& config_json, const val& with_source_index);
   // Non-destructive: how many events the same bake would produce.
   uint32_t previewMidiFxCount(const val& clip_id, const std::string& config_json);
   void setMidiFx(const val& clip_id, const std::string& config_json);
@@ -348,8 +347,7 @@ struct ProjectWasm {
   uint32_t getOverlapPolicy() const;
   double getSampleRate() const;
   void setMixerSceneJson(const std::string& scene_json);
-  uint32_t setMarker(const val& marker_id_val, double ppq, const std::string& name);
-  uint32_t setMarkerEx(val marker);
+  uint32_t setMarker(val marker);
   val markerByIndex(const val& index_val) const;
   val trackByIndex(const val& index_val) const;
   val clipByIndex(const val& index_val) const;

@@ -64,7 +64,8 @@ val ProjectWasm::importExternalStems(val request) {
     planes.reserve(channels);
     size_t frames = 0;
     for (size_t channel = 0; channel < channels; ++channel) {
-      samples.push_back(float32ArrayToVector(source_planes[static_cast<unsigned>(channel)]));
+      samples.push_back(
+          float32ArrayToVector(source_planes[static_cast<unsigned>(channel)], "planarSamples"));
       if (channel == 0) {
         frames = samples.back().size();
       } else if (samples.back().size() != frames) {

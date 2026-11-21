@@ -298,32 +298,18 @@ class RealtimeVoiceChangerWrapper {
   // consumers should prefer the prepared API below (getMonoInputBuffer /
   // processPreparedMono / getMonoOutputBuffer) which avoids per-sample JS↔C++
   // crossings and per-call allocations entirely.
-  val processMono(val samples) { return process_mono(samples, val::undefined()); }
+  // `carrier` is a mono external vocoder carrier of the input length, or undefined for none.
+  val processMono(val samples, val carrier) { return process_mono(samples, carrier); }
 
-  val processMonoWithCarrier(val samples, val carrier) { return process_mono(samples, carrier); }
-
-  void processMonoInto(val samples, val output) {
-    process_mono_into(samples, val::undefined(), output);
-  }
-
-  void processMonoWithCarrierInto(val samples, val carrier, val output) {
+  void processMonoInto(val samples, val carrier, val output) {
     process_mono_into(samples, carrier, output);
   }
 
-  val processInterleaved(val samples, const val& channels_val) {
-    return process_interleaved(samples, val::undefined(), channels_val);
-  }
-
-  val processInterleavedWithCarrier(val samples, val carrier, const val& channels_val) {
+  val processInterleaved(val samples, val carrier, const val& channels_val) {
     return process_interleaved(samples, carrier, channels_val);
   }
 
-  void processInterleavedInto(val samples, const val& channels_val, val output) {
-    process_interleaved_into(samples, val::undefined(), channels_val, output);
-  }
-
-  void processInterleavedWithCarrierInto(val samples, val carrier, const val& channels_val,
-                                         val output) {
+  void processInterleavedInto(val samples, val carrier, const val& channels_val, val output) {
     process_interleaved_into(samples, carrier, channels_val, output);
   }
 
@@ -479,7 +465,7 @@ class RealtimeVoiceChangerWrapper {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidState,
           "block not processed; the configuration takes an external vocoder "
-          "carrier, so use the WithCarrier process methods");
+          "carrier, so a carrier must be supplied");
     }
   }
 
@@ -779,13 +765,6 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("processMonoInto", &RealtimeVoiceChangerWrapper::processMonoInto)
       .function("processInterleaved", &RealtimeVoiceChangerWrapper::processInterleaved)
       .function("processInterleavedInto", &RealtimeVoiceChangerWrapper::processInterleavedInto)
-      .function("processMonoWithCarrier", &RealtimeVoiceChangerWrapper::processMonoWithCarrier)
-      .function("processMonoWithCarrierInto",
-                &RealtimeVoiceChangerWrapper::processMonoWithCarrierInto)
-      .function("processInterleavedWithCarrier",
-                &RealtimeVoiceChangerWrapper::processInterleavedWithCarrier)
-      .function("processInterleavedWithCarrierInto",
-                &RealtimeVoiceChangerWrapper::processInterleavedWithCarrierInto)
       .function("noteOn", &RealtimeVoiceChangerWrapper::noteOn)
       .function("noteOff", &RealtimeVoiceChangerWrapper::noteOff)
       .function("allNotesOff", &RealtimeVoiceChangerWrapper::allNotesOff)

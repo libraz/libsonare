@@ -130,7 +130,7 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  *   thread, reuse the returned reference for the block rather than retaining it.
  * - An enabled `loudness` stage needs `loudnessStaticGainDb` measured offline
  *   ({@link streamingLoudnessGain} returns it), because whole-signal integrated
- *   LUFS cannot be measured block by block. Pass `loudnessStaticGainPeakDb` too
+ *   LUFS cannot be measured block by block. Pass `loudnessStaticGainPeakDbtp` too
  *   and the static gain is clamped exactly as the offline chain clamps it, so
  *   the live preview matches the render.
  * - {@link flush} output starts {@link latencySamples} samples early; discard
@@ -181,7 +181,7 @@ export class StreamingMasteringChain {
       maxBlockSize,
       numChannels,
       loudnessStaticGainDb,
-      loudnessStaticGainPeakDb,
+      loudnessStaticGainPeakDbtp,
       ...chainConfig
     } = config;
     assertIntegerValue(sampleRate, 'sampleRate');
@@ -190,8 +190,8 @@ export class StreamingMasteringChain {
     if (loudnessStaticGainDb !== undefined) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;
     }
-    if (loudnessStaticGainPeakDb !== undefined) {
-      options.loudnessStaticGainPeakDb = loudnessStaticGainPeakDb;
+    if (loudnessStaticGainPeakDbtp !== undefined) {
+      options.loudnessStaticGainPeakDbtp = loudnessStaticGainPeakDbtp;
     }
     const module = getSonareModule();
     this.chainHandle = module.createStreamingMasteringChain(

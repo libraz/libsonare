@@ -274,10 +274,10 @@ SonareSampleBank* SampleBankWasm::lookup(uint32_t id) {
 bool SampleBankWasm::issued(uint32_t id) { return id != 0 && id < g_next_sample_bank_id; }
 
 uint32_t SampleBankWasm::addSample(val data, val desc) {
-  if (wasmFloat32ArrayLength(data, "sample data") == 0) {
+  if (wasmFloat32ArrayLength(data, "data") == 0) {
     throw WasmRangeError("sample data must not be empty");
   }
-  const std::vector<float> frames = float32ArrayToVector(data);
+  const std::vector<float> frames = float32ArrayToVector(data, "data");
 
   SonareSampleDesc c{};
   c.root_key = static_cast<uint8_t>(integerField(desc, "rootKey", "sample descriptor", 127.0));

@@ -109,9 +109,12 @@ val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,
   return chromaToVal(bass_chroma(audio, config));
 }
 
-val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blend,
-                      const val& stft_blend_weight_val, const val& stft_blend_n_fft,
-                      const val& hop_length) {
+val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
+                   const val& stft_blend_weight_val, const val& stft_blend_n_fft,
+                   const val& hop_length_val) {
+  const val hop_length = hop_length_val.isUndefined() || hop_length_val.isNull()
+                             ? val(constants::kDefaultHopLength)
+                             : hop_length_val;
   const float stft_blend_weight = checkedFloatFromVal(stft_blend_weight_val, "stftBlendWeight");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -130,12 +133,6 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
 
   out.set("data", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
   return out;
-}
-
-val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
-                   const val& stft_blend_weight_val, const val& stft_blend_n_fft) {
-  return js_nnls_chroma_ex(samples, sample_rate, enable_stft_blend, stft_blend_weight_val,
-                           stft_blend_n_fft, val(constants::kDefaultHopLength));
 }
 
 // ============================================================================
@@ -419,7 +416,6 @@ void registerFeatureMusicBindings() {
   function("chromaCqt", &js_chroma_cqt);
   function("bassChroma", &js_bass_chroma);
   function("nnlsChroma", &js_nnls_chroma);
-  function("nnlsChromaEx", &js_nnls_chroma_ex);
   function("cqt", &js_cqt);
   function("pseudoCqt", &js_pseudo_cqt);
   function("hybridCqt", &js_hybrid_cqt);

@@ -130,26 +130,21 @@ class MixerWasm {
   // indices shift down by one after removal; recompile before processing.
   void removeSend(const val& strip_index_val, const val& send_index_val);
 
-  // Reads a meter snapshot at the given tap point. tap: 0 = pre-fader,
+  // Reads a strip's meter snapshot at the given tap point. tap: 0 = pre-fader,
   // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
-  val meterTap(const val& strip_index_val, const val& tap_val);
-
-  // Reads the strip's current (post-fader) meter snapshot. Tap-less, mirroring
-  // the Node/Python stripMeter contract which calls sonare_strip_meter; the
-  // tap-selectable variant is meterTap.
-  val stripMeter(const val& strip_index_val);
+  val stripMeter(const val& strip_index_val, const val& tap_val);
   val busMeter(std::string bus_id);
 
   // Number of blocks in which the strip discarded recursive state because a
   // non-finite value had reached it. See
   // sonare_strip_non_finite_discard_count for the full contract.
-  uint32_t stripNonFiniteDiscardCount(const val& strip_index_val);
+  double stripNonFiniteDiscardCount(const val& strip_index_val);
 
   // Number of blocks in which a bus discarded recursive state because a
   // non-finite value had reached it. See
   // sonare_mixer_bus_non_finite_discard_count for the full contract,
   // including why an uncompiled bus throws rather than reading zero.
-  uint32_t busNonFiniteDiscardCount(std::string bus_id);
+  double busNonFiniteDiscardCount(std::string bus_id);
 
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.

@@ -549,7 +549,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
 
   // Reject out-of-range enum-like fields up front, matching the C ABI's
-  // sonare_detect_chords_ex: chroma_method must be 0/1, and when key context is
+  // sonare_detect_chords: chroma_method must be 0/1, and when key context is
   // enabled the key root/mode must be in range (otherwise they are unused).
   validateChromaMethod(chroma_method);
   if (use_key_context) {
@@ -669,8 +669,8 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
   return out;
 }
 
-// The one reader of a MusicAnalyzeOptions object, shared by analyze and
-// analyzeWithProgress. Field rules are enforced by validate_config when
+// The one reader of a MusicAnalyzeOptions object, used by analyze.
+// Field rules are enforced by validate_config when
 // MusicAnalyzer is constructed.
 MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   MusicAnalyzerConfig config;
@@ -729,13 +729,32 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   return config;
 }
 
-val js_analyze(val samples, const val& sample_rate_val, val options) {
+val js_analyze(val samples, const val& sample_rate_val, val options, const val& progress_callback,
+               const val& cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const bool has_progress = callbackGiven(progress_callback, "onProgress");
+  const bool has_cancel = callbackGiven(cancel_callback, "cancel");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const MusicAnalyzerConfig config = musicAnalyzerConfigFromVal(options);
   MusicAnalyzer analyzer(audio, config);
-  AnalysisResult result = analyzer.analyze();
-  return analysisResultToVal(result);
+  if (!has_progress && !has_cancel) {
+    AnalysisResult result = analyzer.analyze();
+    return analysisResultToVal(result);
+  }
+  if (has_progress) {
+    analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage ? stage : ""));
+    });
+  }
+  if (has_cancel) {
+    analyzer.set_cancel_callback(
+        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
+  }
+  const auto result = analyzer.analyze_cancellable();
+  if (!result) {
+    throw SonareException(ErrorCode::Cancelled, "analysis cancelled");
+  }
+  return analysisResultToVal(*result);
 }
 
 val js_estimate_meter(val beat_times, val beat_strengths, val options) {
@@ -763,8 +782,9 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   // The request keys, as the Node addon reports them through the C entry.
   const MeterResult result = sonare::util::check::with_camel_paths(
       [&] {
-        return estimate_meter_from_beats(float32ArrayToVector(beat_times),
-                                         float32ArrayToVector(beat_strengths), config);
+        return estimate_meter_from_beats(float32ArrayToVector(beat_times, "beatTimes"),
+                                         float32ArrayToVector(beat_strengths, "beatStrengths"),
+                                         config);
       },
       std::array<sonare::util::check::MemberKey, 6>{
           {{"candidate_numerators", "candidateNumerators"},
@@ -868,29 +888,6 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
   return out;
 }
 
-// Analyze with progress callback
-val js_analyze_with_progress(val samples, const val& sample_rate_val, val options,
-                             val progress_callback, val cancel_callback) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  MusicAnalyzer analyzer(audio, musicAnalyzerConfigFromVal(options));
-  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
-    });
-  }
-  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
-    analyzer.set_cancel_callback(
-        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
-  }
-
-  const auto result = analyzer.analyze_cancellable();
-  if (!result) {
-    throw SonareException(ErrorCode::Cancelled, "analysis cancelled");
-  }
-  return analysisResultToVal(*result);
-}
-
 void registerQuickAnalysisBindings() {
   // Quick API (high-level)
   function("detectBpm", &js_detect_bpm);
@@ -907,7 +904,6 @@ void registerQuickAnalysisBindings() {
   function("estimateMeter", &js_estimate_meter);
   function("_analysisResultSchemaPaths", &js_analysis_result_schema_paths);
   function("_analysisResultSchemaFixture", &js_analysis_result_schema_fixture);
-  function("analyzeWithProgress", &js_analyze_with_progress);
 
   registerQuickDetailedAnalysisBindings();
   registerRoomAcousticsBindings();

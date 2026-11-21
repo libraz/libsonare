@@ -193,7 +193,7 @@ inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
     throw WasmTypeError("synth patch engineParams must be an object of key -> number");
   }
   val names = val::global("Object").call<val>("keys", map);
-  const size_t count = wasmArrayLikeLength(names, "engineParams keys");
+  const size_t count = wasmArrayLikeLength(names, "engineParams");
   storage->keys.reserve(count);
   storage->params.reserve(count);
   for (size_t i = 0; i < count; ++i) {

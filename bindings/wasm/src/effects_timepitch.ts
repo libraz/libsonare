@@ -109,7 +109,7 @@ export function timeStretch(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertPositiveFloatValue(r.speedRatio, 'speedRatio');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return requireModule().timeStretchEx(
+    return requireModule().timeStretch(
       r.samples,
       r.sampleRate,
       r.speedRatio,
@@ -144,7 +144,7 @@ export function pitchShift(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFloatValue(r.pitchSemitones, 'pitchSemitones');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return requireModule().pitchShiftEx(
+    return requireModule().pitchShift(
       r.samples,
       r.sampleRate,
       r.pitchSemitones,

@@ -788,6 +788,7 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
       r.hopLength ?? 512,
+      undefined,
     );
   });
 }
@@ -816,11 +817,12 @@ export function splitSilenceCommonWithReport(
       args,
     );
     assertCommonSignals(r.signals);
-    return requireModule().splitSilenceCommonWithReport(
+    return requireModule().splitSilenceCommon(
       r.signals,
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
       r.hopLength ?? 512,
+      true,
     );
   });
 }

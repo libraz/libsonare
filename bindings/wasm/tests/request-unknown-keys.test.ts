@@ -351,7 +351,7 @@ const stereoBody = () => ({
 const REQUEST_ONLY: ReadonlyArray<readonly [string, () => Record<string, unknown>]> = [
   ['masteringRepairDereverbConfigForRoom', () => ({ estimate: {} })],
   ['roomGeometryFromEstimate', () => ({ estimate: {} })],
-  ['voiceChangeRealtime', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
+  ['realtimeVoiceChangerRender', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
   ['lufsMultichannel', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
   ['lufsSeriesMultichannel', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
   ['meteringCrestFactorDbStereo', () => stereoBody()],

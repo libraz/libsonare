@@ -111,17 +111,19 @@ void ProjectWasm::setProgramOnChannel(const val& clip_id_val, const val& group_v
   }
 }
 
-void ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_json) {
+val ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_json,
+                            const val& with_source_index_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const SonareError err =
-      sonare_project_bake_midi_fx(project_.get(), clip_id, wasmCString(config_json, "configJson"));
-  if (err != SONARE_OK) {
-    throwCError(err);
+  const bool with_source_index =
+      optionalBool(with_source_index_val, "withSourceIndex").value_or(false);
+  if (!with_source_index) {
+    const SonareError err = sonare_project_bake_midi_fx(
+        project_.get(), clip_id, wasmCString(config_json, "configJson"), nullptr, 0, nullptr);
+    if (err != SONARE_OK) {
+      throwCError(err);
+    }
+    return val::undefined();
   }
-}
-
-val ProjectWasm::bakeMidiFxWithSourceIndex(const val& clip_id_val, const std::string& config_json) {
-  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   // Sized from the non-destructive preview so the bake is a single pass with an
   // exactly-fitting buffer, rather than a bake that has to be repeated when the
   // guess is short.
@@ -134,9 +136,9 @@ val ProjectWasm::bakeMidiFxWithSourceIndex(const val& clip_id_val, const std::st
   static_assert(sizeof(int) == sizeof(int32_t), "vectorToInt32Array assumes a 32-bit int");
   std::vector<int> source_index(expected, -1);
   size_t written = 0;
-  const SonareError err = sonare_project_bake_midi_fx_ex(
-      project_.get(), clip_id, wasmCString(config_json, "configJson"), source_index.data(),
-      source_index.size(), &written);
+  const SonareError err =
+      sonare_project_bake_midi_fx(project_.get(), clip_id, wasmCString(config_json, "configJson"),
+                                  source_index.data(), source_index.size(), &written);
   if (err != SONARE_OK) {
     throwCError(err);
   }
@@ -156,7 +158,7 @@ uint32_t ProjectWasm::previewMidiFxCount(const val& clip_id_val, const std::stri
 }
 
 void ProjectWasm::setMidiFx(const val& clip_id, const std::string& config_json) {
-  bakeMidiFx(clip_id, config_json);
+  bakeMidiFx(clip_id, config_json, val::undefined());
 }
 
 val ProjectWasm::validateMidiNotes(const val& clip_id_val) {
@@ -197,13 +199,13 @@ SonareProjectTempoOptions tempoOptionsFrom(val options) {
 
 val ProjectWasm::analyzeTempo(val audio, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> samples = float32ArrayToVector(audio);
+  std::vector<float> samples = float32ArrayToVector(audio, "samples");
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
-  const SonareError err = sonare_project_analyze_tempo_with_options(
-      project_.get(), samples.data(), samples.size(), sample_rate, &resolved, candidates,
-      std::size(candidates), &count);
+  const SonareError err =
+      sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,
+                                   &resolved, candidates, std::size(candidates), &count);
   if (err != SONARE_OK) {
     throwCError(err);
   }
@@ -230,10 +232,10 @@ float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& c
                              bool apply_time_signatures, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int candidate_index = checkedIntFromVal(candidate_index_val, "candidateIndex");
-  std::vector<float> samples = float32ArrayToVector(audio);
+  std::vector<float> samples = float32ArrayToVector(audio, "samples");
   float bpm = 0.0f;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
-  const SonareError err = sonare_project_auto_tempo_with_options(
+  const SonareError err = sonare_project_auto_tempo(
       project_.get(), samples.data(), samples.size(), sample_rate, &resolved,
       static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
   if (err != SONARE_OK) throwCError(err);
@@ -244,8 +246,11 @@ double ProjectWasm::snapToGrid(double ppq, double strength, const val& division_
   const int division =
       domainNumberFromVal<int>(division_val, "division", sonare_c_detail::kSnapDivisionDomain);
   double out = 0.0;
+  SonareProjectSnapToGridOptions options;
+  sonare_project_snap_to_grid_options_init(&options);
+  options.division = division;
   const SonareError err =
-      sonare_project_snap_to_grid_ex(project_.get(), ppq, strength, division, &out);
+      sonare_project_snap_to_grid(project_.get(), ppq, strength, &options, &out);
   if (err != SONARE_OK) {
     throwCError(err);
   }
@@ -523,7 +528,6 @@ void registerProjectMidi(class_<ProjectWasm>& cls) {
       .function("setProgram", &ProjectWasm::setProgram)
       .function("setProgramOnChannel", &ProjectWasm::setProgramOnChannel)
       .function("bakeMidiFx", &ProjectWasm::bakeMidiFx)
-      .function("bakeMidiFxWithSourceIndex", &ProjectWasm::bakeMidiFxWithSourceIndex)
       .function("previewMidiFxCount", &ProjectWasm::previewMidiFxCount)
       .function("setMidiFx", &ProjectWasm::setMidiFx)
       .function("validateMidiNotes", &ProjectWasm::validateMidiNotes)

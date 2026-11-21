@@ -133,7 +133,6 @@ const TABLE: Entry[] = [
     'estimateTuning',
     'phaseVocoder',
     'decomposeStems',
-    'hpssWithResidual',
     'hpss',
     'harmonic',
     'percussive',
@@ -171,8 +170,9 @@ const TABLE: Entry[] = [
   mono('voiceChange'),
   // Request-only and planar: `{ channels, sampleRate }`.
   {
-    name: 'voiceChangeRealtime',
-    call: (samples, sampleRate) => fn('voiceChangeRealtime')({ channels: [samples], sampleRate }),
+    name: 'realtimeVoiceChangerRender',
+    call: (samples, sampleRate) =>
+      fn('realtimeVoiceChangerRender')({ channels: [samples], sampleRate }),
   },
   mono('spectralEdit', { ops: [] }),
   mono('noteStretch', { stretchRatio: 1.2 }),

@@ -248,53 +248,44 @@ mastering::api::MasteringChainConfig presetConfigWithOverrides(const val& preset
       mastering::api::chain_params_argument("overrides"));
 }
 
-val js_master_audio(val preset, val samples, const val& sample_rate_val, val overrides) {
+val js_master_audio(val preset, val samples, const val& sample_rate_val, val overrides,
+                    const val& progress_callback, const val& cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  const bool has_progress = callbackGiven(progress_callback, "onProgress");
+  const bool has_cancel = callbackGiven(cancel_callback, "cancel");
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
-  return masteringMonoResultToVal(chain.process_mono(data.data(), data.size(), sample_rate));
-}
-
-val js_master_audio_stereo(val preset, val left_samples, val right_samples,
-                           const val& sample_rate_val, val overrides) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
-  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
-  return masteringStereoResultToVal(
-      chain.process_stereo(left.data(), right.data(), left.size(), sample_rate));
-}
-
-val js_master_audio_with_progress(val preset, val samples, const val& sample_rate_val,
-                                  val overrides, val progress_callback, val cancel_callback) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
-  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
+  if (!has_progress && !has_cancel) {
+    return masteringMonoResultToVal(chain.process_mono(data.data(), data.size(), sample_rate));
+  }
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
   if (!result) {
     throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
   }
-
   return masteringMonoResultToVal(*result);
 }
 
-val js_master_audio_stereo_with_progress(val preset, val left_samples, val right_samples,
-                                         const val& sample_rate_val, val overrides,
-                                         val progress_callback, val cancel_callback) {
+val js_master_audio_stereo(val preset, val left_samples, val right_samples,
+                           const val& sample_rate_val, val overrides, const val& progress_callback,
+                           const val& cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
+  const bool has_progress = callbackGiven(progress_callback, "onProgress");
+  const bool has_cancel = callbackGiven(cancel_callback, "cancel");
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+  std::vector<float> left = float32ArrayToVector(left_samples, "left");
+  std::vector<float> right = float32ArrayToVector(right_samples, "right");
   mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
+  if (!has_progress && !has_cancel) {
+    return masteringStereoResultToVal(
+        chain.process_stereo(left.data(), right.data(), left.size(), sample_rate));
+  }
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result =
       chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);
   if (!result) {
     throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
   }
-
   return masteringStereoResultToVal(*result);
 }
 
@@ -314,7 +305,7 @@ val js_mastering_process(std::string processor_name, val samples, const val& sam
                          val params) {
   wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   const auto parsed = masteringParamsFromObject(params);
   auto result = sonare::util::check::under_member("params", [&] {
@@ -337,9 +328,9 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
                                 const val& sample_rate_val, val params) {
   wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+  std::vector<float> left = float32ArrayToVector(left_samples, "left");
+  std::vector<float> right = float32ArrayToVector(right_samples, "right");
   validate_offline_audio_input("left", left.data(), left.size(), sample_rate);
   validate_offline_audio_input("right", right.data(), right.size(), sample_rate);
   const auto parsed = masteringParamsFromObject(params);
@@ -367,10 +358,9 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int reference_sample_rate =
       checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
-                               "reference samples", false);
-  std::vector<float> source = float32ArrayToVector(source_samples);
-  std::vector<float> reference = float32ArrayToVector(reference_samples);
+  validateWasmFloat32ArrayPair(source_samples, "source", reference_samples, "reference", false);
+  std::vector<float> source = float32ArrayToVector(source_samples, "source");
+  std::vector<float> reference = float32ArrayToVector(reference_samples, "reference");
   // source and reference may have independent lengths and rates.
   validate_offline_audio_input("source", source.data(), source.size(), sample_rate);
   validate_offline_audio_input("reference", reference.data(), reference.size(),
@@ -397,18 +387,20 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int reference_sample_rate =
       checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
-                               "source right samples", true);
-  validateWasmFloat32ArrayPair(reference_left_samples, "reference left samples",
-                               reference_right_samples, "reference right samples", true);
-  validateWasmFloat32ElementBudget({wasmFloat32ArrayLength(source_left_samples),
-                                    wasmFloat32ArrayLength(source_right_samples),
-                                    wasmFloat32ArrayLength(reference_left_samples),
-                                    wasmFloat32ArrayLength(reference_right_samples)});
-  std::vector<float> source_left = float32ArrayToVector(source_left_samples);
-  std::vector<float> source_right = float32ArrayToVector(source_right_samples);
-  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples);
-  std::vector<float> reference_right = float32ArrayToVector(reference_right_samples);
+  validateWasmFloat32ArrayPair(source_left_samples, "sourceLeft", source_right_samples,
+                               "sourceRight", true);
+  validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
+                               "referenceRight", true);
+  validateWasmFloat32ElementBudget(
+      {wasmFloat32ArrayLength(source_left_samples, "sourceLeft"),
+       wasmFloat32ArrayLength(source_right_samples, "sourceRight"),
+       wasmFloat32ArrayLength(reference_left_samples, "referenceLeft"),
+       wasmFloat32ArrayLength(reference_right_samples, "referenceRight")});
+  std::vector<float> source_left = float32ArrayToVector(source_left_samples, "sourceLeft");
+  std::vector<float> source_right = float32ArrayToVector(source_right_samples, "sourceRight");
+  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples, "referenceLeft");
+  std::vector<float> reference_right =
+      float32ArrayToVector(reference_right_samples, "referenceRight");
   validate_offline_audio_input("sourceLeft", source_left.data(), source_left.size(), sample_rate);
   validate_offline_audio_input("sourceRight", source_right.data(), source_right.size(),
                                sample_rate);
@@ -440,10 +432,9 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int reference_sample_rate =
       checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
-                               "reference samples", false);
-  std::vector<float> source = float32ArrayToVector(source_samples);
-  std::vector<float> reference = float32ArrayToVector(reference_samples);
+  validateWasmFloat32ArrayPair(source_samples, "source", reference_samples, "reference", false);
+  std::vector<float> source = float32ArrayToVector(source_samples, "source");
+  std::vector<float> reference = float32ArrayToVector(reference_samples, "reference");
   // source and reference may have independent lengths and rates.
   validate_offline_audio_input("source", source.data(), source.size(), sample_rate);
   validate_offline_audio_input("reference", reference.data(), reference.size(),
@@ -462,8 +453,7 @@ val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int reference_sample_rate =
       checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
-                               "reference samples", false);
+  validateWasmFloat32ArrayPair(source_samples, "source", reference_samples, "reference", false);
   // source and reference may have independent lengths and rates; the core
   // resamples the reference onto the source rate.
   const Audio source = loadValidatedAudio("source", source_samples, sample_rate);
@@ -487,14 +477,15 @@ val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_ri
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int reference_sample_rate =
       checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
-  validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
-                               "source right samples", true);
-  validateWasmFloat32ArrayPair(reference_left_samples, "reference left samples",
-                               reference_right_samples, "reference right samples", true);
-  validateWasmFloat32ElementBudget({wasmFloat32ArrayLength(source_left_samples),
-                                    wasmFloat32ArrayLength(source_right_samples),
-                                    wasmFloat32ArrayLength(reference_left_samples),
-                                    wasmFloat32ArrayLength(reference_right_samples)});
+  validateWasmFloat32ArrayPair(source_left_samples, "sourceLeft", source_right_samples,
+                               "sourceRight", true);
+  validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
+                               "referenceRight", true);
+  validateWasmFloat32ElementBudget(
+      {wasmFloat32ArrayLength(source_left_samples, "sourceLeft"),
+       wasmFloat32ArrayLength(source_right_samples, "sourceRight"),
+       wasmFloat32ArrayLength(reference_left_samples, "referenceLeft"),
+       wasmFloat32ArrayLength(reference_right_samples, "referenceRight")});
   const auto source_left = loadValidatedAudio("sourceLeft", source_left_samples, sample_rate);
   const auto source_right = loadValidatedAudio("sourceRight", source_right_samples, sample_rate);
   const auto reference_left =
@@ -520,9 +511,9 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
                                         val right_samples, const val& sample_rate_val, val params) {
   wasmRefuseEmbeddedNul(analysis_name, "analysisName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+  std::vector<float> left = float32ArrayToVector(left_samples, "left");
+  std::vector<float> right = float32ArrayToVector(right_samples, "right");
   validate_offline_audio_input("left", left.data(), left.size(), sample_rate);
   validate_offline_audio_input("right", right.data(), right.size(), sample_rate);
   return mastering::api::analyze_named_stereo(analysis_name, left.data(), right.data(), left.size(),
@@ -534,9 +525,9 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
 // planar left/right shape the rest of the stereo mastering API uses.
 std::vector<float> interleaveValidatedPair(const char* left_name, const char* right_name,
                                            val left_samples, val right_samples, int sample_rate) {
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+  std::vector<float> left = float32ArrayToVector(left_samples, "left");
+  std::vector<float> right = float32ArrayToVector(right_samples, "right");
   validate_offline_audio_input(left_name, left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right_name, right.data(), right.size(), sample_rate);
   std::vector<float> interleaved(left.size() * 2);
@@ -591,7 +582,7 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
 std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_val,
                                            val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result =
@@ -624,7 +615,7 @@ std::string js_mastering_chain_config_params(std::string document) {
 std::string js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val,
                                                  val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result =
@@ -634,7 +625,7 @@ std::string js_mastering_assistant_suggest_chain(val samples, const val& sample_
 
 std::string js_mastering_audio_profile(val samples, const val& sample_rate_val, val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
   const mastering::assistant::AudioProfileConfig config =
@@ -769,8 +760,6 @@ void registerMasteringApiBindings() {
   function("masteringPlatformNames", &js_mastering_platform_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);
-  function("masterAudioWithProgress", &js_master_audio_with_progress);
-  function("masterAudioStereoWithProgress", &js_master_audio_stereo_with_progress);
 }
 
 #endif  // __EMSCRIPTEN__

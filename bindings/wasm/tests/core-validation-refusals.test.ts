@@ -188,8 +188,8 @@ type RawInverse = {
   resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array;
   melToAudio(...args: unknown[]): Float32Array;
   griffinLim(...args: unknown[]): Float32Array;
-  timeStretchEx(...args: unknown[]): Float32Array;
-  pitchShiftEx(...args: unknown[]): Float32Array;
+  timeStretch(...args: unknown[]): Float32Array;
+  pitchShift(...args: unknown[]): Float32Array;
   createStreamingMasteringChain(configJson: string | null): {
     prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void;
     delete(): void;
@@ -481,8 +481,8 @@ describe('native spectral stretch geometry refusals come from the core', () => {
     const shift = { samples, sampleRate: rate, pitchSemitones: input.pitch_semitones, ...options };
     expect(timeStretch(stretch).length).toBeGreaterThan(0);
     expect(pitchShift(shift).length).toBeGreaterThan(0);
-    const viaStretch = raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length);
-    const viaShift = raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, hop_length);
+    const viaStretch = raw().timeStretch(samples, rate, input.speed_ratio, n_fft, hop_length);
+    const viaShift = raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, hop_length);
     expect(viaStretch.length).toBeGreaterThan(0);
     expect(viaShift.length).toBeGreaterThan(0);
   });
@@ -507,8 +507,8 @@ describe('native spectral stretch geometry refusals come from the core', () => {
       expectRefusalOf(call, kind);
     }
     const rawCalls: Array<() => unknown> = [
-      () => raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length),
-      () => raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, hop_length),
+      () => raw().timeStretch(samples, rate, input.speed_ratio, n_fft, hop_length),
+      () => raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, hop_length),
     ];
     for (const call of rawCalls) {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
@@ -539,11 +539,11 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
       expect(pitchShift(shift)).toEqual(pitchShift({ ...shift, ...derived }));
       // The module reads SONARE_STFT_HOP_AUTO (-1), which the facades send for an
       // omitted hop, as the derived one.
-      expect(raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, -1)).toEqual(
-        raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
+      expect(raw().timeStretch(samples, rate, input.speed_ratio, n_fft, -1)).toEqual(
+        raw().timeStretch(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
       );
-      expect(raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, -1)).toEqual(
-        raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
+      expect(raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, -1)).toEqual(
+        raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
       );
     },
   );
@@ -553,7 +553,7 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
     ({ n_fft, hop_length }) => {
       expect(
         expectRefusalOf(
-          () => raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length),
+          () => raw().timeStretch(samples, rate, input.speed_ratio, n_fft, hop_length),
           RangeError,
         ).message,
       ).toMatch(/hopLength must be an integer in \[1, 2147483647\]/);

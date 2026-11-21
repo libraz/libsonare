@@ -85,13 +85,15 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", cumulative_count);
   }
 
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   const size_t n_frames = f0.size();
   if (n_frames == 0) {
     throw WasmRangeError("f0Hz must not be empty");
   }
-  std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
-  std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
+  std::vector<float> voiced_vec =
+      has_voiced ? float32ArrayToVector(voiced, "voiced") : std::vector<float>{};
+  std::vector<float> prob_vec =
+      has_prob ? float32ArrayToVector(voiced_prob, "voicedProb") : std::vector<float>{};
   if (has_voiced && voiced_vec.size() != n_frames) {
     throw WasmRangeError("voiced must have the same length as f0Hz");
   }
@@ -131,7 +133,7 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced,
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
 
   accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", cumulative_count);
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   if (f0.empty()) {
     throw WasmRangeError("f0Hz must not be empty");
   }
@@ -139,7 +141,7 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced,
   std::vector<float> voiced_vec;
   if (has_voiced) {
     accumulateWasmFloat32ArrayLength(voiced, "voiced", cumulative_count);
-    voiced_vec = float32ArrayToVector(voiced);
+    voiced_vec = float32ArrayToVector(voiced, "voiced");
     if (voiced_vec.size() != f0.size()) {
       throw WasmRangeError("voiced must have the same length as f0Hz");
     }

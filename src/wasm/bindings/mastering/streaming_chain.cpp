@@ -16,7 +16,7 @@ namespace {
 /// @brief Build StreamingMasteringChainOptions from an optional options val.
 ///
 /// Reads the optional numeric fields `loudnessStaticGainDb` and
-/// `loudnessStaticGainPeakDb`; absent, `undefined` or `null` leaves both unset. Both defaults are
+/// `loudnessStaticGainPeakDbtp`; absent, `undefined` or `null` leaves both unset. Both defaults are
 /// the NaN that StreamingMasteringChainOptions spells "not provided" with, so floatOption is the
 /// reader: a non-finite value means the same thing, and an enabled loudness stage still refuses a
 /// gain it was never given.
@@ -30,9 +30,9 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val optio
     options.loudness_static_gain_db =
         floatOption(options_val, "loudnessStaticGainDb", options.loudness_static_gain_db);
   }
-  if (hasProperty(options_val, "loudnessStaticGainPeakDb")) {
-    options.loudness_static_gain_peak_db =
-        floatOption(options_val, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
+  if (hasProperty(options_val, "loudnessStaticGainPeakDbtp")) {
+    options.loudness_static_gain_peak_dbtp = floatOption(options_val, "loudnessStaticGainPeakDbtp",
+                                                         options.loudness_static_gain_peak_dbtp);
   }
   return options;
 }
@@ -61,9 +61,9 @@ class StreamingMasteringChainWrapper {
   }
 
   val processMono(val samples) {
-    const std::size_t length = wasmFloat32ArrayLength(samples, "mono process block");
+    const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
     validateBlockLength(length);
-    std::vector<float> block = float32ArrayToVector(samples);
+    std::vector<float> block = float32ArrayToVector(samples, "samples");
     if (!block.empty()) {
       float* channels[] = {block.data()};
       chain_.process_block(channels, 1, static_cast<int>(block.size()));
@@ -72,12 +72,11 @@ class StreamingMasteringChainWrapper {
   }
 
   val processStereo(val left_samples, val right_samples) {
-    validateWasmFloat32ArrayPair(left_samples, "left process block", right_samples,
-                                 "right process block", true);
-    const std::size_t length = wasmFloat32ArrayLength(left_samples, "left process block");
+    validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+    const std::size_t length = wasmFloat32ArrayLength(left_samples, "left");
     validateBlockLength(length);
-    std::vector<float> left = float32ArrayToVector(left_samples);
-    std::vector<float> right = float32ArrayToVector(right_samples);
+    std::vector<float> left = float32ArrayToVector(left_samples, "left");
+    std::vector<float> right = float32ArrayToVector(right_samples, "right");
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       chain_.process_block(channels, 2, static_cast<int>(left.size()));

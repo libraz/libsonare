@@ -135,21 +135,20 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
     if (isAbsent(left)) {
       throw WasmTypeError("leftChannels[" + std::to_string(index) + "] must be a Float32Array");
     }
-    const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(left, "leftChannels entry", &budget);
-    input.left[index] = float32ArrayToVector(left);
+    const std::size_t frames = accumulateWasmFloat32ArrayLength(left, "leftChannels", &budget);
+    input.left[index] = float32ArrayToVector(left, "leftChannels");
 
     const val right = isAbsent(right_channels) ? val::undefined() : right_channels[index];
     if (!isAbsent(right)) {
       // The core carries one frame count per track and reads both planes with
       // it, so a shorter right plane would be read past its end.
       const std::size_t right_frames =
-          accumulateWasmFloat32ArrayLength(right, "rightChannels entry", &budget);
+          accumulateWasmFloat32ArrayLength(right, "rightChannels", &budget);
       if (right_frames != frames) {
         const std::string at = "tracks[" + std::to_string(index) + "]";
         throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
       }
-      input.right[index] = float32ArrayToVector(right);
+      input.right[index] = float32ArrayToVector(right, "rightChannels");
     }
 
     if (!isAbsent(track_sample_rates)) {

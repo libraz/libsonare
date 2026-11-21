@@ -132,9 +132,9 @@ float js_metering_crest_factor_db(val samples, const val& sample_rate_val) {
 float js_metering_crest_factor_db_stereo(val left_samples, val right_samples,
                                          const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
-  std::vector<float> left = float32ArrayToVector(left_samples);
-  std::vector<float> right = float32ArrayToVector(right_samples);
+  validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
+  std::vector<float> left = float32ArrayToVector(left_samples, "left");
+  std::vector<float> right = float32ArrayToVector(right_samples, "right");
   validate_offline_audio_input("left", left.data(), left.size(), sample_rate);
   validate_offline_audio_input("right", right.data(), right.size(), sample_rate);
   std::vector<float> interleaved(left.size() * 2);
@@ -231,14 +231,14 @@ void ensureStereoPair(const char* left_name, const char* right_name, const val& 
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
     throw WasmRangeError("sampleRate is out of range");
   }
-  const std::size_t left_length = wasmFloat32ArrayLength(left, "left channel");
-  const std::size_t right_length = wasmFloat32ArrayLength(right, "right channel");
+  const std::size_t left_length = wasmFloat32ArrayLength(left, left_name);
+  const std::size_t right_length = wasmFloat32ArrayLength(right, right_name);
   validateWasmFloat32ElementBudget({left_length, right_length});
   if (left_length != right_length) {
     throw WasmRangeError("left and right must have the same length");
   }
-  *out_left = float32ArrayToVector(left);
-  *out_right = float32ArrayToVector(right);
+  *out_left = float32ArrayToVector(left, left_name);
+  *out_right = float32ArrayToVector(right, right_name);
   validate_offline_audio_input(left_name, out_left->data(), out_left->size(), sample_rate);
   validate_offline_audio_input(right_name, out_right->data(), out_right->size(), sample_rate);
 }
@@ -283,30 +283,10 @@ float js_metering_stereo_width(val left, val right, const val& sample_rate_val) 
   return metering::stereo_width(l.data(), r.data(), l.size());
 }
 
-val js_metering_vectorscope(val left, val right, const val& sample_rate_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> l;
-  std::vector<float> r;
-  ensureStereoPair("left", "right", left, right, sample_rate, &l, &r);
-  std::vector<metering::VectorscopePoint> points =
-      metering::vectorscope(l.data(), r.data(), l.size());
-  std::vector<float> mid(points.size());
-  std::vector<float> side(points.size());
-  for (size_t i = 0; i < points.size(); ++i) {
-    mid[i] = points[i].mid;
-    side[i] = points[i].side;
-  }
-  val out = val::object();
-  out.set("mid", vectorToFloat32Array(mid));
-  out.set("side", vectorToFloat32Array(side));
-  return out;
-}
-
-// Display-sized mid/side vectorscope. Mirrors js_metering_vectorscope but
-// decimates the point series to at most max_points points (0 = one point per
-// input sample). Backs the C ABI sonare_metering_vectorscope_decimated.
-val js_metering_vectorscope_decimated(val left, val right, const val& sample_rate_val,
-                                      const val& max_points_val) {
+// Mid/side vectorscope, decimated to at most max_points points (0 = one point
+// per input sample). Mirrors the C ABI sonare_metering_vectorscope.
+val js_metering_vectorscope(val left, val right, const val& sample_rate_val,
+                            const val& max_points_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::size_t max_points =
       static_cast<std::size_t>(checkedUintFromVal(max_points_val, "maxPoints"));
@@ -327,21 +307,11 @@ val js_metering_vectorscope_decimated(val left, val right, const val& sample_rat
   return out;
 }
 
-val js_metering_phase_scope(val left, val right, const val& sample_rate_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> l;
-  std::vector<float> r;
-  ensureStereoPair("left", "right", left, right, sample_rate, &l, &r);
-  metering::PhaseScopeResult result = metering::phase_scope(l.data(), r.data(), l.size());
-  return phaseScopeToVal(result);
-}
-
-// Display-sized phase scope. Mirrors js_metering_phase_scope but decimates the
-// point series to at most max_points points (0 = one point per input sample);
-// the summary stats are always computed over the full-resolution signal. Backs
-// the C ABI sonare_metering_phase_scope_decimated.
-val js_metering_phase_scope_decimated(val left, val right, const val& sample_rate_val,
-                                      const val& max_points_val) {
+// Phase scope, decimated to at most max_points points (0 = one point per input
+// sample); the summary stats are always computed over the full-resolution
+// signal. Mirrors the C ABI sonare_metering_phase_scope.
+val js_metering_phase_scope(val left, val right, const val& sample_rate_val,
+                            const val& max_points_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::size_t max_points =
       static_cast<std::size_t>(checkedUintFromVal(max_points_val, "maxPoints"));
@@ -479,7 +449,7 @@ val js_waveform_peaks(val samples, const val& channels_val, const val& samples_p
   const int channels = checkedIntFromVal(channels_val, "channels");
   const std::size_t samples_per_bucket = static_cast<std::size_t>(domainNumberFromVal<long long>(
       samples_per_bucket_val, "samplesPerBucket", metering::kSamplesPerBucketDomain));
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   // Reject a length that is not a whole number of interleaved frames instead of
   // silently dropping a trailing partial frame (matches the Node/Python facades,
   // which throw on the same input).
@@ -493,7 +463,7 @@ val js_waveform_peaks(val samples, const val& channels_val, const val& samples_p
 
 val js_waveform_peak_pyramid(val samples, const val& channels_val, val js_levels) {
   const int channels = checkedIntFromVal(channels_val, "channels");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   std::vector<size_t> levels;
   // The level count is caller-controlled and drives the reserve, so it goes
   // through the shared safe-integer + budget guard instead of a raw narrowing.
@@ -543,9 +513,7 @@ void registerMeteringBindings() {
   function("meteringStereoCorrelation", &js_metering_stereo_correlation);
   function("meteringStereoWidth", &js_metering_stereo_width);
   function("meteringVectorscope", &js_metering_vectorscope);
-  function("meteringVectorscopeDecimated", &js_metering_vectorscope_decimated);
   function("meteringPhaseScope", &js_metering_phase_scope);
-  function("meteringPhaseScopeDecimated", &js_metering_phase_scope_decimated);
   function("meteringSpectrum", &js_metering_spectrum);
   function("meteringSpectrumFrame", &js_metering_spectrum_frame);
   function("waveformPeaks", &js_waveform_peaks);

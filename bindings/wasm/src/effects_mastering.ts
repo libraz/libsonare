@@ -21,11 +21,11 @@ export {
 } from './effects_timepitch.js';
 export type {
   FormantMode,
+  RealtimeVoiceChangerRenderRequest,
   VoiceChangeOptions,
-  VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
 } from './effects_voice_change.js';
-export { voiceChange, voiceChangeRealtime } from './effects_voice_change.js';
+export { realtimeVoiceChangerRender, voiceChange } from './effects_voice_change.js';
 export {
   masterAudio,
   masterAudioStereo,

@@ -10,8 +10,8 @@
  *
  * The three entry points do not refuse an out-of-range kernel in the same
  * place. `extractPercussiveEvents` reads its options object through the
- * module's own range-checked reader, which names the option; `hpss` and
- * `hpssWithResidual` hand the kernel to a positional embind parameter declared
+ * module's own range-checked reader, which names the option; `hpss`
+ * hands the kernel to a positional embind parameter declared
  * `int`, which WRAPS, so the facade range-checks those before the call. Each is
  * asserted for what it actually produces rather than flattened.
  *
@@ -26,13 +26,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  extractPercussiveEvents,
-  hpss,
-  hpssWithResidual,
-  init,
-  renderPercussiveEvents,
-} from '../dist/index.js';
+import { extractPercussiveEvents, hpss, init, renderPercussiveEvents } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 22050;
@@ -180,8 +174,8 @@ function expectCeilingRefusal(caught: unknown, direction: Direction, kernel: num
 const entries = [
   { name: 'hpss', run: (options: object) => hpss({ samples: tone, sampleRate, ...options }) },
   {
-    name: 'hpssWithResidual',
-    run: (options: object) => hpssWithResidual({ samples: tone, sampleRate, ...options }),
+    name: 'hpss withResidual',
+    run: (options: object) => hpss({ samples: tone, sampleRate, withResidual: true, ...options }),
   },
 ];
 
@@ -224,7 +218,7 @@ describe('HPSS kernel ceiling', () => {
           // The facade's own refusal, ahead of the narrowing, so it names the
           // argument rather than the median filter the value never reached.
           expect(error.message).toContain(
-            `${entry.name}: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer in [-2147483648, 2147483647]`,
+            `hpss: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer in [-2147483648, 2147483647]`,
           );
           expect(error.message).not.toContain('exceeds the maximum');
         });
@@ -263,9 +257,9 @@ describe('HPSS kernel ceiling', () => {
     expect(result.harmonic.length).toBe(tone.length);
     expect(result.harmonic.some((value) => value !== 0)).toBe(true);
 
-    const residual = hpssWithResidual({ samples: tone, sampleRate });
+    const residual = hpss({ samples: tone, sampleRate, withResidual: true });
     expect(residual.harmonic.length).toBe(tone.length);
-    expect(residual.residual.length).toBe(tone.length);
+    expect(residual.residual?.length).toBe(tone.length);
   });
 });
 

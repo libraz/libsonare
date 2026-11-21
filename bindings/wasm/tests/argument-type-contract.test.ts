@@ -48,7 +48,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['frameSignal', 'samples'],
   ['harmonic', 'samples'],
   ['hpss', 'samples'],
-  ['hpssWithResidual', 'samples'],
   ['hybridCqt', 'samples'],
   ['lufs', 'samples'],
   ['masteringApplyProcessor', 'samples'],
@@ -182,7 +181,7 @@ const ARRAY_SAMPLES = new Set(['extractPercussiveEvents', 'renderPercussiveEvent
 const REQUEST_ONLY: string[] = [
   'decompose',
   'nnFilter',
-  'voiceChangeRealtime',
+  'realtimeVoiceChangerRender',
   'masteringRepairDeclickStereo',
   'masteringRepairDeclipStereo',
   'masteringRepairDecrackleStereo',

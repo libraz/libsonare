@@ -117,7 +117,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
                               ? 0.0f
                               : checkedFloatFromVal(tempo_bpm_val, "tempoBpm");
   const SonareTranscribeConfig resolved = transcribeConfigFromVal(config);
-  const std::vector<float> buffer = float32ArrayToVector(samples);
+  const std::vector<float> buffer = float32ArrayToVector(samples, "samples");
 
   SonareTranscribeResult result{};
   const SonareError err = sonare_transcribe(buffer.empty() ? nullptr : buffer.data(), buffer.size(),
@@ -147,7 +147,7 @@ uint32_t ProjectWasm::transcribeToClip(const val& clip_id_val, val samples,
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const SonareTranscribeConfig resolved = transcribeConfigFromVal(config);
-  const std::vector<float> buffer = float32ArrayToVector(samples);
+  const std::vector<float> buffer = float32ArrayToVector(samples, "samples");
 
   size_t note_count = 0;
   const SonareError err = sonare_project_transcribe_to_clip(

@@ -589,7 +589,7 @@ export function meteringVectorscope(request: MeteringVectorscopeRequest): Vector
 export function meteringVectorscope(...args: unknown[]): VectorscopeReport {
   return withEntry('meteringVectorscope', () => {
     const r = scopeRequest('meteringVectorscope', args);
-    return requireModule().meteringVectorscopeDecimated(r.left, r.right, r.sampleRate, r.maxPoints);
+    return requireModule().meteringVectorscope(r.left, r.right, r.sampleRate, r.maxPoints);
   });
 }
 
@@ -602,7 +602,7 @@ export function meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseSco
 export function meteringPhaseScope(...args: unknown[]): PhaseScopeReport {
   return withEntry('meteringPhaseScope', () => {
     const r = scopeRequest('meteringPhaseScope', args);
-    return requireModule().meteringPhaseScopeDecimated(r.left, r.right, r.sampleRate, r.maxPoints);
+    return requireModule().meteringPhaseScope(r.left, r.right, r.sampleRate, r.maxPoints);
   });
 }
 

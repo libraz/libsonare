@@ -337,7 +337,7 @@ export interface EngineTransportState {
   /** Quarter note of the current bar's downbeat. */
   barStartPpq: number;
   /** Zero-based index of the current bar. */
-  barCount: number;
+  barIndex: number;
   /** Time signature in effect at the current position. */
   timeSignature: TimeSignature;
   /** One-based beat within the current bar. */

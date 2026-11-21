@@ -12,10 +12,10 @@ import {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchShift,
+  realtimeVoiceChangerRender,
   spectralEdit,
   timeStretch,
   voiceChange,
-  voiceChangeRealtime,
 } from '../src/index';
 import { meteringTruePeakDbtp } from '../src/metering';
 import {
@@ -111,7 +111,7 @@ describe('effects request-object compatibility (WASM)', () => {
     );
     // The render block is fixed, so a block size is no longer a request field.
     expect(() =>
-      voiceChangeRealtime({
+      realtimeVoiceChangerRender({
         channels: [samples],
         sampleRate,
         config: 'neutralMonitor',
@@ -283,7 +283,7 @@ function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
 // depending on which spelling the caller reached for. The expected value comes
 // from the shared corpus the Python suite reads, so a change on one surface
 // alone fails on the others.
-describe('voiceChangeRealtime default preset', () => {
+describe('realtimeVoiceChangerRender default preset', () => {
   it('renders what the shared corpus names as the default', () => {
     const expected = (
       JSON.parse(
@@ -292,7 +292,7 @@ describe('voiceChangeRealtime default preset', () => {
           'utf8',
         ),
       ) as { defaults: Record<string, VoicePresetId> }
-    ).defaults['voice_change_realtime.preset'];
+    ).defaults['realtime_voice_changer_render.config'];
     // The corpus spells the id as the document does; the request takes the lowerCamel token.
     const token = expected.replace(/-([a-z])/g, (_match, ch: string) => ch.toUpperCase());
     expect(token).toBe('neutralMonitor');
@@ -304,8 +304,8 @@ describe('voiceChangeRealtime default preset', () => {
     }
     // A TypeScript default parameter is not introspectable, so compare renders:
     // omitting the preset must produce exactly what naming the default produces.
-    expect(voiceChangeRealtime({ channels: [samples], sampleRate })).toEqual(
-      voiceChangeRealtime({
+    expect(realtimeVoiceChangerRender({ channels: [samples], sampleRate })).toEqual(
+      realtimeVoiceChangerRender({
         channels: [samples],
         sampleRate,
         config: token as VoicePresetId,

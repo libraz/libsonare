@@ -173,18 +173,7 @@ void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   }
 }
 
-uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std::string& name) {
-  const uint32_t marker_id = checkedUintFromVal(marker_id_val, "markerId");
-  uint32_t out_id = 0;
-  const SonareError err =
-      sonare_project_set_marker(project_.get(), marker_id, ppq, wasmCString(name, "name"), &out_id);
-  if (err != SONARE_OK) {
-    throwCError(err);
-  }
-  return out_id;
-}
-
-uint32_t ProjectWasm::setMarkerEx(val marker) {
+uint32_t ProjectWasm::setMarker(val marker) {
   SonareProjectMarker desc{};
   desc.id = uintProperty(marker, "id", desc.id);
   desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", desc.kind));
@@ -199,7 +188,7 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   const SonareError err =
       sonare_project_set_marker_ex_name(project_.get(), &desc, wasmCString(name, "name"), &out_id);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCErrorFlattening(err, "marker");
   }
   return out_id;
 }
@@ -370,9 +359,7 @@ val ProjectWasm::tempoSegmentByIndex(const val& index_val) const {
   }
   val out = val::object();
   // The same three fields setTempoSegments reads, so a segment read back can be
-  // written straight to another project. start_sample is left out on purpose:
-  // the setter ignores it and a project stores 0 in it, so surfacing it would
-  // only offer a number that means nothing.
+  // written straight to another project.
   out.set("startPpq", seg.start_ppq);
   out.set("bpm", seg.bpm);
   out.set("endBpm", seg.end_bpm);
@@ -461,7 +448,6 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("getSampleRate", &ProjectWasm::getSampleRate)
       .function("setMixerSceneJson", &ProjectWasm::setMixerSceneJson)
       .function("setMarker", &ProjectWasm::setMarker)
-      .function("setMarkerEx", &ProjectWasm::setMarkerEx)
       .function("markerByIndex", &ProjectWasm::markerByIndex)
       .function("trackByIndex", &ProjectWasm::trackByIndex)
       .function("clipByIndex", &ProjectWasm::clipByIndex)

@@ -83,6 +83,7 @@ describe('the analysis entry exports only what its binary registers', () => {
     lufsSeriesMultichannel: 'lufsSeriesInterleaved',
     ebur128LoudnessRangeLu: 'ebur128LoudnessRangeLu',
     meteringTruePeakDbtp: 'meteringTruePeakDb',
+    splitSilenceCommonWithReport: 'splitSilenceCommon',
   };
 
   const entryFunctions = (): string[] =>

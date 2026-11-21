@@ -44,7 +44,7 @@ RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_v
   block.storage.reserve(static_cast<size_t>(count));
   block.pointers.reserve(static_cast<size_t>(count));
   for (int ch = 0; ch < count; ++ch) {
-    std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
+    std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
     if (ch == 0) {
       block.frames = static_cast<int>(channel.size());
       if (block.frames <= 0) {

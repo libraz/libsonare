@@ -92,7 +92,7 @@ void ProjectWasm::setSourceAudio(const val& source_id_val, val audio, const val&
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
   const int channels = checkedIntFromVal(channels_val, "channels");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<float> samples = float32ArrayToVector(audio);
+  const std::vector<float> samples = float32ArrayToVector(audio, "audio");
   if (channels <= 0 || samples.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("audio length must be a multiple of channels");
   }
@@ -250,7 +250,7 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
   // The point count comes from an untrusted JS `.length`: validate it through
   // the shared safe-integer + budget guard, and cap the pre-reserve so a
   // fabricated length cannot allocate storage the array does not back.
-  const size_t count = wasmArrayLikeLength(points, "automation points");
+  const size_t count = wasmArrayLikeLength(points, "points");
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];
@@ -289,9 +289,10 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
 
 namespace {
 
-uint32_t automationTargetKindFromVal(val desc) {
+SonareAutomationTargetKind automationTargetKindFromVal(val desc,
+                                                       SonareAutomationTargetKind omitted) {
   if (!hasProperty(desc, "targetKind")) {
-    return SONARE_AUTOMATION_TARGET_OPAQUE;
+    return omitted;
   }
 
   const val target_kind = desc["targetKind"];
@@ -300,7 +301,7 @@ uint32_t automationTargetKindFromVal(val desc) {
     const int ordinal = checkedIntFromVal(target_kind, "automation target kind");
     requireOrdinalInRange(ordinal, SONARE_AUTOMATION_TARGET_OPAQUE,
                           SONARE_AUTOMATION_TARGET_TRACK_PAN, "automation target kind");
-    return static_cast<uint32_t>(ordinal);
+    return static_cast<SonareAutomationTargetKind>(ordinal);
   }
   if (type == "string") {
     const std::string name = target_kind.as<std::string>();
@@ -318,17 +319,8 @@ double ProjectWasm::addAutomationLane(const val& track_id_val, val desc) {
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
   uint32_t out = 0;
-  const bool has_target_kind = hasProperty(desc, "targetKind");
-  SonareAutomationLaneDescEx d_ex{};
-  if (has_target_kind) {
-    d_ex.target_param_id = d.target_param_id;
-    d_ex.target_kind = static_cast<SonareAutomationTargetKind>(automationTargetKindFromVal(desc));
-    d_ex.points = d.points;
-    d_ex.point_count = d.point_count;
-  }
-  checkCError(has_target_kind
-                  ? sonare_project_add_automation_lane_ex(project_.get(), track_id, &d_ex, &out)
-                  : sonare_project_add_automation_lane(project_.get(), track_id, &d, &out));
+  d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_OPAQUE);
+  checkCError(sonare_project_add_automation_lane(project_.get(), track_id, &d, &out));
   return static_cast<double>(out);
 }
 
@@ -336,19 +328,9 @@ void ProjectWasm::editAutomationLane(const val& track_id_val, double target_para
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
-  const bool has_target_kind = hasProperty(desc, "targetKind");
-  SonareAutomationLaneDescEx d_ex{};
-  if (has_target_kind) {
-    d_ex.target_param_id = d.target_param_id;
-    d_ex.target_kind = static_cast<SonareAutomationTargetKind>(automationTargetKindFromVal(desc));
-    d_ex.points = d.points;
-    d_ex.point_count = d.point_count;
-  }
-  checkCError(has_target_kind
-                  ? sonare_project_edit_automation_lane_ex(
-                        project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d_ex)
-                  : sonare_project_edit_automation_lane(
-                        project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d));
+  d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_UNCHANGED);
+  checkCError(sonare_project_edit_automation_lane(project_.get(), track_id,
+                                                  static_cast<uint32_t>(target_param_id), &d));
 }
 
 void ProjectWasm::removeAutomationLane(const val& track_id_val, double target_param_id) {

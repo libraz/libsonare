@@ -652,7 +652,7 @@ val capabilitiesToVal(const SonareVocalCapabilities& capabilities) {
 
 val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_value, "sampleRate");
-  std::vector<float> source = float32ArrayToVector(samples);
+  std::vector<float> source = float32ArrayToVector(samples, "samples");
   CreateStorage storage;
   const SonareVocalCreateOptions parsed = optionsFromVal(options, &storage);
   SonareVocalSession* session = nullptr;
@@ -666,7 +666,7 @@ val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val 
 double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, val state,
                                      val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_value, "sampleRate");
-  std::vector<float> source = float32ArrayToVector(samples);
+  std::vector<float> source = float32ArrayToVector(samples, "samples");
   std::vector<uint8_t> bytes = byteArray(state, "state");
   SonareVocalRestoreOptions parsed{};
   sonare_vocal_restore_options_init(&parsed);

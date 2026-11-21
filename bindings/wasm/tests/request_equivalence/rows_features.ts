@@ -361,22 +361,6 @@ export const ROWS: Row[] = [
     inert: { sampleRate: 'intervals are in samples' },
   },
   {
-    name: 'hpssWithResidual',
-    fn: sonare.hpssWithResidual,
-    form: 'sampleOptions',
-    params: 'samples sampleRate kernelHarmonic? kernelPercussive? nFft? hopLength? hardMask?',
-    values: {
-      samples: SIG,
-      sampleRate: ALT_SR,
-      kernelHarmonic: 17,
-      kernelPercussive: 17,
-      nFft: 1024,
-      hopLength: 128,
-      hardMask: true,
-    },
-    invalid: { nFft: 0 },
-  },
-  {
     name: 'lufsMultichannel',
     fn: sonare.lufsMultichannel,
     form: 'requestOnly',

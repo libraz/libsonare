@@ -80,7 +80,7 @@ function renderMono(
     const rendered =
       carrierHz === null
         ? changer.processMono(voice)
-        : changer.processMonoWithCarrier(voice, saw(BLOCK, carrierHz, 0.3, block * BLOCK));
+        : changer.processMono(voice, saw(BLOCK, carrierHz, 0.3, block * BLOCK));
     out.set(rendered, block * BLOCK);
   }
   return out;
@@ -223,14 +223,12 @@ describe('RealtimeVoiceChanger voice transformer', () => {
       const changer = make(externalPod(), 2);
       try {
         const voice = new Float32Array(BLOCK);
-        expect(() => changer.processMonoWithCarrier(voice, new Float32Array(BLOCK - 1))).toThrow(
-          RangeError,
-        );
+        expect(() => changer.processMono(voice, new Float32Array(BLOCK - 1))).toThrow(RangeError);
         expect(() =>
-          changer.processInterleavedWithCarrierInto(
-            new Float32Array(BLOCK * 2),
+          changer.processInterleavedInto(
             new Float32Array(BLOCK * 2),
             2,
+            new Float32Array(BLOCK * 2),
             new Float32Array(BLOCK * 2),
           ),
         ).toThrow(RangeError);
@@ -305,7 +303,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         let planarRight = new Float32Array(0);
         const planarBuffer = planar.createRealtimePlanarBuffer(BLOCK, 2);
         for (let block = 0; block < 8; block++) {
-          interleaved.processInterleavedWithCarrierInto(frames, carrier, 2, interleavedOut);
+          interleaved.processInterleavedInto(frames, 2, interleavedOut, carrier);
           planarBuffer.channels[0]?.set(left);
           planarBuffer.channels[1]?.set(right);
           planarBuffer.carrier.set(carrier);

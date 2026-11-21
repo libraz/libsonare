@@ -3397,7 +3397,7 @@ describe('SonareRealtimeEngineNode', () => {
                   ppq: 1,
                   bpm: 90,
                   barStartPpq: 0,
-                  barCount: 1,
+                  barIndex: 1,
                   timeSignature: { numerator: 7, denominator: 8, confidence: 1 },
                   loopStartPpq: 1,
                   loopEndPpq: 3,

@@ -267,6 +267,17 @@ inline std::vector<std::string> lastDiagnosticMessages() {
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code), text);
 }
 
+/// @brief throwLastCError for a call whose options struct's refusal subjects carry a
+///        "<c_root>." prefix the request keys do not: the prefix is stripped as they are spelled.
+[[noreturn]] inline void throwLastCErrorFlattening(
+    const char* c_root, SonareError fallback = SONARE_ERROR_INVALID_STATE) {
+  if (std::optional<sonare::SonareParameterRefusal> shown =
+          sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
+    throw *shown;
+  }
+  throwLastCError(fallback);
+}
+
 /// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.
 [[noreturn]] inline void throwMidiEngineUnavailable() {
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
@@ -315,11 +326,11 @@ std::size_t wasmIndexArg(double value, const char* subject);
 /// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.
 /// @p length_key names the count property ("length" for arrays and Int32Array,
 /// "byteLength" for a Uint8Array byte blob).
-std::size_t wasmArrayLikeLength(const val& arr, const char* subject = "array",
+std::size_t wasmArrayLikeLength(const val& arr, const char* subject,
                                 const char* length_key = "length");
 /// Reads and validates an array-like object's JS `.length` without narrowing a
 /// non-finite, fractional, or unsafe Number to wasm32 size_t.
-std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject = "Float32Array");
+std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject);
 /// Checks a cumulative caller-controlled Float32 element count before any
 /// associated vectors are allocated.
 void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts);
@@ -333,11 +344,12 @@ std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_s
 /// at the same pre-allocation boundary.
 void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,
                                   const char* second_subject, bool require_matching_lengths);
-std::vector<float> float32ArrayToVector(val arr);
+std::vector<float> float32ArrayToVector(val arr, const char* subject);
 /// @brief float32ArrayToVector for one span of the source, so a windowed entry
 /// point costs its window rather than the buffer it is polling. @p start and
 /// @p count must already be clamped to the source's length.
-std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::size_t count);
+std::vector<float> float32ArrayWindowToVector(val arr, const char* subject, std::size_t start,
+                                              std::size_t count);
 /// @brief Loads a JS Float32Array into an Audio after the shared offline-input
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params
@@ -372,7 +384,7 @@ Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
 /// returns the copied samples. @throws WasmArgumentError.
 std::vector<float> loadValidatedInterleaved(const char* name, val samples, int channels,
                                             int sample_rate, size_t* frames);
-std::vector<int32_t> int32ArrayToVector(val arr);
+std::vector<int32_t> int32ArrayToVector(val arr, const char* subject);
 std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
@@ -608,6 +620,9 @@ std::optional<bool> optionalBool(const val& v, const char* key);
 /// Invokes a JS cancellation callback and returns true only when it returns the
 /// literal boolean true. Undefined and all other values leave the operation running.
 bool cancelCallbackRequested(const val& callback);
+/// @brief True when @p callback is a JS function; false for `undefined` or `null`.
+/// @throws WasmTypeError naming @p key when it is present and not a function.
+bool callbackGiven(const val& callback, const char* key);
 /// @brief Reads the JS `.length` of @p a and @p b and requires they match.
 /// @p subject names the arrays in the error message (e.g. "leftChannels and
 /// rightChannels"). When @p require_non_zero is true (the default — this is

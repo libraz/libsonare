@@ -90,7 +90,7 @@ val js_power_to_db(val values, const val& ref_val, const val& amin_val, const va
   const float ref = checkedFloatFromVal(ref_val, "ref");
   const float amin = checkedFloatFromVal(amin_val, "amin");
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(power_to_db(data, ref, amin, top_db));
 }
@@ -99,28 +99,28 @@ val js_amplitude_to_db(val values, const val& ref_val, const val& amin_val, cons
   const float ref = checkedFloatFromVal(ref_val, "ref");
   const float amin = checkedFloatFromVal(amin_val, "amin");
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(amplitude_to_db(data, ref, amin, top_db));
 }
 
 val js_db_to_power(val values, const val& ref_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(db_to_power(data, ref));
 }
 
 val js_db_to_amplitude(val values, const val& ref_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(db_to_amplitude(data, ref));
 }
 
 val js_preemphasis(val samples, const val& coef_val, val zi) {
   const float coef = checkedFloatFromVal(coef_val, "coef");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(preemphasis(data, coef));
   }
@@ -129,7 +129,7 @@ val js_preemphasis(val samples, const val& coef_val, val zi) {
 
 val js_deemphasis(val samples, const val& coef_val, val zi) {
   const float coef = checkedFloatFromVal(coef_val, "coef");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(deemphasis(data, coef));
   }
@@ -141,7 +141,7 @@ val js_trim_silence(val samples, const val& top_db_val, const val& frame_length_
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   auto result = trim(data, top_db, frame_length, hop_length);
   val out = val::object();
   out.set("audio", vectorToFloat32Array(result.audio));
@@ -155,7 +155,7 @@ val js_split_silence(val samples, const val& top_db_val, const val& frame_length
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   auto ranges = split(data, top_db, frame_length, hop_length);
   std::vector<int> flat;
   flat.reserve(ranges.size() * 2);
@@ -191,8 +191,8 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
     if (signal.isUndefined() || signal.isNull()) {
       throw WasmTypeError("signals[" + std::to_string(index) + "] must be a Float32Array");
     }
-    accumulateWasmFloat32ArrayLength(signal, "signals entry", &budget);
-    buffers[index] = float32ArrayToVector(signal);
+    accumulateWasmFloat32ArrayLength(signal, "signals", &budget);
+    buffers[index] = float32ArrayToVector(signal, "signals");
     validateFiniteVector(buffers[index], "signals[" + std::to_string(index) + "]", "sample");
     pointers[index] = buffers[index].data();
     lengths[index] = buffers[index].size();
@@ -215,16 +215,11 @@ val flattenIntervals(const std::vector<std::pair<int, int>>& intervals) {
 }  // namespace
 
 val js_split_silence_common(val signals, const val& top_db_val, const val& frame_length_val,
-                            const val& hop_length_val) {
-  const CommonSplitReport report =
-      splitSilenceCommonImpl(signals, top_db_val, frame_length_val, hop_length_val);
-  return flattenIntervals(report.intervals);
-}
-
-val js_split_silence_common_with_report(val signals, const val& top_db_val,
-                                        const val& frame_length_val, const val& hop_length_val) {
+                            const val& hop_length_val, const val& with_report_val) {
+  const bool with_report = optionalBool(with_report_val, "withReport").value_or(false);
   const CommonSplitReport result =
       splitSilenceCommonImpl(signals, top_db_val, frame_length_val, hop_length_val);
+  if (!with_report) return flattenIntervals(result.intervals);
   val report = val::object();
   report.set("silenceCeilingDb", result.silence_ceiling_db);
   report.set("maxSignalIntervals", result.max_signal_intervals);
@@ -240,7 +235,7 @@ val js_frame_signal(val samples, const val& frame_length_val, const val& hop_len
       domainNumberFromVal<int>(frame_length_val, "frameLength", kFrameLengthDomain);
   const int hop_length =
       domainNumberFromVal<int>(hop_length_val, "hopLength", kFrameHopLengthDomain);
-  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> data = float32ArrayToVector(samples, "samples");
   val out = val::object();
   out.set("nFrames", frame_count(data.size(), frame_length, hop_length));
   out.set("frames", vectorToFloat32Array(frame(data, frame_length, hop_length)));
@@ -278,7 +273,7 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
       optionalDomainValue<int>(length_val, "length", sonare::kClicksLengthDomain).value_or(0);
   const float frequency = checkedFloatFromVal(frequency_val, "frequency");
   const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
-  std::vector<float> values = float32ArrayToVector(times);
+  std::vector<float> values = float32ArrayToVector(times, "times");
   validateFiniteVector(values, "times");
   const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
   return vectorToFloat32Array(audio.data(), audio.size());
@@ -287,7 +282,7 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
 val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   if (size < 0) {
     throw WasmRangeError("size must be an integer in [0, 2147483647]");
@@ -298,7 +293,7 @@ val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
 val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   if (size < 0) {
     throw WasmRangeError("size must be an integer in [0, 2147483647]");
@@ -306,10 +301,10 @@ val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
   return vectorToFloat32Array(fix_length(data, static_cast<size_t>(size), pad_value));
 }
 
-std::vector<int> intArrayToVector(val arr) {
+std::vector<int> intArrayToVector(val arr, const char* subject) {
   // The caller-supplied `.length` decides the allocation, so it goes through the
   // shared safe-integer + budget guard rather than a raw as<int>() narrowing.
-  const size_t length = wasmArrayLikeLength(arr, "Int32Array");
+  const size_t length = wasmArrayLikeLength(arr, subject);
   std::vector<int> out(length);
   for (size_t index = 0; index < length; ++index) {
     // Each element goes through the same 32-bit-integer guard as any other
@@ -321,14 +316,15 @@ std::vector<int> intArrayToVector(val arr) {
 }
 
 val js_fix_frames(val frames, const val& x_min, const val& x_max, bool pad) {
-  return vectorToInt32Array(fix_frames(intArrayToVector(frames), checkedIntFromVal(x_min, "xMin"),
+  return vectorToInt32Array(fix_frames(intArrayToVector(frames, "frames"),
+                                       checkedIntFromVal(x_min, "xMin"),
                                        checkedIntFromVal(x_max, "xMax"), pad));
 }
 
 val js_onset_backtrack(val events, val energy) {
-  std::vector<float> energy_values = float32ArrayToVector(energy);
+  std::vector<float> energy_values = float32ArrayToVector(energy, "energy");
   validateFiniteVector(energy_values, "energy");
-  return vectorToInt32Array(onset_backtrack(intArrayToVector(events), energy_values));
+  return vectorToInt32Array(onset_backtrack(intArrayToVector(events, "events"), energy_values));
 }
 
 val js_peak_pick(val values, const val& pre_max, const val& post_max, const val& pre_avg,
@@ -339,7 +335,7 @@ val js_peak_pick(val values, const val& pre_max, const val& post_max, const val&
   const int post_avg_frames = checkedIntFromVal(post_avg, "postAvg");
   const float delta = checkedFloatFromVal(delta_val, "delta");
   const int wait_frames = checkedIntFromVal(wait, "wait");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToInt32Array(peak_pick(data, pre_max_frames, post_max_frames, pre_avg_frames,
                                       post_avg_frames, delta, wait_frames));
@@ -348,7 +344,7 @@ val js_peak_pick(val values, const val& pre_max, const val& post_max, const val&
 val js_vector_normalize(val values, const val& norm_type_val, const val& threshold_val) {
   const int norm_type = checkedIntFromVal(norm_type_val, "normType");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   requireOrdinalInRange(norm_type, static_cast<int>(NormType::Inf),
                         static_cast<int>(NormType::Power), "normType");
@@ -358,7 +354,7 @@ val js_vector_normalize(val values, const val& norm_type_val, const val& thresho
 val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val options) {
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  std::vector<float> data = float32ArrayToVector(values);
+  std::vector<float> data = float32ArrayToVector(values, "values");
   validateMatrix(data, "values", n_bins, n_frames);
   PcenConfig config;
   if (!options.isUndefined() && !options.isNull()) {
@@ -376,7 +372,7 @@ val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val opti
 val js_tonnetz(val chromagram, const val& n_chroma_val, const val& n_frames_val) {
   const int n_chroma = checkedIntFromVal(n_chroma_val, "nChroma");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  std::vector<float> data = float32ArrayToVector(chromagram);
+  std::vector<float> data = float32ArrayToVector(chromagram, "chromagram");
   validateMatrix(data, "chromagram", n_chroma, n_frames);
   return vectorToFloat32Array(tonnetz(data.data(), n_chroma, n_frames));
 }
@@ -406,7 +402,7 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
-  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
   validateFiniteVector(data, "onsetEnvelope");
   validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
@@ -435,7 +431,7 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
   const int n_bins = n_bins_val.isUndefined() || n_bins_val.isNull()
                          ? kCyclicTempogramBins
                          : domainNumberFromVal<int>(n_bins_val, "nBins", kRhythmCountDomain);
-  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
   validateFiniteVector(data, "onsetEnvelope");
   TempogramConfig config;
   config.hop_length = hop_length;
@@ -460,7 +456,7 @@ val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.tempo_max = *v;
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
-  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
   validateFiniteVector(data, "onsetEnvelope");
   config.sr = sample_rate;
   config.hop_length = hop_length;
@@ -511,7 +507,7 @@ val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const v
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
   const int win_length =
       domainNumberFromVal<int>(win_length_val, "winLength", kTempogramWinLengthDomain);
-  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  std::vector<float> data = float32ArrayToVector(onset_envelope, "onsetEnvelope");
   validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
@@ -533,16 +529,16 @@ val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val&
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kRhythmCountDomain);
   const bool has_factors = !factors.isUndefined() && !factors.isNull();
   if (has_factors) {
-    validateWasmFloat32ArrayPair(tempogram_data, "tempogram data", factors, "factors", false);
+    validateWasmFloat32ArrayPair(tempogram_data, "tempogram", factors, "factors", false);
   }
-  std::vector<float> data = float32ArrayToVector(tempogram_data);
+  std::vector<float> data = float32ArrayToVector(tempogram_data, "tempogram");
   validatePositiveSampleRate(sample_rate);
   // An undefined/null/empty factors argument falls back to the library default
   // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.
   if (!has_factors) {
     return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
   }
-  std::vector<float> factor_values = float32ArrayToVector(factors);
+  std::vector<float> factor_values = float32ArrayToVector(factors, "factors");
   if (factor_values.empty()) {
     return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
   }
@@ -570,7 +566,6 @@ void registerFeatureCoreBindings() {
   function("trimSilence", &js_trim_silence);
   function("splitSilence", &js_split_silence);
   function("splitSilenceCommon", &js_split_silence_common);
-  function("splitSilenceCommonWithReport", &js_split_silence_common_with_report);
   function("frameSignal", &js_frame_signal);
   function("tone", &js_tone);
   function("chirp", &js_chirp);

@@ -231,7 +231,7 @@ export function trim(...args: unknown[]): Float32Array {
     const hopLength = r.hopLength ?? 512;
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFiniteScalar(thresholdDb, 'thresholdDb');
-    return requireModule().trimEx(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
+    return requireModule().trim(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
   });
 }
 

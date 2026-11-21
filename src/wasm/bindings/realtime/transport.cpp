@@ -284,7 +284,7 @@ val RealtimeEngineWasm::getTransportState() const {
   out.set("ppq", state.ppq_position);
   out.set("bpm", state.bpm);
   out.set("barStartPpq", state.bar_start_ppq);
-  out.set("barCount", static_cast<double>(state.bar_count));
+  out.set("barIndex", static_cast<double>(state.bar_count));
   val time_signature = val::object();
   time_signature.set("numerator", state.time_sig.numerator);
   time_signature.set("denominator", state.time_sig.denominator);

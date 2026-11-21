@@ -78,7 +78,7 @@ export function voiceChange(...args: unknown[]): Float32Array {
 }
 
 /** Canonical request form for offline realtime voice changing. */
-export interface VoiceChangeRealtimeRequest {
+export interface RealtimeVoiceChangerRenderRequest {
   /** One (mono) or two (stereo) planar channels of equal length. */
   channels: Float32Array[];
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
@@ -98,10 +98,12 @@ export interface VoiceChangeRealtimeRequest {
  *   RangeError for a channel count other than 1 or 2, unequal channel lengths, out-of-domain
  *   audio or rate, or an unknown preset id or token.
  */
-export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] {
-  return withEntry('voiceChangeRealtime', () => {
-    const fnName = 'voiceChangeRealtime';
-    const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
+export function realtimeVoiceChangerRender(
+  request: RealtimeVoiceChangerRenderRequest,
+): Float32Array[] {
+  return withEntry('realtimeVoiceChangerRender', () => {
+    const fnName = 'realtimeVoiceChangerRender';
+    const req = requestOnly<RealtimeVoiceChangerRenderRequest>(fnName, [request]);
     if (req.sampleRate === undefined || req.sampleRate === null) {
       throw refuseType(`sampleRate must be a number`);
     }
@@ -114,10 +116,10 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
     if (planes.some((plane) => plane.length !== frames)) {
       throw refuse(`channels must have equal lengths`);
     }
-    const native = withEntry('voiceChangeRealtime', () =>
+    const native = withEntry('realtimeVoiceChangerRender', () =>
       nativeVoiceConfig(req.config ?? 'neutralMonitor'),
     );
-    const out = requireModule().voiceChangeRealtime(
+    const out = requireModule().realtimeVoiceChangerRender(
       interleavePlanes(planes),
       req.sampleRate,
       typeof native === 'string' ? native : JSON.stringify(native),

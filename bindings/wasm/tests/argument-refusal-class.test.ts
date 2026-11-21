@@ -38,11 +38,11 @@ import {
   mixingScenePreset,
   mixStereo,
   RealtimeEngine,
+  realtimeVoiceChangerRender,
   renderPlayback,
   StreamingEqualizer,
   samplesToFrames,
   timeToFrames,
-  voiceChangeRealtime,
 } from '../dist/index.js';
 
 function thrown(call: () => unknown): unknown {
@@ -214,7 +214,7 @@ describe('argument refusal classes shared with the Node surface', () => {
   it('refuses a bad realtime voice-changer channel count and stereo length with a RangeError', () => {
     expect(
       thrown(() =>
-        voiceChangeRealtime({
+        realtimeVoiceChangerRender({
           channels: [samples, samples, samples],
           sampleRate: 48000,
         }),
@@ -222,7 +222,7 @@ describe('argument refusal classes shared with the Node surface', () => {
     ).toBeInstanceOf(RangeError);
     expect(
       thrown(() =>
-        voiceChangeRealtime({
+        realtimeVoiceChangerRender({
           channels: [new Float32Array(2205), new Float32Array(2204)],
           sampleRate: 48000,
         }),

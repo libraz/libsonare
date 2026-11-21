@@ -130,7 +130,7 @@ export type PanLaw = 'const3Db' | 'const4.5Db' | 'const6Db' | 'linear0Db';
 
 /**
  * Meter tap point for reading a strip's meter snapshot
- * (see {@link Mixer.meterTap} and {@link Mixer.stripMeter}).
+ * (see {@link Mixer.stripMeter}).
  */
 export type MeterTap = 'preFader' | 'postFader';
 
