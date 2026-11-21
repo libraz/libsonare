@@ -1109,22 +1109,24 @@ TEST_CASE("same-identity chord merges preserve the confidence duration integral"
       std::vector<Piece> parts;
       float threshold = 0;
       if (kind == "short_same")
-        parts = {{r.root, r.minor, a, lo}, {other, r.minor, b, 0}, {r.root, r.minor, b, hi}};
+        parts = std::vector<Piece>{
+            {r.root, r.minor, a, lo}, {other, r.minor, b, 0}, {r.root, r.minor, b, hi}};
       else if (kind == "three_same")
-        parts = {{r.root, r.minor, a, lo},
-                 {other, r.minor, b, 0},
-                 {r.root, r.minor, 2 * a, .7f},
-                 {other, r.minor, b, 0},
-                 {r.root, r.minor, 4 * a, hi}};
+        parts = std::vector<Piece>{{r.root, r.minor, a, lo},
+                                   {other, r.minor, b, 0},
+                                   {r.root, r.minor, 2 * a, .7f},
+                                   {other, r.minor, b, 0},
+                                   {r.root, r.minor, 4 * a, hi}};
       else if (kind == "distinct_final")
-        parts = {{r.root, r.minor, a, 0}, {other, r.minor, b, 0}};
+        parts = std::vector<Piece>{{r.root, r.minor, a, 0}, {other, r.minor, b, 0}};
       else if (kind == "nc_barrier") {
-        parts = {{r.root, r.minor, a, 0}, {-1, r.minor, b, 1}, {r.root, r.minor, z, 0}};
+        parts = std::vector<Piece>{
+            {r.root, r.minor, a, 0}, {-1, r.minor, b, 1}, {r.root, r.minor, z, 0}};
         threshold = .9f;
       } else
-        parts = {{r.root, r.minor, a, lo},
-                 {other, r.minor, b, 0},
-                 {r.root, r.minor, z, kind == "equal_score" ? lo : hi}};
+        parts = std::vector<Piece>{{r.root, r.minor, a, lo},
+                                   {other, r.minor, b, 0},
+                                   {r.root, r.minor, z, kind == "equal_score" ? lo : hi}};
       auto raw = analyze(parts, r, 0, threshold),
            got = analyze(parts, r, kind == "unmerged" ? 0 : .3f, threshold);
       REQUIRE(raw.size() == parts.size());
@@ -1182,11 +1184,12 @@ TEST_CASE("short different chords and rejected intervals preserve confidence pol
     for (std::string kind : {"different_absorb", "prefix_absorb", "silence"}) {
       std::vector<Piece> pieces;
       if (kind == "different_absorb")
-        pieces = {{r.root, r.minor, a, r.noise}, {other, r.minor, b, 0}, {next, r.minor, 2 * a, 0}};
+        pieces = std::vector<Piece>{
+            {r.root, r.minor, a, r.noise}, {other, r.minor, b, 0}, {next, r.minor, 2 * a, 0}};
       else if (kind == "prefix_absorb")
-        pieces = {{other, r.minor, b, 0}, {r.root, r.minor, a, r.noise}};
+        pieces = std::vector<Piece>{{other, r.minor, b, 0}, {r.root, r.minor, a, r.noise}};
       else
-        pieces = {{-1, false, a, 0}};
+        pieces = std::vector<Piece>{{-1, false, a, 0}};
       auto raw = analyze(pieces, r, 0, kind == "silence" ? .5f : 0),
            got = analyze(pieces, r, .3f, kind == "silence" ? .5f : 0);
       bool setup = raw.size() == pieces.size(), pass = false;
