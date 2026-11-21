@@ -813,7 +813,10 @@ TEST_CASE("project C surface imports SMF text-class meta with structured kinds",
       REQUIRE(m.key_minor == 1);
     } else if (m.kind == SONARE_MARKER_KIND_LYRIC) {
       found_lyric = true;
-      REQUIRE(std::string(m.name) == "la");
+      char* lyric = nullptr;
+      REQUIRE(sonare_project_marker_name_by_index(project, i, &lyric) == SONARE_OK);
+      REQUIRE(std::string(lyric) == "la");
+      sonare_free_string(lyric);
     } else if (m.kind == SONARE_MARKER_KIND_CUE_POINT) {
       found_cue = true;
     }
@@ -840,11 +843,9 @@ TEST_CASE("project C surface set_marker stores kind and key signature", "[projec
   in.key_minor = 0;
   in.ppq = 4.0;
   const std::string key_name = "Eb major";
-  std::copy(key_name.begin(), key_name.end(), in.name);
-  in.name[key_name.size()] = '\0';
 
   uint32_t out_id = 0;
-  REQUIRE(sonare_project_set_marker(project, &in, &out_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &in, key_name.c_str(), &out_id) == SONARE_OK);
   REQUIRE(out_id != 0);
 
   SonareProjectMarker got{};
@@ -854,7 +855,10 @@ TEST_CASE("project C surface set_marker stores kind and key signature", "[projec
   REQUIRE(got.key_fifths == -3);
   REQUIRE(got.key_minor == 0);
   REQUIRE(got.ppq == 4.0);
-  REQUIRE(std::string(got.name) == "Eb major");
+  char* got_name = nullptr;
+  REQUIRE(sonare_project_marker_name_by_index(project, 0, &got_name) == SONARE_OK);
+  REQUIRE(std::string(got_name) == "Eb major");
+  sonare_free_string(got_name);
 
   // Export to SMF and re-import: the key signature survives as a marker kind.
   uint8_t* bytes = nullptr;
@@ -879,13 +883,15 @@ TEST_CASE("project C surface set_marker stores kind and key signature", "[projec
   bad.id = 0;
   bad.key_fifths = 8;
   uint32_t bad_id = 0;
-  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_marker(project, &bad, "bad", &bad_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   bad.key_fifths = -8;
-  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_marker(project, &bad, "bad", &bad_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   // The same out-of-range fifths is accepted on a non-key-signature kind, where
   // the field is unused.
   bad.kind = SONARE_MARKER_KIND_MARKER;
-  REQUIRE(sonare_project_set_marker(project, &bad, &bad_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &bad, "bad", &bad_id) == SONARE_OK);
 
   sonare_project_destroy(round);
   sonare_project_destroy(project);
@@ -901,7 +907,7 @@ TEST_CASE("project C surface preserves long UTF-8 marker names", "[project]") {
   SonareProjectMarker marker{};
   marker.ppq = 4.0;
   uint32_t id = 0;
-  REQUIRE(sonare_project_set_marker_ex_name(project, &marker, name.c_str(), &id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &marker, name.c_str(), &id) == SONARE_OK);
   REQUIRE(id != 0);
 
   char* full_name = nullptr;
@@ -916,9 +922,23 @@ TEST_CASE("project C surface preserves long UTF-8 marker names", "[project]") {
   REQUIRE(std::string(json, json_len).find(name) != std::string::npos);
   sonare_free_string(json);
 
-  SonareProjectMarker legacy{};
-  REQUIRE(sonare_project_marker_by_index(project, 0, &legacy) == SONARE_OK);
-  REQUIRE(legacy.name[63] == '\0');
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project C surface set_marker reads a NULL name as the empty name", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectMarker marker{};
+  marker.ppq = 2.0;
+  uint32_t id = 0;
+  REQUIRE(sonare_project_set_marker(project, &marker, nullptr, &id) == SONARE_OK);
+  REQUIRE(id != 0);
+
+  char* name = nullptr;
+  REQUIRE(sonare_project_marker_name_by_index(project, 0, &name) == SONARE_OK);
+  REQUIRE(std::string(name).empty());
+  sonare_free_string(name);
   sonare_project_destroy(project);
 }
 
@@ -1105,7 +1125,7 @@ TEST_CASE("project C surface set_program emits bank select and program change", 
   REQUIRE(sonare_midi_program(0.0, 0, 2, 11, &existing) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, &existing, 1) == SONARE_OK);
 
-  REQUIRE(sonare_project_set_program_on_channel(project, clip, 0, 3, 24, 0x0123) == SONARE_OK);
+  REQUIRE(sonare_project_set_program(project, clip, 0, 3, 24, 0x0123) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
@@ -1145,7 +1165,7 @@ TEST_CASE("project C surface set_program emits bank select and program change", 
 
   sonare_free_bytes(bytes);
 
-  REQUIRE(sonare_project_set_program_on_channel(project, clip, 0, 3, 25, -1) == SONARE_OK);
+  REQUIRE(sonare_project_set_program(project, clip, 0, 3, 25, -1) == SONARE_OK);
   bytes = nullptr;
   len = 0;
   REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_OK);
@@ -1709,7 +1729,7 @@ TEST_CASE("project C surface keeps an SMF note-off written on the end-of-track t
   REQUIRE(json.find("\"lengthPpq\":1.0000000000000002") != std::string::npos);
 
   SonareProjectCompileResult result{};
-  REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &result, nullptr) == SONARE_OK);
   REQUIRE(result.has_timeline != 0);
   sonare_free_project_compile_result(&result);
 
@@ -1734,7 +1754,7 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
 
   SonareProjectCompileResult result{};
-  REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &result, nullptr) == SONARE_OK);
   REQUIRE(result.has_timeline != 0);  // warning is non-fatal
 
   bool warned = false;
@@ -2171,7 +2191,7 @@ TEST_CASE("project C surface MIDI refusals name the parameter", "[project][midi]
   REQUIRE(sonare_project_set_midi_events(project, clip, &bad_event, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "events[0].word0 must be a MIDI 1.0 or MIDI 2.0 channel voice message");
-  REQUIRE(sonare_project_set_program_on_channel(project, clip, 16, 0, 0, -1) ==
+  REQUIRE(sonare_project_set_program(project, clip, 16, 0, 0, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "group must be an integer in [0, 15]");
   uint32_t first_clip = 5;

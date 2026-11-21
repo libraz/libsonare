@@ -255,7 +255,7 @@ typedef struct {
 } SonareStreamStats;
 
 /// @par Threading and lifecycle
-/// A handle supports one producer thread calling process, process_with_offset,
+/// A handle supports one producer thread calling process,
 /// or finalize concurrently with one consumer thread calling available_frames,
 /// a read_frames variant, stats, frame_count, or current_time_sec. Calls within
 /// either role must be serialized. Completed frames and stats snapshots use an
@@ -277,21 +277,16 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
 /// @brief Destroys a streaming analyzer handle (null is a no-op).
 void sonare_stream_analyzer_destroy(SonareStreamAnalyzer* analyzer);
 
-/// @brief Feeds an audio chunk (internal cumulative offset tracking).
-/// @details Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE;
-///   call sonare_stream_analyzer_reset first to begin a new stream.
-SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
-                                           size_t n_samples);
-
-/// @brief Feeds an audio chunk with an explicit external sample offset.
-/// @details Offsets must be contiguous across non-empty calls. A gap, seek, or
-///   switch from the internally tracked overload returns
-///   SONARE_ERROR_INVALID_PARAMETER; call sonare_stream_analyzer_reset first to
+/// @brief Feeds an audio chunk.
+/// @details A NULL @p sample_offset tracks the cumulative offset internally. A non-NULL
+///   @p sample_offset is the explicit external offset of this chunk: offsets must be
+///   contiguous across non-empty calls. A gap, seek, or switch from internal tracking
+///   returns SONARE_ERROR_INVALID_PARAMETER; call sonare_stream_analyzer_reset first to
 ///   discard the buffered partial frame and begin a new timeline segment.
-///   Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE.
-SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* analyzer,
-                                                       const float* samples, size_t n_samples,
-                                                       size_t sample_offset);
+///   Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE; call
+///   sonare_stream_analyzer_reset first to begin a new stream.
+SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
+                                           size_t n_samples, const size_t* sample_offset);
 
 /// @brief Drains any high-rate resampler tail, then flushes the final partial
 ///        analysis frame with zero-padding.

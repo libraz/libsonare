@@ -415,20 +415,13 @@ SonareError probe_project_set_midi_events(const std::string& param, double value
 SonareError probe_project_set_program(const std::string& param, double value) {
   Project project;
   const uint32_t clip = project.add_midi_clip();
-  const int program = is_param(param, "program") ? static_cast<int>(value) : 0;
-  return sonare_project_set_program(project.handle, clip, program, -1);
-}
-
-SonareError probe_project_set_program_on_channel(const std::string& param, double value) {
-  Project project;
-  const uint32_t clip = project.add_midi_clip();
   uint8_t group = 0;
   uint8_t channel = 0;
   int program = 0;
   if (is_param(param, "group")) group = to_u8(value);
   if (is_param(param, "channel")) channel = to_u8(value);
   if (is_param(param, "program")) program = static_cast<int>(value);
-  return sonare_project_set_program_on_channel(project.handle, clip, group, channel, program, -1);
+  return sonare_project_set_program(project.handle, clip, group, channel, program, -1);
 }
 
 // ---- Project edits ----------------------------------------------------------------------
@@ -533,7 +526,6 @@ SonareError probe_snap_to_grid(const std::string&, double value) {
 SonareProjectMarker marker_for(const std::string& param, double value) {
   SonareProjectMarker marker{};
   marker.kind = SONARE_MARKER_KIND_MARKER;
-  std::strcpy(marker.name, "marker");
   if (is_param(param, "marker.id")) marker.id = to_u32(value);
   if (is_param(param, "marker.key_fifths")) {
     marker.kind = SONARE_MARKER_KIND_KEY_SIGNATURE;
@@ -546,14 +538,7 @@ SonareError probe_set_marker(const std::string& param, double value) {
   Project project;
   const SonareProjectMarker marker = marker_for(param, value);
   uint32_t out = 0;
-  return sonare_project_set_marker(project.handle, &marker, &out);
-}
-
-SonareError probe_set_marker_ex_name(const std::string& param, double value) {
-  Project project;
-  const SonareProjectMarker marker = marker_for(param, value);
-  uint32_t out = 0;
-  return sonare_project_set_marker_ex_name(project.handle, &marker, "marker", &out);
+  return sonare_project_set_marker(project.handle, &marker, "marker", &out);
 }
 
 SonareError probe_set_time_signatures(const std::string& param, double value) {
@@ -617,38 +602,6 @@ SonareError probe_bounce(const std::string& param, double value) {
       param, value,
       [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
         return sonare_project_bounce(p, o, out, len, ch);
-      });
-}
-
-SonareError probe_bounce_instruments(const std::string& param, double value) {
-  return bounce_options_with(
-      param, value,
-      [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
-        return sonare_project_bounce_with_instruments(p, o, nullptr, 0, out, len, ch);
-      });
-}
-
-SonareError probe_bounce_builtin_options(const std::string& param, double value) {
-  return bounce_options_with(
-      param, value,
-      [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
-        return sonare_project_bounce_with_builtin_instruments(p, o, nullptr, 0, out, len, ch);
-      });
-}
-
-SonareError probe_bounce_synth(const std::string& param, double value) {
-  return bounce_options_with(
-      param, value,
-      [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
-        return sonare_project_bounce_with_synth_instruments(p, o, nullptr, 0, out, len, ch);
-      });
-}
-
-SonareError probe_bounce_sf2_options(const std::string& param, double value) {
-  return bounce_options_with(
-      param, value,
-      [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
-        return sonare_project_bounce_with_sf2_instruments(p, o, nullptr, 0, out, len, ch);
       });
 }
 
@@ -830,17 +783,11 @@ const std::map<std::string, Probe>& probes() {
       {"project_annotate_chords", probe_annotate_chords},
       {"project_annotate_keys", probe_annotate_keys},
       {"project_bounce", probe_bounce},
-      {"project_bounce_with_builtin_instruments", probe_bounce_builtin_options},
-      {"project_bounce_with_instruments", probe_bounce_instruments},
-      {"project_bounce_with_sf2_instruments", probe_bounce_sf2_options},
-      {"project_bounce_with_synth_instruments", probe_bounce_synth},
       {"project_edit_automation_lane", probe_edit_automation_lane},
       {"project_import_external_stems", probe_import_external_stems},
       {"project_set_marker", probe_set_marker},
-      {"project_set_marker_ex_name", probe_set_marker_ex_name},
       {"project_set_midi_events", probe_project_set_midi_events},
       {"project_set_program", probe_project_set_program},
-      {"project_set_program_on_channel", probe_project_set_program_on_channel},
       {"project_set_source_audio", probe_set_source_audio},
       {"project_set_time_signatures", probe_set_time_signatures},
       {"project_set_warp_map", probe_set_warp_map},

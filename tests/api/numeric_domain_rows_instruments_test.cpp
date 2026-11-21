@@ -61,7 +61,7 @@ std::string field_of(const std::string& param) { return param.substr(param.rfind
 SonareError probe_engine_builtin(const std::string& param, double value) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig config{};
   sonare_engine_builtin_synth_config_init(&config);
   set_builtin_field(&config, field_of(param), value);
@@ -73,7 +73,7 @@ SonareError probe_engine_builtin(const std::string& param, double value) {
 SonareError probe_engine_sf2(const std::string& param, double value) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   set_sf2_field(&config, field_of(param), value);
@@ -82,10 +82,16 @@ SonareError probe_engine_sf2(const std::string& param, double value) {
   return err;
 }
 
-/// Runs @p bounce over a fresh empty project with the options a 64-frame render takes.
-SonareError bounce_with(
-    const std::function<SonareError(SonareProject*, const SonareProjectBounceOptions*, float**,
-                                    size_t*, int*)>& bounce) {
+/// Bounces a fresh empty project with the options a 64-frame render takes and one hosted
+/// instrument of the kind @p param names, its field set to @p value.
+SonareError probe_project_bounce(const std::string& param, double value) {
+  SonareBuiltinInstrumentBinding builtin{};
+  sonare_builtin_synth_config_init(&builtin.config);
+  builtin.destination_id = 2;
+  SonareSf2InstrumentBinding sf2{};
+  sonare_sf2_instrument_config_init(&sf2.config);
+  sf2.destination_id = 2;
+
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   SonareProjectBounceOptions options;
@@ -94,37 +100,22 @@ SonareError bounce_with(
   options.block_size = 64;
   options.num_channels = 2;
   options.sample_rate = 48000;
+  if (param.rfind("builtin_instruments[]", 0) == 0) {
+    set_builtin_field(&builtin.config, field_of(param), value);
+    options.builtin_instruments = &builtin;
+    options.builtin_instrument_count = 1;
+  } else {
+    set_sf2_field(&sf2.config, field_of(param), value);
+    options.sf2_instruments = &sf2;
+    options.sf2_instrument_count = 1;
+  }
   float* out = nullptr;
   size_t out_len = 0;
   int channels = 0;
-  const SonareError err = bounce(project, &options, &out, &out_len, &channels);
+  const SonareError err = sonare_project_bounce(project, &options, &out, &out_len, &channels);
   if (err == SONARE_OK) sonare_free_floats(out);
   sonare_project_destroy(project);
   return err;
-}
-
-SonareError probe_bounce_builtin(const std::string& param, double value) {
-  SonareBuiltinInstrumentBinding binding{};
-  sonare_builtin_synth_config_init(&binding.config);
-  binding.destination_id = 2;
-  set_builtin_field(&binding.config, field_of(param), value);
-  return bounce_with([&](SonareProject* project, const SonareProjectBounceOptions* options,
-                         float** out, size_t* out_len, int* channels) {
-    return sonare_project_bounce_with_builtin_instruments(project, options, &binding, 1, out,
-                                                          out_len, channels);
-  });
-}
-
-SonareError probe_bounce_sf2(const std::string& param, double value) {
-  SonareSf2InstrumentBinding binding{};
-  sonare_sf2_instrument_config_init(&binding.config);
-  binding.destination_id = 2;
-  set_sf2_field(&binding.config, field_of(param), value);
-  return bounce_with([&](SonareProject* project, const SonareProjectBounceOptions* options,
-                         float** out, size_t* out_len, int* channels) {
-    return sonare_project_bounce_with_sf2_instruments(project, options, &binding, 1, out, out_len,
-                                                      channels);
-  });
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT
@@ -135,8 +126,7 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_ARRANGEMENT)
       {"engine_set_builtin_instrument", probe_engine_builtin},
       {"engine_set_sf2_instrument", probe_engine_sf2},
-      {"project_bounce_with_builtin_instruments", probe_bounce_builtin},
-      {"project_bounce_with_sf2_instruments", probe_bounce_sf2},
+      {"project_bounce", probe_project_bounce},
 #endif
   };
   return table;

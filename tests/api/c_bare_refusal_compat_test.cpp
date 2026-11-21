@@ -215,20 +215,20 @@ TEST_CASE("the tempogram family names the refused onset envelope and mode", "[c_
   size_t out_length = 0;
   int n_frames = 0;
 
-  REQUIRE(sonare_tempogram_with_mode(nullptr, 64, 22050, 512, 16, 1, 0,
-                                     SONARE_TEMPOGRAM_AUTOCORRELATION, &out, &out_length,
-                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_tempogram(nullptr, 64, 22050, 512, 16, 1, 0, SONARE_TEMPOGRAM_AUTOCORRELATION,
+                           &out, &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "onset_envelope must not be NULL when length is not 0");
-  REQUIRE(sonare_tempogram_with_mode(nan_envelope.data(), 64, 22050, 512, 16, 1, 0,
-                                     SONARE_TEMPOGRAM_AUTOCORRELATION, &out, &out_length,
-                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_tempogram(nan_envelope.data(), 64, 22050, 512, 16, 1, 0,
+                           SONARE_TEMPOGRAM_AUTOCORRELATION, &out, &out_length,
+                           &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "onset_envelope contains a non-finite sample at index 3");
-  REQUIRE(sonare_tempogram_with_mode(envelope.data(), 64, 22050, 512, 16, 1, 0, 9, &out,
-                                     &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_tempogram(envelope.data(), 64, 22050, 512, 16, 1, 0, 9, &out, &out_length,
+                           &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "mode must be one of " +
                                 std::to_string(SONARE_TEMPOGRAM_AUTOCORRELATION) + ", " +
                                 std::to_string(SONARE_TEMPOGRAM_COSINE));
-  REQUIRE(sonare_tempogram(envelope.data(), 64, 22050, 512, 16, 1, 0, nullptr, &out_length,
+  REQUIRE(sonare_tempogram(envelope.data(), 64, 22050, 512, 16, 1, 0,
+                           SONARE_TEMPOGRAM_AUTOCORRELATION, nullptr, &out_length,
                            &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "out must not be NULL");
 

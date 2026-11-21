@@ -15,6 +15,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_synth_instruments(SonareProject* project,
+                                          const SonareProjectBounceOptions* options,
+                                          const SonareSynthInstrumentBinding* bindings,
+                                          size_t count, float** out_interleaved, size_t* out_len,
+                                          int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.synth_instruments = bindings;
+  with_instruments.synth_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 constexpr double kSourceRate = 44100.0;
 
 /// A pitched tone with content across the band, so a filter has something to
@@ -257,8 +272,8 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
   float* out = nullptr;
   size_t len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
-                                                       &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                        &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -306,8 +321,8 @@ TEST_CASE("narrowing one range leaves the other covering everything", "[project]
   float* out = nullptr;
   size_t len = 0;
   int bounce_channels2 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
-                                                       &bounce_channels2) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                        &bounce_channels2) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -335,8 +350,8 @@ TEST_CASE("a sample patch without a bank renders silence, not an error", "[proje
   float* out = nullptr;
   size_t len = 0;
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
-                                                       &bounce_channels3) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                        &bounce_channels3) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -373,9 +388,8 @@ TEST_CASE("a synth patch whose struct_size is below sizeof is refused", "[projec
   float* out = nullptr;
   size_t len = 0;
   int bounce_channels4 = 0;
-  CHECK(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
-                                                     &bounce_channels4) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                      &bounce_channels4) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
 }

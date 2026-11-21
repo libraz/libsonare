@@ -32,7 +32,7 @@ TEST_CASE("compile surfaces a renderable timeline for a valid project", "[projec
   BuiltProject built = build_project(audio);
 
   SonareProjectCompileResult result{};
-  REQUIRE(sonare_project_compile(built.project, &result) == SONARE_OK);
+  REQUIRE(sonare_project_compile(built.project, &result, nullptr) == SONARE_OK);
   REQUIRE(result.has_timeline == 1);
   sonare_free_project_compile_result(&result);
   REQUIRE(result.diagnostics == nullptr);

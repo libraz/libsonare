@@ -378,22 +378,68 @@ TEST_CASE(
   REQUIRE(zero_fft.magnitude == nullptr);
 }
 
-TEST_CASE("sonare_stft_db zeroes every out param before a validate_audio_params rejection",
+TEST_CASE("sonare_stft zeroes the result before a validate_audio_params rejection",
           "[c_api][features]") {
-  // out_n_bins / out_n_frames are non-owning scalars (never freed), but they
-  // must still be defined on every exit path rather than left as caller
+  // The result must be defined on every exit path rather than left as caller
   // stack garbage when validate_audio_params rejects the (empty) input before
   // the STFT body ever runs.
-  int n_bins = -1;
-  int n_frames = -1;
-  float* db = nullptr;
+  SonareStftOptions options;
+  sonare_stft_options_init(&options);
+  options.db = 1;
+  SonareStftResult result;
+  result.n_bins = -1;
+  result.n_frames = -1;
+  result.db = nullptr;
   const std::vector<float> empty;
-  REQUIRE(sonare_stft_db(empty.data(), 0, 22050, 1024, 256, &n_bins, &n_frames, &db) ==
+  REQUIRE(sonare_stft(empty.data(), 0, 22050, 1024, 256, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(n_bins == 0);
-  REQUIRE(n_frames == 0);
-  REQUIRE(db == nullptr);
-  sonare_free_floats(db);
+  REQUIRE(result.n_bins == 0);
+  REQUIRE(result.n_frames == 0);
+  REQUIRE(result.db == nullptr);
+  sonare_free_stft_result(&result);
+}
+
+TEST_CASE("sonare_stft fills the dB plane only when asked and sizes options", "[c_api][features]") {
+  std::vector<float> samples(4096);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = std::sin(0.05f * static_cast<float>(i));
+  }
+  SonareStftResult plain{};
+  REQUIRE(sonare_stft(samples.data(), samples.size(), 22050, 512, 128, nullptr, &plain) ==
+          SONARE_OK);
+  REQUIRE(plain.magnitude != nullptr);
+  REQUIRE(plain.db == nullptr);
+
+  SonareStftOptions options;
+  sonare_stft_options_init(&options);
+  REQUIRE(options.struct_size == sizeof(SonareStftOptions));
+  REQUIRE(options.db == 0);
+  SonareStftResult off{};
+  REQUIRE(sonare_stft(samples.data(), samples.size(), 22050, 512, 128, &options, &off) ==
+          SONARE_OK);
+  REQUIRE(off.db == nullptr);
+
+  options.db = 1;
+  SonareStftResult with_db{};
+  REQUIRE(sonare_stft(samples.data(), samples.size(), 22050, 512, 128, &options, &with_db) ==
+          SONARE_OK);
+  REQUIRE(with_db.db != nullptr);
+  REQUIRE(with_db.n_bins == plain.n_bins);
+  REQUIRE(with_db.n_frames == plain.n_frames);
+  const size_t total = static_cast<size_t>(plain.n_bins) * static_cast<size_t>(plain.n_frames);
+  for (size_t i = 0; i < total; ++i) {
+    REQUIRE(with_db.magnitude[i] == plain.magnitude[i]);
+    REQUIRE(std::isfinite(with_db.db[i]));
+  }
+
+  options.struct_size = sizeof(uint32_t);
+  SonareStftResult refused{};
+  REQUIRE(sonare_stft(samples.data(), samples.size(), 22050, 512, 128, &options, &refused) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_free_stft_result(&plain);
+  sonare_free_stft_result(&off);
+  sonare_free_stft_result(&with_db);
 }
 
 TEST_CASE("segment C APIs return owned matrices and index vectors", "[c_api][features]") {

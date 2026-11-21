@@ -316,7 +316,7 @@ TEST_CASE("sonare_realtime_voice_changer ISP limiter fields round-trip through t
 TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time signature", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
   REQUIRE(sonare_engine_set_time_signature(engine, 3, 4) == SONARE_OK);
 
@@ -333,7 +333,7 @@ TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time sign
 TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
   REQUIRE(sonare_engine_set_loop(engine, 0.0, 4.0, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
@@ -356,7 +356,7 @@ TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[
   std::array<float, 128> right{};
   float* channels[] = {left.data(), right.data()};
   for (int i = 0; i < 1000; ++i) {
-    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   }
 
   done.store(true, std::memory_order_release);
@@ -368,7 +368,7 @@ TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[
 TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation failure", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16, 0) == SONARE_OK);
 
   SonareEngineBounceOptions bad_options;
   sonare_engine_bounce_options_init(&bad_options);
@@ -397,7 +397,7 @@ TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the 
           "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareEngineBounceOptions options;
   sonare_engine_bounce_options_init(&options);
@@ -427,7 +427,7 @@ TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling th
   // (use-after-free on the next marker query, caught under ASan).
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareEngineMarker good[2]{};
   good[0].id = 11;
@@ -466,7 +466,7 @@ TEST_CASE("sonare_engine duplicate parameter rejection preserves the original me
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareParameterInfo original{};
   original.id = 17;
@@ -507,7 +507,7 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
 #if defined(SONARE_WITH_GRAPH)
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
 
   SonareParameterInfo parameter{};
   parameter.id = 7;
@@ -555,8 +555,8 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
   std::array<float, 64> audio{};
   float* channels[] = {audio.data()};
   audio.fill(1.0f);
-  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(audio[0] < 0.01f);
 
   // The second binding is invalid. The valid first binding must not be
@@ -596,8 +596,8 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
   REQUIRE(node_count == 3);
   REQUIRE(connection_count == 2);
   audio.fill(1.0f);
-  REQUIRE(sonare_engine_set_parameter(engine, 7, 0.0f, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, 0.0f, -1, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(audio[0] == Catch::Approx(1.0f));
 
   // A valid graph with no bindings removes the old target. Adopt it, then
@@ -608,14 +608,88 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
   pass_graph.parameter_binding_count = 0;
   REQUIRE(sonare_engine_set_graph(engine, &pass_graph) == SONARE_OK);
   audio.fill(1.0f);
-  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(sonare_engine_set_graph(engine, &pass_graph) == SONARE_OK);
   for (int block = 0; block < 100; ++block) {
     audio.fill(1.0f);
-    REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1) == SONARE_OK);
-    REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+    REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1, 0) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
     REQUIRE(audio[0] == Catch::Approx(1.0f));
   }
+
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("sonare_engine_set_parameter steps when smoothed is 0 and ramps when it is set",
+          "[c_api][engine][graph]") {
+#if defined(SONARE_WITH_GRAPH)
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 7;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 12.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  SonareEngineGraphNode nodes[3];
+  for (auto& element : nodes) sonare_engine_graph_node_init(&element);
+  std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
+  nodes[0].type = 0;
+  nodes[0].num_ports = 1;
+  std::strncpy(nodes[1].id, "gain", sizeof(nodes[1].id) - 1);
+  nodes[1].type = 1;
+  nodes[1].num_ports = 1;
+  std::strncpy(nodes[2].id, "out", sizeof(nodes[2].id) - 1);
+  nodes[2].type = 0;
+  nodes[2].num_ports = 1;
+  SonareEngineGraphConnection connections[2]{};
+  std::strncpy(connections[0].source_node, "in", sizeof(connections[0].source_node) - 1);
+  std::strncpy(connections[0].dest_node, "gain", sizeof(connections[0].dest_node) - 1);
+  connections[0].mix = 1;
+  std::strncpy(connections[1].source_node, "gain", sizeof(connections[1].source_node) - 1);
+  std::strncpy(connections[1].dest_node, "out", sizeof(connections[1].dest_node) - 1);
+  connections[1].mix = 1;
+  SonareEngineGraphParameterBinding binding{};
+  binding.param_id = 7;
+  std::strncpy(binding.node_id, "gain", sizeof(binding.node_id) - 1);
+  SonareEngineGraphSpec graph{};
+  graph.nodes = nodes;
+  graph.node_count = 3;
+  graph.connections = connections;
+  graph.connection_count = 2;
+  graph.parameter_bindings = &binding;
+  graph.parameter_binding_count = 1;
+  std::strncpy(graph.input_node, "in", sizeof(graph.input_node) - 1);
+  std::strncpy(graph.output_node, "out", sizeof(graph.output_node) - 1);
+  graph.num_channels = 1;
+  REQUIRE(sonare_engine_set_graph(engine, &graph) == SONARE_OK);
+
+  std::array<float, 64> audio{};
+  float* channels[] = {audio.data()};
+
+  // A step lands on its target within the first block.
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] < 0.01f);
+
+  // The first smoothed set on a target is its baseline; the next one ramps from it and has
+  // not reached its target after one block.
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, 0.0f, -1, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] == Catch::Approx(1.0f));
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] > 0.5f);
+  REQUIRE(audio[63] > 0.01f);
 
   sonare_engine_destroy(engine);
 #endif
@@ -625,7 +699,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
   REQUIRE(sonare_engine_set_time_signature(engine, 3, 4) == SONARE_OK);
   SonareEngineMarker markers[2]{};
@@ -801,7 +875,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   left.fill(0.25f);
   right.fill(-0.25f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   // The mixed level depends on whether the routing graph installed above is
   // part of this build: without it the engine mixes the direct path only.
 #if defined(SONARE_WITH_GRAPH)
@@ -866,7 +940,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   std::array<float, 128> clip_left{};
   std::array<float, 128> clip_right{};
@@ -905,7 +979,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   left.fill(0.25f);
   right.fill(-0.25f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
 #if defined(SONARE_WITH_MIXING)
@@ -917,7 +991,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   for (size_t i = 0; i < input_meter_count; ++i) {
     if (input_meters[i].target_id == 0xFFFFu) {
       found_input_meter = true;
-      REQUIRE(input_meters[i].peak_db_l == Catch::Approx(-12.0412f).margin(0.05f));
+      REQUIRE(input_meters[i].peak_db[0] == Catch::Approx(-12.0412f).margin(0.05f));
     }
   }
   REQUIRE(found_input_meter);
@@ -942,7 +1016,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   left.fill(0.25f);
   right.fill(-0.25f);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.5f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.5f).margin(0.0001f));
   REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
@@ -952,7 +1026,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   left.fill(0.25f);
   right.fill(-0.25f);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.625f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.625f).margin(0.0001f));
 
@@ -965,7 +1039,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   left.fill(0.25f);
   right.fill(-0.25f);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
   REQUIRE(status.captured_frames == 64);
   REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
@@ -980,7 +1054,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   left.fill(0.25f);
   right.fill(-0.25f);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 64) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
   REQUIRE(status.captured_frames == 64);
 
@@ -988,7 +1062,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   for (int i = 0; i < 3; ++i) {
     left.fill(0.5f);
     right.fill(-0.5f);
-    REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 64) == SONARE_OK);
   }
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
   REQUIRE(status.captured_frames == 64);
@@ -999,7 +1073,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   left.fill(0.75f);
   right.fill(-0.75f);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 64) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
   REQUIRE(status.captured_frames == 128);
   REQUIRE(capture_left[64] == Catch::Approx(0.75f).margin(0.0001f));
@@ -1011,7 +1085,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
 TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api][capture]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 4, 4) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 4, 4, 0) == SONARE_OK);
 
   std::array<float, 4> captured{};
   float* capture_channels[] = {captured.data()};
@@ -1029,7 +1103,7 @@ TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api
 
   std::array<float, 8> input{0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
   float* channels[] = {input.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 1, 8) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 8) == SONARE_OK);
 
   SonareEngineCaptureStatus status{};
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
@@ -1040,10 +1114,11 @@ TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api
 }
 #endif
 
-TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "[c_api]") {
+TEST_CASE("sonare_engine_process returns a separate monitor bus when monitor_out is given",
+          "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16, 0) == SONARE_OK);
 
   std::array<float, 16> left{};
   std::array<float, 16> right{};
@@ -1057,12 +1132,16 @@ TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "
   monitor_right.fill(99.0f);
   float* monitor_channels[] = {monitor_left.data(), monitor_right.data()};
 
-  REQUIRE(sonare_engine_process_with_monitor(engine, channels, monitor_channels, 2, 16) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, monitor_channels, 2, 16) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.25f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
   REQUIRE(monitor_left[0] == Catch::Approx(0.0f).margin(0.0001f));
   REQUIRE(monitor_right[0] == Catch::Approx(0.0f).margin(0.0001f));
+
+  // An absent monitor_out folds the cue bus into channels, so the block still renders.
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 16) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
 
   sonare_engine_destroy(engine);
 }
@@ -1071,7 +1150,7 @@ TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "
 TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64, 0) == SONARE_OK);
 
   std::array<float, 128> clip_left{};
   std::array<float, 128> clip_right{};
@@ -1123,7 +1202,7 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
 TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 4, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 4, 64, 64, 0) == SONARE_OK);
 
   std::array<float, 4> source{0.0f, 10.0f, 20.0f, 30.0f};
   const float* clip_channels[] = {source.data()};
@@ -1145,7 +1224,7 @@ TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
 
   std::array<float, 4> out{};
   float* channels[] = {out.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 1, 4) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 4) == SONARE_OK);
   REQUIRE(out[0] == Catch::Approx(0.0f).margin(0.0001f));
   REQUIRE(out[1] == Catch::Approx(5.0f).margin(0.0001f));
   REQUIRE(out[2] == Catch::Approx(10.0f).margin(0.0001f));
@@ -1164,7 +1243,7 @@ TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
 TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64, 0) == SONARE_OK);
 
   std::vector<float> source(4096);
   for (size_t i = 0; i < source.size(); ++i) {
@@ -1186,7 +1265,8 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") 
 
   std::vector<float> out(8192, 0.0f);
   float* channels[] = {out.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out.size())) ==
+          SONARE_OK);
 
   float peak = 0.0f;
   for (float v : out) {
@@ -1213,7 +1293,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_to_end_tempo_sync_length_as_the_sourc
   auto render = [&](int64_t length, bool with_anchors, std::vector<float>* out) {
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64, 0) == SONARE_OK);
     SonareEngineClip clip;
     sonare_engine_clip_init(&clip);
     clip.id = 305;
@@ -1233,7 +1313,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_to_end_tempo_sync_length_as_the_sourc
       REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
       out->assign(8192, 0.0f);
       float* channels[] = {out->data()};
-      REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out->size())) ==
+      REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out->size())) ==
               SONARE_OK);
     }
     sonare_engine_destroy(engine);
@@ -1256,7 +1336,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_to_end_tempo_sync_length_as_the_sourc
 TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64, 0) == SONARE_OK);
 
   std::vector<float> source(4096);
   for (size_t i = 0; i < source.size(); ++i) {
@@ -1285,7 +1365,8 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
 
   std::vector<float> out(8192, 0.0f);
   float* channels[] = {out.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out.size())) ==
+          SONARE_OK);
 
   float peak = 0.0f;
   for (float v : out) {
@@ -1298,7 +1379,8 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   std::fill(out.begin(), out.end(), 0.0f);
-  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out.size())) ==
+          SONARE_OK);
   float head_peak = 0.0f;
   float tail_peak = 0.0f;
   for (size_t i = 0; i < out.size(); ++i) {
@@ -1318,7 +1400,7 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
 TEST_CASE("sonare_engine streams paged clip providers and reports page misses", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16, 0) == SONARE_OK);
 
   SonareClipPageProvider* provider = nullptr;
   REQUIRE(sonare_clip_page_provider_create(1, 8, 4, &provider) == SONARE_OK);
@@ -1346,7 +1428,8 @@ TEST_CASE("sonare_engine streams paged clip providers and reports page misses", 
 
   std::array<float, 8> out{};
   float* channels[] = {out.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out.size())) ==
+          SONARE_OK);
   REQUIRE(out[0] == Catch::Approx(1.0f));
   REQUIRE(out[3] == Catch::Approx(4.0f));
   REQUIRE(out[4] == Catch::Approx(0.0f));
@@ -1375,7 +1458,8 @@ TEST_CASE("sonare_engine streams paged clip providers and reports page misses", 
   REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   out.fill(0.0f);
-  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, static_cast<int>(out.size())) ==
+          SONARE_OK);
   REQUIRE(out[4] == Catch::Approx(5.0f));
   REQUIRE(out[7] == Catch::Approx(8.0f));
 
@@ -1435,7 +1519,7 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16, 0) == SONARE_OK);
 
   SonareClipPageProvider* provider = nullptr;
   REQUIRE(sonare_clip_page_provider_create(1, 8, 4, &provider) == SONARE_OK);
@@ -1509,7 +1593,7 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
 TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[c_api]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64, 0) == SONARE_OK);
 
   std::array<float, 128> clip_left{};
   std::array<float, 128> clip_right{};

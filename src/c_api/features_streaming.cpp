@@ -211,24 +211,16 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
 void sonare_stream_analyzer_destroy(SonareStreamAnalyzer* analyzer) { delete analyzer; }
 
 SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
-                                           size_t n_samples) {
+                                           size_t n_samples, const size_t* sample_offset) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, n_samples);
   SONARE_C_TRY
-  analyzer->analyzer->process(samples, n_samples);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* analyzer,
-                                                       const float* samples, size_t n_samples,
-                                                       size_t sample_offset) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(analyzer);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, n_samples);
-  SONARE_C_TRY
-  analyzer->analyzer->process(samples, n_samples, sample_offset);
+  if (sample_offset == nullptr) {
+    analyzer->analyzer->process(samples, n_samples);
+  } else {
+    analyzer->analyzer->process(samples, n_samples, *sample_offset);
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 }

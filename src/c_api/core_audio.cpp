@@ -158,33 +158,41 @@ SonareError sonare_downmix(const float* channels, size_t frames, size_t num_chan
 }
 
 #ifndef __EMSCRIPTEN__
-SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL(path);
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  SONARE_C_TRY
-  *out = new SonareAudio{Audio::from_file(path)};
-  return SONARE_OK;
-  SONARE_C_CATCH
+void sonare_audio_file_options_init(SonareAudioFileOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->channel_index = SONARE_AUDIO_CHANNEL_DOWNMIX;
 }
 
-SonareError sonare_audio_from_file_channel(const char* path, int channel_index, SonareAudio** out) {
+SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOptions* options,
+                                   SonareAudio** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(path);
-  if (const SonareError err = run_validation([&] {
-        util::check::integer_within(channel_index, sonare_c_detail::kAudioChannelIndexDomain,
-                                    "channel_index");
-      });
+  SonareAudioFileOptions resolved;
+  if (const SonareError err = sonare_c_detail::resolve_options(
+          options, sonare_audio_file_options_init, "sonare_audio_file_options_init", &resolved);
       err != SONARE_OK) {
     return err;
+  }
+  if (resolved.channel_index != SONARE_AUDIO_CHANNEL_DOWNMIX) {
+    if (const SonareError err = run_validation([&] {
+          util::check::integer_within(resolved.channel_index,
+                                      sonare_c_detail::kAudioChannelIndexDomain, "channel_index");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  *out = new SonareAudio{Audio::from_file_channel(path, channel_index)};
+  if (resolved.channel_index == SONARE_AUDIO_CHANNEL_DOWNMIX) {
+    *out = new SonareAudio{Audio::from_file(path)};
+  } else {
+    *out = new SonareAudio{Audio::from_file_channel(path, resolved.channel_index)};
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 }

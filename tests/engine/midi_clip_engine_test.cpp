@@ -39,6 +39,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 using sonare::engine::RealtimeEngine;
 using sonare::engine::TrackLaneConfig;
 using sonare::midi::MidiClipSchedule;
@@ -634,8 +649,8 @@ TEST_CASE("sonare_project_set_clip_gain and set_clip_fade change a MIDI clip's b
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels) == SONARE_OK);
     std::vector<float> result(out, out + out_len);
     sonare_free_floats(out);
     return result;

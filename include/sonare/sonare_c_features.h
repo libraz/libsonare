@@ -295,12 +295,22 @@ SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int
 // Features - Spectrogram
 // ============================================================================
 
+/// @brief Options for @ref sonare_stft.
+/// @details Fill with @ref sonare_stft_options_init before setting fields.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_stft_options_init.
+  uint32_t struct_size;
+  /// Non-zero also fills SonareStftResult::db with the magnitude in dB. Default 0.
+  int32_t db;
+} SonareStftOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_stft_options_init(SonareStftOptions* options);
+
+/// @details A NULL @p options takes the defaults (no dB plane).
 /// @param out Receives heap-owned arrays; free with sonare_free_stft_result.
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, SonareStftResult* out);
-/// @note Free @p out_db with @ref sonare_free_floats.
-SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate, int n_fft,
-                           int hop_length, int* out_n_bins, int* out_n_frames, float** out_db);
+                        int hop_length, const SonareStftOptions* options, SonareStftResult* out);
 
 // ============================================================================
 // Features - Mel
@@ -1179,13 +1189,8 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
                            size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                             int hop_length, int win_length, int center, int norm, float** out,
-                             size_t* out_length, int* out_n_frames);
-/// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t length, int sample_rate,
-                                       int hop_length, int win_length, int center, int norm,
-                                       int mode, float** out, size_t* out_length,
-                                       int* out_n_frames);
+                             int hop_length, int win_length, int center, int norm, int mode,
+                             float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                                     int hop_length, int win_length, float bpm_min, int n_bins,

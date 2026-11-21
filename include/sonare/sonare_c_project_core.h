@@ -117,52 +117,6 @@ static_assert(sizeof(SonareProjectCompileResult) == 3u * sizeof(void*) + sizeof(
               "SonareProjectCompileResult layout drift");
 #endif
 
-/// The render length derived from the compiled arrangement (its musical end plus the longest
-/// hosted-instrument release tail). Outside the length's real domain (a positive frame count), so
-/// it never reads as a length.
-#define SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1)
-
-/// The output width of the scene master's layout (2 with no master). Outside the channel count's
-/// real domain, so it never reads as a width.
-#define SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1)
-
-/// The project's own sample rate. Outside the rate's real domain, so it never reads as a rate.
-#define SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1)
-
-/// @brief Options for @ref sonare_project_bounce. Start from
-///        @ref sonare_project_bounce_options_init; every field is then read literally and
-///        checked against the range given beside it.
-typedef struct {
-  uint32_t struct_size;  ///< sizeof(SonareProjectBounceOptions); set by the init function.
-  /// Render length in frames at @p sample_rate; positive. Default
-  /// @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT, which derives it.
-  int64_t total_frames;
-  /// Render block size in frames; positive. Default 128.
-  int block_size;
-  /// Output channel count: 1, 2, 6 or 8, at most the width of the scene master's layout
-  /// (mono/stereo/no master allow 2). Default @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER,
-  /// the width of the scene master's layout (2 with no master). The master is mixed at this
-  /// width; 1 folds a 2-channel master to 0.5(L+R).
-  int num_channels;
-  /// Sample rate in Hz; must equal the project sample rate. Default
-  /// @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT, the project's.
-  int sample_rate;
-  /// Host-instrument latency compensation in samples fed to the compiler; >= 0. Default 0.
-  int instrument_latency_samples;
-} SonareProjectBounceOptions;
-
-/// @brief Writes every default into @p options and sets its @c struct_size; NULL is ignored.
-void sonare_project_bounce_options_init(SonareProjectBounceOptions* options);
-
-#ifdef __cplusplus
-static_assert(offsetof(SonareProjectBounceOptions, struct_size) == 0,
-              "BounceOptions.struct_size offset");
-static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64_t),
-              "BounceOptions.total_frames offset");
-static_assert(sizeof(SonareProjectBounceOptions) == 2 * sizeof(int64_t) + 4 * sizeof(int),
-              "SonareProjectBounceOptions layout drift");
-#endif
-
 // ============================================================================
 // ABI version
 // ============================================================================
@@ -293,41 +247,35 @@ SonareError sonare_project_time_signature_by_index(const SonareProject* project,
 
 /// @brief Project timeline marker with its kind and (for key signatures) the
 ///        structured key. @c kind is a SonareMarkerKind ordinal; the key fields
-///        apply only to the key-signature kind. The layout mirrors
-///        SonareEngineMarker so one binding shape serves both.
+///        apply only to the key-signature kind. The name travels beside the
+///        record: @ref sonare_project_set_marker takes it, and
+///        @ref sonare_project_marker_name_by_index reads it.
 typedef struct {
   uint32_t id;        ///< Stable marker id; 0 on input allocates a new one.
   uint8_t kind;       ///< A @ref SonareMarkerKind ordinal.
   int8_t key_fifths;  ///< Key signature only: -7..7 (sharps positive).
   uint8_t key_minor;  ///< Key signature only: 0 major / 1 minor.
   double ppq;         ///< Position in quarter notes.
-  char name[64];      ///< NUL-terminated UTF-8 name, truncated to 63 bytes.
 } SonareProjectMarker;
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareProjectMarker) == 80u, "SonareProjectMarker layout drift");
+static_assert(sizeof(SonareProjectMarker) == 16u, "SonareProjectMarker layout drift");
 static_assert(offsetof(SonareProjectMarker, ppq) == 8u, "SonareProjectMarker ppq offset");
-static_assert(offsetof(SonareProjectMarker, name) == 16u, "SonareProjectMarker name offset");
 #endif
 
 /// @brief Adds or replaces a marker from a SonareProjectMarker, including
-///        its kind and key signature. @p marker->id 0 allocates a new id and
-///        UINT32_MAX is reserved (SONARE_ERROR_INVALID_PARAMETER); the
-///        allocated / affected id is returned via @p out_marker_id. For the
-///        key-signature kind @p marker->key_fifths must be in -7..7 (the SMF
-///        `sf` range); an out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
+///        its kind and key signature, with an unbounded UTF-8 name.
+/// @details @p marker->id 0 allocates a new id and UINT32_MAX is reserved
+///          (SONARE_ERROR_INVALID_PARAMETER); the allocated / affected id is
+///          returned via @p out_marker_id. For the key-signature kind
+///          @p marker->key_fifths must be in -7..7 (the SMF `sf` range); an
+///          out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
+///          @p name is copied verbatim; NULL is the empty name.
 SonareError sonare_project_set_marker(SonareProject* project, const SonareProjectMarker* marker,
-                                      uint32_t* out_marker_id);
+                                      const char* name, uint32_t* out_marker_id);
 
-/// @brief Adds or replaces a full marker while accepting an unbounded UTF-8 name.
-/// @details @p marker supplies the non-name fields, under the same id rules as
-///          sonare_project_set_marker. @p name is copied verbatim; use this
-///          API when the fixed 64-byte compatibility field is too small.
-SonareError sonare_project_set_marker_ex_name(SonareProject* project,
-                                              const SonareProjectMarker* marker, const char* name,
-                                              uint32_t* out_marker_id);
-
-/// @brief Reads a project marker by index (0-based, in stored order). An index
+/// @brief Reads a project marker by index (0-based, in stored order); the name
+///        comes from @ref sonare_project_marker_name_by_index. An index
 ///        out of range yields SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
                                            SonareProjectMarker* out);
@@ -489,11 +437,23 @@ SonareError sonare_project_tempo_segment_count(const SonareProject* project, siz
 ///        @ref sonare_project_time_signature_by_index.
 SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count);
 
+/// @brief Opaque compiled-timeline handle. Create with @ref sonare_project_compile, destroy
+///        with @ref sonare_project_timeline_destroy.
+typedef struct SonareProjectTimeline SonareProjectTimeline;
+
 /// @brief Compiles the project into an RT-readable timeline, surfacing
-///        diagnostics. Never throws; bad input yields error diagnostics.
+///        diagnostics, and optionally keeps the resulting timeline.
+/// @details Bad input yields error diagnostics, not an error return. When @p out_timeline is
+///          non-NULL and compilation produced a timeline (@c out->has_timeline non-zero),
+///          @p *out_timeline receives a new handle; otherwise it is NULL and the call still
+///          returns @c SONARE_OK, with the error diagnostics in @p out. A NULL @p out_timeline
+///          compiles for diagnostics only. Both outputs are zeroed on entry. CONTROL thread.
 /// @param out Zero-initialized result; free with
 ///        @ref sonare_free_project_compile_result.
-SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out);
+/// @param out_timeline Receives the new timeline handle, or NULL; may itself be NULL.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL @p project or @p out.
+SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out,
+                                   SonareProjectTimeline** out_timeline);
 
 /// @brief Token of a @ref SonareProjectDiagnostic code ("danglingSourceRef", "clipOverlap", ...),
 ///        or NULL when @p code is not one. Contiguous from 0, so a caller lists the codes by
@@ -506,7 +466,7 @@ const char* sonare_project_diagnostic_code_name(int code);
 const char* sonare_project_diagnostic_severity_name(int severity);
 
 /// @brief Returns compile diagnostics produced by the most recent
-///        @ref sonare_project_bounce / instrument bounce on this project.
+///        @ref sonare_project_bounce on this project.
 /// @details This surfaces non-fatal warnings from the bounce's internal compile
 ///          step, such as MIDI clips rendering silently without a bound
 ///          instrument. On a project no bounce has ever run on, the result is
@@ -523,29 +483,6 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
 
 /// @brief Frees the heap buffers held by a compile result and zeroes it.
 void sonare_free_project_compile_result(SonareProjectCompileResult* result);
-
-/// @brief Compiles + renders the project offline to interleaved float audio.
-/// @param options Render options, started from @ref sonare_project_bounce_options_init. May be
-///        NULL for those defaults (project sample rate, the scene master's layout width, block
-///        128).
-/// @param out_interleaved Receives a heap float array (free with
-///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
-/// @param out_len Receives the interleaved sample count.
-/// @param out_num_channels Receives the width the render was mixed at: the requested
-///        num_channels, or the resolved default when it was
-///        @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER. Written 0 first, so it is
-///        defined on every return.
-/// @details Deterministic: the same project + options yields bit-identical
-///          output within one build. When options->total_frames is positive,
-///          that explicit length is used as-is; mixer FX / instrument tails are
-///          auto-extended only when total_frames is
-///          @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a refused option;
-///         SONARE_ERROR_INVALID_STATE when the stored project cannot be
-///         rendered (its derived length overflows, or the compiled arrangement
-///         does not fit the engine or the scene's mixer).
-SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
-                                  float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 #ifdef __cplusplus
 }

@@ -12,7 +12,7 @@ TEST_CASE("engine degradation counters are reachable through the C ABI",
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   uint32_t pages = 0xDEADBEEFu;
   uint32_t stretch = 0xDEADBEEFu;
@@ -40,23 +40,21 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1, 0) == SONARE_OK);
 
   const uint8_t sysex[sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes + 1]{};
   REQUIRE(sonare_engine_push_midi_sysex(engine, 0, sysex, sizeof(sysex), -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_prepare(engine, std::numeric_limits<double>::quiet_NaN(), 128, 1, 1) ==
+  REQUIRE(sonare_engine_prepare(engine, std::numeric_limits<double>::quiet_NaN(), 128, 1, 1, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_prepare(engine, 7999.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_prepare(engine, 384001.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 2) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, -1) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 7999.0, 128, 1, 1, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 384001.0, 128, 1, 1, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1, -1) == SONARE_ERROR_INVALID_PARAMETER);
   // Driven from the engine constant, so raising it moves the boundary here too.
   constexpr int max_channels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, max_channels) ==
-          SONARE_OK);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, max_channels + 1) ==
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1, max_channels) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1, max_channels + 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
 #if defined(SONARE_WITH_MIXING)
@@ -85,7 +83,7 @@ TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "
   constexpr int kBlock = 64;
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, kBlock, 16, 16, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16, 2) == SONARE_OK);
 
   std::array<float, kBlock * 2> left{};
   std::array<float, kBlock * 2> right{};
@@ -97,7 +95,7 @@ TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "
 
   // A block-size violation wins when both preconditions fail. C process still
   // returns SONARE_OK because the diagnostic is delivered asynchronously.
-  REQUIRE(sonare_engine_process(engine, too_many_channels, 3, kBlock * 2) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, too_many_channels, nullptr, 3, kBlock * 2) == SONARE_OK);
   for (float sample : left) REQUIRE(sample == 0.0f);
   for (float sample : right) REQUIRE(sample == 0.0f);
   for (float sample : extra) REQUIRE(sample == 0.0f);
@@ -114,7 +112,7 @@ TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "
   left.fill(1.0f);
   right.fill(-1.0f);
   extra.fill(1.0f);
-  REQUIRE(sonare_engine_process(engine, too_many_channels, 3, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, too_many_channels, nullptr, 3, kBlock) == SONARE_OK);
   for (int i = 0; i < kBlock; ++i) {
     REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
     REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
@@ -132,7 +130,7 @@ TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "
   left.fill(0.25f);
   right.fill(-0.25f);
   float* prepared_channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, prepared_channels, 2, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, prepared_channels, nullptr, 2, kBlock) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.25f));
   REQUIRE(right[0] == Catch::Approx(-0.25f));
 
@@ -158,7 +156,7 @@ TEST_CASE("sonare_engine_flush_control_commands drains the command ring without 
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, /*command_capacity=*/4,
-                                /*telemetry_capacity=*/4) == SONARE_OK);
+                                /*telemetry_capacity=*/4, 0) == SONARE_OK);
 
   REQUIRE(sonare_engine_flush_control_commands(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -179,7 +177,7 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareParameterInfo parameter{};
   parameter.id = 77;
@@ -198,9 +196,8 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
   REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
   REQUIRE(lane_count == 0);
 
-  REQUIRE(sonare_engine_set_parameter(engine, 77, 1.0f, -1) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_set_parameter_smoothed(engine, 77, 1.0f, -1) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_parameter(engine, 77, 1.0f, -1, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_parameter(engine, 77, 1.0f, -1, 1) == SONARE_ERROR_INVALID_PARAMETER);
 
   REQUIRE(sonare_engine_clear_parameters(engine) == SONARE_OK);
   REQUIRE(sonare_engine_set_automation_lane(engine, 77, points, 1) == SONARE_OK);
@@ -214,7 +211,7 @@ TEST_CASE("sonare_engine parameter registration leaves automation lanes in place
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   const auto add = [&](uint32_t id) {
     SonareParameterInfo parameter{};
@@ -246,7 +243,7 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // Valid tempo ramp: constant 120 then ramp to 140.
   const SonareProjectTempoSegment tempo[] = {{0.0, 120.0, 0.0}, {1920.0, 120.0, 140.0}};
@@ -281,7 +278,7 @@ TEST_CASE("of two tempo segments at one start_ppq the later-supplied one takes e
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   // 120 BPM up to ppq 4 is 96000 samples; four more quarters take 48000 at 240 BPM, 192000 at 60.
   const SonareProjectTempoSegment slow_then_fast[] = {
       {0.0, 120.0, 0.0}, {4.0, 60.0, 0.0}, {4.0, 240.0, 0.0}};
@@ -306,7 +303,7 @@ TEST_CASE("of two time-signature segments at one start_ppq the later-supplied on
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
   // ppq 8 is sample 192000 at 120 BPM; one bar from there is 72000 samples in 3/4, 120000 in 5/4.
   const SonareProjectTimeSignatureSegment three_then_five[] = {
@@ -328,7 +325,7 @@ TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // An above-bound count is refused by the non-throwing guard, so the staging
   // vector is never sized from it.
@@ -369,7 +366,7 @@ TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C
 TEST_CASE("sonare_engine rejects out-of-range automation curve ordinals", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // An out-of-range default curve is rejected, not clamped.
   SonareParameterInfo parameter{};
@@ -396,7 +393,7 @@ TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareParameterInfo parameter{};
   parameter.id = 0x4D580001u;
@@ -406,8 +403,14 @@ TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_
   parameter.default_value = 0.0f;
   parameter.rt_safe = 1;
   REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, parameter.id, -60.0f, 6.0f) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  SonareMidiCcBinding cc{};
+  cc.cc_number = 74;
+  cc.channel = 0;
+  cc.kind = SONARE_MIDI_CC_CONTROL_CHANGE_7;
+  cc.param_id = parameter.id;
+  cc.min_value = -60.0f;
+  cc.max_value = 6.0f;
+  REQUIRE(sonare_engine_bind_midi_cc(engine, &cc) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -420,7 +423,7 @@ TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][
   // instead of being the one surface that accepts it.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareParameterInfo parameter{};
   parameter.id = 0;
@@ -446,7 +449,7 @@ TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][
 TEST_CASE("sonare_engine_add_parameter rejects a non-finite declared range", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
@@ -527,7 +530,7 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16, 0) == SONARE_OK);
 
   std::array<float, kFrames> clip_l{};
   clip_l.fill(1.0f);
@@ -549,7 +552,7 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
 
   const uint32_t fader_target = engine_track_lane_target(engine, 10, "faderDb");
   // Manual value first: -24 dB.
-  REQUIRE(sonare_engine_set_parameter(engine, fader_target, -24.0f, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, fader_target, -24.0f, -1, 0) == SONARE_OK);
 
   // An automation lane then drives the same fader to 0 dB (Hold, curve 2).
   SonareAutomationPoint points[] = {{0.0, 0.0f, 2}};
@@ -559,11 +562,11 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   float* io[] = {buf.data()};
   for (int i = 0; i < 8; ++i) {
     buf.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kBlock) == SONARE_OK);
   }
   REQUIRE(sonare_engine_settle_parameters(engine) == SONARE_OK);
   buf.fill(0.0f);
-  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kBlock) == SONARE_OK);
   REQUIRE(rms(buf) > 0.9);  // The lane drives the fader to ~0 dB (full amplitude).
 
   // Clear the lane: the fader must revert to the manual -24 dB value, not the
@@ -571,11 +574,11 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   REQUIRE(sonare_engine_set_automation_lane(engine, fader_target, nullptr, 0) == SONARE_OK);
   for (int i = 0; i < 8; ++i) {
     buf.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kBlock) == SONARE_OK);
   }
   REQUIRE(sonare_engine_settle_parameters(engine) == SONARE_OK);
   buf.fill(0.0f);
-  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kBlock) == SONARE_OK);
   // -24 dB is roughly a 16x amplitude reduction (10^(-24/20) ~= 0.063).
   REQUIRE(rms(buf) < 0.15);
   REQUIRE(rms(buf) > 0.02);

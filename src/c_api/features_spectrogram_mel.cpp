@@ -23,10 +23,22 @@ MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, flo
 // Features - Spectrogram
 // ============================================================================
 
+void sonare_stft_options_init(SonareStftOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+}
+
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, SonareStftResult* out) {
+                        int hop_length, const SonareStftOptions* options, SonareStftResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
+  SonareStftOptions resolved;
+  if (const SonareError err =
+          resolve_options(options, sonare_stft_options_init, "sonare_stft_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("stft", "samples", samples, length, sample_rate,
@@ -36,51 +48,29 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
                        config.hop_length = hop_length;
                        Spectrogram spec = Spectrogram::compute(audio, config);
 
-                       out->n_bins = spec.n_bins();
-                       out->n_frames = spec.n_frames();
-                       out->n_fft = spec.n_fft();
-                       out->hop_length = spec.hop_length();
-                       out->sample_rate = spec.sample_rate();
-
                        size_t total = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
                        const std::vector<float>& mag = spec.magnitude();
                        const std::vector<float>& pow = spec.power();
 
                        std::unique_ptr<float[]> magnitude(new float[total]);
                        std::unique_ptr<float[]> power(new float[total]);
+                       std::unique_ptr<float[]> db_out;
                        std::memcpy(magnitude.get(), mag.data(), total * sizeof(float));
                        std::memcpy(power.get(), pow.data(), total * sizeof(float));
+                       if (resolved.db != 0) {
+                         const std::vector<float> db = spec.to_db();
+                         db_out.reset(new float[db.size()]);
+                         std::memcpy(db_out.get(), db.data(), db.size() * sizeof(float));
+                       }
+
+                       out->n_bins = spec.n_bins();
+                       out->n_frames = spec.n_frames();
+                       out->n_fft = spec.n_fft();
+                       out->hop_length = spec.hop_length();
+                       out->sample_rate = spec.sample_rate();
                        out->magnitude = release_array(magnitude);
                        out->power = release_array(power);
-                       return SONARE_OK;
-                     });
-}
-
-SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate, int n_fft,
-                           int hop_length, int* out_n_bins, int* out_n_frames, float** out_db) {
-  SONARE_C_API_ENTRY;
-
-  // Zero every out param up front, not just the owned out_db pointer, so a
-  // validate_audio_params rejection inside run_offline (which skips the body
-  // below) never leaves *out_n_bins / *out_n_frames as caller stack garbage.
-  SONARE_C_ZERO_OUTS(out_n_bins, out_n_frames, out_db);
-  SONARE_C_REQUIRE_NONNULL(out_n_bins);
-  SONARE_C_REQUIRE_NONNULL(out_n_frames);
-  SONARE_C_REQUIRE_NONNULL(out_db);
-
-  return run_offline("stft_db", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       StftConfig config;
-                       config.n_fft = n_fft;
-                       config.hop_length = hop_length;
-                       Spectrogram spec = Spectrogram::compute(audio, config);
-
-                       *out_n_bins = spec.n_bins();
-                       *out_n_frames = spec.n_frames();
-                       std::vector<float> db = spec.to_db();
-                       std::unique_ptr<float[]> db_out(new float[db.size()]);
-                       std::memcpy(db_out.get(), db.data(), db.size() * sizeof(float));
-                       *out_db = release_array(db_out);
+                       out->db = db_out ? release_array(db_out) : nullptr;
                        return SONARE_OK;
                      });
 }

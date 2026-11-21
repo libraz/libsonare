@@ -66,41 +66,13 @@ typedef struct {
 /// target_id of the input-monitor capture tap; not a lane or bus index.
 #define SONARE_TELEMETRY_TARGET_INPUT_MONITOR 0xFFFFu
 
-/// Mirrors engine::MeterTelemetryRecord: a fixed-size stereo meter snapshot published by the
-/// engine's meter tap, with the pre-trim input peaks last. Drained with
-/// sonare_engine_drain_meter_telemetry. See the target-id range above for how target_id encodes
-/// the mix target. Every meter drain consumes the records of all targets from one shared queue.
-typedef struct {
-  uint32_t target_id;        ///< Mix target the snapshot was taken at (see the target-id range).
-  int64_t render_frame;      ///< Device render frame the snapshot was published at.
-  uint64_t seq;              ///< Publication sequence number.
-  float peak_db_l;           ///< Left sample peak of the block in dBFS.
-  float peak_db_r;           ///< Right sample peak of the block in dBFS.
-  float rms_db_l;            ///< Left block RMS in dBFS.
-  float rms_db_r;            ///< Right block RMS in dBFS.
-  float true_peak_dbtp_l;    ///< Left streaming inter-sample peak in dBTP: a STREAMING measurement
-                             ///< that runs one reconstruction-filter group delay behind the block.
-  float true_peak_dbtp_r;    ///< Right streaming inter-sample peak in dBTP.
-  float max_true_peak_dbtp;  ///< Highest true peak reached so far, in dBTP.
-  float correlation;         ///< Left/right phase correlation in [-1, 1].
-  float mono_compat_width;   ///< Stereo width relevant to mono compatibility.
-  float momentary_lufs;      ///< Momentary (400 ms) loudness in LUFS.
-  float short_term_lufs;     ///< Short-term (3 s) loudness in LUFS.
-  float integrated_lufs;     ///< Integrated loudness in LUFS since the meter started.
-  float gain_reduction_db;   ///< Gain reduction applied by the target's dynamics, in dB.
-  uint32_t dropped_records;  ///< Records dropped because the telemetry queue was full.
-  /// Maximum pre-trim input peak for the left plane, in dBFS.
-  float input_peak_db_l;
-  /// Maximum pre-trim input peak for the right plane, in dBFS.
-  float input_peak_db_r;
-} SonareMeterTelemetryRecord;
-
-/// Widest per-plane meter the wide telemetry record carries (7.1).
+/// Widest per-plane meter the telemetry record carries (7.1).
 #define SONARE_METER_MAX_CHANNELS 8
 
-/// Per-plane meter snapshot for a surround mix target. Mirrors engine::MeterTelemetryRecord with
-/// the per-channel arrays exposed (planes [0, num_channels)), the pre-trim input peaks last.
-/// Drained with sonare_engine_drain_meter_telemetry_wide; a stereo target's L/R are planes 0 and 1.
+/// Per-plane meter snapshot for a mix target. Mirrors engine::MeterTelemetryRecord with the
+/// per-channel arrays exposed (planes [0, num_channels)), the pre-trim input peaks last.
+/// Drained with sonare_engine_drain_meter_telemetry; a stereo target's L/R are planes 0 and 1.
+/// Every meter drain consumes the records of all targets from one shared queue.
 /// See the target-id range above for how target_id encodes the mix target.
 typedef struct {
   uint32_t target_id;    ///< Mix target the snapshot was taken at (see the target-id range).
@@ -109,8 +81,8 @@ typedef struct {
   int32_t num_channels;  ///< Valid planes in the per-plane arrays, 1..SONARE_METER_MAX_CHANNELS.
   float peak_db[SONARE_METER_MAX_CHANNELS];  ///< Per-plane sample peak of the block in dBFS.
   float rms_db[SONARE_METER_MAX_CHANNELS];   ///< Per-plane block RMS in dBFS.
-  /// Per-plane streaming inter-sample (true) peak in dBTP (a streaming measurement, see
-  /// SonareMeterTelemetryRecord).
+  /// Per-plane streaming inter-sample (true) peak in dBTP: a STREAMING measurement that runs one
+  /// reconstruction-filter group delay behind the block.
   float true_peak_dbtp[SONARE_METER_MAX_CHANNELS];
   float max_true_peak_dbtp;  ///< Highest true peak reached so far, in dBTP.
   float correlation;         ///< Phase correlation in [-1, 1].
@@ -122,7 +94,7 @@ typedef struct {
   uint32_t dropped_records;  ///< Records dropped because the telemetry queue was full.
   /// Maximum pre-trim input peak for each valid plane, in dBFS.
   float input_peak_db[SONARE_METER_MAX_CHANNELS];
-} SonareMeterTelemetryRecordWide;
+} SonareMeterTelemetryRecord;
 
 /// One lowered MIDI 1.0 message drained from the engine's external-MIDI output queue
 /// (sonare_engine_drain_external_midi). A single queued channel-voice event may lower to more than
@@ -585,28 +557,18 @@ typedef struct {
 static_assert(sizeof(SonareEngineTelemetry) == 40u, "SonareEngineTelemetry layout changed");
 static_assert(offsetof(SonareEngineTelemetry, error) == 4u,
               "SonareEngineTelemetry error offset changed");
-static_assert(sizeof(SonareMeterTelemetryRecord) == 88u,
+static_assert(sizeof(SonareMeterTelemetryRecord) == 192u,
               "SonareMeterTelemetryRecord layout changed");
 static_assert(offsetof(SonareMeterTelemetryRecord, render_frame) == 8u,
               "SonareMeterTelemetryRecord render_frame offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecord, peak_db_l) == 24u,
+static_assert(offsetof(SonareMeterTelemetryRecord, num_channels) == 24u,
+              "SonareMeterTelemetryRecord num_channels offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecord, peak_db) == 28u,
               "SonareMeterTelemetryRecord meter prefix offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecord, dropped_records) == 76u,
+static_assert(offsetof(SonareMeterTelemetryRecord, dropped_records) == 152u,
               "SonareMeterTelemetryRecord dropped_records offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecord, input_peak_db_l) == 80u,
+static_assert(offsetof(SonareMeterTelemetryRecord, input_peak_db) == 156u,
               "SonareMeterTelemetryRecord input peaks must be appended");
-static_assert(sizeof(SonareMeterTelemetryRecordWide) == 192u,
-              "SonareMeterTelemetryRecordWide layout changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, render_frame) == 8u,
-              "SonareMeterTelemetryRecordWide render_frame offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, num_channels) == 24u,
-              "SonareMeterTelemetryRecordWide num_channels offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, peak_db) == 28u,
-              "SonareMeterTelemetryRecordWide meter prefix offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, dropped_records) == 152u,
-              "SonareMeterTelemetryRecordWide dropped_records offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, input_peak_db) == 156u,
-              "SonareMeterTelemetryRecordWide input peaks must be appended");
 
 static_assert(sizeof(SonareTransportState) == 112u, "SonareTransportState layout changed");
 static_assert(offsetof(SonareTransportState, render_frame) == 8u,

@@ -5,7 +5,7 @@
 ///        realtime engine. Included via @ref sonare_c.h.
 ///
 /// A @ref SonareProjectTimeline is the immutable playback snapshot that
-/// @ref sonare_project_compile builds and discards: audio clips, MIDI clips,
+/// @ref sonare_project_compile builds: audio clips, MIDI clips,
 /// automation, track lanes, tempo and time-signature segments, markers and the
 /// mixer scene's per-track strips. It owns everything it references and never
 /// reaches back into the project, so later project edits do not change it.
@@ -20,27 +20,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/// @brief Opaque compiled-timeline handle. Create with
-///        @ref sonare_project_compile_timeline, destroy with
-///        @ref sonare_project_timeline_destroy.
-typedef struct SonareProjectTimeline SonareProjectTimeline;
-
-/// @brief Compiles the project and keeps the resulting timeline.
-/// @details Runs the same compile and fills the same diagnostics as
-///          @ref sonare_project_compile. When compilation produced a timeline
-///          (@c out_result->has_timeline non-zero) @p *out_timeline receives a
-///          new handle; otherwise it is NULL and the call still returns
-///          @c SONARE_OK, with the error diagnostics in @p out_result. Both
-///          outputs are zeroed on entry. CONTROL thread.
-/// @param project Project to compile.
-/// @param out_result Receives the diagnostics; free with
-///        @ref sonare_free_project_compile_result.
-/// @param out_timeline Receives the new timeline handle, or NULL.
-/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL argument.
-SonareError sonare_project_compile_timeline(SonareProject* project,
-                                            SonareProjectCompileResult* out_result,
-                                            SonareProjectTimeline** out_timeline);
 
 /// @brief Destroys a timeline handle. NULL is safe.
 /// @details An engine the timeline was applied to keeps its own reference, so
@@ -89,7 +68,7 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 ///          markers or automation; 120 BPM in 4/4). It never leaves a mix of
 ///          the previous and the new timeline.
 /// @param engine Prepared engine.
-/// @param timeline Timeline from @ref sonare_project_compile_timeline.
+/// @param timeline Timeline from @ref sonare_project_compile.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL argument or a timeline
 ///         the engine cannot hold (for example more track lanes than it
 ///         supports, a sample-rate mismatch, or a scene strip it cannot build);

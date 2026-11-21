@@ -390,10 +390,9 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t length, int sample_rate,
-                                       int hop_length, int win_length, int center, int norm,
-                                       int mode, float** out, size_t* out_length,
-                                       int* out_n_frames) {
+SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                             int hop_length, int win_length, int center, int norm, int mode,
+                             float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
   if (const SonareError err = run_validation([&] {
@@ -422,16 +421,6 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
   *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length));
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
-}
-
-SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                             int hop_length, int win_length, int center, int norm, float** out,
-                             size_t* out_length, int* out_n_frames) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
-  return sonare_tempogram_with_mode(onset_envelope, length, sample_rate, hop_length, win_length,
-                                    center, norm, SONARE_TEMPOGRAM_AUTOCORRELATION, out, out_length,
-                                    out_n_frames);
 }
 
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,

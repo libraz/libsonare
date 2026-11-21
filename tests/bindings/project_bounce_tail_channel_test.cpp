@@ -14,6 +14,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_instruments(SonareProject* project,
+                                    const SonareProjectBounceOptions* options,
+                                    const SonareInstrumentBinding* bindings, size_t count,
+                                    float** out_interleaved, size_t* out_len,
+                                    int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.instruments = bindings;
+  with_instruments.instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 #if defined(SONARE_WITH_MIXING)
 // A callback instrument that emits a constant DC level on every render() block,
 // independent of note state, and declares no release tail (tail_samples == 0).
@@ -90,8 +105,8 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(kTotalFrames) * 2u);
 

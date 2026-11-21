@@ -172,16 +172,16 @@ def _render_c(
     binding.destination_id = 0
     binding.patch = SynthPatch(preset="sine")._to_c()
     binding.use_gm_programs = int(use_gm_programs)
+    options.synth_instruments = ctypes.pointer(binding)
+    options.synth_instrument_count = 1
 
     try:
         with out_float_array(lib) as (out, out_length):
             out_channels = ctypes.c_int(0)
             check(
-                lib.sonare_project_bounce_with_synth_instruments(
+                lib.sonare_project_bounce(
                     handle,
                     ctypes.byref(options),
-                    ctypes.byref(binding),
-                    ctypes.c_size_t(1),
                     ctypes.byref(out),
                     ctypes.byref(out_length),
                     ctypes.byref(out_channels),

@@ -154,7 +154,7 @@ TEST_CASE("C-ABI add_clip owns decoded audio in one undo transaction", "[project
   REQUIRE(project->audio.sources.at(source_id).channels[0] == std::vector<float>{0.25f, 0.5f});
 
   SonareProjectCompileResult compile{};
-  REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &compile, nullptr) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
   sonare_free_project_compile_result(&compile);
 
@@ -856,7 +856,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   REQUIRE(json.find("\"lengthPpq\":1") != std::string::npos);
 
   SonareProjectCompileResult compile{};
-  REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &compile, nullptr) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
   sonare_free_project_compile_result(&compile);
 
@@ -868,7 +868,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(serialize(project) == json);
   REQUIRE(project->audio.sources.size() == 2);
-  REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &compile, nullptr) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
   sonare_free_project_compile_result(&compile);
 
@@ -1622,7 +1622,7 @@ TEST_CASE("C-ABI move_clip rejects a cross-kind move without mutating state",
 
   // The project still compiles after the rejected cross-kind moves.
   SonareProjectCompileResult result{};
-  REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &result, nullptr) == SONARE_OK);
   REQUIRE(result.has_timeline == 1);
   sonare_free_project_compile_result(&result);
 

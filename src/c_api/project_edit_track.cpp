@@ -326,7 +326,7 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
 }
 
 SonareError sonare_project_set_marker(SonareProject* project, const SonareProjectMarker* marker,
-                                      uint32_t* out_marker_id) {
+                                      const char* name, uint32_t* out_marker_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
@@ -337,40 +337,9 @@ SonareError sonare_project_set_marker(SonareProject* project, const SonareProjec
     return err;
   }
   SONARE_C_TRY
-  const char* name_end = std::find(marker->name, marker->name + sizeof(marker->name), '\0');
-  std::string name(marker->name, name_end);
   auto command =
-      std::make_unique<arr::SetMarker>(marker->id, marker->ppq, std::move(name), marker->kind,
-                                       marker->key_fifths, marker->key_minor != 0);
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (marker->id == 0 && project->history.project().markers().empty()) {
-    return SONARE_ERROR_INVALID_STATE;
-  }
-  *out_marker_id = marker->id != 0 ? marker->id : project->history.project().markers().back().id;
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  if (out_marker_id) *out_marker_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, marker, out_marker_id);
-#endif
-}
-
-SonareError sonare_project_set_marker_ex_name(SonareProject* project,
-                                              const SonareProjectMarker* marker, const char* name,
-                                              uint32_t* out_marker_id) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_marker_id) *out_marker_id = 0;
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(marker);
-  SONARE_C_REQUIRE_NONNULL(name);
-  SONARE_C_REQUIRE_NONNULL(out_marker_id);
-  if (const SonareError err = run_validation([&] { check_marker(marker); }); err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_TRY
-  auto command = std::make_unique<arr::SetMarker>(marker->id, marker->ppq, name, marker->kind,
-                                                  marker->key_fifths, marker->key_minor != 0);
+      std::make_unique<arr::SetMarker>(marker->id, marker->ppq, name != nullptr ? name : "",
+                                       marker->kind, marker->key_fifths, marker->key_minor != 0);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   if (marker->id == 0 && project->history.project().markers().empty()) {
     return SONARE_ERROR_INVALID_STATE;

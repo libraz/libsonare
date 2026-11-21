@@ -1,4 +1,5 @@
 #include "c_api/project_internal.h"
+#include "c_api/project_timeline_internal.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
@@ -374,7 +375,6 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   out->key_fifths = m.key_fifths;
   out->key_minor = m.key_minor ? 1 : 0;
   out->ppq = m.ppq;
-  copy_utf8_prefix(out->name, m.name);
   return SONARE_OK;
 #else
   if (out) *out = {};
@@ -668,21 +668,28 @@ const char* sonare_project_diagnostic_severity_name(int severity) {
 #endif
 }
 
-SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out) {
+SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out,
+                                   SonareProjectTimeline** out_timeline) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = {};
+  if (out_timeline) *out_timeline = nullptr;
+#if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   arr::CompileResult result =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio);
+  std::unique_ptr<SonareProjectTimeline> handle;
+  if (out_timeline != nullptr && result.timeline.has_value()) {
+    handle = std::make_unique<SonareProjectTimeline>();
+    handle->timeline = std::make_shared<const arr::CompiledTimeline>(std::move(*result.timeline));
+  }
   fill_compile_result_from_diagnostics(result.diagnostics, result.timeline.has_value(), out);
+  if (out_timeline != nullptr) *out_timeline = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out);
+  SONARE_C_STUB_NOT_SUPPORTED(project, out, out_timeline);
 #endif
 }
 

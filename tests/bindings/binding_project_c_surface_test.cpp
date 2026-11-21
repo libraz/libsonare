@@ -12,7 +12,7 @@ SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, co
   SonareProjectMarker marker{};
   marker.id = id;
   marker.ppq = ppq;
-  return sonare_project_set_marker_ex_name(project, &marker, name, out_id);
+  return sonare_project_set_marker(project, &marker, name, out_id);
 }
 
 }  // namespace
@@ -222,12 +222,12 @@ TEST_CASE("marker setters reject the reserved entity id", "[project]") {
   SonareProjectMarker marker{};
   marker.id = kReserved;
   marker.ppq = 1.0;
-  std::copy(marker_name.begin(), marker_name.end(), marker.name);
   out_id = 99;
-  CHECK(sonare_project_set_marker(project, &marker, &out_id) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_marker(project, &marker, marker_name.c_str(), &out_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out_id == 0u);
   out_id = 99;
-  CHECK(sonare_project_set_marker_ex_name(project, &marker, "reserved", &out_id) ==
+  CHECK(sonare_project_set_marker(project, &marker, nullptr, &out_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out_id == 0u);
 
@@ -243,7 +243,7 @@ TEST_CASE("marker setters reject the reserved entity id", "[project]") {
   CHECK(out_id != kReserved);
   marker.id = kReserved - 1u;
   out_id = 0;
-  REQUIRE(sonare_project_set_marker(project, &marker, &out_id) == SONARE_OK);
+  REQUIRE(sonare_project_set_marker(project, &marker, nullptr, &out_id) == SONARE_OK);
   CHECK(out_id == kReserved - 1u);
 
   const std::string json = serialize(project);

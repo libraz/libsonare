@@ -642,7 +642,8 @@ TEST_CASE("sonare_stream_analyzer_read_frames publishes no array when a copy fai
   SonareStreamAnalyzer* analyzer = nullptr;
   REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
   const std::vector<float> samples = sine(32 * 64, 8000, 440.0f);
-  REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+  REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+          SONARE_OK);
 
   SonareStreamFrames frames{};
   REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 1, &frames) == SONARE_OK);

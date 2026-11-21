@@ -1385,7 +1385,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   // binds an instrument at bounce time (the compiler runs before instruments are
   // registered, so it cannot know whether one will be — hence a warning, not an
   // error). Emitted once so a user who bounces with the plain sonare_project_bounce
-  // path is nudged toward bounce_with_builtin_instruments / a bound destination.
+  // path is nudged toward binding builtin_instruments / a destination in the bounce options.
   if (!timeline.midi_clips.empty()) {
     add_diag(&result, Diagnostic::Code::kMidiClipNoInstrument, Diagnostic::Severity::kWarning,
              first_midi_clip_id,

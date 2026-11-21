@@ -301,14 +301,9 @@ TEST_CASE("the music and spectrogram entries refuse a NULL argument by its name"
                                     &env_length, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_n_frames must not be NULL");
 
-  CHECK(sonare_stft(samples.data(), samples.size(), 22050, 2048, 512, nullptr) ==
+  CHECK(sonare_stft(samples.data(), samples.size(), 22050, 2048, 512, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
-  int n_bins = 0;
-  int n_frames = 0;
-  CHECK(sonare_stft_db(samples.data(), samples.size(), 22050, 2048, 512, &n_bins, &n_frames,
-                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "out_db must not be NULL");
 
   const std::vector<float> features(4 * 9, 0.5f);
   float* delta = nullptr;
@@ -338,9 +333,12 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
 #ifndef __EMSCRIPTEN__
-  CHECK(sonare_audio_from_file(nullptr, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_audio_from_file(nullptr, nullptr, &audio) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "path must not be NULL");
-  CHECK(sonare_audio_from_file_channel("x.wav", -1, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareAudioFileOptions file_options;
+  sonare_audio_file_options_init(&file_options);
+  file_options.channel_index = -2;
+  CHECK(sonare_audio_from_file("x.wav", &file_options, &audio) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "channel_index must be an integer in [0, 2147483647]");
   CHECK(sonare_audio_file_num_channels("x.wav", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_channels must not be NULL");
@@ -607,12 +605,12 @@ TEST_CASE("the project MIDI entries name a route field and a bank outside their 
   uint32_t clip = 0;
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
   for (const int bank : {-2, 16384}) {
-    CHECK(sonare_project_set_program_on_channel(project, clip, 0, 0, 0, bank) ==
+    CHECK(sonare_project_set_program(project, clip, 0, 0, 0, bank) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_message(),
                Catch::Matchers::ContainsSubstring("bank must be -1 or an integer in [0, 16383]"));
   }
-  CHECK(sonare_project_set_program_on_channel(project, clip, 0, 0, 0, -1) == SONARE_OK);
+  CHECK(sonare_project_set_program(project, clip, 0, 0, 0, -1) == SONARE_OK);
   sonare_project_destroy(project);
 }
 
@@ -628,7 +626,7 @@ EnginePtr prepared_engine() {
   SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
   EnginePtr engine(raw, sonare_engine_destroy);
-  REQUIRE(sonare_engine_prepare(raw, 48000.0, 256, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(raw, 48000.0, 256, 64, 64, 0) == SONARE_OK);
   return engine;
 }
 
@@ -681,7 +679,7 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          sonare_engine_drain_external_midi(engine.get(), events, 1, &count);
        }}},
       // A realtime entry refuses a bad count without recording a subject.
-      {"engine_process_with_monitor.num_channels", {nullptr}},
+      {"engine_process.num_channels", {nullptr}},
       {"engine_resolve_master_automation_id.param_name", {[] {
          const EnginePtr engine = prepared_engine();
          uint32_t id = 0;
@@ -787,7 +785,7 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          SonareProjectMarker marker{};
          marker.id = std::numeric_limits<uint32_t>::max();
          uint32_t marker_id = 0;
-         sonare_project_set_marker(project.get(), &marker, &marker_id);
+         sonare_project_set_marker(project.get(), &marker, nullptr, &marker_id);
        }}},
       {"project_set_overlap_policy.overlap_policy", {[] {
          const ProjectPtr project = new_project();
@@ -798,7 +796,7 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       // A realtime entry refuses a bad input without recording a subject.
       {"realtime_voice_changer_process_mono_with_carrier.input", {nullptr}},
       // A misplaced offset is refused as plain text with no subject.
-      {"stream_analyzer_process_with_offset.sample_offset", {nullptr}},
+      {"stream_analyzer_process.sample_offset", {nullptr}},
       // Every base offset is accepted.
       {"stream_analyzer_reset.base_sample_offset", {nullptr}},
       {"strip_remove_send.index", {[] {

@@ -12,6 +12,35 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_synth_instruments(SonareProject* project,
+                                          const SonareProjectBounceOptions* options,
+                                          const SonareSynthInstrumentBinding* bindings,
+                                          size_t count, float** out_interleaved, size_t* out_len,
+                                          int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.synth_instruments = bindings;
+  with_instruments.synth_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_sf2_instruments(SonareProject* project,
+                                        const SonareProjectBounceOptions* options,
+                                        const SonareSf2InstrumentBinding* bindings, size_t count,
+                                        float** out_interleaved, size_t* out_len,
+                                        int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.sf2_instruments = bindings;
+  with_instruments.sf2_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 constexpr uint32_t kDestination = 3;
 constexpr const char* kSoftClipChain = R"([{"processor":"saturation.softClipper","params":{}}])";
 
@@ -50,8 +79,8 @@ std::vector<float> bounce_gm_synth(SonareProject* project) {
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -127,8 +156,8 @@ TEST_CASE("a SoundFont-player bounce honours part rigs", "[bindings][part_rig]")
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels2 = 0;
-    REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels2) == SONARE_OK);
+    REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels2) == SONARE_OK);
     std::vector<float> result(out, out + out_len);
     sonare_free_floats(out);
     return result;
@@ -163,7 +192,7 @@ TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the
   sonare_synth_patch_init(&synth.patch);
   synth.destination_id = 1;
   synth.use_gm_programs = 1;
-  REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);
+  REQUIRE(sonare_engine_set_synth_instrument(engine, &synth) == SONARE_OK);
   SonareEngineSf2InstrumentConfig sf2{};
   sonare_engine_sf2_instrument_config_init(&sf2);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &sf2) == SONARE_OK);

@@ -3,6 +3,8 @@
 /// @file numeric_domain_rows_analysis.h
 /// @brief Numeric-domain rows of the analysis, feature, core and filter C entries.
 
+#include <sonare/sonare_c.h>
+
 #include "analysis/acoustic_analyzer.h"
 #include "analysis/boundary_detector.h"
 #include "analysis/bpm_analyzer.h"
@@ -62,7 +64,9 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"analyze_timbre", "n_mels", sonare::kTimbreCountDomain, nullptr},
     {"analyze_timbre", "n_mfcc", sonare::kTimbreCountDomain, nullptr},
     {"analyze_timbre", "window_sec", sonare::kTimbreWindowSecDomain, nullptr},
-    {"audio_from_file_channel", "channel_index", sonare_c_detail::kAudioChannelIndexDomain,
+    {"audio_from_file", "channel_index",
+     sonare::util::check::with_sentinel(sonare_c_detail::kAudioChannelIndexDomain,
+                                        SONARE_AUDIO_CHANNEL_DOWNMIX),
      nullptr},
     {"bass_chroma", "hop_length", sonare::kCqtHopLengthDomain, nullptr},
     {"bass_chroma", "n_chroma", sonare::kChromaCountDomain, nullptr},
@@ -186,14 +190,10 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"spectral_rolloff", "n_fft", sonare::kStftNFftDomain, "even"},
     {"stft", "hop_length", sonare::kStftHopDomain, nullptr},
     {"stft", "n_fft", sonare::kStftNFftDomain, "even"},
-    {"stft_db", "hop_length", sonare::kStftHopDomain, nullptr},
-    {"stft_db", "n_fft", sonare::kStftNFftDomain, "even"},
     {"tempogram", "hop_length", sonare::kRhythmCountDomain, nullptr},
     {"tempogram", "win_length", sonare::kTempogramWinLengthDomain, nullptr},
     {"tempogram_ratio", "hop_length", sonare::kRhythmCountDomain, nullptr},
     {"tempogram_ratio", "win_length", sonare::kRhythmCountDomain, nullptr},
-    {"tempogram_with_mode", "hop_length", sonare::kRhythmCountDomain, nullptr},
-    {"tempogram_with_mode", "win_length", sonare::kTempogramWinLengthDomain, nullptr},
     {"time_to_frames", "hop_length", sonare::kFrameTimeHopDomain, nullptr},
     {"time_to_frames", "sr", sonare::kFrameTimeSampleRateDomain, nullptr},
     {"tone", "sample_rate", sonare::kSynthesisSampleRateDomain, nullptr},

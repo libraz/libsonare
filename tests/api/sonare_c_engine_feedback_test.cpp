@@ -20,7 +20,7 @@ constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
 SonareEngine* make_prepared(size_t command_capacity = 64) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, command_capacity, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, command_capacity, 64, 0) == SONARE_OK);
   return engine;
 }
 
@@ -281,7 +281,7 @@ TEST_CASE("sonare_engine lane transient shaper reports negative gain reduction",
   size_t count = 0;
   for (int b = 0; b < 8; ++b) {
     block.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kBlock) == SONARE_OK);
     std::array<float, SONARE_METER_MAX_INSERTS> entries{};
     REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 1, entries.data(),
                                                              entries.size(), &count) == SONARE_OK);
@@ -305,18 +305,18 @@ TEST_CASE("sonare_engine refuses a reserved mixer id that names no strip",
   // The retired positional encoding: lane byte below the master's 0xFF.
   for (uint32_t positional : {0x4D580101u, 0x4D580001u, 0x4D580100u, 0x4D58FE00u}) {
     INFO("id " << positional);
-    CHECK(sonare_engine_set_parameter_smoothed(engine, positional, -6.0f, -1) == kInvalid);
-    CHECK(sonare_engine_set_parameter(engine, positional, -6.0f, -1) == kInvalid);
+    CHECK(sonare_engine_set_parameter(engine, positional, -6.0f, -1, 1) == kInvalid);
+    CHECK(sonare_engine_set_parameter(engine, positional, -6.0f, -1, 0) == kInvalid);
     CHECK(sonare_engine_set_automation_lane(engine, positional, &point, 1) == kInvalid);
   }
 
   // The master ids and the ids issued per strip stay valid.
-  CHECK(sonare_engine_set_parameter_smoothed(engine, 0x4D58FF01u, -6.0f, -1) == SONARE_OK);
+  CHECK(sonare_engine_set_parameter(engine, 0x4D58FF01u, -6.0f, -1, 1) == SONARE_OK);
   CHECK(sonare_engine_set_automation_lane(engine, 0x4D58FF01u, &point, 1) == SONARE_OK);
   uint32_t track_id = 0;
   REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, 7, "faderDb", &track_id) ==
           SONARE_OK);
-  CHECK(sonare_engine_set_parameter_smoothed(engine, track_id, -6.0f, -1) == SONARE_OK);
+  CHECK(sonare_engine_set_parameter(engine, track_id, -6.0f, -1, 1) == SONARE_OK);
   CHECK(sonare_engine_set_automation_lane(engine, track_id, &point, 1) == SONARE_OK);
   sonare_engine_destroy(engine);
 }

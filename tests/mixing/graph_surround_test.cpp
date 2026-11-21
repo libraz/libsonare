@@ -24,6 +24,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlockSize = 128;
 constexpr int64_t kTotalFrames = kBlockSize * 40;
@@ -82,7 +97,7 @@ SonareBuiltinSynthConfig project_synth() {
 std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
   uint32_t output_bus = 0;
   if (bus_layout != kNoBus) {
     SonareEngineBus bus{};
@@ -158,8 +173,8 @@ SonareError bounce(SonareProject* project, int channels, std::vector<float>* out
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels = 0;
-  const SonareError err = sonare_project_bounce_with_builtin_instruments(
-      project, &options, &binding, 1, &out, &out_len, &bounce_channels);
+  const SonareError err = bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                          &out_len, &bounce_channels);
   if (err == SONARE_OK && out_samples != nullptr) out_samples->assign(out, out + out_len);
   if (out != nullptr) sonare_free_floats(out);
   return err;

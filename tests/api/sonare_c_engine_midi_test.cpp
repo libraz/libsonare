@@ -14,11 +14,56 @@
 #include "c_api/synth_patch_common.h"
 #endif
 
+namespace {
+
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_sf2_instruments(SonareProject* project,
+                                        const SonareProjectBounceOptions* options,
+                                        const SonareSf2InstrumentBinding* bindings, size_t count,
+                                        float** out_interleaved, size_t* out_len,
+                                        int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.sf2_instruments = bindings;
+  with_instruments.sf2_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+// Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
+SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
+                            const SonareSynthPatch* patch) {
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = destination_id;
+  binding.patch = *patch;
+  return sonare_engine_set_synth_instrument(engine, &binding);
+}
+
+}  // namespace
+
+namespace {
+
+// A 7-bit control-change binding of one controller and channel to an engine parameter.
+SonareError bind_cc7(SonareEngine* engine, uint8_t channel, uint8_t controller, uint32_t param_id,
+                     float min_value, float max_value) {
+  SonareMidiCcBinding binding{};
+  binding.cc_number = controller;
+  binding.channel = channel;
+  binding.kind = SONARE_MIDI_CC_CONTROL_CHANGE_7;
+  binding.param_id = param_id;
+  binding.min_value = min_value;
+  binding.max_value = max_value;
+  return sonare_engine_bind_midi_cc(engine, &binding);
+}
+
+}  // namespace
+
 TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_GRAPH)
   SonareParameterInfo parameter{};
@@ -67,7 +112,7 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   graph.num_channels = 1;
   REQUIRE(sonare_engine_set_graph(engine, &graph) == SONARE_OK);
 
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
+  REQUIRE(bind_cc7(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
   size_t binding_count = 0;
   REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
   REQUIRE(binding_count == 1);
@@ -76,7 +121,7 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   audio.fill(1.0f);
   float* channels[] = {audio.data()};
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 74, 0, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(audio[0] < 0.01f);
 
   REQUIRE(sonare_engine_clear_midi_cc_bindings(engine) == SONARE_OK);
@@ -91,28 +136,25 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   high_resolution.param_id = 7;
   high_resolution.min_value = -60.0f;
   high_resolution.max_value = 0.0f;
-  REQUIRE(sonare_engine_bind_midi_cc_binding(engine, &high_resolution) == SONARE_OK);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, &high_resolution) == SONARE_OK);
   REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
   REQUIRE(binding_count == 1);
 
   audio.fill(1.0f);
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 1, 64, -1) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 33, 0, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(std::abs(audio[0] - 0.03163f) < 0.002f);
 #elif defined(SONARE_WITH_ARRANGEMENT)
   // Binding a CC needs only the arrangement subsystem; the block above
   // additionally needs the graph to observe the bound parameter actually move.
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
+  REQUIRE(bind_cc7(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
 #else
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(bind_cc7(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 16, 74, 7, 0.0f, 1.0f) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 128, 7, 0.0f, 1.0f) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 0, 0.0f, 1.0f) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bind_cc7(engine, 16, 74, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bind_cc7(engine, 0, 128, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bind_cc7(engine, 0, 74, 0, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -121,7 +163,7 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
@@ -136,7 +178,7 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(std::max(peak_abs(left), peak_abs(right)) > 0.0f);
 
   REQUIRE(sonare_engine_push_midi_note_off(engine, 7, 0, 0, 60, 0, -1) == SONARE_OK);
@@ -159,7 +201,7 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
 TEST_CASE("sonare_engine refuses a built-in waveform outside the enum", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
@@ -212,7 +254,7 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   SonareEngineBuiltinSynthConfig synth{};
@@ -239,7 +281,7 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(std::max(peak_abs(left), peak_abs(right)) > 0.0f);
 
   SonareEngineMidiEvent bad_group_event = events[0];
@@ -264,7 +306,7 @@ TEST_CASE("sonare_engine drains a MIDI 2.0 RPN as its four-message MIDI 1.0 sequ
   // a budget of four and a budget of three can never consume it.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
   const sonare::midi::Ump rpn =
       sonare::midi::make_midi2_registered_controller(0, 1, 0, 0, (uint32_t{12} << 25));
@@ -283,7 +325,7 @@ TEST_CASE("sonare_engine drains a MIDI 2.0 RPN as its four-message MIDI 1.0 sequ
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
 
   std::array<SonareExternalMidiEvent, 4> drained{};
   size_t count = 0;
@@ -306,7 +348,7 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // Route destination 5 to the external queue instead of an instrument.
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
@@ -329,7 +371,7 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
 
   std::array<SonareExternalMidiEvent, 16> drained{};
   size_t count = 0;
@@ -375,7 +417,7 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
 
   constexpr uint32_t kGroup = 5u;
@@ -402,7 +444,7 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
 
   std::array<SonareExternalMidiEvent, 32> drained{};
   size_t count = 0;
@@ -417,7 +459,7 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
   // pair above matched, so only its retained channel's controller reset remains;
   // an unmatched note-on would surface here as an extra note-off or reset group.
   REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
           SONARE_OK);
   REQUIRE(count == 4);
@@ -446,7 +488,7 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
 TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // The slot table holds 16 distinct external destinations.
   for (uint32_t id = 0; id < 16; ++id) {
@@ -470,15 +512,15 @@ TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][
 TEST_CASE("sonare_engine reports a full MIDI CC binding table as state", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   // 16 channels x 16 controllers fill the 256-entry table.
   for (uint8_t channel = 0; channel < 16; ++channel) {
     for (uint8_t controller = 0; controller < 16; ++controller) {
-      REQUIRE(sonare_engine_bind_midi_cc(engine, channel, controller, 7, 0.0f, 1.0f) == SONARE_OK);
+      REQUIRE(bind_cc7(engine, channel, controller, 7, 0.0f, 1.0f) == SONARE_OK);
     }
   }
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(bind_cc7(engine, 0, 74, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_STATE);
   SonareMidiCcBinding binding{};
   binding.kind = SONARE_MIDI_CC_CONTROL_CHANGE_7;
   binding.cc_number = 74;
@@ -486,12 +528,11 @@ TEST_CASE("sonare_engine reports a full MIDI CC binding table as state", "[c_api
   binding.param_id = 7;
   binding.min_value = 0.0f;
   binding.max_value = 1.0f;
-  REQUIRE(sonare_engine_bind_midi_cc_binding(engine, &binding) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, &binding) == SONARE_ERROR_INVALID_STATE);
   // An out-of-range channel stays an argument refusal on the full table, and a
   // rebind of a bound controller and channel replaces it in place.
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 16, 74, 7, 0.0f, 1.0f) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 0, 7, -1.0f, 1.0f) == SONARE_OK);
+  REQUIRE(bind_cc7(engine, 16, 74, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bind_cc7(engine, 0, 0, 7, -1.0f, 1.0f) == SONARE_OK);
 
   sonare_engine_destroy(engine);
 }
@@ -499,7 +540,7 @@ TEST_CASE("sonare_engine reports a full MIDI CC binding table as state", "[c_api
 TEST_CASE("sonare_engine reports a full instrument rack as state", "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
   sonare_engine_builtin_synth_config_init(&synth);
   for (uint32_t destination = 0; destination < 16; ++destination) {
@@ -522,7 +563,7 @@ TEST_CASE("sonare_engine reports a full instrument rack as state", "[c_api][engi
 TEST_CASE("sonare_engine_set_param_smoothing_ms validates its argument", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   REQUIRE(sonare_engine_set_param_smoothing_ms(engine, 0.0f) == SONARE_OK);
   REQUIRE(sonare_engine_set_param_smoothing_ms(engine, 75.0f) == SONARE_OK);
@@ -538,7 +579,7 @@ TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 24000, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 24000, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
   REQUIRE(sonare_engine_set_external_midi_clock_enabled(engine, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, 0) == SONARE_OK);
@@ -546,7 +587,7 @@ TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "
   std::vector<float> left(24000, 0.0f);
   std::vector<float> right(24000, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 24000) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 24000) == SONARE_OK);
 
   // One Start plus 24 clock ticks (one every 1000 samples at 120 BPM).
   std::array<SonareExternalMidiEvent, 64> drained{};
@@ -567,7 +608,7 @@ TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "
 TEST_CASE("sonare_engine external MIDI stays monotonic across a loop wrap", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);  // 1 beat = 24000 samples
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
 
@@ -600,7 +641,7 @@ TEST_CASE("sonare_engine external MIDI stays monotonic across a loop wrap", "[c_
   std::vector<int64_t> frames;
   std::array<SonareExternalMidiEvent, 64> drained{};
   for (int block = 0; block < 470; ++block) {
-    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
     size_t count = 0;
     REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
             SONARE_OK);
@@ -625,7 +666,7 @@ TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][e
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
 
   int64_t sample = 0;
@@ -671,7 +712,7 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 0) ==
@@ -691,7 +732,7 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
   std::vector<float> left(64, 0.0f);
   std::vector<float> right(64, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 64) == SONARE_OK);
   REQUIRE(peak_abs(left) > 0.01f);
   REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending) == SONARE_OK);
   REQUIRE(pending == 0);
@@ -731,7 +772,7 @@ TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths
                    uint8_t key_pressure) -> std::vector<float> {
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16, 0) == SONARE_OK);
     SonareEngineBuiltinSynthConfig synth{};
     sonare_engine_builtin_synth_config_init(&synth);
     synth.gain = 0.4f;
@@ -749,7 +790,7 @@ TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths
     std::vector<float> settle_right(kSettle, 0.0f);
     for (size_t at = 0; at < kSettle; at += kBlock) {
       float* channels[] = {settle.data() + at, settle_right.data() + at};
-      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+      REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlock) == SONARE_OK);
     }
 
     // Sent after the note is sounding, which is both how a live gesture arrives
@@ -774,7 +815,7 @@ TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths
     std::vector<float> right(kMeasured, 0.0f);
     for (size_t at = 0; at < kMeasured; at += kBlock) {
       float* channels[] = {left.data() + at, right.data() + at};
-      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+      REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlock) == SONARE_OK);
     }
     sonare_engine_destroy(engine);
     return left;
@@ -811,7 +852,7 @@ TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths
 TEST_CASE("sonare_engine refuses a per-note dimension outside its domain", "[c_api][engine]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
 
   REQUIRE(sonare_engine_push_midi_input_pitch_bend(nullptr, 0, 0, 8192, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -977,7 +1018,7 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
   const auto chord_peak = [](const SonareEngineBuiltinSynthConfig& synth, SonareError* err) {
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16, 0) == SONARE_OK);
     *err = sonare_engine_set_builtin_instrument(engine, 7, &synth);
     float peak = 0.0f;
     if (*err == SONARE_OK) {
@@ -989,7 +1030,7 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
       std::vector<float> right(kBlock, 0.0f);
       float* channels[] = {left.data(), right.data()};
       for (int block = 0; block < 12; ++block) {
-        REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+        REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlock) == SONARE_OK);
         for (float sample : left) peak = std::max(peak, std::abs(sample));
       }
     }
@@ -1085,7 +1126,7 @@ TEST_CASE("sonare_engine raw UMP push delivers a MIDI 2.0 note at full velocity 
   auto render = [](Path path, uint16_t velocity16) -> float {
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16, 0) == SONARE_OK);
     SonareEngineBuiltinSynthConfig synth{};
     sonare_engine_builtin_synth_config_init(&synth);
     synth.gain = 0.4f;
@@ -1104,7 +1145,7 @@ TEST_CASE("sonare_engine raw UMP push delivers a MIDI 2.0 note at full velocity 
     std::vector<float> right(kBlock * 8, 0.0f);
     for (size_t at = 0; at < left.size(); at += kBlock) {
       float* channels[] = {left.data() + at, right.data() + at};
-      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+      REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlock) == SONARE_OK);
     }
     sonare_engine_destroy(engine);
     return peak_abs(left);
@@ -1137,7 +1178,7 @@ TEST_CASE("sonare_engine raw UMP push refuses data messages and mismatched word 
           "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
 #endif
@@ -1200,7 +1241,7 @@ TEST_CASE("sonare_engine raw UMP push reports a full queue as retryable back-pre
   // return for a full queue.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
   const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
   size_t accepted = 0;
   SonareError refused = SONARE_OK;
@@ -1225,7 +1266,7 @@ constexpr int kProgramBlocks = 8;
 SonareEngine* make_program_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kProgramBlock, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kProgramBlock, 16, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   REQUIRE(sonare_engine_set_sf2_instrument(engine, kProgramDestination, &config) == SONARE_OK);
@@ -1237,7 +1278,7 @@ std::vector<float> render_program_blocks(SonareEngine* engine) {
   std::vector<float> right(left.size(), 0.0f);
   for (size_t at = 0; at < left.size(); at += kProgramBlock) {
     float* channels[] = {left.data() + at, right.data() + at};
-    REQUIRE(sonare_engine_process(engine, channels, 2, kProgramBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kProgramBlock) == SONARE_OK);
   }
   return left;
 }
@@ -1307,7 +1348,7 @@ TEST_CASE("sonare_engine typed program change refuses out-of-domain arguments",
           "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
 #endif
@@ -1461,7 +1502,7 @@ const sonare::midi::Ump kLiveNote2 = sonare::midi::make_midi2_note_on(0, 0, 60, 
 TEST_CASE("sonare_engine live push family names the refused argument", "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
 
   // Each value fits its C type and lies outside the MIDI domain, so only the
   // range rule can refuse it. The input source stays disabled: an argument is
@@ -1568,7 +1609,7 @@ TEST_CASE("sonare_engine input-source pushes refuse a disabled source as invalid
           "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
   for (const bool was_enabled : {false, true}) {
     if (was_enabled) {
       REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
@@ -1588,7 +1629,7 @@ TEST_CASE("an SF2 instrument config with a struct_size below sizeof is refused",
           "[c_api][engine][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   REQUIRE(config.struct_size == sizeof(SonareEngineSf2InstrumentConfig));
@@ -1624,9 +1665,8 @@ TEST_CASE("an SF2 instrument config with a struct_size below sizeof is refused",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels = 0;
-    REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
   }
   sonare_project_destroy(project);
@@ -1638,7 +1678,7 @@ TEST_CASE("sonare_engine live push refusals return their code when the heap fail
           "[c_api][engine][midi]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
   // An argument refusal and a state refusal: both record their reason with the
   // first allocation failing, so neither may let a bad_alloc leave the C boundary.
   std::vector<std::pair<LivePush, SonareError>> cases = {
@@ -1670,7 +1710,7 @@ TEST_CASE("sonare_engine input-source pushes report a full queue as out of memor
     INFO(p.function);
     SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16, 0) == SONARE_OK);
     REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
     size_t accepted = 0;
     SonareError refused = SONARE_OK;
@@ -1690,7 +1730,7 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
           "[c_api][engine][synth_patch]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16, 0) == SONARE_OK);
 
   const auto base = [] {
     SonareSynthPatch patch{};
@@ -1704,7 +1744,7 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
     const char* error = nullptr;
     CHECK_FALSE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
     CHECK(error != nullptr);
-    CHECK(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(set_synth_patch(engine, 1, &patch) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()).size() > 0);
   };
 
@@ -1767,7 +1807,7 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
   CHECK(routes[0].depth == 9600.0f);
   CHECK(static_cast<int>(routes[1].source) == 1);
   CHECK(routes[1].depth == -9600.0f);
-  REQUIRE(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_OK);
+  REQUIRE(set_synth_patch(engine, 1, &patch) == SONARE_OK);
 
   SonareSynthPatch sample = base();
   sample.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;

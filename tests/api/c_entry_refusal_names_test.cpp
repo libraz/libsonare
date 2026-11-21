@@ -49,7 +49,7 @@ struct PreparedEngine {
 
   PreparedEngine() {
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8, 0) == SONARE_OK);
   }
 
   ~PreparedEngine() { sonare_engine_destroy(engine); }

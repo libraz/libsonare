@@ -423,19 +423,9 @@ SonareError probe_stft(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
   SonareStftResult out{};
   const SonareError err =
-      sonare_stft(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, &out);
+      sonare_stft(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, nullptr, &out);
   if (err == SONARE_OK) sonare_free_stft_result(&out);
   return err;
-}
-
-SonareError probe_stft_db(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
-  int n_bins = 0;
-  int n_frames = 0;
-  float* db = nullptr;
-  return finish_floats(sonare_stft_db(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length,
-                                      &n_bins, &n_frames, &db),
-                       db);
 }
 
 /// Mel arguments: the framing, the band count and the coefficient count.
@@ -634,19 +624,8 @@ SonareError probe_tempogram(const std::string& param, double value) {
   int n_frames = 0;
   return finish_floats(
       sonare_tempogram(envelope().data(), envelope().size(), t.sample_rate, t.hop_length,
-                       t.win_length, 1, 1, &out, &out_length, &n_frames),
-      out);
-}
-
-SonareError probe_tempogram_with_mode(const std::string& param, double value) {
-  const Tempo t = tempo_of(param, value);
-  float* out = nullptr;
-  size_t out_length = 0;
-  int n_frames = 0;
-  return finish_floats(
-      sonare_tempogram_with_mode(envelope().data(), envelope().size(), t.sample_rate, t.hop_length,
-                                 t.win_length, 1, 1, SONARE_TEMPOGRAM_AUTOCORRELATION, &out,
-                                 &out_length, &n_frames),
+                       t.win_length, 1, 1, SONARE_TEMPOGRAM_AUTOCORRELATION, &out, &out_length,
+                       &n_frames),
       out);
 }
 
@@ -762,12 +741,12 @@ SonareError probe_downmix(const std::string& param, double value) {
                        out);
 }
 
-SonareError probe_audio_from_file_channel(const std::string& param, double value) {
-  int channel_index = 0;
-  if (is_param(param, "channel_index")) channel_index = static_cast<int>(value);
+SonareError probe_audio_from_file(const std::string& param, double value) {
+  SonareAudioFileOptions options;
+  sonare_audio_file_options_init(&options);
+  if (is_param(param, "channel_index")) options.channel_index = static_cast<int>(value);
   SonareAudio* out = nullptr;
-  const SonareError err =
-      sonare_audio_from_file_channel("/nonexistent/probe.wav", channel_index, &out);
+  const SonareError err = sonare_audio_from_file("/nonexistent/probe.wav", &options, &out);
   if (err == SONARE_OK) sonare_audio_destroy(out);
   return err;
 }
@@ -987,7 +966,6 @@ const std::map<std::string, Probe>& probes() {
       {"cqt_to_audio", probe_cqt_to_audio},
       {"vqt_to_audio", probe_vqt_to_audio},
       {"stft", probe_stft},
-      {"stft_db", probe_stft_db},
       {"mel_spectrogram", probe_mel_spectrogram},
       {"mfcc", probe_mfcc},
       {"mel_delta", probe_mel_delta},
@@ -1002,7 +980,6 @@ const std::map<std::string, Probe>& probes() {
       {"pitch_pyin", probe_pitch_pyin},
       {"reassigned_spectrogram", probe_reassigned_spectrogram},
       {"tempogram", probe_tempogram},
-      {"tempogram_with_mode", probe_tempogram_with_mode},
       {"fourier_tempogram", probe_fourier_tempogram},
       {"cyclic_tempogram", probe_cyclic_tempogram},
       {"plp", probe_plp},
@@ -1013,7 +990,7 @@ const std::map<std::string, Probe>& probes() {
       {"chirp", probe_chirp},
       {"clicks", probe_clicks},
       {"downmix", probe_downmix},
-      {"audio_from_file_channel", probe_audio_from_file_channel},
+      {"audio_from_file", probe_audio_from_file},
       {"chord_functions", probe_chord_functions},
 #if defined(SONARE_WITH_PITCH_EDITOR)
       {"note_segments", probe_note_segments},

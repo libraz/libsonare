@@ -68,30 +68,6 @@ SonareMeterTelemetryRecord meter_record(const engine::MeterTelemetryRecord& reco
   out.target_id = record.target_id;
   out.render_frame = record.render_frame;
   out.seq = record.seq;
-  out.peak_db_l = record.peak_db[0];
-  out.peak_db_r = record.peak_db[1];
-  out.rms_db_l = record.rms_db[0];
-  out.rms_db_r = record.rms_db[1];
-  out.true_peak_dbtp_l = record.true_peak_db[0];
-  out.true_peak_dbtp_r = record.true_peak_db[1];
-  out.max_true_peak_dbtp = record.max_true_peak_db;
-  out.correlation = record.correlation;
-  out.mono_compat_width = record.mono_compat_width;
-  out.momentary_lufs = record.momentary_lufs;
-  out.short_term_lufs = record.short_term_lufs;
-  out.integrated_lufs = record.integrated_lufs;
-  out.gain_reduction_db = record.gain_reduction_db;
-  out.dropped_records = record.dropped_records;
-  out.input_peak_db_l = record.input_peak_db[0];
-  out.input_peak_db_r = record.input_peak_db[1];
-  return out;
-}
-
-SonareMeterTelemetryRecordWide meter_record_wide(const engine::MeterTelemetryRecord& record) {
-  SonareMeterTelemetryRecordWide out{};
-  out.target_id = record.target_id;
-  out.render_frame = record.render_frame;
-  out.seq = record.seq;
   const int planes =
       std::clamp(record.channel_count, 0, static_cast<int>(SONARE_METER_MAX_CHANNELS));
   out.num_channels = planes;
@@ -118,20 +94,15 @@ SonareMeterTelemetryRecordWide meter_record_wide(const engine::MeterTelemetryRec
 
 }  // namespace
 
-SonareError sonare_engine_process(SonareEngine* engine, float* const* channels, int num_channels,
-                                  int num_frames) {
+SonareError sonare_engine_process(SonareEngine* engine, float* const* channels,
+                                  float* const* monitor_out, int num_channels, int num_frames) {
   SONARE_C_RT_API_ENTRY;
   if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
-  engine->engine.process(channels, num_channels, num_frames);
-  return SONARE_OK;
-}
-
-SonareError sonare_engine_process_with_monitor(SonareEngine* engine, float* const* channels,
-                                               float* const* monitor_out, int num_channels,
-                                               int num_frames) {
-  SONARE_C_RT_API_ENTRY;
-  if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
-  engine->engine.process_with_monitor(channels, monitor_out, num_channels, num_frames);
+  if (monitor_out == nullptr) {
+    engine->engine.process(channels, num_channels, num_frames);
+  } else {
+    engine->engine.process_with_monitor(channels, monitor_out, num_channels, num_frames);
+  }
   return SONARE_OK;
 }
 
@@ -186,7 +157,7 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
     return SONARE_ERROR_INVALID_STATE;
   }
   block_size = sonare_c_engine_detail::resolve_offline_block(engine->engine, block_size);
-  // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor
+  // sonare_engine_prepare bounds capture/instrument/PDC/monitor
   // scratch to prepared_channels(); rendering more planes than that would
   // silently write zeros to every plane past the bound instead of erroring, so
   // the host reads a "successful" render that is actually silence for the
@@ -527,31 +498,6 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
   engine::MeterTelemetryRecord record{};
   while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
     out[count] = meter_record(record);
-    ++count;
-  }
-  *out_count = count;
-  return SONARE_OK;
-#else
-  *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
-#endif
-}
-
-SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
-                                                     SonareMeterTelemetryRecordWide* out,
-                                                     size_t max_records, size_t* out_count) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_count);
-  SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
-  SONARE_C_REQUIRE_NONNULL(out_count);
-
-#if defined(SONARE_WITH_MIXING)
-  size_t count = 0;
-  engine::MeterTelemetryRecord record{};
-  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    out[count] = meter_record_wide(record);
     ++count;
   }
   *out_count = count;

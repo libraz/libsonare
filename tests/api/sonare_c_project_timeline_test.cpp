@@ -19,6 +19,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 using sonare::constants::kTwoPiD;
 
 SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, const char* name,
@@ -26,7 +41,7 @@ SonareError set_marker_named(SonareProject* project, uint32_t id, double ppq, co
   SonareProjectMarker marker{};
   marker.id = id;
   marker.ppq = ppq;
-  return sonare_project_set_marker_ex_name(project, &marker, name, out_id);
+  return sonare_project_set_marker(project, &marker, name, out_id);
 }
 
 constexpr int kSampleRate = 48000;
@@ -132,8 +147,8 @@ std::vector<float> project_bounce(SonareProject* project) {
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels) == SONARE_OK);
   REQUIRE(out_len == static_cast<size_t>(kFrames) * 2);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -143,7 +158,7 @@ std::vector<float> project_bounce(SonareProject* project) {
 SonareEngine* prepared_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
   return engine;
 }
 
@@ -152,7 +167,7 @@ void process_block(SonareEngine* engine) {
   std::array<float, kBlockSize> left{};
   std::array<float, kBlockSize> right{};
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, kBlockSize) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlockSize) == SONARE_OK);
 }
 
 bool transport_playing(SonareEngine* engine) {
@@ -195,7 +210,7 @@ std::vector<float> engine_bounce(SonareEngine* engine) {
 SonareProjectTimeline* compile_timeline(SonareProject* project) {
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
-  REQUIRE(sonare_project_compile_timeline(project, &result, &timeline) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &result, &timeline) == SONARE_OK);
   REQUIRE(result.has_timeline != 0);
   REQUIRE(timeline != nullptr);
   sonare_free_project_compile_result(&result);
@@ -470,7 +485,8 @@ TEST_CASE("apply is refused while the transport is playing", "[timeline-apply][c
   sonare_project_destroy(second.project);
 }
 
-TEST_CASE("compile_timeline and apply validate their arguments", "[timeline-apply][c_api]") {
+TEST_CASE("compile with a timeline output and apply validate their arguments",
+          "[timeline-apply][c_api]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
 
@@ -478,21 +494,19 @@ TEST_CASE("compile_timeline and apply validate their arguments", "[timeline-appl
   result.has_timeline = 7;
   auto* const sentinel = reinterpret_cast<SonareProjectTimeline*>(&result);
   SonareProjectTimeline* timeline = sentinel;
-  REQUIRE(sonare_project_compile_timeline(nullptr, &result, &timeline) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_compile(nullptr, &result, &timeline) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(timeline == nullptr);
   REQUIRE(result.has_timeline == 0);
   REQUIRE(result.diagnostics == nullptr);
 
   timeline = sentinel;
-  REQUIRE(sonare_project_compile_timeline(project, nullptr, &timeline) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_compile(project, nullptr, &timeline) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(timeline == nullptr);
 
+  // A NULL out_timeline compiles for diagnostics only.
   result.has_timeline = 7;
-  REQUIRE(sonare_project_compile_timeline(project, &result, nullptr) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(result.has_timeline == 0);
+  REQUIRE(sonare_project_compile(project, &result, nullptr) == SONARE_OK);
+  sonare_free_project_compile_result(&result);
 
   SonareEngine* engine = prepared_engine();
   timeline = compile_timeline(project);
@@ -507,7 +521,7 @@ TEST_CASE("compile_timeline and apply validate their arguments", "[timeline-appl
   sonare_project_destroy(project);
 }
 
-TEST_CASE("compile_timeline returns no handle and the diagnostics when compile fails",
+TEST_CASE("compile returns no timeline handle and the diagnostics when compile fails",
           "[timeline-apply][c_api]") {
   // A clip pointing at a source id the project does not hold is a compile error.
   const std::string json =
@@ -523,14 +537,14 @@ TEST_CASE("compile_timeline returns no handle and the diagnostics when compile f
   sonare_free_string(warnings);
 
   SonareProjectCompileResult expected{};
-  REQUIRE(sonare_project_compile(project, &expected) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &expected, nullptr) == SONARE_OK);
   REQUIRE(expected.has_timeline == 0);
   REQUIRE(expected.diagnostic_count > 0);
 
   SonareProjectCompileResult result{};
   auto* const sentinel = reinterpret_cast<SonareProjectTimeline*>(&result);
   SonareProjectTimeline* timeline = sentinel;
-  REQUIRE(sonare_project_compile_timeline(project, &result, &timeline) == SONARE_OK);
+  REQUIRE(sonare_project_compile(project, &result, &timeline) == SONARE_OK);
   REQUIRE(timeline == nullptr);
   REQUIRE(result.has_timeline == 0);
   REQUIRE(result.diagnostic_count == expected.diagnostic_count);
@@ -583,23 +597,17 @@ TEST_CASE("project diagnostic codes and severities are named by their facade tok
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-TEST_CASE("compile_timeline refuses a NULL pointer by its header name", "[project][timeline]") {
+TEST_CASE("compile refuses a NULL pointer by its header name", "[project][timeline]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
   const auto message = [] { return std::string(sonare_last_error_message()); };
 
-  REQUIRE(sonare_project_compile_timeline(nullptr, &result, &timeline) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_compile(nullptr, &result, &timeline) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "project must not be NULL");
-  // Two NULL outs: the first one in header order is named.
-  REQUIRE(sonare_project_compile_timeline(project, nullptr, nullptr) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "out_result must not be NULL");
-  REQUIRE(sonare_project_compile_timeline(project, &result, nullptr) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "out_timeline must not be NULL");
+  REQUIRE(sonare_project_compile(project, nullptr, &timeline) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
 
   sonare_project_destroy(project);
 }

@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <new>
+#include <optional>
 #include <set>
 
 #include "c_api/project_bounce_internal.h"
@@ -558,6 +559,175 @@ bool probe_hosted_latency_tail(const arr::CompiledTimeline& timeline,
 #endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// The hosted instruments of one bounce and the objects that back them, in the order the options
+// list them: callback, built-in, NativeSynth, then SoundFont.
+struct BounceInstruments {
+  std::vector<std::unique_ptr<CallbackInstrument>> callbacks;
+  std::vector<std::unique_ptr<sonare::midi::BuiltinSynth>> builtins;
+  std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> synths;
+  std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> sf2_players;
+  std::vector<HostedInstrument> hosted;
+};
+
+// Refuses every destination the four binding lists name more than once, within or across kinds.
+void check_unique_destinations(const SonareProjectBounceOptions& options) {
+  namespace check = sonare::util::check;
+  std::set<uint32_t> seen;
+  const auto claim = [&](uint32_t destination_id, const char* list, size_t index) {
+    if (!seen.insert(destination_id).second) {
+      check::refuse(check::indexed_subject(list, index, "destination_id").c_str(),
+                    "must not be bound twice");
+    }
+  };
+  for (size_t i = 0; i < options.instrument_count; ++i) {
+    claim(options.instruments[i].destination_id, "instruments", i);
+  }
+  for (size_t i = 0; i < options.builtin_instrument_count; ++i) {
+    claim(options.builtin_instruments[i].destination_id, "builtin_instruments", i);
+  }
+  for (size_t i = 0; i < options.synth_instrument_count; ++i) {
+    claim(options.synth_instruments[i].destination_id, "synth_instruments", i);
+  }
+  for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
+    claim(options.sf2_instruments[i].destination_id, "sf2_instruments", i);
+  }
+}
+
+// Validates every binding list of @p options, then builds the instruments they describe. Nothing
+// is constructed until every list has passed, so a bad entry anywhere refuses the whole bounce.
+SonareError collect_bounce_instruments(const SonareProject* project,
+                                       const SonareProjectBounceOptions& options,
+                                       BounceInstruments* out) {
+  namespace check = sonare::util::check;
+  check::non_null_when_count(options.instruments, options.instrument_count, "options.instruments",
+                             "options.instrument_count");
+  check::non_null_when_count(options.builtin_instruments, options.builtin_instrument_count,
+                             "options.builtin_instruments", "options.builtin_instrument_count");
+  check::non_null_when_count(options.synth_instruments, options.synth_instrument_count,
+                             "options.synth_instruments", "options.synth_instrument_count");
+  check::non_null_when_count(options.sf2_instruments, options.sf2_instrument_count,
+                             "options.sf2_instruments", "options.sf2_instrument_count");
+
+  // Every callback instrument must supply a render function (the audio source).
+  for (size_t i = 0; i < options.instrument_count; ++i) {
+    if (options.instruments[i].callbacks.render == nullptr) {
+      check::refuse(check::indexed_subject("instruments", i, "callbacks.render").c_str(),
+                    sonare::util::refusal::kNonNullPredicate);
+    }
+  }
+  // A bad ordinal anywhere in a list refuses the whole bounce rather than rendering the earlier
+  // bindings and then failing.
+  for (size_t i = 0; i < options.builtin_instrument_count; ++i) {
+    const SonareBuiltinInstrumentBinding& binding = options.builtin_instruments[i];
+    sonare_c_detail::require_struct_size(binding.config.struct_size,
+                                         sizeof(SonareBuiltinSynthConfig),
+                                         "builtin_instruments[" + std::to_string(i) + "].config",
+                                         "sonare_builtin_synth_config_init");
+    check::integer_in_range(
+        binding.config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
+        check::indexed_subject("builtin_instruments", i, "config.waveform").c_str());
+  }
+  for (size_t i = 0; i < options.synth_instrument_count; ++i) {
+    sonare_c_detail::require_struct_size(
+        options.synth_instruments[i].patch.struct_size, sizeof(SonareSynthPatch),
+        "synth_instruments[" + std::to_string(i) + "].patch", "sonare_synth_patch_init");
+  }
+  for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
+    sonare_c_detail::require_struct_size(
+        options.sf2_instruments[i].config.struct_size, sizeof(SonareSf2InstrumentConfig),
+        "sf2_instruments[" + std::to_string(i) + "].config", "sonare_sf2_instrument_config_init");
+  }
+  check_unique_destinations(options);
+
+  const size_t total = options.instrument_count + options.builtin_instrument_count +
+                       options.synth_instrument_count + options.sf2_instrument_count;
+  out->hosted.reserve(total);
+
+  out->callbacks.reserve(options.instrument_count);
+  for (size_t i = 0; i < options.instrument_count; ++i) {
+    const SonareInstrumentBinding& binding = options.instruments[i];
+    out->callbacks.push_back(std::make_unique<CallbackInstrument>(binding.callbacks));
+    out->hosted.push_back(
+        {binding.destination_id, out->callbacks.back().get(), out->callbacks.back().get()});
+  }
+
+  out->builtins.reserve(options.builtin_instrument_count);
+  for (size_t i = 0; i < options.builtin_instrument_count; ++i) {
+    const SonareBuiltinInstrumentBinding& binding = options.builtin_instruments[i];
+    out->builtins.push_back(
+        std::make_unique<sonare::midi::BuiltinSynth>(sonare_c_detail::builtin_synth_config_from_c(
+            binding.config, "builtin_instruments[" + std::to_string(i) + "].config.")));
+    out->hosted.push_back({binding.destination_id, out->builtins.back().get()});
+  }
+
+  out->synths.reserve(options.synth_instrument_count);
+  for (size_t i = 0; i < options.synth_instrument_count; ++i) {
+    const SonareSynthInstrumentBinding& binding = options.synth_instruments[i];
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    if (!sonare_c_detail::synth_config_from_patch_c(binding.patch, &cfg, &error)) {
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                     error != nullptr ? error : "invalid synth patch");
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    cfg.use_gm_programs = binding.use_gm_programs != 0;
+#if defined(SONARE_WITH_MASTERING)
+    cfg.insert_factory = [](std::string_view name,
+                            std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+#endif
+    // The bounce is single-threaded and offline: pending EFX changes realise inline.
+    cfg.realize_efx_inline = true;
+    out->synths.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
+    // The synth takes a share, so a caller that destroys its own handle
+    // mid-bounce cannot pull the pool out from under a sounding voice.
+    if (binding.sample_bank != nullptr) {
+      out->synths.back()->set_sample_bank(
+          std::shared_ptr<const sonare::midi::synth::SampleBank>(binding.sample_bank->bank));
+    }
+    if (!apply_project_part_rigs(project, binding.destination_id, out->synths.back().get())) {
+      return SONARE_ERROR_NOT_SUPPORTED;
+    }
+    out->hosted.push_back({binding.destination_id, out->synths.back().get()});
+  }
+
+  // No loaded SoundFont is allowed: the player's NativeSynth GM fallback is
+  // the data-free floor (every program still sounds; the manifest reports the
+  // synth backend honestly).
+  out->sf2_players.reserve(options.sf2_instrument_count);
+  for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
+    const SonareSf2InstrumentBinding& binding = options.sf2_instruments[i];
+    auto player_config = sonare_c_detail::sf2_player_config_from_c(
+        binding.config, "sf2_instruments[" + std::to_string(i) + "].config.");
+#if defined(SONARE_WITH_MASTERING)
+    // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
+    // mastering factory itself, so the host injects it.
+    player_config.insert_factory =
+        [](std::string_view name,
+           std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+#endif
+    // The bounce is single-threaded and offline: pending EFX changes realise inline.
+    player_config.realize_efx_inline = true;
+    auto player = std::make_unique<sonare::midi::synth::Sf2Player>(std::move(player_config));
+    player->set_soundfont(project->soundfont);
+    out->sf2_players.push_back(std::move(player));
+    if (!apply_project_part_rigs(project, binding.destination_id, out->sf2_players.back().get())) {
+      return SONARE_ERROR_NOT_SUPPORTED;
+    }
+    out->hosted.push_back({binding.destination_id, out->sf2_players.back().get()});
+  }
+  return SONARE_OK;
+}
+
+}  // namespace
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
 static_assert(sonare::engine::RealtimeEngine::kDefaultOfflineBlock == 128,
               "the documented default block of SonareProjectBounceOptions");
 #endif
@@ -580,64 +750,39 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (out_num_channels) *out_num_channels = 0;
+  // Before the first argument rejection below, so an early return leaves the
+  // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_interleaved);
   SONARE_C_REQUIRE_NONNULL(out_len);
   SONARE_C_REQUIRE_NONNULL(out_num_channels);
-  return do_project_bounce(project, options, {}, out_interleaved, out_len, out_num_channels);
+  BounceInstruments instruments;
+  if (options != nullptr) {
+    // The instrument members sit past the original fields, so the size is read first.
+    sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareProjectBounceOptions),
+                                         "options", "sonare_project_bounce_options_init");
+    if (const SonareError err = collect_bounce_instruments(project, *options, &instruments);
+        err != SONARE_OK) {
+      return err;
+    }
+  }
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  std::optional<RenderPathDump> path_dump;
+  if (instruments.synths.empty() && !instruments.sf2_players.empty()) {
+    path_dump.emplace(instruments.sf2_players);
+  } else if (!instruments.synths.empty()) {
+    path_dump.emplace(instruments.synths);
+  }
+#endif
+  return do_project_bounce(project, options, instruments.hosted, out_interleaved, out_len,
+                           out_num_channels);
   SONARE_C_CATCH
 #else
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
   if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, out_interleaved, out_len, out_num_channels);
-#endif
-}
-
-SonareError sonare_project_bounce_with_instruments(SonareProject* project,
-                                                   const SonareProjectBounceOptions* options,
-                                                   const SonareInstrumentBinding* instruments,
-                                                   size_t instrument_count, float** out_interleaved,
-                                                   size_t* out_len, int* out_num_channels) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (out_interleaved) *out_interleaved = nullptr;
-  if (out_len) *out_len = 0;
-  if (out_num_channels) *out_num_channels = 0;
-  // Before the first argument rejection below, so an early return leaves the
-  // recorded compile result empty rather than describing the previous bounce.
-  clear_last_bounce_result(project);
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
-  SONARE_C_REQUIRE_NONNULL(out_interleaved);
-  SONARE_C_REQUIRE_NONNULL(out_len);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
-  // Every callback instrument must supply a render function (the audio source).
-  for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].callbacks.render == nullptr) {
-      sonare::util::check::refuse(
-          sonare::util::check::indexed_subject("instruments", i, "callbacks.render").c_str(),
-          sonare::util::refusal::kNonNullPredicate);
-    }
-  }
-  std::vector<std::unique_ptr<CallbackInstrument>> owned;
-  std::vector<HostedInstrument> hosted;
-  owned.reserve(instrument_count);
-  hosted.reserve(instrument_count);
-  for (size_t i = 0; i < instrument_count; ++i) {
-    owned.push_back(std::make_unique<CallbackInstrument>(instruments[i].callbacks));
-    hosted.push_back({instruments[i].destination_id, owned.back().get(), owned.back().get()});
-  }
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
-  SONARE_C_CATCH
-#else
-  if (out_interleaved) *out_interleaved = {};
-  if (out_len) *out_len = {};
-  if (out_num_channels) *out_num_channels = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len, out_num_channels);
 #endif
 }
 
@@ -658,191 +803,5 @@ void sonare_sf2_instrument_config_init(SonareSf2InstrumentConfig* config) {
 #else
   *config = SonareSf2InstrumentConfig{};
   config->struct_size = sizeof(SonareSf2InstrumentConfig);
-#endif
-}
-
-SonareError sonare_project_bounce_with_builtin_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len, int* out_num_channels) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (out_interleaved) *out_interleaved = nullptr;
-  if (out_len) *out_len = 0;
-  if (out_num_channels) *out_num_channels = 0;
-  // Before the first argument rejection below, so an early return leaves the
-  // recorded compile result empty rather than describing the previous bounce.
-  clear_last_bounce_result(project);
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
-  SONARE_C_REQUIRE_NONNULL(out_interleaved);
-  SONARE_C_REQUIRE_NONNULL(out_len);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
-  std::vector<std::unique_ptr<sonare::midi::BuiltinSynth>> owned;
-  std::vector<HostedInstrument> hosted;
-  owned.reserve(instrument_count);
-  hosted.reserve(instrument_count);
-  for (size_t i = 0; i < instrument_count; ++i) {
-    // Checked before any instrument is constructed, so a bad ordinal anywhere in
-    // the list refuses the whole bounce rather than rendering the earlier
-    // bindings and then failing.
-    sonare_c_detail::require_struct_size(
-        instruments[i].config.struct_size, sizeof(SonareBuiltinSynthConfig),
-        "instruments[" + std::to_string(i) + "].config", "sonare_builtin_synth_config_init");
-    sonare::util::check::integer_in_range(
-        instruments[i].config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
-        sonare::util::check::indexed_subject("instruments", i, "config.waveform").c_str());
-  }
-  for (size_t i = 0; i < instrument_count; ++i) {
-    owned.push_back(
-        std::make_unique<sonare::midi::BuiltinSynth>(sonare_c_detail::builtin_synth_config_from_c(
-            instruments[i].config, "instruments[" + std::to_string(i) + "].config.")));
-    hosted.push_back({instruments[i].destination_id, owned.back().get()});
-  }
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
-  SONARE_C_CATCH
-#else
-  if (out_interleaved) *out_interleaved = {};
-  if (out_len) *out_len = {};
-  if (out_num_channels) *out_num_channels = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len, out_num_channels);
-#endif
-}
-
-SonareError sonare_project_bounce_with_synth_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len, int* out_num_channels) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (out_interleaved) *out_interleaved = nullptr;
-  if (out_len) *out_len = 0;
-  if (out_num_channels) *out_num_channels = 0;
-  // Before the first argument rejection below, so an early return leaves the
-  // recorded compile result empty rather than describing the previous bounce.
-  clear_last_bounce_result(project);
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
-  SONARE_C_REQUIRE_NONNULL(out_interleaved);
-  SONARE_C_REQUIRE_NONNULL(out_len);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
-  std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> owned;
-  std::vector<HostedInstrument> hosted;
-  owned.reserve(instrument_count);
-  hosted.reserve(instrument_count);
-  for (size_t i = 0; i < instrument_count; ++i) {
-    sonare_c_detail::require_struct_size(instruments[i].patch.struct_size, sizeof(SonareSynthPatch),
-                                         "instruments[" + std::to_string(i) + "].patch",
-                                         "sonare_synth_patch_init");
-  }
-  for (size_t i = 0; i < instrument_count; ++i) {
-    sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    if (!sonare_c_detail::synth_config_from_patch_c(instruments[i].patch, &cfg, &error)) {
-      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                     error != nullptr ? error : "invalid synth patch");
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    cfg.use_gm_programs = instruments[i].use_gm_programs != 0;
-#if defined(SONARE_WITH_MASTERING)
-    cfg.insert_factory = [](std::string_view name,
-                            std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
-      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
-    };
-#endif
-    // The bounce is single-threaded and offline: pending EFX changes realise inline.
-    cfg.realize_efx_inline = true;
-    owned.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
-    // The synth takes a share, so a caller that destroys its own handle
-    // mid-bounce cannot pull the pool out from under a sounding voice.
-    if (instruments[i].sample_bank != nullptr) {
-      owned.back()->set_sample_bank(
-          std::shared_ptr<const sonare::midi::synth::SampleBank>(instruments[i].sample_bank->bank));
-    }
-    if (!apply_project_part_rigs(project, instruments[i].destination_id, owned.back().get())) {
-      return SONARE_ERROR_NOT_SUPPORTED;
-    }
-    hosted.push_back({instruments[i].destination_id, owned.back().get()});
-  }
-#if defined(SONARE_TUNING) && SONARE_TUNING
-  const RenderPathDump path_dump(owned);
-#endif
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
-  SONARE_C_CATCH
-#else
-  if (out_interleaved) *out_interleaved = {};
-  if (out_len) *out_len = {};
-  if (out_num_channels) *out_num_channels = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len, out_num_channels);
-#endif
-}
-
-SonareError sonare_project_bounce_with_sf2_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
-    size_t* out_len, int* out_num_channels) {
-  SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (out_interleaved) *out_interleaved = nullptr;
-  if (out_len) *out_len = 0;
-  if (out_num_channels) *out_num_channels = 0;
-  // Before the first argument rejection below, so an early return leaves the
-  // recorded compile result empty rather than describing the previous bounce.
-  clear_last_bounce_result(project);
-  SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
-  SONARE_C_REQUIRE_NONNULL(out_interleaved);
-  SONARE_C_REQUIRE_NONNULL(out_len);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
-  // No loaded SoundFont is allowed: the player's NativeSynth GM fallback is
-  // the data-free floor (every program still sounds; the manifest reports the
-  // synth backend honestly).
-  for (size_t i = 0; i < instrument_count; ++i) {
-    sonare_c_detail::require_struct_size(
-        instruments[i].config.struct_size, sizeof(SonareSf2InstrumentConfig),
-        "instruments[" + std::to_string(i) + "].config", "sonare_sf2_instrument_config_init");
-  }
-  std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
-  std::vector<HostedInstrument> hosted;
-  owned.reserve(instrument_count);
-  hosted.reserve(instrument_count);
-  for (size_t i = 0; i < instrument_count; ++i) {
-    auto player_config = sonare_c_detail::sf2_player_config_from_c(
-        instruments[i].config, "instruments[" + std::to_string(i) + "].config.");
-#if defined(SONARE_WITH_MASTERING)
-    // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
-    // mastering factory itself, so the host injects it.
-    player_config.insert_factory =
-        [](std::string_view name,
-           std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
-      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
-    };
-#endif
-    // The bounce is single-threaded and offline: pending EFX changes realise inline.
-    player_config.realize_efx_inline = true;
-    auto player = std::make_unique<sonare::midi::synth::Sf2Player>(std::move(player_config));
-    player->set_soundfont(project->soundfont);
-    owned.push_back(std::move(player));
-    if (!apply_project_part_rigs(project, instruments[i].destination_id, owned.back().get())) {
-      return SONARE_ERROR_NOT_SUPPORTED;
-    }
-    hosted.push_back({instruments[i].destination_id, owned.back().get()});
-  }
-#if defined(SONARE_TUNING) && SONARE_TUNING
-  const RenderPathDump path_dump(owned);
-#endif
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
-  SONARE_C_CATCH
-#else
-  if (out_interleaved) *out_interleaved = {};
-  if (out_len) *out_len = {};
-  if (out_num_channels) *out_num_channels = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len, out_num_channels);
 #endif
 }

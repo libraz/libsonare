@@ -44,7 +44,7 @@ class PreparedEngine {
  public:
   PreparedEngine() {
     REQUIRE(sonare_engine_create(&engine_) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine_, 48000.0, 64, 32, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine_, 48000.0, 64, 32, 16, 0) == SONARE_OK);
   }
   ~PreparedEngine() { sonare_engine_destroy(engine_); }
   PreparedEngine(const PreparedEngine&) = delete;
@@ -380,17 +380,6 @@ SonareError probe_engine_articulation(const std::string&, double value) {
 
 SonareError probe_engine_bind_midi_cc(const std::string& param, double value) {
   PreparedEngine engine;
-  std::uint8_t channel = 0;
-  std::uint8_t controller = 1;
-  std::uint32_t param_id = 1;
-  if (is_param(param, "channel")) channel = as_u8(value);
-  if (is_param(param, "controller")) controller = as_u8(value);
-  if (is_param(param, "param_id")) param_id = as_u32(value);
-  return sonare_engine_bind_midi_cc(engine.get(), channel, controller, param_id, 0.0f, 1.0f);
-}
-
-SonareError probe_engine_bind_midi_cc_binding(const std::string& param, double value) {
-  PreparedEngine engine;
   SonareMidiCcBinding binding{};
   binding.cc_number = 1;
   binding.channel = 0;
@@ -400,7 +389,7 @@ SonareError probe_engine_bind_midi_cc_binding(const std::string& param, double v
   binding.max_value = 1.0f;
   if (is_param(param, "binding.cc_number")) binding.cc_number = as_u8(value);
   if (is_param(param, "binding.param_id")) binding.param_id = as_u32(value);
-  return sonare_engine_bind_midi_cc_binding(engine.get(), &binding);
+  return sonare_engine_bind_midi_cc(engine.get(), &binding);
 }
 
 SonareError probe_engine_render_offline(const std::string& param, double value) {
@@ -468,28 +457,13 @@ SonareError probe_engine_prepare(const std::string& param, double value) {
   int max_block_size = 64;
   std::size_t command_capacity = 32;
   std::size_t telemetry_capacity = 16;
-  if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
-  if (is_param(param, "command_capacity")) command_capacity = as_size(value);
-  if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
-  const SonareError err =
-      sonare_engine_prepare(engine, 48000.0, max_block_size, command_capacity, telemetry_capacity);
-  sonare_engine_destroy(engine);
-  return err;
-}
-
-SonareError probe_engine_prepare_with_channels(const std::string& param, double value) {
-  SonareEngine* engine = nullptr;
-  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  int max_block_size = 64;
-  std::size_t command_capacity = 32;
-  std::size_t telemetry_capacity = 16;
   int max_channels = 2;
   if (is_param(param, "max_block_size")) max_block_size = static_cast<int>(value);
   if (is_param(param, "command_capacity")) command_capacity = as_size(value);
   if (is_param(param, "telemetry_capacity")) telemetry_capacity = as_size(value);
   if (is_param(param, "max_channels")) max_channels = static_cast<int>(value);
-  const SonareError err = sonare_engine_prepare_with_channels(
-      engine, 48000.0, max_block_size, command_capacity, telemetry_capacity, max_channels);
+  const SonareError err = sonare_engine_prepare(engine, 48000.0, max_block_size, command_capacity,
+                                                telemetry_capacity, max_channels);
   sonare_engine_destroy(engine);
   return err;
 }
@@ -919,13 +893,11 @@ const std::map<std::string, Probe>& probes() {
       {"engine_add_parameter", probe_engine_add_parameter},
       {"engine_articulation", probe_engine_articulation},
       {"engine_bind_midi_cc", probe_engine_bind_midi_cc},
-      {"engine_bind_midi_cc_binding", probe_engine_bind_midi_cc_binding},
       {"engine_bounce_offline", probe_engine_bounce_offline},
       {"engine_count_in_end_sample", probe_engine_count_in_end_sample},
       {"engine_freeze_offline", probe_engine_freeze_offline},
       {"engine_load_soundfont", probe_engine_load_soundfont},
       {"engine_prepare", probe_engine_prepare},
-      {"engine_prepare_with_channels", probe_engine_prepare_with_channels},
       {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},
       {"engine_render_offline", probe_engine_render_offline},

@@ -162,14 +162,14 @@ TEST_CASE("realtime engine reports its default max block size", "[c-api]") {
   REQUIRE(sonare_engine_max_block_size(engine, &max_block) == SONARE_OK);
   CHECK(max_block == 0);  // not prepared yet
 
-  REQUIRE(sonare_engine_prepare(engine, kRate, 0, 0, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kRate, 0, 0, 0, 0) == SONARE_OK);
   REQUIRE(sonare_engine_max_block_size(engine, &max_block) == SONARE_OK);
   CHECK(max_block == sonare::engine::RealtimeEngine::kDefaultMaxBlock);
 
   std::vector<float> left(static_cast<size_t>(max_block), 0.0f);
   std::vector<float> right(left.size(), 0.0f);
   float* channels[2] = {left.data(), right.data()};
-  CHECK(sonare_engine_process(engine, channels, 2, max_block) == SONARE_OK);
+  CHECK(sonare_engine_process(engine, channels, nullptr, 2, max_block) == SONARE_OK);
 
   max_block = -1;
   CHECK(sonare_engine_max_block_size(nullptr, &max_block) == SONARE_ERROR_INVALID_PARAMETER);

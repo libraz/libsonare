@@ -389,6 +389,7 @@ void sonare_free_stft_result(SonareStftResult* r) {
   if (r) {
     delete[] r->magnitude;
     delete[] r->power;
+    delete[] r->db;
     *r = {};
   }
 }

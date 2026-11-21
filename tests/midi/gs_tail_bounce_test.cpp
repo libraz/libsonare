@@ -25,6 +25,49 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_instruments(SonareProject* project,
+                                    const SonareProjectBounceOptions* options,
+                                    const SonareInstrumentBinding* bindings, size_t count,
+                                    float** out_interleaved, size_t* out_len,
+                                    int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.instruments = bindings;
+  with_instruments.instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_synth_instruments(SonareProject* project,
+                                          const SonareProjectBounceOptions* options,
+                                          const SonareSynthInstrumentBinding* bindings,
+                                          size_t count, float** out_interleaved, size_t* out_len,
+                                          int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.synth_instruments = bindings;
+  with_instruments.synth_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_sf2_instruments(SonareProject* project,
+                                        const SonareProjectBounceOptions* options,
+                                        const SonareSf2InstrumentBinding* bindings, size_t count,
+                                        float** out_interleaved, size_t* out_len,
+                                        int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.sf2_instruments = bindings;
+  with_instruments.sf2_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 using sonare::midi::synth::EnvelopeTimeScales;
 using sonare::midi::synth::gm_drum_kit_max_tail_samples;
 using sonare::midi::synth::gm_fallback_max_tail_samples;
@@ -92,8 +135,8 @@ int64_t bounce_gm_frames(bool release_edit) {
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels1) == SONARE_OK);
   sonare_free_floats(out);
   sonare_project_destroy(project);
   return static_cast<int64_t>(out_len / 2);
@@ -127,8 +170,8 @@ SonareError bounce_native(SonareProject* project, const SonareProjectBounceOptio
   REQUIRE(sonare_synth_preset_patch("sine", &binding.patch) == SONARE_OK);
   binding.use_gm_programs = 1;
   int bounce_channels2 = 0;
-  return sonare_project_bounce_with_synth_instruments(project, options, &binding, 1, out, out_len,
-                                                      &bounce_channels2);
+  return bounce_with_synth_instruments(project, options, &binding, 1, out, out_len,
+                                       &bounce_channels2);
 }
 
 SonareError bounce_sf2(SonareProject* project, const SonareProjectBounceOptions* options,
@@ -136,8 +179,8 @@ SonareError bounce_sf2(SonareProject* project, const SonareProjectBounceOptions*
   SonareSf2InstrumentBinding binding{};
   sonare_sf2_instrument_config_init(&binding.config);
   int bounce_channels3 = 0;
-  return sonare_project_bounce_with_sf2_instruments(project, options, &binding, 1, out, out_len,
-                                                    &bounce_channels3);
+  return bounce_with_sf2_instruments(project, options, &binding, 1, out, out_len,
+                                     &bounce_channels3);
 }
 
 void silent_render(void*, float* const*, int, int) {}
@@ -178,8 +221,8 @@ TEST_CASE("a drum-kit bounce reports the tail of the pieces it strikes",
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels4 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels4) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels4) == SONARE_OK);
   const int64_t frames = static_cast<int64_t>(out_len / 2);
   // The clip strikes note 60; the bounce must end far short of the every-key bound.
   const int64_t kit_max = gm_drum_kit_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f);
@@ -207,16 +250,15 @@ TEST_CASE("an unbounded instrument tail makes the auto-length bounce refuse",
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels5 = 0;
-  CHECK(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                               &bounce_channels5) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                &bounce_channels5) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out == nullptr);
 
   // An explicit length is the caller's answer to the unbounded tail.
   options.total_frames = kArrangementFrames;
   int bounce_channels6 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels6) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels6) == SONARE_OK);
   CHECK(out_len == static_cast<size_t>(kArrangementFrames) * 2);
   sonare_free_floats(out);
   sonare_project_destroy(project);

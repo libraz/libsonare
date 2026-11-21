@@ -82,26 +82,6 @@ static_assert(offsetof(SonareInstrumentBinding, callbacks) ==
               "InstrumentBinding.callbacks offset");
 #endif
 
-/// @brief Like @ref sonare_project_bounce, but registers each callback
-///        instrument on the engine before rendering, so MIDI tracks routed to
-///        those destinations render the host instrument's audio instead of
-///        silence. @p instruments points to @p instrument_count bindings (may be
-///        NULL / 0 for a silent MIDI bounce identical to sonare_project_bounce).
-///        Deterministic for a fixed project + options + instrument behavior.
-/// @note Callback instruments expose destination-level audio only. If tracks
-///       sharing one callback destination feed different channel strips, this
-///       function returns @ref SONARE_ERROR_NOT_SUPPORTED; use a zero-latency,
-///       source-aware built-in / NativeSynth / SF2 binding, or one destination
-///       per strip.
-/// @note Free @p out_interleaved with @ref sonare_free_floats.
-/// @note @p out_num_channels receives the width the render was mixed at, as in
-///       @ref sonare_project_bounce; it is written 0 first.
-SonareError sonare_project_bounce_with_instruments(SonareProject* project,
-                                                   const SonareProjectBounceOptions* options,
-                                                   const SonareInstrumentBinding* instruments,
-                                                   size_t instrument_count, float** out_interleaved,
-                                                   size_t* out_len, int* out_num_channels);
-
 // ============================================================================
 // Built-in instrument (minimal polyphonic oscillator synth)
 // ============================================================================
@@ -156,26 +136,6 @@ typedef struct {
   uint32_t destination_id;          ///< MIDI destination id the synth serves.
   SonareBuiltinSynthConfig config;  ///< Synth patch for that destination.
 } SonareBuiltinInstrumentBinding;
-
-/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to the
-///        given destinations through the built-in oscillator synth, so a
-///        MIDI-only arrangement bounces to audible output without the caller
-///        supplying its own instrument callbacks. @p instruments points to
-///        @p instrument_count bindings (may be NULL / 0 for a silent bounce).
-///        When @p options->total_frames is
-///        @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT the render length is auto-derived
-///        from the arrangement (musical end + the synth's release tail);
-///        an instrument reporting an unbounded tail makes that fail with
-///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
-///        and does not auto-extend for mixer FX / instrument tails.
-///        Deterministic for a fixed project + options + patch.
-/// @note Free @p out_interleaved with @ref sonare_free_floats.
-/// @note @p out_num_channels receives the width the render was mixed at, as in
-///       @ref sonare_project_bounce; it is written 0 first.
-SonareError sonare_project_bounce_with_builtin_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 // ============================================================================
 // NativeSynth instrument (patch-driven synthesizer; see SonareSynthPatch)
@@ -353,32 +313,6 @@ typedef struct {
   SonareSampleBank* sample_bank;
 } SonareSynthInstrumentBinding;
 
-/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
-///        the given destinations through the patch-driven NativeSynth (the
-///        full synthesizer: every @ref SonareSynthEngineMode engine plus the
-///        realism layer; @ref sonare_synth_enum_names with
-///        SONARE_SYNTH_ENUM_ENGINE_MODE lists them at runtime).
-///        Each binding resolves its @ref SonareSynthPatch via
-///        the preset catalog + field overrides; a struct_size below sizeof or an
-///        unknown preset name or a refused engine param fails with
-///        SONARE_ERROR_INVALID_PARAMETER.
-///        When @p options->total_frames is
-///        @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT the render length is auto-derived
-///        from the arrangement (musical end + the patch's release tail; with
-///        use_gm_programs, the longest tail among the programs and drum notes
-///        the arrangement plays);
-///        an instrument reporting an unbounded tail makes that fail with
-///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
-///        and does not auto-extend for mixer FX / instrument tails.
-///        Deterministic for a fixed project + options + patch.
-/// @note Free @p out_interleaved with @ref sonare_free_floats.
-/// @note @p out_num_channels receives the width the render was mixed at, as in
-///       @ref sonare_project_bounce; it is written 0 first.
-SonareError sonare_project_bounce_with_synth_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len, int* out_num_channels);
-
 // ============================================================================
 // SoundFont (SF2) instrument: host-supplied sample data, GS-compatible player
 // ============================================================================
@@ -447,7 +381,7 @@ typedef struct {
 SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
                                               size_t max_entries, size_t* out_count);
 
-/// @brief SF2 player patch for @ref sonare_project_bounce_with_sf2_instruments. Start from
+/// @brief SF2 player patch for @ref SonareProjectBounceOptions::sf2_instruments. Start from
 ///        @ref sonare_sf2_instrument_config_init and override what you need; every field is then
 ///        read literally and refused outside its domain with SONARE_ERROR_INVALID_PARAMETER.
 typedef struct {
@@ -481,26 +415,111 @@ typedef struct {
   SonareSf2InstrumentConfig config;  ///< Player patch for that destination.
 } SonareSf2InstrumentBinding;
 
-/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
-///        the given destinations through a GS-compatible SoundFont player fed
-///        by the project's loaded SoundFont (@ref
-///        sonare_project_load_soundfont). Each bound player is multitimbral
-///        (16 MIDI channels; channel 10 and GM2 CC0=120 rhythm parts as drums
-///        via bank 128; GS NRPN part
-///        edits and GS/GM SysEx resets honored); programs the SoundFont does
-///        not cover — including bouncing with no SoundFont loaded at all —
-///        play through the built-in synthesizer GM fallback bank (the
-///        data-free floor. @ref sonare_project_soundfont_manifest reports
-///        default SF2-first coverage; model-first bindings deliberately override
-///        that report for their dedicated melodic families. Deterministic for a fixed project +
-///        options + SoundFont + patch.
-/// @note Free @p out_interleaved with @ref sonare_free_floats.
-/// @note @p out_num_channels receives the width the render was mixed at, as in
-///       @ref sonare_project_bounce; it is written 0 first.
-SonareError sonare_project_bounce_with_sf2_instruments(
-    SonareProject* project, const SonareProjectBounceOptions* options,
-    const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
-    size_t* out_len, int* out_num_channels);
+// ============================================================================
+// Bounce (compile + offline render, with hosted instruments)
+// ============================================================================
+
+/// The render length derived from the compiled arrangement (its musical end plus the longest
+/// hosted-instrument release tail). Outside the length's real domain (a positive frame count), so
+/// it never reads as a length.
+#define SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1)
+
+/// The output width of the scene master's layout (2 with no master). Outside the channel count's
+/// real domain, so it never reads as a width.
+#define SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1)
+
+/// The project's own sample rate. Outside the rate's real domain, so it never reads as a rate.
+#define SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1)
+
+/// @brief Options for @ref sonare_project_bounce. Start from
+///        @ref sonare_project_bounce_options_init; every field is then read literally and
+///        checked against the range given beside it. The four instrument lists host the
+///        instruments MIDI tracks render through; a pointer may be NULL only with its count 0.
+typedef struct {
+  uint32_t struct_size;  ///< sizeof(SonareProjectBounceOptions); set by the init function.
+  /// Render length in frames at @p sample_rate; positive. Default
+  /// @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT, which derives it.
+  int64_t total_frames;
+  /// Render block size in frames; positive. Default 128.
+  int block_size;
+  /// Output channel count: 1, 2, 6 or 8, at most the width of the scene master's layout
+  /// (mono/stereo/no master allow 2). Default @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER,
+  /// the width of the scene master's layout (2 with no master). The master is mixed at this
+  /// width; 1 folds a 2-channel master to 0.5(L+R).
+  int num_channels;
+  /// Sample rate in Hz; must equal the project sample rate. Default
+  /// @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT, the project's.
+  int sample_rate;
+  /// Host-instrument latency compensation in samples fed to the compiler; >= 0. Default 0.
+  int instrument_latency_samples;
+  /// Callback instruments (see @ref SonareInstrumentBinding): MIDI tracks routed to their
+  /// destinations render the host instrument's audio instead of silence. Each needs a render
+  /// callback. Callback instruments expose destination-level audio only: tracks sharing one
+  /// callback destination that feed different channel strips are refused with
+  /// SONARE_ERROR_NOT_SUPPORTED; use a zero-latency, source-aware built-in / NativeSynth / SF2
+  /// binding, or one destination per strip. Default NULL.
+  const SonareInstrumentBinding* instruments;
+  size_t instrument_count;  ///< Entries in @p instruments. Default 0.
+  /// Built-in oscillator synths, so a MIDI-only arrangement bounces to audible output without
+  /// callbacks. Default NULL.
+  const SonareBuiltinInstrumentBinding* builtin_instruments;
+  size_t builtin_instrument_count;  ///< Entries in @p builtin_instruments. Default 0.
+  /// Patch-driven NativeSynths (the full synthesizer: every @ref SonareSynthEngineMode engine
+  /// plus the realism layer). Each patch resolves through the preset catalog + field overrides;
+  /// a struct_size below sizeof, an unknown preset name or a refused engine param fails with
+  /// SONARE_ERROR_INVALID_PARAMETER. Default NULL.
+  const SonareSynthInstrumentBinding* synth_instruments;
+  size_t synth_instrument_count;  ///< Entries in @p synth_instruments. Default 0.
+  /// GS-compatible SoundFont players fed by the project's loaded SoundFont
+  /// (@ref sonare_project_load_soundfont). Each player is multitimbral (16 MIDI channels;
+  /// channel 10 and GM2 CC0=120 rhythm parts as drums via bank 128; GS NRPN part edits and GS/GM
+  /// SysEx resets honored); programs the SoundFont does not cover, including bouncing with no
+  /// SoundFont loaded, play through the built-in synthesizer GM fallback bank.
+  /// @ref sonare_project_soundfont_manifest reports default SF2-first coverage. Default NULL.
+  const SonareSf2InstrumentBinding* sf2_instruments;
+  size_t sf2_instrument_count;  ///< Entries in @p sf2_instruments. Default 0.
+} SonareProjectBounceOptions;
+
+/// @brief Writes every default into @p options and sets its @c struct_size; NULL is ignored.
+void sonare_project_bounce_options_init(SonareProjectBounceOptions* options);
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectBounceOptions, struct_size) == 0,
+              "BounceOptions.struct_size offset");
+static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64_t),
+              "BounceOptions.total_frames offset");
+static_assert(offsetof(SonareProjectBounceOptions, instruments) ==
+                  2 * sizeof(int64_t) + 4 * sizeof(int),
+              "BounceOptions.instruments offset");
+static_assert(sizeof(SonareProjectBounceOptions) ==
+                  2 * sizeof(int64_t) + 4 * sizeof(int) + 8 * sizeof(void*),
+              "SonareProjectBounceOptions layout drift");
+#endif
+
+/// @brief Compiles + renders the project offline to interleaved float audio.
+/// @param options Render options, started from @ref sonare_project_bounce_options_init. May be
+///        NULL for those defaults (project sample rate, the scene master's layout width, block
+///        128).
+/// @param out_interleaved Receives a heap float array (free with
+///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
+/// @param out_len Receives the interleaved sample count.
+/// @param out_num_channels Receives the width the render was mixed at: the requested
+///        num_channels, or the resolved default when it was
+///        @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER. Written 0 first, so it is
+///        defined on every return.
+/// @details Deterministic: the same project + options + instrument behavior yields
+///          bit-identical output within one build. Each instrument list in @p options is
+///          optional; with none, MIDI tracks render silence. A destination named twice, within
+///          one list or across lists, is refused with SONARE_ERROR_INVALID_PARAMETER.
+///          When options->total_frames is positive, that explicit length is used as-is; mixer FX /
+///          instrument tails are auto-extended only when total_frames is
+///          @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a refused option;
+///         SONARE_ERROR_INVALID_STATE when the stored project cannot be
+///         rendered (its derived length overflows, or the compiled arrangement
+///         does not fit the engine or the scene's mixer).
+SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
+                                  float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 #ifdef __cplusplus
 }

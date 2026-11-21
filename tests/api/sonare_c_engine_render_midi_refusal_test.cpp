@@ -26,7 +26,7 @@ std::string last_error() { return sonare_last_error_message(); }
 SonareEngine* prepared_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 16, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 2) == SONARE_OK);
   return engine;
 }
 
@@ -270,9 +270,6 @@ TEST_CASE("engine telemetry drains refuse a NULL buffer by name", "[c_api][engin
   CHECK(sonare_engine_drain_meter_telemetry(engine, nullptr, 1, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL when max_records is not 0");
-  CHECK(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 1, &count) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "out must not be NULL when max_records is not 0");
   CHECK(sonare_engine_drain_scope_telemetry(engine, nullptr, 1, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out must not be NULL when max_records is not 0");
@@ -320,10 +317,7 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
   CHECK(last_error() == "clips must not be NULL when clip_count is not 0");
   CHECK(sonare_engine_set_builtin_instrument(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "config must not be NULL");
-  CHECK(sonare_engine_set_synth_instrument(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "patch must not be NULL");
-  CHECK(sonare_engine_set_synth_instrument_binding(engine, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_synth_instrument(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "binding must not be NULL");
   CHECK(sonare_engine_set_sf2_instrument(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "config must not be NULL");
@@ -338,7 +332,7 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
   CHECK(sonare_engine_external_midi_dropped_count(engine, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
-  CHECK(sonare_engine_bind_midi_cc_binding(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_bind_midi_cc(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "binding must not be NULL");
   CHECK(sonare_engine_set_midi_fx(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "config_json must not be NULL");
@@ -390,23 +384,7 @@ TEST_CASE("engine MIDI entries refuse a NULL argument by name", "[c_api][engine_
 TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][engine_refusal]") {
   SonareEngine* engine = prepared_engine();
 
-  // Channel, controller, parameter id and range of a scalar CC binding.
-  CHECK(sonare_engine_bind_midi_cc(engine, 16, 1, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "channel must be an integer in [0, 15]");
-  CHECK(sonare_engine_bind_midi_cc(engine, 0, 128, 7, 0.0f, 1.0f) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "controller must be an integer in [0, 127]");
-  CHECK(sonare_engine_bind_midi_cc(engine, 0, 1, 0, 0.0f, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "param_id must be an integer in [1, 4294967295]");
-  CHECK(sonare_engine_bind_midi_cc(engine, 0, 1, 7, std::nanf(""), 1.0f) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "min_value must be finite and in [-3.4028235e38, 3.4028235e38]");
-  CHECK(sonare_engine_bind_midi_cc(engine, 0, 1, 7, 1.0f, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "max_value must be at least min_value");
-  CHECK(sonare_engine_bind_midi_cc(engine, 0, 1, 0x4D58FF00u, 0.0f, 1.0f) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "param_id must not be a reserved engine parameter id");
-
+  // Channel, controller, parameter id and range of a CC binding.
   SonareMidiCcBinding good{};
   good.cc_number = 1;
   good.channel = 0;
@@ -417,7 +395,7 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
   auto binding_refused = [&](auto edit) {
     SonareMidiCcBinding binding = good;
     edit(binding);
-    CHECK(sonare_engine_bind_midi_cc_binding(engine, &binding) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_engine_bind_midi_cc(engine, &binding) == SONARE_ERROR_INVALID_PARAMETER);
     return last_error();
   };
   CHECK(binding_refused([](auto& b) { b.cc_number = 128; }) ==
@@ -427,6 +405,10 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
   CHECK(binding_refused([](auto& b) { b.kind = 4; }) == "binding.kind must be one of 0, 1, 2, 3");
   CHECK(binding_refused([](auto& b) { b.param_id = 0; }) ==
         "binding.param_id must be an integer in [1, 4294967295]");
+  CHECK(binding_refused([](auto& b) { b.min_value = std::nanf(""); }) ==
+        "binding.min_value must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK(binding_refused([](auto& b) { b.param_id = 0x4D58FF00u; }) ==
+        "binding.param_id must not be a reserved engine parameter id");
   CHECK(binding_refused([](auto& b) { b.max_value = -1.0f; }) ==
         "binding.max_value must be at least binding.min_value");
   CHECK(binding_refused([](auto& b) {

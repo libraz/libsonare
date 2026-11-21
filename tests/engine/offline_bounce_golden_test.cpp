@@ -83,7 +83,7 @@ std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& 
                                                              const Scenario& scenario) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSourceSampleRate, kBlock, 256, 256) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSourceSampleRate, kBlock, 256, 256, 0) == SONARE_OK);
 
   auto [left, right] = make_clip(signal);
   const float* clip_channels[] = {left.data(), right.data()};
@@ -276,7 +276,7 @@ struct AttenuatedLaneEngine {
 
   AttenuatedLaneEngine() {
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-    REQUIRE(sonare_engine_prepare(engine, kRate, kBlock, 256, 256) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, kRate, kBlock, 256, 256, 0) == SONARE_OK);
 
     const float* clip_channels[] = {left.data(), right.data()};
     SonareEngineClip clip;
@@ -295,7 +295,7 @@ struct AttenuatedLaneEngine {
     uint32_t fader_id = 0;
     REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, 10, "faderDb", &fader_id) ==
             SONARE_OK);
-    REQUIRE(sonare_engine_set_parameter(engine, fader_id, kFaderDb, -1) == SONARE_OK);
+    REQUIRE(sonare_engine_set_parameter(engine, fader_id, kFaderDb, -1, 0) == SONARE_OK);
     REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
     REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   }

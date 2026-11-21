@@ -11,6 +11,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_sf2_instruments(SonareProject* project,
+                                        const SonareProjectBounceOptions* options,
+                                        const SonareSf2InstrumentBinding* bindings, size_t count,
+                                        float** out_interleaved, size_t* out_len,
+                                        int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.sf2_instruments = bindings;
+  with_instruments.sf2_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 // In-memory SF2 fixture: a looped sine preset at (0, 0), a second melodic
 // preset at (0, 1) and a bank-128 drum kit at (128, 0). Program (0, 2) is
 // deliberately NOT covered so manifest fallback reporting is observable.
@@ -548,8 +563,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                     &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   {
     float fallback_peak = 0.0f;
@@ -566,9 +581,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   // A struct not started from its init is rejected.
   binding.config.struct_size = 0;
   int bounce_channels2 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                     &bounce_channels2) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels2) == SONARE_ERROR_INVALID_PARAMETER);
   binding.config.struct_size = sizeof(SonareSf2InstrumentConfig);
 
   // A gain the player's constructor would silently replace with its own default
@@ -579,9 +593,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
     CAPTURE(bad);
     binding.config.gain = bad;
     int bounce_channels3 = 0;
-    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                     &bounce_channels3) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels3) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
   binding.config.gain = 0.5f;
@@ -589,16 +602,15 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
     CAPTURE(bad);
     binding.config.polyphony = bad;
     int bounce_channels4 = 0;
-    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                     &bounce_channels4) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels4) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
   binding.config.polyphony = 48;
 
   int bounce_channels5 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                     &bounce_channels5) == SONARE_OK);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                      &bounce_channels5) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2);
   float peak = 0.0f;
@@ -609,8 +621,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   float* out2 = nullptr;
   size_t out2_len = 0;
   int bounce_channels6 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out2,
-                                                     &out2_len, &bounce_channels6) == SONARE_OK);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out2, &out2_len,
+                                      &bounce_channels6) == SONARE_OK);
   REQUIRE(out2_len == out_len);
   REQUIRE(std::memcmp(out, out2, out_len * sizeof(float)) == 0);
   sonare_free_floats(out2);
@@ -619,8 +631,8 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   float* silent = nullptr;
   size_t silent_len = 0;
   int bounce_channels7 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, nullptr, 0, &silent,
-                                                     &silent_len, &bounce_channels7) == SONARE_OK);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, nullptr, 0, &silent, &silent_len,
+                                      &bounce_channels7) == SONARE_OK);
   float silent_peak = 0.0f;
   for (size_t i = 0; i < silent_len; ++i) silent_peak = std::max(silent_peak, std::abs(silent[i]));
   REQUIRE(silent_peak == 0.0f);
@@ -633,7 +645,7 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
 TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   SonareEngineSf2InstrumentConfig config{};
@@ -648,7 +660,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
     std::vector<float> fb_left(128, 0.0f);
     std::vector<float> fb_right(128, 0.0f);
     float* fb_channels[] = {fb_left.data(), fb_right.data()};
-    REQUIRE(sonare_engine_process(engine, fb_channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, fb_channels, nullptr, 2, 128) == SONARE_OK);
     float fb_peak = 0.0f;
     for (float s : fb_left) fb_peak = std::max(fb_peak, std::abs(s));
     for (float s : fb_right) fb_peak = std::max(fb_peak, std::abs(s));
@@ -684,7 +696,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   float peak = 0.0f;
   for (float s : left) peak = std::max(peak, std::abs(s));
   for (float s : right) peak = std::max(peak, std::abs(s));
@@ -746,7 +758,7 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
 TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
@@ -804,7 +816,7 @@ std::vector<uint8_t> gs_dt1(uint8_t a0, uint8_t a1, uint8_t a2, std::vector<uint
 std::vector<float> render_overdrive(int realization) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
@@ -823,7 +835,7 @@ std::vector<float> render_overdrive(int realization) {
   for (int block = 0; block < 64; ++block) {
     std::fill(left.begin(), left.end(), 0.0f);
     std::fill(right.begin(), right.end(), 0.0f);
-    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
     out.insert(out.end(), left.begin(), left.end());
   }
   sonare_engine_destroy(engine);
@@ -835,7 +847,7 @@ std::vector<float> render_overdrive(int realization) {
 TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_api][sf2]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};
   sonare_engine_sf2_instrument_config_init(&config);
   for (int bad : {-1, 2, 7}) {

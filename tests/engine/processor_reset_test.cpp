@@ -127,7 +127,7 @@ EnginePtr make_engine(Processor p, Placement placement) {
   SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
   EnginePtr engine(raw);
-  REQUIRE(sonare_engine_prepare(engine.get(), kSampleRate, kBlock, 1024, 1024) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine.get(), kSampleRate, kBlock, 1024, 1024, 0) == SONARE_OK);
 
   const float* clip_channels[] = {source().left.data(), source().right.data()};
   SonareEngineClip clip;
@@ -190,7 +190,7 @@ void process_blocks(SonareEngine* engine, int blocks, Planar* capture = nullptr)
   for (int b = 0; b < blocks; ++b) {
     left.fill(0.0f);
     right.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, kChannels, kBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, kChannels, kBlock) == SONARE_OK);
     if (capture != nullptr) {
       capture->left.insert(capture->left.end(), left.begin(), left.end());
       capture->right.insert(capture->right.end(), right.begin(), right.end());

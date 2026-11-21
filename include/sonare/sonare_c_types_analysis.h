@@ -59,6 +59,7 @@ typedef struct {
   int sample_rate;   ///< Sample rate in Hz.
   float* magnitude;  ///< n_bins * n_frames, caller frees with sonare_free_floats
   float* power;      ///< n_bins * n_frames, caller frees with sonare_free_floats
+  float* db;  ///< n_bins * n_frames magnitude in dB; NULL unless SonareStftOptions::db is non-zero
 } SonareStftResult;
 
 /** Layout version of SonareMelResult and SonareMfccResult, written by the
@@ -633,7 +634,7 @@ typedef struct {
 } SonareSynthEngineParam;
 
 /** NativeSynth patch for
-   @ref sonare_project_bounce_with_synth_instruments and
+   @ref SonareProjectBounceOptions::synth_instruments and
    @ref sonare_engine_set_synth_instrument.
 
    Start from @ref sonare_synth_patch_init and override what you need. The patch starts from a BASE:

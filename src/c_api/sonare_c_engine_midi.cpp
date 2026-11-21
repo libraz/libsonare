@@ -387,33 +387,8 @@ SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
 }  // namespace
 #endif
 
-SonareError sonare_engine_set_synth_instrument_with_bank(SonareEngine* engine,
-                                                         uint32_t destination_id,
-                                                         const SonareSynthPatch* patch,
-                                                         SonareSampleBank* bank) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(patch);
-#if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)bank;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
-#else
-  SONARE_C_TRY
-  return bind_native_synth(engine, destination_id, *patch, bank, false);
-  SONARE_C_CATCH
-#endif
-}
-
-SonareError sonare_engine_set_synth_instrument(SonareEngine* engine, uint32_t destination_id,
-                                               const SonareSynthPatch* patch) {
-  SONARE_C_API_ENTRY;
-  return sonare_engine_set_synth_instrument_with_bank(engine, destination_id, patch, nullptr);
-}
-
-SonareError sonare_engine_set_synth_instrument_binding(
-    SonareEngine* engine, const SonareSynthInstrumentBinding* binding) {
+SonareError sonare_engine_set_synth_instrument(SonareEngine* engine,
+                                               const SonareSynthInstrumentBinding* binding) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(binding);
@@ -705,39 +680,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
 #endif
 }
 
-SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, uint8_t channel, uint8_t controller,
-                                       uint32_t param_id, float min_value, float max_value) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err = run_validation([&] {
-        util::check::integer_within(channel, kEngineMidiChannelDomain, "channel");
-        util::check::integer_within(controller, kEngineMidiControllerDomain, "controller");
-        util::check::integer_within(param_id, kEngineParameterIdDomain, "param_id");
-        util::check::finite_float(min_value, "min_value");
-        util::check::finite_float(max_value, "max_value");
-        if (max_value < min_value) {
-          util::check::refuse_relation({"max_value", "min_value"}, "{0} must be at least {1}");
-        }
-        if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
-          util::check::refuse("param_id", "must not be a reserved engine parameter id");
-        }
-      });
-      err != SONARE_OK) {
-    return err;
-  }
-#if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
-#else
-  if (engine->engine.bind_midi_cc(controller, channel, param_id, min_value, max_value)) {
-    return SONARE_OK;
-  }
-  return midi_cc_bind_error(engine->engine);
-#endif
-}
-
-SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
-                                               const SonareMidiCcBinding* binding) {
+SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcBinding* binding) {
   SONARE_C_API_ENTRY;
   // Argument validation is expressed purely against the C surface — the public
   // ordinals and SONARE_MIDI_CC_ANY_CHANNEL, never sonare::midi::CcBinding —

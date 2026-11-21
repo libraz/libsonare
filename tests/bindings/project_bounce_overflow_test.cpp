@@ -12,6 +12,35 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_instruments(SonareProject* project,
+                                    const SonareProjectBounceOptions* options,
+                                    const SonareInstrumentBinding* bindings, size_t count,
+                                    float** out_interleaved, size_t* out_len,
+                                    int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.instruments = bindings;
+  with_instruments.instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 struct CallbackState {
   int render_calls = 0;
 };
@@ -73,9 +102,8 @@ TEST_CASE("project bounce rejects an arrangement event endpoint overflow", "[pro
   const SonareProjectBounceOptions options =
       bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels1) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);
@@ -96,8 +124,8 @@ TEST_CASE("project bounce rejects arrangement plus instrument-tail overflow",
   const SonareProjectBounceOptions options =
       bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels2 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels2) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels2) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);
@@ -116,9 +144,8 @@ TEST_CASE("project bounce rejects total-frames plus PDC overflow", "[project][ov
   size_t out_len = 1;
   const SonareProjectBounceOptions options = bounce_options(std::numeric_limits<int64_t>::max());
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels3) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels3) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);
@@ -137,9 +164,8 @@ TEST_CASE("project bounce rejects negative host-instrument latency", "[project][
   size_t out_len = 1;
   const SonareProjectBounceOptions options = bounce_options(128);
   int bounce_channels4 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels4) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels4) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);
@@ -183,8 +209,8 @@ TEST_CASE("project bounce derives the length from the named constant and refuses
   out = nullptr;
   out_len = 0;
   int bounce_channels6 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels6) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels6) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len > 0);
   sonare_free_floats(out);
@@ -219,9 +245,8 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
   const int64_t frames = static_cast<int64_t>(sonare::kMaxAudioBufferSize / 2u);
   const SonareProjectBounceOptions options = bounce_options(frames);
   int bounce_channels7 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels7) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels7) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   sonare_project_destroy(project);
@@ -256,9 +281,8 @@ TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project]
   const int64_t frames = static_cast<int64_t>(sonare::kMaxAudioBufferSize / 4u);
   const SonareProjectBounceOptions options = bounce_options(frames);
   int bounce_channels8 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels8) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels8) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   sonare_project_destroy(project);

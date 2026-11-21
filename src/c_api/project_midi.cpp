@@ -1197,15 +1197,8 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 #endif
 }
 
-SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id, int program,
-                                       int bank) {
-  SONARE_C_API_ENTRY;
-  return sonare_project_set_program_on_channel(project, clip_id, 0, 0, program, bank);
-}
-
-SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32_t clip_id,
-                                                  uint8_t group, uint8_t channel, int program,
-                                                  int bank) {
+SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id, uint8_t group,
+                                       uint8_t channel, int program, int bank) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);

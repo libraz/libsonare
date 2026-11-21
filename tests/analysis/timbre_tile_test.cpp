@@ -274,8 +274,8 @@ TEST_CASE("sonare_stft's power equals re^2+im^2 independent of a preceding magni
   const Audio audio = make_audio();
 
   SonareStftResult result{};
-  REQUIRE(sonare_stft(audio.data(), audio.size(), audio.sample_rate(), kNfft, kHop, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_stft(audio.data(), audio.size(), audio.sample_rate(), kNfft, kHop, nullptr,
+                      &result) == SONARE_OK);
 
   // Independent reference, built from a second spectrogram's complex data without
   // ever calling Spectrogram::power() or ::magnitude().

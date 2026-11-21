@@ -229,6 +229,21 @@ test = "tests/api/sonare_c_engine_contract_test.cpp::TEST_CASE(\"sonare_capabili
 
 [[entry]]
 kind = "function"
+old = "sonare_audio_from_file"
+changed = "takes const SonareAudioFileOptions* options (NULL = downmix; sonare_audio_file_options_init) before out; channel_index selects one channel and SONARE_AUDIO_CHANNEL_DOWNMIX (-1, the default) downmixes"
+domain = "core"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_audio_from_file downmixes by default and loads one channel on request"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_from_file_channel"
+removed = "call sonare_audio_from_file with SonareAudioFileOptions channel_index set"
+domain = "core"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
 old = "sonare_capability_catalog_json"
 changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
 domain = "mastering"
@@ -725,7 +740,6 @@ domain = "effects"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
 
-
 [[entry]]
 kind = "field"
 old = "SonareRealtimeVoiceChangerConfig.eq_highpass_hz"
@@ -1165,16 +1179,16 @@ rule = "loudness-names"
 [[entry]]
 kind = "field"
 old = "SonareMeterTelemetryRecord.true_peak_db_l"
-new = "SonareMeterTelemetryRecord.true_peak_dbtp_l"
+removed = "read true_peak_dbtp[0]"
 domain = "engine"
-rule = "loudness-names"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
 old = "SonareMeterTelemetryRecord.true_peak_db_r"
-new = "SonareMeterTelemetryRecord.true_peak_dbtp_r"
+removed = "read true_peak_dbtp[1]"
 domain = "engine"
-rule = "loudness-names"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
@@ -1196,27 +1210,6 @@ old = "SonareMixMeterSnapshot.true_peak_db_r"
 new = "SonareMixMeterSnapshot.true_peak_dbtp_r"
 domain = "mastering"
 rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWide.max_true_peak_db"
-new = "SonareMeterTelemetryRecordWide.max_true_peak_dbtp"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWide.true_peak_db"
-new = "SonareMeterTelemetryRecordWide.true_peak_dbtp"
-domain = "engine"
-rule = "loudness-names"
-
-[[entry]]
-kind = "field"
-old = "SonareMeterTelemetryRecordWide.channel_count"
-new = "SonareMeterTelemetryRecordWide.num_channels"
-domain = "engine"
-rule = "num-channels"
 
 [[entry]]
 kind = "field"
@@ -1250,9 +1243,9 @@ test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retun
 [[entry]]
 kind = "type"
 old = "SonareProjectBounceOptions"
-changed = "leads with uint32_t struct_size; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults"
+changed = "gains instruments / builtin_instruments / synth_instruments / sf2_instruments and their counts after instrument_latency_samples, so one options record carries the hosted instruments; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults"
 domain = "project"
-rule = "absent-not-sentinel"
+rule = "options-struct"
 test = "tests/bindings/project_bounce_tail_channel_test.cpp::project bounce reads only the named constants as the default for width and rate"
 
 [[entry]]
@@ -3070,10 +3063,10 @@ rule = "progress-callback"
 [[entry]]
 kind = "function"
 old = "sonare_engine_drain_meter_telemetry"
-changed = "fills SonareMeterTelemetryRecord, which now carries input_peak_db_l and input_peak_db_r after dropped_records (88 bytes); this is the former sonare_engine_drain_meter_telemetry_v2 under the unsuffixed name"
+changed = "fills SonareMeterTelemetryRecord, which is now the per-plane layout (peak_db[], rms_db[], true_peak_dbtp[], input_peak_db[] and num_channels, 192 bytes); a stereo target is planes 0 and 1"
 domain = "engine"
 rule = "options-struct"
-test = "tests/api/sonare_c_engine_routing_test.cpp::C engine master meter carries pre-trim input and compressor reduction"
+test = "tests/api/sonare_c_engine_routing_test.cpp::C engine meter drain refuses bad arguments and reports per-plane peaks"
 
 [[entry]]
 kind = "function"
@@ -3085,22 +3078,21 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_engine_drain_meter_telemetry_wide"
-changed = "fills SonareMeterTelemetryRecordWide, which now carries input_peak_db[] after dropped_records (192 bytes); this is the former sonare_engine_drain_meter_telemetry_wide_v2 under the unsuffixed name"
+removed = "call sonare_engine_drain_meter_telemetry, which fills the per-plane record"
 domain = "engine"
-rule = "options-struct"
-test = "tests/api/sonare_c_engine_routing_test.cpp::C engine wide meter carries pre-trim input and compressor reduction"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "sonare_engine_drain_meter_telemetry_wide_v2"
-removed = "call sonare_engine_drain_meter_telemetry_wide, which now fills the record with the input peaks"
+removed = "call sonare_engine_drain_meter_telemetry, which fills the per-plane record"
 domain = "engine"
 rule = "options-struct"
 
 [[entry]]
 kind = "type"
 old = "SonareMeterTelemetryRecord"
-changed = "the record is 88 bytes and ends with input_peak_db_l and input_peak_db_r; it replaces SonareMeterTelemetryRecordV2"
+changed = "the record is the per-plane layout, 192 bytes: peak_db[], rms_db[], true_peak_dbtp[] and input_peak_db[] indexed by plane with num_channels valid planes; it replaces SonareMeterTelemetryRecordWide"
 domain = "engine"
 rule = "options-struct"
 test = "tests/api/sonare_c_engine_routing_test.cpp::C engine master meter carries pre-trim input and compressor reduction"
@@ -3108,10 +3100,119 @@ test = "tests/api/sonare_c_engine_routing_test.cpp::C engine master meter carrie
 [[entry]]
 kind = "type"
 old = "SonareMeterTelemetryRecordWide"
-changed = "the record is 192 bytes and ends with input_peak_db[SONARE_METER_MAX_CHANNELS]; it replaces SonareMeterTelemetryRecordWideV2"
+removed = "use SonareMeterTelemetryRecord, which carries the same per-plane fields"
 domain = "engine"
-rule = "options-struct"
-test = "tests/api/sonare_c_engine_routing_test.cpp::C engine wide meter carries pre-trim input and compressor reduction"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_bind_midi_cc"
+changed = "takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_engine_midi_test.cpp::sonare_engine MIDI CC binding drives engine parameter"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_bind_midi_cc_binding"
+removed = "call sonare_engine_bind_midi_cc, which takes the SonareMidiCcBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.peak_db_l"
+removed = "read peak_db[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.peak_db_r"
+removed = "read peak_db[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.rms_db_l"
+removed = "read rms_db[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.rms_db_r"
+removed = "read rms_db[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_prepare"
+changed = "takes int max_channels after telemetry_capacity (0 selects 64, negative is refused); pass 0 for the former five-argument call"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_prepare reads 0 as the library default for every sized argument"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_prepare_with_channels"
+removed = "call sonare_engine_prepare, which takes max_channels"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_process"
+changed = "takes float* const* monitor_out after channels: NULL folds the cue bus into channels as before, non-NULL receives it separately"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_engine_voice_test.cpp::sonare_engine_process returns a separate monitor bus when monitor_out is given"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_process_with_monitor"
+removed = "call sonare_engine_process with a non-NULL monitor_out"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_parameter"
+changed = "takes int smoothed after render_frame: 0 steps to the value as before, non-zero ramps to it"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_engine_voice_test.cpp::sonare_engine_set_parameter steps when smoothed is 0 and ramps when it is set"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_parameter_smoothed"
+removed = "call sonare_engine_set_parameter with smoothed non-zero"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_synth_instrument"
+changed = "takes a const SonareSynthInstrumentBinding* (destination_id, patch, use_gm_programs, sample_bank); a NULL sample_bank binds none, as the patch-only call did"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_set_synth_instrument follows GM program changes only when asked"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_synth_instrument_binding"
+removed = "call sonare_engine_set_synth_instrument, which takes the SonareSynthInstrumentBinding"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_synth_instrument_with_bank"
+removed = "call sonare_engine_set_synth_instrument with the bank in SonareSynthInstrumentBinding.sample_bank"
+domain = "engine"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
@@ -3123,7 +3224,7 @@ rule = "options-struct"
 [[entry]]
 kind = "type"
 old = "SonareMeterTelemetryRecordWideV2"
-removed = "use SonareMeterTelemetryRecordWide, which carries the same fields"
+removed = "use SonareMeterTelemetryRecord, which carries the same fields"
 domain = "engine"
 rule = "options-struct"
 
@@ -3171,6 +3272,51 @@ old = "sonare_stream_analyzer_read_frames_i16_ex"
 removed = "call sonare_stream_analyzer_read_frames_i16, which now takes the config"
 domain = "analysis"
 rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_stft"
+changed = "takes const SonareStftOptions* options (NULL = defaults; sonare_stft_options_init) before out; options->db non-zero also fills SonareStftResult.db with the magnitude in dB"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_stft fills the dB plane only when asked and sizes options"
+
+[[entry]]
+kind = "function"
+old = "sonare_stft_db"
+removed = "call sonare_stft with SonareStftOptions db set and read SonareStftResult.db"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_tempogram"
+changed = "takes int mode (SonareTempogramMode: SONARE_TEMPOGRAM_AUTOCORRELATION is the form the entry computed before) after norm"
+domain = "analysis"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare_tempogram mode selects autocorrelation or cosine"
+
+[[entry]]
+kind = "function"
+old = "sonare_tempogram_with_mode"
+removed = "call sonare_tempogram, which takes the mode"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_process"
+changed = "takes const size_t* sample_offset after n_samples: NULL tracks the cumulative offset internally as before, non-NULL is the explicit offset of the chunk"
+domain = "analysis"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_core_test.cpp::sonare_stream_analyzer_process tracks its own offset or takes an explicit one"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_process_with_offset"
+removed = "call sonare_stream_analyzer_process with a non-NULL sample_offset"
+domain = "analysis"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
@@ -3294,10 +3440,10 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_set_marker"
-changed = "takes a const SonareProjectMarker* (id, kind, key signature, ppq, name) and out_marker_id; set marker.id to 0 to allocate a new id"
+changed = "takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id"
 domain = "project"
 rule = "options-struct"
-test = "tests/bindings/binding_project_midi_test.cpp::project C surface set_marker stores kind and key signature"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface set_marker reads a NULL name as the empty name"
 
 [[entry]]
 kind = "function"
@@ -3327,6 +3473,94 @@ old = "SonareProjectTempoSegment.start_sample"
 removed = "drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0"
 domain = "project"
 rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bounce"
+changed = "hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_bounce_test.cpp::project bounce hosts several instrument kinds and refuses a destination bound twice"
+
+[[entry]]
+kind = "type"
+old = "SonareProjectMarker"
+changed = "the record is 16 bytes and carries no name; pass the name to sonare_project_set_marker and read it with sonare_project_marker_name_by_index"
+domain = "project"
+rule = "options-struct"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface preserves long UTF-8 marker names"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bounce_with_instruments"
+removed = "call sonare_project_bounce with the instruments list of SonareProjectBounceOptions set"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bounce_with_builtin_instruments"
+removed = "call sonare_project_bounce with the builtin_instruments list of SonareProjectBounceOptions set"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bounce_with_synth_instruments"
+removed = "call sonare_project_bounce with the synth_instruments list of SonareProjectBounceOptions set"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_bounce_with_sf2_instruments"
+removed = "call sonare_project_bounce with the sf2_instruments list of SonareProjectBounceOptions set"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_compile"
+changed = "takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "tests/api/sonare_c_project_timeline_test.cpp::compile returns no timeline handle and the diagnostics when compile fails"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_compile_timeline"
+removed = "call sonare_project_compile with a non-NULL out_timeline"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_marker_ex_name"
+removed = "call sonare_project_set_marker, which takes the name"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectMarker.name"
+removed = "read the name with sonare_project_marker_name_by_index"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_program"
+changed = "takes uint8_t group and uint8_t channel after clip_id (0 and 0 is the former call); the former sonare_project_set_program_on_channel contract"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "tests/bindings/binding_project_midi_test.cpp::project C surface set_program emits bank select and program change"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_program_on_channel"
+removed = "call sonare_project_set_program, which takes group and channel"
+domain = "project"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"

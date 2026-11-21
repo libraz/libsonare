@@ -21,7 +21,7 @@ extern "C" {
 /// CONTROL thread; more than one control thread needs external serialization.
 ///
 /// AUDIO-thread functions (no allocation, no lock, no throw):
-/// - `sonare_engine_process`, `sonare_engine_process_with_monitor`. They do not
+/// - `sonare_engine_process`. It does not
 ///   touch the thread-local `sonare_last_error_message()` /
 ///   `sonare_last_diagnostic()` channels, because first-touch TLS setup is
 ///   not realtime-safe — validate and read diagnostics on the control thread.
@@ -38,8 +38,8 @@ extern "C" {
 ///   reset, so controller values set before a loop region are not restored at
 ///   the wrap; live-input notes and channels keep their state. A stop releases
 ///   every note and resets every played channel, live ones included.
-/// - Live parameter / MIDI: `sonare_engine_set_parameter`,
-///   `sonare_engine_set_parameter_smoothed`, and the live MIDI push family
+/// - Live parameter / MIDI: `sonare_engine_set_parameter` (jump or smoothed
+///   ramp), and the live MIDI push family
 ///   (`sonare_engine_push_midi_*`, `sonare_engine_push_midi_input_*`; see the
 ///   MIDI section below for the full list).
 /// - Instrument controls: `sonare_engine_set_controller_profile`,
@@ -101,18 +101,22 @@ void sonare_engine_destroy(SonareEngine* engine);
 ///   use is 1024.
 #define SONARE_ENGINE_MAX_TELEMETRY_CAPACITY 16384u
 
-/// @brief Prepares an engine with the default 64-channel planar scratch.
+/// @brief Prepares an engine, bounding its internal channel-planar scratch.
 /// @details 0 is the library-default sentinel for every sized argument:
-///          @p max_block_size 0 selects 128, @p command_capacity 0 selects 1024
-///          and @p telemetry_capacity 0 selects 1024. A negative
-///          @p max_block_size is refused. An explicit capacity is rounded up to
-///          a power of two internally, so the smallest queue is reached by
-///          passing a small explicit value such as 1 or 2.
+///          @p max_block_size 0 selects 128, @p command_capacity 0 selects 1024,
+///          @p telemetry_capacity 0 selects 1024 and @p max_channels 0 selects 64.
+///          A negative @p max_block_size or @p max_channels is refused. An
+///          explicit capacity is rounded up to a power of two internally, so the
+///          smallest queue is reached by passing a small explicit value such as
+///          1 or 2.
 ///          @p command_capacity must not exceed @ref
 ///          SONARE_ENGINE_MAX_COMMAND_CAPACITY and @p telemetry_capacity must
 ///          not exceed @ref SONARE_ENGINE_MAX_TELEMETRY_CAPACITY; a larger
 ///          value returns SONARE_ERROR_INVALID_PARAMETER and leaves the engine
 ///          untouched.
+///          Capture, instrument, PDC and monitor scratch is reserved for
+///          @p max_channels (1..64) only: the host must not pass more channels
+///          to process/render until it prepares again with a larger bound.
 ///          @p sample_rate must be a whole number of hertz in [8000, 384000];
 ///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER, as does a
 ///          @p max_block_size outside [1, 1048576] after the sentinel is applied.
@@ -123,20 +127,8 @@ void sonare_engine_destroy(SonareEngine* engine);
 ///         sample rate and @p sample_rate differs from it; the engine is left
 ///         untouched until the timeline's clips are cleared.
 SonareError sonare_engine_prepare(SonareEngine* engine, double sample_rate, int max_block_size,
-                                  size_t command_capacity, size_t telemetry_capacity);
-/// @brief Prepares an engine while bounding internal channel-planar scratch.
-/// @details Unlike @ref sonare_engine_prepare, this entry point reserves only
-///          @p max_channels (1..64) for capture, instrument, PDC, and monitor
-///          scratch. The host must not pass more channels to process/render
-///          until it prepares again with a larger bound. Use the legacy prepare
-///          function when the maximum channel count is not known. 0 is the
-///          library-default sentinel for every sized argument, as in @ref
-///          sonare_engine_prepare, and additionally @p max_channels 0 selects
-///          64; a negative @p max_channels is refused. The two capacities carry
-///          the same bounds as @ref sonare_engine_prepare.
-SonareError sonare_engine_prepare_with_channels(SonareEngine* engine, double sample_rate,
-                                                int max_block_size, size_t command_capacity,
-                                                size_t telemetry_capacity, int max_channels);
+                                  size_t command_capacity, size_t telemetry_capacity,
+                                  int max_channels);
 /// @brief Queues a transport start at @p render_frame (negative or past: the next block head).
 /// @return SONARE_ERROR_OUT_OF_MEMORY when the command queue is full.
 SonareError sonare_engine_play(SonareEngine* engine, int64_t render_frame);
@@ -294,8 +286,7 @@ SonareError sonare_engine_parameter_info(SonareEngine* engine, uint32_t id,
 /// @details An empty lane (@p point_count == 0) leaves the target
 ///   undriven rather than snapping it to 0 or a default: once the audio
 ///   thread adopts the change, the target reverts to the last value
-///   explicitly sent through @ref sonare_engine_set_parameter /
-///   @ref sonare_engine_set_parameter_smoothed, or is left unchanged if no
+///   explicitly sent through @ref sonare_engine_set_parameter, or is left unchanged if no
 ///   such value was ever sent for @p param_id. This holds regardless of
 ///   whether the manual value or the lane clear reaches the audio thread
 ///   first. A mixer-namespace id (0x4D58xxxx) other than a master id names no
@@ -681,7 +672,7 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareEngine* engin
 /// @brief Resolves a track-lane insert parameter to its reserved automation id.
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
-///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed.
+///   with @ref sonare_engine_set_parameter.
 ///   Track fader/pan ids, bus fader ids and track, bus and master insert ids
 ///   share one lifetime rule: an id names the strip by identity and, for an insert, the
 ///   kind of processor in its slot (for `effects.gsEfx`, its EFX type too), so
@@ -961,21 +952,17 @@ SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* o
 /// @c +=. Zero every output plane before this call when no upstream audio is
 /// intended. Audio-thread only; @p num_frames must not exceed the prepared
 /// block size. If @p num_channels exceeds the channel bound supplied to
-/// sonare_engine_prepare_with_channels, the engine silences and advances the
+/// sonare_engine_prepare, the engine silences and advances the
 /// block, returns @c SONARE_OK, and publishes a telemetry error with
 /// @c error == SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED and
 /// @c value == @p num_channels. A block-size violation takes precedence when
 /// both limits are exceeded and remains
 /// @c SONARE_ENGINE_TELEMETRY_ERROR_MAX_BLOCK_EXCEEDED.
-SonareError sonare_engine_process(SonareEngine* engine, float* const* channels, int num_channels,
-                                  int num_frames);
-/// @brief Renders one block in place like @ref sonare_engine_process, and also copies the cue
-///        (monitor) bus to @p monitor_out instead of folding it into @p channels.
-/// @details Audio-thread only. @p monitor_out holds @p num_channels planes of @p num_frames floats;
-///   a NULL plane is skipped.
-SonareError sonare_engine_process_with_monitor(SonareEngine* engine, float* const* channels,
-                                               float* const* monitor_out, int num_channels,
-                                               int num_frames);
+/// @param monitor_out NULL folds the cue (monitor) bus into @p channels. Non-NULL copies the cue
+///   bus to @p monitor_out instead of folding it: @p num_channels planes of @p num_frames
+///   floats, a NULL plane skipped.
+SonareError sonare_engine_process(SonareEngine* engine, float* const* channels,
+                                  float* const* monitor_out, int num_channels, int num_frames);
 /// @brief Fills @p options with sizeof and the defaults for sonare_engine_render_offline
 ///        (@c finalize 1). A NULL @p options is ignored.
 void sonare_engine_render_offline_options_init(SonareEngineRenderOfflineOptions* options);
@@ -1111,11 +1098,10 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 /// @param written Receives the number of records written; set to 0 on entry.
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
-/// @brief Drains meter telemetry records published by the engine, with pre-trim input peaks
-///        appended to each record.
-/// @details Every meter drain pops from one shared queue and consumes the records of all targets,
-///   so an engine reads its meters through one drain only. This is the stereo form; use
-///   @ref sonare_engine_drain_meter_telemetry_wide for surround targets.
+/// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
+/// @details Every target's record carries all its num_channels planes, and a stereo target's L/R
+///   are planes 0 and 1. Every meter drain pops from one shared queue and consumes the records of
+///   all targets, so an engine reads its meters through one drain only.
 /// @param out Caller-owned array receiving up to @p max_records entries; written only on success.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
 ///   nothing is copied or drained and @p out_count is always set to 0. This
@@ -1127,14 +1113,6 @@ SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTele
 SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
-/// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
-/// @details Every target's record carries all its num_channels planes, and a stereo target's L/R
-///   are planes 0 and 1. It consumes the same shared queue as
-///   @ref sonare_engine_drain_meter_telemetry, so an engine reads its meters through one drain
-///   only. @p out, @p max_records and @p out_count follow that function.
-SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
-                                                     SonareMeterTelemetryRecordWide* out,
-                                                     size_t max_records, size_t* out_count);
 /// Upper bound on the inserts one meter target's strip carries: a track or master
 /// strip's pre-fader plus post-fader inserts. A bus strip carries at most half.
 #define SONARE_METER_MAX_INSERTS 128u
@@ -1178,29 +1156,25 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
 SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
-/// @brief Pushes a live parameter value to the engine (immediate jump).
+/// @brief Pushes a live parameter value to the engine, as a jump or a smoothed ramp.
 /// @param param_id Target parameter id.
 /// @param value New value.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @param smoothed 0 jumps to @p value; non-zero ramps to it over the engine smoother's time
+///   (@ref sonare_engine_set_param_smoothing_ms).
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a reserved mixer id
 ///   (0x4D58xxxx) that is not a master id: the retired positional track and bus
 ///   encoding names no strip. Ids resolved for a strip that was later removed
 ///   are still accepted and apply nothing.
-/// @details This value also becomes @p param_id's base value: if an
-///   automation lane later starts (and stops) driving @p param_id, the target
-///   reverts to this value once that lane empties -- see
+/// @details This value also becomes @p param_id's base value (for a ramp, the ramp's target, not
+///   its in-flight position): if an automation lane later starts (and stops) driving
+///   @p param_id, the target reverts to this value once that lane empties -- see
 ///   @ref sonare_engine_set_automation_lane.
 SonareError sonare_engine_set_parameter(SonareEngine* engine, uint32_t param_id, float value,
-                                        int64_t render_frame);
-/// @brief Pushes a live parameter value to the engine using a smoothed ramp.
-/// @details The ramp's target (not its in-flight position) becomes
-///   @p param_id's base value, with the same restore-on-lane-release behavior
-///   as @ref sonare_engine_set_parameter.
-SonareError sonare_engine_set_parameter_smoothed(SonareEngine* engine, uint32_t param_id,
-                                                 float value, int64_t render_frame);
+                                        int64_t render_frame, int smoothed);
 /// @brief Sets the ramp time (ms) of the engine-level smoother.
 /// @details The time is one time constant: about 63% of the way at the set time.
-///          Governs only @ref sonare_engine_set_parameter_smoothed on parameters
+///          Governs only smoothed @ref sonare_engine_set_parameter pushes on parameters
 ///          bound through the automation engine. Reserved engine targets -- track
 ///          and bus faders, pan and width, and insert and instrument parameters --
 ///          keep their own fixed smoothing whatever this is set to, and MIDI-CC
@@ -1213,8 +1187,8 @@ SonareError sonare_engine_set_param_smoothing_ms(SonareEngine* engine, float smo
 ///   reorder it addresses whichever track now holds that position. A command
 ///   already queued when the lanes change keeps its track. An armed PFL/AFL cue
 ///   (@ref sonare_engine_set_track_monitor_mode) is folded into the program
-///   output by @ref sonare_engine_process and kept separate by the
-///   `_with_monitor` variants; offline renders, bounces and freezes never include it.
+///   output by @ref sonare_engine_process and kept separate when its
+///   @c monitor_out is given; offline renders, bounces and freezes never include it.
 SonareError sonare_engine_set_solo_mute(SonareEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame);
 /// @brief Schedules a per-track-lane PFL/AFL monitor tap.
@@ -1222,8 +1196,8 @@ SonareError sonare_engine_set_solo_mute(SonareEngine* engine, uint32_t lane_inde
 ///          the audio thread applies the mode at @p render_frame (or at the
 ///          next block head when negative). PFL taps after the lane strip and
 ///          before lane fader/gate/pan; AFL taps after those lane stages. The
-///          monitor bus is folded into @ref sonare_engine_process output and is
-///          returned separately by @ref sonare_engine_process_with_monitor.
+///          monitor bus is folded into @ref sonare_engine_process output, or returned separately
+///          through its @c monitor_out.
 ///          Offline renders, bounces and freezes never include the cue.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or unknown mode,
 ///         @c SONARE_ERROR_NOT_SUPPORTED when mixing is disabled, and
@@ -1365,14 +1339,19 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
 /// @brief Binds/replaces the patch-driven NativeSynth on a realtime MIDI
 ///        destination (the full synthesizer: every @ref SonareSynthEngineMode
 ///        engine, enumerable at runtime via @ref sonare_synth_enum_names with
-///        SONARE_SYNTH_ENUM_ENGINE_MODE). The
-///        patch resolves exactly like the project bounce surface
-///        (@ref SonareSynthPatch: preset catalog base + field overrides); an
-///        struct_size below sizeof or an unknown preset name fails with
-///        SONARE_ERROR_INVALID_PARAMETER. Control-thread API; the engine owns
-///        the synth. Live MIDI input and scheduled MIDI clips routed to
-///        @p destination_id render through it. This is a control-thread
-///        structural mutation; do not call concurrently with
+///        SONARE_SYNTH_ENUM_ENGINE_MODE) from a @ref SonareSynthInstrumentBinding,
+///        the record the project bounce takes, so live playback and a bounce
+///        resolve one binding identically.
+/// @details Reads destination_id, patch and use_gm_programs as the bounce does.
+///        The patch resolves through the preset catalog base + field overrides;
+///        a struct_size below sizeof or an unknown preset name fails with
+///        SONARE_ERROR_INVALID_PARAMETER. The engine takes a share of
+///        sample_bank (the bounce only borrows it), so the caller may destroy
+///        its handle afterwards; a NULL sample_bank binds none, and a sample
+///        patch bound without a bank is accepted and renders silence. Control-
+///        thread API; the engine owns the synth. Live MIDI input and scheduled
+///        MIDI clips routed to destination_id render through it. This is a
+///        control-thread structural mutation; do not call concurrently with
 ///        @ref sonare_engine_process. Replacing an instrument releases the
 ///        destination's sounding notes and fades the outgoing instrument out
 ///        over 10 ms in the following blocks, so a swap during playback does
@@ -1381,43 +1360,18 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
 /// @return SONARE_ERROR_INVALID_PARAMETER if the synth itself is refused (it fails
 ///         to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or the
 ///         synth cannot prepare a SysEx already scheduled or queued for
-///         @p destination_id; SONARE_ERROR_OUT_OF_MEMORY if allocation fails.
+///         destination_id; SONARE_ERROR_OUT_OF_MEMORY if allocation fails.
 ///         Either way the previous binding stays in place.
-SonareError sonare_engine_set_synth_instrument(SonareEngine* engine, uint32_t destination_id,
-                                               const SonareSynthPatch* patch);
-
-/// @brief Like @ref sonare_engine_set_synth_instrument, and additionally binds
-///        the sample bank a SONARE_SYNTH_ENGINE_SAMPLE patch reads.
-/// @details Same patch resolution and the same control-thread contract; the
-///          only difference is @p bank, which the engine takes a share of, so
-///          the caller may destroy its own handle afterwards. Pass NULL for a
-///          patch that does not voice the sample engine — it then behaves
-///          exactly like @ref sonare_engine_set_synth_instrument. A sample
-///          patch bound WITHOUT a bank is accepted and renders silence, the
-///          same way one naming a keymap set the bank lacks does.
-SonareError sonare_engine_set_synth_instrument_with_bank(SonareEngine* engine,
-                                                         uint32_t destination_id,
-                                                         const SonareSynthPatch* patch,
-                                                         SonareSampleBank* bank);
-
-/// @brief Binds the NativeSynth from a @ref SonareSynthInstrumentBinding, the
-///        record @ref sonare_project_bounce_with_synth_instruments takes, so
-///        live playback and a bounce resolve one binding identically.
-/// @details Reads destination_id, patch and use_gm_programs as the bounce
-///          does. The engine takes a share of sample_bank (the bounce only
-///          borrows it), so the caller may destroy its handle afterwards. Same
-///          control-thread contract as @ref sonare_engine_set_synth_instrument.
-SonareError sonare_engine_set_synth_instrument_binding(SonareEngine* engine,
-                                                       const SonareSynthInstrumentBinding* binding);
+SonareError sonare_engine_set_synth_instrument(SonareEngine* engine,
+                                               const SonareSynthInstrumentBinding* binding);
 
 /// @brief Resolves a hosted instrument's continuous parameter to its reserved
 ///        automation id.
 /// @details Instrument counterpart of
 ///   @ref sonare_engine_resolve_track_insert_automation_id: the returned id is
 ///   driven over time with @ref sonare_engine_set_automation_lane (a PPQ
-///   breakpoint lane) or set once with @ref sonare_engine_set_parameter /
-///   @ref sonare_engine_set_parameter_smoothed, and reaches the instrument at
-///   audio-block precision, live and offline alike.
+///   breakpoint lane) or set once with @ref sonare_engine_set_parameter, and reaches the instrument
+///   at audio-block precision, live and offline alike.
 ///
 ///   @p param_name is the instrument's JSON-key parameter name. For the
 ///   NativeSynth (@ref sonare_engine_set_synth_instrument) these are the
@@ -1787,21 +1741,15 @@ SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t d
 SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destination_id, uint8_t part,
                                        int mode, const char* inserts_json);
 
-/// @brief Binds a live MIDI CC to an engine automation parameter.
-/// @details Control-thread API. After binding, @ref sonare_engine_push_midi_cc
-///          still routes the MIDI event to the destination instrument, and also
-///          maps the 7-bit CC value into [min_value, max_value] for @p param_id.
+/// @brief Binds a full 7-bit/14-bit CC, RPN, or NRPN descriptor to the live engine.
+/// @details Control-thread API. Uses the same descriptor and validation as project MIDI
+///          learn/conversion. After binding, @ref sonare_engine_push_midi_cc still routes the
+///          MIDI event to the destination instrument, and also maps the controller value into
+///          [min_value, max_value] for the bound parameter.
 /// @return SONARE_ERROR_INVALID_STATE when the binding table is full (a rebind of
 ///         a bound controller and channel replaces it and always fits);
 ///         SONARE_ERROR_OUT_OF_MEMORY if allocation fails.
-SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, uint8_t channel, uint8_t controller,
-                                       uint32_t param_id, float min_value, float max_value);
-/// @brief Binds a full 7-bit/14-bit CC, RPN, or NRPN descriptor to the live engine.
-/// @details Uses the same descriptor and validation as project MIDI learn/conversion.
-/// The scalar @ref sonare_engine_bind_midi_cc remains a 7-bit compatibility shim.
-/// @return As for @ref sonare_engine_bind_midi_cc.
-SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
-                                               const SonareMidiCcBinding* binding);
+SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcBinding* binding);
 /// @brief Clears all live MIDI CC to parameter bindings.
 SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine);
 /// @brief Returns the number of live MIDI CC bindings.
@@ -2027,7 +1975,7 @@ SonareError sonare_engine_push_midi_input_ump(SonareEngine* engine, const uint32
 ///          player (@ref sonare_engine_set_sf2_instrument) selects bank and program
 ///          under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a NativeSynth
 ///          bound with use_gm_programs
-///          (@ref sonare_engine_set_synth_instrument_binding) resolves each
+///          (@ref sonare_engine_set_synth_instrument) resolves each
 ///          channel's voice from the bank and program; a NativeSynth whose patch
 ///          plays the GM kit (the `drumKit` preset, or a percussion patch with
 ///          gm_kit on) takes the program as the GS drum-set select on every

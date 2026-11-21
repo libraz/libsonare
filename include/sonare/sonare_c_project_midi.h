@@ -470,21 +470,14 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
 SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_t** out_bytes,
                                             size_t* out_len);
 
-/// @brief Sets a MIDI clip's program / bank by inserting deterministic
-///        MIDI-1.0 bank-select CC + program-change events at source PPQ 0.
-///        Uses group 0 / channel 0. For explicit routing use
-///        @ref sonare_project_set_program_on_channel.
-///        @p program must be in [0,127]. @p bank may be -1 (no bank select) or
-///        a 14-bit bank number [0,16383] encoded as CC0(MSB), CC32(LSB).
-SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id, int program,
-                                       int bank);
-
-/// @brief Sets a MIDI clip's program / bank on a specific UMP group/channel.
+/// @brief Sets a MIDI clip's program / bank on a specific UMP group/channel by inserting
+///        deterministic MIDI-1.0 bank-select CC + program-change events at source PPQ 0.
 ///        Existing PPQ-0 bank-select/program events for that same group/channel
 ///        are replaced; other channels' program events are preserved.
-SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32_t clip_id,
-                                                  uint8_t group, uint8_t channel, int program,
-                                                  int bank);
+///        @p program must be in [0,127]. @p bank may be -1 (no bank select) or
+///        a 14-bit bank number [0,16383] encoded as CC0(MSB), CC32(LSB).
+SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id, uint8_t group,
+                                       uint8_t channel, int program, int bank);
 
 /// @brief Applies a deterministic MIDI-FX transform to a clip's stored events.
 ///

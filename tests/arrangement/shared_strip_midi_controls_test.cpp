@@ -17,6 +17,35 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_instruments(SonareProject* project,
+                                    const SonareProjectBounceOptions* options,
+                                    const SonareInstrumentBinding* bindings, size_t count,
+                                    float** out_interleaved, size_t* out_len,
+                                    int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.instruments = bindings;
+  with_instruments.instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 constexpr int kSampleRate = 48000;
 constexpr int kBlockSize = 128;
 constexpr int64_t kFrames = 24000;
@@ -75,8 +104,8 @@ StereoEnergy bounce_energy(SonareProject* project) {
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels1) == SONARE_OK);
   StereoEnergy energy;
   for (size_t i = 0; i + 1 < out_len; i += 2) {
     energy.left += static_cast<double>(out[i]) * static_cast<double>(out[i]);
@@ -150,8 +179,8 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels2 = 0;
-    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                   &bounce_channels2) == SONARE_OK);
+    REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                    &bounce_channels2) == SONARE_OK);
     double sum = 0.0;
     for (size_t i = 0; i < out_len; ++i)
       sum += static_cast<double>(out[i]) * static_cast<double>(out[i]);
@@ -227,8 +256,8 @@ TEST_CASE("a callback destination shared by unrouted tracks bounces once",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels3 = 0;
-    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                   &bounce_channels3) == SONARE_OK);
+    REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                    &bounce_channels3) == SONARE_OK);
     std::vector<float> samples(out, out + out_len);
     sonare_free_floats(out);
     sonare_project_destroy(project);

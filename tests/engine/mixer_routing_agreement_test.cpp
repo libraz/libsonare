@@ -34,6 +34,21 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 using sonare::constants::kTwoPiD;
 
 constexpr double kSampleRate = 48000.0;
@@ -282,7 +297,7 @@ struct EngineOptions {
 SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
 
   const SonareEngineTrackSend sends[] = {{kBusB, kSendDb, 1,
                                           row.routing == Routing::kASendPreB
@@ -331,7 +346,7 @@ SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
     uint32_t lane_fader = 0;
     REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, kMidiTrack, "faderDb",
                                                            &lane_fader) == SONARE_OK);
-    REQUIRE(sonare_engine_set_parameter(engine, lane_fader, kSourceFaderDb, 0) == SONARE_OK);
+    REQUIRE(sonare_engine_set_parameter(engine, lane_fader, kSourceFaderDb, 0, 0) == SONARE_OK);
     REQUIRE(sonare_engine_flush_control_commands(engine) == SONARE_OK);
   }
 
@@ -400,7 +415,7 @@ std::vector<float> render_live(const Row& row) {
     io[static_cast<size_t>(c)] = block[static_cast<size_t>(c)].data();
   for (int64_t b = 0; b < kTotalFrames / kBlockSize; ++b) {
     for (auto& plane : block) std::fill(plane.begin(), plane.end(), 0.0f);
-    REQUIRE(sonare_engine_process(engine, io.data(), channels, kBlockSize) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io.data(), nullptr, channels, kBlockSize) == SONARE_OK);
     for (int c = 0; c < channels; ++c) {
       std::copy(block[static_cast<size_t>(c)].begin(), block[static_cast<size_t>(c)].end(),
                 planes[static_cast<size_t>(c)].begin() + b * kBlockSize);
@@ -496,8 +511,8 @@ std::vector<float> render_project_bounce(const Row& row) {
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels) == SONARE_OK);
   REQUIRE(out_len == static_cast<size_t>(kTotalFrames * output_channels(row)));
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);

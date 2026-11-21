@@ -12,6 +12,63 @@
 
 namespace {
 
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_instruments(SonareProject* project,
+                                    const SonareProjectBounceOptions* options,
+                                    const SonareInstrumentBinding* bindings, size_t count,
+                                    float** out_interleaved, size_t* out_len,
+                                    int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.instruments = bindings;
+  with_instruments.instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_builtin_instruments(SonareProject* project,
+                                            const SonareProjectBounceOptions* options,
+                                            const SonareBuiltinInstrumentBinding* bindings,
+                                            size_t count, float** out_interleaved, size_t* out_len,
+                                            int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.builtin_instruments = bindings;
+  with_instruments.builtin_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_synth_instruments(SonareProject* project,
+                                          const SonareProjectBounceOptions* options,
+                                          const SonareSynthInstrumentBinding* bindings,
+                                          size_t count, float** out_interleaved, size_t* out_len,
+                                          int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.synth_instruments = bindings;
+  with_instruments.synth_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+SonareError bounce_with_sf2_instruments(SonareProject* project,
+                                        const SonareProjectBounceOptions* options,
+                                        const SonareSf2InstrumentBinding* bindings, size_t count,
+                                        float** out_interleaved, size_t* out_len,
+                                        int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.sf2_instruments = bindings;
+  with_instruments.sf2_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
 // A one-track SMF carrying the two scheduled GS messages that turn on an EFX
 // unit 0. The project C event POD intentionally cannot construct SysEx, so
 // importing this tiny file is the public binding path for the test.
@@ -82,8 +139,8 @@ TEST_CASE("auto-length project bounce includes a scheduled classic GS EFX tail",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels1 = 0;
-    REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels1) == SONARE_OK);
+    REQUIRE(bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels1) == SONARE_OK);
     REQUIRE(out != nullptr);
     sonare_free_floats(out);
     sonare_project_destroy(project);
@@ -124,8 +181,8 @@ TEST_CASE("auto-length synth bounce includes a scheduled modern GS EFX tail",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels2 = 0;
-    REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels2) == SONARE_OK);
+    REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels2) == SONARE_OK);
     REQUIRE(out != nullptr);
     sonare_free_floats(out);
     sonare_project_destroy(project);
@@ -187,8 +244,8 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels3) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels3) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2);
 
@@ -259,9 +316,8 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   float* bounced = nullptr;
   size_t bounced_length = 0;
   int bounce_channels5 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &bounce_options, &bounce_binding,
-                                                         1, &bounced, &bounced_length,
-                                                         &bounce_channels5) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &bounce_options, &bounce_binding, 1, &bounced,
+                                          &bounced_length, &bounce_channels5) == SONARE_OK);
   float bounce_peak = 0.0f;
   for (size_t i = 0; i < bounced_length; ++i) {
     bounce_peak = std::max(bounce_peak, std::abs(bounced[i]));
@@ -269,7 +325,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
 
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig live_config{};
   sonare_engine_builtin_synth_config_init(&live_config);
   live_config.polyphony = 1;
@@ -288,7 +344,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   std::array<float, kBlockSize> prime_left{};
   std::array<float, kBlockSize> prime_right{};
   float* prime_channels[] = {prime_left.data(), prime_right.data()};
-  REQUIRE(sonare_engine_process(engine, prime_channels, 2, kBlockSize) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, prime_channels, nullptr, 2, kBlockSize) == SONARE_OK);
   const SonareEngineMidiEvent events[] = {
       {0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},
   };
@@ -312,7 +368,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   for (int block = 0; block < kFrames / kBlockSize; ++block) {
     left.fill(0.0f);
     right.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, channels, 2, kBlockSize) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, kBlockSize) == SONARE_OK);
     for (float sample : left) {
       live_peak = std::max(live_peak, std::abs(sample));
     }
@@ -385,8 +441,8 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels6 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels6) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels6) == SONARE_OK);
     StereoEnergy energy;
     const size_t begin = 12000u * 2u;
     for (size_t i = begin; i + 1 < out_len; i += 2) {
@@ -498,8 +554,8 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels7 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels7) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels7) == SONARE_OK);
     double energy = 0.0;
     const size_t begin = 12000u * 2u;
     for (size_t i = begin; i < out_len; ++i) {
@@ -599,8 +655,8 @@ TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels8 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len, &bounce_channels8) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels8) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len > 0);
   REQUIRE(out_len % 2 == 0);
@@ -705,8 +761,8 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels9 = 0;
-    outcome.status = sonare_project_bounce_with_builtin_instruments(
-        project, &options, &binding, 1, &out, &out_len, &bounce_channels9);
+    outcome.status = bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels9);
     sonare_free_floats(out);
 
     SonareProjectCompileResult compiled{};
@@ -787,8 +843,8 @@ TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 1;
   int bounce_channels10 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels10) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels10) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   sonare_project_destroy(project);
@@ -829,8 +885,8 @@ TEST_CASE("bounce_with_instruments auto length includes callback instrument tail
   float* no_tail = nullptr;
   size_t no_tail_len = 0;
   int bounce_channels11 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &no_tail,
-                                                 &no_tail_len, &bounce_channels11) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &no_tail, &no_tail_len,
+                                  &bounce_channels11) == SONARE_OK);
   sonare_free_floats(no_tail);
 
   constexpr int kTailSamples = 4096;
@@ -838,8 +894,8 @@ TEST_CASE("bounce_with_instruments auto length includes callback instrument tail
   float* with_tail = nullptr;
   size_t with_tail_len = 0;
   int bounce_channels12 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &with_tail,
-                                                 &with_tail_len, &bounce_channels12) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &with_tail, &with_tail_len,
+                                  &bounce_channels12) == SONARE_OK);
   sonare_free_floats(with_tail);
 
   REQUIRE(with_tail_len == no_tail_len + static_cast<size_t>(kTailSamples * options.num_channels));
@@ -880,8 +936,8 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels13 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(
-              project, &options, &binding, 1, &out, &out_len, &bounce_channels13) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels13) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2);
   float peak = 0.0f;
@@ -893,15 +949,15 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
   float* out2 = nullptr;
   size_t out2_len = 0;
   int bounce_channels14 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(
-              project, &options, &binding, 1, &out2, &out2_len, &bounce_channels14) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out2, &out2_len,
+                                          &bounce_channels14) == SONARE_OK);
   REQUIRE(out2_len == out_len);
   sonare_free_floats(out2);
 
   sonare_project_destroy(project);
 }
 
-TEST_CASE("bounce_with_builtin_instruments refuses a waveform outside the enum", "[project]") {
+TEST_CASE("project bounce refuses a built-in waveform outside the enum", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
@@ -931,9 +987,8 @@ TEST_CASE("bounce_with_builtin_instruments refuses a waveform outside the enum",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels15 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                           &out_len, &bounce_channels15) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels15) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
   }
 
@@ -945,8 +1000,8 @@ TEST_CASE("bounce_with_builtin_instruments refuses a waveform outside the enum",
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels16 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels16) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels16) == SONARE_OK);
     sonare_free_floats(out);
   }
 
@@ -967,9 +1022,8 @@ TEST_CASE("bounce_with_synth_instruments validates null handles before patch con
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 123;
   int bounce_channels17 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(nullptr, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels17) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(nullptr, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels17) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
 
@@ -978,9 +1032,8 @@ TEST_CASE("bounce_with_synth_instruments validates null handles before patch con
   out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   out_len = 123;
   int bounce_channels18 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       nullptr, &bounce_channels18) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, nullptr,
+                                        &bounce_channels18) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   sonare_project_destroy(project);
 }
@@ -1014,14 +1067,13 @@ TEST_CASE("synth bounce GM mode follows program changes through the C API", "[pr
   float* fixed_audio = nullptr;
   size_t fixed_len = 0;
   int bounce_channels19 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &fixed, 1, &fixed_audio,
-                                                       &fixed_len,
-                                                       &bounce_channels19) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &fixed, 1, &fixed_audio, &fixed_len,
+                                        &bounce_channels19) == SONARE_OK);
   float* gm_audio = nullptr;
   size_t gm_len = 0;
   int bounce_channels20 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &gm, 1, &gm_audio,
-                                                       &gm_len, &bounce_channels20) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &gm, 1, &gm_audio, &gm_len,
+                                        &bounce_channels20) == SONARE_OK);
   REQUIRE(fixed_len == gm_len);
   bool differs = false;
   for (size_t i = 0; i < gm_len; ++i) {
@@ -1067,9 +1119,8 @@ TEST_CASE("synth bounce GM programs 4 and 40 stay audible and distinct", "[proje
     float* audio = nullptr;
     size_t audio_len = 0;
     int bounce_channels21 = 0;
-    REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &audio,
-                                                         &audio_len,
-                                                         &bounce_channels21) == SONARE_OK);
+    REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &audio, &audio_len,
+                                          &bounce_channels21) == SONARE_OK);
     REQUIRE(audio != nullptr);
     REQUIRE(audio_len == static_cast<size_t>(options.total_frames));
     std::vector<float> result(audio, audio + audio_len);
@@ -1134,8 +1185,8 @@ TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") 
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels22 = 0;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(
-              project, &options, &binding, 1, &out, &out_len, &bounce_channels22) == SONARE_OK);
+  REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                          &bounce_channels22) == SONARE_OK);
   REQUIRE(out != nullptr);
   // A 4-quarter clip at the default tempo spans well over a second of audio.
   REQUIRE(out_len >= 48000u * 2u);
@@ -1351,9 +1402,8 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   callback_binding.destination_id = 1u;
   callback_binding.callbacks.render = nullptr;  // required
   int bounce_channels29 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &callback_binding, 1, &out,
-                                                 &out_len, &bounce_channels29) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_instruments(project, &options, &callback_binding, 1, &out, &out_len,
+                                  &bounce_channels29) == SONARE_ERROR_INVALID_PARAMETER);
   SonareProjectCompileResult after_callback{};
   REQUIRE(sonare_project_last_bounce_compile_result(project, &after_callback) == SONARE_OK);
   CHECK(after_callback.diagnostic_count == 0);
@@ -1393,9 +1443,8 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   sf2_binding.destination_id = 1u;
   sf2_binding.config.struct_size = 0;  // not started from its init
   int bounce_channels33 = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &sf2_binding, 1, &out,
-                                                     &out_len, &bounce_channels33) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_sf2_instruments(project, &options, &sf2_binding, 1, &out, &out_len,
+                                      &bounce_channels33) == SONARE_ERROR_INVALID_PARAMETER);
   SonareProjectCompileResult after_sf2{};
   REQUIRE(sonare_project_last_bounce_compile_result(project, &after_sf2) == SONARE_OK);
   CHECK(after_sf2.diagnostic_count == 0);
@@ -1548,8 +1597,8 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels35 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels35) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels35) == SONARE_OK);
     const float peak = buffer_peak(out, out_len, skip_samples);
     sonare_free_floats(out);
     sonare_project_destroy(project);
@@ -2018,8 +2067,8 @@ TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument"
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels42 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels42) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels42) == SONARE_OK);
   REQUIRE(out != nullptr);
   // The returned length is the requested frame count: the PDC pre-roll is
   // rendered then trimmed, not appended.
@@ -2118,8 +2167,8 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels43 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels43) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels43) == SONARE_OK);
   sonare_free_floats(out);
 
   // All three note-ons must have been dispatched, in pitch order, each at a
@@ -2213,8 +2262,8 @@ TEST_CASE("a tick denser than the per-block event hold loses no events", "[proje
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels44 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels44) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels44) == SONARE_OK);
   sonare_free_floats(out);
 
   // End-of-render controller resets are separate from these authored events.
@@ -2314,8 +2363,8 @@ TEST_CASE("bounce delivers the end-of-render note release to a callback instrume
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels45 = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                                 &bounce_channels45) == SONARE_OK);
+  REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                  &bounce_channels45) == SONARE_OK);
   sonare_free_floats(out);
 
   REQUIRE(state.rendered_frames == options.total_frames);
@@ -2413,8 +2462,8 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels46 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels46) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels46) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames));
 
@@ -3007,8 +3056,8 @@ TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expressio
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels54 = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                project, &options, &binding, 1, &out, &out_len, &bounce_channels54) == SONARE_OK);
+    REQUIRE(bounce_with_builtin_instruments(project, &options, &binding, 1, &out, &out_len,
+                                            &bounce_channels54) == SONARE_OK);
     REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2u);
     std::vector<float> audio(out, out + out_len);
     sonare_free_floats(out);
@@ -3071,13 +3120,63 @@ TEST_CASE("project bounce entries refuse a NULL pointer by its header name", "[p
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_len must not be NULL");
 
-  REQUIRE(sonare_project_bounce_with_instruments(project, nullptr, nullptr, 1, &out, &len,
-                                                 &channels) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "instruments must not be NULL when instrument_count is not 0");
+  REQUIRE(bounce_with_instruments(project, nullptr, nullptr, 1, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.instruments must not be NULL when options.instrument_count is not 0");
   const SonareInstrumentBinding no_render{};
-  REQUIRE(sonare_project_bounce_with_instruments(project, nullptr, &no_render, 1, &out, &len,
-                                                 &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_instruments(project, nullptr, &no_render, 1, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "instruments[0].callbacks.render must not be NULL");
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project bounce hosts several instrument kinds and refuses a destination bound twice",
+          "[project][refusal]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  float* out = nullptr;
+  size_t len = 0;
+  int channels = 0;
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  SonareProjectBounceOptions options;
+  sonare_project_bounce_options_init(&options);
+  options.total_frames = 64;
+  options.block_size = 64;
+  options.num_channels = 2;
+
+  SonareBuiltinInstrumentBinding builtin[2]{};
+  for (auto& binding : builtin) sonare_builtin_synth_config_init(&binding.config);
+  builtin[0].destination_id = 3;
+  builtin[1].destination_id = 4;
+  SonareSynthInstrumentBinding synth{};
+  sonare_synth_patch_init(&synth.patch);
+  synth.destination_id = 5;
+  options.builtin_instruments = builtin;
+  options.builtin_instrument_count = 2;
+  options.synth_instruments = &synth;
+  options.synth_instrument_count = 1;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) == SONARE_OK);
+  sonare_free_floats(out);
+
+  builtin[1].destination_id = 3;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "builtin_instruments[1].destination_id must not be bound twice");
+
+  builtin[1].destination_id = 4;
+  synth.destination_id = 4;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "synth_instruments[0].destination_id must not be bound twice");
+
+  options.synth_instruments = nullptr;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() ==
+        "options.synth_instruments must not be NULL when options.synth_instrument_count is not 0");
 
   sonare_project_destroy(project);
 }
@@ -3152,23 +3251,21 @@ TEST_CASE("project bounce refuses options and instrument members by their header
   SonareBuiltinInstrumentBinding builtin{};
   sonare_builtin_synth_config_init(&builtin.config);
   builtin.config.waveform = 9;
-  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, nullptr, &builtin, 1, &out, &len,
-                                                         &channels) ==
+  REQUIRE(bounce_with_builtin_instruments(project, nullptr, &builtin, 1, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "instruments[0].config.waveform must be an integer in [0, 3]");
+  CHECK(message() == "builtin_instruments[0].config.waveform must be an integer in [0, 3]");
 
   SonareSf2InstrumentBinding sf2{};
   sonare_sf2_instrument_config_init(&sf2.config);
   sf2.config.struct_size = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, nullptr, &sf2, 1, &out, &len,
-                                                     &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_sf2_instruments(project, nullptr, &sf2, 1, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() ==
-        "instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
+        "sf2_instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
 
   sonare_project_destroy(project);
 }
-TEST_CASE("bounce_with_builtin_instruments refuses each synth field by name",
-          "[project][refusal]") {
+TEST_CASE("project bounce refuses each built-in synth field by name", "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
@@ -3181,36 +3278,38 @@ TEST_CASE("bounce_with_builtin_instruments refuses each synth field by name",
   sonare_builtin_synth_config_init(&binding.config);
   CHECK(binding.config.struct_size == sizeof(SonareBuiltinSynthConfig));
   const auto refused = [&](const SonareBuiltinInstrumentBinding& bad, const std::string& text) {
-    CHECK(sonare_project_bounce_with_builtin_instruments(
-              project, nullptr, &bad, 1, &out, &len, &channels) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bounce_with_builtin_instruments(project, nullptr, &bad, 1, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(message() == text);
   };
   SonareBuiltinInstrumentBinding bad = binding;
   bad.config.struct_size = 0;
-  refused(bad, "instruments[0].config.struct_size must be set by sonare_builtin_synth_config_init");
+  refused(
+      bad,
+      "builtin_instruments[0].config.struct_size must be set by sonare_builtin_synth_config_init");
   bad = binding;
   bad.config.gain = 0.0f;
-  refused(bad, "instruments[0].config.gain must be finite and in (0, 4]");
+  refused(bad, "builtin_instruments[0].config.gain must be finite and in (0, 4]");
   bad = binding;
   bad.config.attack_ms = 0.0f;
-  refused(bad, "instruments[0].config.attack_ms must be finite and in (0, 20000]");
+  refused(bad, "builtin_instruments[0].config.attack_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.decay_ms = 0.0f;
-  refused(bad, "instruments[0].config.decay_ms must be finite and in (0, 20000]");
+  refused(bad, "builtin_instruments[0].config.decay_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.sustain = 1.5f;
-  refused(bad, "instruments[0].config.sustain must be finite and in (0, 1]");
+  refused(bad, "builtin_instruments[0].config.sustain must be finite and in (0, 1]");
   bad = binding;
   bad.config.release_ms = 0.0f;
-  refused(bad, "instruments[0].config.release_ms must be finite and in (0, 20000]");
+  refused(bad, "builtin_instruments[0].config.release_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.polyphony = 0;
-  refused(bad, "instruments[0].config.polyphony must be an integer in [1, 64]");
+  refused(bad, "builtin_instruments[0].config.polyphony must be an integer in [1, 64]");
 
   sonare_project_destroy(project);
 }
 
-TEST_CASE("bounce_with_sf2_instruments refuses each player field by name", "[project][refusal]") {
+TEST_CASE("project bounce refuses each SF2 player field by name", "[project][refusal]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
@@ -3223,31 +3322,31 @@ TEST_CASE("bounce_with_sf2_instruments refuses each player field by name", "[pro
   sonare_sf2_instrument_config_init(&binding.config);
   CHECK(binding.config.struct_size == sizeof(SonareSf2InstrumentConfig));
   const auto refused = [&](const SonareSf2InstrumentBinding& bad, const std::string& text) {
-    CHECK(sonare_project_bounce_with_sf2_instruments(project, nullptr, &bad, 1, &out, &len,
-                                                     &channels) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bounce_with_sf2_instruments(project, nullptr, &bad, 1, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(message() == text);
   };
   SonareSf2InstrumentBinding bad = binding;
   bad.config.struct_size = 0;
   refused(bad,
-          "instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
+          "sf2_instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
   bad = binding;
   bad.config.gain = -1.0f;
-  refused(bad, "instruments[0].config.gain must be finite and in [0, 4]");
+  refused(bad, "sf2_instruments[0].config.gain must be finite and in [0, 4]");
   bad = binding;
   bad.config.polyphony = 0;
-  refused(bad, "instruments[0].config.polyphony must be an integer in [1, 64]");
+  refused(bad, "sf2_instruments[0].config.polyphony must be an integer in [1, 64]");
   bad = binding;
   bad.config.prefer_model_for_modeled_families = -1;
   refused(bad,
-          "instruments[0].config.prefer_model_for_modeled_families must be an integer in [0, "
+          "sf2_instruments[0].config.prefer_model_for_modeled_families must be an integer in [0, "
           "2147483647]");
   bad = binding;
   bad.config.clear_bank_rig = -1;
-  refused(bad, "instruments[0].config.clear_bank_rig must be an integer in [0, 2147483647]");
+  refused(bad, "sf2_instruments[0].config.clear_bank_rig must be an integer in [0, 2147483647]");
   bad = binding;
   bad.config.gs_efx_realization = 2;
-  refused(bad, "instruments[0].config.gs_efx_realization must be an integer in [0, 1]");
+  refused(bad, "sf2_instruments[0].config.gs_efx_realization must be an integer in [0, 1]");
 
   sonare_project_destroy(project);
 }

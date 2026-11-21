@@ -305,15 +305,14 @@ TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
+TEST_CASE("sonare_tempogram mode selects autocorrelation or cosine", "[c_api]") {
   const std::vector<float> env{0.2f, 1.0f, 0.4f, 0.0f, 0.8f, 0.1f, 0.5f, 0.3f,
                                0.6f, 0.0f, 0.9f, 0.2f, 0.4f, 0.7f, 0.1f, 0.5f};
   float* data = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
-  SonareError err =
-      sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, SONARE_TEMPOGRAM_COSINE,
-                                 &data, &out_length, &n_frames);
+  SonareError err = sonare_tempogram(env.data(), env.size(), 8, 1, 8, 0, 0, SONARE_TEMPOGRAM_COSINE,
+                                     &data, &out_length, &n_frames);
 
   REQUIRE(err == SONARE_OK);
   REQUIRE(data != nullptr);
@@ -326,8 +325,14 @@ TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
   }
   sonare_free_floats(data);
 
-  REQUIRE(sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, 99, &data, &out_length,
-                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+  float* autocorr = nullptr;
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, 8, 0, 0, SONARE_TEMPOGRAM_AUTOCORRELATION,
+                           &autocorr, &out_length, &n_frames) == SONARE_OK);
+  REQUIRE(autocorr != nullptr);
+  sonare_free_floats(autocorr);
+
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, 8, 0, 0, 99, &data, &out_length,
+                           &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_tempogram and sonare_fourier_tempogram frame an uncentered envelope per window",
@@ -338,7 +343,8 @@ TEST_CASE("sonare_tempogram and sonare_fourier_tempogram frame an uncentered env
   float* data = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
-  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 0, 0, &data, &out_length,
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 0, 0,
+                           SONARE_TEMPOGRAM_AUTOCORRELATION, &data, &out_length,
                            &n_frames) == SONARE_OK);
   REQUIRE(n_frames == static_cast<int>(env.size()) - kWin + 1);
   REQUIRE(out_length == static_cast<size_t>(n_frames) * kWin);
@@ -351,14 +357,15 @@ TEST_CASE("sonare_tempogram and sonare_fourier_tempogram frame an uncentered env
   sonare_free_floats(data);
 
   // A centered envelope keeps one frame per envelope frame.
-  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 1, 0, &data, &out_length,
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 1, 0,
+                           SONARE_TEMPOGRAM_AUTOCORRELATION, &data, &out_length,
                            &n_frames) == SONARE_OK);
   REQUIRE(n_frames == static_cast<int>(env.size()));
   sonare_free_floats(data);
 
   // An envelope shorter than the window is refused when not centered.
-  REQUIRE(sonare_tempogram(env.data(), 4, 8, 1, kWin, 0, 0, &data, &out_length, &n_frames) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_tempogram(env.data(), 4, 8, 1, kWin, 0, 0, SONARE_TEMPOGRAM_AUTOCORRELATION, &data,
+                           &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(data == nullptr);
   REQUIRE(n_frames == 0);
 }
@@ -375,7 +382,8 @@ TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
     float* tg = nullptr;
     size_t tg_length = 0;
     int tg_frames = 0;
-    REQUIRE(sonare_tempogram(env, env_count, 22050, 512, win_length, 1, 1, &tg, &tg_length,
+    REQUIRE(sonare_tempogram(env, env_count, 22050, 512, win_length, 1, 1,
+                             SONARE_TEMPOGRAM_AUTOCORRELATION, &tg, &tg_length,
                              &tg_frames) == SONARE_OK);
 
     SECTION("default factors") {

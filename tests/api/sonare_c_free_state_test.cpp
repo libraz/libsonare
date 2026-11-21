@@ -1137,7 +1137,9 @@ TEST_CASE("sonare_free_stft_result leaves the result zeroed", "[c_api][c_free]")
   r.n_fft = static_cast<decltype(r.n_fft)>(1);
   r.hop_length = static_cast<decltype(r.hop_length)>(1);
   r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
+  r.db = new float[1]{0.0f};
   sonare_free_stft_result(&r);
+  CHECK(r.db == nullptr);
   CHECK(r.n_bins == static_cast<decltype(r.n_bins)>(0));
   CHECK(r.n_frames == static_cast<decltype(r.n_frames)>(0));
   CHECK(r.n_fft == static_cast<decltype(r.n_fft)>(0));

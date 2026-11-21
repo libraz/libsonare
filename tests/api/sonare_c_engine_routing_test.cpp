@@ -46,7 +46,7 @@ struct DcTrack {
 SonareEngine* make_routing_engine(std::initializer_list<DcTrack> tracks) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 64, 64, 0) == SONARE_OK);
   static const float* channels[] = {dc_source().data()};
   std::vector<SonareEngineClip> clips;
   uint32_t clip_id = 1;
@@ -75,7 +75,7 @@ std::vector<float> render_all(SonareEngine* engine, int blocks = 30) {
   float* io[] = {block.data()};
   for (int b = 0; b < blocks; ++b) {
     block.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kRoutingBlock) == SONARE_OK);
     out.insert(out.end(), block.begin(), block.end());
   }
   return out;
@@ -123,7 +123,7 @@ InsertGainReduction render_and_read_insert_gr(SonareEngine* engine, uint32_t tar
   InsertGainReduction result;
   for (int b = 0; b < blocks; ++b) {
     block.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kRoutingBlock) == SONARE_OK);
     std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
     REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
@@ -406,7 +406,7 @@ SonareEngineMidiClipSchedule held_note_clip(const SonareEngineMidiEvent* events)
 std::vector<float> render_midi_clip(const SonareEngineMidiClipSchedule& clip) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
   sonare_engine_builtin_synth_config_init(&synth);
   synth.gain = 0.5f;
@@ -420,7 +420,7 @@ std::vector<float> render_midi_clip(const SonareEngineMidiClipSchedule& clip) {
   for (int b = 0; b < 8; ++b) {
     left.fill(0.0f);
     right.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 2, kRoutingBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 2, kRoutingBlock) == SONARE_OK);
     out.insert(out.end(), left.begin(), left.end());
   }
   sonare_engine_destroy(engine);
@@ -449,7 +449,7 @@ TEST_CASE("sonare_engine MIDI clip gain scales the destination's rendered audio"
 TEST_CASE("sonare_engine_set_midi_clips refuses a bad gain or fade", "[c_engine_routing]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kRoutingBlock, 16, 16, 0) == SONARE_OK);
   const SonareEngineMidiEvent events[] = {{0, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0}};
   const SonareEngineMidiClipSchedule good = held_note_clip(events);
   constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
@@ -523,7 +523,7 @@ TEST_CASE("C engine queues a master loudness reset", "[c_api][engine][loudness_r
   constexpr int kProgramBlocks = 160;  // More than the 3 s short-term window.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 4, 8) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 4, 8, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_input_monitor(engine, 1, 1.0f) == SONARE_OK);
   REQUIRE(sonare_engine_reset_master_loudness_meter(nullptr, -1) == SONARE_ERROR_INVALID_PARAMETER);
   std::array<float, kBlock> samples{};
@@ -547,14 +547,14 @@ TEST_CASE("C engine queues a master loudness reset", "[c_api][engine][loudness_r
     return latest;
   };
   for (int block = 0; block < kProgramBlocks; ++block) {
-    REQUIRE(sonare_engine_process(engine, channels, 1, kBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, kBlock) == SONARE_OK);
   }
   const SonareMeterTelemetryRecord before = latest_master();
   REQUIRE(before.integrated_lufs > -60.0f);
   REQUIRE(before.integrated_lufs < 0.0f);
 
   REQUIRE(sonare_engine_reset_master_loudness_meter(engine, -1) == SONARE_OK);
-  REQUIRE(sonare_engine_process(engine, channels, 1, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, kBlock) == SONARE_OK);
   const SonareMeterTelemetryRecord after = latest_master();
   REQUIRE(after.integrated_lufs <= -100.0f);
   REQUIRE(after.momentary_lufs > -60.0f);
@@ -579,7 +579,7 @@ TEST_CASE("C engine master meter carries pre-trim input and compressor reduction
   bool found = false;
   for (int block = 0; block < 20; ++block) {
     samples.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, kRoutingBlock) == SONARE_OK);
     std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
     REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
@@ -592,14 +592,14 @@ TEST_CASE("C engine master meter carries pre-trim input and compressor reduction
     }
   }
   REQUIRE(found);
-  REQUIRE(master.input_peak_db_l == Catch::Approx(0.0f).margin(0.001f));
-  REQUIRE(master.input_peak_db_r <= -100.0f);
+  REQUIRE(master.input_peak_db[0] == Catch::Approx(0.0f).margin(0.001f));
+  REQUIRE(master.input_peak_db[1] <= -100.0f);
   REQUIRE(master.gain_reduction_db < -10.0f);
-  REQUIRE(master.peak_db_l < master.input_peak_db_l - 10.0f);
+  REQUIRE(master.peak_db[0] < master.input_peak_db[0] - 10.0f);
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
+TEST_CASE("C engine meter carries a multi-plane pre-trim input and compressor reduction",
           "[c_api][engine][meter]") {
   SonareEngine* engine = make_routing_engine({{10, 1.0f}});
   const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
@@ -611,28 +611,28 @@ TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
       SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  SonareMeterTelemetryRecordWide scratch{};
+  SonareMeterTelemetryRecord scratch{};
   size_t count = 99;
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide(nullptr, &scratch, 1, &count) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry(nullptr, &scratch, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, &scratch, 1, nullptr) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, &scratch, 1, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 1, &count) ==
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, nullptr, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, nullptr, 0, &count) == SONARE_OK);
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, nullptr, 0, &count) == SONARE_OK);
   REQUIRE(count == 0);
 
   std::array<float, kRoutingBlock> samples{};
   float* channels[] = {samples.data()};
-  SonareMeterTelemetryRecordWide master{};
+  SonareMeterTelemetryRecord master{};
   bool found = false;
   for (int block = 0; block < 20; ++block) {
     samples.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
-    std::array<SonareMeterTelemetryRecordWide, 16> records{};
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, kRoutingBlock) == SONARE_OK);
+    std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
-    REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, records.data(), records.size(),
-                                                     &written) == SONARE_OK);
+    REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
+            SONARE_OK);
     for (size_t index = 0; index < written; ++index) {
       if (records[index].target_id == 0) {
         master = records[index];
@@ -714,7 +714,7 @@ TEST_CASE("per-insert gain reduction folds a split block like the meter record",
           SONARE_OK);
   std::array<float, kRoutingBlock> block{};
   float* io[] = {block.data()};
-  REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kRoutingBlock) == SONARE_OK);
   std::array<SonareMeterTelemetryRecord, 16> records{};
   size_t written = 0;
   REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
@@ -779,7 +779,7 @@ TEST_CASE("per-insert gain reduction covers the master and a bus",
   float bus_record = 0.0f;
   for (int b = 0; b < 30; ++b) {
     block.fill(0.0f);
-    REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kRoutingBlock) == SONARE_OK);
     std::array<SonareMeterTelemetryRecord, 16> records{};
     size_t written = 0;
     REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(), &written) ==
@@ -1079,7 +1079,7 @@ TEST_CASE("sonare_engine_set_track_sends with an unchanged list keeps an in-flig
     float* io[] = {block.data()};
     for (int b = 0; b < blocks; ++b) {
       block.fill(0.0f);
-      REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+      REQUIRE(sonare_engine_process(engine, io, nullptr, 1, kRoutingBlock) == SONARE_OK);
       out.insert(out.end(), block.begin(), block.end());
     }
     return out;

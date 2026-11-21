@@ -22,6 +22,19 @@
 
 namespace {
 
+// Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
+SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
+                            const SonareSynthPatch* patch) {
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = destination_id;
+  binding.patch = *patch;
+  return sonare_engine_set_synth_instrument(engine, &binding);
+}
+
+}  // namespace
+
+namespace {
+
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 /// Entries in a '\n'-separated name table.
@@ -53,11 +66,11 @@ bool names_contain(const char* names, const std::string& wanted) {
 SonareEngine* make_reed_engine(uint32_t dest) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
-  REQUIRE(sonare_engine_set_synth_instrument(engine, dest, &patch) == SONARE_OK);
+  REQUIRE(set_synth_patch(engine, dest, &patch) == SONARE_OK);
   return engine;
 }
 
@@ -83,7 +96,7 @@ std::vector<float> render_breath_ramp(SonareEngine* engine, uint32_t dest) {
   for (int block = 0; block < 32; ++block) {
     const uint8_t value = static_cast<uint8_t>((block * 127) / 31);
     REQUIRE(sonare_engine_push_midi_cc(engine, dest, 0, 0, 2, value, -1) == SONARE_OK);
-    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
     out.insert(out.end(), left.begin(), left.end());
   }
   return out;
@@ -271,7 +284,7 @@ TEST_CASE("controller profile calls name the destination that has no instrument"
           "[c_api][controller]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   size_t count = 123;
   const SonareControllerBinding binding = breath_to_excitation();
@@ -295,7 +308,7 @@ TEST_CASE("an instrument without a controller profile refuses with a specific me
           "[c_api][controller]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   SonareEngineBuiltinSynthConfig builtin{};
   sonare_engine_builtin_synth_config_init(&builtin);
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);

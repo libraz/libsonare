@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <set>
@@ -999,7 +1000,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
       SonareStreamAnalyzer* analyzer = nullptr;
       REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
-      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
               SONARE_OK);
       SonareStreamFrames floats{};
       REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 1, &floats) == SONARE_OK);
@@ -1019,7 +1020,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
       analyzer = nullptr;
       REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
-      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
               SONARE_OK);
       SonareStreamFramesU8 u8{};
       REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 1, &u8) == SONARE_OK);
@@ -1037,7 +1038,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
       analyzer = nullptr;
       REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
-      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
               SONARE_OK);
       SonareStreamFramesI16 i16{};
       REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 1, &i16) == SONARE_OK);
@@ -1203,7 +1204,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(analyzer != nullptr);
 
     auto samples = generate_sine(440.0f, config.sample_rate, 0.25f);
-    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
 
     SonareStreamFramesU8 u8 = {};
     REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, nullptr, 4, &u8) == SONARE_OK);
@@ -1218,7 +1220,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(u8.chroma != nullptr);
     sonare_free_stream_frames_u8(&u8);
 
-    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
     SonareStreamFramesI16 i16 = {};
     REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, nullptr, 4, &i16) == SONARE_OK);
     REQUIRE(i16.n_frames > 0);
@@ -1239,7 +1242,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(analyzer != nullptr);
 
     std::vector<float> samples(600, 0.0f);
-    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
 
     size_t available = 0;
     // window = 1024 * 22050 / 44100 = 512 samples, hop 256: 600 samples hold
@@ -1282,7 +1286,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     // config actually reaches the quantizer.
     SonareStreamAnalyzer* tight = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&config, &tight) == SONARE_OK);
-    REQUIRE(sonare_stream_analyzer_process(tight, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(tight, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
     SonareStreamQuantizeConfig narrow = qdefault;
     narrow.centroid_max = 1.0f;
     SonareStreamFramesU8 tight_frames = {};
@@ -1291,7 +1296,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     SonareStreamAnalyzer* wide = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&config, &wide) == SONARE_OK);
-    REQUIRE(sonare_stream_analyzer_process(wide, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(wide, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
     SonareStreamQuantizeConfig broad = qdefault;
     broad.centroid_max = 1.0e9f;
     SonareStreamFramesU8 wide_frames = {};
@@ -1329,7 +1335,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_create(&bounded, &analyzer) == SONARE_OK);
 
     std::vector<float> samples(32 * 64, 0.0f);
-    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size(), nullptr) ==
+            SONARE_OK);
     size_t available = 0;
     REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
     REQUIRE(available == 3);
@@ -2697,4 +2704,80 @@ TEST_CASE("C BPM and rhythm entries agree with detect_bpm across input rates",
     CHECK(rhythm.bpm == Catch::Approx(quick).margin(2.5f));
     sonare_free_rhythm_result(&rhythm);
   }
+}
+
+TEST_CASE("sonare_stream_analyzer_process tracks its own offset or takes an explicit one",
+          "[c_api][stream]") {
+  SonareStreamConfig config;
+  sonare_stream_config_init(&config);
+  config.sample_rate = 22050;
+  const auto samples = generate_sine(440.0f, config.sample_rate, 0.5f);
+  const size_t half = samples.size() / 2;
+
+  auto frames_after = [&](bool explicit_offset) {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    size_t offset = 0;
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), half,
+                                           explicit_offset ? &offset : nullptr) == SONARE_OK);
+    offset = half;
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data() + half, samples.size() - half,
+                                           explicit_offset ? &offset : nullptr) == SONARE_OK);
+    size_t available = 0;
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    sonare_stream_analyzer_destroy(analyzer);
+    return available;
+  };
+  CHECK(frames_after(true) == frames_after(false));
+
+  SonareStreamAnalyzer* analyzer = nullptr;
+  REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+  size_t gap = half + 1;
+  REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), half, nullptr) == SONARE_OK);
+  CHECK(sonare_stream_analyzer_process(analyzer, samples.data() + half, 16, &gap) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  sonare_stream_analyzer_destroy(analyzer);
+}
+
+TEST_CASE("sonare_audio_from_file downmixes by default and loads one channel on request",
+          "[c_api][audio_io]") {
+  const auto path = std::filesystem::temp_directory_path() / "sonare_c_audio_from_file_test.wav";
+  constexpr size_t kFrames = 2048;
+  std::vector<float> interleaved(kFrames * 2);
+  for (size_t i = 0; i < kFrames; ++i) {
+    interleaved[2 * i] = 0.5f;
+    interleaved[2 * i + 1] = -0.25f;
+  }
+  sonare::save_wav_multichannel(path.string(), interleaved.data(), kFrames, 2,
+                                sonare::ChannelLayout::Stereo, 22050);
+
+  SonareAudio* downmix = nullptr;
+  REQUIRE(sonare_audio_from_file(path.string().c_str(), nullptr, &downmix) == SONARE_OK);
+  SonareAudioFileOptions options;
+  sonare_audio_file_options_init(&options);
+  REQUIRE(options.channel_index == SONARE_AUDIO_CHANNEL_DOWNMIX);
+  SonareAudio* explicit_downmix = nullptr;
+  REQUIRE(sonare_audio_from_file(path.string().c_str(), &options, &explicit_downmix) == SONARE_OK);
+  REQUIRE(sonare_audio_length(downmix) == sonare_audio_length(explicit_downmix));
+  CHECK(sonare_audio_data(downmix)[100] ==
+        Catch::Approx(sonare_audio_data(explicit_downmix)[100]).margin(1e-6));
+
+  options.channel_index = 1;
+  SonareAudio* right = nullptr;
+  REQUIRE(sonare_audio_from_file(path.string().c_str(), &options, &right) == SONARE_OK);
+  CHECK(sonare_audio_data(right)[100] == Catch::Approx(-0.25f).margin(1e-3));
+
+  options.channel_index = 2;
+  SonareAudio* missing = nullptr;
+  CHECK(sonare_audio_from_file(path.string().c_str(), &options, &missing) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  options.channel_index = -2;
+  CHECK(sonare_audio_from_file(path.string().c_str(), &options, &missing) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(missing == nullptr);
+
+  sonare_audio_destroy(downmix);
+  sonare_audio_destroy(explicit_downmix);
+  sonare_audio_destroy(right);
+  std::filesystem::remove(path);
 }

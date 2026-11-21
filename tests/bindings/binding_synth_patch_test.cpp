@@ -1,7 +1,7 @@
 /// @file binding_synth_patch_test.cpp
 /// @brief NativeSynth C ABI surface: the preset catalog
 ///        (sonare_synth_preset_names / sonare_synth_preset_patch), the
-///        patch-driven bounce (sonare_project_bounce_with_synth_instruments)
+///        patch-driven bounce (the synth_instruments list of sonare_project_bounce)
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
 #include <algorithm>
@@ -23,6 +23,34 @@
 #include "support/midi_render.h"
 #include "util/constants.h"
 #include "util/json.h"
+
+namespace {
+
+// Bounces with one kind of hosted-instrument list set on a copy of the options.
+SonareError bounce_with_synth_instruments(SonareProject* project,
+                                          const SonareProjectBounceOptions* options,
+                                          const SonareSynthInstrumentBinding* bindings,
+                                          size_t count, float** out_interleaved, size_t* out_len,
+                                          int* out_num_channels) {
+  SonareProjectBounceOptions with_instruments;
+  sonare_project_bounce_options_init(&with_instruments);
+  if (options != nullptr) with_instruments = *options;
+  with_instruments.synth_instruments = bindings;
+  with_instruments.synth_instrument_count = count;
+  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
+                               out_num_channels);
+}
+
+// Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
+SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
+                            const SonareSynthPatch* patch) {
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = destination_id;
+  binding.patch = *patch;
+  return sonare_engine_set_synth_instrument(engine, &binding);
+}
+
+}  // namespace
 
 namespace {
 
@@ -61,8 +89,8 @@ std::vector<float> bounce_synth(SonareProject* project, const SonareSynthPatch& 
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels1) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -400,8 +428,8 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
     binding.patch = patch;
     out = nullptr;
     int bounce_channels2 = 0;
-    const SonareError status = sonare_project_bounce_with_synth_instruments(
-        project, &options, &binding, 1, &out, &out_len, &bounce_channels2);
+    const SonareError status = bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                             &out_len, &bounce_channels2);
     sonare_free_floats(out);
     return status;
   };
@@ -430,16 +458,15 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
   dangling.engine_param_count = 1;
   binding.patch = dangling;
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels3) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels3) == SONARE_ERROR_INVALID_PARAMETER);
   // A count of zero needs no array.
   SonareSynthPatch none = dangling;
   none.engine_param_count = 0;
   binding.patch = none;
   int bounce_channels4 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels4) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels4) == SONARE_OK);
   sonare_free_floats(out);
 
   sonare_project_destroy(project);
@@ -1083,9 +1110,8 @@ TEST_CASE("a mod routing naming none on either end is refused",
   none_source.mod_routings[0] = {0 /*none*/, 1 /*pitchCents*/, 80.0f};
   binding.patch = none_source;
   int bounce_channels5 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels5) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels5) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareSynthPatch none_destination{};
   sonare_synth_patch_init(&none_destination);
@@ -1093,9 +1119,8 @@ TEST_CASE("a mod routing naming none on either end is refused",
   none_destination.mod_routings[0] = {3 /*lfo1*/, 0 /*none*/, 80.0f};
   binding.patch = none_destination;
   int bounce_channels6 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels6) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels6) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Not vacuous: a routing naming a real source and destination on both ends
   // still passes.
@@ -1105,8 +1130,8 @@ TEST_CASE("a mod routing naming none on either end is refused",
   valid.mod_routings[0] = {3 /*lfo1*/, 1 /*pitchCents*/, 80.0f};
   binding.patch = valid;
   int bounce_channels7 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels7) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels7) == SONARE_OK);
   sonare_free_floats(out);
 
   sonare_project_destroy(project);
@@ -1148,17 +1173,15 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels8 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels8) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels8) == SONARE_ERROR_INVALID_PARAMETER);
   SonareSynthPatch bad_name{};
   sonare_synth_patch_init(&bad_name);
   std::strcpy(bad_name.preset, "no-such-preset");
   binding.patch = bad_name;
   int bounce_channels9 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels9) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels9) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
 }
@@ -1361,8 +1384,8 @@ std::vector<float> census_render(const SonareSynthPatch& patch, SonareSampleBank
   float* out = nullptr;
   size_t out_len = 0;
   int bounce_channels10 = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len, &bounce_channels10) == SONARE_OK);
+  REQUIRE(bounce_with_synth_instruments(project, &options, &binding, 1, &out, &out_len,
+                                        &bounce_channels10) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -1646,11 +1669,11 @@ TEST_CASE("a GS variation bank reports whether it is voiced or falls back",
 TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][synth_patch]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
 
   SonareSynthPatch patch{};
   REQUIRE(sonare_synth_preset_patch("sawLead", &patch) == SONARE_OK);
-  REQUIRE(sonare_engine_set_synth_instrument(engine, 7, &patch) == SONARE_OK);
+  REQUIRE(set_synth_patch(engine, 7, &patch) == SONARE_OK);
   size_t count = 0;
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 1);
@@ -1659,7 +1682,7 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
-  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
   float peak = 0.0f;
   for (float s : left) peak = std::max(peak, std::abs(s));
   for (float s : right) peak = std::max(peak, std::abs(s));
@@ -1669,8 +1692,8 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
   SonareSynthPatch bad{};
   sonare_synth_patch_init(&bad);
   bad.struct_size = sizeof(SonareSynthPatch) - 1;
-  REQUIRE(sonare_engine_set_synth_instrument(engine, 7, &bad) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_set_synth_instrument(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(set_synth_patch(engine, 7, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_synth_instrument(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 1);
 

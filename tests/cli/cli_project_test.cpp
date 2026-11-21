@@ -593,7 +593,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
   SECTION("--synth routes MIDI through the built-in instrument bounce") {
     // Without --synth a MIDI bounce is silent; --synth makes it audible by
-    // routing through sonare_project_bounce_with_synth_instruments.
+    // routing through the synth_instruments list of sonare_project_bounce.
     const std::string proj = unique_temp_path("_proj.json");
     const std::string wav = unique_temp_path("_synth.wav");
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);

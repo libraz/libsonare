@@ -166,28 +166,8 @@ SonareError sonare_engine_create(SonareEngine** out) {
 void sonare_engine_destroy(SonareEngine* engine) { delete engine; }
 
 SonareError sonare_engine_prepare(SonareEngine* engine, double sample_rate, int max_block_size,
-                                  size_t command_capacity, size_t telemetry_capacity) {
-  SONARE_C_API_ENTRY;
-  if (max_block_size == 0) max_block_size = engine::RealtimeEngine::kDefaultMaxBlock;
-  if (command_capacity == 0) command_capacity = engine::RealtimeEngine::kDefaultCommandCapacity;
-  if (telemetry_capacity == 0) {
-    telemetry_capacity = engine::RealtimeEngine::kDefaultTelemetryCapacity;
-  }
-  SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err =
-          check_prepare_limits(sample_rate, max_block_size, command_capacity, telemetry_capacity);
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_TRY
-  engine->engine.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_engine_prepare_with_channels(SonareEngine* engine, double sample_rate,
-                                                int max_block_size, size_t command_capacity,
-                                                size_t telemetry_capacity, int max_channels) {
+                                  size_t command_capacity, size_t telemetry_capacity,
+                                  int max_channels) {
   SONARE_C_API_ENTRY;
   if (max_block_size == 0) max_block_size = engine::RealtimeEngine::kDefaultMaxBlock;
   if (command_capacity == 0) command_capacity = engine::RealtimeEngine::kDefaultCommandCapacity;
@@ -774,7 +754,7 @@ SonareError sonare_engine_count_in_end_sample(SonareEngine* engine, int64_t star
 }
 
 SonareError sonare_engine_set_parameter(SonareEngine* engine, uint32_t param_id, float value,
-                                        int64_t render_frame) {
+                                        int64_t render_frame, int smoothed) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = check_automatable_parameter(engine, param_id); err != SONARE_OK) {
@@ -785,26 +765,7 @@ SonareError sonare_engine_set_parameter(SonareEngine* engine, uint32_t param_id,
     return err;
   }
   rt::Command command{};
-  command.type = rt::CommandType::kSetParam;
-  command.target_id = param_id;
-  command.sample_time = render_frame;
-  command.arg.f = value;
-  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
-}
-
-SonareError sonare_engine_set_parameter_smoothed(SonareEngine* engine, uint32_t param_id,
-                                                 float value, int64_t render_frame) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(engine);
-  if (const SonareError err = check_automatable_parameter(engine, param_id); err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation([&] { util::check::finite_float(value, "value"); });
-      err != SONARE_OK) {
-    return err;
-  }
-  rt::Command command{};
-  command.type = rt::CommandType::kSetParamSmoothed;
+  command.type = smoothed != 0 ? rt::CommandType::kSetParamSmoothed : rt::CommandType::kSetParam;
   command.target_id = param_id;
   command.sample_time = render_frame;
   command.arg.f = value;

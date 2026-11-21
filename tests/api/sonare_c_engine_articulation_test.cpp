@@ -22,17 +22,30 @@
 
 namespace {
 
+// Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
+SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
+                            const SonareSynthPatch* patch) {
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = destination_id;
+  binding.patch = *patch;
+  return sonare_engine_set_synth_instrument(engine, &binding);
+}
+
+}  // namespace
+
+namespace {
+
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 /// An engine with a NativeSynth on destination @p dest running @p engine_mode.
 SonareEngine* make_synth_engine(uint32_t dest, int engine_mode) {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.engine_mode = engine_mode;
-  REQUIRE(sonare_engine_set_synth_instrument(engine, dest, &patch) == SONARE_OK);
+  REQUIRE(set_synth_patch(engine, dest, &patch) == SONARE_OK);
   return engine;
 }
 
@@ -42,7 +55,7 @@ std::vector<float> render_blocks(SonareEngine* engine, int blocks) {
   std::vector<float> right(128, 0.0f);
   float* channels[] = {left.data(), right.data()};
   for (int block = 0; block < blocks; ++block) {
-    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, nullptr, 2, 128) == SONARE_OK);
     out.insert(out.end(), left.begin(), left.end());
   }
   return out;

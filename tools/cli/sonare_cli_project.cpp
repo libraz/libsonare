@@ -289,7 +289,7 @@ int cmd_project_compile(const CliArgs& args) {
   if (!load_project_from_args(args, &handle, nullptr, &load_error))
     return project_exit_code(load_error);
   SonareProjectCompileResult result{};
-  SonareError err = sonare_project_compile(handle.ptr, &result);
+  SonareError err = sonare_project_compile(handle.ptr, &result, nullptr);
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
     project_report_error("compile project", err);

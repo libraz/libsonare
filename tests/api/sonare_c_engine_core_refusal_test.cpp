@@ -15,6 +15,19 @@
 
 namespace {
 
+// Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.
+SonareError set_synth_patch(SonareEngine* engine, uint32_t destination_id,
+                            const SonareSynthPatch* patch) {
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = destination_id;
+  binding.patch = *patch;
+  return sonare_engine_set_synth_instrument(engine, &binding);
+}
+
+}  // namespace
+
+namespace {
+
 namespace refusal = sonare::util::refusal;
 
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
@@ -33,7 +46,7 @@ std::string int_at_least_1() {
 SonareEngine* make_engine() {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 0) == SONARE_OK);
   return engine;
 }
 
@@ -66,26 +79,26 @@ TEST_CASE("engine lifecycle refusals name the parameter", "[c_api][engine_refusa
   CHECK(sonare_engine_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
 
-  CHECK(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "engine must not be NULL");
 
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   const std::string rate = refusal::integer_range_predicate(8000, 384000);
-  CHECK(sonare_engine_prepare(engine, 1000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 1000.0, 128, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("sample_rate", rate));
-  CHECK(sonare_engine_prepare(engine, 48000.0, -1, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000.0, -1, 16, 16, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_block_size", refusal::integer_range_predicate(1, 1 << 20)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 65537, 16) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 65537, 16, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("command_capacity", refusal::integer_range_predicate(0, 65536)));
-  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16385) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16385, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         refused("telemetry_capacity", refusal::integer_range_predicate(0, 16384)));
-  CHECK(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 16, 65) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, 65) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_channels", refusal::integer_range_predicate(1, 64)));
-  CHECK(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 16, -1) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_prepare(engine, 48000.0, 128, 16, 16, -1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("max_channels", refusal::integer_range_predicate(1, 64)));
   sonare_engine_destroy(engine);
 }
@@ -272,13 +285,15 @@ TEST_CASE("engine automation lane and parameter refusals", "[c_api][engine_refus
   CHECK(last_message() == refused("points[0].curve_to_next",
                                   refusal::one_of_predicate(std::array<int, 4>{0, 1, 2, 3})));
 
-  CHECK(sonare_engine_set_parameter(engine, no_strip, 0.5f, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_parameter(engine, no_strip, 0.5f, 0, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "param_id must be the id of a mixer strip's parameter in this engine");
-  CHECK(sonare_engine_set_parameter(engine, 7, 0.5f, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_parameter(engine, 7, 0.5f, 0, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "param_id must name a realtime-safe parameter");
-  CHECK(sonare_engine_set_parameter(engine, 5, std::nanf(""), 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_parameter(engine, 5, std::nanf(""), 0, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("value", refusal::kFloatRangePredicate));
-  CHECK(sonare_engine_set_parameter_smoothed(engine, 5, std::nanf(""), 0) ==
+  CHECK(sonare_engine_set_parameter(engine, 5, std::nanf(""), 0, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("value", refusal::kFloatRangePredicate));
   CHECK(sonare_engine_set_param_smoothing_ms(engine, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
@@ -597,7 +612,7 @@ TEST_CASE("engine controller profile refusals", "[c_api][engine_refusal]") {
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
-  REQUIRE(sonare_engine_set_synth_instrument(engine, 3, &patch) == SONARE_OK);
+  REQUIRE(set_synth_patch(engine, 3, &patch) == SONARE_OK);
 
   CHECK(sonare_engine_set_controller_profile(engine, 3, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "preset_name must not be NULL");

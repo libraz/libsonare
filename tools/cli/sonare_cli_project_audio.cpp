@@ -346,11 +346,12 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   float* interleaved = nullptr;
   size_t total = 0;
   int rendered_channels = 0;
+  if (use_synth) {
+    options.synth_instruments = &synth_binding;
+    options.synth_instrument_count = 1;
+  }
   SonareError err =
-      use_synth
-          ? sonare_project_bounce_with_synth_instruments(handle.ptr, &options, &synth_binding, 1,
-                                                         &interleaved, &total, &rendered_channels)
-          : sonare_project_bounce(handle.ptr, &options, &interleaved, &total, &rendered_channels);
+      sonare_project_bounce(handle.ptr, &options, &interleaved, &total, &rendered_channels);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
     return project_exit_code(err);

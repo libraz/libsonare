@@ -16,6 +16,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_audio_duration` | `sonare_audio_duration_sec` |
 
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_audio_from_file` | takes const SonareAudioFileOptions* options (NULL = downmix; sonare_audio_file_options_init) before out; channel_index selects one channel and SONARE_AUDIO_CHANNEL_DOWNMIX (-1, the default) downmixes |
+
 #### C results are released by a function named after the result
 
 | 1.x | 2.0.0 |
@@ -31,6 +37,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_last_diagnostic_message` | `sonare_last_diagnostic` |
 | `sonare_last_diagnostic_severity` | `sonare_last_diagnostic` |
 | `sonare_last_warning_message` | `sonare_last_diagnostic` |
+
+#### Each operation has exactly one entry point
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_audio_from_file_channel` | removed: call sonare_audio_from_file with SonareAudioFileOptions channel_index set |
 
 #### Versions and features come from *AbiVersion() and capabilities()
 
@@ -215,6 +227,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_spectral_bandwidth` | takes const SonareSpectralBandwidthOptions* options (NULL = defaults; sonare_spectral_bandwidth_options_init) before out; p moved into the struct |
 | `sonare_split_silence_common_ex` | removed: call sonare_split_silence_common, which takes the nullable out_report |
 | `sonare_split_silence_common` | takes a trailing nullable SonareSilenceCommonReport* out_report (NULL = no diagnosis), the output sonare_split_silence_common_ex added |
+| `sonare_stft` | takes const SonareStftOptions* options (NULL = defaults; sonare_stft_options_init) before out; options->db non-zero also fills SonareStftResult.db with the magnitude in dB |
 | `sonare_stream_analyzer_config_default` | removed: call sonare_stream_config_init(&config) on a caller-owned struct instead |
 | `sonare_stream_analyzer_read_frames_i16_ex` | removed: call sonare_stream_analyzer_read_frames_i16, which now takes the config |
 | `sonare_stream_analyzer_read_frames_i16` | takes a const SonareStreamQuantizeConfig* config before max_frames (NULL for the sonare_stream_quantize_config_init defaults) |
@@ -237,6 +250,16 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_hz_to_note` | returns SonareError and writes a caller-owned name through out_string, released with sonare_free_string |
+
+#### Each operation has exactly one entry point
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_stft_db` | removed: call sonare_stft with SonareStftOptions db set and read SonareStftResult.db |
+| `sonare_stream_analyzer_process_with_offset` | removed: call sonare_stream_analyzer_process with a non-NULL sample_offset |
+| `sonare_stream_analyzer_process` | takes const size_t* sample_offset after n_samples: NULL tracks the cumulative offset internally as before, non-NULL is the explicit offset of the chunk |
+| `sonare_tempogram_with_mode` | removed: call sonare_tempogram, which takes the mode |
+| `sonare_tempogram` | takes int mode (SonareTempogramMode: SONARE_TEMPOGRAM_AUTOCORRELATION is the form the entry computed before) after norm |
 
 #### Channel counts are numChannels
 
@@ -642,10 +665,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareMeterTelemetryRecord.max_true_peak_db` | `SonareMeterTelemetryRecord.max_true_peak_dbtp` |
-| `SonareMeterTelemetryRecord.true_peak_db_l` | `SonareMeterTelemetryRecord.true_peak_dbtp_l` |
-| `SonareMeterTelemetryRecord.true_peak_db_r` | `SonareMeterTelemetryRecord.true_peak_dbtp_r` |
-| `SonareMeterTelemetryRecordWide.max_true_peak_db` | `SonareMeterTelemetryRecordWide.max_true_peak_dbtp` |
-| `SonareMeterTelemetryRecordWide.true_peak_db` | `SonareMeterTelemetryRecordWide.true_peak_dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -676,14 +695,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SONARE_SYNTH_PATCH_STRUCT_VERSION` | removed: the macro is gone; initialise the struct with sonare_synth_patch_init, which sets struct_size |
 | `SonareEngineSf2InstrumentConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_engine_sf2_instrument_config_init |
 | `SonareMeterTelemetryRecordV2` | removed: use SonareMeterTelemetryRecord, which carries the same fields |
-| `SonareMeterTelemetryRecordWideV2` | removed: use SonareMeterTelemetryRecordWide, which carries the same fields |
-| `SonareMeterTelemetryRecordWide` | the record is 192 bytes and ends with input_peak_db[SONARE_METER_MAX_CHANNELS]; it replaces SonareMeterTelemetryRecordWideV2 |
-| `SonareMeterTelemetryRecord` | the record is 88 bytes and ends with input_peak_db_l and input_peak_db_r; it replaces SonareMeterTelemetryRecordV2 |
+| `SonareMeterTelemetryRecordWideV2` | removed: use SonareMeterTelemetryRecord, which carries the same fields |
+| `SonareMeterTelemetryRecord` | the record is the per-plane layout, 192 bytes: peak_db[], rms_db[], true_peak_dbtp[] and input_peak_db[] indexed by plane with num_channels valid planes; it replaces SonareMeterTelemetryRecordWide |
 | `SonareSynthPatch.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_synth_patch_init |
 | `sonare_engine_drain_meter_telemetry_v2` | removed: call sonare_engine_drain_meter_telemetry, which now fills the record with the input peaks |
-| `sonare_engine_drain_meter_telemetry_wide_v2` | removed: call sonare_engine_drain_meter_telemetry_wide, which now fills the record with the input peaks |
-| `sonare_engine_drain_meter_telemetry_wide` | fills SonareMeterTelemetryRecordWide, which now carries input_peak_db[] after dropped_records (192 bytes); this is the former sonare_engine_drain_meter_telemetry_wide_v2 under the unsuffixed name |
-| `sonare_engine_drain_meter_telemetry` | fills SonareMeterTelemetryRecord, which now carries input_peak_db_l and input_peak_db_r after dropped_records (88 bytes); this is the former sonare_engine_drain_meter_telemetry_v2 under the unsuffixed name |
+| `sonare_engine_drain_meter_telemetry_wide_v2` | removed: call sonare_engine_drain_meter_telemetry, which fills the per-plane record |
+| `sonare_engine_drain_meter_telemetry` | fills SonareMeterTelemetryRecord, which is now the per-plane layout (peak_db[], rms_db[], true_peak_dbtp[], input_peak_db[] and num_channels, 192 bytes); a stereo target is planes 0 and 1 |
 | `sonare_engine_render_offline_ex` | removed: call sonare_engine_render_offline with a SonareEngineRenderOfflineOptions filled by sonare_engine_render_offline_options_init, setting finalize there |
 | `sonare_engine_render_offline` | takes a trailing const SonareEngineRenderOfflineOptions* (NULL renders and finalizes as before); initialise the options with sonare_engine_render_offline_options_init and set finalize to 0 for a chunk |
 
@@ -703,11 +720,29 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_synth_engine_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 | `sonare_synth_patch_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 
-#### Channel counts are numChannels
+#### Each operation has exactly one entry point
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareMeterTelemetryRecordWide.channel_count` | `SonareMeterTelemetryRecordWide.num_channels` |
+| `SonareMeterTelemetryRecord.peak_db_l` | removed: read peak_db[0] |
+| `SonareMeterTelemetryRecord.peak_db_r` | removed: read peak_db[1] |
+| `SonareMeterTelemetryRecord.rms_db_l` | removed: read rms_db[0] |
+| `SonareMeterTelemetryRecord.rms_db_r` | removed: read rms_db[1] |
+| `SonareMeterTelemetryRecord.true_peak_db_l` | removed: read true_peak_dbtp[0] |
+| `SonareMeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
+| `SonareMeterTelemetryRecordWide` | removed: use SonareMeterTelemetryRecord, which carries the same per-plane fields |
+| `sonare_engine_bind_midi_cc_binding` | removed: call sonare_engine_bind_midi_cc, which takes the SonareMidiCcBinding |
+| `sonare_engine_bind_midi_cc` | takes a const SonareMidiCcBinding* (the former sonare_engine_bind_midi_cc_binding form); the scalar 7-bit call is a binding of kind SONARE_MIDI_CC_CONTROL_CHANGE_7 with cc_number, channel, param_id, min_value and max_value |
+| `sonare_engine_drain_meter_telemetry_wide` | removed: call sonare_engine_drain_meter_telemetry, which fills the per-plane record |
+| `sonare_engine_prepare_with_channels` | removed: call sonare_engine_prepare, which takes max_channels |
+| `sonare_engine_prepare` | takes int max_channels after telemetry_capacity (0 selects 64, negative is refused); pass 0 for the former five-argument call |
+| `sonare_engine_process_with_monitor` | removed: call sonare_engine_process with a non-NULL monitor_out |
+| `sonare_engine_process` | takes float* const* monitor_out after channels: NULL folds the cue bus into channels as before, non-NULL receives it separately |
+| `sonare_engine_set_parameter_smoothed` | removed: call sonare_engine_set_parameter with smoothed non-zero |
+| `sonare_engine_set_parameter` | takes int smoothed after render_frame: 0 steps to the value as before, non-zero ramps to it |
+| `sonare_engine_set_synth_instrument_binding` | removed: call sonare_engine_set_synth_instrument, which takes the SonareSynthInstrumentBinding |
+| `sonare_engine_set_synth_instrument_with_bank` | removed: call sonare_engine_set_synth_instrument with the bank in SonareSynthInstrumentBinding.sample_bank |
+| `sonare_engine_set_synth_instrument` | takes a const SonareSynthInstrumentBinding* (destination_id, patch, use_gm_programs, sample_bank); a NULL sample_bank binds none, as the patch-only call did |
 
 #### Other individual changes
 
@@ -726,7 +761,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareBuiltinSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_builtin_synth_config_init, after which every field is read literally and a value outside its domain is refused instead of replaced: gain in (0, 4], attack_ms, decay_ms and release_ms in (0, 20000], sustain in (0, 1], polyphony in [1, 64]; a 0 is no longer the default |
 | `SonareExternalStemImportRequest` | leads with uint32_t struct_size in place of struct_version; prepare it with sonare_external_stem_import_request_init, after which every field is read literally: sample_rate must equal the project's (default 0, so it is always set), stems non-NULL and stem_count at least 1; a struct whose struct_size was not set is refused |
 | `SonareMidiRouteConfig` | leads with uint32_t struct_size; prepare it with sonare_midi_route_config_init, after which every field is read literally: filter_group and filter_channel SONARE_MIDI_ROUTE_ANY (-1) accept any group or channel and remap_channel SONARE_MIDI_ROUTE_NO_REMAP (-1) leaves the channel unchanged; a NULL config still means those defaults |
-| `SonareProjectBounceOptions` | leads with uint32_t struct_size; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
 | `SonareProjectTempoOptions` | leads with uint32_t struct_size; prepare it with sonare_project_tempo_options_init, after which every field is read literally; a struct whose struct_size was not set is refused |
 | `SonareSf2InstrumentConfig` | leads with uint32_t struct_size instead of struct_version; prepare it with sonare_sf2_instrument_config_init, after which every field is read literally: gain in [0, 4] (0 is silence), polyphony in [1, 64], the two flags 0 or non-zero with a negative refused, gs_efx_realization 0 or 1; a 0 gain or polyphony is no longer the default |
 | `SonareTakeAlignConfig` | leads with uint32_t struct_size; prepare it with sonare_take_align_config_init, after which every field is read literally: hop_length in [1, 65536] (default 512) and bins_per_octave a positive multiple of 12 (default 12); a 0 is no longer the library value, and a NULL config still means those defaults |
@@ -746,6 +780,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareAutomationLaneDescEx` | removed: use SonareAutomationLaneDesc, which now carries target_kind |
 | `SonareAutomationLaneDesc` | gains target_kind between target_param_id and points; the layout is the former SonareAutomationLaneDescEx |
 | `SonareExternalStemImportRequest.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init |
+| `SonareProjectBounceOptions` | gains instruments / builtin_instruments / synth_instruments / sf2_instruments and their counts after instrument_latency_samples, so one options record carries the hosted instruments; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
+| `SonareProjectMarker` | the record is 16 bytes and carries no name; pass the name to sonare_project_set_marker and read it with sonare_project_marker_name_by_index |
 | `SonareProjectTempoSegment.start_sample` | removed: drop the member; a project holds musical positions only, so the setter ignored it and the getter wrote 0 |
 | `SonareProjectVocalEditApplyDesc.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `SonareProjectVocalEditApplyResult.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
@@ -781,10 +817,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_auto_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour |
 | `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
 | `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted |
+| `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused |
 | `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
 | `sonare_project_edit_automation_lane` | takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
-| `sonare_project_set_marker` | takes a const SonareProjectMarker* (id, kind, key signature, ppq, name) and out_marker_id; set marker.id to 0 to allocate a new id |
+| `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id |
 | `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
 | `sonare_project_snap_to_grid` | takes a const SonareProjectSnapToGridOptions* (NULL for the beat grid) before out_ppq; set division there, initialising the options with sonare_project_snap_to_grid_options_init |
 
@@ -812,6 +849,21 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_vocal_free_pitch_result` | `sonare_free_vocal_pitch_result` |
 | `sonare_vocal_free_render_result` | `sonare_free_vocal_render_result` |
 | `sonare_vocal_free_state_bytes` | `sonare_free_vocal_state_bytes` |
+
+#### Each operation has exactly one entry point
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareProjectMarker.name` | removed: read the name with sonare_project_marker_name_by_index |
+| `sonare_project_bounce_with_builtin_instruments` | removed: call sonare_project_bounce with the builtin_instruments list of SonareProjectBounceOptions set |
+| `sonare_project_bounce_with_instruments` | removed: call sonare_project_bounce with the instruments list of SonareProjectBounceOptions set |
+| `sonare_project_bounce_with_sf2_instruments` | removed: call sonare_project_bounce with the sf2_instruments list of SonareProjectBounceOptions set |
+| `sonare_project_bounce_with_synth_instruments` | removed: call sonare_project_bounce with the synth_instruments list of SonareProjectBounceOptions set |
+| `sonare_project_compile_timeline` | removed: call sonare_project_compile with a non-NULL out_timeline |
+| `sonare_project_compile` | takes SonareProjectTimeline** out_timeline after out: NULL compiles for diagnostics only as before, non-NULL also receives the compiled timeline |
+| `sonare_project_set_marker_ex_name` | removed: call sonare_project_set_marker, which takes the name |
+| `sonare_project_set_program_on_channel` | removed: call sonare_project_set_program, which takes group and channel |
+| `sonare_project_set_program` | takes uint8_t group and uint8_t channel after clip_id (0 and 0 is the former call); the former sonare_project_set_program_on_channel contract |
 
 #### Channel counts are numChannels
 

@@ -77,26 +77,34 @@ SonareError sonare_downmix(const float* channels, size_t frames, size_t num_chan
                            float** out_samples);
 
 #ifndef __EMSCRIPTEN__
+/// @brief @ref SonareAudioFileOptions::channel_index value that downmixes every channel.
+#define SONARE_AUDIO_CHANNEL_DOWNMIX (-1)
+
+/// @brief Options for @ref sonare_audio_from_file.
+/// @details Fill with @ref sonare_audio_file_options_init before setting fields.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_audio_file_options_init.
+  uint32_t struct_size;
+  /// Channel to load, or @ref SONARE_AUDIO_CHANNEL_DOWNMIX (the default) to downmix every
+  /// channel. Any other negative value, or an index the file has no channel for, is refused
+  /// with @c SONARE_ERROR_INVALID_PARAMETER.
+  int32_t channel_index;
+} SonareAudioFileOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_audio_file_options_init(SonareAudioFileOptions* options);
+
+/// @brief Loads an audio file into a one-plane handle.
+/// @details A handle carries one plane, so a multi-channel source is downmixed into it unless
+///          @p options selects one channel, which is what a stereo render needs: pair it with
+///          @ref sonare_audio_file_num_channels and load each channel in turn. The file is
+///          decoded once per call. A NULL @p options downmixes. An empty decode or a
+///          non-finite sample in the requested plane is @c SONARE_ERROR_DECODE_FAILED, a
+///          declared rate outside the supported range is @c SONARE_ERROR_INVALID_FORMAT.
 /// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
-SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
-/// @brief Loads one channel of an audio file, leaving the others out of it.
-/// @details A handle carries one plane, so @ref sonare_audio_from_file downmixes
-///          a multi-channel source into it. This entry takes the plane the caller
-///          asks for instead, which is what a stereo render needs: pair it with
-///          @ref sonare_audio_file_num_channels and load each channel in turn.
-///          The file is decoded once per call, so a stereo load costs two
-///          decodes; the alternative, handing back an interleaved buffer, would
-///          add an ownership contract for one allocation.
-/// @details Same format set and same decoded-buffer contract as
-///          @ref sonare_audio_from_file: an empty decode or a non-finite sample
-///          in the requested channel is @c SONARE_ERROR_DECODE_FAILED, a declared
-///          rate outside the supported range is @c SONARE_ERROR_INVALID_FORMAT.
-///          A negative @p channel_index, or one the file has no channel for,
-///          returns @c SONARE_ERROR_INVALID_PARAMETER.
-/// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
-///       sonare_free_* buffer.
-SonareError sonare_audio_from_file_channel(const char* path, int channel_index, SonareAudio** out);
+SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOptions* options,
+                                   SonareAudio** out);
 /// @brief Returns the positive source channel count reported by an audio file.
 /// @details @p out_channels is set to 0 immediately when it is non-NULL, before
 ///          argument validation or file inspection. On @c SONARE_OK it receives
