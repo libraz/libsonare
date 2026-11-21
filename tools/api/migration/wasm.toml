@@ -71,7 +71,7 @@ test = "bindings/wasm/tests/surface/core-errors.test.ts::derives codeName from c
 [[entry]]
 kind = "method"
 old = "SonareRealtimeEngineNode.onSyncError"
-changed = "the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload"
+changed = "the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload, and its text names the public entry whose call posted the sync (SonareEngine.setTempo: ...), not the audio thread's inner RealtimeEngine name"
 domain = "engine"
 rule = "error-class-by-cause"
 entry = "./worklet"
@@ -365,7 +365,6 @@ old = "VocalEditWorkerSession.constructor"
 removed = "the constructor is protected; open a session with VocalEditWorkerClient.create or VocalEditWorkerClient.restore"
 domain = "project"
 rule = "construction"
-
 
 [[entry]]
 kind = "function"
@@ -910,36 +909,36 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "chromaCens"
-changed = "one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'|'sampleRate'>)); request form takes ChromaCensRequest"
+changed = "one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'|'sampleRate'>)); request form takes ChromaCensRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
 
 [[entry]]
 kind = "function"
 old = "chromaCens"
-changed = "one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'|'sampleRate'>)); request form takes ChromaCensRequest"
+changed = "one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'|'sampleRate'>)); request form takes ChromaCensRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
 
 [[entry]]
 kind = "function"
 old = "chromaCqt"
-changed = "one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'|'sampleRate'>)); request form takes ChromaCqtRequest"
+changed = "one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'|'sampleRate'>)); request form takes ChromaCqtRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
 domain = "analysis"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
 
 [[entry]]
 kind = "function"
 old = "chromaCqt"
-changed = "one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'|'sampleRate'>)); request form takes ChromaCqtRequest"
+changed = "one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'|'sampleRate'>)); request form takes ChromaCqtRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the request and positional forms alike"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
 
 [[entry]]
 kind = "function"
@@ -15037,7 +15036,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "EngineMetronomeConfig.clickSamples"
-changed = "optional: give clickSamples or clickSec, never both; an explicit 0 is a RangeError"
+changed = "clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::names the click length in seconds or samples"
@@ -17278,7 +17277,7 @@ test = "bindings/wasm/tests/decode-channels.test.ts::refuses an upmix, an unknow
 [[entry]]
 kind = "option"
 old = "downmix(targetLayout)"
-changed = "a ChannelLayout name ('mono' | 'stereo' | '5.1' | '7.1'); a number is a TypeError, an unknown name a RangeError"
+changed = "a ChannelLayout name ('mono' | 'stereo' | '5.1' | '7.1'); a number is a TypeError, an unknown name a RangeError, and a layout with more channels than the input is a SonareError coded NotSupported ('downmix cannot upmix')"
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/decode-channels.test.ts::refuses an upmix, an unknown layout"
@@ -18148,18 +18147,18 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "roomGeometryFromEstimate"
-changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomGeometryFromEstimate is request-only"
+test = "bindings/wasm/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
 
 [[entry]]
 kind = "function"
 old = "synthesizeRir"
-changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult"
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest)"
 domain = "effects"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses"
+test = "bindings/wasm/tests/request-unknown-keys.test.ts::synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares"
 
 [[entry]]
 kind = "function"
@@ -20707,11 +20706,10 @@ domain = "project"
 rule = "getters"
 test = "bindings/wasm/tests/soundfont.test.ts::reads the preset count as a getter"
 
-
 [[entry]]
 kind = "method"
 old = "Project.setMixerSceneJson"
-changed = "returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key"
+changed = "returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed"
 domain = "project"
 rule = "individual"
 test = "bindings/wasm/tests/scene-warnings.test.ts::Project.setMixerSceneJson refuses an unknown key by name as InvalidFormat"
@@ -20963,10 +20961,10 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.bakeMidiFx"
-changed = "the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult"
+changed = "the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat"
 domain = "project"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config and leaves its content to the core"
 
 [[entry]]
 kind = "method"
@@ -22176,11 +22174,10 @@ domain = "engine"
 rule = "typed-results"
 test = "bindings/wasm/tests/new-apis.test.ts::honors tunable queue capacities"
 
-
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setGraph"
-changed = "an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names"
+changed = "an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names; a node's numPorts may be omitted for the spec's channel count, and an explicit 0 is a RangeError reading 'spec.nodes[i].numPorts must be an integer in [1, 2147483647]' (0 used to select the channel count); a node id longer than 63 bytes is a RangeError, as on Node"
 domain = "engine"
 rule = "individual"
 test = "bindings/wasm/tests/request-unknown-keys.test.ts::setGraph refuses an undeclared key by name before reading the graph"
@@ -22714,14 +22711,14 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "MasteringChainConfigDocument"
-removed = "Use MasteringChainConfig, the nested config object, instead of the version and flat params document."
+removed = "Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { \"version\": 2, \"params\": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root"
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfigDocument"
-removed = "Use MasteringChainConfig, the nested config object, instead of the version and flat params document."
+removed = "Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { \"version\": 2, \"params\": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root"
 domain = "mastering"
 rule = "typed-results"
 entry = "./analysis"
@@ -24802,10 +24799,10 @@ test = "bindings/wasm/tests/core-validation-refusals.test.ts::in every synchrono
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggest"
-changed = "one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult"
+changed = "one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+test = "bindings/wasm/tests/mastering-assistant-preset.test.ts::rejects an unknown preset and a restoration preset with a RangeError"
 
 [[entry]]
 kind = "function"
@@ -24898,10 +24895,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertPara
 [[entry]]
 kind = "function"
 old = "masteringInsertTiming"
-changed = "request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming"
+changed = "request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::an unknown insert key is refused with one class and text on every param-bag entry"
 
 [[entry]]
 kind = "function"
@@ -24922,10 +24919,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "function"
 old = "masteringStreamingPreview"
-changed = "one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult"
+changed = "one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it)"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+test = "bindings/wasm/tests/request-unknown-keys.test.ts::masteringStreamingPreview refuses a key no platform declares"
 
 [[entry]]
 kind = "function"
@@ -25616,10 +25613,10 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 kind = "function"
 old = "masteringProcess"
 to = "masteringApplyProcessor"
-changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>)"
+changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001)"
 domain = "mastering"
 rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the repair.trimSilence threshold as thresholdDb in dBFS"
 
 [[entry]]
 kind = "function"
@@ -27934,7 +27931,7 @@ entry = "./analysis"
 kind = "field"
 old = "MasteringChainConfig.repair.declip.clipThreshold"
 to = "MasteringChainConfig.repair.declip.clipThresholdDb"
-changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default)"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
@@ -27943,7 +27940,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThreshol
 kind = "field"
 old = "MasteringChainConfig.repair.declip.clipThreshold"
 to = "MasteringChainConfig.repair.declip.clipThresholdDb"
-changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default)"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
@@ -28116,7 +28113,7 @@ test = "bindings/wasm/tests/playback.test.ts::and a JSON string config"
 [[entry]]
 kind = "field"
 old = "PlaybackRendererOptions.config"
-changed = "PlaybackRendererConfig object only; a JSON string is a TypeError"
+changed = "PlaybackRendererConfig object only; a JSON string is a TypeError, and the core refuses an unknown key, a 1.x snake_case key or role token at any depth as SonareError InvalidFormat"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/wasm/tests/playback.test.ts::and a JSON string config"
@@ -29472,7 +29469,7 @@ test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError"
 domain = "mastering"
 rule = "config-keys"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as an argument"
@@ -29480,7 +29477,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError"
 domain = "mastering"
 rule = "config-keys"
 entry = "./analysis"
@@ -30018,21 +30015,21 @@ rule = "input-always-scanned"
 [[entry]]
 kind = "field"
 old = "SurroundPan.distance"
-removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SurroundPan.elevation"
-removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SurroundPan.distance"
-removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat)"
 domain = "mastering"
 rule = "individual"
 entry = "./analysis"
@@ -30040,11 +30037,10 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "SurroundPan.elevation"
-removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat)"
 domain = "mastering"
 rule = "individual"
 entry = "./analysis"
-
 
 [[entry]]
 kind = "field"
@@ -30054,3 +30050,323 @@ changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.band
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairApply"
+changed = "stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS"
+domain = "effects"
+rule = "old-documents-refused"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairApply stages are a discriminated union with clipThresholdDb"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairAnalyze"
+changed = "the recommended stages carry no linear clipThreshold (the declip threshold is clipThresholdDb, in dBFS), and masteringRepairApply takes them as they stand"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairAnalyze recommends stages that masteringRepairApply takes as they stand"
+
+[[entry]]
+kind = "field"
+old = "HpssRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "HpssWithResidualRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "HpssWithResidualRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "effects"
+rule = "library-owned-defaults"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "TimeStretchRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "PitchShiftRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::derives an omitted hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.hopLength"
+changed = "an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop"
+domain = "analysis"
+rule = "library-owned-defaults"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::derives an omitted inverse hop as a quarter of nFft"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::the constant-Q family answers the shared corpus with one text on every entry"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::the constant-Q family answers the shared corpus with one text on every entry"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.hopLength"
+changed = "hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated)"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/constant-q-hop-bound.test.ts::a constant-Q hop is bounded the same way on every entry"
+
+[[entry]]
+kind = "class"
+old = "Audio"
+changed = "new Audio(...) is a TypeError naming the factories: build one with Audio.fromBuffer or another factory"
+domain = "core"
+rule = "construction"
+test = "bindings/wasm/tests/audio-class.test.ts::refuses a direct construction with a TypeError naming the factories"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectrum"
+changed = "delegates to meteringSpectrum: an unknown option key is a TypeError reading 'Audio.spectrum: unknown key k (expected ...)' (was \"unknown option 'k'\"); an explicit nFft of 0 is a RangeError"
+domain = "core"
+rule = "individual"
+test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectrumFrame"
+changed = "delegates to meteringSpectrumFrame: an unknown option key is a TypeError reading 'Audio.spectrumFrame: unknown key k (expected ...)' (was \"unknown option 'k'\"); an explicit nFft of 0 is a RangeError"
+domain = "core"
+rule = "individual"
+test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.dynamicRange"
+changed = "delegates to meteringDynamicRange: an unknown option key is a TypeError reading 'Audio.dynamicRange: unknown key k (expected ...)' (was \"unknown option 'k'\")"
+domain = "core"
+rule = "individual"
+test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.detectClipping"
+changed = "delegates to meteringDetectClipping: an unknown option key is a TypeError reading 'Audio.detectClipping: unknown key k (expected ...)' (was \"unknown option 'k'\")"
+domain = "core"
+rule = "individual"
+test = "bindings/wasm/tests/audio-metering-equivalence.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.setConfig"
+changed = "the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/streaming-retune.test.ts::refuses an unknown config key by name on the constructor and setConfig"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiCcBinding.ccNumber"
+changed = "an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field)"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::above the MIDI data range, by name"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiCcBinding.ccLsbNumber"
+changed = "an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field)"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::above the MIDI data range, by name"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiCcBinding.selectorMsb"
+changed = "an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorMsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field)"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::above the MIDI data range, by name"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiCcBinding.selectorLsb"
+changed = "an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorLsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field)"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::above the MIDI data range, by name"
+
+[[entry]]
+kind = "field"
+old = "AlignTakeToReferenceRequest.hopLength"
+changed = "an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/align-take-to-reference.test.ts::names the field for a value it cannot read, and the core for one it cannot use"
+
+[[entry]]
+kind = "field"
+old = "AlignTakeToReferenceRequest.binsPerOctave"
+changed = "a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter')"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/align-take-to-reference.test.ts::refuses a resolution the rate cannot carry in the two fields that decide it"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.lengthSamples"
+changed = "omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::an engine field whose native 0 is a sentinel refuses 0 out of domain under the caller path"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.lengthSamples"
+changed = "omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::an engine field whose native 0 is a sentinel refuses 0 out of domain under the caller path"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.loopLengthSamples"
+changed = "an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1'"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.ditherBits"
+changed = "with dither set, an integer in [2, 32]: 0, 1 and 33 are a RangeError reading 'options.ditherBits must be an integer in [2, 32]' (0 used to select 16)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/public-input-conformance.test.ts::an engine field whose native 0 is a sentinel refuses 0 out of domain under the caller path"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.ditherSeed"
+changed = "0 is the seed 0; omit it for the default seed (1.x read 0 as the default seed)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/engine-bounce-content.test.ts::reads ditherSeed 0 as a seed of its own and refuses ditherBits 0 under dither"
+
+[[entry]]
+kind = "field"
+old = "EngineFreezeOptions.clipId"
+changed = "omit it for the default clip id; an explicit 0 is a RangeError reading 'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default', any other value an integer in [1, 4294967295]"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/absence-contract.test.ts::on a freeze clip id"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.maxCandidates"
+changed = "a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped)"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::analyzeBpm refuses a maxCandidates past the safe-integer range"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.maxCandidates"
+changed = "a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped)"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/empty-nan-guards.test.ts::analyzeBpm refuses a maxCandidates past the safe-integer range"

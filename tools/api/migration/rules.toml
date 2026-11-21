@@ -366,7 +366,7 @@ const v = magnitude.data[bin * magnitude.cols + frame];
 [[rule]]
 slug = "no-internal-types"
 title = "Public types never expose Wasm* names"
-summary = "WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `SonareModuleHandle`."
+summary = "WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `ModuleHandle`."
 [[rule.example]]
 surface = "wasm"
 before = '''
