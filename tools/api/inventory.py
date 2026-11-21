@@ -398,6 +398,36 @@ def _docstring_text(*nodes: ast.AST | None) -> str:
     return ""
 
 
+_PY_ARGS_HEADERS = {"Args:", "Arguments:", "Keyword Args:", "Keyword Arguments:"}
+_PY_ARG_ENTRY = re.compile(r"\*{0,2}(\w+)(?:\s*\([^)]*\))?:\s*(.*)")
+
+
+def _py_param_docs(doc: str) -> dict[str, str]:
+    """Each parameter's text from the Google-style ``Args:`` sections of a docstring."""
+    out: dict[str, str] = {}
+    header = entry = None
+    cur = ""
+    for ln in doc.split("\n"):
+        text = ln.strip()
+        indent = len(ln) - len(ln.lstrip())
+        if text in _PY_ARGS_HEADERS:
+            header, entry, cur = indent, None, ""
+            continue
+        if header is None or not text:
+            continue
+        if indent <= header:
+            header = None
+            continue
+        entry = indent if entry is None else entry
+        m = _PY_ARG_ENTRY.fullmatch(text)
+        if indent == entry and m:
+            cur = m[1]
+            out[cur] = m[2]
+        elif cur:
+            out[cur] = f"{out[cur]} {text}".strip()
+    return out
+
+
 def _attr_doc(tree: ast.AST | None, node: ast.AST | None) -> bool:
     """A module attribute is documented by a string literal statement right after it."""
     if tree is None or node is None:
@@ -824,6 +854,7 @@ def _py_function(
     if kw_params is None:
         rec["kwargs_unresolved"] = True
     group = [rec]
+    param_docs = _py_param_docs(rec["doc_text"])
     for p in params + list(kw_params or ()):
         group.append(
             _record(
@@ -840,6 +871,7 @@ def _py_function(
                 boolean=p["boolean"],
                 literals=p["literals"],
                 inline_literals=bool(p["literals"]),
+                doc_text=param_docs.get(p["name"], ""),
             )
         )
     return group
@@ -1122,6 +1154,17 @@ def _c_doc_text(lines: list[str], idx: int) -> str:
     return ""
 
 
+_C_PARAM_DOC = re.compile(
+    r"[@\\]param(?:\[[a-z, ]*\])?\s+(\w+)\s+(.*?)"
+    r"(?=\s[@\\](?:param|return|returns|retval|brief|details|note|see|pre|post|warning)\b|$)"
+)
+
+
+def _c_param_docs(doc: str) -> dict[str, str]:
+    """Each parameter's text from the ``@param`` blocks of a Doxygen comment."""
+    return {m[1]: m[2].strip() for m in _C_PARAM_DOC.finditer(doc)}
+
+
 def _c_decl_line(raw: str, pattern: str) -> int:
     """First line matching pattern that is not inside a comment, or 0."""
     stripped = _blank_comments(raw)
@@ -1177,6 +1220,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
             ],
         )
         out.append(rec)
+        param_docs = _c_param_docs(_c_doc_text(lines_by_file[f.file], line - 1)) if line and f.file in lines_by_file else {}
         for p in f.params:
             if not p.raw_name:
                 continue
@@ -1194,6 +1238,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
                     optional=False,
                     boolean=False,
                     literals=[],
+                    doc_text=param_docs.get(p.raw_name, ""),
                 )
             )
     declared_types: set[str] = set()
