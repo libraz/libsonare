@@ -400,8 +400,8 @@ def test_repair_cli_repairs_a_pair_as_the_stereo_declip_does(tmp_path) -> None:
     assert json.loads(result.stdout)["output_gain_db"] == 0.0
 
     with (
-        Audio.from_file_channel(str(source), 0) as left,
-        Audio.from_file_channel(str(source), 1) as right,
+        Audio.from_file(str(source), 0) as left,
+        Audio.from_file(str(source), 1) as right,
     ):
         pair = mastering_repair_declip_stereo(
             left.data, right.data, sample_rate=left.sample_rate, clip_threshold_db=detect_at_db

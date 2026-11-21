@@ -1,5 +1,5 @@
 """SoundFont (SF2) binding tests: Project.load_sound_font / sound_font_manifest /
-bounce_with_sf2_instrument and the realtime engine SF2 instrument entry."""
+Project.bounce(sf2_instruments=...) and the realtime engine SF2 instrument entry."""
 
 from __future__ import annotations
 
@@ -83,19 +83,23 @@ def test_sound_font_manifest_reports_backends() -> None:
         project.close()
 
 
-def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
+def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
     project = _build_midi_only_project()
     try:
         # Without a loaded SoundFont the bounce still sounds: the built-in
         # synthesizer GM fallback is the data-free floor.
-        fallback = project.bounce_with_sf2_instrument(
-            total_frames=4096, block_size=128, num_channels=2, sample_rate=48000
+        fallback = project.bounce(
+            sf2_instruments=[(0, Sf2InstrumentConfig())],
+            total_frames=4096,
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert float(np.max(np.abs(fallback))) > 0.01
 
         project.load_sound_font(_SF2_BYTES)
-        audio = project.bounce_with_sf2_instrument(
-            Sf2InstrumentConfig(gain=1.0),
+        audio = project.bounce(
+            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0))],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -105,8 +109,8 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
         assert audio.dtype == np.float32
         assert float(np.max(np.abs(audio))) > 0.01
 
-        again = project.bounce_with_sf2_instrument(
-            Sf2InstrumentConfig(gain=1.0),
+        again = project.bounce(
+            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0))],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -116,8 +120,10 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
 
         # Program 0 is a dedicated piano model. The opt-in bypasses the
         # loaded Piano 1 preset, while the default remains SF2-first.
-        modeled = project.bounce_with_sf2_instrument(
-            Sf2InstrumentConfig(gain=1.0, prefer_model_for_modeled_families=True),
+        modeled = project.bounce(
+            sf2_instruments=[
+                (0, Sf2InstrumentConfig(gain=1.0, prefer_model_for_modeled_families=True)),
+            ],
             total_frames=4096,
             block_size=128,
             num_channels=2,
@@ -126,9 +132,9 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
         assert float(np.max(np.abs(modeled))) > 0.01
         assert not np.array_equal(modeled, audio)
 
-        # An explicitly empty bindings list renders silence.
-        silent = project.bounce_with_sf2_instrument(
-            instruments=[],
+        # An empty bindings list is the plain bounce, which renders silence.
+        silent = project.bounce(
+            sf2_instruments=[],
             total_frames=2048,
             block_size=128,
             num_channels=2,
@@ -164,8 +170,8 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
                 Project.midi_note_off(1.0, 0, 0, 52, 0),
             ],
         )
-        return project.bounce_with_sf2_instrument(
-            Sf2InstrumentConfig(gain=1.0, clear_bank_rig=clear),
+        return project.bounce(
+            sf2_instruments=[(0, Sf2InstrumentConfig(gain=1.0, clear_bank_rig=clear))],
             total_frames=48000,
             block_size=128,
             num_channels=2,

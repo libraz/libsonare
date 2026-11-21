@@ -3,7 +3,7 @@
 Covers:
 1. Mixer.set_pan string-enum pan_mode and keep-current-mode default.
 2. Mixer.process_stereo MixerStereoResult shape + empty-input silent master.
-3. Project.set_program default bank=None (no Bank Select) vs explicit bank.
+3. Project.set_program default bank pair None (no Bank Select) vs explicit pair.
 4. Project.bounce frees the sentinel buffer on empty bounces (no leak/crash).
 5. Audio.from_buffer default sample_rate is 48000.
 """
@@ -436,33 +436,37 @@ def test_process_stereo_empty_input_returns_silent_master(mixer) -> None:
 
 
 def test_set_program_default_bank_is_none() -> None:
-    """set_program defaults bank to None (no Bank Select), matching the channel API."""
+    """set_program defaults the bank pair to None (no Bank Select)."""
     import inspect
 
     from libsonare import Project
 
     sig = inspect.signature(Project.set_program)
-    assert sig.parameters["bank"].default is None
+    assert sig.parameters["bank_msb"].default is None
+    assert sig.parameters["bank_lsb"].default is None
+    assert sig.parameters["group"].default == 0
+    assert sig.parameters["channel"].default == 0
+    assert "bank" not in sig.parameters
 
     project = Project()
     try:
         project.set_sample_rate(48000.0)
         clip = project.add_midi_clip(0.0, 4.0).clip_id
 
-        # Default bank (None) emits program only; explicit bank>=0 emits Bank Select.
+        # Default bank (None) emits program only; an explicit pair emits Bank Select.
         project.set_program(clip, 40)
         exported = project.export_smf()
         assert bytes([0xC0, 40]) in exported
         assert bytes([0xB0, 0, 0]) not in exported
         assert bytes([0xB0, 32, 0]) not in exported
 
-        project.set_program(clip, 41, bank=0)
+        project.set_program(clip, 41, bank_msb=0, bank_lsb=0)
         exported = project.export_smf()
         assert bytes([0xC0, 41]) in exported
         assert bytes([0xB0, 0, 0]) in exported
         assert bytes([0xB0, 32, 0]) in exported
 
-        project.set_program_on_channel(clip, 0, 0, 42, bank=1)
+        project.set_program(clip, 42, bank_msb=0, bank_lsb=1, group=0, channel=0)
         exported = project.export_smf()
         assert bytes([0xC0, 42]) in exported
         assert bytes([0xB0, 0, 0]) in exported
@@ -539,15 +543,19 @@ def test_empty_bounce_returns_empty_array_repeatably() -> None:
         project.close()
 
 
-def test_empty_bounce_with_builtin_instrument_is_empty() -> None:
+def test_empty_builtin_instrument_bounce_is_empty() -> None:
     """The built-in-instrument bounce also frees the sentinel on empty output."""
-    from libsonare import Project
+    from libsonare import BuiltinSynthConfig, Project
 
     project = Project()
     try:
         project.set_sample_rate(48000.0)
         for _ in range(5):
-            audio = project.bounce_with_builtin_instrument(num_channels=2, sample_rate=48000)
+            audio = project.bounce(
+                builtin_instruments=[(0, BuiltinSynthConfig())],
+                num_channels=2,
+                sample_rate=48000,
+            )
             assert audio.size == 0
             assert audio.shape == (0, 2)
     finally:

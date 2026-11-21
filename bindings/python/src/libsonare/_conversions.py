@@ -739,7 +739,7 @@ def tempogram(
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_tempogram_with_mode(
+        rc = lib.sonare_tempogram(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sr, "sr"),

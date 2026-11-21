@@ -136,7 +136,6 @@ OPERATIONS = (
     "rms_energy",
     "short_term_lufs",
     "spectral_flux",
-    "stft_db",
     "streaming_loudness_gain",
     "streaming_loudness_gain_stereo",
     "synthesize_rir",
@@ -431,9 +430,9 @@ def test_matrix_results_are_two_dimensional() -> None:
     y, env = c["y"], c["env"]
     n_bins, n_frames = libsonare.stft(y, SR).magnitude.shape
     assert n_bins == 2048 // 2 + 1
-    db = libsonare.stft_db(y, SR)
+    db = libsonare.stft(y, SR, db=True).db
     assert db.dtype == np.float32 and db.shape == (n_bins, n_frames)
-    assert libsonare.Audio.from_buffer(y, SR).stft_db().shape == (n_bins, n_frames)
+    assert libsonare.Audio.from_buffer(y, SR).stft(db=True).db.shape == (n_bins, n_frames)
     assert libsonare.tempogram(env, sr=SR, win_length=64).shape == (64, env.size)
     assert libsonare.cyclic_tempogram(env, SR, n_bins=30).shape == (30, env.size)
     assert libsonare.fourier_tempogram(env, sr=SR, win_length=64).shape == (33, env.size)

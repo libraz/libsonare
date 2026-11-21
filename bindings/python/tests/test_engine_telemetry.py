@@ -30,7 +30,7 @@ from libsonare import (
 from ._helpers import scene_strip
 
 
-def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
+def test_engine_drain_meter_telemetry_surround_bus() -> None:
     frames = 256
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_clips(
@@ -56,7 +56,7 @@ def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
         )
         engine.play()
         engine.process([[0.0] * frames for _ in range(6)])
-        wide = engine.drain_meter_telemetry_wide()
+        wide = engine.drain_meter_telemetry()
         bus_meter = next((r for r in wide if r.target_id == 33), None)
         assert bus_meter is not None
         assert bus_meter.num_channels == 6
@@ -384,11 +384,11 @@ def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
     for the same bytes.
     """
     from libsonare._engine_conversions import (
-        _meter_telemetry_wide_from_c,
+        _meter_telemetry_from_c,
         _scope_telemetry_from_c,
     )
     from libsonare._ffi_types_core import (
-        SonareMeterTelemetryRecordWide,
+        SonareMeterTelemetryRecord,
         SonareScopeTelemetryRecord,
     )
 
@@ -402,10 +402,10 @@ def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
         assert len(record.bands) == max_bands
         assert len(record.points) == max_points
     else:
-        raw_wide = SonareMeterTelemetryRecordWide()
+        raw_wide = SonareMeterTelemetryRecord()
         max_planes = len(raw_wide.peak_db)
         raw_wide.num_channels = max_planes + 7
-        wide = _meter_telemetry_wide_from_c(raw_wide)
+        wide = _meter_telemetry_from_c(raw_wide)
         assert wide.num_channels == max_planes
         assert len(wide.peak_db) == max_planes
         assert len(wide.rms_db) == max_planes

@@ -27,8 +27,8 @@ def test_meter_input_peaks_and_reset_command() -> None:
         master = [record for record in records if record.target_id == 0]
         assert master
         expected_db = 20.0 * math.log10(0.25)
-        assert master[-1].input_peak_db_l == pytest.approx(expected_db, abs=0.05)
-        assert master[-1].input_peak_db_r == pytest.approx(expected_db, abs=0.05)
+        assert master[-1].input_peak_db[0] == pytest.approx(expected_db, abs=0.05)
+        assert master[-1].input_peak_db[1] == pytest.approx(expected_db, abs=0.05)
         engine.reset_master_loudness_meter()
 
 
@@ -44,14 +44,14 @@ def test_constructed_insert_value_and_invalid_id() -> None:
 
 
 def test_wide_input_peak_conversion() -> None:
-    from libsonare._engine_conversions import _meter_telemetry_wide_from_c
-    from libsonare._ffi_types_core import SonareMeterTelemetryRecordWide
+    from libsonare._engine_conversions import _meter_telemetry_from_c
+    from libsonare._ffi_types_core import SonareMeterTelemetryRecord
 
-    raw = SonareMeterTelemetryRecordWide()
+    raw = SonareMeterTelemetryRecord()
     raw.num_channels = 2
     raw.input_peak_db[0] = -6.0
     raw.input_peak_db[1] = -12.0
-    record = _meter_telemetry_wide_from_c(raw)
+    record = _meter_telemetry_from_c(raw)
     assert record.input_peak_db == pytest.approx([-6.0, -12.0])
 
 

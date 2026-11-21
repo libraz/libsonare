@@ -57,7 +57,6 @@ BUILDER_CASES = [
             group=0,
             channel=4,
             program=5,
-            bank_valid=True,
             bank_msb=0x10,
             bank_lsb=0x20,
         ),

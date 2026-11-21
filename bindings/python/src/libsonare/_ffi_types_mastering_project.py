@@ -334,21 +334,6 @@ class SonareProjectCompileResult(CStruct):
     ]
 
 
-class SonareProjectBounceOptions(CStruct):
-    """Maps to SonareProjectBounceOptions in sonare_c_project.h."""
-
-    _c_init_ = "sonare_project_bounce_options_init"
-
-    _fields_ = [
-        ("struct_size", ctypes.c_uint32),
-        ("total_frames", ctypes.c_int64),
-        ("block_size", ctypes.c_int),
-        ("num_channels", ctypes.c_int),
-        ("sample_rate", ctypes.c_int),
-        ("instrument_latency_samples", ctypes.c_int),
-    ]
-
-
 class SonareMidiEventPod(CStruct):
     """Maps to SonareMidiEventPod in sonare_c_project.h."""
 
@@ -897,6 +882,29 @@ class SonareInstrumentBinding(CStruct):
     _fields_ = [
         ("destination_id", ctypes.c_uint32),
         ("callbacks", SonareInstrumentCallbacks),
+    ]
+
+
+class SonareProjectBounceOptions(CStruct):
+    """Maps to SonareProjectBounceOptions in sonare_c_project.h."""
+
+    _c_init_ = "sonare_project_bounce_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("total_frames", ctypes.c_int64),
+        ("block_size", ctypes.c_int),
+        ("num_channels", ctypes.c_int),
+        ("sample_rate", ctypes.c_int),
+        ("instrument_latency_samples", ctypes.c_int),
+        ("instruments", ctypes.POINTER(SonareInstrumentBinding)),
+        ("instrument_count", ctypes.c_size_t),
+        ("builtin_instruments", ctypes.POINTER(SonareBuiltinInstrumentBinding)),
+        ("builtin_instrument_count", ctypes.c_size_t),
+        ("synth_instruments", ctypes.POINTER(SonareSynthInstrumentBinding)),
+        ("synth_instrument_count", ctypes.c_size_t),
+        ("sf2_instruments", ctypes.POINTER(SonareSf2InstrumentBinding)),
+        ("sf2_instrument_count", ctypes.c_size_t),
     ]
 
 

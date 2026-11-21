@@ -20,6 +20,7 @@ from ._ffi import (
     SonareMfccResult,
     SonareReassignedSpectrogramResult,
     SonareSpectralBandwidthOptions,
+    SonareStftOptions,
     SonareStftResult,
 )
 from ._field_spelling import surface_spelling
@@ -138,6 +139,8 @@ def stft(
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
+    *,
+    db: bool = False,
 ) -> StftResult:
     """Compute the short-time Fourier transform.
 
@@ -146,21 +149,25 @@ def stft(
         sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
+        db: Also compute the magnitude in dB (default False).
 
     Returns:
         StftResult with magnitude and power spectrograms, each of shape
-        ``(n_fft // 2 + 1, n_frames)``.
+        ``(n_fft // 2 + 1, n_frames)``; ``db`` holds the magnitude in dB with
+        the same shape when ``db`` is True and is ``None`` otherwise.
     """
     lib = _get_lib()
     sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareStftResult()
+    options = SonareStftOptions._given(db=1 if db else 0)
     rc = lib.sonare_stft(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
@@ -171,52 +178,10 @@ def stft(
             sample_rate=out.sample_rate,
             magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
             power=_from_c_float_matrix(out.power, out.n_bins, out.n_frames),
+            db=_from_c_float_matrix(out.db, out.n_bins, out.n_frames) if db else None,
         )
     finally:
         lib.sonare_free_stft_result(ctypes.byref(out))
-
-
-@_entry("stft_db")
-@_guard_buffer("samples")
-def stft_db(
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-) -> np.ndarray:
-    """Compute the STFT in decibels.
-
-    Args:
-        samples: Audio samples.
-        sample_rate: Sample rate in Hz.
-        n_fft: FFT window size (default 2048).
-        hop_length: Hop length in samples (default 512).
-
-    Returns:
-        A float32 array of shape ``(n_fft // 2 + 1, n_frames)``.
-    """
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out_n_bins = ctypes.c_int()
-    out_n_frames = ctypes.c_int()
-    out_db = ctypes.POINTER(ctypes.c_float)()
-    rc = lib.sonare_stft_db(
-        c_array,
-        _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        ctypes.byref(out_n_bins),
-        ctypes.byref(out_n_frames),
-        ctypes.byref(out_db),
-    )
-    _check(rc)
-    try:
-        return _from_c_float_matrix(out_db, out_n_bins.value, out_n_frames.value)
-    finally:
-        total = out_n_bins.value * out_n_frames.value
-        if out_db and total > 0:
-            lib.sonare_free_floats(out_db)
 
 
 # ============================================================================

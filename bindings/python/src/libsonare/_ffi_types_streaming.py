@@ -502,6 +502,7 @@ class SonareStftResult(CStruct):
         ("sample_rate", ctypes.c_int32),
         ("magnitude", ctypes.POINTER(ctypes.c_float)),
         ("power", ctypes.POINTER(ctypes.c_float)),
+        ("db", ctypes.POINTER(ctypes.c_float)),
     ]
 
 

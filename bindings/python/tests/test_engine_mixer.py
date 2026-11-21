@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from libsonare import (
@@ -68,7 +69,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         )
         engine.play()
         engine.set_track_monitor_mode(10, "pfl", render_frame=block // 2)
-        processed = engine.process_with_monitor([[0.0] * block])
+        processed = engine.process([[0.0] * block], monitor=True)
         main, monitor = processed.output, processed.monitor
         assert main[0][-1] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][0] == pytest.approx(0.0, abs=0.01)
@@ -77,13 +78,13 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
 
         engine.set_parameter(engine.resolve_strip_automation_id(10, "faderDb"), -6.0)
         for _ in range(9):
-            processed = engine.process_with_monitor([[0.0] * block])
+            processed = engine.process([[0.0] * block], monitor=True)
             main, monitor = processed.output, processed.monitor
         assert 0.4 < main[0][-1] < 0.7
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
         engine.set_track_monitor_mode(10, "afl")
-        processed = engine.process_with_monitor([[0.0] * block])
+        processed = engine.process([[0.0] * block], monitor=True)
         main, monitor = processed.output, processed.monitor
         assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
         assert 0.4 < monitor[0][-1] < 0.7
@@ -126,7 +127,8 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert 0.75 < processed[0][-1] < 1.25
 
-        engine.set_parameter_smoothed(engine.resolve_strip_automation_id(10, "faderDb"), -12.0)
+        fader = engine.resolve_strip_automation_id(10, "faderDb")
+        engine.set_parameter(fader, -12.0, smoothed=True)
         for _ in range(6):
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert processed[0][-1] < 0.45
@@ -460,7 +462,7 @@ def test_engine_set_strip_routes_the_master_strip() -> None:
         processed = engine.process([[0.0] * 256])
         # Two unit clips (2) through the -12 dB master fader; a centred mono master is unity.
         assert processed[0][-1] == pytest.approx(2 * 10 ** (-12 / 20), abs=1e-3)
-        engine.set_parameter_smoothed(0x4D58FF01, -24.0)
+        engine.set_parameter(0x4D58FF01, -24.0, smoothed=True)
         engine.set_parameter(0x4D58FF02, 0.25)
         attenuated = processed
         for _ in range(8):
@@ -478,7 +480,7 @@ def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
         # The retired positional encoding, for the lane that now holds track 7.
         for positional in (0x4D580101, 0x4D580001, 0x4D58FE00):
             with pytest.raises(SonareValueError) as smoothed:
-                engine.set_parameter_smoothed(positional, -6.0)
+                engine.set_parameter(positional, -6.0, smoothed=True)
             assert smoothed.value.code == 4
             with pytest.raises(SonareValueError) as immediate:
                 engine.set_parameter(positional, -6.0)
@@ -487,9 +489,9 @@ def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
                 engine.set_automation_lane(positional, points)
             assert lane.value.code == 4
         lane_fader = engine.resolve_strip_automation_id(7, "faderDb")
-        engine.set_parameter_smoothed(lane_fader, -6.0)
+        engine.set_parameter(lane_fader, -6.0, smoothed=True)
         engine.set_automation_lane(lane_fader, points)
-        engine.set_parameter_smoothed(0x4D58FF01, -6.0)
+        engine.set_parameter(0x4D58FF01, -6.0, smoothed=True)
         engine.set_automation_lane(0x4D58FF01, points)
 
 
@@ -537,17 +539,53 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
         )
 
 
-def test_realtime_engine_process_with_monitor_returns_separate_bus() -> None:
+def test_realtime_engine_process_monitor_returns_separate_bus() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=16) as engine:
-        result = engine.process_with_monitor([[0.25] * 16, [-0.25] * 16])
+        plain = engine.process([[0.25] * 16, [-0.25] * 16])
+        assert isinstance(plain, list)
+        assert not isinstance(plain, EngineProcessWithMonitorResult)
+        explicit = engine.process([[0.25] * 16, [-0.25] * 16], monitor=False)
+        assert all(np.array_equal(a, b) for a, b in zip(explicit, plain, strict=True))
+        result = engine.process([[0.25] * 16, [-0.25] * 16], monitor=True)
         assert isinstance(result, EngineProcessWithMonitorResult)
         with pytest.raises(TypeError):
             iter(result)
         output, monitor = result.output, result.monitor
         assert output[0][0] == pytest.approx(0.25)
         assert output[1][0] == pytest.approx(-0.25)
+        assert all(np.array_equal(a, b) for a, b in zip(output, plain, strict=True))
         assert monitor[0][0] == pytest.approx(0.0)
         assert monitor[1][0] == pytest.approx(0.0)
+
+
+def _fader_blocks(**set_kwargs: bool) -> list[float]:
+    """Last sample of each block after one fader write, with the given set_parameter options."""
+    frames = 256 * 12
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_lanes([{"track_id": 10}])
+        engine.play()
+        engine.set_parameter(engine.resolve_strip_automation_id(10, "faderDb"), -12.0, **set_kwargs)
+        return [engine.process([[0.0] * 256])[0][-1] for _ in range(10)]
+
+
+def test_set_parameter_smoothed_flag_defaults_to_the_immediate_write() -> None:
+    omitted = _fader_blocks()
+    assert _fader_blocks(smoothed=False) == omitted
+    ramped = _fader_blocks(smoothed=True)
+    target = 10 ** (-12 / 20)
+    assert omitted[-1] == pytest.approx(target, abs=1e-3)
+    assert ramped[-1] == pytest.approx(target, abs=1e-3)
 
 
 def test_engine_track_strip_pan_and_send_setters() -> None:
@@ -848,7 +886,7 @@ def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
 
 def test_track_solo_mute_after_a_project_timeline_is_coded_invalid_state() -> None:
     with Project() as project, RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        result = project.compile_timeline()
+        result = project.compile(timeline=True)
         assert result.timeline is not None
         with result.timeline as timeline:
             engine.apply_project_timeline(timeline)

@@ -343,7 +343,7 @@ class _EngineMidiMixin:
         ``patch`` is a :class:`SynthPatch`, a preset name string
         (``"sawLead"`` or ``"va:sawLead"``; see :func:`synth_preset_names`),
         or ``None`` for the default subtractive patch. The patch resolves
-        exactly like :meth:`Project.bounce_with_synth_instrument`. After
+        exactly like :meth:`Project.bounce` with ``synth_instruments``. After
         binding, live MIDI input and scheduled MIDI clips routed to that
         destination render through the synth. Raises :class:`SonareValueError` for
         an unknown preset name.
@@ -360,9 +360,8 @@ class _EngineMidiMixin:
 
         :attr:`SynthPatch.use_gm_programs` follows incoming GM bank/program
         changes and routes channel 10 through the GM drum map, exactly like
-        the bounce binding of the same name; unlike the bounce, an unstated
-        (``None``) value resolves to ``False`` rather than an ``auto_select_gm``
-        fallback, since the realtime engine has no per-call equivalent of it.
+        the bounce binding of the same name; an unstated (``None``) value
+        resolves to ``False`` in both.
 
         Control-thread only: this is a structural mutation, so do not call it
         concurrently with :meth:`process`.
@@ -378,7 +377,7 @@ class _EngineMidiMixin:
         binding.use_gm_programs = 1 if resolved.use_gm_programs else 0
         binding.sample_bank = bank._require_handle() if bank is not None else None
         _check(
-            lib.sonare_engine_set_synth_instrument_binding(
+            lib.sonare_engine_set_synth_instrument(
                 self._require_handle(),
                 ctypes.byref(binding),
             )
@@ -389,7 +388,7 @@ class _EngineMidiMixin:
         """Resolve a hosted instrument's continuous parameter to its automation id.
 
         The returned id drives :meth:`set_automation_lane`,
-        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
+        :meth:`set_parameter` exactly like a
         fader/pan or strip-insert id, so an instrument parameter follows a
         breakpoint lane at audio-block precision, live and offline alike.
 
@@ -830,9 +829,7 @@ class _EngineMidiMixin:
         """
         lib = _get_lib()
         c_binding = _cc_binding_to_c(binding)
-        _check(
-            lib.sonare_engine_bind_midi_cc_binding(self._require_handle(), ctypes.byref(c_binding))
-        )
+        _check(lib.sonare_engine_bind_midi_cc(self._require_handle(), ctypes.byref(c_binding)))
 
     @_entry("RealtimeEngine.clear_midi_cc_bindings")
     def clear_midi_cc_bindings(self) -> None:

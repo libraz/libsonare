@@ -491,10 +491,10 @@ class _ProjectInspectionMixin:
             raw.key_minor = 1 if key_minor else 0
         out_id = ctypes.c_uint32()
         _check(
-            _get_lib().sonare_project_set_marker_ex_name(
+            _get_lib().sonare_project_set_marker(
                 self._require_handle(),
                 ctypes.byref(raw),
-                _utf8_arg(_marker_name_arg(name), "name"),
+                None if name is None else _utf8_arg(_marker_name_arg(name), "name"),
                 ctypes.byref(out_id),
             )
         )
@@ -801,7 +801,7 @@ class _ProjectInspectionMixin:
         """Return the compile result captured by the most recent bounce.
 
         Mirrors :meth:`compile`'s structured :class:`ProjectCompileResult` but
-        reads the diagnostics recorded during the last ``bounce*`` call instead
+        reads the diagnostics recorded during the last :meth:`bounce` call instead
         of recompiling. ``None`` when no bounce has run on this project, or the
         last one was refused for its arguments before it compiled; an empty
         ``diagnostics`` means the last bounce compiled clean.

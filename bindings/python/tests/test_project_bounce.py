@@ -11,6 +11,7 @@ from libsonare import (
     ExternalInstrument,
     Project,
     ProjectCompileResult,
+    SonareError,
     SonareValueError,
 )
 
@@ -54,7 +55,7 @@ def _build_midi_only_project() -> Project:
     return project
 
 
-def test_bounce_with_builtin_instrument_produces_non_silent_audio() -> None:
+def test_bounce_builtin_instruments_produces_non_silent_audio() -> None:
     """Flagship: a MIDI-only project bounced through the built-in synth is audible."""
     project = _build_midi_only_project()
     try:
@@ -64,8 +65,12 @@ def test_bounce_with_builtin_instrument_produces_non_silent_audio() -> None:
         )
         assert float(np.max(np.abs(silent))) == 0.0
 
-        audio = project.bounce_with_builtin_instrument(
-            total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
+        audio = project.bounce(
+            builtin_instruments=[(0, BuiltinSynthConfig())],
+            total_frames=48000,
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert audio.shape == (48000, 2)
         assert audio.dtype == np.float32
@@ -74,11 +79,15 @@ def test_bounce_with_builtin_instrument_produces_non_silent_audio() -> None:
         project.close()
 
 
-def test_bounce_with_builtin_instrument_auto_derives_length() -> None:
+def test_bounce_builtin_instruments_auto_derives_length() -> None:
     """Omitting total_frames lets the native layer derive the render length."""
     project = _build_midi_only_project()
     try:
-        audio = project.bounce_with_builtin_instrument(num_channels=2, sample_rate=48000)
+        audio = project.bounce(
+            builtin_instruments=[(0, BuiltinSynthConfig())],
+            num_channels=2,
+            sample_rate=48000,
+        )
         assert audio.ndim == 2
         assert audio.shape[0] > 0
         assert float(np.max(np.abs(audio))) > 0.0
@@ -86,13 +95,16 @@ def test_bounce_with_builtin_instrument_auto_derives_length() -> None:
         project.close()
 
 
-def test_bounce_with_builtin_instrument_accepts_waveform_patch() -> None:
+def test_bounce_builtin_instruments_accepts_waveform_patch() -> None:
     """A non-default patch (named waveform + overrides) still renders audibly."""
     project = _build_midi_only_project()
     try:
         patch = BuiltinSynthConfig(waveform="saw", gain=0.3, polyphony=8)
-        audio = project.bounce_with_builtin_instrument(
-            patch, total_frames=24000, num_channels=2, sample_rate=48000
+        audio = project.bounce(
+            builtin_instruments=[(0, patch)],
+            total_frames=24000,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
@@ -105,17 +117,20 @@ def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
     try:
         for waveform in (0, 1, 4, -1, True):
             with pytest.raises(TypeError):
-                project.bounce_with_builtin_instrument(
-                    BuiltinSynthConfig(waveform=waveform), total_frames=1200
+                project.bounce(
+                    builtin_instruments=[(0, BuiltinSynthConfig(waveform=waveform))],
+                    total_frames=1200,
                 )
         with pytest.raises(SonareValueError):
-            project.bounce_with_builtin_instrument(
-                BuiltinSynthConfig(waveform="noise"), total_frames=1200
+            project.bounce(
+                builtin_instruments=[(0, BuiltinSynthConfig(waveform="noise"))],
+                total_frames=1200,
             )
         # Rejection is by domain, not by the field having stopped working.
         for waveform in ("sine", "saw", "sawtooth", "square", "triangle"):
-            project.bounce_with_builtin_instrument(
-                BuiltinSynthConfig(waveform=waveform), total_frames=1200
+            project.bounce(
+                builtin_instruments=[(0, BuiltinSynthConfig(waveform=waveform))],
+                total_frames=1200,
             )
     finally:
         project.close()
@@ -143,13 +158,17 @@ class _ConstantInstrument:
         channels += self.level
 
 
-def test_bounce_with_instruments_hosts_external_callback() -> None:
+def test_bounce_instruments_hosts_external_callback() -> None:
     """Flagship: a MIDI-only project routes through a host-supplied instrument."""
     project = _build_midi_only_project()
     instrument = _ConstantInstrument(level=0.25)
     try:
-        audio = project.bounce_with_instruments(
-            instrument, total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
+        audio = project.bounce(
+            instruments=[(0, instrument)],
+            total_frames=48000,
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert audio.shape == (48000, 2)
         assert audio.dtype == np.float32
@@ -166,7 +185,7 @@ def test_bounce_with_instruments_hosts_external_callback() -> None:
         project.close()
 
 
-def test_bounce_with_instruments_render_only_instrument() -> None:
+def test_bounce_instruments_render_only_instrument() -> None:
     """Only render() is required; prepare/on_event are optional (duck-typed)."""
 
     class RenderOnly:
@@ -175,8 +194,11 @@ def test_bounce_with_instruments_render_only_instrument() -> None:
 
     project = _build_midi_only_project()
     try:
-        audio = project.bounce_with_instruments(
-            RenderOnly(), total_frames=4800, num_channels=2, sample_rate=48000
+        audio = project.bounce(
+            instruments=[(0, RenderOnly())],
+            total_frames=4800,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert audio.shape[0] > 0
         assert float(np.max(np.abs(audio))) > 0.0
@@ -184,27 +206,33 @@ def test_bounce_with_instruments_render_only_instrument() -> None:
         project.close()
 
 
-def test_bounce_with_instruments_auto_length_includes_tail_samples() -> None:
+def test_bounce_instruments_auto_length_includes_tail_samples() -> None:
     """External instruments can report release/effect tail for auto-length bounce."""
 
     project = _build_midi_only_project()
     try:
         dry = _ConstantInstrument(level=0.0)
-        no_tail = project.bounce_with_instruments(
-            dry, block_size=128, num_channels=2, sample_rate=48000
+        no_tail = project.bounce(
+            instruments=[(0, dry)],
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
         )
 
         wet = _ConstantInstrument(level=0.0)
         wet.tail_samples = 4096
-        with_tail = project.bounce_with_instruments(
-            wet, block_size=128, num_channels=2, sample_rate=48000
+        with_tail = project.bounce(
+            instruments=[(0, wet)],
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
         )
         assert with_tail.shape[0] == no_tail.shape[0] + wet.tail_samples
     finally:
         project.close()
 
 
-def test_bounce_with_instruments_propagates_callback_error() -> None:
+def test_bounce_instruments_propagates_callback_error() -> None:
     """An exception raised inside a callback surfaces to the caller, not silenced."""
 
     class Boom:
@@ -219,8 +247,12 @@ def test_bounce_with_instruments_propagates_callback_error() -> None:
     instrument = Boom()
     try:
         with pytest.raises(ValueError, match="synthesis failed"):
-            project.bounce_with_instruments(
-                instrument, total_frames=48000, block_size=32, num_channels=2, sample_rate=48000
+            project.bounce(
+                instruments=[(0, instrument)],
+                total_frames=48000,
+                block_size=32,
+                num_channels=2,
+                sample_rate=48000,
             )
         assert instrument.calls == 1
     finally:
@@ -233,11 +265,70 @@ def test_external_instrument_is_exported() -> None:
     assert libsonare.ExternalInstrument is ExternalInstrument
 
 
-def test_bounce_with_instruments_requires_an_instrument() -> None:
+def test_bounce_without_instrument_keywords_is_the_plain_bounce() -> None:
+    """Every instrument keyword absent, None or empty renders the plain call's silence."""
     project = _build_midi_only_project()
     try:
-        with pytest.raises(ValueError, match="requires"):
-            project.bounce_with_instruments(num_channels=2, sample_rate=48000)
+        kwargs = {"total_frames": 4800, "block_size": 128, "num_channels": 2, "sample_rate": 48000}
+        plain = project.bounce(**kwargs)
+        assert float(np.max(np.abs(plain))) == 0.0
+        for empty in (
+            {},
+            {"instruments": None},
+            {"builtin_instruments": None},
+            {"synth_instruments": None},
+            {"sf2_instruments": None},
+            {"instruments": [], "builtin_instruments": [], "synth_instruments": []},
+            {"sf2_instruments": []},
+        ):
+            assert np.array_equal(project.bounce(**empty, **kwargs), plain)
+    finally:
+        project.close()
+
+
+def test_bounce_mixes_instrument_kinds_on_separate_destinations() -> None:
+    """One call hosts an external and a built-in instrument on two destinations."""
+    project = Project()
+    project.set_sample_rate(48000.0)
+    try:
+        for destination, note in ((0, 60), (1, 72)):
+            midi = project.add_midi_clip(0.0, 1.0)
+            project.set_track_midi_destination(midi.track_id, destination)
+            project.set_midi_events(
+                midi.clip_id,
+                [
+                    Project.midi_note_on(0.0, 0, 0, note, 100),
+                    Project.midi_note_off(0.5, 0, 0, note, 0),
+                ],
+            )
+        kwargs = {"total_frames": 12000, "block_size": 128, "num_channels": 2, "sample_rate": 48000}
+        builtin_only = project.bounce(builtin_instruments=[(1, BuiltinSynthConfig())], **kwargs)
+        external = _ConstantInstrument(level=0.25)
+        both = project.bounce(
+            instruments=[(0, external)],
+            builtin_instruments=[(1, BuiltinSynthConfig())],
+            **kwargs,
+        )
+        assert external.render_calls > 0
+        assert float(np.max(np.abs(both - builtin_only))) > 0.1
+    finally:
+        project.close()
+
+
+def test_bounce_refuses_a_destination_bound_twice() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(SonareError):
+            project.bounce(
+                builtin_instruments=[(0, BuiltinSynthConfig()), (0, BuiltinSynthConfig())],
+                total_frames=4800,
+            )
+        with pytest.raises(SonareError):
+            project.bounce(
+                instruments=[(0, _ConstantInstrument())],
+                builtin_instruments=[(0, BuiltinSynthConfig())],
+                total_frames=4800,
+            )
     finally:
         project.close()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 
@@ -18,7 +18,6 @@ from ._engine_conversions import (
     _graph_node_to_c,
     _graph_parameter_binding_to_c,
     _meter_telemetry_from_c,
-    _meter_telemetry_wide_from_c,
     _scope_telemetry_from_c,
     _telemetry_from_c,
 )
@@ -39,7 +38,6 @@ from ._ffi_types_core import (
     SonareEngineRenderOfflineOptions,
     SonareEngineTelemetry,
     SonareMeterTelemetryRecord,
-    SonareMeterTelemetryRecordWide,
     SonareScopeTelemetryRecord,
 )
 from ._narrowing import _narrow_double, _resolve_zero_default
@@ -56,7 +54,6 @@ from ._runtime import (
     EngineGraphSpec,
     EngineTelemetry,
     MeterTelemetryRecord,
-    MeterTelemetryRecordWide,
     ScopeTelemetryRecord,
     _check,
     _check_realtime,
@@ -283,39 +280,42 @@ class _EngineIoMixin:
         )
         return int(out.value)
 
+    @overload
+    def process(
+        self, channels: Sequence[Sequence[float]], *, monitor: Literal[False] = False
+    ) -> list[np.ndarray]: ...
+
+    @overload
+    def process(
+        self, channels: Sequence[Sequence[float]], *, monitor: Literal[True]
+    ) -> EngineProcessWithMonitorResult: ...
+
     @_entry("RealtimeEngine.process")
-    def process(self, channels: Sequence[Sequence[float]]) -> list[np.ndarray]:
+    def process(
+        self, channels: Sequence[Sequence[float]], *, monitor: bool = False
+    ) -> list[np.ndarray] | EngineProcessWithMonitorResult:
         """Render one block and return the processed channel copies.
 
         Input channel buffers are never modified: the engine renders over
         private copies, adding its output to each corresponding input plane.
         Pass zero-filled planes when the engine is the only audio source.
+
+        With ``monitor=True`` the cue (monitor) bus is kept out of the program
+        planes and returned beside them as an
+        :class:`EngineProcessWithMonitorResult`; otherwise it is folded into
+        the returned planes.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
+        monitor_arrays: list[ctypes.Array[ctypes.c_float]] = []
+        monitor_ptrs = None
+        if monitor:
+            # `(c_float * N)()` zero-initialises each plane.
+            monitor_arrays = [(ctypes.c_float * frame_count)() for _ in arrays]
+            monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
+                *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in monitor_arrays]
+            )
         _check_realtime(
             _get_lib().sonare_engine_process(
-                self._require_handle(),
-                ptrs,
-                _to_c_int(len(arrays), "num_channels"),
-                _to_c_int(frame_count, "frame_count"),
-            )
-        )
-        return _plane_arrays(arrays, frame_count)
-
-    @_entry("RealtimeEngine.process_with_monitor")
-    def process_with_monitor(
-        self, channels: Sequence[Sequence[float]]
-    ) -> EngineProcessWithMonitorResult:
-        """Render one block and return the program planes and the monitor planes."""
-        arrays, ptrs, frame_count = self._channel_arrays(channels)
-        # `(c_float * N)()` already zero-initialises; the previous
-        # `*([0.0] * N)` built a throwaway Python list and varargs-marshalled it.
-        monitor_arrays = [(ctypes.c_float * frame_count)() for _ in arrays]
-        monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
-            *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in monitor_arrays]
-        )
-        _check_realtime(
-            _get_lib().sonare_engine_process_with_monitor(
                 self._require_handle(),
                 ptrs,
                 monitor_ptrs,
@@ -323,6 +323,8 @@ class _EngineIoMixin:
                 _to_c_int(frame_count, "frame_count"),
             )
         )
+        if not monitor:
+            return _plane_arrays(arrays, frame_count)
         return EngineProcessWithMonitorResult(
             output=tuple(_plane_arrays(arrays, frame_count)),
             monitor=tuple(_plane_arrays(monitor_arrays, frame_count)),
@@ -590,10 +592,9 @@ class _EngineIoMixin:
 
     @_entry("RealtimeEngine.drain_meter_telemetry")
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
-        """Drain pending stereo meter telemetry records published by the engine.
+        """Drain pending per-plane meter telemetry for every target.
 
-        Compatibility drain: it consumes the same queue as
-        :meth:`drain_meter_telemetry_wide`, which is the one drain to use.
+        A stereo target's left and right are planes 0 and 1.
         """
         if max_records <= 0:
             return []
@@ -607,27 +608,6 @@ class _EngineIoMixin:
             )
         )
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
-
-    @_entry("RealtimeEngine.drain_meter_telemetry_wide")
-    def drain_meter_telemetry_wide(self, max_records: int = 1024) -> list[MeterTelemetryRecordWide]:
-        """Drain pending per-plane meter telemetry for every target.
-
-        This is the one meter drain: a stereo target's left and right are
-        planes 0 and 1. Use it alone; :meth:`drain_meter_telemetry` consumes
-        the same queue and stays for compatibility.
-        """
-        if max_records <= 0:
-            return []
-        lib = _get_lib()
-        capacity = _to_c_size_t(max_records, "max_records")
-        raw = (SonareMeterTelemetryRecordWide * capacity.value)()
-        written = ctypes.c_size_t()
-        _check(
-            lib.sonare_engine_drain_meter_telemetry_wide(
-                self._require_handle(), raw, capacity, ctypes.byref(written)
-            )
-        )
-        return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
 
     @_entry("RealtimeEngine.meter_target_insert_gain_reduction")
     def meter_target_insert_gain_reduction(self, target_id: int) -> np.ndarray:

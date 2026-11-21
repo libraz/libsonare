@@ -76,7 +76,6 @@ from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
 from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._project_instruments import GsEfxRealization as GsEfxRealization
 from ._project_model import ProjectCompileResult as ProjectCompileResult
-from ._project_model import ProjectCompileTimelineResult as ProjectCompileTimelineResult
 from ._project_model import ProjectDiagnostic as ProjectDiagnostic
 from ._project_model import ProjectDiagnosticCode as ProjectDiagnosticCode
 from ._project_model import ProjectDiagnosticSeverity as ProjectDiagnosticSeverity
@@ -782,9 +781,6 @@ from .analyzer import (
     stft as stft,
 )
 from .analyzer import (
-    stft_db as stft_db,
-)
-from .analyzer import (
     streaming_loudness_gain as streaming_loudness_gain,
 )
 from .analyzer import (
@@ -1240,9 +1236,6 @@ from .types import (
 )
 from .types import (
     MeterTelemetryRecord as MeterTelemetryRecord,
-)
-from .types import (
-    MeterTelemetryRecordWide as MeterTelemetryRecordWide,
 )
 from .types import (
     MfccResult as MfccResult,

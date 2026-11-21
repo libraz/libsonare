@@ -47,9 +47,6 @@ from ._engine_conversions import (
     _meter_telemetry_from_c as _meter_telemetry_from_c,
 )
 from ._engine_conversions import (
-    _meter_telemetry_wide_from_c as _meter_telemetry_wide_from_c,
-)
-from ._engine_conversions import (
     _scope_telemetry_from_c as _scope_telemetry_from_c,
 )
 from ._engine_conversions import (
@@ -246,7 +243,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         here.
         """
         _check(
-            _get_lib().sonare_engine_prepare_with_channels(
+            _get_lib().sonare_engine_prepare(
                 self._require_handle(),
                 _narrow_double(sample_rate, "sample_rate"),
                 _to_c_int(
@@ -593,7 +590,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         An empty lane (``points`` empty) leaves the target undriven rather
         than snapping it to 0 or a default: once the change is adopted, the
         target reverts to the last value explicitly sent through
-        :meth:`set_parameter` / :meth:`set_parameter_smoothed`, or is left
+        :meth:`set_parameter`, or is left
         unchanged if no such value was ever sent for ``param_id``. This holds
         regardless of whether the manual value or the lane clear is adopted
         first.
@@ -781,11 +778,20 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self.set_parameter(param_id, gain_db, render_frame)
 
     @_entry("RealtimeEngine.set_parameter")
-    def set_parameter(self, param_id: int, value: float, render_frame: int | None = None) -> None:
-        """Push a live parameter value to the engine (immediate jump).
+    def set_parameter(
+        self,
+        param_id: int,
+        value: float,
+        render_frame: int | None = None,
+        *,
+        smoothed: bool = False,
+    ) -> None:
+        """Push a live parameter value to the engine (immediate jump by default).
 
         ``render_frame`` is the render-frame time to apply (``None`` for
-        immediate). This value also becomes ``param_id``'s base value: if an
+        immediate). With ``smoothed=True`` the value is reached through a
+        smoothed ramp instead of a jump; the ramp's target (not its in-flight
+        position) becomes the base value. This value also becomes ``param_id``'s base value: if an
         automation lane later starts (and stops) driving ``param_id``, the
         target reverts to this value once that lane empties -- see
         :meth:`set_automation_lane`. A reserved mixer id (``0x4D58xxxx``) other
@@ -800,26 +806,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 _to_c_uint32(param_id, "param_id"),
                 _to_c_float(value, "value"),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
-            )
-        )
-
-    @_entry("RealtimeEngine.set_parameter_smoothed")
-    def set_parameter_smoothed(
-        self, param_id: int, value: float, render_frame: int | None = None
-    ) -> None:
-        """Push a live parameter value to the engine using a smoothed ramp.
-
-        The ramp's target (not its in-flight position) becomes ``param_id``'s
-        base value, with the same restore-on-lane-release behavior as
-        :meth:`set_parameter`.
-        """
-        lib = _get_lib()
-        _check(
-            lib.sonare_engine_set_parameter_smoothed(
-                self._require_handle(),
-                _to_c_uint32(param_id, "param_id"),
-                _to_c_float(value, "value"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                1 if smoothed else 0,
             )
         )
 
@@ -828,7 +815,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Set the ramp time (ms) of the engine-level smoother.
 
         The time is one time constant: about 63% of the way at the set time.
-        Governs only ``set_parameter_smoothed`` on parameters bound through the
+        Governs only ``set_parameter(..., smoothed=True)`` on parameters bound through the
         automation engine. Reserved engine targets -- track and bus faders, pan
         and width, and insert and instrument parameters -- keep their own fixed
         smoothing whatever this is set to, and MIDI-CC mappings apply their values

@@ -159,7 +159,7 @@ def test_state_reads_are_properties_and_close_is_the_only_teardown() -> None:
 def test_a_new_timeline_is_anchored_by_start_sample() -> None:
     with StreamAnalyzer(sample_rate=SR) as analyzer:
         analyzer.reset(start_sample=SR)
-        analyzer.process_with_offset(_triad(0.25), start_sample=SR)
+        analyzer.process(_triad(0.25), start_sample=SR)
         assert analyzer.read_frames(1).timestamps_sec[0] >= 1.0
         with pytest.raises(TypeError):
             analyzer.reset(base_sample_offset=0)  # type: ignore[call-arg]

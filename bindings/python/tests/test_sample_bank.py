@@ -1,5 +1,5 @@
 """Sample-bank binding tests: SampleBank, the SynthPatch sample fields, and the
-sample_bank argument on Project.bounce_with_synth_instrument and
+sample_bank argument on Project.bounce(synth_instruments=...) and
 RealtimeEngine.set_synth_instrument."""
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ def _sample_patch(
 def _render(note: int, patch: SynthPatch) -> np.ndarray:
     project = _one_note_project(note)
     try:
-        return project.bounce_with_synth_instrument(
-            patch,
+        return project.bounce(
+            synth_instruments=[(0, patch)],
             total_frames=12000,
             num_channels=1,
             sample_rate=SAMPLE_RATE,
@@ -257,8 +257,8 @@ def test_each_binding_carries_its_own_bank() -> None:
             silent.add_zone(0, sample_index=silent.add_sample(_tone()), key_lo=60, key_hi=60)
 
             def render(banks: tuple[SampleBank, SampleBank]) -> np.ndarray:
-                return project.bounce_with_synth_instrument(
-                    instruments=[
+                return project.bounce(
+                    synth_instruments=[
                         (0, _sample_patch(banks[0])),
                         (1, _sample_patch(banks[1])),
                     ],
@@ -389,8 +389,8 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
                     loop_mode=loop_mode,
                 )
                 bank.add_zone(0, sample_index=index)
-                return project.bounce_with_synth_instrument(
-                    _sample_patch(bank),
+                return project.bounce(
+                    synth_instruments=[(0, _sample_patch(bank))],
                     total_frames=12000,
                     num_channels=1,
                     sample_rate=SAMPLE_RATE,
@@ -520,8 +520,10 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
                     loop_mode=loop_mode,
                 )
                 bank.add_zone(0, sample_index=index)
-                out = project.bounce_with_synth_instrument(
-                    SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank),
+                out = project.bounce(
+                    synth_instruments=[
+                        (0, SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank)),
+                    ],
                     total_frames=12000,
                     num_channels=1,
                     sample_rate=sample_rate,

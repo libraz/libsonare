@@ -74,17 +74,11 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_project_compile.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareProjectCompileResult),
+        ctypes.POINTER(ctypes.c_void_p),
     ]
 
     lib.sonare_free_project_compile_result.restype = None
     lib.sonare_free_project_compile_result.argtypes = [ctypes.POINTER(SonareProjectCompileResult)]
-
-    lib.sonare_project_compile_timeline.restype = ctypes.c_int32
-    lib.sonare_project_compile_timeline.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectCompileResult),
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
 
     lib.sonare_project_timeline_destroy.restype = None
     lib.sonare_project_timeline_destroy.argtypes = [ctypes.c_void_p]
@@ -105,17 +99,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_sf2_instrument_config_init.restype = None
     lib.sonare_sf2_instrument_config_init.argtypes = [ctypes.POINTER(SonareSf2InstrumentConfig)]
-
-    lib.sonare_project_bounce_with_builtin_instruments.restype = ctypes.c_int32
-    lib.sonare_project_bounce_with_builtin_instruments.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectBounceOptions),
-        ctypes.POINTER(SonareBuiltinInstrumentBinding),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
 
     lib.sonare_synth_preset_names.restype = ctypes.c_char_p
     lib.sonare_synth_preset_names.argtypes = []
@@ -156,17 +139,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
     ]
 
-    lib.sonare_project_bounce_with_synth_instruments.restype = ctypes.c_int32
-    lib.sonare_project_bounce_with_synth_instruments.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectBounceOptions),
-        ctypes.POINTER(SonareSynthInstrumentBinding),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
-
     lib.sonare_project_load_soundfont.restype = ctypes.c_int32
     lib.sonare_project_load_soundfont.argtypes = [
         ctypes.c_void_p,
@@ -189,28 +161,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareSf2ProgramStatus),
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_project_bounce_with_sf2_instruments.restype = ctypes.c_int32
-    lib.sonare_project_bounce_with_sf2_instruments.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectBounceOptions),
-        ctypes.POINTER(SonareSf2InstrumentBinding),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
-
-    lib.sonare_project_bounce_with_instruments.restype = ctypes.c_int32
-    lib.sonare_project_bounce_with_instruments.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectBounceOptions),
-        ctypes.POINTER(SonareInstrumentBinding),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
     ]
 
     # Edit.
@@ -596,14 +546,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_project_set_program.argtypes = [
         ctypes.c_void_p,
         ctypes.c_uint32,
-        ctypes.c_int,
-        ctypes.c_int,
-    ]
-
-    lib.sonare_project_set_program_on_channel.restype = ctypes.c_int32
-    lib.sonare_project_set_program_on_channel.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
         ctypes.c_uint8,
         ctypes.c_uint8,
         ctypes.c_int,
@@ -934,13 +876,6 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_project_set_marker.restype = ctypes.c_int32
     lib.sonare_project_set_marker.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareProjectMarker),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-
-    lib.sonare_project_set_marker_ex_name.restype = ctypes.c_int32
-    lib.sonare_project_set_marker_ex_name.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareProjectMarker),
         ctypes.c_char_p,

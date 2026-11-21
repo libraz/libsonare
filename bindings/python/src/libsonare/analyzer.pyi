@@ -1235,11 +1235,13 @@ def trim(
     hop_length: int = 512,
 ) -> np.ndarray[Any, Any]: ...
 def stft(
-    samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples,
+    sr: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    *,
+    db: bool = False,
 ) -> StftResult: ...
-def stft_db(
-    samples: FloatSamples, sample_rate: int, n_fft: int = 2048, hop_length: int = 512
-) -> np.ndarray[Any, Any]: ...
 def mel_spectrogram(
     samples: FloatSamples,
     sample_rate: int,

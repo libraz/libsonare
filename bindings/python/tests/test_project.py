@@ -399,7 +399,8 @@ def test_compile_surfaces_renderable_timeline() -> None:
         assert isinstance(result, libsonare.ProjectCompileResult)
         with pytest.raises(TypeError):
             iter(result)  # type: ignore[call-overload]
-        assert [f.name for f in dataclasses.fields(result)] == ["diagnostics"]
+        assert [f.name for f in dataclasses.fields(result)] == ["diagnostics", "timeline"]
+        assert result.timeline is None
         # The project carries a MIDI clip, so the compiler emits a single
         # best-effort warning (code 10 = kMidiClipNoInstrument) that the bounce is
         # silent unless an instrument is bound. It is non-fatal (timeline valid).

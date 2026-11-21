@@ -45,8 +45,8 @@ def test_known_channel_decode_is_one_ordered_shared_decode(
     monkeypatch.setattr(audio, "decode_channels", decode)
     monkeypatch.setattr(
         audio.Audio,
-        "from_file_channel",
-        classmethod(lambda _cls, _path, _index: pytest.fail("channel-by-channel decode")),
+        "from_file",
+        classmethod(lambda _cls, _path, _index=None: pytest.fail("per-file decode")),
     )
 
     planes, sample_rate = common._load_audio_channels(str(path))
@@ -164,7 +164,7 @@ def test_stereo_planes_from_a_real_wav_equal_the_per_channel_decode(tmp_path) ->
     assert sample_rate == 44_100
     assert decoded.shape == (2, frames)
     for index in range(2):
-        with audio.Audio.from_file_channel(str(path), index) as plane:
+        with audio.Audio.from_file(str(path), index) as plane:
             np.testing.assert_array_equal(decoded[index], plane.data)
 
     planes, cli_rate = common._load_audio_channels(str(path))

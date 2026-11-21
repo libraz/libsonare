@@ -115,7 +115,7 @@ _ARRAY_RECORDS = {
     "MasteringReport": ("band_energy_delta_db",),
     "MasteringResult": ("samples",),
     "MasteringStereoResult": ("left", "right"),
-    "MeterTelemetryRecordWide": ("peak_db", "rms_db", "true_peak_dbtp", "input_peak_db"),
+    "MeterTelemetryRecord": ("peak_db", "rms_db", "true_peak_dbtp", "input_peak_db"),
     "MixResult": ("left", "right"),
     "MixerStereoResult": ("left", "right"),
     "NoiseDetection": ("band_floor_dbfs",),

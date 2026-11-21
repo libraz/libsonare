@@ -1003,7 +1003,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.nnls_chroma` | returns one float32 (rows, n_frames) ndarray instead of a tuple of dimensions and a flat list |
-| `Audio.stft_db` | returns one float32 (rows, n_frames) ndarray instead of a tuple of dimensions and a flat list |
 
 #### Python composite results are frozen dataclasses
 
@@ -1057,7 +1056,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.from_file_channel` | removed: call Audio.from_file(path, channel_index) |
 | `Audio.mastering_chain` | removed: call the method Audio.master_audio(overrides=config) with no preset; overrides={} returns the input |
+| `Audio.stft_db` | removed: call Audio.stft(..., db=True) and read the result's db plane |
 
 #### masterAudio is the mastering entry; mastering is renamed
 
@@ -1167,7 +1168,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `rms_energy(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `short_term_lufs(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `spectral_flux(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
-| `stft_db(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 | `vqt_to_audio(sample_rate)` | sample_rate is required (1.x defaulted to 22050) |
 
 #### Sample rate is spelled sampleRate, sample_rate and --sample-rate
@@ -1532,7 +1532,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `recurrence_matrix` | `segment_recurrence_matrix`: takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix |
 | `recurrence_to_lag(n)` | removed: read from the 2-D array's shape |
 | `recurrence_to_lag` | `segment_recurrence_to_lag`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix |
-| `stft_db` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
 | `subsegment(cols)` | removed: read from the 2-D array's shape |
 | `subsegment(rows)` | removed: read from the 2-D array's shape |
 | `subsegment` | `segment_subsegment`: takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int] |
@@ -1628,12 +1627,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `StreamAnalyzer.process_with_offset` | removed: call StreamAnalyzer.process(samples, start_sample) |
 | `mel_result_to_audio` | removed: call mel_to_audio(result.power, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
 | `mel_result_to_stft` | removed: call mel_to_stft(result.power, sr=result.sample_rate, n_fft=result.n_fft, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
 | `metering_phase_scope_decimated` | removed: call metering_phase_scope(..., max_points=n) |
 | `metering_vectorscope_decimated` | removed: call metering_vectorscope(..., max_points=n) |
 | `mfcc_result_to_audio` | removed: call mfcc_to_audio(result.coefficients, n_mels=result.n_mels, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk) |
 | `mfcc_result_to_mel` | removed: call mfcc_to_mel(result.coefficients, n_mels=result.n_mels, lifter=result.lifter) |
+| `stft_db` | removed: call stft(..., db=True) and read the result's db plane |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -1796,7 +1797,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `FunctionalChord.roman` | `FunctionalChord.roman_numeral` |
 | `Section.canonical_name` | `Section.name` |
 | `Section.name` | a field filled by the analysis functions, with no fallback spelling built from type; a Section built by hand takes name and group, which no longer default to an empty string and 0 |
-| `StreamAnalyzer.process_with_offset(sample_offset)` | `StreamAnalyzer.process_with_offset(start_sample)` |
 | `StreamAnalyzer.reset(base_sample_offset)` | `StreamAnalyzer.reset(start_sample)` |
 | `StreamFrames.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesI16.feature_flags` | removed: test the feature field itself; a feature not computed is None |
@@ -2656,10 +2656,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `EngineMetronomeConfig.click_seconds` | `EngineMetronomeConfig.click_sec`: float \| None, default None: None selects the library click length and an explicit 0 raises SonareValueError |
 | `MeterTelemetryRecord.max_true_peak_db` | `MeterTelemetryRecord.max_true_peak_dbtp` |
-| `MeterTelemetryRecord.true_peak_db_l` | `MeterTelemetryRecord.true_peak_dbtp_l` |
-| `MeterTelemetryRecord.true_peak_db_r` | `MeterTelemetryRecord.true_peak_dbtp_r` |
-| `MeterTelemetryRecordWide.max_true_peak_db` | `MeterTelemetryRecordWide.max_true_peak_dbtp` |
-| `MeterTelemetryRecordWide.true_peak_db` | `MeterTelemetryRecordWide.true_peak_dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -2823,7 +2819,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MeterTelemetryRecordWide` | peak_db, rms_db, true_peak_dbtp, input_peak_db are float32 ndarrays instead of list[float]; the record compares by identity |
 | `RealtimeEngine.captured_audio` | returns one float32 ndarray per channel instead of nested lists |
 | `RealtimeEngine.meter_target_insert_gain_reduction` | returns a float32 ndarray instead of list[float] |
 | `ScopeTelemetryRecord` | bands is a float32 ndarray instead of list[float]; the record compares by identity |
@@ -2893,6 +2888,17 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MeterTelemetryRecord.input_peak_db_l` | removed: read input_peak_db[0] |
+| `MeterTelemetryRecord.input_peak_db_r` | removed: read input_peak_db[1] |
+| `MeterTelemetryRecord.peak_db_l` | removed: read peak_db[0] |
+| `MeterTelemetryRecord.peak_db_r` | removed: read peak_db[1] |
+| `MeterTelemetryRecord.rms_db_l` | removed: read rms_db[0] |
+| `MeterTelemetryRecord.rms_db_r` | removed: read rms_db[1] |
+| `MeterTelemetryRecord.true_peak_db_l` | removed: read true_peak_dbtp[0] |
+| `MeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
+| `MeterTelemetryRecordWide` | removed: read MeterTelemetryRecord, which carries the per-channel planes and num_channels |
+| `RealtimeEngine.drain_meter_telemetry_wide` | removed: call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes |
+| `RealtimeEngine.process_with_monitor` | removed: call RealtimeEngine.process(channels, monitor=True) |
 | `RealtimeEngine.set_capture_buffer` | `RealtimeEngine.configure_capture`: configure_capture(capacity_frames=..., num_channels=...) sets the whole capture setup; the buffer is reallocated only when its shape changes, and reallocating while armed raises SonareError (INVALID_STATE) |
 | `RealtimeEngine.set_capture_punch(enabled)` | removed: pass configure_capture(..., punch=CapturePunch(...)) to gate capture and omit punch to leave it ungated |
 | `RealtimeEngine.set_capture_punch(end_sample)` | removed: set CapturePunch(end_sample=...) and pass it as configure_capture(..., punch=...) |
@@ -2903,6 +2909,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_input_monitor(enabled)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
 | `RealtimeEngine.set_input_monitor(gain)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
 | `RealtimeEngine.set_input_monitor` | `RealtimeEngine.configure_capture`: configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) sets the whole capture setup; an omitted monitor is enabled at gain 1 |
+| `RealtimeEngine.set_parameter_smoothed` | removed: call RealtimeEngine.set_parameter(param_id, value, render_frame, smoothed=True) |
 | `RealtimeEngine.set_record_offset_samples(offset_samples)` | removed: pass configure_capture(..., record_offset_samples=...) |
 | `RealtimeEngine.set_record_offset_samples` | `RealtimeEngine.configure_capture`: configure_capture(..., record_offset_samples=...) sets the whole capture setup; an omitted offset is 0 |
 
@@ -3073,7 +3080,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `EngineMarker.id` | optional, default None: set_markers allocates the lowest id above every id the engine has stored or assigned that the list does not carry; a marker read back always carries its id |
 | `EngineMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)) |
-| `MeterTelemetryRecordWide.channel_count` | `MeterTelemetryRecordWide.num_channels` |
 | `Mixer.add_bus(bus_id)` | `Mixer.add_bus(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.add_strip(strip_id)` | `Mixer.add_strip(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.add_vca_group(group_id)` | `Mixer.add_vca_group(id)`: renamed id, the name the Node and WASM mixers use |
@@ -3120,22 +3126,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_builtin_instrument(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_builtin_instrument(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_builtin_instrument(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_builtin_instrument(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_instruments(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_instruments(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_instruments(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_instruments(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_sf2_instrument(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_sf2_instrument(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_sf2_instrument(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_sf2_instrument(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_synth_instrument(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_synth_instrument(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_synth_instrument(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce_with_synth_instrument(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.gm_drum_note_for_name` | an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError |
 | `Project.gm_family_first_program` | a family outside 0..15 raises SonareValueError (returned -1) |
 | `Project.gm_program_for_name` | an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError |
@@ -3300,6 +3290,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.bounce_with_builtin_instrument` | removed: call Project.bounce(builtin_instruments=[(destination_id, config), ...]) |
+| `Project.bounce_with_instruments` | removed: call Project.bounce(instruments=[(destination_id, instrument), ...]) |
+| `Project.bounce_with_sf2_instrument` | removed: call Project.bounce(sf2_instruments=[(destination_id, config), ...]) |
+| `Project.bounce_with_synth_instrument` | removed: call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True |
+| `Project.compile_timeline` | removed: call Project.compile(timeline=True) and read the result's timeline |
+| `Project.midi2_program(bank_valid)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank |
+| `Project.set_program(bank)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank select |
+| `Project.set_program_on_channel` | removed: call Project.set_program(clip_id, program, bank_msb=..., bank_lsb=..., group=..., channel=...) |
 | `apply_project_vocal_edit` | removed: call the method Project.apply_vocal_edit(...) with the same keywords |
 | `get_project_vocal_edit_dependencies` | removed: call the method Project.vocal_edit_dependencies() |
 | `rehydrate_project_vocal_edits` | removed: call the method Project.rehydrate_vocal_edits(originals, cancel=...) |

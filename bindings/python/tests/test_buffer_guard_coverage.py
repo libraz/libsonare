@@ -342,10 +342,6 @@ _REALTIME_BLOCK_PATH = {
         "silent: the caller owns the finite check on a streaming block call; the "
         "analysis frames overlapping the block carry garbage, later frames recover"
     ),
-    "StreamAnalyzer.process_with_offset": (
-        "silent: the caller owns the finite check on a streaming block call; the "
-        "analysis frames overlapping the block carry garbage, later frames recover"
-    ),
     "StreamingEqualizer.process_mono": (
         "silent: the caller owns the finite check on a streaming block call; one "
         "non-finite sample poisons the biquad state until clear(), not just the block"

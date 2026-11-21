@@ -63,8 +63,8 @@ class StreamAnalyzer:
     Feed audio chunks with :meth:`process`, then drain analyzed frames with
     :meth:`read_frames`. Query running estimates via :meth:`stats`.
 
-    One serialized producer thread may call :meth:`process`,
-    :meth:`process_with_offset`, or :meth:`finalize` concurrently with one
+    One serialized producer thread may call :meth:`process` or
+    :meth:`finalize` concurrently with one
     serialized consumer thread reading :attr:`available_frames`, a ``read_frames*``
     method, :meth:`stats`, :attr:`frame_count`, or :attr:`current_time_sec`. Native frame and
     stats publication is an allocation-free release/acquire handoff. Do not call
@@ -193,37 +193,31 @@ class StreamAnalyzer:
         return _require_open(self._handle, "StreamAnalyzer")
 
     @_entry("StreamAnalyzer.process")
-    def process(self, samples: Sequence[float] | list[float]) -> None:
-        """Feed an audio chunk (cumulative offset tracked internally).
+    def process(
+        self, samples: Sequence[float] | list[float], start_sample: int | None = None
+    ) -> None:
+        """Feed an audio chunk.
+
+        Args:
+            samples: Audio samples.
+            start_sample: ``None`` (the default) tracks the cumulative offset
+                internally. An integer is the explicit external offset of this
+                chunk: offsets must be contiguous across non-empty calls, and a
+                gap, a seek or a switch from internal tracking is rejected. Call
+                :meth:`reset` first to discard the buffered partial frame and
+                anchor a new timeline segment.
 
         Feeding a finalized analyzer raises an invalid-state error; call
         :meth:`reset` first to start a new stream.
         """
+        offset = None if start_sample is None else _to_c_size_t(start_sample, "start_sample")
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process(
-                self._require_handle(), c_array, _to_c_size_t(length, "length")
-            )
-        )
-
-    @_entry("StreamAnalyzer.process_with_offset")
-    def process_with_offset(
-        self, samples: Sequence[float] | list[float], start_sample: int
-    ) -> None:
-        """Feed a chunk with a contiguous external sample offset.
-
-        A gap, seek, a switch from :meth:`process`, or a chunk fed after
-        :meth:`finalize` is rejected. Call :meth:`reset` first to discard the
-        buffered partial frame and anchor a new timeline segment.
-        """
-        offset = _to_c_size_t(start_sample, "start_sample")
-        c_array, length = _to_c_float_array(samples)
-        _check(
-            _get_lib().sonare_stream_analyzer_process_with_offset(
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
-                offset,
+                None if offset is None else ctypes.byref(offset),
             )
         )
 

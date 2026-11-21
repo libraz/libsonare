@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Literal
+from typing import Literal, overload
 
 import numpy as np
 
@@ -45,7 +45,6 @@ from .types import (
     EqBandInput,
     ExternalMidiEvent,
     MeterTelemetryRecord,
-    MeterTelemetryRecordWide,
     MidiFxConfig,
     MixSceneBusInput,
     MixSceneStripInput,
@@ -378,10 +377,16 @@ class RealtimeEngine:
     def graph_connection_count(self) -> int:
         """Number of connections in the installed graph."""
         ...
-    def process(self, channels: PlanarChannels) -> list[np.ndarray]:
+    @overload
+    def process(
+        self, channels: PlanarChannels, *, monitor: Literal[False] = False
+    ) -> list[np.ndarray]:
         """Render one block and return the processed channel copies; inputs are not modified."""
         ...
-    def process_with_monitor(self, channels: PlanarChannels) -> EngineProcessWithMonitorResult:
+    @overload
+    def process(
+        self, channels: PlanarChannels, *, monitor: Literal[True]
+    ) -> EngineProcessWithMonitorResult:
         """Render one block and return the program planes and the monitor planes."""
         ...
     def render_offline(
@@ -420,7 +425,7 @@ class RealtimeEngine:
         """Clip-page look-ahead window in timeline frames."""
         ...
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
-        """Drain stereo meter records; consumes the queue ``drain_meter_telemetry_wide`` reads."""
+        """Drain per-plane meter records; a stereo target's L/R are planes 0 and 1."""
         ...
     def meter_target_insert_gain_reduction(self, target_id: int) -> np.ndarray:
         """Return per-insert gain reduction in dB (<= 0) for a meter target's strip.
@@ -431,9 +436,6 @@ class RealtimeEngine:
         (0xFFFF) and unused slots give an empty list.
         """
         ...
-    def drain_meter_telemetry_wide(self, max_records: int = 1024) -> list[MeterTelemetryRecordWide]:
-        """Drain per-plane meter records for every target; the one meter drain, use it alone."""
-        ...
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
         """Enable scope telemetry every ``interval_frames`` render frames with ``band_count``
         spectrum bands; returns the band count the engine applied."""
@@ -442,10 +444,12 @@ class RealtimeEngine:
         """Drain up to ``max_records`` scope telemetry records."""
         ...
     def set_parameter(
-        self, param_id: int, value: float, render_frame: int | None = None
-    ) -> None: ...
-    def set_parameter_smoothed(
-        self, param_id: int, value: float, render_frame: int | None = None
+        self,
+        param_id: int,
+        value: float,
+        render_frame: int | None = None,
+        *,
+        smoothed: bool = False,
     ) -> None: ...
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None: ...
     def set_track_solo_mute(

@@ -777,7 +777,7 @@ class _EngineMixingMixin:
         """Resolve a strip insert parameter to its reserved automation id.
 
         The returned id drives :meth:`set_automation_lane`,
-        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
+        :meth:`set_parameter` exactly like a
         :meth:`resolve_strip_automation_id` id. Raises :class:`SonareValueError`
         if the strip, insert, or name is unknown.
 

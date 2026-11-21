@@ -332,14 +332,27 @@ def test_stream_analyzer_external_offsets_preserve_buffered_timestamps_and_rejec
         expected = reference.read_frames(64).timestamps_sec
     with ls.StreamAnalyzer(**cfg) as analyzer:
         for offset in range(0, len(audio), 128):
-            analyzer.process_with_offset(audio[offset : offset + 128], offset)
+            analyzer.process(audio[offset : offset + 128], offset)
         assert analyzer.read_frames(64).timestamps_sec == pytest.approx(expected, abs=1e-7)
         analyzer.reset()
-        analyzer.process_with_offset(audio[:128], 1000)
+        analyzer.process(audio[:128], 1000)
         with pytest.raises(ls.SonareError):
-            analyzer.process_with_offset(audio[128:256], 1129)
+            analyzer.process(audio[128:256], 1129)
         analyzer.reset(5000)
-        analyzer.process_with_offset(audio[:128], 5000)
+        analyzer.process(audio[:128], 5000)
+
+
+def test_stream_analyzer_process_without_start_sample_tracks_the_offset_internally():
+    cfg = dict(sample_rate=22050, n_fft=2048, hop_length=512)
+    audio = [0.0] * 4096
+    with ls.StreamAnalyzer(**cfg) as plain, ls.StreamAnalyzer(**cfg) as explicit_none:
+        for offset in range(0, len(audio), 128):
+            plain.process(audio[offset : offset + 128])
+            explicit_none.process(audio[offset : offset + 128], start_sample=None)
+        assert plain.frame_count == explicit_none.frame_count > 0
+        np.testing.assert_array_equal(
+            plain.read_frames(64).timestamps_sec, explicit_none.read_frames(64).timestamps_sec
+        )
 
 
 def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
@@ -348,7 +361,7 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
 
     with ls.StreamAnalyzer(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8) as analyzer:
         operations = (
-            lambda value: analyzer.process_with_offset([0.0], value),
+            lambda value: analyzer.process([0.0], value),
             analyzer.read_frames,
             analyzer.read_frames_u8,
             analyzer.read_frames_i16,
@@ -368,4 +381,4 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
         assert analyzer.read_frames_i16(size_t_max).n_frames == 0
 
         analyzer.reset()
-        analyzer.process_with_offset([0.0], 0)
+        analyzer.process([0.0], 0)

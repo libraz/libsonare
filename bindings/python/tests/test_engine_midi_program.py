@@ -39,7 +39,7 @@ def _render_input(prepare) -> np.ndarray:
 
 
 def _bank8_words() -> list[int]:
-    event = Project.midi2_program(0.0, 0, 0, 0, True, 8, 0)
+    event = Project.midi2_program(0.0, 0, 0, 0, 8, 0)
     w0, w1 = event.word0, event.word1
     return [w0, w1]
 
@@ -83,15 +83,41 @@ def test_bank_without_bank_valid_is_refused(bank_msb: int, bank_lsb: int) -> Non
         with pytest.raises(SonareValueError, match=f"push_midi_input_program: {bank_rule}"):
             engine.push_midi_input_program(0, 0, 0, False, bank_msb, bank_lsb)
         assert engine.midi_input_pending_count == 0
-    with pytest.raises(SonareValueError) as builder:
-        Project.midi2_program(0.0, 0, 0, 0, False, bank_msb, bank_lsb)
-    assert builder.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
-def test_midi2_program_with_bank_valid_still_packs_a_bank() -> None:
-    event = Project.midi2_program(0.0, 0, 0, 5, True, 8, 3)
-    w0, w1 = event.word0, event.word1
-    assert [w0, w1] == [0x40C00001, 0x05000803]
+def test_midi2_program_without_a_bank_is_the_plain_program_change() -> None:
+    event = Project.midi2_program(0.0, 0, 0, 5)
+    assert [event.word0, event.word1] == [0x40C00000, 0x05000000]
+    explicit = Project.midi2_program(0.0, 0, 0, 5, bank_msb=None, bank_lsb=None)
+    assert [explicit.word0, explicit.word1] == [0x40C00000, 0x05000000]
+
+
+def test_midi2_program_with_a_bank_pair_packs_a_bank() -> None:
+    event = Project.midi2_program(0.0, 0, 0, 5, 8, 3)
+    assert [event.word0, event.word1] == [0x40C00001, 0x05000803]
+    named = Project.midi2_program(0.0, 0, 0, 5, bank_msb=8, bank_lsb=3)
+    assert [named.word0, named.word1] == [0x40C00001, 0x05000803]
+    zero = Project.midi2_program(0.0, 0, 0, 5, bank_msb=0, bank_lsb=0)
+    assert [zero.word0, zero.word1] == [0x40C00001, 0x05000000]
+
+
+_BOTH_BANK_NAMES = r"(?s)(?=.*bank_msb)(?=.*bank_lsb)"
+
+
+@pytest.mark.parametrize("given", [{"bank_msb": 1}, {"bank_lsb": 1}, {"bank_msb": 0}])
+def test_midi2_program_bank_half_is_refused(given: dict[str, int]) -> None:
+    with pytest.raises(SonareValueError, match=_BOTH_BANK_NAMES):
+        Project.midi2_program(0.0, 0, 0, 5, **given)
+
+
+@pytest.mark.parametrize("name", ["bank_msb", "bank_lsb"])
+@pytest.mark.parametrize("value", [-1, 128, 256])
+def test_midi2_program_bank_is_refused_outside_0_to_127(name: str, value: int) -> None:
+    other = "bank_lsb" if name == "bank_msb" else "bank_msb"
+    with pytest.raises(SonareValueError, match=name):
+        Project.midi2_program(0.0, 0, 0, 5, **{name: value, other: 0})
+    edge = Project.midi2_program(0.0, 0, 0, 5, **{name: 127, other: 0})
+    assert edge.word0 == 0x40C00001
 
 
 @pytest.mark.parametrize(

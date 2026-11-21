@@ -41,6 +41,7 @@ from ._cli_options import (
     _tempo_bpm,
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
+from ._project_instruments import SynthPatch
 from ._runtime import ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
@@ -282,9 +283,8 @@ def _project_bounce(
             kwargs["num_channels"] = args.channels
         use_synth = force_synth or args.synth is not None
         if use_synth:
-            audio = cast(Any, project).bounce_with_synth_instrument(
-                preset, auto_select_gm=preset is None, **kwargs
-            )
+            patch = SynthPatch(use_gm_programs=True) if preset is None else preset
+            audio = cast(Any, project).bounce(synth_instruments=[(0, patch)], **kwargs)
         else:
             audio = cast(Any, project).bounce(**kwargs)
         frames, channels = _write_project_bounce_wav(args.output, audio, sample_rate)
@@ -553,7 +553,7 @@ def cmd_project(args: argparse.Namespace) -> int:
         try:
             # Compiled for the timeline only to report whether one was produced,
             # as the native front-end reports the C result's own flag.
-            result = cast(Any, project).compile_timeline()
+            result = cast(Any, project).compile(timeline=True)
             has_timeline = result.timeline is not None
             if has_timeline:
                 result.timeline.close()

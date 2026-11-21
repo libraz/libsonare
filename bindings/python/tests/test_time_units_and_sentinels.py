@@ -347,11 +347,11 @@ class TestSentinelsAreAbsence:
             project.set_sample_rate(48000)
             clip_id = project.add_midi_clip(0.0, 4.0).clip_id
             project.set_program(clip_id, 24)
-            project.set_program(clip_id, 24, 0)
-            with pytest.raises(SonareValueError, match="bank"):
-                project.set_program(clip_id, 24, -1)
-            with pytest.raises(SonareValueError, match="bank"):
-                project.set_program_on_channel(clip_id, 0, 0, 24, -1)
+            project.set_program(clip_id, 24, bank_msb=0, bank_lsb=0)
+            with pytest.raises(SonareValueError, match="bank_msb"):
+                project.set_program(clip_id, 24, bank_msb=-1, bank_lsb=0)
+            with pytest.raises(SonareValueError, match="bank_lsb"):
+                project.set_program(clip_id, 24, bank_msb=0, bank_lsb=-1, group=0, channel=0)
         finally:
             project.close()
 

@@ -154,9 +154,6 @@ from .analyzer import (
     stft as _stft,
 )
 from .analyzer import (
-    stft_db as _stft_db,
-)
-from .analyzer import (
     time_stretch as _time_stretch,
 )
 from .analyzer import (
@@ -357,54 +354,45 @@ class Audio:
 
     @classmethod
     @_entry("Audio.from_file")
-    def from_file(cls, path: str) -> Audio:
+    def from_file(cls, path: str, channel_index: int | None = None) -> Audio:
         """Load audio from a file path.
 
         Supported formats in default builds: WAV, MP3.
         With FFmpeg enabled (``-DSONARE_WITH_FFMPEG=ON``): M4A/AAC/FLAC/OGG/Opus
         and any other container/codec supported by the linked FFmpeg.
 
+        An :class:`Audio` carries a single channel, so a multi-channel source is
+        downmixed into it unless ``channel_index`` selects one channel, which is
+        what rendering a stereo result needs: pair it with
+        :meth:`file_num_channels` and load each channel in turn. The file is
+        decoded once per call, so a stereo load costs two decodes.
+
+        Args:
+            path: File path.
+            channel_index: Zero-based source channel to load, or ``None`` (the
+                default) to downmix every channel.
+
         Raises:
+            SonareValueError: If ``channel_index`` is negative.
             RuntimeError: If the file does not exist, is too large, or has an
                 unsupported format. The error message includes the offending
                 extension and a copy-pasteable ``ffmpeg`` conversion hint.
+            SonareError: If ``channel_index`` names no channel the file has.
         """
         lib = _get_lib()
         handle = ctypes.c_void_p()
+        options = None
+        if channel_index is not None:
+            index = _to_c_int(channel_index, "channel_index")
+            if index.value < 0:
+                raise _refuse("channel_index must be non-negative")
+            options = _ffi_core.SonareAudioFileOptions(channel_index=index.value)
         rc = lib.sonare_audio_from_file(
             _utf8_arg(path, "path"),
+            None if options is None else ctypes.byref(options),
             ctypes.byref(handle),
         )
         _check(rc)
-        return cls(handle, lib)
-
-    @classmethod
-    @_entry("Audio.from_file_channel")
-    def from_file_channel(cls, path: str, channel_index: int) -> Audio:
-        """Load one channel of a file, leaving the others out of it.
-
-        An :class:`Audio` carries a single channel, so :meth:`from_file`
-        downmixes a multi-channel source into it. This loads the requested
-        channel instead, which is what rendering a stereo result needs: pair it
-        with :meth:`file_num_channels` and load each channel in turn.
-
-        The file is decoded once per call, so a stereo load costs two decodes.
-        The format set and the decoded-buffer contract are :meth:`from_file`'s.
-
-        Raises:
-            SonareError: If the file cannot be loaded, or if ``channel_index``
-                names no channel the file has.
-        """
-        lib = _get_lib()
-        load = lib.sonare_audio_from_file_channel
-        handle = ctypes.c_void_p()
-        _check(
-            load(
-                _utf8_arg(path, "path"),
-                _to_c_int(channel_index, "channel_index"),
-                ctypes.byref(handle),
-            )
-        )
         return cls(handle, lib)
 
     @classmethod
@@ -1075,18 +1063,12 @@ class Audio:
     # --- Features - Spectrogram ---
 
     @_entry("Audio.stft")
-    def stft(self, n_fft: int = 2048, hop_length: int = 512) -> StftResult:
-        """Compute the short-time Fourier transform."""
-        return _stft(self.data, self.sample_rate, n_fft, hop_length)
+    def stft(self, n_fft: int = 2048, hop_length: int = 512, *, db: bool = False) -> StftResult:
+        """Compute the short-time Fourier transform.
 
-    @_entry("Audio.stft_db")
-    def stft_db(
-        self,
-        n_fft: int = 2048,
-        hop_length: int = 512,
-    ) -> np.ndarray:
-        """Compute the STFT in decibels as a float32 array of shape ``(n_bins, n_frames)``."""
-        return _stft_db(self.data, self.sample_rate, n_fft, hop_length)
+        With ``db=True`` the result's ``db`` plane holds the magnitude in dB.
+        """
+        return _stft(self.data, self.sample_rate, n_fft, hop_length, db=db)
 
     # --- Features - Mel ---
 

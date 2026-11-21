@@ -38,6 +38,17 @@ class SonareDownmixOptions(CStruct):
     ]
 
 
+class SonareAudioFileOptions(CStruct):
+    """Maps to SonareAudioFileOptions in sonare_c_types_functions.h."""
+
+    _c_init_ = "sonare_audio_file_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("channel_index", ctypes.c_int32),
+    ]
+
+
 # SonarePitchCorrectionConfig.target_mode values.
 SONARE_PITCH_TARGET_FIXED_MIDI = 0
 SONARE_PITCH_TARGET_SCALE = 1
@@ -137,38 +148,12 @@ class SonareClipPageRequest(CStruct):
     ]
 
 
-class SonareMeterTelemetryRecord(CStruct):
-    """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
-
-    _fields_ = [
-        ("target_id", ctypes.c_uint32),
-        ("render_frame", ctypes.c_int64),
-        ("seq", ctypes.c_uint64),
-        ("peak_db_l", ctypes.c_float),
-        ("peak_db_r", ctypes.c_float),
-        ("rms_db_l", ctypes.c_float),
-        ("rms_db_r", ctypes.c_float),
-        ("true_peak_dbtp_l", ctypes.c_float),
-        ("true_peak_dbtp_r", ctypes.c_float),
-        ("max_true_peak_dbtp", ctypes.c_float),
-        ("correlation", ctypes.c_float),
-        ("mono_compat_width", ctypes.c_float),
-        ("momentary_lufs", ctypes.c_float),
-        ("short_term_lufs", ctypes.c_float),
-        ("integrated_lufs", ctypes.c_float),
-        ("gain_reduction_db", ctypes.c_float),
-        ("dropped_records", ctypes.c_uint32),
-        ("input_peak_db_l", ctypes.c_float),
-        ("input_peak_db_r", ctypes.c_float),
-    ]
-
-
 SONARE_METER_MAX_CHANNELS = 8
 SONARE_METER_MAX_INSERTS = 128
 
 
-class SonareMeterTelemetryRecordWide(CStruct):
-    """Maps to SonareMeterTelemetryRecordWide in sonare_c.h."""
+class SonareMeterTelemetryRecord(CStruct):
+    """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
 
     _fields_ = [
         ("target_id", ctypes.c_uint32),
@@ -289,11 +274,7 @@ class SonareEngineMarker(CStruct):
 
 
 class SonareProjectMarker(CStruct):
-    """Maps to SonareProjectMarker in sonare_c_project.h.
-
-    Same shape / offsets as :class:`SonareEngineMarker` so one binding shape
-    serves both surfaces.
-    """
+    """Maps to SonareProjectMarker in sonare_c_project_core.h; the name travels beside it."""
 
     _fields_ = [
         ("id", ctypes.c_uint32),
@@ -301,7 +282,6 @@ class SonareProjectMarker(CStruct):
         ("key_fifths", ctypes.c_int8),
         ("key_minor", ctypes.c_uint8),
         ("ppq", ctypes.c_double),
-        ("name", ctypes.c_char * 64),
     ]
 
 

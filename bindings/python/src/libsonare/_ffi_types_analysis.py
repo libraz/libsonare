@@ -534,6 +534,17 @@ class SonareMelSpectrogramOptions(CStruct):
     ]
 
 
+class SonareStftOptions(CStruct):
+    """Maps to SonareStftOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_stft_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("db", ctypes.c_int32),
+    ]
+
+
 class SonareMelToAudioOptions(CStruct):
     """Maps to SonareMelToAudioOptions in sonare_c_features.h."""
 

@@ -1090,14 +1090,6 @@ rule = "sample-rate-name"
 
 [[entry]]
 kind = "option"
-old = "stft_db(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "analysis"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
 old = "mel_spectrogram(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "analysis"
@@ -2238,14 +2230,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_i
 
 [[entry]]
 kind = "function"
-old = "stft_db"
-changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
-
-[[entry]]
-kind = "function"
 old = "tempogram"
 changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
 domain = "analysis"
@@ -2997,14 +2981,6 @@ changed = "returns a float32 ndarray instead of list[float]"
 domain = "core"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
-
-[[entry]]
-kind = "method"
-old = "Audio.stft_db"
-changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of dimensions and a flat list"
-domain = "core"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
 
 [[entry]]
 kind = "method"
@@ -4898,13 +4874,6 @@ test = "bindings/python/tests/test_stream_analyzer_shape.py::test_state_reads_ar
 kind = "option"
 old = "StreamAnalyzer.reset(base_sample_offset)"
 new = "StreamAnalyzer.reset(start_sample)"
-domain = "analysis"
-rule = "individual"
-
-[[entry]]
-kind = "option"
-old = "StreamAnalyzer.process_with_offset(sample_offset)"
-new = "StreamAnalyzer.process_with_offset(start_sample)"
 domain = "analysis"
 rule = "individual"
 
@@ -7359,13 +7328,6 @@ domain = "project"
 rule = "individual"
 
 [[entry]]
-kind = "field"
-old = "MeterTelemetryRecordWide.channel_count"
-new = "MeterTelemetryRecordWide.num_channels"
-domain = "engine"
-rule = "individual"
-
-[[entry]]
 kind = "type"
 old = "PitchDecomposition"
 new = "PitchDecompositionResult"
@@ -7460,36 +7422,8 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_metronome_clic
 
 [[entry]]
 kind = "field"
-old = "MeterTelemetryRecord.true_peak_db_l"
-new = "MeterTelemetryRecord.true_peak_dbtp_l"
-domain = "engine"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "MeterTelemetryRecord.true_peak_db_r"
-new = "MeterTelemetryRecord.true_peak_dbtp_r"
-domain = "engine"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
 old = "MeterTelemetryRecord.max_true_peak_db"
 new = "MeterTelemetryRecord.max_true_peak_dbtp"
-domain = "engine"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "MeterTelemetryRecordWide.true_peak_db"
-new = "MeterTelemetryRecordWide.true_peak_dbtp"
-domain = "engine"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "MeterTelemetryRecordWide.max_true_peak_db"
-new = "MeterTelemetryRecordWide.max_true_peak_dbtp"
 domain = "engine"
 rule = "unit-in-name"
 
@@ -9722,134 +9656,6 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_
 
 [[entry]]
 kind = "option"
-old = "Project.bounce_with_builtin_instrument(total_frames)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_builtin_instrument(block_size)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_builtin_instrument(num_channels)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_builtin_instrument(sample_rate)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_synth_instrument(total_frames)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_synth_instrument(block_size)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_synth_instrument(num_channels)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_synth_instrument(sample_rate)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_sf2_instrument(total_frames)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_sf2_instrument(block_size)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_sf2_instrument(num_channels)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_sf2_instrument(sample_rate)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_instruments(total_frames)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_instruments(block_size)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_instruments(num_channels)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
-old = "Project.bounce_with_instruments(sample_rate)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
-
-[[entry]]
-kind = "option"
 old = "Project.add_clip(audio_channels)"
 changed = "required alongside audio and refused without it (was 1 by default)"
 domain = "project"
@@ -10462,14 +10268,6 @@ kind = "type"
 old = "MasteringStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
 domain = "mastering"
-rule = "array-results"
-test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
-
-[[entry]]
-kind = "type"
-old = "MeterTelemetryRecordWide"
-changed = "peak_db, rms_db, true_peak_dbtp, input_peak_db are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "engine"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -13527,4 +13325,172 @@ kind = "option"
 old = "voice_change_realtime(samples)"
 new = "realtime_voice_changer_render(samples)"
 domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "stft_db"
+removed = "call stft(..., db=True) and read the result's db plane"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Audio.stft_db"
+removed = "call Audio.stft(..., db=True) and read the result's db plane"
+domain = "core"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Audio.from_file_channel"
+removed = "call Audio.from_file(path, channel_index)"
+domain = "core"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.process_with_offset"
+removed = "call StreamAnalyzer.process(samples, start_sample)"
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.process_with_monitor"
+removed = "call RealtimeEngine.process(channels, monitor=True)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_parameter_smoothed"
+removed = "call RealtimeEngine.set_parameter(param_id, value, render_frame, smoothed=True)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.drain_meter_telemetry_wide"
+removed = "call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MeterTelemetryRecordWide"
+removed = "read MeterTelemetryRecord, which carries the per-channel planes and num_channels"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.peak_db_l"
+removed = "read peak_db[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.peak_db_r"
+removed = "read peak_db[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.rms_db_l"
+removed = "read rms_db[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.rms_db_r"
+removed = "read rms_db[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.true_peak_db_l"
+removed = "read true_peak_dbtp[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.true_peak_db_r"
+removed = "read true_peak_dbtp[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.input_peak_db_l"
+removed = "read input_peak_db[0]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.input_peak_db_r"
+removed = "read input_peak_db[1]"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce_with_instruments"
+removed = "call Project.bounce(instruments=[(destination_id, instrument), ...])"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce_with_builtin_instrument"
+removed = "call Project.bounce(builtin_instruments=[(destination_id, config), ...])"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce_with_synth_instrument"
+removed = "call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce_with_sf2_instrument"
+removed = "call Project.bounce(sf2_instruments=[(destination_id, config), ...])"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.compile_timeline"
+removed = "call Project.compile(timeline=True) and read the result's timeline"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.set_program_on_channel"
+removed = "call Project.set_program(clip_id, program, bank_msb=..., bank_lsb=..., group=..., channel=...)"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "Project.set_program(bank)"
+removed = "pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank select"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "Project.midi2_program(bank_valid)"
+removed = "pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank"
+domain = "project"
 rule = "one-entry-per-operation"

@@ -780,7 +780,9 @@ class ChordAnalysisResult:
 class StftResult:
     """Short-time Fourier transform result.
 
-    ``magnitude`` and ``power`` are float32 arrays of shape ``(n_bins, n_frames)``.
+    ``magnitude`` and ``power`` are float32 arrays of shape ``(n_bins, n_frames)``;
+    ``db`` is the magnitude in dB with the same shape, or ``None`` unless the
+    transform was asked for it.
     """
 
     n_fft: int
@@ -793,6 +795,8 @@ class StftResult:
     """Magnitude spectrogram."""
     power: NDArray[np.float32]
     """Power spectrogram."""
+    db: NDArray[np.float32] | None = None
+    """Magnitude in dB, or ``None`` unless requested."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

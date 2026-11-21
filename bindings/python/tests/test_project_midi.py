@@ -166,7 +166,7 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
             },
         )
         project.set_program(midi_clip, program=42)
-        project.set_program_on_channel(midi_clip, group=0, channel=3, program=24, bank=0x0123)
+        project.set_program(midi_clip, 24, bank_msb=2, bank_lsb=35, group=0, channel=3)
         exported = project.export_smf()
         assert exported[:4] == b"MThd"
         assert bytes([0xC0, 42]) in exported
@@ -711,10 +711,48 @@ def test_program_and_bank_are_refused_outside_their_widths() -> None:
     project = Project()
     try:
         clip = project.add_midi_clip(0.0, 4.0).clip_id
-        project.set_program(clip, 0, bank=16383)
-        with pytest.raises(SonareValueError, match=r": bank must be an integer in \[0, 16383\]$"):
-            project.set_program(clip, 0, bank=16384)
+        project.set_program(clip, 0, bank_msb=127, bank_lsb=127)
+        for name, other in (("bank_msb", "bank_lsb"), ("bank_lsb", "bank_msb")):
+            for value in (-1, 128):
+                with pytest.raises(SonareValueError, match=rf"{name}.*\[0, 127\]"):
+                    project.set_program(clip, 0, **{name: value, other: 0})
         with pytest.raises(SonareValueError, match=r": program must be an integer in \[0, 127\]$"):
-            project.set_program_on_channel(clip, 0, 0, 128)
+            project.set_program(clip, 128)
+        with pytest.raises(SonareValueError, match=r": program must be an integer in \[0, 127\]$"):
+            project.set_program(clip, 128, group=0, channel=3)
+    finally:
+        project.close()
+
+
+@pytest.mark.parametrize("given", [{"bank_msb": 1}, {"bank_lsb": 1}, {"bank_msb": 0}])
+def test_set_program_bank_half_is_refused(given: dict[str, int]) -> None:
+    project = Project()
+    try:
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
+        with pytest.raises(SonareValueError, match=r"(?s)(?=.*bank_msb)(?=.*bank_lsb)"):
+            project.set_program(clip, 5, **given)
+        # The refused call left nothing behind: the clip still exports no program.
+        assert bytes([0xC0, 5]) not in project.export_smf()
+    finally:
+        project.close()
+
+
+def test_set_program_without_a_bank_emits_no_bank_select_and_with_one_emits_it() -> None:
+    project = Project()
+    try:
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
+        project.set_program(clip, 5)
+        project.set_program(clip, 6, group=0, channel=2)
+        plain = project.export_smf()
+        assert bytes([0xC0, 5]) in plain
+        assert bytes([0xC2, 6]) in plain
+        assert bytes([0xB0, 0, 0]) not in plain
+        assert bytes([0xB2, 0, 1]) not in plain
+
+        project.set_program(clip, 7, bank_msb=1, bank_lsb=5, group=0, channel=2)
+        banked = project.export_smf()
+        assert bytes([0xC2, 7]) in banked
+        assert bytes([0xB2, 0, 1]) in banked
+        assert bytes([0xB2, 32, 5]) in banked
     finally:
         project.close()

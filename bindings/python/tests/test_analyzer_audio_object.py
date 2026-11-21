@@ -337,11 +337,13 @@ def test_audio_effects() -> None:
 
 
 def test_audio_stft_db() -> None:
-    """Audio.stft_db returns dB spectrogram."""
+    """Audio.stft(db=True) returns a dB plane; the plain call leaves it None."""
     from libsonare import Audio
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
-    db = audio.stft_db()
+    assert audio.stft().db is None
+    db = audio.stft(db=True).db
+    assert db is not None
     assert db.shape[0] == 1025
     assert db.shape[1] > 0
 
@@ -433,11 +435,11 @@ def test_analysis_result_types(analyze_sine_result) -> None:
         assert isinstance(beat.time_sec, float)
 
 
-def test_audio_from_file_channel_keeps_the_channels_apart(tmp_path) -> None:
+def test_audio_from_file_channel_index_keeps_the_channels_apart(tmp_path) -> None:
     """Each channel arrives as itself; from_file folds them into neither."""
     import wave
 
-    from libsonare import SonareError
+    from libsonare import SonareError, SonareValueError
     from libsonare.audio import Audio
 
     # Two constant channels sharing no sample, so the fold shows up as a value
@@ -456,15 +458,18 @@ def test_audio_from_file_channel_keeps_the_channels_apart(tmp_path) -> None:
 
     assert Audio.file_num_channels(path) == 2
     with (
-        Audio.from_file_channel(path, 0) as left,
-        Audio.from_file_channel(path, 1) as right,
+        Audio.from_file(path, channel_index=0) as left,
+        Audio.from_file(path, 1) as right,
         Audio.from_file(path) as folded,
+        Audio.from_file(path, channel_index=None) as explicit_downmix,
     ):
+        np.testing.assert_array_equal(folded.data, explicit_downmix.data)
         assert len(left.data) == frames
         assert np.allclose(left.data, 0.5, atol=1e-4)
         assert np.allclose(right.data, -0.25, atol=1e-4)
         assert np.allclose(folded.data, 0.125, atol=1e-4)
 
-    for index in (2, -1):
-        with pytest.raises(SonareError):
-            Audio.from_file_channel(path, index)
+    with pytest.raises(SonareError):
+        Audio.from_file(path, 2)
+    with pytest.raises(SonareValueError, match="channel_index"):
+        Audio.from_file(path, -1)

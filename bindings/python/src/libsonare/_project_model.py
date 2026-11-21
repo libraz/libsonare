@@ -509,17 +509,10 @@ class ProjectCompileResult:
     diagnostics: tuple[ProjectDiagnostic, ...]
     """Every diagnostic the compile produced; empty when it was clean. An
     ``"error"`` entry means no timeline was produced."""
-
-
-@dataclass(frozen=True)
-class ProjectCompileTimelineResult:
-    """Result of :meth:`Project.compile_timeline`."""
-
-    diagnostics: tuple[ProjectDiagnostic, ...]
-    """Every diagnostic the compile produced; empty when it was clean."""
-    timeline: ProjectTimeline | None
-    """The compiled playback snapshot, owned by the caller; ``None`` when
-    compilation produced none (``diagnostics`` says why)."""
+    timeline: ProjectTimeline | None = None
+    """The compiled playback snapshot, owned by the caller; ``None`` unless
+    :meth:`Project.compile` ran with ``timeline=True`` and compilation produced
+    one."""
 
 
 @dataclass(frozen=True)

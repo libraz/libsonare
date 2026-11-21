@@ -19,21 +19,11 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(SonareStftOptions),
         ctypes.POINTER(SonareStftResult),
     ]
-
-    # sonare_stft_db
-    lib.sonare_stft_db.restype = ctypes.c_int32
-    lib.sonare_stft_db.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-    ]
+    lib.sonare_stft_options_init.restype = None
+    lib.sonare_stft_options_init.argtypes = [ctypes.POINTER(SonareStftOptions)]
 
     # --- Features - Mel ---
 
@@ -607,19 +597,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_tempogram.restype = ctypes.c_int32
     lib.sonare_tempogram.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_int),
-    ]
-    lib.sonare_tempogram_with_mode.restype = ctypes.c_int32
-    lib.sonare_tempogram_with_mode.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,

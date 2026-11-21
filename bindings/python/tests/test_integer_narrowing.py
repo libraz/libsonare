@@ -434,7 +434,6 @@ def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
     ids = (
         ("clip_id", lambda v: project.set_midi_events(v, events)),
         ("clip_id", lambda v: project.set_program(v, 5)),
-        ("clip_id", lambda v: project.set_program_on_channel(v, 0, 0, 5)),
         ("clip_id", lambda v: project.bake_midi_fx(v, fx)),
     )
     for name, edit in ids:
@@ -444,11 +443,22 @@ def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
 
     scalars = (
         ("program", lambda v: project.set_program(clip_a, v), 5, 6, WRAPPED_INTS),
-        ("bank", lambda v: project.set_program(clip_a, 5, v), 0, 1, WRAPPED_INTS),
-        ("program", lambda v: project.set_program_on_channel(clip_a, 0, 0, v), 5, 6, WRAPPED_INTS),
-        ("bank", lambda v: project.set_program_on_channel(clip_a, 0, 0, 5, v), 0, 1, WRAPPED_INTS),
-        ("group", lambda v: project.set_program_on_channel(clip_a, v, 0, 5), 0, 1, WRAPPED_BYTES),
-        ("channel", lambda v: project.set_program_on_channel(clip_a, 0, v, 5), 0, 1, WRAPPED_BYTES),
+        (
+            "bank_msb",
+            lambda v: project.set_program(clip_a, 5, bank_msb=v, bank_lsb=0),
+            0,
+            1,
+            (*WRAPPED_BYTES, 128),
+        ),
+        (
+            "bank_lsb",
+            lambda v: project.set_program(clip_a, 5, bank_msb=0, bank_lsb=v),
+            0,
+            1,
+            (*WRAPPED_BYTES, 128),
+        ),
+        ("group", lambda v: project.set_program(clip_a, 5, group=v), 0, 1, WRAPPED_BYTES),
+        ("channel", lambda v: project.set_program(clip_a, 5, channel=v), 0, 1, WRAPPED_BYTES),
     )
     for name, edit, first, second, refused in scalars:
         assert applied(edit, first) != applied(edit, second), name  # positive control

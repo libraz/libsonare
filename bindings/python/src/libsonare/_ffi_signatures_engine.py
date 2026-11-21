@@ -22,14 +22,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_size_t,
         ctypes.c_size_t,
-    ]
-    lib.sonare_engine_prepare_with_channels.restype = ctypes.c_int32
-    lib.sonare_engine_prepare_with_channels.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_double,
-        ctypes.c_int,
-        ctypes.c_size_t,
-        ctypes.c_size_t,
         ctypes.c_int,
     ]
     lib.sonare_engine_play.restype = ctypes.c_int32
@@ -694,13 +686,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_process.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.c_int,
-        ctypes.c_int,
-    ]
-    lib.sonare_engine_process_with_monitor.restype = ctypes.c_int32
-    lib.sonare_engine_process_with_monitor.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.c_int,
         ctypes.c_int,
@@ -752,13 +737,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    lib.sonare_engine_drain_meter_telemetry_wide.restype = ctypes.c_int32
-    lib.sonare_engine_drain_meter_telemetry_wide.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(SonareMeterTelemetryRecordWide),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
     lib.sonare_engine_meter_target_insert_gain_reduction.restype = ctypes.c_int32
     lib.sonare_engine_meter_target_insert_gain_reduction.argtypes = [
         ctypes.c_void_p,
@@ -787,13 +765,7 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_uint32,
         ctypes.c_float,
         ctypes.c_int64,
-    ]
-    lib.sonare_engine_set_parameter_smoothed.restype = ctypes.c_int32
-    lib.sonare_engine_set_parameter_smoothed.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_float,
-        ctypes.c_int64,
+        ctypes.c_int,
     ]
     lib.sonare_engine_set_param_smoothing_ms.restype = ctypes.c_int32
     lib.sonare_engine_set_param_smoothing_ms.argtypes = [
@@ -927,19 +899,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_set_synth_instrument.restype = ctypes.c_int32
     lib.sonare_engine_set_synth_instrument.argtypes = [
         ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(SonareSynthPatch),
-    ]
-    lib.sonare_engine_set_synth_instrument_with_bank.restype = ctypes.c_int32
-    lib.sonare_engine_set_synth_instrument_with_bank.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(SonareSynthPatch),
-        ctypes.c_void_p,
-    ]
-    lib.sonare_engine_set_synth_instrument_binding.restype = ctypes.c_int32
-    lib.sonare_engine_set_synth_instrument_binding.argtypes = [
-        ctypes.c_void_p,
         ctypes.POINTER(SonareSynthInstrumentBinding),
     ]
     lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
@@ -966,15 +925,6 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.sonare_engine_bind_midi_cc.restype = ctypes.c_int32
     lib.sonare_engine_bind_midi_cc.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint8,
-        ctypes.c_uint8,
-        ctypes.c_uint32,
-        ctypes.c_float,
-        ctypes.c_float,
-    ]
-    lib.sonare_engine_bind_midi_cc_binding.restype = ctypes.c_int32
-    lib.sonare_engine_bind_midi_cc_binding.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(SonareMidiCcBinding),
     ]

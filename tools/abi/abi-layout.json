@@ -119,6 +119,24 @@
     ],
     "size": 12
   },
+  "SonareAudioFileOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "channel_index",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
   "SonareAutomationLaneDesc": {
     "align": 8,
     "fields": [
@@ -4755,126 +4773,6 @@
         "size": 8
       },
       {
-        "kind": "float",
-        "name": "peak_db_l",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "peak_db_r",
-        "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "rms_db_l",
-        "offset": 32,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "rms_db_r",
-        "offset": 36,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "true_peak_dbtp_l",
-        "offset": 40,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "true_peak_dbtp_r",
-        "offset": 44,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "max_true_peak_dbtp",
-        "offset": 48,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "correlation",
-        "offset": 52,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "mono_compat_width",
-        "offset": 56,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "momentary_lufs",
-        "offset": 60,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "short_term_lufs",
-        "offset": 64,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "integrated_lufs",
-        "offset": 68,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "gain_reduction_db",
-        "offset": 72,
-        "size": 4
-      },
-      {
-        "kind": "unsigned",
-        "name": "dropped_records",
-        "offset": 76,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "input_peak_db_l",
-        "offset": 80,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "input_peak_db_r",
-        "offset": 84,
-        "size": 4
-      }
-    ],
-    "size": 88
-  },
-  "SonareMeterTelemetryRecordWide": {
-    "align": 8,
-    "fields": [
-      {
-        "kind": "unsigned",
-        "name": "target_id",
-        "offset": 0,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "render_frame",
-        "offset": 8,
-        "size": 8
-      },
-      {
-        "kind": "unsigned",
-        "name": "seq",
-        "offset": 16,
-        "size": 8
-      },
-      {
         "kind": "signed",
         "name": "num_channels",
         "offset": 24,
@@ -6973,9 +6871,57 @@
         "name": "instrument_latency_samples",
         "offset": 28,
         "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "instruments",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "instrument_count",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "builtin_instruments",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "builtin_instrument_count",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "synth_instruments",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "synth_instrument_count",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "sf2_instruments",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "sf2_instrument_count",
+        "offset": 88,
+        "size": 8
       }
     ],
-    "size": 32
+    "size": 96
   },
   "SonareProjectChordSymbol": {
     "align": 8,
@@ -7423,15 +7369,9 @@
         "name": "ppq",
         "offset": 8,
         "size": 8
-      },
-      {
-        "kind": "aggregate",
-        "name": "name",
-        "offset": 16,
-        "size": 64
       }
     ],
-    "size": 80
+    "size": 16
   },
   "SonareProjectSnapToGridOptions": {
     "align": 4,
@@ -9677,6 +9617,24 @@
     ],
     "size": 48
   },
+  "SonareStftOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "db",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
   "SonareStftResult": {
     "align": 8,
     "fields": [
@@ -9721,9 +9679,15 @@
         "name": "power",
         "offset": 32,
         "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "db",
+        "offset": 40,
+        "size": 8
       }
     ],
-    "size": 40
+    "size": 48
   },
   "SonareStreamBarChord": {
     "align": 4,

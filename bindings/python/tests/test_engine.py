@@ -71,7 +71,7 @@ def test_engine_transport_state_and_live_parameters() -> None:
             )
         )
         engine.set_parameter(3, 1.5)
-        engine.set_parameter_smoothed(3, 0.5, render_frame=0)
+        engine.set_parameter(3, 0.5, render_frame=0, smoothed=True)
         engine.play()
         engine.process([[0.1] * 128, [0.1] * 128])
 

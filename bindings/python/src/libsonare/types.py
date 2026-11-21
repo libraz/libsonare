@@ -365,9 +365,6 @@ from ._types_engine import (
     MeterTelemetryRecord as MeterTelemetryRecord,
 )
 from ._types_engine import (
-    MeterTelemetryRecordWide as MeterTelemetryRecordWide,
-)
-from ._types_engine import (
     MidiFxConfig as MidiFxConfig,
 )
 from ._types_engine import (

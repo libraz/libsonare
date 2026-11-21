@@ -62,9 +62,8 @@ def _build_project() -> tuple[Project, int]:
 
 
 def _project_bounce(project: Project) -> np.ndarray:
-    return project.bounce_with_builtin_instrument(
-        _SYNTH,
-        destination_id=_DESTINATION,
+    return project.bounce(
+        builtin_instruments=[(_DESTINATION, _SYNTH)],
         total_frames=_FRAMES,
         block_size=_BLOCK,
         num_channels=2,
@@ -104,8 +103,8 @@ def _engine_bounce(engine: RealtimeEngine) -> np.ndarray:
 
 
 def _compile(project: Project) -> ProjectTimeline:
-    result = project.compile_timeline()
-    assert isinstance(result, libsonare.ProjectCompileTimelineResult)
+    result = project.compile(timeline=True)
+    assert isinstance(result, libsonare.ProjectCompileResult)
     assert not [d for d in result.diagnostics if d.severity == "error"]
     assert result.timeline is not None
     return result.timeline
@@ -173,9 +172,20 @@ def test_apply_while_playing_raises_and_leaves_engine_unchanged() -> None:
 def test_compile_failure_has_no_timeline_and_reports_diagnostics() -> None:
     # A clip naming a source the project does not hold is a compile error.
     with Project.from_json(dangling_source_json()) as project:
-        result = project.compile_timeline()
+        result = project.compile(timeline=True)
         expected = project.compile()
-        assert isinstance(result, libsonare.ProjectCompileTimelineResult)
+        assert isinstance(result, libsonare.ProjectCompileResult)
         assert result.timeline is None
         assert any(d.severity == "error" and d.message for d in result.diagnostics)
         assert result.diagnostics == expected.diagnostics
+
+
+def test_plain_compile_carries_no_timeline() -> None:
+    with Project.from_json(dangling_source_json()) as project:
+        assert project.compile().timeline is None
+    project = Project()
+    try:
+        assert project.compile().timeline is None
+        assert project.compile(timeline=False).timeline is None
+    finally:
+        project.close()

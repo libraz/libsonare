@@ -143,7 +143,7 @@ GsEfxRealization: TypeAlias = Literal["modern", "classic"]
 @dataclass(frozen=True)
 class BuiltinSynthConfig:
     """Patch for the built-in polyphonic oscillator synth (see
-    :meth:`Project.bounce_with_builtin_instrument`).
+    :meth:`Project.bounce`).
 
     Every numeric field is ``None`` for the library value, so a
     default-constructed config is the default sine patch; override only what
@@ -197,7 +197,7 @@ _SOURCE_BACKENDS: tuple[str, ...] = get_args(SourceBackend)
 @dataclass(frozen=True)
 class Sf2InstrumentConfig:
     """Patch for the SoundFont (SF2) player (see
-    :meth:`Project.bounce_with_sf2_instrument`).
+    :meth:`Project.bounce`).
 
     ``gain`` and ``polyphony`` are ``None`` for the library value; a given
     value is read literally and refused outside its range (``gain`` in [0, 4],
@@ -331,7 +331,7 @@ class SynthModRouting:
 @dataclass(frozen=True)
 class SynthPatch:
     """Versioned NativeSynth patch (see
-    :meth:`Project.bounce_with_synth_instrument` and
+    :meth:`Project.bounce` and
     :meth:`RealtimeEngine.set_synth_instrument`).
 
     The patch starts from a BASE — the named ``preset`` (see
@@ -434,8 +434,7 @@ class SynthPatch:
 
     ``use_gm_programs`` is a BINDING option too (Node and WASM spell it
     ``useGmPrograms``): it makes this destination resolve each MIDI channel from
-    its GM bank/program messages. ``None`` means "not stated", falling back to
-    :meth:`Project.bounce_with_synth_instrument`'s ``auto_select_gm``.
+    its GM bank/program messages. ``None`` and ``False`` both leave it off.
 
     ``amp_attack_ms`` / ``filter_attack_ms`` reach full level at the set time.
     ``*_decay_ms`` and ``*_release_ms`` are three time constants: about -26 dB
@@ -537,9 +536,7 @@ class SynthPatch:
     """PCM bank the ``sample_*`` fields address; a binding option, not a patch field."""
     # The same kind of BINDING option, spelled `useGmPrograms` by Node and
     # WASM: it travels on SonareSynthInstrumentBinding, so _to_c() does not
-    # carry it and _from_c() never fills it. None means "not stated", which is
-    # what leaves Project.bounce_with_synth_instrument's per-call
-    # `auto_select_gm` reachable as the fallback.
+    # carry it and _from_c() never fills it.
     use_gm_programs: bool | None = None
     """Resolve each MIDI channel from GM bank/program messages; a binding option."""
     engine_params: Mapping[str, float] | None = None
@@ -915,7 +912,7 @@ def synth_preset_patch(name: str) -> SynthPatch:
 
 
 class ExternalInstrument(Protocol):
-    """A host-supplied instrument driven during :meth:`Project.bounce_with_instruments`.
+    """A host-supplied instrument driven during :meth:`Project.bounce`.
 
     The object models a MIDI instrument the bounce engine hosts in place of the
     built-in synth. Only :meth:`render` is required; ``prepare``, ``on_event``

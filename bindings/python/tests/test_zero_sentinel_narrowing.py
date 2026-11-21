@@ -326,7 +326,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
             engine.set_track_lanes([lane])
             engine.play()
             engine.process([[0.0] * frames for _ in range(6)])
-            wide = engine.drain_meter_telemetry_wide()
+            wide = engine.drain_meter_telemetry()
             bus = next(record for record in wide if record.target_id == 33)
             return round(max(bus.peak_db), 3)
 

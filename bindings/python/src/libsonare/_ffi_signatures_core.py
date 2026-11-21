@@ -56,17 +56,11 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_audio_from_file.restype = ctypes.c_int32
     lib.sonare_audio_from_file.argtypes = [
         ctypes.c_char_p,
+        ctypes.POINTER(SonareAudioFileOptions),
         ctypes.POINTER(ctypes.c_void_p),
     ]
-
-    # sonare_audio_from_file_channel
-    # Optional for the same reason as the channel-count probe below.
-    lib.sonare_audio_from_file_channel.restype = ctypes.c_int32
-    lib.sonare_audio_from_file_channel.argtypes = [
-        ctypes.c_char_p,
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
+    lib.sonare_audio_file_options_init.restype = None
+    lib.sonare_audio_file_options_init.argtypes = [ctypes.POINTER(SonareAudioFileOptions)]
 
     # sonare_audio_file_num_channels
     # This is additive to the audio-file ABI. Keep the signature optional so
@@ -676,13 +670,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
-    ]
-    lib.sonare_stream_analyzer_process_with_offset.restype = ctypes.c_int32
-    lib.sonare_stream_analyzer_process_with_offset.argtypes = [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_stream_analyzer_finalize.restype = ctypes.c_int32
     lib.sonare_stream_analyzer_finalize.argtypes = [ctypes.c_void_p]

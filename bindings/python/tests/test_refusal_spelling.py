@@ -195,10 +195,6 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "project_import_clip_file": lambda: (libsonare.Project().import_clip_file, {}),
     "project_import_smf": lambda: (libsonare.Project().import_smf, {}),
     "project_set_marker": lambda: (libsonare.Project().set_marker, {"ppq": 0.0}),
-    "project_set_marker_ex_name": lambda: (
-        libsonare.Project().set_marker,
-        {"ppq": 0.0, "name": "m"},
-    ),
     "project_set_overlap_policy": lambda: (libsonare.Project().set_overlap_policy, {}),
     "project_set_source_audio": lambda: (
         libsonare.Project().set_source_audio,
@@ -210,8 +206,8 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     ),
     "realtime_voice_changer_process_interleaved": _voice_changer("process_interleaved"),
     "realtime_voice_changer_process_mono": _voice_changer("process_mono"),
-    "stream_analyzer_process_with_offset": lambda: (
-        libsonare.StreamAnalyzer(sample_rate=22050).process_with_offset,
+    "stream_analyzer_process": lambda: (
+        libsonare.StreamAnalyzer(sample_rate=22050).process,
         {"samples": _TONE[:512]},
     ),
     "stream_analyzer_reset": lambda: (libsonare.StreamAnalyzer(sample_rate=22050).reset, {}),

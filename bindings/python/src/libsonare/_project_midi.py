@@ -18,7 +18,6 @@ from ._errors import _entry, _not_supported, _refuse
 # The transcription config is built once for the whole binding: this method and
 # the free `transcribe` take the same keyword options, and two builders would be
 # two chances for their domains to part company.
-from ._narrowing import _C_ABSENT
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _MIDI_DATA_MAX,
@@ -64,14 +63,21 @@ from ._runtime import (
 )
 from ._types_engine import AutomationPoint, MidiFxConfig
 
-# Widths the bank-number argument and the static GM lookups still narrow in Python: a
-# bank number is 14 bits, a GM data byte 7 bits. The packers leave the domain to the C ABI.
-_MIDI_14BIT_MAX = 16383
 
+def _bank_pair(bank_msb: object, bank_lsb: object) -> tuple[bool, int, int]:
+    """Validate an optional bank select pair: both or neither, each in [0, 127].
 
-def _midi_bank(bank: object) -> int:
-    """An optional 14-bit bank number; ``None`` is the C ABI's absent ``-1``."""
-    return _C_ABSENT if bank is None else _narrow_int(bank, "bank", 0, _MIDI_14BIT_MAX)
+    Returns ``(valid, msb, lsb)``; an absent pair is ``(False, 0, 0)``.
+    """
+    if bank_msb is None and bank_lsb is None:
+        return False, 0, 0
+    if bank_msb is None or bank_lsb is None:
+        raise _refuse("bank_msb and bank_lsb must be given together")
+    return (
+        True,
+        _narrow_int(bank_msb, "bank_msb", 0, _MIDI_DATA_MAX),
+        _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX),
+    )
 
 
 # Domains of the static GM tables: a number outside is refused, one inside that
@@ -390,35 +396,31 @@ class _ProjectMidiMixin:
                 lib.sonare_free_bytes(out)
 
     @_entry("Project.set_program")
-    def set_program(self, clip_id: int, program: int, bank: int | None = None) -> None:
-        """Set a MIDI clip's channel-0 program / bank at source PPQ 0.
+    def set_program(
+        self,
+        clip_id: int,
+        program: int,
+        *,
+        bank_msb: int | None = None,
+        bank_lsb: int | None = None,
+        group: int = 0,
+        channel: int = 0,
+    ) -> None:
+        """Set a MIDI clip's program / bank for one UMP group and channel at source PPQ 0.
 
-        ``bank`` defaults to ``None`` (no Bank Select emitted), matching
-        :meth:`set_program_on_channel`; pass a 14-bit bank in [0, 16383] to emit a
-        Bank Select. ``program`` is in [0, 127].
+        ``bank_msb`` and ``bank_lsb`` (each in [0, 127]) are given together to
+        emit a Bank Select, or both omitted for none; one alone is refused with
+        :class:`SonareValueError`. ``program`` is in [0, 127].
         """
+        valid, msb, lsb = _bank_pair(bank_msb, bank_lsb)
         _check(
             _get_lib().sonare_project_set_program(
-                self._require_handle(),
-                _to_c_uint32(clip_id, "clip_id"),
-                _to_c_int(program, "program"),
-                _midi_bank(bank),
-            )
-        )
-
-    @_entry("Project.set_program_on_channel")
-    def set_program_on_channel(
-        self, clip_id: int, group: int, channel: int, program: int, bank: int | None = None
-    ) -> None:
-        """Set a MIDI clip's program / bank for one UMP group and channel."""
-        _check(
-            _get_lib().sonare_project_set_program_on_channel(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_int(program, "program"),
-                _midi_bank(bank),
+                (msb << 7) | lsb if valid else -1,
             )
         )
 
@@ -713,25 +715,24 @@ class _ProjectMidiMixin:
         group: int,
         channel: int,
         program: int,
-        bank_valid: bool = False,
-        bank_msb: int = 0,
-        bank_lsb: int = 0,
+        bank_msb: int | None = None,
+        bank_lsb: int | None = None,
     ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 program-change event tuple.
 
-        The bank travels in the same message and is applied only when
-        ``bank_valid`` is true. A non-zero ``bank_msb`` or ``bank_lsb`` with
-        ``bank_valid`` false is refused with :class:`SonareValueError`: a bank the receiver would
-        ignore is not packed."""
+        The bank travels in the same message: give ``bank_msb`` and ``bank_lsb``
+        (each in [0, 127]) together to apply it, or omit both. One alone is
+        refused with :class:`SonareValueError`."""
+        valid, msb, lsb = _bank_pair(bank_msb, bank_lsb)
         return _midi_event_packed(
             "sonare_midi2_program",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
             _to_c_uint8(channel, "channel"),
             _to_c_uint8(program, "program"),
-            _to_c_int(1 if bank_valid else 0, "bank_valid"),
-            _to_c_uint8(bank_msb, "bank_msb"),
-            _to_c_uint8(bank_lsb, "bank_lsb"),
+            _to_c_int(1 if valid else 0, "bank_valid"),
+            _to_c_uint8(msb, "bank_msb"),
+            _to_c_uint8(lsb, "bank_lsb"),
         )
 
     @staticmethod

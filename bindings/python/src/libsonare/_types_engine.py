@@ -35,7 +35,7 @@ PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
 
 @dataclass(frozen=True, slots=True, eq=False)
 class EngineProcessWithMonitorResult:
-    """Result of ``Engine.process_with_monitor``: the program and monitor planes."""
+    """Result of ``RealtimeEngine.process(..., monitor=True)``: the program and monitor planes."""
 
     output: tuple[npt.NDArray[np.float32], ...]
     """Processed program channel planes, one float32 array per channel."""
@@ -732,67 +732,13 @@ class EngineGraphSpec:
     """Automation parameter bindings; None for none."""
 
 
-@dataclass(frozen=True, slots=True)
-class MeterTelemetryRecord:
-    """A meter snapshot drained from the realtime engine's meter tap.
-
-    ``true_peak_dbtp_l``/``true_peak_dbtp_r``/``max_true_peak_dbtp`` are inter-sample
-    peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
-    streaming measurement that runs one reconstruction-filter group delay (a
-    few samples) behind the block, so the reading does not depend on the block
-    size. :func:`metering_true_peak_dbtp` measures a whole signal at once.
-    """
-
-    target_id: int
-    """Id of the mix target the snapshot belongs to."""
-    render_frame: int
-    """Render frame the snapshot was taken at."""
-    seq: int
-    """Sequence number of the record."""
-    peak_db_l: float
-    """Left sample peak, in dBFS."""
-    peak_db_r: float
-    """Right sample peak, in dBFS."""
-    rms_db_l: float
-    """Left RMS level, in dBFS."""
-    rms_db_r: float
-    """Right RMS level, in dBFS."""
-    true_peak_dbtp_l: float
-    """Left true peak, in dBTP."""
-    true_peak_dbtp_r: float
-    """Right true peak, in dBTP."""
-    max_true_peak_dbtp: float
-    """Maximum true peak over both channels, in dBTP."""
-    correlation: float
-    """Stereo phase correlation, -1..1."""
-    mono_compat_width: float
-    """Stereo width measure for mono compatibility."""
-    momentary_lufs: float
-    """Momentary loudness, in LUFS."""
-    short_term_lufs: float
-    """Short-term loudness, in LUFS."""
-    integrated_lufs: float
-    """Integrated loudness, in LUFS."""
-    gain_reduction_db: float
-    """Gain reduction applied, in dB."""
-    dropped_records: int
-    """Records dropped because the telemetry queue was full."""
-    # Input tap peaks are appended to preserve positional construction of the
-    # pre-V2 public record while making the source/input relationship explicit.
-    input_peak_db_l: float = -120.0
-    """Left input-tap sample peak, in dBFS."""
-    input_peak_db_r: float = -120.0
-    """Right input-tap sample peak, in dBFS."""
-
-
 @dataclass(frozen=True, slots=True, eq=False)
-class MeterTelemetryRecordWide:
-    """A per-plane meter snapshot for a surround mix target.
+class MeterTelemetryRecord:
+    """A per-plane meter snapshot for a mix target.
 
     ``peak_db``/``rms_db``/``true_peak_dbtp`` carry ``num_channels`` valid planes
     in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
-    Rss). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
-    stereo fast path.
+    Rss); a stereo target's left and right are planes 0 and 1.
 
     ``true_peak_dbtp``/``max_true_peak_dbtp`` are inter-sample peaks from the
     ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a streaming

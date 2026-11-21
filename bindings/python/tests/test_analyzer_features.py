@@ -294,14 +294,38 @@ def test_stft() -> None:
 
 
 def test_stft_db() -> None:
-    """stft_db returns a dB-scaled spectrogram of shape (n_bins, n_frames)."""
-    from libsonare import stft, stft_db
+    """stft(db=True) carries a dB plane shaped like the magnitude."""
+    from libsonare import stft
 
     tone = _generate_sine(440, 22050, 1.0)
-    db = stft_db(tone, sample_rate=22050)
-    assert db.shape == stft(tone, sr=22050).magnitude.shape
-    assert db.shape[0] == 1025
-    assert db.shape[1] > 0
+    result = stft(tone, sr=22050, db=True)
+    assert result.db is not None
+    assert result.db.dtype == np.float32
+    assert result.db.shape == result.magnitude.shape
+    assert result.db.shape[0] == 1025
+    assert result.db.shape[1] > 0
+    # Bins well above the top_db clip follow 20*log10(magnitude).
+    audible = result.magnitude > 1.0
+    assert audible.any()
+    expected = 20.0 * np.log10(result.magnitude[audible])
+    np.testing.assert_allclose(result.db[audible], expected, atol=1e-2)
+
+
+def test_stft_without_db_matches_the_db_call_on_every_other_field() -> None:
+    """The absent option leaves db None and the other planes untouched."""
+    from libsonare import stft
+
+    tone = _generate_sine(440, 22050, 1.0)
+    plain = stft(tone, sr=22050)
+    with_db = stft(tone, sr=22050, db=True)
+    assert plain.db is None
+    assert (plain.n_fft, plain.hop_length, plain.sample_rate) == (
+        with_db.n_fft,
+        with_db.hop_length,
+        with_db.sample_rate,
+    )
+    np.testing.assert_array_equal(plain.magnitude, with_db.magnitude)
+    np.testing.assert_array_equal(plain.power, with_db.power)
 
 
 def test_mel_spectrogram() -> None:
