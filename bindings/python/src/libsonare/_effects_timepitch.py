@@ -265,7 +265,7 @@ def pitch_correct_timevarying(
                 prob_array,
                 voiced_array,
                 _to_c_size_t(n_frames, "n_frames"),
-                _to_c_int(hop_length, "hop_length"),
+                _to_c_size_t(hop_length, "hop_length"),
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),

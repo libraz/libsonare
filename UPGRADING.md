@@ -329,11 +329,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRirSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults) |
 | `SonareRoomMorphConfig` | leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5) |
 | `SonareVoiceChangeConfig` | leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused |
-| `sonare_hpss_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
 | `sonare_phase_vocoder` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
-| `sonare_pitch_shift_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
-| `sonare_time_stretch_ex` | pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default |
 
 #### String values are lowerCamelCase tokens
 
@@ -365,9 +362,21 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonarePercussiveRenderConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_percussive_render_config_init |
 | `SonareRealtimeVoiceChangerConfig.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_realtime_voice_changer_config_init |
 | `SonareVoiceChangeConfig.struct_version` | removed: the field is gone; set pitch_semitones, formant_factor and formant_mode directly |
+| `sonare_decompose_with_init` | removed: call sonare_decompose with SonareDecomposeOptions init set |
+| `sonare_decompose` | takes const SonareDecomposeOptions* options (NULL = defaults; sonare_decompose_options_init) before out_w; an unknown init is refused as options.init |
+| `sonare_hpss_ex` | removed: call sonare_hpss with SonareHpssOptions n_fft, hop_length and use_soft_mask set; pass a non-NULL out_residual for the residual |
+| `sonare_hpss` | takes const SonareHpssOptions* options (NULL = defaults; sonare_hpss_options_init) before out, and a trailing nullable float** out_residual |
 | `sonare_note_target_assign_config_default` | removed: call sonare_note_target_assign_config_init(&config) on a caller-owned struct instead |
 | `sonare_pitch_correction_config_default` | removed: call sonare_pitch_correction_config_init(&config) on a caller-owned struct instead |
+| `sonare_pitch_shift_ex` | removed: call sonare_pitch_shift with SonarePitchShiftOptions n_fft and hop_length set |
+| `sonare_pitch_shift` | takes const SonarePitchShiftOptions* options (NULL = defaults; sonare_pitch_shift_options_init) before out |
 | `sonare_realtime_voice_changer_config_default` | removed: call sonare_realtime_voice_changer_config_init(&config) on a caller-owned struct instead |
+| `sonare_time_stretch_ex` | removed: call sonare_time_stretch with SonareTimeStretchOptions n_fft and hop_length set |
+| `sonare_time_stretch` | takes const SonareTimeStretchOptions* options (NULL = defaults; sonare_time_stretch_options_init) before out |
+| `sonare_trim_ex` | removed: call sonare_trim with SonareTrimOptions frame_length and hop_length set |
+| `sonare_trim` | takes const SonareTrimOptions* options (NULL = defaults; sonare_trim_options_init) before out |
+| `sonare_voice_change_ex` | removed: call sonare_voice_change, which takes the SonareVoiceChangeConfig |
+| `sonare_voice_change` | takes const SonareVoiceChangeConfig* config (NULL = defaults; sonare_voice_change_config_init) in place of pitch_semitones and formant_factor |
 
 #### C constructors return SonareError and an out pointer
 
@@ -397,8 +406,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pitch_correct_to_midi_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double |
-| `sonare_trim_ex(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_trim_ex(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 
 #### Every C failure sets the error message
 
@@ -406,6 +413,27 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareRirSynthResult.has_error` | removed: check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic as "code: message" in sonare_last_error_message() |
 | `sonare_synthesize_rir` | an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set |
+
+#### Each operation has exactly one entry point
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareNormalizeStereoResult` | removed: sonare_normalize_stereo and sonare_normalize_rms_stereo return out_left, out_right and out_length |
+| `SonareRoomMorphStereoResult` | removed: sonare_room_morph_stereo returns out_left, out_right and out_length |
+| `sonare_decompose_stems_linked` | out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed |
+| `sonare_free_room_morph_stereo_result` | removed: free each room_morph_stereo buffer with sonare_free_floats |
+| `sonare_hpss_with_residual` | removed: call sonare_hpss with a non-NULL out_residual; harmonic, percussive, length and sample rate arrive in SonareHpssResult |
+| `sonare_mastering_repair_denoise_classical_linked` | returns SonareDenoiseLinkedResult* out (channels and the SonareDenoiseReport), freed with sonare_free_denoise_linked_result, in place of caller channel buffers and a report |
+| `sonare_mastering_repair_dereverb_classical_linked` | returns SonareDereverbLinkedResult* out (channels and the SonareDereverbReport), freed with sonare_free_dereverb_linked_result, in place of caller channel buffers and a report |
+| `sonare_normalize_rms_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer |
+| `sonare_normalize_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer |
+| `sonare_realtime_voice_changer_create_json` | removed: parse with sonare_realtime_voice_changer_config_from_json, then call sonare_realtime_voice_changer_create |
+| `sonare_realtime_voice_changer_process_interleaved` | takes const float* carrier after input (NULL = none), mono and shared by every channel |
+| `sonare_realtime_voice_changer_process_mono` | takes const float* carrier after input (NULL = none); a NULL carrier while an external carrier is configured is SONARE_ERROR_INVALID_STATE |
+| `sonare_realtime_voice_changer_process_planar_stereo` | takes const float* carrier after right (NULL = none), mono and shared by both channels |
+| `sonare_realtime_voice_changer_set_config_json` | removed: parse with sonare_realtime_voice_changer_config_from_json, then call sonare_realtime_voice_changer_set_config |
+| `sonare_room_morph_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_room_morph returns its buffer |
+| `sonare_voice_change_realtime` | removed: call sonare_realtime_voice_changer_render with a SonareRealtimeVoiceChangerConfig (NULL for neutralMonitor; parse a preset id or JSON with sonare_realtime_voice_changer_config_from_json) |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
@@ -421,7 +449,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareNoteEdit.pitch_shift_semitones` | `SonareNoteEdit.pitch_semitones` |
 | `SonareRealtimeVoiceChangerConfig.retune_semitones` | `SonareRealtimeVoiceChangerConfig.retune_pitch_semitones` |
 | `sonare_pitch_shift(semitones)` | `sonare_pitch_shift(pitch_semitones)` |
-| `sonare_pitch_shift_ex(semitones)` | `sonare_pitch_shift_ex(pitch_semitones)` |
 | `sonare_streaming_retune_config(out_semitones)` | `sonare_streaming_retune_config(out_pitch_semitones)` |
 | `sonare_streaming_retune_create(semitones)` | `sonare_streaming_retune_create(pitch_semitones)` |
 | `sonare_streaming_retune_set_config(semitones)` | `sonare_streaming_retune_set_config(pitch_semitones)` |
@@ -465,7 +492,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareDeclipConfig.clip_threshold` | `SonareDeclipConfig.clip_threshold_db` |
 | `SonareTrimSilenceConfig.threshold` | `SonareTrimSilenceConfig.threshold_db` |
-| `sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_db)` | `sonare_streaming_mastering_chain_create_ex(loudness_static_gain_peak_dbtp)`: the true peak the static gain was computed for is named in dBTP, its unit |
 
 #### Loudness quantities use one name per measurement
 
@@ -496,14 +522,22 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_master_audio_stereo_with_progress_ex` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
-| `sonare_master_audio_stereo_with_progress` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
-| `sonare_master_audio_stereo` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
-| `sonare_master_audio_with_progress_ex` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
-| `sonare_master_audio_with_progress` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
-| `sonare_master_audio` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
+| `sonare_master_audio_stereo` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
+| `sonare_master_audio` | overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root "overrides", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER; takes const SonareMasterAudioOptions* options (NULL = defaults; sonare_master_audio_options_init) after overrides_json; progress and cancel callbacks are options fields |
 | `sonare_streaming_loudness_gain_stereo` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
 | `sonare_streaming_loudness_gain` | takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root "config", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER |
+
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_master_audio_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data |
+| `sonare_master_audio_stereo_with_progress` | removed: call sonare_master_audio_stereo with SonareMasterAudioOptions progress_callback and progress_user_data set |
+| `sonare_master_audio_with_progress_ex` | removed: call sonare_master_audio with SonareMasterAudioOptions carrying progress_callback, cancel_callback and their user data |
+| `sonare_master_audio_with_progress` | removed: call sonare_master_audio with SonareMasterAudioOptions progress_callback and progress_user_data set |
+| `sonare_mixer_add_strip_ex` | removed: call sonare_mixer_add_strip with SonareMixerAddStripOptions set |
+| `sonare_mixer_add_strip` | takes const SonareMixerAddStripOptions* options (NULL = defaults; sonare_mixer_add_strip_options_init) after id; the channel layout and oversample factor are options fields, and an oversample of 0 is refused |
+| `sonare_streaming_mastering_chain_create_ex` | removed: call sonare_streaming_mastering_chain_create with SonareStreamingMasteringChainOptions loudness_static_gain_db and loudness_static_gain_peak_dbtp set |
 
 #### C constructors return SonareError and an out pointer
 
@@ -511,8 +545,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_eq_create` | SonareError sonare_eq_create(sample_rate, max_block_size, &eq); read the error from the return value, the handle from eq (NULL on failure) |
 | `sonare_mixer_create` | SonareError sonare_mixer_create(sample_rate, max_block_size, &mixer); read the error from the return value, the handle from mixer (NULL on failure) |
-| `sonare_streaming_mastering_chain_create_ex` | SonareError sonare_streaming_mastering_chain_create_ex(config_json, loudness_static_gain_db, loudness_static_gain_peak_db, &chain); read the error from the return value, the handle from chain (NULL on failure) |
-| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure) |
+| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields, NaN when not given |
 
 #### C results are released by a function named after the result
 
@@ -520,8 +553,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_capability_catalog_json` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 | `sonare_mastering_amp_preset_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
-| `sonare_mastering_insert_param_info_at_rate` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering [] |
-| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering [] |
+| `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for |
 | `sonare_mastering_processor_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
 
 #### C counts are size_t and returned through an out parameter
@@ -550,13 +582,31 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `sonare_eq_match_ex` | removed: call sonare_eq_match, which takes the independent lengths and reference rate |
+| `sonare_eq_match` | takes source_length after source and reference_length and reference_sample_rate after reference; the reference is resampled onto sample_rate |
+| `sonare_mastering_ab_match_loudness_stereo` | returns float** out_left, float** out_right and size_t* out_length plus SonareLoudnessMatch* out_match, as sonare_mastering_ab_match_loudness does |
+| `sonare_mastering_analyze_pair_ex` | removed: call sonare_mastering_analyze_pair, which takes the independent lengths and reference rate |
+| `sonare_mastering_analyze_pair` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor |
+| `sonare_mastering_apply_pair_processor_ex` | removed: call sonare_mastering_apply_pair_processor, which takes the independent lengths and reference rate |
+| `sonare_mastering_apply_pair_processor_stereo_ex` | removed: call sonare_mastering_apply_pair_processor_stereo, which takes the independent lengths and reference rate |
+| `sonare_mastering_apply_pair_processor_stereo` | takes source_length, reference_length and reference_sample_rate, as sonare_mastering_apply_pair_processor |
+| `sonare_mastering_apply_pair_processor` | takes source_length, reference_length and reference_sample_rate: source and reference each at their own length and rate, the reference resampled onto sample_rate |
+| `sonare_mastering_assistant_suggest_chain_json_stereo` | removed: read the chainConfig block of sonare_mastering_assistant_suggest_stereo's document |
+| `sonare_mastering_assistant_suggest_chain_json` | removed: read the chainConfig block of sonare_mastering_assistant_suggest's document |
 | `sonare_mastering_chain_stereo_with_progress_ex` | removed: call sonare_master_audio_stereo_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json |
 | `sonare_mastering_chain_stereo_with_progress` | removed: call sonare_master_audio_stereo_with_progress with preset NULL (the default chain) and the old params as overrides_json |
 | `sonare_mastering_chain_stereo` | removed: call sonare_master_audio_stereo with preset NULL (the default chain) and the old params as overrides_json |
 | `sonare_mastering_chain_with_progress_ex` | removed: call sonare_master_audio_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json |
 | `sonare_mastering_chain_with_progress` | removed: call sonare_master_audio_with_progress with preset NULL (the default chain) and the old params as overrides_json |
 | `sonare_mastering_chain` | removed: call sonare_master_audio with preset NULL (the default chain) and the old params as overrides_json |
+| `sonare_mastering_insert_param_info_at_rate` | removed: call sonare_mastering_insert_param_info, which takes the sample rate |
+| `sonare_metering_phase_scope_decimated` | removed: call sonare_metering_phase_scope, which takes max_points |
+| `sonare_metering_phase_scope` | takes size_t max_points before out: 0 (or at least length) for one point per sample, otherwise the point cloud is decimated to at most max_points |
+| `sonare_metering_vectorscope_decimated` | removed: call sonare_metering_vectorscope, which takes max_points |
+| `sonare_metering_vectorscope` | takes size_t max_points before out: 0 (or at least length) for one point per sample, otherwise the point cloud is decimated to at most max_points |
 | `sonare_mixing_assistant_suggest_scene_json` | removed: call sonare_mixing_assistant_suggest with the same arguments and read the scene member of the returned document |
+| `sonare_strip_meter_tap` | removed: call sonare_strip_meter, which takes the tap |
+| `sonare_strip_meter` | takes int tap (SonareMeterTap) after strip; SONARE_METER_TAP_POST_FADER reads the snapshot the two-argument form read, and an unknown tap is refused |
 
 #### Channel counts are numChannels
 
@@ -1996,6 +2046,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `remix(align_zeros)` | defaults to True (cuts snap to zero crossings), as librosa does; pass align_zeros=False for the 1.x cuts |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingRetune.prepare(sample_rate)` | sample_rate is an integer in Hz; a float, even a whole one, raises SonareValueError |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -4671,8 +4727,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DecomposeStemsRequest` | `sampleRate` is now required |
 | `HpssRequest.sampleRate` | optional -> required (no default) |
 | `HpssRequest` | `sampleRate` is now required |
-| `HpssWithResidualRequest.sampleRate` | optional -> required (no default) |
-| `HpssWithResidualRequest` | `sampleRate` is now required |
 | `MasteringRepairAnalyzeRequest.sampleRate` | optional -> required (no default) |
 | `MasteringRepairAnalyzeRequest` | `sampleRate` is now required |
 | `MasteringRepairApplyRequest.sampleRate` | optional -> required (no default) |
@@ -4742,8 +4796,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SpectralEditRequest` | `ops` is now `readonly SpectralRegionOp[]` (was `SpectralRegionOp[]`); `ops` is now required; `window` is now `WindowType` (was `"hann" \| "hamming" \| "blackman" \| "rectangular"`) |
 | `SplitNoteRequest` | adds `frameSec?: number`; `frame` is now optional; `voiced` is now `VoicedFlags` (was `VoicedFlags \| null`); `voicedProb` is now `Float32Array` (was `Float32Array \| null`) |
 | `TimeStretchRequest` | removes `rate`; adds `speedRatio: number` (required); `sampleRate` is now required |
-| `VoiceChangeRealtimeRequest.channels` | the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples |
-| `VoiceChangeRealtimeRequest.sampleRate` | optional -> required (no default) |
+| `VoiceChangeRealtimeRequest.channels` | `RealtimeVoiceChangerRenderRequest.channels`: the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples |
+| `VoiceChangeRealtimeRequest.sampleRate` | `RealtimeVoiceChangerRenderRequest.sampleRate`: optional -> required (no default) |
 | `VoiceChangeRequest.sampleRate` | optional -> required (no default) |
 | `VoiceChangeRequest` | `sampleRate` is now required |
 
@@ -4812,7 +4866,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
-| `HpssWithResidualRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
@@ -4876,7 +4929,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `RealtimeVoiceChanger.processInterleaved` | removed: Allocate the output yourself and call processInterleavedInto(input, numChannels, output), or use processPlanar(channels). |
 | `RoomGeometryFromEstimateOptions` | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
-| `VoiceChangeRealtimeOptions` | removed: Use VoiceChangeRealtimeRequest; the option fields are part of the request object. |
+| `VoiceChangeRealtimeOptions` | removed: Use RealtimeVoiceChangerRenderRequest; the option fields are part of the request object. |
 | `autoTune` | one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult |
 | `decompose(beta)` | removed: pass beta as a field of DecomposeRequest |
 | `decompose(init)` | removed: pass init as a field of DecomposeRequest |
@@ -4896,12 +4949,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
-| `hpssWithResidual(hardMask)` | removed: pass hardMask as a field of HpssWithResidualRequest |
-| `hpssWithResidual(hopLength)` | removed: pass hopLength as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
-| `hpssWithResidual(nFft)` | removed: pass nFft as a field of HpssWithResidualRequest |
-| `hpssWithResidual` | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
 | `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
 | `masteringRepairDeclickStereo` | request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult |
 | `masteringRepairDeclipStereo` | request-only: masteringRepairDeclipStereo(request: MasteringRepairDeclipStereoRequest): MasteringRepairDeclipResult |
@@ -4971,10 +5018,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `trim(hopLength)` | removed: pass hopLength as a field of TrimRequest |
 | `trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
-| `voiceChangeRealtime(preset)` | removed: pass it as config in VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime` | request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] |
+| `voiceChangeRealtime(preset)` | removed: pass it as config in RealtimeVoiceChangerRenderRequest |
+| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of RealtimeVoiceChangerRenderRequest |
+| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in RealtimeVoiceChangerRenderRequest |
+| `voiceChangeRealtime` | `realtimeVoiceChangerRender`: request-only: realtimeVoiceChangerRender(request: RealtimeVoiceChangerRenderRequest): Float32Array[] |
 | `voiceChange` | one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array |
 
 #### Cheap scalar state reads are getters and properties
@@ -4990,7 +5037,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `HpssWithResidualRequest` | removed: Use HpssRequest with withResidual: true. |
 | `PitchCorrectToMidiTimevaryingRequest` | removed: Use PitchCorrectTimevaryingRequest with targetMode: 'midi' and targetMidi. |
+| `hpssWithResidual` | removed: Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual. |
 | `pitchCorrectToMidiTimevarying` | removed: Call pitchCorrectTimevarying with targetMode: 'midi' and targetMidi, plus samples, sampleRate and f0Hz. |
 
 #### Channel counts are numChannels
@@ -4999,7 +5048,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `RealtimeVoiceChanger.processInterleavedInto` | processInterleavedInto(input: Float32Array, numChannels: 1 \| 2, output: Float32Array): void |
 | `RealtimeVoiceChangerOptions.channels` | `RealtimeVoiceChangerOptions.numChannels`: channels -> numChannels (1 \| 2), required: the channel count of the caller's stream has no default (was 1) |
-| `VoiceChangeRealtimeRequest.samples` | `VoiceChangeRealtimeRequest.channels`: samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`) |
+| `VoiceChangeRealtimeRequest.samples` | `RealtimeVoiceChangerRenderRequest.channels`: samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`) |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
@@ -5028,8 +5077,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `DenoiseLinkedResult` | removed: Use MasteringRepairDenoiseClassicalResult: channels plus reports, whose single entry is the shared report. |
-| `DereverbLinkedResult` | removed: Use MasteringRepairDereverbClassicalResult: channels plus reports, whose single entry is the shared report. |
 | `ExtractNotesRequest` | declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`) |
 | `HumDetection.harmonicDbfs` | number[] -> Float32Array |
 | `NoiseDetection.bandFloorDbfs` | number[] -> Float32Array |
@@ -5038,6 +5085,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RirSynthOptions` | `SynthesizeRirRequest` |
 | `RoomEstimateRequest` | `EstimateRoomRequest` |
 | `RoomGeometryOptions` | `RoomGeometry` |
+| `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
 | `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult |
 
 #### The ./worklet entry exports only the documented surface
@@ -5121,7 +5169,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
-| `VoiceChangeRealtimeRequest.preset` | `VoiceChangeRealtimeRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
 ### Node: Mastering, mixing and loudness
@@ -5218,6 +5266,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MixMeterSnapshot.truePeakDbR` | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
 | `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingLoudnessGainResult.truePeakDb` | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
 | `StreamingPlatform.ceilingDb` | `StreamingPlatform.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 
 #### A value that is not given is absent, never 0, -1 or ''
@@ -5527,7 +5576,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingMasteringChain.prepare` | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them |
-| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?} |
+| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
 
 #### Multichannel audio is planar: channels plus sampleRate
 
@@ -5617,7 +5666,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DeclipStereoResult` | `MasteringRepairDeclipResult`: renamed to MasteringRepairDeclipResult; shape {channels, reports} |
 | `DecrackleStereoResult` | `MasteringRepairDecrackleResult`: renamed to MasteringRepairDecrackleResult; shape {channels, reports} |
 | `DehumStereoResult` | `MasteringRepairDehumResult`: renamed to MasteringRepairDehumResult; shape {channels, reports} |
+| `DenoiseLinkedResult` | removed: Use MasteringRepairDenoiseClassicalResult: channels plus reports, whose single entry is the shared report. |
 | `DenoiseStereoResult` | `MasteringRepairDenoiseClassicalResult`: renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports} |
+| `DereverbLinkedResult` | removed: Use MasteringRepairDereverbClassicalResult: channels plus reports, whose single entry is the shared report. |
 | `DereverbStereoResult` | `MasteringRepairDereverbClassicalResult`: renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports} |
 | `MasteringAudioProfile.dynamics.attackDensity` | `MasteringAudioProfileDynamics.attackPerSecond` |
 | `MasteringAudioProfile.dynamics.shortTermLufsStd` | `MasteringAudioProfileDynamics.shortTermLufsStd` |
@@ -6154,6 +6205,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineTelemetry.graphLatencySamplesQ8` | `EngineTelemetry.graphLatencySamples` |
+| `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId, config?); the destination id leads and config.destinationId is refused |
 | `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |
@@ -9011,10 +9063,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `HarmonicRequest` | `sampleRate` is now required |
 | `HpssRequest.sampleRate` | optional -> required (no default) |
 | `HpssRequest` | `sampleRate` is now required |
-| `HpssWithResidualRequest.sampleRate` (`./analysis`) | optional -> required (no default) |
-| `HpssWithResidualRequest.sampleRate` | optional -> required (no default) |
-| `HpssWithResidualRequest` (`./analysis`) | `sampleRate` is now required |
-| `HpssWithResidualRequest` | `sampleRate` is now required |
 | `MasteringRepairAnalyzeRequest.sampleRate` | optional -> required (no default) |
 | `MasteringRepairAnalyzeRequest` | `sampleRate` is now required |
 | `MasteringRepairApplyRequest.sampleRate` | optional -> required (no default) |
@@ -9111,8 +9159,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `TimeStretchRequest.sampleRate` | optional -> required (no default) |
 | `TimeStretchRequest` | removes `rate`; adds `speedRatio: number` (required); `sampleRate` is now required |
 | `VoiceChangeRealtimeRequest.blockSize` | removed: Drop it; the renderer uses one fixed block size on every surface and compensates the latency itself. |
-| `VoiceChangeRealtimeRequest.channels` | the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples |
-| `VoiceChangeRealtimeRequest.sampleRate` | optional -> required (no default) |
+| `VoiceChangeRealtimeRequest.channels` | `RealtimeVoiceChangerRenderRequest.channels`: the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples |
+| `VoiceChangeRealtimeRequest.sampleRate` | `RealtimeVoiceChangerRenderRequest.sampleRate`: optional -> required (no default) |
 | `VoiceChangeRequest.sampleRate` | optional -> required (no default) |
 | `VoiceChangeRequest` | `sampleRate` is now required |
 
@@ -9207,8 +9255,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
-| `HpssWithResidualRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
-| `HpssWithResidualRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
@@ -9318,7 +9364,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `DecomposeResult` | declared interface {w: Matrix2D, h: Matrix2D} (was alias of WasmDecomposeResult) |
-| `HpssWithResidualResult` | declared interface {harmonic, percussive, residual, sampleRate} (was alias of WasmHpssWithResidualResult) |
 
 #### One-shot JavaScript calls take a request object
 
@@ -9327,7 +9372,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeVoiceChanger.processInterleaved` | removed: Allocate the output yourself and call processInterleavedInto(input, numChannels, output), or use processPlanar(channels). |
 | `RoomGeometryFromEstimateOptions` (`./analysis`) | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
 | `RoomGeometryFromEstimateOptions` | removed: Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object. |
-| `VoiceChangeRealtimeOptions` | removed: Use VoiceChangeRealtimeRequest; the option fields are part of the request object. |
+| `VoiceChangeRealtimeOptions` | removed: Use RealtimeVoiceChangerRenderRequest; the option fields are part of the request object. |
 | `autoTune` | one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult |
 | `decompose(beta)` (`./analysis`) | removed: pass beta as a field of DecomposeRequest |
 | `decompose(beta)` | removed: pass beta as a field of DecomposeRequest |
@@ -9354,18 +9399,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `hpss(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssRequest |
 | `hpss(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssRequest |
 | `hpss(nFft)` | removed: pass nFft as a field of HpssRequest |
-| `hpssWithResidual(hardMask)` (`./analysis`) | removed: pass hardMask as a field of HpssWithResidualRequest |
-| `hpssWithResidual(hardMask)` | removed: pass hardMask as a field of HpssWithResidualRequest |
-| `hpssWithResidual(hopLength)` (`./analysis`) | removed: pass hopLength as a field of HpssWithResidualRequest |
-| `hpssWithResidual(hopLength)` | removed: pass hopLength as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelHarmonic)` (`./analysis`) | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelHarmonic)` | removed: pass kernelHarmonic as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelPercussive)` (`./analysis`) | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
-| `hpssWithResidual(kernelPercussive)` | removed: pass kernelPercussive as a field of HpssWithResidualRequest |
-| `hpssWithResidual(nFft)` (`./analysis`) | removed: pass nFft as a field of HpssWithResidualRequest |
-| `hpssWithResidual(nFft)` | removed: pass nFft as a field of HpssWithResidualRequest |
-| `hpssWithResidual` (`./analysis`) | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
-| `hpssWithResidual` | one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'\|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult |
 | `hpss` | one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'\|'sampleRate'>)); request form takes HpssRequest; returns HpssResult |
 | `masteringRepairDeclickStereo(config)` | removed: pass config as a field of MasteringRepairDeclickStereoRequest |
 | `masteringRepairDeclickStereo(left)` | removed: pass left as a field of MasteringRepairDeclickStereoRequest |
@@ -9498,10 +9531,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `trim(thresholdDb)` | removed: pass thresholdDb as a field of TrimRequest |
 | `trim` (`./analysis`) | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
-| `voiceChangeRealtime(preset)` | removed: pass it as config in VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in VoiceChangeRealtimeRequest |
-| `voiceChangeRealtime` | request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] |
+| `voiceChangeRealtime(preset)` | removed: pass it as config in RealtimeVoiceChangerRenderRequest |
+| `voiceChangeRealtime(sampleRate)` | removed: pass sampleRate as a field of RealtimeVoiceChangerRenderRequest |
+| `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in RealtimeVoiceChangerRenderRequest |
 | `voiceChange` | one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array |
 
 #### Cheap scalar state reads are getters and properties
@@ -9525,6 +9557,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `DecomposeWithInitRequest` (`./analysis`) | removed: Use DecomposeRequest, which takes init: 'random' or 'nndsvd'. |
 | `DecomposeWithInitRequest` | removed: Use DecomposeRequest, which takes init: 'random' or 'nndsvd'. |
+| `HpssWithResidualRequest` (`./analysis`) | removed: Use HpssRequest with withResidual: true. |
+| `HpssWithResidualRequest` | removed: Use HpssRequest with withResidual: true. |
+| `HpssWithResidualResult` | removed: Use HpssResult; residual is present when the call set withResidual: true. |
 | `PitchCorrectToMidiTimevaryingRequest` | removed: Use PitchCorrectTimevaryingRequest with targetMode: 'midi' and targetMidi. |
 | `RealtimeVoiceChanger.processPreparedInterleaved` | removed: Use createRealtimeInterleavedBuffer(numFrames, numChannels): fill its input view and call its process(). |
 | `RealtimeVoiceChanger.processPreparedMono` | removed: Use createRealtimeMonoBuffer(numSamples): fill its input view and call its process(). |
@@ -9532,6 +9567,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeVoiceChanger.setPodConfig` | removed: Call setConfig(config), which takes the same config object. |
 | `decomposeWithInit` (`./analysis`) | removed: Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest. |
 | `decomposeWithInit` | removed: Call decompose({ s, nComponents, init: 'nndsvd' }); init is a field of DecomposeRequest. |
+| `hpssWithResidual` (`./analysis`) | removed: Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual. |
+| `hpssWithResidual` | removed: Call hpss({ samples, sampleRate, withResidual: true }); the result then also carries residual. |
 | `pitchCorrectToMidiTimevarying` | removed: Call pitchCorrectTimevarying with targetMode: 'midi' and targetMidi, plus samples, sampleRate and f0Hz. |
 
 #### Channel counts are numChannels
@@ -9540,13 +9577,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `RealtimeVoiceChanger.createRealtimeInterleavedBuffer` | createRealtimeInterleavedBuffer(numFrames: number, numChannels: 1 \| 2) |
 | `RealtimeVoiceChanger.createRealtimePlanarBuffer` | createRealtimePlanarBuffer(numFrames: number, numChannels: 1 \| 2) |
-| `RealtimeVoiceChanger.processInterleavedInto` | processInterleavedInto(input: Float32Array, numChannels: 1 \| 2, output: Float32Array): void |
+| `RealtimeVoiceChanger.processInterleavedInto` | processInterleavedInto(input: Float32Array, numChannels: 1 \| 2, output: Float32Array, carrier?: Float32Array): void |
 | `RealtimeVoiceChangerInterleavedBuffer.channels` | `RealtimeVoiceChangerInterleavedBuffer.numChannels`: channels -> numChannels (readonly) |
 | `SonareRealtimeVoiceChangerWorkletProcessorOptions.blockSize` (`./worklet`) | `SonareRealtimeVoiceChangerWorkletProcessorOptions.maxBlockSize`: blockSize -> maxBlockSize |
 | `SonareRealtimeVoiceChangerWorkletProcessorOptions.channelCount` (`./worklet`) | `SonareRealtimeVoiceChangerWorkletProcessorOptions.numChannels`: channelCount -> numChannels (1 \| 2), required: the channel count of the caller's stream has no default (was 1) |
 | `SonareRealtimeVoiceChangerWorkletProcessorOptions.preset` (`./worklet`) | `SonareRealtimeVoiceChangerWorkletProcessorOptions.config`: preset -> config |
 | `SonareRealtimeVoiceChangerWorkletProcessorOptions` (`./worklet`) | removes `blockSize`; removes `channelCount`; removes `preset`; adds `config?: RealtimeVoiceChangerConfigInput`; adds `maxBlockSize?: number`; adds `numChannels: 1 \| 2` (required); adds `wasmBinary?: ArrayBuffer \| Uint8Array` |
-| `VoiceChangeRealtimeRequest.samples` | `VoiceChangeRealtimeRequest.channels`: samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`) |
+| `VoiceChangeRealtimeRequest.samples` | `RealtimeVoiceChangerRenderRequest.channels`: samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`) |
 
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
@@ -9610,6 +9647,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryOptions` (`./analysis`) | `RoomGeometry` |
 | `RoomGeometryOptions` | `RoomGeometry` |
 | `SpectralEditOptions.window` (`./analysis`) | type WindowType (was SpectralEditWindow); 'rect' removed |
+| `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
 | `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult |
 
 #### The ./worklet entry exports only the documented surface
@@ -9729,7 +9767,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
-| `VoiceChangeRealtimeRequest.preset` | `VoiceChangeRealtimeRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `VoiceChangeRealtimeRequest.preset` | `RealtimeVoiceChangerRenderRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
+| `voiceChangeRealtime` | `realtimeVoiceChangerRender`: renamed to the realtime voice changer stem and request-only: realtimeVoiceChangerRender(request: RealtimeVoiceChangerRenderRequest): Float32Array[] |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
 ### WASM: Mastering, mixing and loudness
@@ -9884,6 +9923,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `StreamingMasteringChainConfig.loudness.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
 | `StreamingMasteringChainConfig.loudness.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
 | `StreamingMasteringChainConfig.loudness.ceilingDb` | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./analysis`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./worklet`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
@@ -10303,9 +10345,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `StreamingMasteringChain.prepare` (`./worklet`) | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them |
 | `StreamingMasteringChain.prepare` | removed: the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them |
-| `StreamingMasteringChainConfig` (`./analysis`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?} |
-| `StreamingMasteringChainConfig` (`./worklet`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?} |
-| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?} |
+| `StreamingMasteringChainConfig` (`./analysis`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
+| `StreamingMasteringChainConfig` (`./worklet`) | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
+| `StreamingMasteringChainConfig` | StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 \| 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDbtp?} |
 
 #### Multichannel audio is planar: channels plus sampleRate
 
@@ -11378,6 +11420,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineTelemetry.graphLatencySamplesQ8` | `EngineTelemetry.graphLatencySamples` |
+| `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId, config?); config.destinationId is refused |
 | `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |

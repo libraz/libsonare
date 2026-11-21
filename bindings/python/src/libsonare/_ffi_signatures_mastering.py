@@ -362,13 +362,13 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
     count_fn.restype = ctypes.c_int32
     count_fn.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     discard_fn = lib.sonare_streaming_mastering_chain_non_finite_discard_count
     discard_fn.restype = ctypes.c_int32
     discard_fn.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_streaming_mastering_chain_stage_names.restype = ctypes.c_char_p
     lib.sonare_streaming_mastering_chain_stage_names.argtypes = [ctypes.c_void_p]
@@ -376,7 +376,7 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
     lib.sonare_eq_create.restype = ctypes.c_int32
     lib.sonare_eq_create.argtypes = [
-        ctypes.c_double,
+        ctypes.c_int,
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_void_p),
     ]
@@ -428,7 +428,7 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_eq_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_eq_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_eq_set_sidechain.restype = ctypes.c_int32
     lib.sonare_eq_set_sidechain.argtypes = [

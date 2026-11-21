@@ -54,6 +54,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_int32,
+    _to_c_int64,
     _to_c_int_array,
     _to_c_size_t,
     _validate_samples,
@@ -137,8 +138,8 @@ def note_stretch(
         "sonare_note_stretch",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(0 if onset.value is None else onset.value, "onset_sample"),
-        _to_c_int(len(samples) if offset.value is None else offset.value, "offset_sample"),
+        _to_c_int64(0 if onset.value is None else onset.value, "onset_sample"),
+        _to_c_int64(len(samples) if offset.value is None else offset.value, "offset_sample"),
         _to_c_float(stretch_ratio, "stretch_ratio"),
         respelled=_respellings(onset, offset),
     )
@@ -182,9 +183,9 @@ def note_move(
         "sonare_note_move",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(0 if onset.value is None else onset.value, "onset_sample"),
-        _to_c_int(len(samples) if offset.value is None else offset.value, "offset_sample"),
-        _to_c_int(0 if target.value is None else target.value, "target_onset_sample"),
+        _to_c_int64(0 if onset.value is None else onset.value, "onset_sample"),
+        _to_c_int64(len(samples) if offset.value is None else offset.value, "offset_sample"),
+        _to_c_int64(0 if target.value is None else target.value, "target_onset_sample"),
         respelled=_respellings(onset, offset, target),
     )
 

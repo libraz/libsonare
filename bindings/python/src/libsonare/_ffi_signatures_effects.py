@@ -136,7 +136,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_int32),
         ctypes.c_size_t,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
@@ -156,7 +156,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.POINTER(ctypes.c_int32),
         ctypes.c_size_t,
-        ctypes.c_int,
+        ctypes.c_size_t,
         ctypes.POINTER(SonarePitchCorrectionConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
@@ -181,8 +181,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_int64,
+        ctypes.c_int64,
         ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
@@ -194,9 +194,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.c_int64,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
@@ -488,7 +488,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_streaming_retune_prepare.restype = ctypes.c_int32
     lib.sonare_streaming_retune_prepare.argtypes = [
         ctypes.c_void_p,
-        ctypes.c_double,
+        ctypes.c_int,
         ctypes.c_int,
     ]
     lib.sonare_streaming_retune_reset.restype = ctypes.c_int32
@@ -617,7 +617,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_realtime_voice_changer_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_realtime_voice_changer_config_json.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_config_json.argtypes = [
@@ -742,8 +742,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]

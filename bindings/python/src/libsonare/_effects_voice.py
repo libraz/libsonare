@@ -35,7 +35,6 @@ from ._runtime import (
     _narrow_int,
     _not_planar_channels,
     _out_float_array,
-    _to_c_double,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -317,7 +316,7 @@ class RealtimeVoiceChanger:
         adds one and the number does not depend on a dimension you did not
         choose.
         """
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         rc = self._lib.sonare_realtime_voice_changer_non_finite_discard_count(
             self._require_handle(), ctypes.byref(out)
         )
@@ -1199,12 +1198,14 @@ class StreamingRetune:
         return _require_open(self._handle, "StreamingRetune")
 
     @_entry("StreamingRetune.prepare")
-    def prepare(self, sample_rate: float, max_block_size: int) -> None:
-        """Allocate native state for ``sample_rate`` and resolve the grain size."""
+    def prepare(self, sample_rate: int, max_block_size: int) -> None:
+        """Allocate native state for an integer ``sample_rate`` in Hz and resolve the grain size."""
         _check(
             self._lib.sonare_streaming_retune_prepare(
                 self._require_handle(),
-                _to_c_double(sample_rate, "sample_rate"),
+                _to_c_int(
+                    _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX), "sample_rate"
+                ),
                 _to_c_int(max_block_size, "max_block_size"),
             )
         )

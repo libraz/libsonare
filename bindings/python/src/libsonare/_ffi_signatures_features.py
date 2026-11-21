@@ -870,8 +870,8 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_float),
     ]
 

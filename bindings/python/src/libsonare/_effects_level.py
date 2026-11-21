@@ -270,8 +270,8 @@ def trim(
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_float(threshold_db, "threshold_db"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
+            _to_c_size_t(frame_length, "frame_length"),
+            _to_c_size_t(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )

@@ -35,7 +35,7 @@ class SonareMasteringResult(CStruct):
         ("applied_gain_db", ctypes.c_float),
         ("latency_samples", ctypes.c_int32),
         ("loudness_target_limited", ctypes.c_int32),
-        ("non_finite_substitution_count", ctypes.c_uint32),
+        ("non_finite_substitution_count", ctypes.c_size_t),
     ]
 
 
@@ -61,7 +61,7 @@ class SonareMasteringStereoResult(CStruct):
         ("applied_gain_db", ctypes.c_float),
         ("latency_samples", ctypes.c_int32),
         ("loudness_target_limited", ctypes.c_int32),
-        ("non_finite_substitution_count", ctypes.c_uint32),
+        ("non_finite_substitution_count", ctypes.c_size_t),
     ]
 
 
@@ -109,7 +109,7 @@ class SonareMasteringChainResult(CStruct):
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),
         ("report", SonareMasteringReport),
-        ("non_finite_substitution_count", ctypes.c_uint32),
+        ("non_finite_substitution_count", ctypes.c_size_t),
     ]
 
 
@@ -133,7 +133,7 @@ class SonareMasteringChainStereoResult(CStruct):
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),
         ("report", SonareMasteringReport),
-        ("non_finite_substitution_count", ctypes.c_uint32),
+        ("non_finite_substitution_count", ctypes.c_size_t),
     ]
 
 

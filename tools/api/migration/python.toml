@@ -5407,6 +5407,14 @@ rule = "unit-in-name"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_retune_names_its_quantities_with_units"
 
 [[entry]]
+kind = "option"
+old = "StreamingRetune.prepare(sample_rate)"
+changed = "sample_rate is an integer in Hz; a float, even a whole one, raises SonareValueError"
+domain = "effects"
+rule = "c-count-types"
+test = "bindings/python/tests/test_integer_narrowing.py::test_a_streaming_retune_rate_is_an_integer"
+
+[[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerConfig.retune_semitones"
 new = "RealtimeVoiceChangerConfig.retune_pitch_semitones"

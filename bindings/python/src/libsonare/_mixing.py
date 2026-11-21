@@ -817,7 +817,7 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check_realtime(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
         return int(out.value)
 
@@ -838,7 +838,7 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check_realtime(
             lib.sonare_mixer_bus_non_finite_discard_count(
                 self._handle, _utf8_arg(bus_id, "bus_id"), ctypes.byref(out)

@@ -154,8 +154,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_audio_silence_ratio.argtypes = [
         ctypes.c_void_p,
         ctypes.c_float,
-        ctypes.c_int,
-        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_float),
     ]
 

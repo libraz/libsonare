@@ -408,7 +408,7 @@ class StreamingMasteringChain:
         block since construction; :meth:`reset` leaves it alone.
         """
         self._ensure_open()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         rc = self._lib.sonare_streaming_mastering_chain_non_finite_substitution_count(
             self._handle, ctypes.byref(out)
         )
@@ -437,7 +437,7 @@ class StreamingMasteringChain:
         counters on one handle share an epoch.
         """
         self._ensure_open()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         rc = self._lib.sonare_streaming_mastering_chain_non_finite_discard_count(
             self._handle, ctypes.byref(out)
         )
@@ -502,13 +502,11 @@ class StreamingEqualizer:
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
-        # Narrowed rather than coerced: the rate reaches the C create as a float
-        # but every later call as an int, so int() here would split the two.
         sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         handle = ctypes.c_void_p()
         rc = lib.sonare_eq_create(
-            float(sample_rate_value),
+            _to_c_int(sample_rate_value, "sample_rate"),
             _to_c_int(max_block_value, "max_block_size"),
             ctypes.byref(handle),
         )
@@ -826,7 +824,7 @@ class StreamingEqualizer:
         span of audio.
         """
         self._ensure_open()
-        out = ctypes.c_uint32()
+        out = ctypes.c_size_t()
         _check_realtime(
             self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out))
         )

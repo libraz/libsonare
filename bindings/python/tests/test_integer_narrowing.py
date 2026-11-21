@@ -71,6 +71,15 @@ def test_a_negative_size_is_refused_rather_than_read_as_the_largest_one() -> Non
                 analyzer.read_frames(value)
 
 
+def test_a_streaming_retune_rate_is_an_integer() -> None:
+    """The C prepare takes an int rate, so a float rate is refused rather than truncated."""
+    with ls.StreamingRetune() as retune:
+        retune.prepare(48000, 256)
+        for value in (48000.0, 44100.5):
+            with pytest.raises(SonareValueError, match="sample_rate"):
+                retune.prepare(value, 256)
+
+
 def test_a_wrapped_bitmask_is_refused_rather_than_read_as_a_different_scale() -> None:
     """The 16-bit reader: 2**16 + mask is the same mask with a different meaning."""
     assert ls.scale_quantize_midi(0, 0b101010110101, 61.4) != ls.scale_quantize_midi(0, 1, 61.4)

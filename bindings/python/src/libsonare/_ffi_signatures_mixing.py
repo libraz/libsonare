@@ -118,13 +118,13 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_strip_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_strip_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_mixer_bus_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_mixer_bus_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,
         ctypes.c_char_p,
-        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
     ]
     lib.sonare_strip_read_goniometer_latest.restype = ctypes.c_size_t
     lib.sonare_strip_read_goniometer_latest.argtypes = [

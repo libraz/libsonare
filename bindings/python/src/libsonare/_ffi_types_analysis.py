@@ -303,8 +303,8 @@ class SonareClippingRegion(CStruct):
     """Maps to SonareClippingRegion in sonare_c.h."""
 
     _fields_ = [
-        ("start_sample", ctypes.c_size_t),
-        ("end_sample", ctypes.c_size_t),
+        ("start_sample", ctypes.c_int64),
+        ("end_sample", ctypes.c_int64),
         ("length", ctypes.c_size_t),
         ("peak", ctypes.c_float),
     ]
