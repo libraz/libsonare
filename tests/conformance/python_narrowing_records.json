@@ -63,22 +63,10 @@
       "reason": "The saturation probe itself: analyze_impulse_response reads .value off this conversion and refuses a non-finite or non-positive result, so the conversion is the measurement rather than the argument."
     },
     {
-      "file": "_analysis_reports.py",
-      "argument": "decay_db_c",
-      "type": "c_float",
-      "reason": "Already narrowed: the .value of the probe above, past its finite-and-positive check."
-    },
-    {
       "file": "_conversions.py",
       "argument": "blend_weight",
       "type": "c_float",
       "reason": "The saturation probe itself: nnls_chroma reads .value off this conversion and refuses anything outside a finite [0, 1]."
-    },
-    {
-      "file": "_conversions.py",
-      "argument": "blend_weight_c",
-      "type": "c_float",
-      "reason": "Already narrowed: the .value of the probe above, past its finite [0, 1] check."
     },
     {
       "file": "_effects_level.py",

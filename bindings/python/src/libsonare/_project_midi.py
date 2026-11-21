@@ -420,7 +420,8 @@ class _ProjectMidiMixin:
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_int(program, "program"),
-                (msb << 7) | lsb if valid else -1,
+                # The 14-bit bank, or -1 for no Bank Select; _bank_pair checked each 7-bit half.
+                _to_c_int((msb << 7) | lsb if valid else -1, "bank"),
             )
         )
 
