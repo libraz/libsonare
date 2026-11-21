@@ -18,7 +18,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 _SCANNER = _ROOT / "tools/api/unnamed_integer_bounds.py"
 
 # Sites of the facade class listed by tools/api/unnamed_integer_bounds.py.
-_RECORDED = 367
+_RECORDED = 363
 
 
 def _scanner() -> Any:

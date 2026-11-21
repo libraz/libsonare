@@ -32,15 +32,21 @@ struct TimbreConfig {
   float window_sec = 0.5f;  ///< Window for time-varying analysis in seconds; finite and positive
 };
 
+/// @brief Domains of the TimbreConfig members, stated once for the core check and the readers.
+inline constexpr util::check::NumericDomain kTimbreCountDomain =
+    util::check::integer_domain_of<int>(1);
+inline constexpr util::check::NumericDomain kTimbreWindowSecDomain =
+    util::check::real_domain_above(0.0, false);
+
 /// @brief Refuses a TimbreConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless n_fft, hop_length, n_mels and n_mfcc are
 ///         positive and window_sec is finite and positive.
 inline void validate_timbre_config(const TimbreConfig& config) {
-  util::check::integer_at_least(config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::integer_at_least(config.n_mels, 1, "n_mels");
-  util::check::integer_at_least(config.n_mfcc, 1, "n_mfcc");
-  util::check::greater_than(config.window_sec, 0.0, "window_sec");
+  util::check::within(config.n_fft, kTimbreCountDomain, "n_fft");
+  util::check::within(config.hop_length, kTimbreCountDomain, "hop_length");
+  util::check::within(config.n_mels, kTimbreCountDomain, "n_mels");
+  util::check::within(config.n_mfcc, kTimbreCountDomain, "n_mfcc");
+  util::check::within(config.window_sec, kTimbreWindowSecDomain, "window_sec");
 }
 
 /// @brief Timbre analyzer for extracting sound characteristics.
