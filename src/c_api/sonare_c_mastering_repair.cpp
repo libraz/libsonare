@@ -448,15 +448,14 @@ SonareError require_output_planes(float* const* out_channels, size_t channel_cou
 }
 
 /// Shared body of the channel-linked entry points, which differ only in their
-/// report type and the core call they wrap.
-template <typename CReport, typename Check, typename Fn>
+/// result type and the core call they wrap. @p process returns the C report.
+template <typename CResult, typename Check, typename Fn>
 SonareError run_linked(const char* fn, const char* name, const float* const* channels,
                        size_t channel_count, size_t length, int sample_rate, Check config_ok,
-                       float* const* out_channels, CReport* out_report, Fn process) {
-  // Cleared before any validation return, so a rejected call hands back a zero
-  // report rather than whatever the caller's stack slot held. The output planes
-  // are the caller's and stay untouched until the core has produced samples.
-  SONARE_C_ZERO_OUTS(out_report);
+                       CResult* out, Fn process) {
+  // Cleared before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(channels);
   if (const SonareError err = require_channel_count(channel_count); err != SONARE_OK) return err;
 
@@ -474,12 +473,7 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
   }
   const SonareError config_err = check_config(config_ok);
   if (config_err != SONARE_OK) return config_err;
-  SONARE_C_REQUIRE_NONNULL(out_channels);
-  if (const SonareError err = require_output_planes(out_channels, channel_count);
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out_report);
+  SONARE_C_REQUIRE_NONNULL(out);
   inputs.reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
     inputs.push_back(Audio::from_buffer(channels[c], length, sample_rate));
@@ -491,15 +485,33 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
   for (const Audio& channel : inputs) pointers.push_back(&channel);
 
   std::vector<Audio> produced;
-  *out_report = process(pointers.data(), &produced);
+  const auto report = process(pointers.data(), &produced);
   if (produced.size() != channel_count) return SONARE_ERROR_INVALID_STATE;
-  for (size_t c = 0; c < channel_count; ++c) {
-    // The core resynthesizes every channel to the first one's input length, so
-    // this agrees with `length` by construction; checking is what keeps the copy
-    // from depending on that.
-    if (produced[c].size() != length) return SONARE_ERROR_INVALID_STATE;
-    std::memcpy(out_channels[c], produced[c].data(), length * sizeof(float));
+  // The core resynthesizes every channel to the first one's input length, so
+  // this agrees with `length` by construction; checking is what keeps the copy
+  // from depending on that.
+  for (const Audio& channel : produced) {
+    if (channel.size() != length) return SONARE_ERROR_INVALID_STATE;
   }
+  // Allocate everything before publishing any field.
+  std::unique_ptr<float*[]> planes(new float*[channel_count]());
+  struct PlaneGuard {
+    float** planes;
+    size_t count;
+    ~PlaneGuard() {
+      if (planes == nullptr) return;
+      for (size_t c = 0; c < count; ++c) delete[] planes[c];
+    }
+  } guard{planes.get(), channel_count};
+  for (size_t c = 0; c < channel_count; ++c) {
+    planes[c] = new float[length];
+    std::memcpy(planes[c], produced[c].data(), length * sizeof(float));
+  }
+  guard.planes = nullptr;
+  out->channels = planes.release();
+  out->num_channels = channel_count;
+  out->length = length;
+  out->report = report;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -562,6 +574,17 @@ template <typename CResult>
 void free_mono_samples(CResult* result) {
   if (result == nullptr) return;
   delete[] result->samples;
+  *result = {};
+}
+
+/// Release a channel-linked result's planes and empty it, so a second release is a no-op.
+template <typename CResult>
+void free_linked_channels(CResult* result) {
+  if (result == nullptr) return;
+  if (result->channels != nullptr) {
+    for (size_t c = 0; c < result->num_channels; ++c) delete[] result->channels[c];
+  }
+  delete[] result->channels;
   *result = {};
 }
 
@@ -757,14 +780,13 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
 
 SonareError sonare_mastering_repair_denoise_classical_linked(
     const float* const* channels, size_t num_channels, size_t length, int sample_rate,
-    const SonareDenoiseClassicalConfig* config, float* const* out_channels,
-    SonareDenoiseReport* out_report) {
+    const SonareDenoiseClassicalConfig* config, SonareDenoiseLinkedResult* out) {
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
   return run_linked(
       "mastering_repair_denoise_classical_linked", "channels", channels, num_channels, length,
-      sample_rate, [&] { validate_cpp(to_cpp_denoise_config(config)); }, out_channels, out_report,
+      sample_rate, [&] { validate_cpp(to_cpp_denoise_config(config)); }, out,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_denoise_report(sonare::mastering::repair::denoise_classical_linked(
             inputs, num_channels, produced, to_cpp_denoise_config(config)));
@@ -992,14 +1014,13 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
 
 SonareError sonare_mastering_repair_dereverb_classical_linked(
     const float* const* channels, size_t num_channels, size_t length, int sample_rate,
-    const SonareDereverbClassicalConfig* config, float* const* out_channels,
-    SonareDereverbReport* out_report) {
+    const SonareDereverbClassicalConfig* config, SonareDereverbLinkedResult* out) {
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
   return run_linked(
       "mastering_repair_dereverb_classical_linked", "channels", channels, num_channels, length,
-      sample_rate, [&] { validate_cpp(to_cpp_dereverb_config(config)); }, out_channels, out_report,
+      sample_rate, [&] { validate_cpp(to_cpp_dereverb_config(config)); }, out,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_dereverb_report(sonare::mastering::repair::dereverb_classical_linked(
             inputs, num_channels, produced, to_cpp_dereverb_config(config)));
@@ -1191,6 +1212,10 @@ void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result) {
 
 void sonare_free_denoise_result(SonareDenoiseResult* result) { free_mono_samples(result); }
 
+void sonare_free_denoise_linked_result(SonareDenoiseLinkedResult* result) {
+  free_linked_channels(result);
+}
+
 void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
@@ -1214,6 +1239,10 @@ void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result) {
 }
 
 void sonare_free_dereverb_result(SonareDereverbResult* result) { free_mono_samples(result); }
+
+void sonare_free_dereverb_linked_result(SonareDereverbLinkedResult* result) {
+  free_linked_channels(result);
+}
 
 void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);

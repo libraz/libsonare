@@ -118,58 +118,42 @@ SonareError master_stereo(const char* entry, const char* preset, const float* le
 
 }  // namespace
 
+void sonare_master_audio_options_init(SonareMasterAudioOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+}
+
 SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
                                 int sample_rate, const char* overrides_json,
+                                const SonareMasterAudioOptions* options,
                                 SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
-  return master_mono("master_audio", preset, samples, length, sample_rate, overrides_json, nullptr,
-                     nullptr, out, nullptr, nullptr);
+  SONARE_C_ZERO_OUTS(out);
+  SonareMasterAudioOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_master_audio_options_init,
+                                              "sonare_master_audio_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  return master_mono("master_audio", preset, samples, length, sample_rate, overrides_json,
+                     resolved.progress_callback, resolved.progress_user_data, out,
+                     resolved.cancel_callback, resolved.cancel_user_data);
 }
 
 SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
                                        size_t length, int sample_rate, const char* overrides_json,
+                                       const SonareMasterAudioOptions* options,
                                        SonareMasteringChainStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  SonareMasterAudioOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_master_audio_options_init,
+                                              "sonare_master_audio_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
   return master_stereo("master_audio_stereo", preset, left, right, length, sample_rate,
-                       overrides_json, nullptr, nullptr, out, nullptr, nullptr);
-}
-
-SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
-                                              size_t length, int sample_rate,
-                                              const char* overrides_json,
-                                              SonareMasteringProgressCallback callback,
-                                              void* user_data, SonareMasteringChainResult* out) {
-  SONARE_C_API_ENTRY;
-  return master_mono("master_audio_with_progress", preset, samples, length, sample_rate,
-                     overrides_json, callback, user_data, out, nullptr, nullptr);
-}
-
-SonareError sonare_master_audio_with_progress_ex(
-    const char* preset, const float* samples, size_t length, int sample_rate,
-    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
-  SONARE_C_API_ENTRY;
-  return master_mono("master_audio_with_progress_ex", preset, samples, length, sample_rate,
-                     overrides_json, callback, user_data, out, cancel_cb, cancel_user_data);
-}
-
-SonareError sonare_master_audio_stereo_with_progress(const char* preset, const float* left,
-                                                     const float* right, size_t length,
-                                                     int sample_rate, const char* overrides_json,
-                                                     SonareMasteringProgressCallback callback,
-                                                     void* user_data,
-                                                     SonareMasteringChainStereoResult* out) {
-  SONARE_C_API_ENTRY;
-  return master_stereo("master_audio_stereo_with_progress", preset, left, right, length,
-                       sample_rate, overrides_json, callback, user_data, out, nullptr, nullptr);
-}
-
-SonareError sonare_master_audio_stereo_with_progress_ex(
-    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
-  SONARE_C_API_ENTRY;
-  return master_stereo("master_audio_stereo_with_progress_ex", preset, left, right, length,
-                       sample_rate, overrides_json, callback, user_data, out, cancel_cb,
-                       cancel_user_data);
+                       overrides_json, resolved.progress_callback, resolved.progress_user_data, out,
+                       resolved.cancel_callback, resolved.cancel_user_data);
 }

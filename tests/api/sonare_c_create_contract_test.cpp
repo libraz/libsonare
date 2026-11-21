@@ -42,16 +42,19 @@ TEST_CASE(
     "sonare_streaming_mastering_chain_create returns its error and leaves out NULL on "
     "failure",
     "[c_api][c_create]") {
-  CHECK(sonare_streaming_mastering_chain_create(nullptr, nullptr) ==
+  CHECK(sonare_streaming_mastering_chain_create(nullptr, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   SonareStreamingMasteringChain* chain = sentinel<SonareStreamingMasteringChain>();
-  CHECK(sonare_streaming_mastering_chain_create("{", &chain) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(chain == nullptr);
-  chain = sentinel<SonareStreamingMasteringChain>();
-  CHECK(sonare_streaming_mastering_chain_create_ex("{", NAN, NAN, &chain) ==
+  CHECK(sonare_streaming_mastering_chain_create("{", nullptr, &chain) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(chain == nullptr);
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
+  chain = sentinel<SonareStreamingMasteringChain>();
+  SonareStreamingMasteringChainOptions options;
+  sonare_streaming_mastering_chain_options_init(&options);
+  CHECK(sonare_streaming_mastering_chain_create("{", &options, &chain) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(chain == nullptr);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   CHECK(chain != nullptr);
   sonare_streaming_mastering_chain_destroy(chain);
 }

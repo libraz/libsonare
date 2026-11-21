@@ -520,10 +520,12 @@ SonareError sonare_mastering_enum_value(const char* processor, const char* key, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_apply_pair_processor_ex(
-    const char* processor, const float* source, size_t source_length, const float* reference,
-    size_t reference_length, int reference_sample_rate, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out) {
+SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
+                                                  size_t source_length, const float* reference,
+                                                  size_t reference_length,
+                                                  int reference_sample_rate, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
@@ -536,10 +538,10 @@ SonareError sonare_mastering_apply_pair_processor_ex(
       empty_err != SONARE_OK) {
     return empty_err;
   }
-  SonareError err = validate_audio_params("mastering_apply_pair_processor_ex", "source", source,
+  SonareError err = validate_audio_params("mastering_apply_pair_processor", "source", source,
                                           source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("mastering_apply_pair_processor_ex", "reference", reference,
+  err = validate_audio_params("mastering_apply_pair_processor", "reference", reference,
                               reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
@@ -554,18 +556,7 @@ SonareError sonare_mastering_apply_pair_processor_ex(
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
-                                                  const float* reference, size_t length,
-                                                  int sample_rate,
-                                                  const SonareMasteringParam* params,
-                                                  size_t param_count, SonareMasteringResult* out) {
-  SONARE_C_API_ENTRY;
-  return sonare_mastering_apply_pair_processor_ex(processor, source, length, reference, length,
-                                                  sample_rate, sample_rate, params, param_count,
-                                                  out);
-}
-
-SonareError sonare_mastering_apply_pair_processor_stereo_ex(
+SonareError sonare_mastering_apply_pair_processor_stereo(
     const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,
     size_t reference_length, int reference_sample_rate, int sample_rate,
@@ -580,11 +571,11 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
     return empty_err;
   }
 
-  SonareError err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo_ex",
+  SonareError err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo",
                                                  "source_left", "source_right", source_left,
                                                  source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo_ex", "reference_left",
+  err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo", "reference_left",
                                      "reference_right", reference_left, reference_right,
                                      reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
@@ -600,28 +591,18 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_apply_pair_processor_stereo(
-    const char* processor, const float* source_left, const float* source_right,
-    const float* reference_left, const float* reference_right, size_t length, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
-  SONARE_C_API_ENTRY;
-  return sonare_mastering_apply_pair_processor_stereo_ex(
-      processor, source_left, source_right, length, reference_left, reference_right, length,
-      sample_rate, sample_rate, params, param_count, out);
-}
-
-SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* source,
-                                             size_t source_length, const float* reference,
-                                             size_t reference_length, int reference_sample_rate,
-                                             int sample_rate, const SonareMasteringParam* params,
-                                             size_t param_count, char** json_out) {
+SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
+                                          size_t source_length, const float* reference,
+                                          size_t reference_length, int reference_sample_rate,
+                                          int sample_rate, const SonareMasteringParam* params,
+                                          size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(analysis);
-  SonareError err = validate_audio_params("mastering_analyze_pair_ex", "source", source,
-                                          source_length, sample_rate);
+  SonareError err =
+      validate_audio_params("mastering_analyze_pair", "source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("mastering_analyze_pair_ex", "reference", reference, reference_length,
+  err = validate_audio_params("mastering_analyze_pair", "reference", reference, reference_length,
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
@@ -633,15 +614,6 @@ SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* 
   *json_out = copy_string(json);
   return SONARE_OK;
   SONARE_C_CATCH
-}
-
-SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
-                                          const float* reference, size_t length, int sample_rate,
-                                          const SonareMasteringParam* params, size_t param_count,
-                                          char** json_out) {
-  SONARE_C_API_ENTRY;
-  return sonare_mastering_analyze_pair_ex(analysis, source, length, reference, length, sample_rate,
-                                          sample_rate, params, param_count, json_out);
 }
 
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
@@ -699,11 +671,10 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
 SonareError sonare_mastering_ab_match_loudness_stereo(
     const float* source_left, const float* source_right, size_t source_length,
     const float* reference_left, const float* reference_right, size_t reference_length,
-    int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
-    SonareLoudnessMatch* out_match) {
+    int reference_sample_rate, int sample_rate, float** out_left, float** out_right,
+    size_t* out_length, SonareLoudnessMatch* out_match) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_match);
-  if (out != nullptr) out->sample_rate = sample_rate;
+  SONARE_C_ZERO_OUTS(out_left, out_right, out_length, out_match);
 
   SonareError err = validate_stereo_audio_params("mastering_ab_match_loudness_stereo",
                                                  "source_left", "source_right", source_left,
@@ -713,7 +684,9 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
                                      "reference_right", reference_left, reference_right,
                                      reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_left);
+  SONARE_C_REQUIRE_NONNULL(out_right);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   const sonare::mastering::match::StereoAudioPair reference{
@@ -724,19 +697,10 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
       Audio::from_buffer(source_right, source_length, sample_rate)};
   const auto matched = sonare::mastering::match::ab_match_loudness_stereo(reference, source);
   const std::size_t length = matched.b.left.size();
-  // Report the achieved output loudness, not the reference scalar.
-  std::vector<float> matched_interleaved(length * 2);
-  for (size_t index = 0; index < length; ++index) {
-    matched_interleaved[index * 2] = matched.b.left[index];
-    matched_interleaved[index * 2 + 1] = matched.b.right[index];
-  }
-  const float output_lufs = sonare::mastering::common::measure_lufs_interleaved(
-      matched_interleaved.data(), length, 2, sample_rate);
-
   std::unique_ptr<float[]> left;
   std::unique_ptr<float[]> right;
   if (length != 0) {
-    // Allocate before publishing any field, as in set_stereo_result().
+    // Allocate before publishing any field.
     left = std::make_unique<float[]>(length);
     right = std::make_unique<float[]>(length);
     std::memcpy(left.get(), matched.b.left.data(), length * sizeof(float));
@@ -745,13 +709,9 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
 
   const SonareLoudnessMatch match{matched.reference_lufs, matched.source_lufs,
                                   matched.applied_gain_db, matched.matched_true_peak_dbtp};
-  out->length = length;
-  out->sample_rate = matched.b.left.sample_rate();
-  out->input_lufs = matched.source_lufs;
-  out->output_lufs = output_lufs;
-  out->applied_gain_db = matched.applied_gain_db;
-  out->left = release_array(left);
-  out->right = release_array(right);
+  *out_length = length;
+  *out_left = release_array(left);
+  *out_right = release_array(right);
   if (out_match) *out_match = match;
   return SONARE_OK;
   SONARE_C_CATCH

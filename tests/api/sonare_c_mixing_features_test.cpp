@@ -17,7 +17,7 @@ TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src", nullptr);
   REQUIRE(strip != nullptr);
 
   size_t send_index = 0;
@@ -55,7 +55,7 @@ TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched ex
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
 
@@ -74,7 +74,7 @@ TEST_CASE("sonare_mixer_process_stereo leaves the caller's output untouched when
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, static_cast<int>(kBlock), &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src", nullptr) != nullptr);
   std::vector<float> input(kBlock, 0.25f);
   const float* in[] = {input.data()};
   std::vector<float> left(kBlock, 0.0f);
@@ -739,7 +739,7 @@ TEST_CASE("mixer strip lookup, scene and query entries name the refused argument
           "[c_api][mixing][refusal]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
-  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src", nullptr) != nullptr);
 
   CHECK(sonare_mixer_strip_at(nullptr, 0) == nullptr);
   CHECK(mixer_refusal_message() == "mixer must not be NULL");
@@ -806,7 +806,7 @@ TEST_CASE("mixer process_stereo refuses in header order and names the channel",
           "[c_api][mixing][refusal]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
-  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src", nullptr) != nullptr);
   std::vector<float> left(64, 0.0f);
   std::vector<float> right(64, 0.0f);
   const float* in_l[] = {left.data()};

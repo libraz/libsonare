@@ -121,38 +121,37 @@ typedef struct {
 /// @return SONARE_OK, SONARE_ERROR_INVALID_PARAMETER on an invalid argument (or NULL @p out),
 ///         or another error code on an allocation failure.
 SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out);
-/// Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
-/// Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
-///
-/// Returns NULL on failure. A non-NULL strip is owned by the mixer, NOT the
-/// caller: it stays valid until sonare_mixer_destroy and must never be freed
-/// separately.
-SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
+/// @brief Options for @ref sonare_mixer_add_strip. Start from
+///        @ref sonare_mixer_add_strip_options_init.
+/// @details A strip's meters size their buffers when the strip is built, so this is the only
+///   place their configuration can be chosen. A full meter costs about 646 KB at 48 kHz and a
+///   strip carries two of them; measure_lufs = 0 takes one meter to about 83 KB, and
+///   enable_metering = 0 drops both (about 1.4 MB to 145 KB for the strip) for strips whose
+///   snapshots are never read. The same configuration travels in scene JSON as the strip's
+///   optional "metering" object.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_mixer_add_strip_options_init.
+  uint32_t struct_size;
+  int32_t enable_metering;       ///< Meter the strip pre and post; default 1, non-zero is on
+  int32_t measure_lufs;          ///< Measure loudness; default 1, non-zero is on
+  int32_t measure_true_peak;     ///< Measure true peak; default 1, non-zero is on
+  int32_t true_peak_oversample;  ///< True-peak oversample factor, 4 (default) or 8
+} SonareMixerAddStripOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options);
+
 /// Adds a strip whose pre/post meters are configured up front.
 ///
-/// A strip's meters size their buffers when the strip is built, so this is the
-/// only place the configuration can be chosen: there is no setter, and changing
-/// it later would have to rebuild the strip's storage. A full meter costs about
-/// 646 KB at 48 kHz and a strip carries two of them; measure_lufs = 0 takes one
-/// meter to about 83 KB, and enable_metering = 0 drops both (about 1.4 MB to
-/// 145 KB for the strip) for strips whose snapshots are never read.
-///
-/// enable_metering, measure_lufs and measure_true_peak are booleans (0 / non-0).
-/// true_peak_oversample is 4 or 8, the factors the realtime meter implements;
-/// 0 selects the default (4, the BS.1770-4 minimum). Returns NULL with
-/// sonare_last_error_message() set for a NULL handle or id, a duplicate id, or
-/// any other factor.
+/// @p options NULL is the full meter configuration (LUFS + true peak at 4x). Returns NULL with
+/// sonare_last_error_message() set for a NULL handle or id, a duplicate id, a wrong
+/// struct_size, or an oversample factor other than 4 or 8.
 ///
 /// A non-NULL strip is owned by the mixer, NOT the caller: it stays valid until
 /// sonare_mixer_destroy and must never be freed separately. Adding further strips
 /// does not invalidate it.
-///
-/// The same configuration travels in scene JSON as the strip's optional
-/// "metering" object, which is how a mixer built with
-/// sonare_mixer_from_scene_json chooses it.
-SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int enable_metering,
-                                       int measure_lufs, int measure_true_peak,
-                                       int true_peak_oversample);
+SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
+                                    const SonareMixerAddStripOptions* options);
 /// @brief Sets the strip's input trim in dB, applied before the strip's processing. Refused with
 ///        SONARE_ERROR_INVALID_PARAMETER for a NULL strip or a non-finite value.
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
@@ -233,13 +232,10 @@ SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float sen
 /// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or @c index is out
 /// of range.
 SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index);
-/// @brief Reads the strip's meter snapshot into @p out. Refused with
-///        SONARE_ERROR_INVALID_PARAMETER if strip or out is NULL.
-SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
 /// Reads a meter snapshot at the given tap point. @c tap: 0 = pre-fader,
 /// 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
 /// if strip or out is NULL, or tap is unknown.
-SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out);
+SonareError sonare_strip_meter(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out);
 /// @brief Reads the post-insert meter for a compiled bus (including master).
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
                                    SonareMixMeterSnapshot* out);
@@ -479,7 +475,7 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 ///
 /// Prepare one with sonare_mixer_master_meter_config_init, which sets struct_size and every
 /// field's library default; every field is then read literally. The measurement switches and
-/// the oversample factor mean what they mean on sonare_mixer_add_strip_ex.
+/// the oversample factor mean what they mean on SonareMixerAddStripOptions.
 typedef struct {
   /// sizeof(SonareMixerMasterMeterConfig), set by sonare_mixer_master_meter_config_init. A
   /// smaller value is refused with SONARE_ERROR_INVALID_PARAMETER.

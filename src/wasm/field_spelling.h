@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 39> kOverrides = {{
+inline constexpr std::array<Override, 37> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"downmix", "num_channels", "channels"},
@@ -52,12 +52,10 @@ inline constexpr std::array<Override, 39> kOverrides = {{
     {"project_move_clip", "new_track_id", "trackId"},
     {"project_set_overlap_policy", "overlap_policy", "policy"},
     {"realtime_voice_changer_process_mono", "input", "samples"},
-    {"realtime_voice_changer_process_mono_with_carrier", "input", "samples"},
     {"stream_analyzer_process_with_offset", "sample_offset", "startSample"},
     {"stream_analyzer_reset", "base_sample_offset", "startSample"},
     {"strip_remove_send", "index", "sendIndex"},
     {"strip_set_send_db", "index", "sendIndex"},
-    {"voice_change_realtime", "preset", "config"},
     {"waveform_peak_pyramid", "num_channels", "channels"},
     {"waveform_peaks", "num_channels", "channels"},
 }};

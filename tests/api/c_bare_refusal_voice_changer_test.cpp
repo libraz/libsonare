@@ -17,33 +17,32 @@ std::string last_message() {
 
 }  // namespace
 
-TEST_CASE("voice_change_ex names the refused config", "[c_api][voice_changer]") {
+TEST_CASE("voice_change names the refused config", "[c_api][voice_changer]") {
   const std::vector<float> samples(4096, 0.1f);
   float* out = nullptr;
   size_t out_length = 0;
 
-  REQUIRE(sonare_voice_change_ex(samples.data(), samples.size(), 22050, nullptr, &out,
-                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(last_message() == "config must not be NULL");
-
   SonareVoiceChangeConfig config;
   sonare_voice_change_config_init(&config);
   config.formant_mode = 2;
-  REQUIRE(sonare_voice_change_ex(samples.data(), samples.size(), 22050, &config, &out,
-                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, &config, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "config.formant_mode must be one of 0, 1");
 }
 
-TEST_CASE("voice_change_realtime names the refused channel layout", "[c_api][voice_changer]") {
+TEST_CASE("realtime_voice_changer_render names the refused channel layout",
+          "[c_api][voice_changer]") {
   const std::vector<float> samples(4097, 0.1f);
   float* out = nullptr;
   size_t out_length = 0;
 
-  REQUIRE(sonare_voice_change_realtime(samples.data(), samples.size(), 22050, nullptr, 3, &out,
-                                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(samples.data(), samples.size(), 22050, nullptr, 3,
+                                               &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "channels must be an integer in [1, 2]");
-  REQUIRE(sonare_voice_change_realtime(samples.data(), samples.size(), 22050, nullptr, 2, &out,
-                                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(samples.data(), samples.size(), 22050, nullptr, 2,
+                                               &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "length must be even when channels is 2");
 }
 

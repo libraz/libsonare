@@ -143,24 +143,18 @@ typedef struct {
   size_t point_count;              ///< Number of entries in points.
 } SonareVectorscopeResult;
 
-/// @brief Per-sample mid/side point series for the (left, right) buffer.
-/// @warning This emits one point per input sample. For real-length audio that is
-///          millions of points (hundreds of MB once marshalled across a binding).
-///          Prefer @ref sonare_metering_vectorscope_decimated for a display-sized
-///          point set.
-SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonareVectorscopeResult* out);
-
-/// @brief Display-sized mid/side vectorscope.
+/// @brief Mid/side vectorscope point series for the (left, right) buffer.
 /// @param max_points Upper bound on the returned point count. Pass 0 (or a value
-///        >= @p length) to get one point per sample, identical to
-///        @ref sonare_metering_vectorscope. Otherwise the core deterministically
-///        decimates the input to at most @p max_points points, keeping the
-///        largest-radius sample of each contiguous bucket so transient stereo
-///        peaks survive the down-sample.
-SonareError sonare_metering_vectorscope_decimated(const float* left, const float* right,
-                                                  size_t length, int sample_rate, size_t max_points,
-                                                  SonareVectorscopeResult* out);
+///        >= @p length) to get one point per sample. Otherwise the core
+///        deterministically decimates the input to at most @p max_points points,
+///        keeping the largest-radius sample of each contiguous bucket so transient
+///        stereo peaks survive the down-sample.
+/// @warning One point per sample is millions of points for real-length audio
+///          (hundreds of MB once marshalled across a binding); pass a display-sized
+///          @p max_points.
+SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
+                                        int sample_rate, size_t max_points,
+                                        SonareVectorscopeResult* out);
 
 /// @brief Frees the points of a result. Safe on NULL.
 void sonare_free_vectorscope_result(SonareVectorscopeResult* result);
@@ -184,13 +178,6 @@ typedef struct {
 } SonarePhaseScopeResult;
 
 /// @brief Phase-scope (Lissajous + summary stats) for a stereo pair.
-/// @warning Emits one point per input sample; see the warning on
-///          @ref sonare_metering_vectorscope. Prefer
-///          @ref sonare_metering_phase_scope_decimated for display use.
-SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonarePhaseScopeResult* out);
-
-/// @brief Display-sized phase-scope (Lissajous + summary stats).
 /// @param max_points Upper bound on the returned point count. Pass 0 (or a value
 ///        >= @p length) for one point per sample. Otherwise the point cloud is
 ///        deterministically decimated to at most @p max_points points (keeping
@@ -198,9 +185,11 @@ SonareError sonare_metering_phase_scope(const float* left, const float* right, s
 ///        (@c correlation, @c average_abs_angle_rad, @c max_radius) are always
 ///        computed over the full-resolution signal and are unaffected by
 ///        @p max_points.
-SonareError sonare_metering_phase_scope_decimated(const float* left, const float* right,
-                                                  size_t length, int sample_rate, size_t max_points,
-                                                  SonarePhaseScopeResult* out);
+/// @warning One point per sample is millions of points for real-length audio; see
+///          the warning on @ref sonare_metering_vectorscope.
+SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
+                                        int sample_rate, size_t max_points,
+                                        SonarePhaseScopeResult* out);
 
 /// @brief Frees the points of a result. Safe on NULL.
 void sonare_free_phase_scope_result(SonarePhaseScopeResult* result);

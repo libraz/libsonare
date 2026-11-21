@@ -40,14 +40,3 @@ TEST_CASE("sonare_free_room_estimate leaves the result zeroed", "[c_api][c_free]
   CHECK(r.rt60_bands == nullptr);
   CHECK(r.band_count == static_cast<decltype(r.band_count)>(0));
 }
-
-TEST_CASE("sonare_free_room_morph_stereo_result leaves the result zeroed", "[c_api][c_free]") {
-  SonareRoomMorphStereoResult r{};
-  r.length = static_cast<decltype(r.length)>(1);
-  r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
-  sonare_free_room_morph_stereo_result(&r);
-  CHECK(r.left == nullptr);
-  CHECK(r.right == nullptr);
-  CHECK(r.length == static_cast<decltype(r.length)>(0));
-  CHECK(r.sample_rate == static_cast<decltype(r.sample_rate)>(0));
-}

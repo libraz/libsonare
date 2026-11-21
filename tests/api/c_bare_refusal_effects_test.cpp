@@ -27,21 +27,29 @@ constexpr int kRate = 22050;
 
 }  // namespace
 
-TEST_CASE("hpss_ex and trim_ex refuse a non-positive size by name", "[c_api][effects]") {
+TEST_CASE("hpss and trim refuse a non-positive size by name", "[c_api][effects]") {
   const auto samples = tone(4096);
   SonareHpssResult result{};
-  CHECK(sonare_hpss_ex(samples.data(), samples.size(), kRate, 31, 31, 0, 0, 1, 0, &result,
-                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "n_fft must be an even integer in [4, 524288]");
+  SonareHpssOptions hpss_options;
+  sonare_hpss_options_init(&hpss_options);
+  hpss_options.n_fft = 0;
+  CHECK(sonare_hpss(samples.data(), samples.size(), kRate, 31, 31, &hpss_options, &result,
+                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.n_fft must be an even integer in [4, 524288]");
 
   float* out = nullptr;
   size_t out_length = 0;
-  CHECK(sonare_trim_ex(samples.data(), samples.size(), kRate, -60.0f, 0, 512, &out, &out_length) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "frame_length must be an integer in [1, 2147483647]");
-  CHECK(sonare_trim_ex(samples.data(), samples.size(), kRate, -60.0f, 2048, 0, &out, &out_length) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hop_length must be an integer in [1, 2147483647]");
+  SonareTrimOptions trim_options;
+  sonare_trim_options_init(&trim_options);
+  trim_options.frame_length = 0;
+  CHECK(sonare_trim(samples.data(), samples.size(), kRate, -60.0f, &trim_options, &out,
+                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.frame_length must be an integer in [1, 2147483647]");
+  sonare_trim_options_init(&trim_options);
+  trim_options.hop_length = 0;
+  CHECK(sonare_trim(samples.data(), samples.size(), kRate, -60.0f, &trim_options, &out,
+                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.hop_length must be an integer in [1, 2147483647]");
 }
 
 TEST_CASE("nn_filter refuses a non-positive shape by name", "[c_api][effects]") {
@@ -85,18 +93,17 @@ TEST_CASE("decompose_stems_linked refuses channels and num_channels by name", "[
   const float* channels[1] = {samples.data()};
   float* out = nullptr;
   size_t count = 0;
-  size_t num_channels = 0;
   size_t component_length = 0;
   CHECK(sonare_decompose_stems_linked(nullptr, 1, samples.size(), kRate, nullptr, &out, &count,
-                                      &num_channels, &component_length, nullptr, nullptr, nullptr,
+                                      &component_length, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "channels must not be NULL");
   CHECK(sonare_decompose_stems_linked(channels, 0, samples.size(), kRate, nullptr, &out, &count,
-                                      &num_channels, &component_length, nullptr, nullptr, nullptr,
+                                      &component_length, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "num_channels must be an integer in [1, 64]");
   CHECK(sonare_decompose_stems_linked(channels, 65, samples.size(), kRate, nullptr, &out, &count,
-                                      &num_channels, &component_length, nullptr, nullptr, nullptr,
+                                      &component_length, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "num_channels must be an integer in [1, 64]");
 }

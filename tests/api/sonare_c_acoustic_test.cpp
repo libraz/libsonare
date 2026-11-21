@@ -271,10 +271,13 @@ TEST_CASE("sonare acoustic C API refuses a room config below its struct_size",
             .find("config.struct_size must be set by sonare_room_morph_config_init") !=
         std::string::npos);
   CHECK(out == nullptr);
-  SonareRoomMorphStereoResult stereo{};
+  float* stereo_left = nullptr;
+  float* stereo_right = nullptr;
+  size_t stereo_length = 0;
   REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &morph,
-                                   &stereo) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(stereo.left == nullptr);
+                                   &stereo_left, &stereo_right,
+                                   &stereo_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(stereo_left == nullptr);
 }
 
 TEST_CASE("sonare acoustic C API reads seed 0 as a seed", "[c_api][acoustic]") {
@@ -1287,15 +1290,16 @@ TEST_CASE("sonare acoustic C API stereo morph returns two different channels",
   input[0] = 1.0f;
   const SonareRoomMorphConfig cfg = stereo_morph_config();
 
-  SonareRoomMorphStereoResult out;
-  REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out) ==
-          SONARE_OK);
-  REQUIRE(out.length > input.size());
-  CHECK(out.sample_rate == 48000);
-  REQUIRE(out.left != nullptr);
-  REQUIRE(out.right != nullptr);
+  float* out_left = nullptr;
+  float* out_right = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out_left,
+                                   &out_right, &out_length) == SONARE_OK);
+  REQUIRE(out_length > input.size());
+  REQUIRE(out_left != nullptr);
+  REQUIRE(out_right != nullptr);
   // Identical inputs through two receivers: the added room differs between the channels.
-  CHECK_FALSE(std::equal(out.left, out.left + out.length, out.right));
+  CHECK_FALSE(std::equal(out_left, out_left + out_length, out_right));
 
   // The mono morph of the same input keeps its single-listener output length.
   float* mono = nullptr;
@@ -1304,41 +1308,45 @@ TEST_CASE("sonare acoustic C API stereo morph returns two different channels",
           SONARE_OK);
   CHECK(mono_length > input.size());
   sonare_free_floats(mono);
-  sonare_free_room_morph_stereo_result(&out);
-  CHECK(out.left == nullptr);
-  CHECK(out.right == nullptr);
-  CHECK(out.length == 0);
+  sonare_free_floats(out_left);
+  sonare_free_floats(out_right);
 }
 
 TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_api][acoustic]") {
   std::vector<float> input(4800, 0.0f);
   input[0] = 1.0f;
-  SonareRoomMorphStereoResult out;
+  float* out_left = nullptr;
+  float* out_right = nullptr;
+  size_t out_length = 0;
 
   SonareRoomMorphConfig too_wide = stereo_morph_config();
   too_wide.receiver_spacing_m = 4.5f;
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &too_wide,
-                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(out.left == nullptr);
-  CHECK(out.length == 0);
+                                 &out_left, &out_right,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out_left == nullptr);
+  CHECK(out_right == nullptr);
+  CHECK(out_length == 0);
 
   SonareRoomMorphConfig negative = stereo_morph_config();
   negative.receiver_spacing_m = -0.5f;
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &negative,
-                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
+                                 &out_left, &out_right,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // A spacing of 0 is read as 0, outside (0, 4].
   SonareRoomMorphConfig coincident = stereo_morph_config();
   coincident.receiver_spacing_m = 0.0f;
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &coincident,
-                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
+                                 &out_left, &out_right,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // A listener 0.1 m from the side wall puts one receiver outside the room.
   SonareRoomMorphConfig wall = stereo_morph_config();
   wall.listener.y = 0.1f;
   wall.source.y = 0.1f;
-  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &wall, &out) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &wall, &out_left,
+                                 &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   // The mono morph does not read the spacing, so the same placement still renders.
   float* mono = nullptr;
   size_t mono_length = 0;
@@ -1347,12 +1355,17 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
   sonare_free_floats(mono);
 
   const SonareRoomMorphConfig cfg = stereo_morph_config();
-  CHECK(sonare_room_morph_stereo(input.data(), nullptr, input.size(), 48000, &cfg, &out) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, nullptr, &out) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), nullptr, input.size(), 48000, &cfg, &out_left,
+                                 &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, nullptr,
+                                 &out_left, &out_right,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, nullptr,
+                                 &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out_left,
+                                 nullptr, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out_left,
+                                 &out_right, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
@@ -1389,11 +1402,15 @@ TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
         sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length);
     const bool wrote = out != nullptr;
     sonare_free_floats(out);
-    SonareRoomMorphStereoResult stereo{};
+    float* stereo_left = nullptr;
+    float* stereo_right = nullptr;
+    size_t stereo_length = 0;
     const SonareError stereo_err =
-        sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &stereo);
-    const bool stereo_wrote = stereo.left != nullptr;
-    sonare_free_room_morph_stereo_result(&stereo);
+        sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg,
+                                 &stereo_left, &stereo_right, &stereo_length);
+    const bool stereo_wrote = stereo_left != nullptr;
+    sonare_free_floats(stereo_left);
+    sonare_free_floats(stereo_right);
     REQUIRE(stereo_err == err);
     return std::make_pair(err, wrote || stereo_wrote);
   };

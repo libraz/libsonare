@@ -77,15 +77,18 @@ SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer
   SONARE_C_CATCH
 }
 
-SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id) {
-  SONARE_C_API_ENTRY;
-  // The historical full metering configuration: LUFS + true peak at 4x.
-  return sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0);
+void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->enable_metering = 1;
+  options->measure_lufs = sonare::mixing::kPublishedMeterConfig.measure_lufs ? 1 : 0;
+  options->measure_true_peak = sonare::mixing::kPublishedMeterConfig.measure_true_peak ? 1 : 0;
+  options->true_peak_oversample = sonare::mixing::kPublishedMeterConfig.true_peak_oversample;
 }
 
-SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int enable_metering,
-                                       int measure_lufs, int measure_true_peak,
-                                       int true_peak_oversample) {
+SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
+                                    const SonareMixerAddStripOptions* options) {
   SONARE_C_API_ENTRY;
   if (!mixer) {
     sonare_c_detail::refuse_null("mixer");
@@ -95,10 +98,16 @@ SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int e
     sonare_c_detail::refuse_null("id");
     return nullptr;
   }
-  if (true_peak_oversample != 0 &&
-      !sonare::mixing::is_realtime_true_peak_oversample(true_peak_oversample)) {
+  SonareMixerAddStripOptions resolved{};
+  if (sonare_c_detail::resolve_options(options, sonare_mixer_add_strip_options_init,
+                                       "sonare_mixer_add_strip_options_init",
+                                       &resolved) != SONARE_OK) {
+    return nullptr;
+  }
+  if (!sonare::mixing::is_realtime_true_peak_oversample(resolved.true_peak_oversample)) {
     sonare_c_detail::run_validation([&] {
-      check::one_of(true_peak_oversample, std::array<int, 3>{0, 4, 8}, "true_peak_oversample");
+      check::one_of(resolved.true_peak_oversample, std::array<int, 2>{4, 8},
+                    "options.true_peak_oversample");
     });
     return nullptr;
   }
@@ -112,12 +121,10 @@ SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int e
     }
   }
   sonare::mixing::ChannelStripConfig config;
-  config.enable_metering = enable_metering != 0;
-  config.meter.measure_lufs = measure_lufs != 0;
-  config.meter.measure_true_peak = measure_true_peak != 0;
-  // Zero is the "use the default" sentinel, matching the rest of the C ABI.
-  config.meter.true_peak_oversample =
-      true_peak_oversample != 0 ? true_peak_oversample : config.meter.true_peak_oversample;
+  config.enable_metering = resolved.enable_metering != 0;
+  config.meter.measure_lufs = resolved.measure_lufs != 0;
+  config.meter.measure_true_peak = resolved.measure_true_peak != 0;
+  config.meter.true_peak_oversample = resolved.true_peak_oversample;
   auto strip = std::make_unique<SonareStrip>(config);
   strip->id = strip_id;
   strip->scene_strip.id = strip->id;
@@ -440,18 +447,7 @@ SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index) {
   SONARE_C_CATCH
 }
 
-SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL(strip);
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_TRY
-  copy_meter_snapshot(strip->strip.meter_snapshot(), out);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
+SonareError sonare_strip_meter(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(strip);

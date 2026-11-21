@@ -34,10 +34,10 @@ TEST_CASE("realtime voice changer reports its default max block size", "[c-api]"
 
   std::vector<float> in(static_cast<size_t>(max_block) + 1, 0.0f);
   std::vector<float> out(in.size(), 0.0f);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(),
+  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), nullptr, out.data(),
                                                    static_cast<size_t>(max_block)) == SONARE_OK);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), in.size()) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), nullptr, out.data(),
+                                                   in.size()) == SONARE_ERROR_INVALID_PARAMETER);
 
   max_block = -1;
   CHECK(sonare_realtime_voice_changer_max_block_size(nullptr, &max_block) ==
@@ -52,7 +52,7 @@ TEST_CASE("realtime voice changer reports its default max block size", "[c-api]"
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("streaming mastering chain reports its default max block size", "[c-api]") {
   SonareStreamingMasteringChain* handle = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &handle) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &handle) == SONARE_OK);
   REQUIRE(handle != nullptr);
   int max_block = -1;
   REQUIRE(sonare_streaming_mastering_chain_max_block_size(handle, &max_block) == SONARE_OK);

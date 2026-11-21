@@ -594,10 +594,14 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     // Build with the scene's metering: the meters are sized when the strip is
     // constructed, so this is the one point where a scene can opt out of the
     // full LUFS + true-peak configuration.
-    SonareStrip* strip = sonare_mixer_add_strip_ex(
-        mixer.get(), scene_strip.id.c_str(), scene_strip.metering.enabled ? 1 : 0,
-        scene_strip.metering.lufs ? 1 : 0, scene_strip.metering.true_peak ? 1 : 0,
-        scene_strip.metering.true_peak_oversample);
+    SonareMixerAddStripOptions strip_options{};
+    sonare_mixer_add_strip_options_init(&strip_options);
+    strip_options.enable_metering = scene_strip.metering.enabled ? 1 : 0;
+    strip_options.measure_lufs = scene_strip.metering.lufs ? 1 : 0;
+    strip_options.measure_true_peak = scene_strip.metering.true_peak ? 1 : 0;
+    strip_options.true_peak_oversample = scene_strip.metering.true_peak_oversample;
+    SonareStrip* strip =
+        sonare_mixer_add_strip(mixer.get(), scene_strip.id.c_str(), &strip_options);
     if (!strip) {
       // The strip's id and metering came from the scene, so the refusal is the document's.
       if (sonare_c_detail::last_error_code_storage() == SONARE_ERROR_INVALID_PARAMETER) {
@@ -677,7 +681,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     const auto& bus = mixer->buses[bus_index];
     auto dsp = std::make_unique<SonareBusDsp>();
     dsp->id = bus.id;
-    // Prepare before adding inserts, the same order sonare_mixer_add_strip_ex
+    // Prepare before adding inserts, the same order sonare_mixer_add_strip
     // uses: add_insert prepares each processor as it arrives only once the
     // container itself knows its block size, and BusNode::prepare will not
     // prepare this bus again on a later compile.

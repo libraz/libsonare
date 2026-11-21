@@ -96,13 +96,13 @@ TEST_CASE("metering entries refuse the channels before the output", "[c_api][hea
   SonareVectorscopeResult scope;
   scope.points = garbage_pointer<SonareVectorscopePoint>();
   scope.point_count = 31;
-  REQUIRE(sonare_metering_vectorscope(samples.data(), nullptr, kLength, kRate, &scope) ==
+  REQUIRE(sonare_metering_vectorscope(samples.data(), nullptr, kLength, kRate, 0, &scope) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "right must not be NULL");
   CHECK(scope.points == nullptr);
   CHECK(scope.point_count == 0);
 
-  REQUIRE(sonare_metering_vectorscope(samples.data(), nullptr, kLength, kRate, nullptr) ==
+  REQUIRE(sonare_metering_vectorscope(samples.data(), nullptr, kLength, kRate, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "right must not be NULL");
 }

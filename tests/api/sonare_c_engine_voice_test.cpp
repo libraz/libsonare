@@ -41,7 +41,11 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   out = nullptr;
   out_length = 0;
-  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 5.0f, 1.1f, &out,
+  SonareVoiceChangeConfig vc_config;
+  sonare_voice_change_config_init(&vc_config);
+  vc_config.pitch_semitones = 5.0f;
+  vc_config.formant_factor = 1.1f;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, &vc_config, &out,
                               &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == samples.size());
@@ -50,7 +54,9 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   out = nullptr;
   out_length = 0;
   // A relative formant factor outside the warp's [0.55, 1.65] range is refused, not clamped.
-  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 0.0f, 9.0f, &out,
+  vc_config.pitch_semitones = 0.0f;
+  vc_config.formant_factor = 9.0f;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, &vc_config, &out,
                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
@@ -188,7 +194,7 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   sonare_pitch_correction_config_init(nullptr);
 }
 
-TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo buffers",
+TEST_CASE("sonare_realtime_voice_changer_render processes mono and interleaved stereo buffers",
           "[c_api][voice_changer]") {
   std::vector<float> mono(384);
   for (size_t i = 0; i < mono.size(); ++i) {
@@ -198,8 +204,12 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutralMonitor", 1, &out,
-                                       &out_length) == SONARE_OK);
+  SonareRealtimeVoiceChangerConfig neutralMonitor_config;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("neutralMonitor",
+                                                         &neutralMonitor_config) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_render(mono.data(), mono.size(), 48000,
+                                               &neutralMonitor_config, 1, &out,
+                                               &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == mono.size());
   for (size_t i = 0; i < out_length; ++i) {
@@ -214,8 +224,12 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
   }
   out = nullptr;
   out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size(), 48000, "softWhisper", 2, &out,
-                                       &out_length) == SONARE_OK);
+  SonareRealtimeVoiceChangerConfig softWhisper_config;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("softWhisper", &softWhisper_config) ==
+          SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_render(stereo.data(), stereo.size(), 48000,
+                                               &softWhisper_config, 2, &out,
+                                               &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == stereo.size());
   for (size_t i = 0; i < out_length; ++i) {
@@ -225,21 +239,23 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
 
   out = nullptr;
   out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size() - 1, 48000, "softWhisper", 2,
-                                       &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(stereo.data(), stereo.size() - 1, 48000,
+                                               &softWhisper_config, 2, &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
 
   float poison = 0.0f;
   out = &poison;
   out_length = 7;
-  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutralMonitor", 3, &out,
-                                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(mono.data(), mono.size(), 48000,
+                                               &neutralMonitor_config, 3, &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
 }
 
-TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre-roll)",
+TEST_CASE("sonare_realtime_voice_changer_render compensates chain latency (no silent pre-roll)",
           "[c_api][voice_changer]") {
   // A character preset (softWhisper) carries retune-grain latency. A naive
   // length-in/length-out render would prepend ~latency samples of silent
@@ -254,8 +270,11 @@ TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(tone.data(), tone.size(), 48000, "softWhisper", 1, &out,
-                                       &out_length) == SONARE_OK);
+  SonareRealtimeVoiceChangerConfig softWhisper_config;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("softWhisper", &softWhisper_config) ==
+          SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_render(tone.data(), tone.size(), 48000, &softWhisper_config,
+                                               1, &out, &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == tone.size());
 

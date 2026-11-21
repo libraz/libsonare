@@ -36,6 +36,21 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
+// The core spells the STFT framing bare; at a folded entry they are members of `options`.
+const std::array<CName, 2> kStftOptionNames{
+    {{"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
+const std::array<CName, 3> kTimeStretchNames{
+    {{"rate", "speed_ratio"}, {"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
+
+// An options hop of 0 is absent (a quarter of n_fft); one above INT_MAX saturates there, so the
+// range check refuses it rather than a narrowing cast wrapping it into range.
+int options_stft_hop(size_t value) {
+  if (value == 0) return SONARE_STFT_HOP_AUTO;
+  return value > static_cast<size_t>(std::numeric_limits<int>::max())
+             ? std::numeric_limits<int>::max()
+             : static_cast<int>(value);
+}
+
 /// Checks a decompose-stems config and copies it onto the core one. Throws the refusal.
 void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
                                  DecomposeStemsConfig* core_config) {
@@ -111,49 +126,55 @@ SonareError run_mono_prevalidated(const float* samples, size_t length, int sampl
 
 }  // namespace
 
-SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
-                        int kernel_percussive, SonareHpssResult* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  return sonare_hpss_ex(samples, length, sample_rate, kernel_harmonic, kernel_percussive,
-                        constants::kDefaultNFft, constants::kDefaultHopLength, 1, 0, out, nullptr);
+void sonare_hpss_options_init(SonareHpssOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = constants::kDefaultNFft;
+  options->use_soft_mask = 1;
 }
 
-SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
-                           int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
-                           int use_soft_mask, int with_residual, SonareHpssResult* out,
-                           float** out_residual) {
+SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
+                        int kernel_percussive, const SonareHpssOptions* options,
+                        SonareHpssResult* out, float** out_residual) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_residual);
   if (const SonareError err =
-          validate_audio_params("hpss_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("hpss", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  SonareHpssOptions resolved;
+  if (const SonareError err =
+          resolve_options(options, sonare_hpss_options_init, "sonare_hpss_options_init", &resolved);
       err != SONARE_OK) {
     return err;
   }
   // The FFT size and hop are refused before any input is decoded.
   if (const SonareError err = run_validation([&] {
-        sonare::util::check::even_within(n_fft, sonare::kColaNFftDomain, "n_fft");
-        check_stft_hop(hop_length, "hop_length");
+        sonare::util::check::even_within(resolved.n_fft, sonare::kColaNFftDomain, "options.n_fft");
+        check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length");
       });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  if (with_residual != 0) SONARE_C_REQUIRE_NONNULL(out_residual);
+  const bool with_residual = out_residual != nullptr;
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         HpssConfig config;
         config.kernel_size_harmonic = kernel_harmonic;
         config.kernel_size_percussive = kernel_percussive;
-        config.use_soft_mask = use_soft_mask != 0;
+        config.use_soft_mask = resolved.use_soft_mask != 0;
 
         StftConfig stft_config;
-        stft_config.n_fft = n_fft;
-        stft_config.hop_length = core_stft_hop(hop_length);
+        stft_config.n_fft = resolved.n_fft;
+        stft_config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
 
-        if (with_residual == 0) {
-          HpssAudioResult result = hpss(audio, config, stft_config);
+        if (!with_residual) {
+          HpssAudioResult result =
+              with_c_names(kStftOptionNames, [&] { return hpss(audio, config, stft_config); });
           const size_t n = result.harmonic.size();
           std::unique_ptr<float[]> harmonic(new float[n]);
           std::unique_ptr<float[]> percussive(new float[n]);
@@ -167,7 +188,8 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
           return SONARE_OK;
         }
 
-        HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+        HpssAudioResultWithResidual result = with_c_names(
+            kStftOptionNames, [&] { return hpss_with_residual(audio, config, stft_config); });
         const size_t n = result.harmonic.size();
         std::unique_ptr<float[]> harmonic(new float[n]);
         std::unique_ptr<float[]> percussive(new float[n]);
@@ -215,25 +237,31 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
                                [](const Audio& a) { return percussive(a); });
 }
 
-SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
-                                float speed_ratio, float** out, size_t* out_length) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_length);
-  return sonare_time_stretch_ex(samples, length, sample_rate, speed_ratio, constants::kDefaultNFft,
-                                constants::kDefaultHopLength, out, out_length);
+void sonare_time_stretch_options_init(SonareTimeStretchOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = constants::kDefaultNFft;
 }
 
-SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate,
-                                   float speed_ratio, int n_fft, int hop_length, float** out,
-                                   size_t* out_length) {
+SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
+                                float speed_ratio, const SonareTimeStretchOptions* options,
+                                float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err =
-          validate_audio_params("time_stretch_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("time_stretch", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { check_stft_hop(hop_length, "hop_length"); });
+  SonareTimeStretchOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_time_stretch_options_init,
+                                              "sonare_time_stretch_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation(
+          [&] { check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length"); });
       err != SONARE_OK) {
     return err;
   }
@@ -241,36 +269,41 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
   SONARE_C_REQUIRE_NONNULL(out_length);
 
   TimeStretchConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = core_stft_hop(hop_length);
+  config.n_fft = resolved.n_fft;
+  config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(
       samples, length, sample_rate, out, out_length, [speed_ratio, config](const Audio& a) {
-        return with_c_names(std::array<CName, 1>{{{"rate", "speed_ratio"}}},
+        return with_c_names(kTimeStretchNames,
                             [&] { return time_stretch(a, speed_ratio, config); });
       });
 }
 
-SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
-                               float pitch_semitones, float** out, size_t* out_length) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_length);
-  return sonare_pitch_shift_ex(samples, length, sample_rate, pitch_semitones,
-                               constants::kDefaultNFft, constants::kDefaultHopLength, out,
-                               out_length);
+void sonare_pitch_shift_options_init(SonarePitchShiftOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = constants::kDefaultNFft;
 }
 
-SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
-                                  float pitch_semitones, int n_fft, int hop_length, float** out,
-                                  size_t* out_length) {
+SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
+                               float pitch_semitones, const SonarePitchShiftOptions* options,
+                               float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err =
-          validate_audio_params("pitch_shift_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("pitch_shift", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { check_stft_hop(hop_length, "hop_length"); });
+  SonarePitchShiftOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_pitch_shift_options_init,
+                                              "sonare_pitch_shift_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation(
+          [&] { check_stft_hop(options_stft_hop(resolved.hop_length), "options.hop_length"); });
       err != SONARE_OK) {
     return err;
   }
@@ -284,13 +317,14 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
   SONARE_C_REQUIRE_NONNULL(out_length);
 
   PitchShiftConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = core_stft_hop(hop_length);
+  config.n_fft = resolved.n_fft;
+  config.hop_length = core_stft_hop(options_stft_hop(resolved.hop_length));
   config.backend = StretchBackend::NativeSpectral;
-  return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
-                               [pitch_semitones, config](const Audio& a) {
-                                 return pitch_shift(a, pitch_semitones, config);
-                               });
+  return run_mono_prevalidated(
+      samples, length, sample_rate, out, out_length, [pitch_semitones, config](const Audio& a) {
+        return with_c_names(kStftOptionNames,
+                            [&] { return pitch_shift(a, pitch_semitones, config); });
+      });
 }
 
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
@@ -306,14 +340,6 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
                                [target_db](const Audio& a) { return normalize(a, target_db); });
-}
-
-SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
-                        float** out, size_t* out_length) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_length);
-  return sonare_trim_ex(samples, length, sample_rate, threshold_db, kDefaultSilenceFrameLength,
-                        kDefaultSilenceHopLength, out, out_length);
 }
 
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
@@ -471,21 +497,22 @@ namespace {
 template <typename Fn>
 SonareError run_normalize_stereo(const char* fn, const char* left_name, const char* right_name,
                                  const float* left, const float* right, size_t length,
-                                 int sample_rate, SonareNormalizeStereoResult* out,
-                                 Fn&& normalize_pair) {
-  SONARE_C_ZERO_OUTS(out);
+                                 int sample_rate, float** out_left, float** out_right,
+                                 size_t* out_length, Fn&& normalize_pair) {
+  SONARE_C_ZERO_OUTS(out_left, out_right, out_length);
 
   SonareError err =
       validate_stereo_audio_params(fn, left_name, right_name, left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_left);
+  SONARE_C_REQUIRE_NONNULL(out_right);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   const auto result = normalize_pair(Audio::from_buffer(left, length, sample_rate),
                                      Audio::from_buffer(right, length, sample_rate));
-  out->applied_gain_db = result.applied_gain_db;
-  copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &out->left,
-                       &out->right, &out->length);
+  copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), out_left,
+                       out_right, out_length);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -493,42 +520,56 @@ SonareError run_normalize_stereo(const char* fn, const char* left_name, const ch
 }  // namespace
 
 SonareError sonare_normalize_stereo(const float* left, const float* right, size_t length,
-                                    int sample_rate, float target_db,
-                                    SonareNormalizeStereoResult* out) {
+                                    int sample_rate, float target_db, float** out_left,
+                                    float** out_right, size_t* out_length) {
   SONARE_C_API_ENTRY;
   return run_normalize_stereo(
-      "normalize_stereo", "left", "right", left, right, length, sample_rate, out,
+      "normalize_stereo", "left", "right", left, right, length, sample_rate, out_left, out_right,
+      out_length,
       [target_db](const Audio& l, const Audio& r) { return normalize_stereo(l, r, target_db); });
 }
 
 SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
-                                        int sample_rate, float target_db,
-                                        SonareNormalizeStereoResult* out) {
+                                        int sample_rate, float target_db, float** out_left,
+                                        float** out_right, size_t* out_length) {
   SONARE_C_API_ENTRY;
   return run_normalize_stereo("normalize_rms_stereo", "left", "right", left, right, length,
-                              sample_rate, out, [target_db](const Audio& l, const Audio& r) {
+                              sample_rate, out_left, out_right, out_length,
+                              [target_db](const Audio& l, const Audio& r) {
                                 return normalize_rms_stereo(l, r, target_db, true);
                               });
 }
 
-void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result) {
-  sonare_c_mastering_detail::free_stereo_channels(result);
+void sonare_trim_options_init(SonareTrimOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->frame_length = static_cast<size_t>(kDefaultSilenceFrameLength);
+  options->hop_length = static_cast<size_t>(kDefaultSilenceHopLength);
 }
 
-SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
-                           size_t frame_length, size_t hop_length, float** out,
-                           size_t* out_length) {
+SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
+                        const SonareTrimOptions* options, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err =
-          validate_audio_params("trim_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("trim", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
+  SonareTrimOptions resolved;
+  if (const SonareError err =
+          resolve_options(options, sonare_trim_options_init, "sonare_trim_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  const size_t frame_length = resolved.frame_length;
+  const size_t hop_length = resolved.hop_length;
   if (const SonareError err = run_validation([&] {
         sonare::util::check::integer_within(frame_length, kSilenceFrameLengthDomain,
-                                            "frame_length");
-        sonare::util::check::integer_within(hop_length, kSilenceHopLengthDomain, "hop_length");
+                                            "options.frame_length");
+        sonare::util::check::integer_within(hop_length, kSilenceHopLengthDomain,
+                                            "options.hop_length");
       });
       err != SONARE_OK) {
     return err;
@@ -543,15 +584,32 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
                                });
 }
 
-SonareError sonare_decompose_with_init(const float* s, int n_features, int n_frames,
-                                       int n_components, int n_iter, float beta, const char* init,
-                                       float** out_w, size_t* out_w_length, float** out_h,
-                                       size_t* out_h_length) {
+void sonare_decompose_options_init(SonareDecomposeOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+}
+
+SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
+                             int n_iter, float beta, const SonareDecomposeOptions* options,
+                             float** out_w, size_t* out_w_length, float** out_h,
+                             size_t* out_h_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_w, out_w_length, out_h, out_h_length);
   SONARE_C_REQUIRE_NONNULL(s);
-  if (const SonareError err = run_validation(
-          [&] { validate_decompose_shape(n_features, n_frames, n_components, n_iter); });
+  SonareDecomposeOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_decompose_options_init,
+                                              "sonare_decompose_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  const std::string init = resolved.init != nullptr ? resolved.init : "random";
+  if (const SonareError err = run_validation([&] {
+        validate_decompose_shape(n_features, n_frames, n_components, n_iter);
+        if (init != "random" && init != "nndsvd") {
+          sonare::util::check::refuse("options.init", "must be \"random\" or \"nndsvd\"");
+        }
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -574,22 +632,11 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   // InvalidParameter, which SONARE_C_CATCH maps to SONARE_ERROR_INVALID_PARAMETER).
 
   SONARE_C_TRY
-  std::string init_str = init ? init : "random";
   DecomposeResult result =
-      decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta, init_str);
+      decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta, init);
 
   return copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
   SONARE_C_CATCH
-}
-
-SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
-                             int n_iter, float beta, float** out_w, size_t* out_w_length,
-                             float** out_h, size_t* out_h_length) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_w, out_w_length, out_h, out_h_length);
-  // Backward-compatible delegation: original ABI always used random init.
-  return sonare_decompose_with_init(s, n_features, n_frames, n_components, n_iter, beta, "random",
-                                    out_w, out_w_length, out_h, out_h_length);
 }
 
 SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,
@@ -728,13 +775,12 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_num_channels,
-                                          size_t* out_component_length, float** out_w,
-                                          size_t* out_w_length, float** out_h,
+                                          size_t* out_component_count, size_t* out_component_length,
+                                          float** out_w, size_t* out_w_length, float** out_h,
                                           size_t* out_h_length) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_component_count, out_num_channels, out_component_length, out_w,
-                     out_w_length, out_h, out_h_length);
+  SONARE_C_ZERO_OUTS(out, out_component_count, out_component_length, out_w, out_w_length, out_h,
+                     out_h_length);
   if (const SonareError err = run_validation([&] {
         sonare::util::check::non_null(channels, "channels");
         sonare::util::check::integer_within(
@@ -756,7 +802,6 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   if (config != nullptr) fill_decompose_stems_config(*config, &core_config);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_component_count);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   SONARE_C_REQUIRE_NONNULL(out_component_length);
   // Same output-pair guard as sonare_decompose_stems.
   if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
@@ -804,7 +849,6 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   if (factors_err != SONARE_OK) return factors_err;
   *out = flat.release();
   *out_component_count = result.components.size();
-  *out_num_channels = num_channels;
   *out_component_length = component_length;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -843,39 +887,6 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
         *out_count = resolved.size();
         return SONARE_OK;
       });
-}
-
-SonareError sonare_hpss_with_residual(const float* samples, size_t length, int sample_rate,
-                                      int kernel_harmonic, int kernel_percussive,
-                                      float** out_harmonic, float** out_percussive,
-                                      float** out_residual, size_t* out_length,
-                                      int* out_sample_rate) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_harmonic, out_percussive, out_residual, out_length, out_sample_rate);
-  if (const SonareError err =
-          validate_audio_params("hpss_with_residual", "samples", samples, length, sample_rate);
-      err != SONARE_OK) {
-    return err;
-  }
-  SONARE_C_REQUIRE_NONNULL(out_harmonic);
-  SONARE_C_REQUIRE_NONNULL(out_percussive);
-  SONARE_C_REQUIRE_NONNULL(out_residual);
-  SONARE_C_REQUIRE_NONNULL(out_length);
-  SONARE_C_REQUIRE_NONNULL(out_sample_rate);
-
-  SonareHpssResult result{};
-  float* residual = nullptr;
-  SonareError err = sonare_hpss_ex(samples, length, sample_rate, kernel_harmonic, kernel_percussive,
-                                   constants::kDefaultNFft, constants::kDefaultHopLength, 1, 1,
-                                   &result, &residual);
-  if (err != SONARE_OK) return err;
-
-  *out_harmonic = result.harmonic;
-  *out_percussive = result.percussive;
-  *out_residual = residual;
-  *out_length = result.length;
-  *out_sample_rate = result.sample_rate;
-  return SONARE_OK;
 }
 
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,

@@ -363,13 +363,17 @@ TEST_CASE("Both formant modes refuse a factor outside the warp's range instead o
     }
   }
 
-  // The C ABI's positional call is relative mode and inherits the refusal.
+  // The C ABI's default config is relative mode and inherits the refusal.
   const std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (const float factor : {0.0f, -2.0f, 10.0f, std::numeric_limits<float>::quiet_NaN()}) {
     CAPTURE(factor);
     float* out = nullptr;
     size_t out_length = 0;
-    REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, 3.0f, factor, &out,
+    SonareVoiceChangeConfig relative_config;
+    sonare_voice_change_config_init(&relative_config);
+    relative_config.pitch_semitones = 3.0f;
+    relative_config.formant_factor = factor;
+    REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, &relative_config, &out,
                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(out_length == 0);
@@ -385,16 +389,15 @@ TEST_CASE("Formant mode names parse and print", "[voice_changer][formant_mode]")
   REQUIRE(std::string(formant_mode_name(FormantMode::Absolute)) == "absolute");
 }
 
-TEST_CASE("sonare_voice_change_ex selects the formant mode",
-          "[voice_changer][formant_mode][c_api]") {
+TEST_CASE("sonare_voice_change selects the formant mode", "[voice_changer][formant_mode][c_api]") {
   constexpr int sample_rate = 22050;
   const std::vector<float> samples = three_formant_vowel(150.0, sample_rate, sample_rate / 2);
 
   auto run = [&](const SonareVoiceChangeConfig* config, std::vector<float>* result) {
     float* out = nullptr;
     size_t out_length = 0;
-    const SonareError err = sonare_voice_change_ex(samples.data(), samples.size(), sample_rate,
-                                                   config, &out, &out_length);
+    const SonareError err =
+        sonare_voice_change(samples.data(), samples.size(), sample_rate, config, &out, &out_length);
     if (err == SONARE_OK)
       result->assign(out, out + out_length);
     else
@@ -413,16 +416,22 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   config.formant_factor = 1.1f;
   config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
 
-  // Relative mode is what the positional call has always computed.
-  float* legacy = nullptr;
-  size_t legacy_length = 0;
-  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, 3.0f, 1.1f, &legacy,
-                              &legacy_length) == SONARE_OK);
+  // Relative mode is the default: a config left at its defaults for the mode matches it.
+  SonareVoiceChangeConfig defaults;
+  sonare_voice_change_config_init(&defaults);
+  defaults.pitch_semitones = 3.0f;
+  defaults.formant_factor = 1.1f;
+  std::vector<float> from_defaults;
+  REQUIRE(run(&defaults, &from_defaults) == SONARE_OK);
   std::vector<float> relative;
   REQUIRE(run(&config, &relative) == SONARE_OK);
-  REQUIRE(relative.size() == legacy_length);
-  REQUIRE(std::equal(relative.begin(), relative.end(), legacy));
-  sonare_free_floats(legacy);
+  REQUIRE(relative.size() == from_defaults.size());
+  REQUIRE(std::equal(relative.begin(), relative.end(), from_defaults.begin()));
+
+  // A NULL config is the identity defaults.
+  std::vector<float> identity;
+  REQUIRE(run(nullptr, &identity) == SONARE_OK);
+  REQUIRE(identity.size() == samples.size());
 
   config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
   std::vector<float> absolute;
@@ -441,7 +450,6 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   config.formant_factor = 1.1f;
   config.formant_mode = 2;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(run(nullptr, &none) == SONARE_ERROR_INVALID_PARAMETER);
 
   // A config that was not started from the init function is refused by name.
   const SonareVoiceChangeConfig zeroed{};

@@ -557,7 +557,7 @@ TEST_CASE("C pitch shift rejects an unsupported shifted rate before allocating",
     size_t allocations = 999;
     {
       sonare::test::AllocationGuard guard;
-      error = sonare_pitch_shift(samples, 4, 48000, semitones, &out, &out_length);
+      error = sonare_pitch_shift(samples, 4, 48000, semitones, nullptr, &out, &out_length);
       allocations = guard.count();
     }
     REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
@@ -2573,11 +2573,11 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
     // so fail each of the final allocations of a successful call.
     const std::vector<float> body(4096, 0.1f);
     const auto run_mono = [&](SonareMasteringChainResult* r) {
-      return sonare_master_audio(nullptr, body.data(), body.size(), 48000, nullptr, r);
+      return sonare_master_audio(nullptr, body.data(), body.size(), 48000, nullptr, nullptr, r);
     };
     const auto run_stereo = [&](SonareMasteringChainStereoResult* r) {
       return sonare_master_audio_stereo(nullptr, body.data(), body.data(), body.size(), 48000,
-                                        nullptr, r);
+                                        nullptr, nullptr, r);
     };
     const auto count_allocations = [](auto call) {
       size_t count = 0;
@@ -2641,15 +2641,21 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
   }
 
   SECTION("stereo normalize") {
-    SonareNormalizeStereoResult r{};
+    float* left = nullptr;
+    float* right = nullptr;
+    size_t length = 0;
     sweep(
         [&] {
-          return sonare_normalize_stereo(tone.data(), tone.data(), tone.size(), rate, -3.0f, &r);
+          return sonare_normalize_stereo(tone.data(), tone.data(), tone.size(), rate, -3.0f, &left,
+                                         &right, &length);
         },
-        [&] { return r.left == nullptr && r.right == nullptr && r.length == 0; },
+        [&] { return left == nullptr && right == nullptr && length == 0; },
         [&] {
-          sonare_free_normalize_stereo_result(&r);
-          r = {};
+          sonare_free_floats(left);
+          sonare_free_floats(right);
+          left = nullptr;
+          right = nullptr;
+          length = 0;
         });
   }
 }

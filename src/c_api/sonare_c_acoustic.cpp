@@ -474,9 +474,9 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_room_morph_stereo(const float* left, const float* right, size_t length,
                                      int sample_rate, const SonareRoomMorphConfig* config,
-                                     SonareRoomMorphStereoResult* out) {
+                                     float** out_left, float** out_right, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
+  SONARE_C_ZERO_OUTS(out_left, out_right, out_length);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
   SonareError err = sonare_c_detail::validate_audio_params("room_morph_stereo", "left", left,
@@ -490,7 +490,9 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   require_struct_size(config->struct_size, sizeof(SonareRoomMorphConfig), "config",
                       "sonare_room_morph_config_init");
   check_room_morph_config(*config);
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_left);
+  SONARE_C_REQUIRE_NONNULL(out_right);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   const sonare::effects::acoustic::RoomMorphStereoResult result =
       with_c_names(kRoomMorphNames, [&] {
         return sonare::effects::acoustic::room_morph_stereo(
@@ -503,21 +505,15 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   std::unique_ptr<float[]> right_out(new float[n]);
   std::memcpy(left_out.get(), result.left.data(), n * sizeof(float));
   std::memcpy(right_out.get(), result.right.data(), n * sizeof(float));
-  out->left = sonare_c_detail::release_array(left_out);
-  out->right = sonare_c_detail::release_array(right_out);
-  out->length = n;
-  out->sample_rate = result.left.sample_rate();
+  *out_left = sonare_c_detail::release_array(left_out);
+  *out_right = sonare_c_detail::release_array(right_out);
+  *out_length = n;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_left);
+  SONARE_C_REQUIRE_NONNULL(out_right);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_STUB_NOT_SUPPORTED(left, right, length, sample_rate, config);
 #endif
-}
-
-void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result) {
-  if (!result) return;
-  delete[] result->left;
-  delete[] result->right;
-  *result = {};
 }

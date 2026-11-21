@@ -151,7 +151,7 @@ TEST_CASE("Removing a bus drops strip sends that targeted it", "[mixing][routing
   REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "reverb", "aux") == SONARE_OK);
-  SonareStrip* lead = sonare_mixer_add_strip(mixer, "lead");
+  SonareStrip* lead = sonare_mixer_add_strip(mixer, "lead", nullptr);
   REQUIRE(lead != nullptr);
   size_t send_index = 999;
   REQUIRE(sonare_strip_add_send(lead, "lead-to-verb", "reverb", -6.0f,
@@ -286,7 +286,7 @@ TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixin
     SonareStrip* bed_strip = sonare_mixer_strip_by_id(mixer, "bed");
     REQUIRE(bed_strip != nullptr);
     SonareMixMeterSnapshot meter{};
-    REQUIRE(sonare_strip_meter(bed_strip, &meter) == SONARE_OK);
+    REQUIRE(sonare_strip_meter(bed_strip, SONARE_METER_TAP_POST_FADER, &meter) == SONARE_OK);
     const double energy = block_energy({out_l.begin(), out_l.end()}, {out_r.begin(), out_r.end()});
     sonare_mixer_destroy(mixer);
     return std::pair<double, float>{energy, meter.gain_reduction_db};
@@ -392,7 +392,7 @@ TEST_CASE("Scene-loaded mixer exposes strip meter and goniometer snapshots", "[m
   }
 
   SonareMixMeterSnapshot meter{};
-  REQUIRE(sonare_strip_meter(strip, &meter) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &meter) == SONARE_OK);
   REQUIRE(meter.seq >= static_cast<uint64_t>(kBlocks));
   REQUIRE(meter.gain_reduction_db < -0.1f);
   REQUIRE(meter.max_true_peak_dbtp > sonare::constants::kFloorDb);

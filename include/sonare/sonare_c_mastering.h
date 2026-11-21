@@ -243,9 +243,10 @@ SonareError sonare_mastering_apply_processor_stereo(
 const char* sonare_mastering_preset_names(void);
 
 /// @brief Returns a built-in preset's chain configuration document.
-/// @details Same document shape as @ref sonare_mastering_assistant_suggest_chain_json:
-/// `{"version":2,"params":{...}}`, flat dot-notation keys plus the structured
-/// `dynamics.multibandComp` object, with every enum value by name. Flattened (nested members as
+/// @details The document is `{"version":2,"params":{...}}` (the shape of the
+/// @c chainConfig block of @ref sonare_mastering_assistant_suggest), flat dot-notation keys plus
+/// the structured `dynamics.multibandComp` object, with every enum value by name. Flattened (nested
+/// members as
 /// `.<member>`, list elements as `.<index>`, names as their values), the keys are the ones
 /// @c sonare_master_audio accepts as overrides.
 /// @param preset e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
@@ -266,6 +267,27 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_chain_config_from_json(const char* document, char** json_out);
 
+/// @brief Options for @ref sonare_master_audio and @ref sonare_master_audio_stereo. Start from
+///        @ref sonare_master_audio_options_init.
+/// @details No callback or user pointer is retained past the call: both callbacks run on the
+///          calling thread and nothing is stored once it returns.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_master_audio_options_init.
+  uint32_t struct_size;
+  /// Called with per-stage progress; NULL (the default) reports nothing.
+  SonareMasteringProgressCallback progress_callback;
+  /// Passed back to @c progress_callback unchanged. Default NULL.
+  void* progress_user_data;
+  /// Polled after each progress report; nonzero stops the run with SONARE_ERROR_CANCELLED and no
+  /// output buffers allocated. NULL (the default) never cancels.
+  SonareCancelCallback cancel_callback;
+  /// Passed back to @c cancel_callback unchanged. Default NULL.
+  void* cancel_user_data;
+} SonareMasterAudioOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_master_audio_options_init(SonareMasterAudioOptions* options);
+
 /// @brief Apply a preset chain, or the default chain, to mono audio.
 /// Restoration presets' repair stages, like every classical denoise
 /// configuration, can mistake a steady tone -- a calibration tone, a drone, a
@@ -275,6 +297,8 @@ SonareError sonare_mastering_chain_config_from_json(const char* document, char**
 ///   default chain.
 /// @param overrides_json NULL, or one JSON object overriding the chain @p preset names. A refusal
 ///   names the key under the root `overrides` and returns @c SONARE_ERROR_INVALID_PARAMETER.
+/// @param options NULL for the defaults (@ref sonare_master_audio_options_init): no progress, no
+///   cancellation.
 /// @details @p overrides_json is one JSON object, a flat (key/value) view of the
 ///   @c MasteringChainConfig hierarchy using dot-notation keys (see
 ///   @c parse_chain_config_params). Unknown keys cause
@@ -292,53 +316,14 @@ SonareError sonare_mastering_chain_config_from_json(const char* document, char**
 ///   is refused with the current key named.
 SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
                                 int sample_rate, const char* overrides_json,
+                                const SonareMasterAudioOptions* options,
                                 SonareMasteringChainResult* out);
 
 /// @brief Stereo equivalent of @c sonare_master_audio.
 SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
                                        size_t length, int sample_rate, const char* overrides_json,
+                                       const SonareMasterAudioOptions* options,
                                        SonareMasteringChainStereoResult* out);
-
-/// @brief Same as sonare_master_audio but reports per-stage progress.
-/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
-///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
-                                              size_t length, int sample_rate,
-                                              const char* overrides_json,
-                                              SonareMasteringProgressCallback callback,
-                                              void* user_data, SonareMasteringChainResult* out);
-
-/// @brief Cancellation-capable equivalent of @ref sonare_master_audio_with_progress.
-/// @details When @p cancel_cb returns nonzero after a progress report, returns
-///          @c SONARE_ERROR_CANCELLED and leaves @p out without allocated output buffers.
-/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
-///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
-///   calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_with_progress_ex(
-    const char* preset, const float* samples, size_t length, int sample_rate,
-    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
-
-/// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
-/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
-///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_stereo_with_progress(const char* preset, const float* left,
-                                                     const float* right, size_t length,
-                                                     int sample_rate, const char* overrides_json,
-                                                     SonareMasteringProgressCallback callback,
-                                                     void* user_data,
-                                                     SonareMasteringChainStereoResult* out);
-
-/// @brief Cancellation-capable equivalent of
-///        @ref sonare_master_audio_stereo_with_progress.
-/// @details On cancellation, @p out has no allocated output buffers.
-/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
-///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
-///   calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_stereo_with_progress_ex(
-    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief The mono processor ids this build supports, separated by '\n'.
 /// @details Backed by thread-local storage built once on first use; the pointer
@@ -620,74 +605,44 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
 SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
                                         int* out_is_enum, double* out_value);
 
-/// @details @ref SonareMasteringResult::non_finite_substitution_count here:
-///   whether this can be non-zero depends on which processor was named. One
-///   that does not substitute reports zero because it has nothing to replace
-///   with, not because nothing needed replacing.
+/// @brief Apply a two-input "match.*" processor; source and reference each at their own length
+///        and rate, since a reference master is commonly neither.
+/// @details A reference at another rate is resampled onto @p sample_rate before processing
+///   (equal rates take no resample pass), so the output is at @p sample_rate.
+///   @ref SonareMasteringResult::non_finite_substitution_count depends on which processor was
+///   named: one that does not substitute reports zero because it has nothing to replace with,
+///   not because nothing needed replacing.
+/// @param reference_sample_rate Rate of @p reference.
+/// @param sample_rate Rate of @p source and of the output.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
-                                                  const float* reference, size_t length,
-                                                  int sample_rate,
+                                                  size_t source_length, const float* reference,
+                                                  size_t reference_length,
+                                                  int reference_sample_rate, int sample_rate,
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, SonareMasteringResult* out);
 
-/// @brief Apply a two-input "match.*" processor with independent source and
-/// reference lengths and rates. Reference masters are commonly a different
-/// length and rate than the source; the underlying match primitives consume each
-/// buffer at its own length. @ref sonare_mastering_apply_pair_processor
-/// delegates here with reference_length == length and one rate.
-/// @details A reference at another rate is resampled onto @p sample_rate before
-///   processing (equal rates take no resample pass), so the output is at
-///   @p sample_rate. See @c sonare_mastering_apply_pair_processor for
-///   @c non_finite_substitution_count semantics.
-/// @param reference_sample_rate Rate of @p reference; must be > 0.
-/// @param sample_rate Rate of @p source and of the output; must be > 0.
-/// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
-SonareError sonare_mastering_apply_pair_processor_ex(
-    const char* processor, const float* source, size_t source_length, const float* reference,
-    size_t reference_length, int reference_sample_rate, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out);
-
-/// @brief Stereo counterpart of the pair processor API.
-/// @details Supports match.abCrossfade. The same linear mix is applied to both
-/// channels; other pair processor names are rejected. Output length is the
-/// shorter input length. Free the result with sonare_free_mastering_stereo_result.
-SonareError sonare_mastering_apply_pair_processor_stereo(
-    const char* processor, const float* source_left, const float* source_right,
-    const float* reference_left, const float* reference_right, size_t length, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
-
-/// @brief Stereo pair processing with independent source and reference lengths
-/// and rates.
-/// @details Each stereo input must have equally sized left and right planes. A
-/// reference at @p reference_sample_rate other than @p sample_rate is resampled
-/// onto @p sample_rate first (both must be > 0).
-/// See sonare_mastering_apply_pair_processor_stereo for supported processors.
+/// @brief Stereo counterpart of @ref sonare_mastering_apply_pair_processor.
+/// @details Supports match.abCrossfade; other pair processor names are refused. The same
+/// linear mix is applied to both channels. Each stereo input must have equally sized left and
+/// right planes, and a reference at another rate is resampled onto @p sample_rate first.
 /// Free the result with sonare_free_mastering_stereo_result.
-SonareError sonare_mastering_apply_pair_processor_stereo_ex(
+SonareError sonare_mastering_apply_pair_processor_stereo(
     const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
-/// @note Free @p json_out with @ref sonare_free_string.
-SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
-                                          const float* reference, size_t length, int sample_rate,
-                                          const SonareMasteringParam* params, size_t param_count,
-                                          char** json_out);
-
-/// @brief Analyze a two-input "match.*" analysis with independent source and
-/// reference lengths and rates. See @ref sonare_mastering_apply_pair_processor_ex.
-/// @ref sonare_mastering_analyze_pair delegates here with
-/// reference_length == length and one rate.
+/// @brief Analyze a two-input "match.*" analysis; source and reference each at their own length
+///        and rate, as @ref sonare_mastering_apply_pair_processor.
 /// @details A reference at another rate is resampled onto @p sample_rate first, so
 ///   @c match.estimateReferenceDelaySamples reports a delay in source-rate samples.
 /// @note Free @p json_out with @ref sonare_free_string.
-SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* source,
-                                             size_t source_length, const float* reference,
-                                             size_t reference_length, int reference_sample_rate,
-                                             int sample_rate, const SonareMasteringParam* params,
-                                             size_t param_count, char** json_out);
+SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
+                                          size_t source_length, const float* reference,
+                                          size_t reference_length, int reference_sample_rate,
+                                          int sample_rate, const SonareMasteringParam* params,
+                                          size_t param_count, char** json_out);
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,
@@ -730,13 +685,13 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
 /// out_match reports the maximum true peak across both matched channels.
 /// Silence follows the mono API's zero-gain fallback. A reference at
 /// reference_sample_rate other than sample_rate is resampled onto sample_rate and
-/// measured there; both must be > 0. Free the result with
-/// sonare_free_mastering_stereo_result. out_match may be NULL.
+/// measured there; both must be > 0. Both channels are heap-allocated and
+/// released with sonare_free_floats. out_match may be NULL.
 SonareError sonare_mastering_ab_match_loudness_stereo(
     const float* source_left, const float* source_right, size_t source_length,
     const float* reference_left, const float* reference_right, size_t reference_length,
-    int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
-    SonareLoudnessMatch* out_match);
+    int reference_sample_rate, int sample_rate, float** out_left, float** out_right,
+    size_t* out_length, SonareLoudnessMatch* out_match);
 
 /// @brief One delivery platform: a loudness target and a true-peak ceiling.
 typedef struct {
@@ -782,9 +737,9 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
 /// @details Runs the offline chain described by @p config_json up to its loudness
 /// stage and measures there, so @c loudness_static_gain_db equals the gain the
 /// offline chain applies (ceiling clamp included) and @c true_peak_dbtp is the
-/// peak that clamp used. Pass them as @p loudness_static_gain_db and
-/// @p loudness_static_gain_peak_dbtp of
-/// @ref sonare_streaming_mastering_chain_create_ex. The gain is computed from
+/// peak that clamp used. Pass them as the @c loudness_static_gain_db and
+/// @c loudness_static_gain_peak_dbtp members of @ref SonareStreamingMasteringChainOptions.
+/// The gain is computed from
 /// the @c loudness.* params whether or not the stage is enabled.
 /// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
 ///   the keys @ref sonare_master_audio takes as overrides. A refusal names the key under the root
@@ -845,31 +800,6 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       size_t length, int sample_rate,
                                                       const SonareMasteringParam* params,
                                                       size_t param_count, char** json_out);
-
-/// @brief As @ref sonare_mastering_assistant_suggest, but writes only the chain
-///        configuration the mastering chain consumes.
-/// @details The fuller document carries an explanation and a
-/// profile alongside the configuration, so a caller that wants to apply a
-/// suggestion has to dig the configuration out of it. This writes that
-/// configuration alone, in the core's own canonical serialization. The document's
-/// @c chainConfig block nests the same configuration as a parsed object rather
-/// than this text, so the two agree as JSON and not as bytes.
-/// @p params accepts the same keys as
-/// @ref sonare_mastering_assistant_suggest. One analysis pass, as there.
-/// The returned string must be released with sonare_free_string().
-SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, size_t length,
-                                                          int sample_rate,
-                                                          const SonareMasteringParam* params,
-                                                          size_t param_count, char** json_out);
-
-/// @brief Stereo counterpart of @ref sonare_mastering_assistant_suggest_chain_json.
-/// @details Profiles the pair the way @ref sonare_mastering_assistant_suggest_stereo
-/// does, so the loudness stage of the suggested chain is built on the
-/// channel-summed program rather than a downmix that reads roughly 6 dB low.
-/// The returned string must be released with sonare_free_string().
-SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
-    const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count, char** json_out);
 
 /// @brief Analyze audio and return mastering assistant profile JSON.
 /// @details @p params accepts nFft, hopLength, truePeakOversample, and
@@ -970,20 +900,14 @@ void sonare_eq_clear(SonareEq* eq);
 /// @param mode One of @c SONARE_EQ_PHASE_ZERO_LATENCY,
 /// @c SONARE_EQ_PHASE_NATURAL, or @c SONARE_EQ_PHASE_LINEAR.
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode);
-/// @brief Configures bands that match @p source to @p reference.
-/// @details Both mono buffers contain @p length samples at @p sample_rate;
-/// @p max_bands must be in [1, SONARE_EQ_MAX_BANDS]. Delegates to
-/// @ref sonare_eq_match_ex with one length and one rate.
-SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
-                            size_t length, int sample_rate, int max_bands);
-/// @brief Configures bands that match @p source to @p reference, each buffer at
-///        its own length and rate.
-/// @details A @p reference at another rate is resampled onto @p sample_rate before
-/// its spectrum is taken; equal rates take no resample pass. Both rates must be
-/// > 0 and @p max_bands in [1, SONARE_EQ_MAX_BANDS].
-SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_length,
-                               int sample_rate, const float* reference, size_t reference_length,
-                               int reference_sample_rate, int max_bands);
+/// @brief Configures bands that match @p source to @p reference, each buffer at its own length
+///        and rate.
+/// @details A @p reference at another rate is resampled onto @p sample_rate before its spectrum
+/// is taken; equal rates take no resample pass. @p max_bands must be in
+/// [1, SONARE_EQ_MAX_BANDS].
+SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_length,
+                            int sample_rate, const float* reference, size_t reference_length,
+                            int reference_sample_rate, int max_bands);
 /// @brief Enables or disables automatic output-gain compensation. Accepts NULL.
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
 /// @brief Returns the automatic gain applied by the latest process call, or zero for NULL.
@@ -1085,41 +1009,40 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
 /// @brief Opaque streaming mastering chain handle.
 typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
 
+/// @brief Options for @ref sonare_streaming_mastering_chain_create. Start from
+///        @ref sonare_streaming_mastering_chain_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_streaming_mastering_chain_options_init.
+  uint32_t struct_size;
+  /// Static gain (dB) applied per block before the loudness stage's true-peak limiter, measured
+  /// at the loudness stage's input (@ref sonare_streaming_loudness_gain returns it). NaN (the
+  /// default) is not given: a config enabling the loudness stage is then refused, because the
+  /// streaming chain cannot measure whole-signal integrated LUFS.
+  float loudness_static_gain_db;
+  /// True peak (dBTP) of the loudness stage's input the static gain was computed for. When
+  /// given, the static gain is clamped to `(ceiling_dbtp - peak_dbtp) +
+  /// max(max_limiter_gain_reduction_db, 0)`, the clamp the offline chain applies, so the
+  /// preview does not overdrive the loudness limiter. NaN (the default) applies the static gain
+  /// verbatim.
+  float loudness_static_gain_peak_dbtp;
+} SonareStreamingMasteringChainOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_streaming_mastering_chain_options_init(SonareStreamingMasteringChainOptions* options);
+
 /// @brief Create a streaming chain from a configuration object.
 /// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
 ///   the keys @ref sonare_master_audio takes as overrides; a refusal names the key under the
 ///   root `config` and returns @c SONARE_ERROR_INVALID_PARAMETER.
-/// @details Fails on an unknown key or a non-streaming stage. When the config enables the
-/// loudness stage this fails (the streaming chain cannot measure whole-signal
-/// integrated LUFS); use @ref sonare_streaming_mastering_chain_create_ex to run
-/// a loudness-enabled chain with a caller-precomputed static gain.
+/// @details Fails on an unknown key or a non-streaming stage, and on a config enabling the
+///   loudness stage unless @p options gives its static gain.
+/// @param options NULL for the defaults (@ref sonare_streaming_mastering_chain_options_init).
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy, which must be called exactly once.
 /// @return SONARE_OK, or the error code describing the failure.
-SonareError sonare_streaming_mastering_chain_create(const char* config_json,
-                                                    SonareStreamingMasteringChain** out);
-
-/// @brief Create a streaming chain with a precomputed loudness static gain.
-/// @details Identical to @ref sonare_streaming_mastering_chain_create except
-/// that when the config enables the loudness stage, @p loudness_static_gain_db
-/// (measured at the loudness stage's input, which
-/// @ref sonare_streaming_loudness_gain returns) is applied per block
-/// before the loudness stage's true-peak limiter instead of throwing.
-/// Pass NaN to reproduce the fail-on-loudness behaviour of the non-_ex create.
-/// @param loudness_static_gain_peak_dbtp True peak (dBTP) of the loudness stage's
-///        input the static gain was computed for. When finite, the static gain
-///        is clamped to `(ceiling_dbtp - peak_dbtp) +
-///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
-///        not overdrive the loudness limiter harder than the offline chain
-///        (which applies the same clamp). Pass NaN to apply the static gain
-///        verbatim (no clamp).
-/// @param out Receives the handle on success, NULL on failure; destroy with
-///        @ref sonare_streaming_mastering_chain_destroy.
-/// @return SONARE_OK, or the error code describing the failure.
-SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
-                                                       float loudness_static_gain_db,
-                                                       float loudness_static_gain_peak_dbtp,
-                                                       SonareStreamingMasteringChain** out);
+SonareError sonare_streaming_mastering_chain_create(
+    const char* config_json, const SonareStreamingMasteringChainOptions* options,
+    SonareStreamingMasteringChain** out);
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
 /// @details @p max_block_size 0 selects the library default (128 frames); a negative value
@@ -1517,6 +1440,16 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_denoise_result(SonareDenoiseResult* result);
 
+/// @brief The channels of a channel-linked denoise pass and the one report they share.
+/// @details @c channels and every plane in it are heap-allocated; release with
+///   @ref sonare_free_denoise_linked_result.
+typedef struct {
+  float** channels;     ///< @c num_channels planes of @c length samples each, heap-allocated.
+  size_t num_channels;  ///< Number of channels.
+  size_t length;        ///< Samples per channel.
+  SonareDenoiseReport report;  ///< The one report for the channel-linked mask.
+} SonareDenoiseLinkedResult;
+
 /// @brief Denoises any number of channels with one channel-linked gain mask.
 /// @details The N-channel form of
 ///   @ref sonare_mastering_repair_denoise_classical_stereo, carrying the same
@@ -1539,14 +1472,15 @@ void sonare_free_denoise_result(SonareDenoiseResult* result);
 ///        way to express the disagreement the core rejects.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Pass NULL to use library defaults.
-/// @param out_channels @p num_channels caller-owned buffers of @p length floats
-///        each, written in place. Unlike the stereo entry nothing is allocated
-///        here, so nothing needs releasing; a rejected call leaves them untouched.
-/// @param out_report Receives the one report the set shares. Must not be NULL.
+/// @param out Receives the channels and the one report the set shares;
+///        release with @ref sonare_free_denoise_linked_result.
 SonareError sonare_mastering_repair_denoise_classical_linked(
     const float* const* channels, size_t num_channels, size_t length, int sample_rate,
-    const SonareDenoiseClassicalConfig* config, float* const* out_channels,
-    SonareDenoiseReport* out_report);
+    const SonareDenoiseClassicalConfig* config, SonareDenoiseLinkedResult* out);
+
+/// @brief Release every channel of a @ref SonareDenoiseLinkedResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_denoise_linked_result(SonareDenoiseLinkedResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
@@ -2018,6 +1952,16 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_dereverb_result(SonareDereverbResult* result);
 
+/// @brief The channels of a channel-linked dereverb pass and the one report they share.
+/// @details @c channels and every plane in it are heap-allocated; release with
+///   @ref sonare_free_dereverb_linked_result.
+typedef struct {
+  float** channels;     ///< @c num_channels planes of @c length samples each, heap-allocated.
+  size_t num_channels;  ///< Number of channels.
+  size_t length;        ///< Samples per channel.
+  SonareDereverbReport report;  ///< The one report for the channel-linked mask.
+} SonareDereverbLinkedResult;
+
 /// @brief Dereverberates any number of channels with one channel-linked mask.
 /// @details The N-channel form of
 ///   @ref sonare_mastering_repair_dereverb_classical_stereo. Both stages are
@@ -2040,14 +1984,15 @@ void sonare_free_dereverb_result(SonareDereverbResult* result);
 ///        way to express the disagreement the core rejects.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Pass NULL to use library defaults.
-/// @param out_channels @p num_channels caller-owned buffers of @p length floats
-///        each, written in place. Unlike the stereo entry nothing is allocated
-///        here, so nothing needs releasing; a rejected call leaves them untouched.
-/// @param out_report Receives the one report the set shares. Must not be NULL.
+/// @param out Receives the channels and the one report the set shares;
+///        release with @ref sonare_free_dereverb_linked_result.
 SonareError sonare_mastering_repair_dereverb_classical_linked(
     const float* const* channels, size_t num_channels, size_t length, int sample_rate,
-    const SonareDereverbClassicalConfig* config, float* const* out_channels,
-    SonareDereverbReport* out_report);
+    const SonareDereverbClassicalConfig* config, SonareDereverbLinkedResult* out);
+
+/// @brief Release every channel of a @ref SonareDereverbLinkedResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_dereverb_linked_result(SonareDereverbLinkedResult* result);
 
 /// @brief Applies a room estimate to a dereverb config IN PLACE: overwrites the
 ///        two fields a measurement determines and leaves the rest alone.

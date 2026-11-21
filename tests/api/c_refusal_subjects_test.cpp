@@ -542,9 +542,11 @@ TEST_CASE("the effects and metering entries refuse their own members", "[c_api][
   float *w = nullptr, *h = nullptr;
   size_t w_length = 0, h_length = 0;
   const auto decompose = [&](int n_features, int n_frames, int n_components, int n_iter) {
-    CHECK(sonare_decompose_with_init(s.data(), n_features, n_frames, n_components, n_iter, 2.0f,
-                                     "random", &w, &w_length, &h,
-                                     &h_length) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareDecomposeOptions options;
+    sonare_decompose_options_init(&options);
+    options.init = "random";
+    CHECK(sonare_decompose(s.data(), n_features, n_frames, n_components, n_iter, 2.0f, &options, &w,
+                           &w_length, &h, &h_length) == SONARE_ERROR_INVALID_PARAMETER);
     return last_message();
   };
   CHECK(decompose(0, 4, 2, 5) == "n_features must be an integer in [1, 2147483647]");
@@ -712,7 +714,7 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          SonareInverseResult out{};
          sonare_mel_to_stft(nullptr, 4, 2, 2, 22050, 2048, 0.0f, 0.0f, nullptr, &out);
        }}},
-      // The entry passes the three metering flags as constants; only the _ex form takes them.
+      // The entry passes the three metering flags as constants; only the options struct takes them.
       {"mixer_add_strip.enable_metering", {nullptr}},
       {"mixer_add_strip.measure_lufs", {nullptr}},
       {"mixer_add_strip.measure_true_peak", {nullptr}},
@@ -801,13 +803,13 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       {"stream_analyzer_reset.base_sample_offset", {nullptr}},
       {"strip_remove_send.index", {[] {
          const MixerPtr mixer = new_mixer();
-         SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), "strip");
+         SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), "strip", nullptr);
          REQUIRE(strip != nullptr);
          sonare_strip_remove_send(strip, 0);
        }}},
       {"strip_set_send_db.index", {[] {
          const MixerPtr mixer = new_mixer();
-         SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), "strip");
+         SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), "strip", nullptr);
          REQUIRE(strip != nullptr);
          sonare_strip_set_send_db(strip, 0, 0.0f);
        }}},

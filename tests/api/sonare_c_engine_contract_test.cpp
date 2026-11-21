@@ -544,7 +544,7 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(refused_eq == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     SonareStreamingMasteringChain* refused_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create("{", &refused_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create("{", nullptr, &refused_chain) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_chain == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("config") != std::string::npos);
@@ -607,12 +607,15 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
     REQUIRE(mixer != nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_OK);
 
-    REQUIRE(sonare_mixer_add_strip_ex(nullptr, "a", 1, 1, 1, 0) == nullptr);
+    REQUIRE(sonare_mixer_add_strip(nullptr, "a", nullptr) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mixer_add_strip_ex(mixer, "a", 1, 1, 1, 17) == nullptr);
+    SonareMixerAddStripOptions bad_oversample;
+    sonare_mixer_add_strip_options_init(&bad_oversample);
+    bad_oversample.true_peak_oversample = 17;
+    REQUIRE(sonare_mixer_add_strip(mixer, "a", &bad_oversample) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
-    REQUIRE(sonare_mixer_add_strip(mixer, "a") == nullptr);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 
     REQUIRE(sonare_mixer_strip_at(mixer, 1) == nullptr);
@@ -642,7 +645,7 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
     REQUIRE(refused_eq == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
     SonareStreamingMasteringChain* refused_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create("{", &refused_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create("{", nullptr, &refused_chain) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_chain == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);

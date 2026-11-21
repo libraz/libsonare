@@ -1,6 +1,7 @@
 /// @file sonare_c_mastering_repair_test.cpp
 /// @brief Mastering repair and dynamics C API tests.
 
+#include <algorithm>
 #include <string>
 
 #include "c_api/sonare_c_last_refusal.h"
@@ -441,6 +442,85 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
   }
 }
 
+namespace {
+
+// Runs the channel-linked entry and copies its channels into caller planes, so a
+// case can compare against the mono and stereo entries plane for plane. The
+// report is always copied, which is zeroed by a refusal; planes only on success.
+template <typename LinkedResult, typename Config, typename Report, typename Fn, typename Free>
+SonareError linked_into(Fn run, Free release, const float* const* channels, size_t num_channels,
+                        size_t length, int sample_rate, const Config* config,
+                        float* const* out_channels, Report* out_report) {
+  LinkedResult result{};
+  const SonareError error = run(channels, num_channels, length, sample_rate, config, &result);
+  if (error == SONARE_OK) {
+    REQUIRE(result.num_channels == num_channels);
+    REQUIRE(result.length == length);
+    for (size_t c = 0; c < num_channels; ++c) {
+      std::copy(result.channels[c], result.channels[c] + length, out_channels[c]);
+    }
+  }
+  *out_report = result.report;
+  release(&result);
+  return error;
+}
+
+SonareError denoise_linked_into(const float* const* channels, size_t num_channels, size_t length,
+                                int sample_rate, const SonareDenoiseClassicalConfig* config,
+                                float* const* out_channels, SonareDenoiseReport* out_report) {
+  return linked_into<SonareDenoiseLinkedResult>(
+      sonare_mastering_repair_denoise_classical_linked, sonare_free_denoise_linked_result, channels,
+      num_channels, length, sample_rate, config, out_channels, out_report);
+}
+
+SonareError dereverb_linked_into(const float* const* channels, size_t num_channels, size_t length,
+                                 int sample_rate, const SonareDereverbClassicalConfig* config,
+                                 float* const* out_channels, SonareDereverbReport* out_report) {
+  return linked_into<SonareDereverbLinkedResult>(
+      sonare_mastering_repair_dereverb_classical_linked, sonare_free_dereverb_linked_result,
+      channels, num_channels, length, sample_rate, config, out_channels, out_report);
+}
+
+}  // namespace
+
+TEST_CASE("sonare_mastering_repair_linked_result owns its planes and clears on refusal",
+          "[c_api][mastering]") {
+  const std::vector<float> tone = generate_sine(440.0f, 22050, 0.5f);
+  const float* in[2] = {tone.data(), tone.data()};
+
+  SonareDenoiseLinkedResult denoise{};
+  REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 2, tone.size(), 22050, nullptr,
+                                                           &denoise) == SONARE_OK);
+  REQUIRE(denoise.channels != nullptr);
+  CHECK(denoise.num_channels == 2);
+  CHECK(denoise.length == tone.size());
+  CHECK(denoise.channels[0] != denoise.channels[1]);
+  sonare_free_denoise_linked_result(&denoise);
+  CHECK(denoise.channels == nullptr);
+  CHECK(denoise.num_channels == 0);
+  sonare_free_denoise_linked_result(&denoise);
+  sonare_free_denoise_linked_result(nullptr);
+
+  SonareDereverbLinkedResult dereverb{};
+  REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 2, tone.size(), 22050, nullptr,
+                                                            &dereverb) == SONARE_OK);
+  REQUIRE(dereverb.channels != nullptr);
+  CHECK(dereverb.num_channels == 2);
+  sonare_free_dereverb_linked_result(&dereverb);
+  CHECK(dereverb.channels == nullptr);
+
+  SonareDenoiseLinkedResult refused{};
+  refused.num_channels = 9;
+  CHECK(sonare_mastering_repair_denoise_classical_linked(
+            in, 0, tone.size(), 22050, nullptr, &refused) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refused.channels == nullptr);
+  CHECK(refused.num_channels == 0);
+  CHECK(sonare_mastering_repair_denoise_classical_linked(
+            in, 2, tone.size(), 22050, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_mastering_repair_dereverb_classical_linked(
+            in, 2, tone.size(), 22050, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering]") {
   const int sr = 22050;
   const auto tone = generate_sine(440.0f, sr, 1.0f);
@@ -468,8 +548,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* in[1] = {noisy.data()};
     float* outs[1] = {plane.data()};
     SonareDenoiseReport report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, length, sr, nullptr, outs,
-                                                             &report) == SONARE_OK);
+    REQUIRE(denoise_linked_into(in, 1, length, sr, nullptr, outs, &report) == SONARE_OK);
 
     SonareDenoiseResult mono{};
     REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), length, sr, nullptr, &mono) ==
@@ -489,8 +568,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* in[2] = {noisy.data(), other.data()};
     float* outs[2] = {first.data(), second.data()};
     SonareDenoiseReport report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 2, length, sr, nullptr, outs,
-                                                             &report) == SONARE_OK);
+    REQUIRE(denoise_linked_into(in, 2, length, sr, nullptr, outs, &report) == SONARE_OK);
 
     SonareDenoiseStereoResult pair{};
     REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), other.data(), length, sr,
@@ -520,15 +598,14 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* three_in[3] = {noisy.data(), noisy.data(), noisy.data()};
     float* three_out[3] = {a.data(), b.data(), c.data()};
     SonareDenoiseReport tripled{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(three_in, 3, length, sr, nullptr,
-                                                             three_out, &tripled) == SONARE_OK);
+    REQUIRE(denoise_linked_into(three_in, 3, length, sr, nullptr, three_out, &tripled) ==
+            SONARE_OK);
 
     std::vector<float> single_plane(length, 0.0f);
     const float* one_in[1] = {noisy.data()};
     float* one_out[1] = {single_plane.data()};
     SonareDenoiseReport single{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(one_in, 1, length, sr, nullptr,
-                                                             one_out, &single) == SONARE_OK);
+    REQUIRE(denoise_linked_into(one_in, 1, length, sr, nullptr, one_out, &single) == SONARE_OK);
 
     // Pinned before the difference, because two floors agreeing on a sentinel
     // would satisfy any relation between them while measuring nothing.
@@ -559,8 +636,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* first_in[3] = {noisy.data(), silence.data(), silence.data()};
     float* first_out[3] = {a0.data(), a1.data(), a2.data()};
     SonareDenoiseReport first_report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                first_in, 3, length, sr, nullptr, first_out, &first_report) == SONARE_OK);
+    REQUIRE(denoise_linked_into(first_in, 3, length, sr, nullptr, first_out, &first_report) ==
+            SONARE_OK);
 
     std::vector<float> b0(length, 0.0f);
     std::vector<float> b1(length, 0.0f);
@@ -568,8 +645,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* middle_in[3] = {silence.data(), noisy.data(), silence.data()};
     float* middle_out[3] = {b0.data(), b1.data(), b2.data()};
     SonareDenoiseReport middle_report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                middle_in, 3, length, sr, nullptr, middle_out, &middle_report) == SONARE_OK);
+    REQUIRE(denoise_linked_into(middle_in, 3, length, sr, nullptr, middle_out, &middle_report) ==
+            SONARE_OK);
 
     REQUIRE(first_report.detected.floor_dbfs == middle_report.detected.floor_dbfs);
     REQUIRE(max_abs(a0.data(), length) > 0.01f);
@@ -590,8 +667,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     const float* in[1] = {tiny.data()};
     float* outs[1] = {plane.data()};
     SonareDenoiseReport report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, tiny.size(), sr, nullptr, outs,
-                                                             &report) == SONARE_OK);
+    REQUIRE(denoise_linked_into(in, 1, tiny.size(), sr, nullptr, outs, &report) == SONARE_OK);
     for (float sample : plane) {
       REQUIRE(std::isfinite(sample));
       REQUIRE(sample != kSentinel);
@@ -606,12 +682,10 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     SonareDenoiseReport report{};
 
     const float* second_null[3] = {noisy.data(), nullptr, noisy.data()};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(second_null, 3, length, sr, nullptr,
-                                                             outs, &report) ==
+    REQUIRE(denoise_linked_into(second_null, 3, length, sr, nullptr, outs, &report) ==
             SONARE_ERROR_INVALID_PARAMETER);
     const float* last_null[3] = {noisy.data(), noisy.data(), nullptr};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(last_null, 3, length, sr, nullptr,
-                                                             outs, &report) ==
+    REQUIRE(denoise_linked_into(last_null, 3, length, sr, nullptr, outs, &report) ==
             SONARE_ERROR_INVALID_PARAMETER);
     // A non-finite sample in a channel past the first, likewise: every channel
     // goes through the same validation rather than only the one the length and
@@ -619,31 +693,21 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     std::vector<float> tainted = noisy;
     tainted[10] = std::numeric_limits<float>::quiet_NaN();
     const float* second_nan[3] = {noisy.data(), tainted.data(), noisy.data()};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(second_nan, 3, length, sr, nullptr,
-                                                             outs, &report) ==
+    REQUIRE(denoise_linked_into(second_nan, 3, length, sr, nullptr, outs, &report) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  SECTION("refuses a missing plane, an empty set and a missing report") {
+  SECTION("refuses an empty set, a missing set and a bad rate") {
     std::vector<float> plane(length, 0.0f);
     const float* in[2] = {noisy.data(), noisy.data()};
-    float* missing_second[2] = {plane.data(), nullptr};
     SonareDenoiseReport report{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 2, length, sr, nullptr,
-                                                             missing_second, &report) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-
     float* outs[2] = {plane.data(), plane.data()};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 0, length, sr, nullptr, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                nullptr, 2, length, sr, nullptr, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 2, length, sr, nullptr, nullptr, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 2, length, sr, nullptr, outs, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 2, length, 0, nullptr, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(denoise_linked_into(in, 0, length, sr, nullptr, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(denoise_linked_into(nullptr, 2, length, sr, nullptr, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(denoise_linked_into(in, 2, length, 0, nullptr, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
 
     // The same config pre-check the mono and stereo entries carry, so the three
     // agree on which configs they reject before the core ever sees them.
@@ -651,12 +715,12 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     sonare_denoise_classical_config_init(&bad);
     bad.n_fft = 1000;  // not a power of two
     bad.hop_length = 256;
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(denoise_linked_into(in, 2, length, sr, &bad, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     bad.n_fft = 1024;
     bad.hop_length = 0;
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(denoise_linked_into(in, 2, length, sr, &bad, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -1528,8 +1592,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* in[1] = {reverberant.data()};
     float* outs[1] = {plane.data()};
     SonareDereverbReport report{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 1, length, sr, &base, outs,
-                                                              &report) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(in, 1, length, sr, &base, outs, &report) == SONARE_OK);
 
     SonareDereverbResult mono{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(reverberant.data(), length, sr, &base,
@@ -1548,8 +1611,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* in[2] = {reverberant.data(), other.data()};
     float* outs[2] = {first.data(), second.data()};
     SonareDereverbReport report{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 2, length, sr, &base, outs,
-                                                              &report) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(in, 2, length, sr, &base, outs, &report) == SONARE_OK);
 
     SonareDereverbStereoResult pair{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
@@ -1575,15 +1637,13 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* three_in[3] = {reverberant.data(), reverberant.data(), reverberant.data()};
     float* three_out[3] = {a.data(), b.data(), c.data()};
     SonareDereverbReport tripled{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(three_in, 3, length, sr, &base,
-                                                              three_out, &tripled) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(three_in, 3, length, sr, &base, three_out, &tripled) == SONARE_OK);
 
     std::vector<float> single_plane(length, 0.0f);
     const float* one_in[1] = {reverberant.data()};
     float* one_out[1] = {single_plane.data()};
     SonareDereverbReport single{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(one_in, 1, length, sr, &base, one_out,
-                                                              &single) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(one_in, 1, length, sr, &base, one_out, &single) == SONARE_OK);
 
     // Pinned first: an implementation reporting a constant zero satisfies every
     // equality below.
@@ -1620,8 +1680,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* in[3] = {reverberant.data(), reverberant.data(), reverberant.data()};
     float* outs[3] = {a.data(), b.data(), c.data()};
     SonareDereverbReport on{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 3, length, sr, &wpe, outs, &on) ==
-            SONARE_OK);
+    REQUIRE(dereverb_linked_into(in, 3, length, sr, &wpe, outs, &on) == SONARE_OK);
     REQUIRE(on.detected.has_late_predictability == 1u);
     REQUIRE(on.detected.late_predictability > 0.0f);
     REQUIRE(on.wpe_predictor_norm > 0.0f);
@@ -1634,8 +1693,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     }
 
     SonareDereverbReport off{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 3, length, sr, &base, outs,
-                                                              &off) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(in, 3, length, sr, &base, outs, &off) == SONARE_OK);
     REQUIRE(off.detected.has_late_predictability == 0u);
     REQUIRE(off.detected.late_predictability == 0.0f);
     REQUIRE(off.wpe_predictor_norm == 0.0f);
@@ -1647,8 +1705,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* in[1] = {tiny.data()};
     float* outs[1] = {plane.data()};
     SonareDereverbReport report{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 1, tiny.size(), sr, &base, outs,
-                                                              &report) == SONARE_OK);
+    REQUIRE(dereverb_linked_into(in, 1, tiny.size(), sr, &base, outs, &report) == SONARE_OK);
 
     SonareDenoiseClassicalConfig denoise;
 
@@ -1665,8 +1722,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     denoise.speech_presence_gain = 1;
     denoise.gain_smoothing = 1;
     SonareDenoiseReport padded{};
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, tiny.size(), sr, &denoise, outs,
-                                                             &padded) == SONARE_OK);
+    REQUIRE(denoise_linked_into(in, 1, tiny.size(), sr, &denoise, outs, &padded) == SONARE_OK);
   }
 
   SECTION("a refusal leaves the caller's planes alone") {
@@ -1676,8 +1732,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     float* outs[2] = {plane.data(), plane.data()};
     SonareDereverbReport report{};
     report.mean_reduction_db = 99.0f;
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                in, 2, length, sr, &base, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(in, 2, length, sr, &base, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     // Nothing is allocated here, so a refusal has no result to clear -- the
     // planes are the caller's and must come back as they were handed over.
     for (float sample : plane) {
@@ -1686,30 +1742,22 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     CHECK(report.mean_reduction_db == 0.0f);
 
     const float* good[2] = {reverberant.data(), reverberant.data()};
-    float* missing_second[2] = {plane.data(), nullptr};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(good, 2, length, sr, &base,
-                                                              missing_second, &report) ==
+    REQUIRE(dereverb_linked_into(good, 0, length, sr, &base, outs, &report) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 0, length, sr, &base, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                nullptr, 2, length, sr, &base, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 2, length, sr, &base, nullptr, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 2, length, sr, &base, outs, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 2, length, 0, &base, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(nullptr, 2, length, sr, &base, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(good, 2, length, 0, &base, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
 
     SonareDereverbClassicalConfig bad = base;
     bad.n_fft = 1500;  // not a power of two
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(good, 2, length, sr, &bad, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     // Bounded by n_fft here, where the denoise entry only requires it positive.
     bad.n_fft = 1024;
     bad.hop_length = 2048;
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                good, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(good, 2, length, sr, &bad, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("hop_length above n_fft is refused by the shared pre-check on all three entries") {
@@ -1733,8 +1781,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     const float* in[2] = {reverberant.data(), other.data()};
     float* outs[2] = {left.data(), right.data()};
     SonareDereverbReport report{};
-    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
-                in, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(dereverb_linked_into(in, 2, length, sr, &bad, outs, &report) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) ==
           "config.hop_length must be an integer in [1, 512]");
   }
@@ -1754,9 +1802,8 @@ TEST_CASE("sonare_mastering_repair_linked_rejects_impossible_channel_count", "[c
     report.mean_reduction_db = 92.0f;
     SonareError error = SONARE_OK;
 
-    REQUIRE_NOTHROW(
-        error = sonare_mastering_repair_denoise_classical_linked(
-            channels, impossible_channel_count, 1, 22050, nullptr, out_channels, &report));
+    REQUIRE_NOTHROW(error = denoise_linked_into(channels, impossible_channel_count, 1, 22050,
+                                                nullptr, out_channels, &report));
     REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(report.detected.floor_dbfs == 0.0f);
     CHECK(report.mean_reduction_db == 0.0f);
@@ -1769,9 +1816,8 @@ TEST_CASE("sonare_mastering_repair_linked_rejects_impossible_channel_count", "[c
     report.mean_reduction_db = 92.0f;
     SonareError error = SONARE_OK;
 
-    REQUIRE_NOTHROW(
-        error = sonare_mastering_repair_dereverb_classical_linked(
-            channels, impossible_channel_count, 1, 48000, nullptr, out_channels, &report));
+    REQUIRE_NOTHROW(error = dereverb_linked_into(channels, impossible_channel_count, 1, 48000,
+                                                 nullptr, out_channels, &report));
     REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(report.detected.late_decay_ratio_db == 0.0f);
     CHECK(report.mean_reduction_db == 0.0f);

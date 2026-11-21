@@ -932,17 +932,6 @@ TEST_CASE("sonare_free_mfcc_result leaves the result zeroed", "[c_api][c_free]")
   CHECK(r.coefficients == nullptr);
 }
 
-TEST_CASE("sonare_free_normalize_stereo_result leaves the result zeroed", "[c_api][c_free]") {
-  SonareNormalizeStereoResult r{};
-  r.length = static_cast<decltype(r.length)>(1);
-  r.applied_gain_db = static_cast<decltype(r.applied_gain_db)>(1);
-  sonare_free_normalize_stereo_result(&r);
-  CHECK(r.left == nullptr);
-  CHECK(r.right == nullptr);
-  CHECK(r.length == static_cast<decltype(r.length)>(0));
-  CHECK(r.applied_gain_db == static_cast<decltype(r.applied_gain_db)>(0));
-}
-
 TEST_CASE("sonare_free_note_objects_result leaves the result zeroed", "[c_api][c_free]") {
   SonareNoteObjectsResult r{};
   r.count = static_cast<decltype(r.count)>(1);

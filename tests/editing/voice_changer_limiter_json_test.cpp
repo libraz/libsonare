@@ -940,10 +940,9 @@ TEST_CASE("RealtimeVoiceChanger preset JSON refuses an old spelling in a current
     std::string error;
     CHECK_FALSE(validate_realtime_voice_changer_preset_json(document, &normalized, &error));
     CHECK_FALSE(error.empty());
-    SonareRealtimeVoiceChanger* handle = nullptr;
-    CHECK(sonare_realtime_voice_changer_create_json(document.c_str(), 48000, 128, 1, &handle) ==
+    SonareRealtimeVoiceChangerConfig pod;
+    CHECK(sonare_realtime_voice_changer_config_from_json(document.c_str(), &pod) ==
           SONARE_ERROR_INVALID_FORMAT);
-    CHECK(handle == nullptr);
     char* out_normalized = nullptr;
     char* out_error = nullptr;
     CHECK(sonare_realtime_voice_changer_validate_preset_json(
@@ -994,10 +993,9 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
   // The flat shape is otherwise complete or refused: the base object misses the transformer keys.
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(base + "}", &parsed, &error));
   CHECK(error == "voiceEngine must be given");
-  SonareRealtimeVoiceChanger* handle = nullptr;
-  CHECK(sonare_realtime_voice_changer_create_json((base + "}").c_str(), 48000, 128, 1, &handle) ==
+  SonareRealtimeVoiceChangerConfig pod;
+  CHECK(sonare_realtime_voice_changer_config_from_json((base + "}").c_str(), &pod) ==
         SONARE_ERROR_INVALID_FORMAT);
-  CHECK(handle == nullptr);
 
   // One key of the complete object changed at a time.
   struct Refusal {
@@ -1082,14 +1080,12 @@ TEST_CASE("RealtimeVoiceChanger JSON refuses a malformed transformer section as 
       realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor));
   auto& dsp = document.as_object().at("dsp").as_object();
   dsp.at("vocoder").as_object().at("bands") = sonare::util::json::Value(64.0);
-  SonareRealtimeVoiceChanger* handle = nullptr;
-  CHECK(sonare_realtime_voice_changer_create_json(sonare::util::json::dump(document).c_str(), 48000,
-                                                  128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(handle == nullptr);
+  SonareRealtimeVoiceChangerConfig pod;
+  CHECK(sonare_realtime_voice_changer_config_from_json(sonare::util::json::dump(document).c_str(),
+                                                       &pod) == SONARE_ERROR_INVALID_FORMAT);
   dsp.at("vocoder").as_object().at("bands") = sonare::util::json::Value(std::string("20"));
-  CHECK(sonare_realtime_voice_changer_create_json(sonare::util::json::dump(document).c_str(), 48000,
-                                                  128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(handle == nullptr);
+  CHECK(sonare_realtime_voice_changer_config_from_json(sonare::util::json::dump(document).c_str(),
+                                                       &pod) == SONARE_ERROR_INVALID_FORMAT);
 }
 
 TEST_CASE("RealtimeVoiceChanger validation bounds every transformer field",

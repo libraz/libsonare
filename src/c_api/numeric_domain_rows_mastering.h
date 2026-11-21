@@ -40,7 +40,6 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"cqt_to_audio", "n_iter", kGriffinLimIterationsDomain, nullptr},
     {"cqt_to_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"eq_match", "max_bands", kEqMatchMaxBandsDomain, nullptr},
-    {"eq_match_ex", "max_bands", kEqMatchMaxBandsDomain, nullptr},
     {"eq_set_band", "index", kEqBandIndexDomain, nullptr},
     {"estimate_room", "config.n_octave_bands", kRoomEstimateOctaveBandsDomain, nullptr},
     {"frame_signal", "frame_length", sonare::kFrameLengthDomain, nullptr},

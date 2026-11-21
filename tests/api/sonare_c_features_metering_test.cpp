@@ -989,7 +989,7 @@ TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {
 
   SECTION("vectorscope returns one point per sample and frees cleanly") {
     SonareVectorscopeResult result = {};
-    REQUIRE(sonare_metering_vectorscope(left.data(), right_in_phase.data(), left.size(), sr,
+    REQUIRE(sonare_metering_vectorscope(left.data(), right_in_phase.data(), left.size(), sr, 0,
                                         &result) == SONARE_OK);
     REQUIRE(result.point_count == left.size());
     REQUIRE(result.points != nullptr);
@@ -1006,7 +1006,7 @@ TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {
 
   SECTION("phase_scope populates summary stats") {
     SonarePhaseScopeResult result = {};
-    REQUIRE(sonare_metering_phase_scope(left.data(), right_in_phase.data(), left.size(), sr,
+    REQUIRE(sonare_metering_phase_scope(left.data(), right_in_phase.data(), left.size(), sr, 0,
                                         &result) == SONARE_OK);
     REQUIRE(result.point_count == left.size());
     REQUIRE(result.points != nullptr);
@@ -1024,7 +1024,7 @@ TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {
     REQUIRE(sonare_metering_stereo_correlation(left.data(), right_in_phase.data(), left.size(), sr,
                                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     SonareVectorscopeResult vs = {};
-    REQUIRE(sonare_metering_vectorscope(left.data(), nullptr, left.size(), sr, &vs) ==
+    REQUIRE(sonare_metering_vectorscope(left.data(), nullptr, left.size(), sr, 0, &vs) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }
@@ -1385,7 +1385,7 @@ TEST_CASE("buffer and result entry points define their outputs on a refused inpu
   SECTION("a scope result refused on a null channel") {
     SonareVectorscopeResult scope;
     std::memset(&scope, 0x5a, sizeof(scope));
-    REQUIRE(sonare_metering_vectorscope(bad_values.data(), nullptr, bad_values.size(), 22050,
+    REQUIRE(sonare_metering_vectorscope(bad_values.data(), nullptr, bad_values.size(), 22050, 0,
                                         &scope) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(scope.point_count == 0);
     REQUIRE(scope.points == nullptr);

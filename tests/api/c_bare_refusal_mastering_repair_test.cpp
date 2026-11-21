@@ -29,15 +29,15 @@ TEST_CASE("sonare_eq_set_band names the refused band index", "[c_api][mastering]
   sonare_eq_destroy(eq);
 }
 
-TEST_CASE("sonare_eq_match_ex names the refused band count", "[c_api][mastering]") {
+TEST_CASE("sonare_eq_match names the refused band count", "[c_api][mastering]") {
   SonareEq* eq = nullptr;
   REQUIRE(sonare_eq_create(kRate, 512, &eq) == SONARE_OK);
   const std::vector<float> audio(4800, 0.1f);
-  REQUIRE(sonare_eq_match_ex(eq, audio.data(), audio.size(), kRate, audio.data(), audio.size(),
-                             kRate, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_eq_match(eq, audio.data(), audio.size(), kRate, audio.data(), audio.size(), kRate,
+                          0) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "max_bands must be an integer in [1, 24]");
-  REQUIRE(sonare_eq_match_ex(eq, audio.data(), audio.size(), kRate, audio.data(), audio.size(),
-                             kRate, SONARE_EQ_MAX_BANDS + 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_eq_match(eq, audio.data(), audio.size(), kRate, audio.data(), audio.size(), kRate,
+                          SONARE_EQ_MAX_BANDS + 1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "max_bands must be an integer in [1, 24]");
   sonare_eq_destroy(eq);
 }
@@ -68,10 +68,9 @@ TEST_CASE("the channel-count refusals of the repair entries name num_channels",
                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "num_channels must be an integer of at least 1");
 
-  SonareDereverbReport report{};
-  REQUIRE(sonare_mastering_repair_dereverb_classical_linked(planes, 0, plane.size(), kRate, nullptr,
-                                                            out_planes, &report) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  SonareDereverbLinkedResult linked{};
+  REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
+              planes, 0, plane.size(), kRate, nullptr, &linked) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "num_channels must be an integer of at least 1");
 }
 
@@ -102,12 +101,12 @@ TEST_CASE("the named-processor apply entries refuse an empty processor name",
                                                   &stereo) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "processor must not be empty");
 
-  REQUIRE(sonare_mastering_apply_pair_processor_ex("", audio.data(), audio.size(), audio.data(),
-                                                   audio.size(), kRate, kRate, nullptr, 0,
-                                                   &mono) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mastering_apply_pair_processor("", audio.data(), audio.size(), audio.data(),
+                                                audio.size(), kRate, kRate, nullptr, 0,
+                                                &mono) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "processor must not be empty");
 
-  REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
+  REQUIRE(sonare_mastering_apply_pair_processor_stereo(
               "", audio.data(), audio.data(), audio.size(), audio.data(), audio.data(),
               audio.size(), kRate, kRate, nullptr, 0, &stereo) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "processor must not be empty");

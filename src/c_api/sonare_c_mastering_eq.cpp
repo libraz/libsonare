@@ -95,22 +95,14 @@ SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
   SONARE_C_CATCH
 }
 
-SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
-                            size_t length, int sample_rate, int max_bands) {
-  SONARE_C_API_ENTRY;
-  return sonare_eq_match_ex(eq, source, length, sample_rate, reference, length, sample_rate,
-                            max_bands);
-}
-
-SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_length,
-                               int sample_rate, const float* reference, size_t reference_length,
-                               int reference_sample_rate, int max_bands) {
+SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_length,
+                            int sample_rate, const float* reference, size_t reference_length,
+                            int reference_sample_rate, int max_bands) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
-  SonareError err =
-      validate_audio_params("eq_match_ex", "source", source, source_length, sample_rate);
+  SonareError err = validate_audio_params("eq_match", "source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("eq_match_ex", "reference", reference, reference_length,
+  err = validate_audio_params("eq_match", "reference", reference, reference_length,
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
   err = run_validation([&] {

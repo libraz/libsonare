@@ -448,11 +448,16 @@ SonareError probe_room_morph(const std::string& param, double value) {
 
 SonareError probe_room_morph_stereo(const std::string& param, double value) {
   const SonareRoomMorphConfig config = morph_config(param, value);
-  SonareRoomMorphStereoResult out{};
-  const SonareError err =
-      sonare_room_morph_stereo(analysis_samples().data(), analysis_samples().data(),
-                               analysis_samples().size(), kAnalysisRate, &config, &out);
-  if (err == SONARE_OK) sonare_free_room_morph_stereo_result(&out);
+  float* out_left = nullptr;
+  float* out_right = nullptr;
+  size_t out_length = 0;
+  const SonareError err = sonare_room_morph_stereo(
+      analysis_samples().data(), analysis_samples().data(), analysis_samples().size(),
+      kAnalysisRate, &config, &out_left, &out_right, &out_length);
+  if (err == SONARE_OK) {
+    sonare_free_floats(out_left);
+    sonare_free_floats(out_right);
+  }
   return err;
 }
 
@@ -495,17 +500,17 @@ SonareError run_detection_stereo(Entry entry, const Config& config) {
                kAnalysisRate, &config, &out);
 }
 
-template <typename Report, typename Config, typename Entry>
-SonareError run_linked(Entry entry, const Config& config, const std::string& param, double value) {
+template <typename Result, typename Config, typename Entry, typename Release>
+SonareError run_linked(Entry entry, Release release, const Config& config, const std::string& param,
+                       double value) {
   const float* channels[2] = {analysis_samples().data(), analysis_samples().data()};
-  // The arrays hold two planes; a probed count other than 2 is refused before they are read.
+  // The array holds two planes; a probed count other than 2 is refused before it is read.
   const size_t num_channels = is_param(param, "num_channels") ? as_size(value) : 2;
-  std::vector<float> left(analysis_samples().size());
-  std::vector<float> right(analysis_samples().size());
-  float* planes[2] = {left.data(), right.data()};
-  Report report{};
-  return entry(channels, num_channels, analysis_samples().size(), kAnalysisRate, &config, planes,
-               &report);
+  Result out{};
+  const SonareError err =
+      entry(channels, num_channels, analysis_samples().size(), kAnalysisRate, &config, &out);
+  if (err == SONARE_OK) release(&out);
+  return err;
 }
 
 SonareDeclickConfig declick_config(const std::string& param, double value) {
@@ -639,8 +644,9 @@ SonareError probe_repair_denoise_stereo(const std::string& param, double value) 
 }
 
 SonareError probe_repair_denoise_linked(const std::string& param, double value) {
-  return run_linked<SonareDenoiseReport>(sonare_mastering_repair_denoise_classical_linked,
-                                         denoise_config(param, value), param, value);
+  return run_linked<SonareDenoiseLinkedResult>(sonare_mastering_repair_denoise_classical_linked,
+                                               sonare_free_denoise_linked_result,
+                                               denoise_config(param, value), param, value);
 }
 
 SonareError probe_repair_detect_noise_floor(const std::string& param, double value) {
@@ -660,8 +666,9 @@ SonareError probe_repair_dereverb_stereo(const std::string& param, double value)
 }
 
 SonareError probe_repair_dereverb_linked(const std::string& param, double value) {
-  return run_linked<SonareDereverbReport>(sonare_mastering_repair_dereverb_classical_linked,
-                                          dereverb_config(param, value), param, value);
+  return run_linked<SonareDereverbLinkedResult>(sonare_mastering_repair_dereverb_classical_linked,
+                                                sonare_free_dereverb_linked_result,
+                                                dereverb_config(param, value), param, value);
 }
 
 SonareError probe_repair_detect_reverb(const std::string& param, double value) {
@@ -791,26 +798,16 @@ SonareError probe_eq_match(const std::string& param, double value) {
   SonareEq* eq = nullptr;
   REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   const int max_bands = is_param(param, "max_bands") ? as_int(value) : 8;
-  const SonareError err = sonare_eq_match(eq, analysis_samples().data(), analysis_samples().data(),
+  const SonareError err = sonare_eq_match(eq, analysis_samples().data(), analysis_samples().size(),
+                                          kAnalysisRate, analysis_samples().data(),
                                           analysis_samples().size(), kAnalysisRate, max_bands);
-  sonare_eq_destroy(eq);
-  return err;
-}
-
-SonareError probe_eq_match_ex(const std::string& param, double value) {
-  SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
-  const int max_bands = is_param(param, "max_bands") ? as_int(value) : 8;
-  const SonareError err = sonare_eq_match_ex(
-      eq, analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, max_bands);
   sonare_eq_destroy(eq);
   return err;
 }
 
 SonareError probe_streaming_chain_prepare(const std::string& param, double value) {
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   const int num_channels = is_param(param, "num_channels") ? as_int(value) : 2;
   const SonareError err = sonare_streaming_mastering_chain_prepare(chain, 48000, 512, num_channels);
   sonare_streaming_mastering_chain_destroy(chain);
@@ -853,7 +850,6 @@ const std::map<std::string, Probe>& probes() {
 #endif
 #if defined(SONARE_WITH_MASTERING)
       {"eq_match", probe_eq_match},
-      {"eq_match_ex", probe_eq_match_ex},
       {"eq_set_band", probe_eq_set_band},
       {"mastering_apply_processor", probe_apply_processor},
       {"mastering_apply_processor_stereo", probe_apply_processor_stereo},

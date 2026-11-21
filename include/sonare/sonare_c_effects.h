@@ -17,75 +17,86 @@ extern "C" {
 // Effects
 // ============================================================================
 
-/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
-///   positive odd integer at most 524287. The ceiling is 524288 and an even
-///   kernel is refused, so 524287 is the largest legal size.
-/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
-///   same rule.
-/// @param out Receives heap-owned harmonic/percussive buffers; free with
-///   sonare_free_hpss_result.
-SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
-                        int kernel_percussive, SonareHpssResult* out);
-/// @brief Configurable HPSS wrapper.
-/// @details The two-way form writes harmonic/percussive into @p out. When
-///          @p with_residual is non-zero, @p out_residual is required and
-///          receives the third signal; otherwise it is optional and remains
-///          NULL. All output fields are reset before input/config validation.
-///
-///          The third signal is silent whenever @p use_soft_mask is non-zero:
-///          the soft masks sum to one, so harmonic and percussive already carry
-///          the whole input and nothing is left over. Pass zero for a residual
-///          that holds signal -- the thresholded masks leave the band where
-///          neither component dominates.
-/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
-///                   positive odd integer at most 524287. The ceiling is 524288
-///                   and an even kernel is refused, so 524287 is the largest
-///                   legal size.
-/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
-///                   same rule.
-/// @param n_fft      FFT size: an even integer >= 4. Any even size is accepted;
-///                   the FFT is mixed-radix, not power-of-two only.
-/// @param hop_length Hop in samples, in (0, n_fft/2], or @ref SONARE_STFT_HOP_AUTO
-///                   for a quarter of @p n_fft (at least 1); 0 is refused. The result is
-///                   resynthesized by overlap-add and the phase-coherent
-///                   spectral paths require at least half-window overlap; a
-///                   sparser hop is rejected with
-///                   SONARE_ERROR_INVALID_PARAMETER rather than returning a
-///                   signal with periodic dropouts.
+/// @brief Options for @ref sonare_hpss. Start from @ref sonare_hpss_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_hpss_options_init.
+  uint32_t struct_size;
+  /// FFT size: an even integer >= 4; the FFT is mixed-radix, not power-of-two only. Default 2048.
+  int32_t n_fft;
+  /// Hop in samples, in [1, n_fft/2]; 0 (the default) is a quarter of @c n_fft, at least 1.
+  /// The result is resynthesized by overlap-add, which needs at least half-window overlap; a
+  /// sparser hop is refused rather than returning a signal with periodic dropouts.
+  size_t hop_length;
+  /// Non-zero uses soft (Wiener) masks; zero uses thresholded binary masks. Default 1.
+  int32_t use_soft_mask;
+} SonareHpssOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_hpss_options_init(SonareHpssOptions* options);
+
+/// @brief Harmonic/percussive source separation.
+/// @details Writes harmonic/percussive into @p out. When @p out_residual is non-NULL it
+///          receives the third signal, the band where neither component dominates. That signal
+///          is silent under soft masks, which sum to one; set @c use_soft_mask to zero for a
+///          residual that holds signal. All outputs are reset before validation.
+/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a positive odd integer
+///   at most 524287. The ceiling is 524288 and an even kernel is refused, so 524287 is the
+///   largest legal size.
+/// @param kernel_percussive Vertical median filter size, in STFT bins, under the same rule.
+/// @param options NULL for the defaults (@ref sonare_hpss_options_init).
 /// @note Free @p out with @ref sonare_free_hpss_result and @p out_residual with
 ///       @ref sonare_free_floats.
-SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
-                           int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
-                           int use_soft_mask, int with_residual, SonareHpssResult* out,
-                           float** out_residual);
+SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
+                        int kernel_percussive, const SonareHpssOptions* options,
+                        SonareHpssResult* out, float** out_residual);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length);
+
+/// @brief Options for @ref sonare_time_stretch. Start from @ref sonare_time_stretch_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_time_stretch_options_init.
+  uint32_t struct_size;
+  /// FFT size: an even integer >= 4. Default 2048.
+  int32_t n_fft;
+  /// Hop in samples; 0 (the default) is a quarter of @c n_fft. See
+  /// @ref SonareHpssOptions::hop_length.
+  size_t hop_length;
+} SonareTimeStretchOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_time_stretch_options_init(SonareTimeStretchOptions* options);
+
+/// @brief Native spectral time stretch.
+/// @param options NULL for the defaults (@ref sonare_time_stretch_options_init).
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
-                                float speed_ratio, float** out, size_t* out_length);
-/// @brief Native spectral time stretch with explicit FFT/hop configuration.
-/// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
-///          (0, n_fft/2], or be @ref SONARE_STFT_HOP_AUTO for a quarter of @p n_fft;
-///          see @ref sonare_hpss_ex.
-/// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate,
-                                   float speed_ratio, int n_fft, int hop_length, float** out,
-                                   size_t* out_length);
+                                float speed_ratio, const SonareTimeStretchOptions* options,
+                                float** out, size_t* out_length);
+
+/// @brief Options for @ref sonare_pitch_shift. Start from @ref sonare_pitch_shift_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_pitch_shift_options_init.
+  uint32_t struct_size;
+  /// FFT size: an even integer >= 4. Default 2048.
+  int32_t n_fft;
+  /// Hop in samples; 0 (the default) is a quarter of @c n_fft. See
+  /// @ref SonareHpssOptions::hop_length.
+  size_t hop_length;
+} SonarePitchShiftOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_pitch_shift_options_init(SonarePitchShiftOptions* options);
+
+/// @brief Native spectral pitch shift.
+/// @param options NULL for the defaults (@ref sonare_pitch_shift_options_init).
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
-                               float pitch_semitones, float** out, size_t* out_length);
-/// @brief Native spectral pitch shift with explicit FFT/hop configuration.
-/// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
-///          (0, n_fft/2], or be @ref SONARE_STFT_HOP_AUTO for a quarter of @p n_fft;
-///          see @ref sonare_hpss_ex.
-/// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
-                                  float pitch_semitones, int n_fft, int hop_length, float** out,
-                                  size_t* out_length);
+                               float pitch_semitones, const SonarePitchShiftOptions* options,
+                               float** out, size_t* out_length);
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
 /// an immediate transpose with no retune glide, and the returned buffer has
@@ -918,20 +929,6 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             const SonarePercussiveRenderConfig* config, float** out,
                                             size_t* out_length);
 
-/// @param pitch_semitones Transpose in semitones; 0 leaves the pitch alone.
-/// @param formant_factor Formant warp applied after the pitch shift (relative mode), in
-///        [0.55, 1.65]; 1 applies no warp, so the formants follow the pitch. A factor outside
-///        that range is SONARE_ERROR_INVALID_PARAMETER rather than clamped. See
-///        @ref sonare_voice_change_ex for the mode that keeps them.
-/// @note Both must be finite; neither has a spelling of "unspecified". This call
-///       assigns them into the config unchecked and the core refuses a
-///       non-finite one, so either comes back as SONARE_ERROR_INVALID_PARAMETER
-///       with the core's own text on sonare_last_error_message().
-/// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
-                                float pitch_semitones, float formant_factor, float** out,
-                                size_t* out_length);
-
 /// @brief How @ref SonareVoiceChangeConfig::formant_factor relates to the pitch shift.
 typedef enum {
   /// The factor is the warp applied after the pitch shift, so the formants end up at the
@@ -942,7 +939,7 @@ typedef enum {
   SONARE_FORMANT_MODE_ABSOLUTE = 1
 } SonareFormantMode;
 
-/// @brief Configuration for @ref sonare_voice_change_ex. Start from
+/// @brief Configuration for @ref sonare_voice_change. Start from
 ///        @ref sonare_voice_change_config_init; every field is then read literally.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareVoiceChangeConfig); set by the init function.
@@ -957,34 +954,18 @@ typedef struct {
 /// @brief Writes every default into @p config and sets its @c struct_size; NULL is ignored.
 void sonare_voice_change_config_init(SonareVoiceChangeConfig* config);
 
-/// @brief @ref sonare_voice_change with a choice of formant mode.
-/// @param config Required. A @c formant_mode outside @ref SonareFormantMode, a
-///        relative-mode factor outside [0.55, 1.65], or an absolute-mode request whose warp (the
-///        factor divided by 2^(semitones/12)) falls outside [0.55, 1.65], is
+/// @brief Pitch shift with a formant warp.
+/// @param config NULL for the defaults (@ref sonare_voice_change_config_init: no transpose, no
+///        warp). A @c formant_mode outside @ref SonareFormantMode, a relative-mode factor outside
+///        [0.55, 1.65], a non-finite transpose or factor, or an absolute-mode request whose warp
+///        (the factor divided by 2^(semitones/12)) falls outside [0.55, 1.65], is
 ///        SONARE_ERROR_INVALID_PARAMETER; for the latter sonare_last_error_message() names the
 ///        reachable formant-factor range for the given semitones. The request is refused rather
 ///        than clamped.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_voice_change_ex(const float* samples, size_t length, int sample_rate,
-                                   const SonareVoiceChangeConfig* config, float** out,
-                                   size_t* out_length);
-/// @brief Convenience offline wrapper around the realtime voice changer chain.
-/// @details Creates a temporary @ref SonareRealtimeVoiceChanger from @p preset,
-///          processes the whole mono or interleaved stereo buffer in realtime-
-///          sized blocks, and destroys the handle before returning. @p preset
-///          may be NULL/empty (neutralMonitor), a preset id, or a full JSON
-///          config document accepted by @ref sonare_realtime_voice_changer_create_json.
-///          @p channels must be 1 (mono) or 2 (interleaved stereo).
-/// @details The chain's processing latency (retune grain + ISP-limiter lookahead)
-///          is compensated: an equal-length silent tail is flushed and the
-///          leading @c latency_samples of pre-roll are dropped, so the returned
-///          buffer is the same length as @p samples AND time-aligned with the
-///          input (no head silence / tail truncation).
-/// @note The returned array is heap-allocated and MUST be released with
-///       @ref sonare_free_floats.
-SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
-                                         const char* preset, int channels, float** out,
-                                         size_t* out_length);
+SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
+                                const SonareVoiceChangeConfig* config, float** out,
+                                size_t* out_length);
 
 #include "sonare_c_engine.h"
 #include "sonare_c_voice_changer.h"
@@ -994,9 +975,6 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
-/// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
-                        float** out, size_t* out_length);
 /// @brief RMS-normalize mono audio with hard clipping to [-1, 1].
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
@@ -1044,22 +1022,6 @@ SonareError sonare_biquad_filter(const float* samples, size_t length, int sample
                                  const SonareBiquadFilterConfig* config, float** out,
                                  size_t* out_length);
 
-/// @brief A normalized channel pair and the gain that produced it.
-/// @details @c left and @c right are heap-allocated; release the pair with
-///   @ref sonare_free_normalize_stereo_result. @c applied_gain_db is one figure rather than a
-///   pair because the gain is one decision shared by both channels; silence
-///   leaves the pair untouched and reports 0.
-typedef struct {
-  /// Normalized left channel, @c length samples.
-  float* left;
-  /// Normalized right channel, @c length samples.
-  float* right;
-  /// Samples per channel.
-  size_t length;
-  /// Gain applied to both channels in dB.
-  float applied_gain_db;
-} SonareNormalizeStereoResult;
-
 /// @brief Peak-normalize a stereo pair on a gain measured across both channels.
 /// @details The peak is taken across the pair and the resulting gain goes to
 ///   both channels, because a per-channel gain is a balance change: it lifts the
@@ -1069,9 +1031,11 @@ typedef struct {
 ///   @ref sonare_normalize -- @p target_db must be finite and <= 0 dBFS -- plus
 ///   the pair itself must be processable together: neither channel empty, one
 ///   @p length, one @p sample_rate.
+/// @note @p out_left and @p out_right each receive @p length samples, reported once in
+///   @p out_length. Free each with @ref sonare_free_floats. On failure all three are cleared.
 SonareError sonare_normalize_stereo(const float* left, const float* right, size_t length,
-                                    int sample_rate, float target_db,
-                                    SonareNormalizeStereoResult* out);
+                                    int sample_rate, float target_db, float** out_left,
+                                    float** out_right, size_t* out_length);
 
 /// @brief RMS-normalize a stereo pair on a gain measured across both channels.
 /// @details The level driven to @p target_db is the root mean square over the
@@ -1080,16 +1044,39 @@ SonareError sonare_normalize_stereo(const float* left, const float* right, size_
 ///   @ref sonare_normalize_rms does, and shares @ref sonare_normalize_stereo's
 ///   argument and pair policy.
 SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
-                                        int sample_rate, float target_db,
-                                        SonareNormalizeStereoResult* out);
+                                        int sample_rate, float target_db, float** out_left,
+                                        float** out_right, size_t* out_length);
 
-/// @brief Release both channels of a @ref SonareNormalizeStereoResult and empty it.
-/// @details NULL and an already-released result are no-ops.
-void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result);
+/// @brief Options for @ref sonare_trim. Start from @ref sonare_trim_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_trim_options_init.
+  uint32_t struct_size;
+  /// RMS frame length in samples. Default 2048.
+  size_t frame_length;
+  /// RMS hop in samples. Default 512.
+  size_t hop_length;
+} SonareTrimOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_trim_options_init(SonareTrimOptions* options);
+
 /// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
+/// @param options NULL for the defaults (@ref sonare_trim_options_init).
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
-                           size_t frame_length, size_t hop_length, float** out, size_t* out_length);
+SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
+                        const SonareTrimOptions* options, float** out, size_t* out_length);
+
+/// @brief Options for @ref sonare_decompose. Start from @ref sonare_decompose_options_init.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_decompose_options_init.
+  uint32_t struct_size;
+  /// Initialiser: "random" (deterministic seeded) or "nndsvd" (SVD warm start, which tends to
+  /// converge in fewer iterations). NULL (the default) is "random".
+  const char* init;
+} SonareDecomposeOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_decompose_options_init(SonareDecomposeOptions* options);
 
 /// @brief Non-negative matrix factorisation of a non-negative spectrogram
 ///        (mirror of @c sonare::decompose / librosa.decompose.decompose).
@@ -1106,39 +1093,15 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
 /// @param n_iter Number of multiplicative-update iterations, >= 1; 0 selects the
 ///        library default (50). Negative values are rejected.
 /// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
+/// @param options NULL for the defaults (@ref sonare_decompose_options_init).
 /// @param out_w Receives the [n_features x n_components] component matrix.
 /// @param out_w_length Receives n_features * n_components.
 /// @param out_h Receives the [n_components x n_frames] activation matrix.
 /// @param out_h_length Receives n_components * n_frames.
-/// @note Uses deterministic random initialisation. For the SVD-based NNDSVD
-///       warm-start (faster convergence), use @ref sonare_decompose_with_init.
 SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
-                             int n_iter, float beta, float** out_w, size_t* out_w_length,
-                             float** out_h, size_t* out_h_length);
-
-/// @brief Non-negative matrix factorisation with a selectable initialiser
-///        (mirror of @c sonare::decompose with the @c init argument).
-/// @details Identical to @ref sonare_decompose but exposes the initialisation
-///          strategy so callers can opt into the NNDSVD warm-start, which tends
-///          to converge in fewer iterations. Both output matrices are
-///          heap-allocated row-major and MUST be released with
-///          @ref sonare_free_floats.
-/// @param s Input spectrogram [n_features x n_frames] row-major (non-negative).
-/// @param n_features Feature dimension (rows). Must be > 0.
-/// @param n_frames Number of time frames. Must be > 0.
-/// @param n_components Target number of components (k). Must be > 0.
-/// @param n_iter Number of multiplicative-update iterations, >= 1; 0 selects the
-///        library default (50). Negative values are rejected.
-/// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
-/// @param init Initialiser: "random" (default if NULL) or "nndsvd".
-/// @param out_w Receives the [n_features x n_components] component matrix.
-/// @param out_w_length Receives n_features * n_components.
-/// @param out_h Receives the [n_components x n_frames] activation matrix.
-/// @param out_h_length Receives n_components * n_frames.
-SonareError sonare_decompose_with_init(const float* s, int n_features, int n_frames,
-                                       int n_components, int n_iter, float beta, const char* init,
-                                       float** out_w, size_t* out_w_length, float** out_h,
-                                       size_t* out_h_length);
+                             int n_iter, float beta, const SonareDecomposeOptions* options,
+                             float** out_w, size_t* out_w_length, float** out_h,
+                             size_t* out_h_length);
 
 /// @brief Options for @ref sonare_decompose_stems.
 /// @details Prepare one with @ref sonare_decompose_stems_config_init (4 components, 2048/512
@@ -1216,13 +1179,11 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Optional options started from the init function; NULL selects the defaults.
 /// @param out Receives one heap buffer holding every (component, channel)
-///        signal, laid out as a single flat array of @p out_component_count * @p out_num_channels
+///        signal, laid out as a single flat array of @p out_component_count * @p num_channels
 ///        * @p out_component_length floats: component c, channel ch starts at
-///        (c * @p out_num_channels + ch) * @p out_component_length. Release
+///        (c * @p num_channels + ch) * @p out_component_length. Release
 ///        with @ref sonare_free_floats.
 /// @param out_component_count Receives the number of components.
-/// @param out_num_channels Receives the number of channels (equal to
-///        @p num_channels).
 /// @param out_component_length Receives the per-(component, channel) sample
 ///        count (equal to @p length).
 /// @param out_w Optional; receives the [n_bins x n_components] component matrix
@@ -1237,9 +1198,8 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_num_channels,
-                                          size_t* out_component_length, float** out_w,
-                                          size_t* out_w_length, float** out_h,
+                                          size_t* out_component_count, size_t* out_component_length,
+                                          float** out_w, size_t* out_w_length, float** out_h,
                                           size_t* out_h_length);
 
 /// @brief Nearest-neighbour filter for spectrogram denoising
@@ -1303,40 +1263,6 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
                                            const int* intervals, size_t interval_count,
                                            int align_zeros, int** out, size_t* out_count);
 
-/// @brief HPSS with residual: separates audio into harmonic, percussive and
-///        residual signals (mirror of @c sonare::hpss_with_residual).
-/// @details All three outputs share the same @p out_length and @p out_sample_rate
-///          (residual = original - harmonic - percussive). Each buffer is
-///          heap-allocated and MUST be released with @ref sonare_free_floats.
-///          Three-signal shape: emitted as three flat buffers because
-///          sonare_c_types.h has no with-residual HPSS result struct.
-///
-///          This entry runs the soft mask, whose two masks sum to one, so the
-///          residual it returns is silence -- the harmonic and percussive
-///          buffers already carry the whole input. It is emitted anyway so the
-///          three-buffer shape does not change with the mask. For a residual
-///          that holds signal, call @ref sonare_hpss_ex with @c use_soft_mask
-///          zero, whose thresholded masks leave the band where neither
-///          component dominates.
-/// @param samples Input audio.
-/// @param length Number of samples.
-/// @param sample_rate Sample rate.
-/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
-///   positive odd integer at most 524287. The ceiling is 524288 and an even
-///   kernel is refused, so 524287 is the largest legal size.
-/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
-///   same rule.
-/// @param out_harmonic Receives the harmonic signal.
-/// @param out_percussive Receives the percussive signal.
-/// @param out_residual Receives the residual signal.
-/// @param out_length Receives the (shared) signal length.
-/// @param out_sample_rate Receives the (shared) sample rate.
-SonareError sonare_hpss_with_residual(const float* samples, size_t length, int sample_rate,
-                                      int kernel_harmonic, int kernel_percussive,
-                                      float** out_harmonic, float** out_percussive,
-                                      float** out_residual, size_t* out_length,
-                                      int* out_sample_rate);
-
 /// @brief Phase-vocoder time-scale modification of audio
 ///        (STFT -> @c sonare::phase_vocoder -> iSTFT).
 /// @details Faithful audio wrapper: computes the STFT, time-stretches the
@@ -1349,7 +1275,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param n_fft FFT size used for analysis/synthesis: an even integer >= 4.
 /// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2], or
 ///        @ref SONARE_STFT_HOP_AUTO for a quarter of @p n_fft (at least 1); 0 is refused. See
-///        @ref sonare_hpss_ex for why the overlap bound applies.
+///        @ref SonareHpssOptions::hop_length for why the overlap bound applies.
 /// @param out Receives the time-stretched audio buffer.
 /// @param out_length Receives the output length.
 /// @note Positional facades use the same order after the audio buffer:

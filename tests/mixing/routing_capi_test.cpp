@@ -15,7 +15,7 @@ TEST_CASE("C-API mixer resolves a zero block size to its default", "[mixing][cap
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 0, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) != nullptr);
 
   std::vector<float> left(513, 0.0f);
   std::vector<float> right(513, 0.0f);
@@ -41,9 +41,9 @@ TEST_CASE("C-API mixer rejects null and duplicate strip ids at insertion", "[mix
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, nullptr) == nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") == nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, nullptr, nullptr) == nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) == nullptr);
   REQUIRE(sonare_mixer_strip_count(mixer) == 1);
   sonare_mixer_destroy(mixer);
 }
@@ -97,7 +97,7 @@ TEST_CASE("C-API mixer recompilation preserves automation timeline and error kin
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "source");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "source", nullptr);
   REQUIRE(strip != nullptr);
 
   std::vector<float> input(kBlock, 1.0f);
@@ -144,13 +144,13 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
           SONARE_ERROR_INVALID_PARAMETER);
 
   SonareMixMeterSnapshot snapshot{};
-  REQUIRE(sonare_strip_meter_tap(nullptr, SONARE_METER_TAP_PRE_FADER, &snapshot) ==
+  REQUIRE(sonare_strip_meter(nullptr, SONARE_METER_TAP_PRE_FADER, &snapshot) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "s");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "s", nullptr);
   REQUIRE(strip != nullptr);
 
   const float nan = std::numeric_limits<float>::quiet_NaN();
@@ -176,15 +176,15 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
   REQUIRE(sonare_strip_set_vca_offset_db(strip, -2.0f) == SONARE_OK);
 
   // NULL out-pointer for meter tap is rejected even with a valid strip.
-  REQUIRE(sonare_strip_meter_tap(strip, SONARE_METER_TAP_PRE_FADER, nullptr) ==
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_PRE_FADER, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Both valid taps succeed.
-  REQUIRE(sonare_strip_meter_tap(strip, SONARE_METER_TAP_PRE_FADER, &snapshot) == SONARE_OK);
-  REQUIRE(sonare_strip_meter_tap(strip, SONARE_METER_TAP_POST_FADER, &snapshot) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_PRE_FADER, &snapshot) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &snapshot) == SONARE_OK);
 
   // Invalid enum values are rejected.
   REQUIRE(sonare_strip_set_pan_law(strip, 99) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_strip_meter_tap(strip, 99, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_meter(strip, 99, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_schedule_fader_automation(strip, 0, -6.0f, 99) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_schedule_pan_automation(strip, 0, 0.5f, 99) ==
@@ -202,7 +202,7 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_channel_delay_samples(strip, 10) == SONARE_OK);
 
@@ -481,7 +481,7 @@ TEST_CASE("C-API VCA groups deduplicate duplicate member ids", "[mixing][capi]")
   SonareMixer* live = nullptr;
   REQUIRE(sonare_mixer_create(kSr, kBlock, &live) == SONARE_OK);
   REQUIRE(live != nullptr);
-  REQUIRE(sonare_mixer_add_strip(live, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(live, "lead", nullptr) != nullptr);
   const char* members[] = {"lead", "lead"};
   REQUIRE(sonare_mixer_add_vca_group(live, "live-vca", -6.0f, members, 2) == SONARE_OK);
   input.assign(kBlock, 1.0f);
@@ -508,7 +508,7 @@ TEST_CASE("C-API VCA groups apply to strips added after group creation", "[mixin
   REQUIRE(mixer != nullptr);
   const char* members[] = {"lead"};
   REQUIRE(sonare_mixer_add_vca_group(mixer, "live-vca", -6.0f, members, 1) == SONARE_OK);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) != nullptr);
 
   std::vector<float> input(kBlock, 1.0f);
   const float* in_l[] = {input.data()};
@@ -528,7 +528,7 @@ TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mix
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) != nullptr);
   const char* members[] = {"lead"};
   REQUIRE(sonare_mixer_add_vca_group(mixer, "lead-vca", -6.0f, members, 1) == SONARE_OK);
 
@@ -588,7 +588,7 @@ TEST_CASE("C-API VCA group gain rejects non-finite and applies a valid value", "
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead", nullptr) != nullptr);
   const char* members[] = {"lead"};
 
   // A non-finite gain must not create the group, and the strip's gain must be
@@ -1269,7 +1269,7 @@ TEST_CASE("C-API set output bus routes a strip into a submix and on to the maste
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
 
   std::vector<float> input(kBlock, 0.5f);
@@ -1321,8 +1321,8 @@ TEST_CASE("C-API set output bus refuses every invalid edit without touching the 
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
-  SonareStrip* b = sonare_mixer_add_strip(mixer, "b");
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
+  SonareStrip* b = sonare_mixer_add_strip(mixer, "b", nullptr);
   REQUIRE(b != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub2", "submix") == SONARE_OK);

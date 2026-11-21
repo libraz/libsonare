@@ -21,7 +21,7 @@ std::string last_message() {
 struct PreparedChain {
   SonareStreamingMasteringChain* chain = nullptr;
   PreparedChain() {
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   }
   ~PreparedChain() { sonare_streaming_mastering_chain_destroy(chain); }
 };

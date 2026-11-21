@@ -59,7 +59,7 @@ class PreparedEngine {
 // Effects
 // ---------------------------------------------------------------------------------------------
 
-SonareError run_decompose(const std::string& param, double value, bool with_init) {
+SonareError probe_decompose(const std::string& param, double value) {
   int n_features = 2;
   int n_frames = 2;
   int n_components = 1;
@@ -73,24 +73,13 @@ SonareError run_decompose(const std::string& param, double value, bool with_init
   float* h = nullptr;
   size_t w_length = 0;
   size_t h_length = 0;
-  const SonareError err =
-      with_init ? sonare_decompose_with_init(s.data(), n_features, n_frames, n_components, n_iter,
-                                             2.0f, "random", &w, &w_length, &h, &h_length)
-                : sonare_decompose(s.data(), n_features, n_frames, n_components, n_iter, 2.0f, &w,
-                                   &w_length, &h, &h_length);
+  const SonareError err = sonare_decompose(s.data(), n_features, n_frames, n_components, n_iter,
+                                           2.0f, nullptr, &w, &w_length, &h, &h_length);
   if (err == SONARE_OK) {
     sonare_free_floats(w);
     sonare_free_floats(h);
   }
   return err;
-}
-
-SonareError probe_decompose(const std::string& param, double value) {
-  return run_decompose(param, value, false);
-}
-
-SonareError probe_decompose_with_init(const std::string& param, double value) {
-  return run_decompose(param, value, true);
 }
 
 SonareError probe_nn_filter(const std::string& param, double value) {
@@ -137,21 +126,21 @@ SonareError probe_decompose_stems_linked(const std::string& param, double value)
   const size_t num_channels = is_param(param, "num_channels") ? as_size(value) : 1;
   float* out = nullptr;
   size_t count = 0;
-  size_t out_channels = 0;
   size_t length = 0;
   const SonareError err = sonare_decompose_stems_linked(
       channels, num_channels, analysis_samples().size(), kAnalysisRate, &config, &out, &count,
-      &out_channels, &length, nullptr, nullptr, nullptr, nullptr);
+      &length, nullptr, nullptr, nullptr, nullptr);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
 
-SonareError probe_hpss_ex(const std::string& param, double value) {
-  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+SonareError probe_hpss(const std::string& param, double value) {
+  SonareHpssOptions options{};
+  sonare_hpss_options_init(&options);
+  if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
   SonareHpssResult out{};
-  const SonareError err =
-      sonare_hpss_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate, 31, 31,
-                     n_fft, SONARE_STFT_HOP_AUTO, 0, 0, &out, nullptr);
+  const SonareError err = sonare_hpss(analysis_samples().data(), analysis_samples().size(),
+                                      kAnalysisRate, 31, 31, &options, &out, nullptr);
   if (err == SONARE_OK) sonare_free_hpss_result(&out);
   return err;
 }
@@ -167,24 +156,26 @@ SonareError probe_phase_vocoder(const std::string& param, double value) {
   return err;
 }
 
-SonareError probe_time_stretch_ex(const std::string& param, double value) {
-  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+SonareError probe_time_stretch(const std::string& param, double value) {
+  SonareTimeStretchOptions options{};
+  sonare_time_stretch_options_init(&options);
+  if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err =
-      sonare_time_stretch_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                             1.5f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  const SonareError err = sonare_time_stretch(analysis_samples().data(), analysis_samples().size(),
+                                              kAnalysisRate, 1.5f, &options, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
 
-SonareError probe_pitch_shift_ex(const std::string& param, double value) {
-  const int n_fft = is_param(param, "n_fft") ? static_cast<int>(value) : 2048;
+SonareError probe_pitch_shift(const std::string& param, double value) {
+  SonarePitchShiftOptions options{};
+  sonare_pitch_shift_options_init(&options);
+  if (is_param(param, "options.n_fft")) options.n_fft = static_cast<int>(value);
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err =
-      sonare_pitch_shift_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                            2.0f, n_fft, SONARE_STFT_HOP_AUTO, &out, &out_length);
+  const SonareError err = sonare_pitch_shift(analysis_samples().data(), analysis_samples().size(),
+                                             kAnalysisRate, 2.0f, &options, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -214,13 +205,15 @@ SilenceFraming silence_framing(const std::string& param, double value) {
   return framing;
 }
 
-SonareError probe_trim_ex(const std::string& param, double value) {
-  const SilenceFraming framing = silence_framing(param, value);
+SonareError probe_trim(const std::string& param, double value) {
+  SonareTrimOptions options{};
+  sonare_trim_options_init(&options);
+  if (is_param(param, "options.frame_length")) options.frame_length = as_size(value);
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err =
-      sonare_trim_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate, -60.0f,
-                     as_size(framing.frame_length), as_size(framing.hop_length), &out, &out_length);
+  const SonareError err = sonare_trim(analysis_samples().data(), analysis_samples().size(),
+                                      kAnalysisRate, -60.0f, &options, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -673,7 +666,7 @@ SonareError probe_engine_set_bus_strip_eq_band_json(const std::string&, double v
 SonareError probe_strip_set_channel_delay_samples(const std::string&, double value) {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "s");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "s", nullptr);
   REQUIRE(strip != nullptr);
   const SonareError err = sonare_strip_set_channel_delay_samples(strip, static_cast<int>(value));
   sonare_mixer_destroy(mixer);
@@ -897,10 +890,10 @@ SonareError probe_assign_note_targets(const std::string&, double value) {
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 
-SonareError probe_voice_change_realtime(const std::string&, double value) {
+SonareError probe_realtime_voice_changer_render(const std::string&, double value) {
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err = sonare_voice_change_realtime(
+  const SonareError err = sonare_realtime_voice_changer_render(
       analysis_samples().data(), analysis_samples().size(), kAnalysisRate, nullptr,
       static_cast<int>(value), &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
@@ -923,7 +916,6 @@ const std::map<std::string, Probe>& probes() {
       {"decompose", probe_decompose},
       {"decompose_stems", probe_decompose_stems},
       {"decompose_stems_linked", probe_decompose_stems_linked},
-      {"decompose_with_init", probe_decompose_with_init},
       {"engine_add_parameter", probe_engine_add_parameter},
       {"engine_articulation", probe_engine_articulation},
       {"engine_bind_midi_cc", probe_engine_bind_midi_cc},
@@ -952,16 +944,16 @@ const std::map<std::string, Probe>& probes() {
       {"engine_set_warp_voice_capacity", probe_engine_set_warp_voice_capacity},
       {"engine_upsert_clip", probe_engine_upsert_clip},
       {"extract_percussive_events", probe_extract_percussive_events},
-      {"hpss_ex", probe_hpss_ex},
+      {"hpss", probe_hpss},
       {"nn_filter", probe_nn_filter},
       {"phase_vocoder", probe_phase_vocoder},
-      {"pitch_shift_ex", probe_pitch_shift_ex},
+      {"pitch_shift", probe_pitch_shift},
       {"render_percussive_events", probe_render_percussive_events},
       {"spectral_edit", probe_spectral_edit},
       {"split_silence", probe_split_silence},
       {"split_silence_common", probe_split_silence_common},
-      {"time_stretch_ex", probe_time_stretch_ex},
-      {"trim_ex", probe_trim_ex},
+      {"time_stretch", probe_time_stretch},
+      {"trim", probe_trim},
       {"trim_silence", probe_trim_silence},
 #if defined(SONARE_WITH_GRAPH)
       {"engine_set_graph", probe_engine_set_graph},
@@ -992,7 +984,7 @@ const std::map<std::string, Probe>& probes() {
 #endif
 #if defined(SONARE_WITH_VOICE_CHANGER)
       {"realtime_voice_changer_preset_config", probe_realtime_voice_changer_preset_config},
-      {"voice_change_realtime", probe_voice_change_realtime},
+      {"realtime_voice_changer_render", probe_realtime_voice_changer_render},
 #endif
   };
   return table;

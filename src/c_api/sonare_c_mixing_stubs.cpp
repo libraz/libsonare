@@ -26,24 +26,18 @@ SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
-SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id) {
-  SONARE_C_API_ENTRY;
-  (void)mixer;
-  (void)id;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return nullptr;
+void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
 }
 
-SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int enable_metering,
-                                       int measure_lufs, int measure_true_peak,
-                                       int true_peak_oversample) {
+SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
+                                    const SonareMixerAddStripOptions* options) {
   SONARE_C_API_ENTRY;
   (void)mixer;
   (void)id;
-  (void)enable_metering;
-  (void)measure_lufs;
-  (void)measure_true_peak;
-  (void)true_peak_oversample;
+  (void)options;
   set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
   return nullptr;
 }
@@ -194,15 +188,7 @@ SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index) {
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
-SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  (void)strip;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
-}
-
-SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
+SonareError sonare_strip_meter(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   (void)strip;

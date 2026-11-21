@@ -314,25 +314,12 @@ SonareError fill_vectorscope_result(const std::vector<metering::VectorscopePoint
 }  // namespace
 
 SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonareVectorscopeResult* out) {
+                                        int sample_rate, size_t max_points,
+                                        SonareVectorscopeResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SonareError err = validate_stereo_pair("metering_vectorscope", "left", "right", left, right,
                                          length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_TRY
-  return fill_vectorscope_result(metering::vectorscope(left, right, length), out);
-  SONARE_C_CATCH
-}
-
-SonareError sonare_metering_vectorscope_decimated(const float* left, const float* right,
-                                                  size_t length, int sample_rate, size_t max_points,
-                                                  SonareVectorscopeResult* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_stereo_pair("metering_vectorscope_decimated", "left", "right", left,
-                                         right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -371,25 +358,12 @@ SonareError fill_phase_scope_result(const metering::PhaseScopeResult& result,
 }  // namespace
 
 SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonarePhaseScopeResult* out) {
+                                        int sample_rate, size_t max_points,
+                                        SonarePhaseScopeResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SonareError err = validate_stereo_pair("metering_phase_scope", "left", "right", left, right,
                                          length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_TRY
-  return fill_phase_scope_result(metering::phase_scope(left, right, length), out);
-  SONARE_C_CATCH
-}
-
-SonareError sonare_metering_phase_scope_decimated(const float* left, const float* right,
-                                                  size_t length, int sample_rate, size_t max_points,
-                                                  SonarePhaseScopeResult* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_stereo_pair("metering_phase_scope_decimated", "left", "right", left,
-                                         right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY

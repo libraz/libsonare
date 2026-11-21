@@ -191,9 +191,11 @@ TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_ch
   REQUIRE_FALSE(config.limiter.enable_isp_limiter);
   REQUIRE(config.limiter.isp_ceiling_dbtp == -2.0f);
 
+  SonareRealtimeVoiceChangerConfig flat_pod;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json(flat_pod_json.c_str(), &flat_pod) ==
+          SONARE_OK);
   SonareRealtimeVoiceChanger* handle = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json(flat_pod_json.c_str(), 48000, 128, 1,
-                                                    &handle) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_create(&flat_pod, 48000, 128, 1, &handle) == SONARE_OK);
   char* nested_json = nullptr;
   REQUIRE(sonare_realtime_voice_changer_config_json(handle, &nested_json) == SONARE_OK);
   REQUIRE(nested_json != nullptr);
@@ -213,31 +215,27 @@ TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_ch
 }
 
 TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]") {
-  SonareRealtimeVoiceChanger* handle = nullptr;
+  SonareRealtimeVoiceChangerConfig parsed;
   REQUIRE(
-      sonare_realtime_voice_changer_create_json(
+      sonare_realtime_voice_changer_config_from_json(
           R"json({"schemaVersion":4,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
-          48000, 128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(handle == nullptr);
-  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
-          SONARE_OK);
+          &parsed) == SONARE_ERROR_INVALID_FORMAT);
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("brightIdol", &parsed) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_create(&parsed, 48000, 128, 1, &handle) == SONARE_OK);
   REQUIRE(handle != nullptr);
 
   std::vector<float> input = sine(220.0f, 48000, 128);
   std::vector<float> output(input.size(), 0.0f);
-  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, input.data(), output.data(),
+  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, input.data(), nullptr, output.data(),
                                                      output.size()) == SONARE_OK);
   for (float sample : output) REQUIRE(std::isfinite(sample));
 
   int latency = 0;
   REQUIRE(sonare_realtime_voice_changer_latency_samples(handle, &latency) == SONARE_OK);
   REQUIRE(latency > 0);
-  REQUIRE(
-      sonare_realtime_voice_changer_set_config_json(
-          handle,
-          R"json({"schemaVersion":4,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
-      SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("deepNarrator", &parsed) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_set_config(handle, &parsed) == SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
 
   char* json = nullptr;
@@ -268,8 +266,9 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   sonare_realtime_voice_changer_destroy(handle);
 }
 
-TEST_CASE("sonare_realtime_voice_changer_create_json refuses config exceeding the JSON byte budget",
-          "[voice_changer][c-api][resource]") {
+TEST_CASE(
+    "sonare_realtime_voice_changer_config_from_json refuses config exceeding the JSON byte budget",
+    "[voice_changer][c-api][resource]") {
   // One JSON string value past the 64 MiB config budget. The refusal has to
   // come from the byte precheck, not from the parser walking a document this
   // size into json::Value nodes first. realtime_voice_changer_config_from_input
@@ -279,10 +278,9 @@ TEST_CASE("sonare_realtime_voice_changer_create_json refuses config exceeding th
   const std::string oversized =
       "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
 
-  SonareRealtimeVoiceChanger* handle = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json(oversized.c_str(), 48000, 128, 1, &handle) ==
+  SonareRealtimeVoiceChangerConfig parsed;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json(oversized.c_str(), &parsed) ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(handle == nullptr);
 
   // The C ABI wrapper does not route this path's error through
   // sonare_last_error_message(), so check the message on the underlying
@@ -294,13 +292,7 @@ TEST_CASE("sonare_realtime_voice_changer_create_json refuses config exceeding th
 
   // An ordinary preset id still creates a handle, so the refusal above is the
   // size and not some other change to config handling.
-  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
-          SONARE_OK);
-  REQUIRE(handle != nullptr);
-  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, oversized.c_str()) ==
-          SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
-  sonare_realtime_voice_changer_destroy(handle);
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("brightIdol", &parsed) == SONARE_OK);
 }
 
 TEST_CASE(

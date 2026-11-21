@@ -218,7 +218,7 @@ class BusNode final : public sonare::rt::ProcessorBase {
   // insert, which clears the delay lines and filter state this node exists to
   // preserve. They are prepared once where their record is created, before the
   // bus's inserts are added, exactly as a strip is prepared in
-  // sonare_mixer_add_strip_ex. Only the per-compile members below are prepared.
+  // sonare_mixer_add_strip. Only the per-compile members below are prepared.
   void prepare(double sample_rate, int max_block_size) override {
     input_trim_.prepare(sample_rate, max_block_size);
     width_.prepare(sample_rate, max_block_size);

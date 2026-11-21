@@ -63,23 +63,19 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
   CHECK(last_message() == "out_length must not be NULL");
   CHECK(out == nullptr);
 
-  float* harmonic = garbage_pointer<float>();
-  float* percussive = garbage_pointer<float>();
+  SonareHpssResult hpss_result{garbage_pointer<float>(), garbage_pointer<float>(), 99, 99};
   float* residual = garbage_pointer<float>();
-  size_t length = 99;
-  int sample_rate = 99;
-  REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, &harmonic, &percussive,
-                                    &residual, &length,
-                                    &sample_rate) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_hpss(nullptr, kLength, kRate, 31, 31, nullptr, &hpss_result, &residual) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
-  CHECK(harmonic == nullptr);
-  CHECK(percussive == nullptr);
+  CHECK(hpss_result.harmonic == nullptr);
+  CHECK(hpss_result.percussive == nullptr);
   CHECK(residual == nullptr);
-  CHECK(length == 0);
-  CHECK(sample_rate == 0);
+  CHECK(hpss_result.length == 0);
+  CHECK(hpss_result.sample_rate == 0);
 
-  REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, nullptr, nullptr, nullptr,
-                                    nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_hpss(nullptr, kLength, kRate, 31, 31, nullptr, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
 
   int* intervals_out = garbage_pointer<int>();
@@ -98,16 +94,16 @@ TEST_CASE("decompose and nn_filter refuse the input matrix before a NULL output"
   size_t w_length = 99;
   float* h = garbage_pointer<float>();
   size_t h_length = 99;
-  REQUIRE(sonare_decompose_with_init(nullptr, 4, 4, 2, 10, 0.0f, "random", &w, &w_length, &h,
-                                     &h_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_decompose(nullptr, 4, 4, 2, 10, 0.0f, nullptr, &w, &w_length, &h, &h_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "s must not be NULL");
   CHECK(w == nullptr);
   CHECK(w_length == 0);
   CHECK(h == nullptr);
   CHECK(h_length == 0);
 
-  REQUIRE(sonare_decompose_with_init(nullptr, 4, 4, 2, 10, 0.0f, "random", nullptr, nullptr,
-                                     nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_decompose(nullptr, 4, 4, 2, 10, 0.0f, nullptr, nullptr, nullptr, nullptr,
+                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "s must not be NULL");
 
   float* out = garbage_pointer<float>();
@@ -125,17 +121,19 @@ TEST_CASE("decompose and nn_filter refuse the input matrix before a NULL output"
 
 TEST_CASE("stereo normalize refuses the left channel before a NULL result",
           "[c_api][header_order]") {
-  SonareNormalizeStereoResult result;
-  std::memset(&result, 0xAB, sizeof(result));
-  REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  float sentinel = 0.0f;
+  float* out_left = &sentinel;
+  float* out_right = &sentinel;
+  size_t out_length = 99;
+  REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, &out_left, &out_right,
+                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "left must be a non-empty buffer");
-  CHECK(result.left == nullptr);
-  CHECK(result.right == nullptr);
-  CHECK(result.length == 0);
+  CHECK(out_left == nullptr);
+  CHECK(out_right == nullptr);
+  CHECK(out_length == 0);
 
-  REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, nullptr) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, nullptr, nullptr,
+                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "left must be a non-empty buffer");
 }
 
@@ -147,27 +145,27 @@ TEST_CASE("voice changer one-shots refuse the input buffer before a NULL output"
 
   float* out = garbage_pointer<float>();
   size_t out_length = 99;
-  REQUIRE(sonare_voice_change(nullptr, kLength, kRate, 0.0f, 1.0f, &out, &out_length) ==
+  REQUIRE(sonare_voice_change(nullptr, kLength, kRate, nullptr, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
-  REQUIRE(sonare_voice_change(nullptr, kLength, kRate, 0.0f, 1.0f, nullptr, nullptr) ==
+  REQUIRE(sonare_voice_change(nullptr, kLength, kRate, nullptr, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
 
   out = garbage_pointer<float>();
   out_length = 99;
-  REQUIRE(sonare_voice_change_realtime(nullptr, kLength, kRate, nullptr, 3, &out, &out_length) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(nullptr, kLength, kRate, nullptr, 3, &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
   // A refused channel count precedes the NULL outputs.
-  REQUIRE(sonare_voice_change_realtime(samples.data(), kLength, kRate, nullptr, 3, nullptr,
-                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_render(samples.data(), kLength, kRate, nullptr, 3, nullptr,
+                                               nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "channels must be an integer in [1, 2]");
 }
 
@@ -199,18 +197,20 @@ TEST_CASE("voice changer creation refuses its arguments before a NULL handle out
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == config_message);
 
+  SonareRealtimeVoiceChangerConfig parsed;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("neutralMonitor", &parsed) == SONARE_OK);
   handle = garbage_pointer<SonareRealtimeVoiceChanger>();
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 0, 0, 1, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create(&parsed, 0, 0, 1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(handle == nullptr);
-  const std::string json_rate_message = last_message();
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 0, 0, 1, nullptr) ==
+  const std::string parsed_rate_message = last_message();
+  REQUIRE(sonare_realtime_voice_changer_create(&parsed, 0, 0, 1, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == json_rate_message);
-  CHECK(json_rate_message != "out must not be NULL");
+  CHECK(last_message() == parsed_rate_message);
+  CHECK(parsed_rate_message != "out must not be NULL");
 
-  // A document the loader refuses precedes the sample rate.
-  REQUIRE(sonare_realtime_voice_changer_create_json("{", 0, 0, 1, nullptr) ==
+  // A document the loader refuses is its own refusal.
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("{", &parsed) ==
           SONARE_ERROR_INVALID_FORMAT);
 }
 

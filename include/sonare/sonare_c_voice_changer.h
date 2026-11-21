@@ -24,14 +24,13 @@ extern "C" {
 /// - `sonare_realtime_voice_changer_create*`,
 ///   `sonare_realtime_voice_changer_destroy`,
 ///   `sonare_realtime_voice_changer_set_config`,
-///   `sonare_realtime_voice_changer_set_config_json` and the JSON validator
+///   `sonare_realtime_voice_changer_config_from_json` and the JSON validator
 ///   entry points allocate and parse — call them only from the configuration
 ///   thread.
 /// - On a single handle, the realtime thread and the configuration thread may
 ///   run concurrently, but two threads MUST NOT call any `_process_*` function
 ///   on the same handle simultaneously.
-/// - `sonare_realtime_voice_changer_set_config` and
-///   `sonare_realtime_voice_changer_set_config_json` are themselves safe to
+/// - `sonare_realtime_voice_changer_set_config` is itself safe to
 ///   call concurrently with a `_process_*` function on the same handle: the
 ///   new configuration is published through a lock-free snapshot mechanism and
 ///   adopted by the realtime thread at the next block boundary. Two threads
@@ -198,7 +197,7 @@ typedef struct {
   /// Amount of the input sibilance mixed into the vocoder output, [0, 1].
   float vocoder_sibilance;
   /// @brief A @ref SonareVocoderCarrierSource. External reads the carrier passed to the
-  ///        *_with_carrier process entries.
+  ///        process entries.
   int32_t vocoder_carrier_source;
   /// @brief A @ref SonareVocoderCarrierWave.
   int32_t vocoder_carrier_wave;
@@ -255,7 +254,7 @@ static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 72u * sizeof(float),
 ///          compile-time expectation; a mismatch means the host libsonare was
 ///          built against a different struct layout and the POD path would
 ///          corrupt memory. JSON-based bindings (Node/Python via
-///          @ref sonare_realtime_voice_changer_create_json) are tolerant of
+///          @ref sonare_realtime_voice_changer_config_from_json) are tolerant of
 ///          layout drift and do not need to gate on this.
 ///
 ///          Distinct from @ref sonare_engine_abi_version (which tracks the
@@ -279,10 +278,10 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 ///          only struct_size.
 void sonare_realtime_voice_changer_config_init(SonareRealtimeVoiceChangerConfig* config);
 
-/// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
-///        a flat POD config. Pass NULL to start from the neutralMonitor preset. A config
-///        refused by validation, a @p sample_rate outside the supported range or a
-///        @p max_block_size outside [1, 1048576] is SONARE_ERROR_INVALID_PARAMETER.
+/// @brief Creates a streaming realtime voice changer handle from a flat POD config.
+/// @details Pass NULL to start from the neutralMonitor preset. A config refused by validation, a
+///        @p sample_rate outside the supported range or a @p max_block_size outside
+///        [1, 1048576] is SONARE_ERROR_INVALID_PARAMETER.
 ///        @p max_block_size 0 selects the library default (128 frames); @p num_channels is
 ///        required (1 or 2), and 0 or a negative value is refused.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
@@ -300,79 +299,73 @@ SonareError sonare_realtime_voice_changer_set_config(
 SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceChanger* handle,
                                                      SonareRealtimeVoiceChangerConfig* out);
 
-/// @brief Creates a streaming realtime voice changer handle from a preset id or
-///        a full chain config JSON document.
-/// @details @p preset_or_config_json may be one of the preset ids returned by
-///          @ref sonare_realtime_voice_changer_preset_names, a JSON object
-///          following the realtime-voice-changer-preset schema, or the flat
-///          @ref SonareRealtimeVoiceChangerConfig field names used by bindings.
-///          JSON schema documents and flat configs must be complete; partial
-///          documents are rejected rather than silently filled with defaults.
-///          The created
-///          handle pre-allocates all internal buffers (including a planar
-///          deinterleave scratch) so every subsequent process call is
-///          realtime-safe.
-///          A document whose content is refused (an unknown preset id, a malformed or
-///          out-of-range field, a combination the chain cannot run) is
-///          SONARE_ERROR_INVALID_FORMAT; a @p sample_rate outside the supported range, a
-///          @p max_block_size outside [1, 1048576] or a @p num_channels other than 1 or 2 is
-///          SONARE_ERROR_INVALID_PARAMETER. @p max_block_size 0 selects the library default
-///          (128 frames); @p num_channels is required, so 0 is refused.
-/// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
-///       sonare_free_* buffer.
-SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_config_json,
-                                                      int sample_rate, int max_block_size,
-                                                      int num_channels,
-                                                      SonareRealtimeVoiceChanger** out);
-/// @brief Releases a handle created by @ref sonare_realtime_voice_changer_create_json.
+/// @brief Parses a preset id or a full chain config JSON document into @p out.
+/// @details @p preset_or_config_json may be NULL or empty (neutralMonitor), one of the preset ids
+///          returned by @ref sonare_realtime_voice_changer_preset_names, a JSON object following
+///          the realtime-voice-changer-preset schema, or the flat
+///          @ref SonareRealtimeVoiceChangerConfig field names used by bindings. JSON schema
+///          documents and flat configs must be complete; partial documents are rejected rather
+///          than silently filled with defaults. A document whose content is refused (an unknown
+///          preset id, a malformed or out-of-range field, a combination the chain cannot run) is
+///          SONARE_ERROR_INVALID_FORMAT and leaves @p out untouched. Pass the result to
+///          @ref sonare_realtime_voice_changer_create or
+///          @ref sonare_realtime_voice_changer_set_config.
+SonareError sonare_realtime_voice_changer_config_from_json(const char* preset_or_config_json,
+                                                           SonareRealtimeVoiceChangerConfig* out);
+
+/// @brief Renders a whole buffer through a temporary realtime voice changer.
+/// @details Creates a temporary @ref SonareRealtimeVoiceChanger from @p config, processes the
+///          whole mono or interleaved stereo buffer in realtime-sized blocks, and destroys the
+///          handle before returning. A NULL @p config selects the neutralMonitor defaults (see
+///          @ref sonare_realtime_voice_changer_config_init); a config that selects an external
+///          vocoder carrier is refused, since the render has none to supply. @p channels must be
+///          1 (mono) or 2 (interleaved stereo).
+/// @details The chain's processing latency (retune grain + ISP-limiter lookahead)
+///          is compensated: an equal-length silent tail is flushed and the
+///          leading @c latency_samples of pre-roll are dropped, so the returned
+///          buffer is the same length as @p samples AND time-aligned with the
+///          input (no head silence / tail truncation).
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_realtime_voice_changer_render(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareRealtimeVoiceChangerConfig* config,
+                                                 int channels, float** out, size_t* out_length);
+/// @brief Releases a handle created by @ref sonare_realtime_voice_changer_create.
 void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle);
 /// @brief Resets streaming state (envelopes, reverb tails, smoothed gains).
 /// @warning Control-thread operation: do not call concurrently with
 ///          sonare_realtime_voice_changer_process. For a live configuration
-///          change, use sonare_realtime_voice_changer_set_config_json instead.
+///          change, use sonare_realtime_voice_changer_set_config instead.
 SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle);
-/// @brief Realtime-safe configuration update; accepts a preset id or a complete JSON config.
-/// @details A document whose content is refused is SONARE_ERROR_INVALID_FORMAT and the previous
-///          configuration stays in effect.
-SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceChanger* handle,
-                                                          const char* preset_or_config_json);
 /// @brief Processes a single mono block. @p num_samples must be <= max_block_size.
+/// @param carrier External vocoder carrier of @p num_samples samples, or NULL for none. It is
+///        read only while the vocoder is enabled with @c SONARE_VOCODER_CARRIER_EXTERNAL and
+///        ignored otherwise; a NULL @p carrier while an external carrier is configured is
+///        SONARE_ERROR_INVALID_STATE, writing no output.
 SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChanger* handle,
-                                                       const float* input, float* output,
-                                                       size_t num_samples);
+                                                       const float* input, const float* carrier,
+                                                       float* output, size_t num_samples);
 /// @brief Processes an interleaved block. Uses a pre-allocated planar scratch
 ///        buffer; never allocates at runtime.
+/// @param carrier Mono external vocoder carrier of @p num_frames samples shared by every channel,
+///        or NULL for none; see @ref sonare_realtime_voice_changer_process_mono.
 /// @param output Caller-owned block written only on success and left untouched on failure, so a
 ///        rejected call leaves whatever the host had there rather than punching a gap in it.
 SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoiceChanger* handle,
-                                                              const float* input, float* output,
+                                                              const float* input,
+                                                              const float* carrier, float* output,
                                                               size_t num_frames, int num_channels);
 /// @brief Process a block of planar (non-interleaved) stereo audio in place.
 /// @details @p left and @p right point to separate float buffers of length
 ///          @p num_frames. The handle must have been prepared with at least
 ///          2 channels. Like the interleaved variant, this is realtime-safe.
+/// @param carrier Mono external vocoder carrier of @p num_frames samples shared by both channels,
+///        or NULL for none; see @ref sonare_realtime_voice_changer_process_mono.
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
+                                                                const float* carrier,
                                                                 size_t num_frames);
-/// @brief Same as @ref sonare_realtime_voice_changer_process_mono, with an external vocoder
-///        carrier of @p num_samples samples.
-/// @details The carrier is read only while the vocoder is enabled with
-///          @c SONARE_VOCODER_CARRIER_EXTERNAL; otherwise it is ignored. A NULL @p carrier is
-///          SONARE_ERROR_INVALID_PARAMETER. The carrier-less process entries return
-///          SONARE_ERROR_INVALID_STATE, writing no output, while an external carrier is configured.
-SonareError sonare_realtime_voice_changer_process_mono_with_carrier(
-    SonareRealtimeVoiceChanger* handle, const float* input, const float* carrier, float* output,
-    size_t num_samples);
-/// @brief Interleaved variant of @ref sonare_realtime_voice_changer_process_mono_with_carrier;
-///        @p carrier is mono, @p num_frames samples, shared by every channel.
-SonareError sonare_realtime_voice_changer_process_interleaved_with_carrier(
-    SonareRealtimeVoiceChanger* handle, const float* input, const float* carrier, float* output,
-    size_t num_frames, int num_channels);
-/// @brief Planar-stereo variant of @ref sonare_realtime_voice_changer_process_mono_with_carrier;
-///        @p carrier is mono, @p num_frames samples, shared by both channels.
-SonareError sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
-    SonareRealtimeVoiceChanger* handle, float* left, float* right, const float* carrier,
-    size_t num_frames);
 /// @brief Holds MIDI note @p note from the start of the next processed block.
 /// @details Held notes become the voices' pitch targets whatever the pitch correction mode, the
 ///          newest leading, up to 1 + harmony_voices of them. Realtime-safe and lock-free; one

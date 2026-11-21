@@ -229,14 +229,6 @@ typedef struct {
   float receiver_spacing_m;
 } SonareRoomMorphConfig;
 
-/// @brief Result of sonare_room_morph_stereo; free with sonare_free_room_morph_stereo_result.
-typedef struct {
-  float* left;      ///< Heap-owned left channel with length samples.
-  float* right;     ///< Heap-owned right channel with length samples.
-  size_t length;    ///< Number of samples in each channel.
-  int sample_rate;  ///< Sample rate in Hz of the input.
-} SonareRoomMorphStereoResult;
-
 #ifdef __cplusplus
 // Each config's scalar prefix is a packed run of 4-byte members (float/int/
 // unsigned), followed by the optional per-band-array + preset tail. The prefix
@@ -335,13 +327,13 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 
 /// @brief Offline room-character morph of a stereo pair toward a target room heard at two
 ///        receivers spaced config->receiver_spacing_m apart across the listener.
-/// @param out Receives the morphed pair (free with sonare_free_room_morph_stereo_result).
-///            Length is the input length plus the target room's reverb tail.
+/// @param out_left   Receives the morphed left channel (caller frees via sonare_free_floats).
+/// @param out_right  Receives the morphed right channel (caller frees via sonare_free_floats).
+/// @param out_length Receives the sample count of each channel: the input length plus the
+///                   target room's reverb tail.
 SonareError sonare_room_morph_stereo(const float* left, const float* right, size_t length,
                                      int sample_rate, const SonareRoomMorphConfig* config,
-                                     SonareRoomMorphStereoResult* out);
-/// @brief Release both channels of a @ref SonareRoomMorphStereoResult; NULL-safe.
-void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result);
+                                     float** out_left, float** out_right, size_t* out_length);
 
 /// @brief Name of a SONARE_MATERIAL_PRESET_* value ("none", "concrete", "wood", "curtain",
 ///        "carpet", "glass"), or NULL when @p preset is not one. The values are contiguous from

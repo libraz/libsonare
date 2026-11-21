@@ -776,9 +776,13 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     }
     // The library runs the latency-compensated one-shot, so the CLI keeps no block loop of its
     // own; the probe handle is prepared at the library's default block size.
+    SonareRealtimeVoiceChangerConfig c_config;
+    const SonareError parse_err =
+        sonare_realtime_voice_changer_config_from_json(config_text.c_str(), &c_config);
+    if (parse_err != SONARE_OK) throw_c_error(parse_err, "voice changer config failed");
     SonareRealtimeVoiceChanger* raw_probe = nullptr;
-    const SonareError probe_err = sonare_realtime_voice_changer_create_json(
-        config_text.c_str(), audio.sample_rate(), 0, 1, &raw_probe);
+    const SonareError probe_err =
+        sonare_realtime_voice_changer_create(&c_config, audio.sample_rate(), 0, 1, &raw_probe);
     if (probe_err != SONARE_OK) throw_c_error(probe_err, "voice changer creation failed");
     std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
         probe(raw_probe, sonare_realtime_voice_changer_destroy);
@@ -789,9 +793,8 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
 
     float* raw_output = nullptr;
     size_t output_length = 0;
-    const SonareError render_err =
-        sonare_voice_change_realtime(audio.data(), audio.size(), audio.sample_rate(),
-                                     config_text.c_str(), 1, &raw_output, &output_length);
+    const SonareError render_err = sonare_realtime_voice_changer_render(
+        audio.data(), audio.size(), audio.sample_rate(), &c_config, 1, &raw_output, &output_length);
     if (render_err != SONARE_OK) throw_c_error(render_err, "voice change failed");
     std::unique_ptr<float, decltype(&sonare_free_floats)> output(raw_output, sonare_free_floats);
     result = Audio::from_vector(std::vector<float>(raw_output, raw_output + output_length),

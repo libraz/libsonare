@@ -16,7 +16,7 @@ TEST_CASE("streaming mastering C API sets prepared realtime parameters",
           "[c_api][mastering][streaming]") {
   const char* config = R"({"maximizer.truePeakLimiter.enabled":1})";
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(config, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(config, nullptr, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
 
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
@@ -48,7 +48,7 @@ TEST_CASE("streaming mastering C API validates setter handles and keys",
                                                          -12.0) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(chain, nullptr, -12.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -76,8 +76,8 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
   REQUIRE(sonare_streaming_loudness_gain(left.data(), left.size(), kRate, config, &mono) ==
           SONARE_OK);
   SonareMasteringChainResult mono_chain{};
-  REQUIRE(sonare_master_audio(nullptr, left.data(), left.size(), kRate, config, &mono_chain) ==
-          SONARE_OK);
+  REQUIRE(sonare_master_audio(nullptr, left.data(), left.size(), kRate, config, nullptr,
+                              &mono_chain) == SONARE_OK);
   CHECK(mono.loudness_static_gain_db == mono_chain.applied_gain_db);
   CHECK(std::isfinite(mono.integrated_lufs));
   CHECK(std::isfinite(mono.true_peak_dbtp));
@@ -88,7 +88,7 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
                                                 config, &stereo) == SONARE_OK);
   SonareMasteringChainStereoResult stereo_chain{};
   REQUIRE(sonare_master_audio_stereo(nullptr, left.data(), right.data(), left.size(), kRate, config,
-                                     &stereo_chain) == SONARE_OK);
+                                     nullptr, &stereo_chain) == SONARE_OK);
   CHECK(stereo.loudness_static_gain_db == stereo_chain.applied_gain_db);
   sonare_free_mastering_chain_stereo_result(&stereo_chain);
 
@@ -103,7 +103,7 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
 TEST_CASE("streaming mastering chain prepare resolves a zero block size to its default",
           "[c_api][mastering][streaming]") {
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, nullptr, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   CHECK(sonare_streaming_mastering_chain_prepare(chain, 48000, -1, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);

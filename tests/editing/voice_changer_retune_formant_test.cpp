@@ -506,15 +506,18 @@ TEST_CASE("VoiceChanger rejects a non-finite pitch instead of reporting a no-op 
   // directly.
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, nan_value, 1.0f, &out,
+  SonareVoiceChangeConfig c_config;
+  sonare_voice_change_config_init(&c_config);
+  c_config.pitch_semitones = nan_value;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, &c_config, &out,
                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
 
   // +/-Inf was never silently bypassed: it enters the branch and pitch_shift
   // refuses it. Pin that so the two cases cannot diverge.
-  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate,
-                              std::numeric_limits<float>::infinity(), 1.0f, &out,
+  c_config.pitch_semitones = std::numeric_limits<float>::infinity();
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, &c_config, &out,
                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 }
 

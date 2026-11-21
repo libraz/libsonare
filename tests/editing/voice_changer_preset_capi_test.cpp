@@ -648,7 +648,7 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
 }
 
 TEST_CASE(
-    "sonare_voice_change_realtime neutralMonitor reports fixed latency and preserves short "
+    "sonare_realtime_voice_changer_render neutralMonitor reports fixed latency and preserves short "
     "signals",
     "[voice_changer][c-api][regression]") {
   // retune.mix == 0 bypasses pitch shifting, not its fixed OLA alignment.
@@ -683,8 +683,8 @@ TEST_CASE(
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(input.data(), length, sample_rate, "neutralMonitor", 1, &out,
-                                       &out_length) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_render(input.data(), length, sample_rate, nullptr, 1, &out,
+                                               &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == length);
 
@@ -756,16 +756,17 @@ TEST_CASE("realtime voice changer audio-thread entries leave the error channel u
   const std::string recorded = record_detailed_error();
   REQUIRE_FALSE(recorded.empty());
 
-  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, mono.data(), mono_out.data(),
+  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, mono.data(), nullptr, mono_out.data(),
                                                      kFrames) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
 
-  REQUIRE(sonare_realtime_voice_changer_process_interleaved(
-              handle, interleaved.data(), interleaved_out.data(), kFrames, 2) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_process_interleaved(handle, interleaved.data(), nullptr,
+                                                            interleaved_out.data(), kFrames,
+                                                            2) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
 
   REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(handle, left.data(), right.data(),
-                                                              kFrames) == SONARE_OK);
+                                                              nullptr, kFrames) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
 
   int latency = 0;
@@ -774,8 +775,9 @@ TEST_CASE("realtime voice changer audio-thread entries leave the error channel u
 
   // A rejected argument reports through the return code alone: it neither
   // records a message of its own nor wipes the one already there.
-  REQUIRE(sonare_realtime_voice_changer_process_mono(
-              handle, mono.data(), mono_out.data(), kFrames * 8) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, mono.data(), nullptr, mono_out.data(),
+                                                     kFrames * 8) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
 
   // The note entries: success, an out-of-range argument and a full queue.
@@ -813,27 +815,27 @@ TEST_CASE("realtime voice changer audio-thread entries leave the error channel u
           SONARE_OK);
   const std::string carrier_recorded = record_detailed_error();
   const std::vector<float> carrier(kFrames, 0.2f);
-  REQUIRE(sonare_realtime_voice_changer_process_mono_with_carrier(
-              carrier_handle, mono.data(), carrier.data(), mono_out.data(), kFrames) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_process_mono(carrier_handle, mono.data(), carrier.data(),
+                                                     mono_out.data(), kFrames) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
-  REQUIRE(sonare_realtime_voice_changer_process_mono_with_carrier(
-              carrier_handle, mono.data(), nullptr, mono_out.data(), kFrames) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_process_mono(carrier_handle, mono.data(), nullptr,
+                                                     mono_out.data(),
+                                                     kFrames) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
-  REQUIRE(sonare_realtime_voice_changer_process_interleaved_with_carrier(
-              carrier_handle, interleaved.data(), carrier.data(), interleaved_out.data(), kFrames,
-              2) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_process_interleaved(carrier_handle, interleaved.data(),
+                                                            carrier.data(), interleaved_out.data(),
+                                                            kFrames, 2) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
-  REQUIRE(sonare_realtime_voice_changer_process_interleaved_with_carrier(
+  REQUIRE(sonare_realtime_voice_changer_process_interleaved(
               carrier_handle, interleaved.data(), nullptr, interleaved_out.data(), kFrames, 2) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
-  REQUIRE(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+  REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(
               carrier_handle, left.data(), right.data(), carrier.data(), kFrames) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
-  REQUIRE(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
-              carrier_handle, left.data(), right.data(), nullptr, kFrames) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(carrier_handle, left.data(),
+                                                              right.data(), nullptr, kFrames) ==
+          SONARE_ERROR_INVALID_STATE);
   REQUIRE(std::string(sonare_last_error_message()) == carrier_recorded);
   sonare_realtime_voice_changer_destroy(carrier_handle);
 }
@@ -1112,8 +1114,10 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
   CHECK_THAT(std::string(sonare_last_error_message()),
              Catch::Matchers::ContainsSubstring("formant mode"));
 
-  // JSON updates are held to the same rule.
-  CHECK(sonare_realtime_voice_changer_set_config_json(absolute, "brightIdol") ==
+  // A parsed preset is held to the same rule.
+  SonareRealtimeVoiceChangerConfig bright;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("brightIdol", &bright) == SONARE_OK);
+  CHECK(sonare_realtime_voice_changer_set_config(absolute, &bright) ==
         SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_realtime_voice_changer_destroy(relative);
@@ -1229,9 +1233,10 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
           "[voice_changer][c-api]") {
   for (const int rate : {48000, 96000, 176400, 192000}) {
     CAPTURE(rate);
+    SonareRealtimeVoiceChangerConfig bright;
+    REQUIRE(sonare_realtime_voice_changer_config_from_json("brightIdol", &bright) == SONARE_OK);
     SonareRealtimeVoiceChanger* first = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", rate, 256, 1, &first) ==
-            SONARE_OK);
+    REQUIRE(sonare_realtime_voice_changer_create(&bright, rate, 256, 1, &first) == SONARE_OK);
     SonareRealtimeVoiceChangerConfig pod{};
     REQUIRE(sonare_realtime_voice_changer_get_config(first, &pod) == SONARE_OK);
     int latency = 0;
@@ -1254,9 +1259,11 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
     }
 
     // Recreating from it at the same rate lands on the same grain and latency.
-    SonareRealtimeVoiceChanger* second = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json(document.c_str(), rate, 256, 1, &second) ==
+    SonareRealtimeVoiceChangerConfig reparsed;
+    REQUIRE(sonare_realtime_voice_changer_config_from_json(document.c_str(), &reparsed) ==
             SONARE_OK);
+    SonareRealtimeVoiceChanger* second = nullptr;
+    REQUIRE(sonare_realtime_voice_changer_create(&reparsed, rate, 256, 1, &second) == SONARE_OK);
     SonareRealtimeVoiceChangerConfig pod2{};
     REQUIRE(sonare_realtime_voice_changer_get_config(second, &pod2) == SONARE_OK);
     int latency2 = 0;
@@ -1293,8 +1300,8 @@ TEST_CASE("C ABI voice changer reset acts on the latest published configuration"
           std::vector<float> out(input.size());
           for (int pos = 0; pos < total; pos += block) {
             REQUIRE(sonare_realtime_voice_changer_process_mono(
-                        handle, input.data() + pos, out.data() + pos, static_cast<size_t>(block)) ==
-                    SONARE_OK);
+                        handle, input.data() + pos, nullptr, out.data() + pos,
+                        static_cast<size_t>(block)) == SONARE_OK);
           }
           return out;
         };
@@ -1342,17 +1349,13 @@ std::string with_replaced(std::string text, const std::string& from, const std::
 
 }  // namespace
 
-TEST_CASE("The preset validator, create_json and set_config_json answer one rule set",
+TEST_CASE("The preset validator and config_from_json answer one rule set",
           "[voice_changer][c-api][validation]") {
   const std::string base = neutral_preset_document();
   const std::string grain = with_replaced(base, "\"engine\":\"psola\"", "\"engine\":\"grain\"");
   const std::string grain_auto = with_replaced(grain, "\"mode\":\"off\"", "\"mode\":\"auto\"");
   const std::string grain_harmony = with_replaced(grain, "\"voices\":0", "\"voices\":1");
   const std::string grain_vocoder = with_replaced(grain, "\"enabled\":false", "\"enabled\":true");
-
-  SonareRealtimeVoiceChanger* live = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, 1, &live) ==
-          SONARE_OK);
 
   struct Case {
     const char* name;
@@ -1371,28 +1374,22 @@ TEST_CASE("The preset validator, create_json and set_config_json answer one rule
         c.document->c_str(), &normalized, &validator_error);
     sonare_free_string(normalized);
 
-    SonareRealtimeVoiceChanger* created = nullptr;
-    const SonareError create_code =
-        sonare_realtime_voice_changer_create_json(c.document->c_str(), 48000, 128, 1, &created);
-    const std::string create_message = sonare_last_error_message();
-    sonare_realtime_voice_changer_destroy(created);
-    const SonareError set_code =
-        sonare_realtime_voice_changer_set_config_json(live, c.document->c_str());
+    SonareRealtimeVoiceChangerConfig parsed;
+    const SonareError parse_code =
+        sonare_realtime_voice_changer_config_from_json(c.document->c_str(), &parsed);
+    const std::string parse_message = sonare_last_error_message();
 
     if (c.accepted) {
       CHECK(validated == SONARE_OK);
-      CHECK(create_code == SONARE_OK);
-      CHECK(set_code == SONARE_OK);
+      CHECK(parse_code == SONARE_OK);
     } else {
       CHECK(validated == SONARE_ERROR_INVALID_FORMAT);
-      CHECK(create_code == SONARE_ERROR_INVALID_FORMAT);
-      CHECK(set_code == SONARE_ERROR_INVALID_FORMAT);
+      CHECK(parse_code == SONARE_ERROR_INVALID_FORMAT);
       REQUIRE(validator_error != nullptr);
-      CHECK(create_message == validator_error);
+      CHECK(parse_message == validator_error);
     }
     sonare_free_string(validator_error);
   }
-  sonare_realtime_voice_changer_destroy(live);
 }
 
 TEST_CASE("The offline realtime wrapper refuses an external-carrier config before processing",
@@ -1404,8 +1401,12 @@ TEST_CASE("The offline realtime wrapper refuses an external-carrier config befor
   const std::vector<float> samples(4800, 0.1f);
   float* out = nullptr;
   size_t out_length = 7;
-  REQUIRE(sonare_voice_change_realtime(samples.data(), samples.size(), 48000, external.c_str(), 1,
-                                       &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareRealtimeVoiceChangerConfig external_config;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json(external.c_str(), &external_config) ==
+          SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_render(samples.data(), samples.size(), 48000,
+                                               &external_config, 1, &out,
+                                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out == nullptr);
   CHECK(out_length == 0);
   CHECK_THAT(std::string(sonare_last_error_message()),
@@ -1417,9 +1418,6 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
   for (const int rate : {0, 7999, 384001, 1000000000}) {
     CAPTURE(rate);
     SonareRealtimeVoiceChanger* handle = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", rate, 128, 1, &handle) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(handle == nullptr);
     REQUIRE(sonare_realtime_voice_changer_create(nullptr, rate, 128, 1, &handle) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(handle == nullptr);
@@ -1427,9 +1425,6 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
   for (const int block : {-1, (1 << 20) + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);
     SonareRealtimeVoiceChanger* handle = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, block, 1, &handle) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(handle == nullptr);
     REQUIRE(sonare_realtime_voice_changer_create(nullptr, 48000, block, 1, &handle) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(handle == nullptr);
@@ -1440,32 +1435,22 @@ TEST_CASE(
     "Realtime voice changer creation defaults a zero block size and requires the channel count",
     "[voice_changer][c-api][validation]") {
   SonareRealtimeVoiceChanger* handle = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, -1, 1, &handle) ==
+  SonareRealtimeVoiceChangerConfig config{};
+  sonare_realtime_voice_changer_config_init(&config);
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, -1, 1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, -1, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, -1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, 0, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 0, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(handle == nullptr);
 
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 0, 1, &handle) ==
-          SONARE_OK);
   std::vector<float> in(129, 0.0f);
   std::vector<float> out(129, 0.0f);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 128) ==
-        SONARE_OK);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 129) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  sonare_realtime_voice_changer_destroy(handle);
-
-  SonareRealtimeVoiceChangerConfig config{};
-  sonare_realtime_voice_changer_config_init(&config);
-  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 0, &handle) ==
-          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 0, 1, &handle) == SONARE_OK);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 128) ==
+  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), nullptr, out.data(), 128) ==
         SONARE_OK);
-  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 129) ==
+  CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), nullptr, out.data(), 129) ==
         SONARE_ERROR_INVALID_PARAMETER);
   sonare_realtime_voice_changer_destroy(handle);
 }

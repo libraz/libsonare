@@ -248,10 +248,13 @@ TEST_CASE("Mixer and strip entries name the refused argument", "[mixing][capi][r
   SonareStrip* strip = sonare_mixer_strip_at(mixer, 0);
   REQUIRE(strip != nullptr);
 
-  CHECK(sonare_mixer_add_strip(mixer, "comp") == nullptr);
+  CHECK(sonare_mixer_add_strip(mixer, "comp", nullptr) == nullptr);
   CHECK(last() == "id must not be the id of a strip already in this mixer");
-  CHECK(sonare_mixer_add_strip_ex(mixer, "other", 1, 1, 1, 3) == nullptr);
-  CHECK(last() == "true_peak_oversample must be one of 0, 4, 8");
+  SonareMixerAddStripOptions bad_options;
+  sonare_mixer_add_strip_options_init(&bad_options);
+  bad_options.true_peak_oversample = 3;
+  CHECK(sonare_mixer_add_strip(mixer, "other", &bad_options) == nullptr);
+  CHECK(last() == "options.true_peak_oversample must be one of 4, 8");
 
   CHECK(sonare_strip_set_fader_db(nullptr, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last() == "strip must not be NULL");
@@ -259,9 +262,9 @@ TEST_CASE("Mixer and strip entries name the refused argument", "[mixing][capi][r
   CHECK(last() == "index must be the index of a send in this strip, which has none");
 
   SonareMixMeterSnapshot snapshot{};
-  CHECK(sonare_strip_meter_tap(strip, 5, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_strip_meter(strip, 5, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last() == "tap must be an integer in [0, 1]");
-  CHECK(sonare_strip_meter_tap(strip, 5, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_strip_meter(strip, 5, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last() == "tap must be an integer in [0, 1]");
 
   CHECK(sonare_strip_schedule_insert_automation(strip, 5, 0, 0, -24.0f, 0) ==

@@ -870,50 +870,6 @@
       "sentinel": null
     },
     {
-      "entry": "decompose_with_init",
-      "param": "n_components",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "decompose_with_init",
-      "param": "n_features",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "decompose_with_init",
-      "param": "n_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "decompose_with_init",
-      "param": "n_iter",
-      "kind": "integer",
-      "lo": 0,
-      "hi": 2147483647,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": 0
-    },
-    {
       "entry": "detect_acoustic",
       "param": "min_decay_db",
       "kind": "real",
@@ -2091,17 +2047,6 @@
       "sentinel": null
     },
     {
-      "entry": "eq_match_ex",
-      "param": "max_bands",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 24,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
       "entry": "eq_set_band",
       "param": "index",
       "kind": "integer",
@@ -2355,8 +2300,8 @@
       "sentinel": null
     },
     {
-      "entry": "hpss_ex",
-      "param": "n_fft",
+      "entry": "hpss",
+      "param": "options.n_fft",
       "kind": "integer",
       "lo": 4,
       "hi": 524288,
@@ -4665,8 +4610,8 @@
       "sentinel": null
     },
     {
-      "entry": "pitch_shift_ex",
-      "param": "n_fft",
+      "entry": "pitch_shift",
+      "param": "options.n_fft",
       "kind": "integer",
       "lo": 4,
       "hi": 524288,
@@ -5809,6 +5754,17 @@
       "sentinel": null
     },
     {
+      "entry": "realtime_voice_changer_render",
+      "param": "channels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "reassigned_spectrogram",
       "param": "hop_length",
       "kind": "integer",
@@ -6876,8 +6832,8 @@
       "sentinel": null
     },
     {
-      "entry": "time_stretch_ex",
-      "param": "n_fft",
+      "entry": "time_stretch",
+      "param": "options.n_fft",
       "kind": "integer",
       "lo": 4,
       "hi": 524288,
@@ -7096,8 +7052,8 @@
       "sentinel": null
     },
     {
-      "entry": "trim_ex",
-      "param": "frame_length",
+      "entry": "trim",
+      "param": "options.frame_length",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -7107,8 +7063,8 @@
       "sentinel": null
     },
     {
-      "entry": "trim_ex",
-      "param": "hop_length",
+      "entry": "trim",
+      "param": "options.hop_length",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -7156,17 +7112,6 @@
       "kind": "integer",
       "lo": 1,
       "hi": 4294967295,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "voice_change_realtime",
-      "param": "channels",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

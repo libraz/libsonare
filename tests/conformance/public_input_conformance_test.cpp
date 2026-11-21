@@ -128,7 +128,7 @@ TEST_CASE("public input corpus keeps mixer option rejection conformant across th
       SonareMixer* mixer = nullptr;
       REQUIRE(sonare_mixer_create(48000, 128, &mixer) == SONARE_OK);
       REQUIRE(mixer != nullptr);
-      SonareStrip* strip = sonare_mixer_add_strip(mixer, "corpus");
+      SonareStrip* strip = sonare_mixer_add_strip(mixer, "corpus", nullptr);
       REQUIRE(strip != nullptr);
 
       const std::string& field = test_case["field"].as_string();

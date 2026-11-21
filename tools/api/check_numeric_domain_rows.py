@@ -22,7 +22,7 @@ _UNROWED: dict[str, str] = {
     "kSilenceIndexableLengthDomain": "refuses only a buffer longer than INT_MAX samples",
     "kSilenceSignalCountDomain": "split_silence_common_ex refuses a signal_count below 1 with its own at-least check first",
     "kStftWinLengthDomain": "polyphonic_analyze, the one C entry taking win_length, checks kColaWinLengthDomain first",
-    "kVoiceChangerBlockSizeDomain": "voice_change_realtime passes a constant block size",
+    "kVoiceChangerBlockSizeDomain": "realtime_voice_changer_render passes a constant block size",
     "kWaveletSampleRateDomain": "wavelet_lengths has no C entry",
 }
 

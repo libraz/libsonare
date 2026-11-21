@@ -99,11 +99,9 @@ std::vector<float> run_mono(const Handle& h, const std::vector<float>& input,
   std::vector<float> out(input.size(), 0.0f);
   for (std::size_t pos = 0; pos < input.size(); pos += kBlock) {
     const std::size_t n = std::min<std::size_t>(kBlock, input.size() - pos);
-    const SonareError err =
-        carrier ? sonare_realtime_voice_changer_process_mono_with_carrier(
-                      h.get(), input.data() + pos, carrier->data() + pos, out.data() + pos, n)
-                : sonare_realtime_voice_changer_process_mono(h.get(), input.data() + pos,
-                                                             out.data() + pos, n);
+    const SonareError err = sonare_realtime_voice_changer_process_mono(
+        h.get(), input.data() + pos, carrier ? carrier->data() + pos : nullptr, out.data() + pos,
+        n);
     REQUIRE(err == SONARE_OK);
   }
   return out;
@@ -378,9 +376,10 @@ TEST_CASE("Every preset round-trips through the POD and agrees with its JSON for
     CHECK(same_bytes(read_config(from_pod), pod));
 
     // The POD route and the preset-id route build the same chain configuration.
+    Config id_config{};
+    REQUIRE(sonare_realtime_voice_changer_config_from_json(id.c_str(), &id_config) == SONARE_OK);
     SonareRealtimeVoiceChanger* raw = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json(id.c_str(), kRate, kBlock, 1, &raw) ==
-            SONARE_OK);
+    REQUIRE(sonare_realtime_voice_changer_create(&id_config, kRate, kBlock, 1, &raw) == SONARE_OK);
     const Handle from_json(raw);
     CHECK(same_bytes(read_config(from_json), read_config(from_pod)));
 
@@ -806,34 +805,22 @@ TEST_CASE("Held notes reach the output whatever the pitch correction mode",
 // Carrier entries
 // ---------------------------------------------------------------------------------------------
 
-TEST_CASE("A NULL carrier is refused by every *_with_carrier entry", "[capi][voice_transform]") {
-  const Handle h = make(vocoder_config(SONARE_VOCODER_CARRIER_EXTERNAL), 2);
+TEST_CASE("A NULL carrier is accepted by every entry while no external carrier is read",
+          "[capi][voice_transform]") {
+  const Handle internal = make(vocoder_config(SONARE_VOCODER_CARRIER_INTERNAL), 2);
   std::vector<float> in(kBlock, 0.1f);
   std::vector<float> out(kBlock * 2, 0.5f);
-  CHECK(sonare_realtime_voice_changer_process_mono_with_carrier(
-            h.get(), in.data(), nullptr, out.data(), kBlock) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_realtime_voice_changer_process_interleaved_with_carrier(
-            h.get(), in.data(), nullptr, out.data(), kBlock, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_realtime_voice_changer_process_mono(internal.get(), in.data(), nullptr, out.data(),
+                                                   kBlock) == SONARE_OK);
+  CHECK(sonare_realtime_voice_changer_process_interleaved(internal.get(), in.data(), nullptr,
+                                                          out.data(), kBlock, 1) == SONARE_OK);
   std::vector<float> left(kBlock, 0.1f);
   std::vector<float> right(kBlock, 0.1f);
-  CHECK(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
-            h.get(), left.data(), right.data(), nullptr, kBlock) == SONARE_ERROR_INVALID_PARAMETER);
-
-  // The same holds when the configuration would not read a carrier at all.
-  const Handle internal = make(vocoder_config(SONARE_VOCODER_CARRIER_INTERNAL), 2);
-  CHECK(sonare_realtime_voice_changer_process_mono_with_carrier(internal.get(), in.data(), nullptr,
-                                                                out.data(), kBlock) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_realtime_voice_changer_process_interleaved_with_carrier(
-            internal.get(), in.data(), nullptr, out.data(), kBlock, 1) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
-            internal.get(), left.data(), right.data(), nullptr, kBlock) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_realtime_voice_changer_process_planar_stereo(
+            internal.get(), left.data(), right.data(), nullptr, kBlock) == SONARE_OK);
 }
 
-TEST_CASE("An internal carrier is never read by the *_with_carrier entries",
-          "[capi][voice_transform]") {
+TEST_CASE("An internal carrier is never read by the process entries", "[capi][voice_transform]") {
   const Config cfg = vocoder_config(SONARE_VOCODER_CARRIER_INTERNAL);
   const auto input = voiced(4096, 160.0);
   const std::vector<float> poisoned(input.size(), kNaN);
@@ -858,9 +845,9 @@ TEST_CASE("An internal carrier is never read by the *_with_carrier entries",
     std::vector<float> out_b(stereo.size());
     for (std::size_t pos = 0; pos < input.size(); pos += kBlock) {
       REQUIRE(sonare_realtime_voice_changer_process_interleaved(a.get(), stereo.data() + 2 * pos,
-                                                                out_a.data() + 2 * pos, kBlock,
-                                                                2) == SONARE_OK);
-      REQUIRE(sonare_realtime_voice_changer_process_interleaved_with_carrier(
+                                                                nullptr, out_a.data() + 2 * pos,
+                                                                kBlock, 2) == SONARE_OK);
+      REQUIRE(sonare_realtime_voice_changer_process_interleaved(
                   b.get(), stereo.data() + 2 * pos, poisoned.data() + pos, out_b.data() + 2 * pos,
                   kBlock, 2) == SONARE_OK);
     }
@@ -878,8 +865,8 @@ TEST_CASE("An internal carrier is never read by the *_with_carrier entries",
     std::vector<float> rb = ra;
     for (std::size_t pos = 0; pos < input.size(); pos += kBlock) {
       REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(
-                  a.get(), la.data() + pos, ra.data() + pos, kBlock) == SONARE_OK);
-      REQUIRE(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+                  a.get(), la.data() + pos, ra.data() + pos, nullptr, kBlock) == SONARE_OK);
+      REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(
                   b.get(), lb.data() + pos, rb.data() + pos, poisoned.data() + pos, kBlock) ==
               SONARE_OK);
     }
@@ -915,7 +902,7 @@ TEST_CASE("Different external carriers give different output on every layout",
     for (std::size_t i = 0; i < n; ++i) stereo[2 * i] = stereo[2 * i + 1] = speech[i];
     std::vector<float> out(stereo.size());
     for (std::size_t pos = 0; pos < n; pos += kBlock) {
-      REQUIRE(sonare_realtime_voice_changer_process_interleaved_with_carrier(
+      REQUIRE(sonare_realtime_voice_changer_process_interleaved(
                   h.get(), stereo.data() + 2 * pos, carrier.data() + pos, out.data() + 2 * pos,
                   kBlock, 2) == SONARE_OK);
     }
@@ -926,7 +913,7 @@ TEST_CASE("Different external carriers give different output on every layout",
     std::vector<float> left = speech;
     std::vector<float> right = speech;
     for (std::size_t pos = 0; pos < n; pos += kBlock) {
-      REQUIRE(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+      REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(
                   h.get(), left.data() + pos, right.data() + pos, carrier.data() + pos, kBlock) ==
               SONARE_OK);
     }
@@ -960,20 +947,21 @@ TEST_CASE("An external carrier without a carrier gives INVALID_STATE and writes 
   const auto input = voiced(kBlock, 160.0);
 
   std::vector<float> mono_out(kBlock, kSentinel);
-  CHECK(sonare_realtime_voice_changer_process_mono(h.get(), input.data(), mono_out.data(),
+  CHECK(sonare_realtime_voice_changer_process_mono(h.get(), input.data(), nullptr, mono_out.data(),
                                                    kBlock) == SONARE_ERROR_INVALID_STATE);
   CHECK(same_bytes(mono_out, std::vector<float>(kBlock, kSentinel)));
 
   std::vector<float> stereo_in(kBlock * 2, 0.2f);
   std::vector<float> stereo_out(kBlock * 2, kSentinel);
-  CHECK(sonare_realtime_voice_changer_process_interleaved(
-            h.get(), stereo_in.data(), stereo_out.data(), kBlock, 2) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_realtime_voice_changer_process_interleaved(h.get(), stereo_in.data(), nullptr,
+                                                          stereo_out.data(), kBlock,
+                                                          2) == SONARE_ERROR_INVALID_STATE);
   CHECK(same_bytes(stereo_out, std::vector<float>(kBlock * 2, kSentinel)));
 
   std::vector<float> left(kBlock, kSentinel);
   std::vector<float> right(kBlock, kSentinel);
-  CHECK(sonare_realtime_voice_changer_process_planar_stereo(h.get(), left.data(), right.data(),
-                                                            kBlock) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_realtime_voice_changer_process_planar_stereo(
+            h.get(), left.data(), right.data(), nullptr, kBlock) == SONARE_ERROR_INVALID_STATE);
   CHECK(same_bytes(left, std::vector<float>(kBlock, kSentinel)));
   CHECK(same_bytes(right, std::vector<float>(kBlock, kSentinel)));
 
@@ -993,12 +981,12 @@ TEST_CASE("An external carrier without a carrier gives INVALID_STATE and writes 
   Config internal = cfg;
   internal.vocoder_carrier_source = SONARE_VOCODER_CARRIER_INTERNAL;
   REQUIRE(sonare_realtime_voice_changer_set_config(mono.get(), &internal) == SONARE_OK);
-  CHECK(sonare_realtime_voice_changer_process_mono(mono.get(), speech.data(), mono_out.data(),
-                                                   kBlock) == SONARE_OK);
+  CHECK(sonare_realtime_voice_changer_process_mono(mono.get(), speech.data(), nullptr,
+                                                   mono_out.data(), kBlock) == SONARE_OK);
   // An external source with the vocoder switched off reads no carrier either.
   Config off = cfg;
   off.vocoder_enabled = 0;
   const Handle idle = make(off);
-  CHECK(sonare_realtime_voice_changer_process_mono(idle.get(), speech.data(), mono_out.data(),
-                                                   kBlock) == SONARE_OK);
+  CHECK(sonare_realtime_voice_changer_process_mono(idle.get(), speech.data(), nullptr,
+                                                   mono_out.data(), kBlock) == SONARE_OK);
 }

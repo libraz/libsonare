@@ -463,7 +463,7 @@ TEST_CASE("The C ABI refuses a saturated strip parameter", "[conformance][wasm]"
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "strip");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "strip", nullptr);
   REQUIRE(strip != nullptr);
 
   // One shared `finite()` stands in front of the whole family, so a

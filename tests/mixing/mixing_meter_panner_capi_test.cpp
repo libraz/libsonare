@@ -242,8 +242,8 @@ TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][c
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip_a = sonare_mixer_add_strip(mixer, "a");
-  SonareStrip* strip_b = sonare_mixer_add_strip(mixer, "b");
+  SonareStrip* strip_a = sonare_mixer_add_strip(mixer, "a", nullptr);
+  SonareStrip* strip_b = sonare_mixer_add_strip(mixer, "b", nullptr);
   REQUIRE(strip_a != nullptr);
   REQUIRE(strip_b != nullptr);
   REQUIRE(sonare_strip_set_fader_db(strip_b, -6.0f) == SONARE_OK);
@@ -267,7 +267,7 @@ TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][c
   REQUIRE(out_r[0] < 1.0f);
 
   SonareMixMeterSnapshot snapshot{};
-  REQUIRE(sonare_strip_meter(strip_b, &snapshot) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip_b, SONARE_METER_TAP_POST_FADER, &snapshot) == SONARE_OK);
   REQUIRE(snapshot.seq > 0);
   REQUIRE(snapshot.likely_mono_compatible == 1);
 
@@ -289,7 +289,7 @@ TEST_CASE("Mixing C API rejects a non-finite process block without touching the 
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a", nullptr);
   REQUIRE(strip != nullptr);
 
   std::array<float, 4> in_l{0.5f, 0.5f, 0.5f, 0.5f};
@@ -305,7 +305,7 @@ TEST_CASE("Mixing C API rejects a non-finite process block without touching the 
                                       out_l.size()) == SONARE_OK);
   REQUIRE(out_l[0] > 0.1f);
   SonareMixMeterSnapshot mixed{};
-  REQUIRE(sonare_strip_meter(strip, &mixed) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &mixed) == SONARE_OK);
   REQUIRE(mixed.seq > 0);
 
   // A zero-frame block stays a documented no-op (see the EMPTY-BLOCK POLICY in
@@ -329,7 +329,7 @@ TEST_CASE("Mixing C API rejects a non-finite process block without touching the 
     REQUIRE(out_l == sentinel);
     REQUIRE(out_r == sentinel);
     SonareMixMeterSnapshot after{};
-    REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
+    REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &after) == SONARE_OK);
     REQUIRE(after.seq == mixed.seq);
   }
 
@@ -349,7 +349,7 @@ TEST_CASE("Mixing C API reports the state a strip discarded after a non-finite s
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a", nullptr);
   REQUIRE(strip != nullptr);
 
   // Pre-set to a value the entry must overwrite, so a read that never writes
@@ -411,7 +411,7 @@ TEST_CASE("A strip's discard count reaches a meter that met a non-finite sample"
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a", nullptr);
   REQUIRE(strip != nullptr);
 
   // No band is enabled and no insert is added, so the EQ's own discard branch
@@ -458,7 +458,7 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "verb", "aux") == SONARE_OK);
 
   size_t count = 0xDEADu;
@@ -522,8 +522,8 @@ TEST_CASE("Mixing C API rejects a NULL strip input without touching the output",
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
-  REQUIRE(sonare_mixer_add_strip(mixer, "b") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "b", nullptr) != nullptr);
 
   std::array<float, 4> in_l{0.5f, 0.5f, 0.5f, 0.5f};
   std::array<float, 4> in_r{0.5f, 0.5f, 0.5f, 0.5f};
@@ -567,26 +567,35 @@ TEST_CASE("Mixing C API rejects a NULL strip input without touching the output",
 // ChannelStripConfig::enable_metering was announced as the escape hatch for the
 // strips whose snapshots are never read, but nothing that builds a strip could
 // set it. The configuration is fixed at construction, so it reaches a strip
-// either through the scene document or through the _ex entry point.
+// either through the scene document or through the strip options.
 TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  // enable_metering, measure_lufs, measure_true_peak, true_peak_oversample.
-  SonareStrip* full = sonare_mixer_add_strip_ex(mixer, "full", 1, 1, 1, 0);
-  SonareStrip* peak_only = sonare_mixer_add_strip_ex(mixer, "peakOnly", 1, 0, 0, 0);
-  SonareStrip* silent = sonare_mixer_add_strip_ex(mixer, "silent", 0, 0, 0, 0);
+  SonareMixerAddStripOptions options;
+  sonare_mixer_add_strip_options_init(&options);
+  SonareStrip* full = sonare_mixer_add_strip(mixer, "full", &options);
+  options.measure_lufs = 0;
+  options.measure_true_peak = 0;
+  SonareStrip* peak_only = sonare_mixer_add_strip(mixer, "peakOnly", &options);
+  options.enable_metering = 0;
+  SonareStrip* silent = sonare_mixer_add_strip(mixer, "silent", &options);
   REQUIRE(full != nullptr);
   REQUIRE(peak_only != nullptr);
   REQUIRE(silent != nullptr);
   // An out-of-range factor is refused rather than silently resolved.
-  REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, 99) == nullptr);
-  // In-range factors the realtime meter does not implement are refused too, not resolved to one.
-  for (int factor : {1, 2, 3, 5, 16}) {
+  SonareMixerAddStripOptions bad;
+  sonare_mixer_add_strip_options_init(&bad);
+  bad.true_peak_oversample = 99;
+  REQUIRE(sonare_mixer_add_strip(mixer, "bad", &bad) == nullptr);
+  // Factors the realtime meter does not implement are refused too, zero included, not resolved
+  // to a default.
+  for (int factor : {0, 1, 2, 3, 5, 16}) {
     INFO("factor " << factor);
-    REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, factor) == nullptr);
+    bad.true_peak_oversample = factor;
+    REQUIRE(sonare_mixer_add_strip(mixer, "bad", &bad) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()) ==
-            "true_peak_oversample must be one of 0, 4, 8");
+            "options.true_peak_oversample must be one of 4, 8");
   }
 
   std::array<float, 512> block{};
@@ -607,9 +616,9 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   SonareMixMeterSnapshot full_snap{};
   SonareMixMeterSnapshot peak_snap{};
   SonareMixMeterSnapshot silent_snap{};
-  REQUIRE(sonare_strip_meter(full, &full_snap) == SONARE_OK);
-  REQUIRE(sonare_strip_meter(peak_only, &peak_snap) == SONARE_OK);
-  REQUIRE(sonare_strip_meter(silent, &silent_snap) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(full, SONARE_METER_TAP_POST_FADER, &full_snap) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(peak_only, SONARE_METER_TAP_POST_FADER, &peak_snap) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(silent, SONARE_METER_TAP_POST_FADER, &silent_snap) == SONARE_OK);
 
   // The fully-metered strip is the control: the same signal reaches all three.
   CHECK(full_snap.peak_db_l > -40.0f);
@@ -643,7 +652,7 @@ struct MasterMeterRig {
   MasterMeterRig() {
     REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
     REQUIRE(mixer != nullptr);
-    REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
   }
   ~MasterMeterRig() { sonare_mixer_destroy(mixer); }
 
@@ -811,7 +820,7 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_input_trim_db(strip, 6.0f) == SONARE_OK);
   REQUIRE(sonare_strip_set_fader_db(strip, -3.0f) == SONARE_OK);
@@ -859,7 +868,7 @@ TEST_CASE("Mixing C API refuses pan and width outside their domains and keeps th
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_pan(strip, -1.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
   REQUIRE(sonare_strip_set_width(strip, 2.0f) == SONARE_OK);
@@ -883,7 +892,7 @@ TEST_CASE("Mixing C API removes a strip send", "[mixing][capi]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal", nullptr);
   REQUIRE(strip != nullptr);
 
   size_t to_verb = 999;
@@ -921,7 +930,7 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "dual");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "dual", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_dual_pan(strip, 1.0f, -0.5f) == SONARE_OK);
 
@@ -957,7 +966,7 @@ TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]")
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround", nullptr);
   REQUIRE(strip != nullptr);
 
   REQUIRE(sonare_strip_set_surround_pan(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1003,7 +1012,7 @@ TEST_CASE("Mixing C API surround pan refuses an out-of-range field and keeps the
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround", nullptr);
   REQUIRE(strip != nullptr);
 
   SonareSurroundPan good{};
@@ -1051,7 +1060,7 @@ TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mix
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned", nullptr);
   REQUIRE(strip != nullptr);
   // sonare_strip_set_pan must mirror the pan mode into the scene strip so it
   // survives scene serialization (regression: previously only the pan position
@@ -1084,7 +1093,7 @@ TEST_CASE("Mixing C API set_pan keep-mode sentinel preserves current pan mode", 
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned", nullptr);
   REQUIRE(strip != nullptr);
 
   // Establish a non-default (StereoPan) mode.
@@ -1128,7 +1137,7 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, static_cast<int>(kLength), &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a", nullptr);
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_pan(strip, 0.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
   const float* inputs_l[] = {left.data()};
@@ -1139,7 +1148,7 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
                                       kLength) == SONARE_OK);
 
   SonareMixMeterSnapshot before{};
-  REQUIRE(sonare_strip_meter(strip, &before) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &before) == SONARE_OK);
   REQUIRE(before.true_peak_dbtp_l < offline_db - 0.01f);
   SonareMixMeterSnapshot master_before{};
   REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master_before) == SONARE_OK);
@@ -1147,7 +1156,7 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
 
   REQUIRE(sonare_mixer_flush_meters(mixer) == SONARE_OK);
   SonareMixMeterSnapshot after{};
-  REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(strip, SONARE_METER_TAP_POST_FADER, &after) == SONARE_OK);
   REQUIRE_THAT(after.true_peak_dbtp_l, WithinAbs(offline_db, 1.0e-4));
   REQUIRE_THAT(after.max_true_peak_dbtp, WithinAbs(offline_db, 1.0e-4));
   // The master bus meter publishes the same quantity and is flushed with the strips.
@@ -1176,7 +1185,7 @@ TEST_CASE("Mixing C API bus meters read an inter-sample over above the sample pe
     SonareMixer* mixer = nullptr;
     REQUIRE(sonare_mixer_create(sample_rate, static_cast<int>(kLength), &mixer) == SONARE_OK);
     REQUIRE(mixer != nullptr);
-    SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+    SonareStrip* strip = sonare_mixer_add_strip(mixer, "a", nullptr);
     REQUIRE(strip != nullptr);
     REQUIRE(sonare_strip_set_pan(strip, 0.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
     const float* inputs_l[] = {left.data()};
@@ -1202,7 +1211,7 @@ TEST_CASE("Mixing C API bus meters read an inter-sample over above the sample pe
 TEST_CASE("Bus meter refusals name the refused argument", "[mixing][capi]") {
   SonareMixer* mixer = nullptr;
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
-  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", nullptr) != nullptr);
   SonareMixMeterSnapshot snapshot{};
 
   CHECK(sonare_mixer_bus_meter(nullptr, "master", &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1277,4 +1286,16 @@ TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixin
   CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
                                         nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refusal() == "sample_rate must be an integer in [8000, 384000]");
+}
+
+TEST_CASE("Mixing C API refuses a strip options struct_size of zero", "[mixing][capi]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  SonareMixerAddStripOptions options;
+  sonare_mixer_add_strip_options_init(&options);
+  options.struct_size = 0;
+  REQUIRE(sonare_mixer_add_strip(mixer, "a", &options) == nullptr);
+  REQUIRE(std::string(sonare_last_error_message()).find("options.struct_size") !=
+          std::string::npos);
+  sonare_mixer_destroy(mixer);
 }

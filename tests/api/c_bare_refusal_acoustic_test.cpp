@@ -172,19 +172,23 @@ TEST_CASE("room_morph_stereo names the refused config and output", "[c_api][acou
   const std::vector<float> left(2048, 0.1f);
   const std::vector<float> right(2048, 0.1f);
   SonareRoomMorphConfig config = morph_config();
-  SonareRoomMorphStereoResult out{};
+  float* out_left = nullptr;
+  float* out_right = nullptr;
+  size_t out_length = 0;
 
-  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, nullptr, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, nullptr,
+                                   &out_left, &out_right,
+                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "config must not be NULL");
 
   config.wet = 3.0f;
-  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, &config, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, &config,
+                                   &out_left, &out_right,
+                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "config.wet must be finite and in [0, 1]");
 
   config = morph_config();
-  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, &config,
-                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(last_message() == "out must not be NULL");
+  REQUIRE(sonare_room_morph_stereo(left.data(), right.data(), left.size(), 22050, &config, nullptr,
+                                   &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(last_message() == "out_left must not be NULL");
 }

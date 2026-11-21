@@ -257,8 +257,10 @@ TEST_CASE("RealtimeVoiceChanger C API interleaved stereo process", "[voice_chang
   constexpr int block = 256;
 
   // Use brightIdol which has reverb mix > 0 so L/R diverge via per-channel seed.
+  SonareRealtimeVoiceChangerConfig config;
+  REQUIRE(sonare_realtime_voice_changer_config_from_json("brightIdol", &config) == SONARE_OK);
   SonareRealtimeVoiceChanger* handle = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", sample_rate, block, 2, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create(&config, sample_rate, block, 2, &handle) ==
           SONARE_OK);
   REQUIRE(handle != nullptr);
 
@@ -273,9 +275,9 @@ TEST_CASE("RealtimeVoiceChanger C API interleaved stereo process", "[voice_chang
   }
   std::vector<float> output(input.size(), 0.0f);
 
-  REQUIRE(sonare_realtime_voice_changer_process_interleaved(handle, input.data(), output.data(),
-                                                            static_cast<std::size_t>(block),
-                                                            2) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_process_interleaved(
+              handle, input.data(), nullptr, output.data(), static_cast<std::size_t>(block), 2) ==
+          SONARE_OK);
 
   // All output samples must be finite and non-NaN.
   for (float s : output) REQUIRE(std::isfinite(s));
@@ -298,9 +300,9 @@ TEST_CASE("RealtimeVoiceChanger C API interleaved stereo process", "[voice_chang
   // recirculation (~4000 samples). If the first block is identical that is not
   // a bug; run two blocks and check the second.
   if (!any_differ) {
-    REQUIRE(sonare_realtime_voice_changer_process_interleaved(handle, input.data(), output.data(),
-                                                              static_cast<std::size_t>(block),
-                                                              2) == SONARE_OK);
+    REQUIRE(sonare_realtime_voice_changer_process_interleaved(
+                handle, input.data(), nullptr, output.data(), static_cast<std::size_t>(block), 2) ==
+            SONARE_OK);
     for (float s : output) REQUIRE(std::isfinite(s));
     // After a second block the dry path has diverged via reverb feedback.
     // At minimum verify both calls returned OK and output is sane.
@@ -361,8 +363,8 @@ TEST_CASE("RealtimeVoiceChanger C API preset_config round-trips all presets",
     // Drive one small block to confirm the processor is functional.
     std::vector<float> in_buf(128, 0.01f);
     std::vector<float> out_buf(128, 0.0f);
-    REQUIRE(sonare_realtime_voice_changer_process_mono(handle, in_buf.data(), out_buf.data(),
-                                                       128) == SONARE_OK);
+    REQUIRE(sonare_realtime_voice_changer_process_mono(handle, in_buf.data(), nullptr,
+                                                       out_buf.data(), 128) == SONARE_OK);
     for (float s : out_buf) REQUIRE(std::isfinite(s));
 
     // Clean destroy.

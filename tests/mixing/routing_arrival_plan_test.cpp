@@ -337,7 +337,7 @@ TEST_CASE("Mixer recompile keeps queued compensation audio on unchanged routes",
       const Render before = render(mixer, warm, kBlock);
       if (refresh == Refresh::Compile) REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
       if (refresh == Refresh::AddSilentStrip) {
-        REQUIRE(sonare_mixer_add_strip(mixer, "extra") != nullptr);
+        REQUIRE(sonare_mixer_add_strip(mixer, "extra", nullptr) != nullptr);
       }
       const std::vector<std::vector<float>> held{std::vector<float>(kAfter, 0.08f),
                                                  std::vector<float>(kAfter, 0.0f)};
