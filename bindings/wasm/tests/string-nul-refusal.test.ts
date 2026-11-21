@@ -408,7 +408,7 @@ describe('embedded NUL refusal, scan', () => {
     },
     {
       file: 'common/common.h',
-      text: '(std::string(subject) + "." + key).c_str()',
+      text: 'sonare::util::json::schema::child_path(subject, key).c_str()',
       count: 2,
       reason:
         'Diagnostic labels for requireInt64Property and requireIntProperty: all keys are literal or macro-stringized names, and subjects are code-owned labels (including note-edit labels composed from fixed entry-point names). checkedInt64FromVal/checkedIntFromVal consume the temporary synchronously for errors; no JS string crosses this boundary.',

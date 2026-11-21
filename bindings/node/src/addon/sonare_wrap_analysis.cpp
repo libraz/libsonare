@@ -97,7 +97,7 @@ Napi::Value AnalyzeWithCallbacks(Napi::Env env, const float* data, size_t length
   }
   if (err != SONARE_OK) {
     sonare_free_string(json_str);
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -380,7 +380,7 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   SonareError err = sonare_estimate_meter_json(beat_times.Data(), beat_strengths.Data(),
                                                beat_times.ElementLength(), &options, &json_str);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return ParseJsonObjectAndFree(env, json_str, "Failed to parse meter estimation JSON");
@@ -500,8 +500,8 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
     if (err != SONARE_OK) {
       error_code_ = err;
       shape_refusal_ = LastRefusalIsShape();
-      refusal_ = sonare_node::ShownLastRefusal("options");
-      SetError(ErrorMessageForCode(err, "options"));
+      refusal_ = sonare_node::ShownLastRefusal();
+      SetError(ErrorMessageForCode(err));
       return;
     }
     if (json_ptr != nullptr) {
@@ -1162,7 +1162,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.tuning_auto = tuning_auto ? 1 : 0;
   SonareError err = sonare_detect_chords(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -1265,7 +1265,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options, key_root,
                                                      key_mode, &detected, &roman, &functions);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

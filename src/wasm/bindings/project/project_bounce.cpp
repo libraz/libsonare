@@ -376,7 +376,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
     // refuses a fraction and an out-of-int64-range value by name instead of
     // truncating the one and casting the other into undefined behavior.
     if (hasProperty(options, "totalFrames")) {
-      const int64_t read = requireInt64Property(options, "totalFrames", "options");
+      const int64_t read = requireInt64Property(options, "totalFrames", "");
       opts.total_frames = read == SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT ? 0 : read;
     }
     if (hasProperty(options, "blockSize")) {

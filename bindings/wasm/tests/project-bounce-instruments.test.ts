@@ -434,7 +434,7 @@ describe('bounce with instruments', () => {
         ],
       });
     expect(bounce).toThrow(
-      "Project.bounce: options.totalFrames must be positive when a hosted instrument's tail is unbounded",
+      "Project.bounce: totalFrames must be positive when a hosted instrument's tail is unbounded",
     );
     // The control: the callback did run and throw before the native failure.
     expect(prepared).toBe(true);
@@ -518,5 +518,34 @@ describe('bounce with instruments', () => {
       expect(channel).toHaveLength(96000);
       expect(channel.every((v) => Math.abs(v - 0.05) < 1e-6)).toBe(true);
     }
+  });
+});
+
+describe('Project.bounce refusal subjects', () => {
+  // RED WHEN: a C-originated subject keeps its `options.` root while the facade's own refusal on
+  // the same option list is spelled bare.
+  it('spells a core refusal and a facade refusal on one list the same way', () => {
+    using project = midiProject();
+    const voice = { waveform: 'saw' } as const;
+    expect(() =>
+      project.bounce({
+        ...OPTIONS,
+        builtinInstruments: [
+          { destinationId: 0, instrument: voice },
+          { destinationId: 0, instrument: voice },
+        ],
+      }),
+    ).toThrow(
+      new RangeError('Project.bounce: builtinInstruments[1].destinationId must not be bound twice'),
+    );
+    expect(() =>
+      project.bounce({
+        ...OPTIONS,
+        builtinInstruments: [
+          { destinationId: 0, instrument: voice },
+          { destinationId: 1.5, instrument: voice },
+        ],
+      }),
+    ).toThrow(/^Project\.bounce: builtinInstruments\[1\]\.destinationId must be an integer/);
   });
 });

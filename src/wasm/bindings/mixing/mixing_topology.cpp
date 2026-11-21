@@ -35,7 +35,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   strip_options.measure_true_peak = true_peak ? 1 : 0;
   if (true_peak_oversample != 0) strip_options.true_peak_oversample = true_peak_oversample;
   if (sonare_mixer_add_strip(mixer_, wasmCString(id, "id"), &strip_options) == nullptr) {
-    throwLastCErrorFlattening("options");
+    throwLastCError();
   }
   // Size the new strip's scratch planes before a realtime caller asks for its views.
   ensureScratchBuffers();

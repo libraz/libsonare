@@ -19,7 +19,7 @@ namespace sonare_node {
 /// @brief The calling thread's last C-ABI failure as a JS message: a recorded parameter refusal
 ///        rendered in request keys, else the flat detail without its C-entry prefix, else the
 ///        generic text for @p err.
-std::string ErrorMessageForCode(SonareError err, const char* c_root = nullptr);
+std::string ErrorMessageForCode(SonareError err);
 
 /// The exception text without a leading C-entry prefix, which the public entry replaces; a
 /// parameter refusal is rendered in request keys from its subjects.
@@ -30,7 +30,7 @@ std::string ExceptionMessage(const std::exception& e);
 bool IsShapeRefusal(const std::exception& e);
 
 /// @brief The last C-ABI parameter refusal as the caller reads it (in request keys), or none.
-std::optional<sonare::SonareParameterRefusal> ShownLastRefusal(const char* c_root = nullptr);
+std::optional<sonare::SonareParameterRefusal> ShownLastRefusal();
 
 /// @brief Carries @p shown, the refusal whose text @p error's message ends with, on @p error as
 ///        plain parts under Symbol.for('libsonare.refusal'), so a facade that converted an
@@ -73,9 +73,9 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 ///        The detail message is @p prefix + the thread-local / generic message.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
 
-/// @brief ThrowSonareError for an entry whose JS request object flattens the C struct parameter
-///        @p c_root into its own keys: a refused subject whose first path segment is @p c_root
-///        is named by the rest of its path.
+/// @brief ThrowSonareError for an entry whose JS object flattens the C struct parameter @p c_root,
+///        a root other than the `options` / `config` every refusal already drops: a refused
+///        subject whose first path segment is @p c_root is named by the rest of its path.
 void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root);
 
 /// @brief Like ThrowSonareError but uses an explicit detail message (e.g. a

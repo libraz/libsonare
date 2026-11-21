@@ -1873,7 +1873,7 @@ export class RealtimeEngine {
     const { clickSamples, clickSec, ...rest } = config;
     const hasSamples = clickSamples !== undefined && clickSamples !== null;
     const hasSec = clickSec !== undefined && clickSec !== null;
-    engineCount('config.clickSamples', clickSamples, METRONOME_CLICK_SAMPLES_MAX);
+    engineCount('clickSamples', clickSamples, METRONOME_CLICK_SAMPLES_MAX);
     if (hasSec) {
       if (typeof clickSec !== 'number') {
         throw refuseType('clickSec must be a number');
@@ -1882,7 +1882,7 @@ export class RealtimeEngine {
         throw refuse('clickSec must be finite');
       }
       if (!(clickSec > 0 && clickSec <= 1)) {
-        throw refuse('config.clickSec must be finite and in (0, 1]');
+        throw refuse('clickSec must be finite and in (0, 1]');
       }
     }
     if (hasSamples && hasSec) {

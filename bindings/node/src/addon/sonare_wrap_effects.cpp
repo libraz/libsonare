@@ -799,7 +799,7 @@ Napi::Value SonareWrap::BiquadFilter(const Napi::CallbackInfo& info) {
                                                &config, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
-    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   std::vector<float> result(output, output + output_length);

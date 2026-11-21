@@ -453,12 +453,9 @@
   },
   "engine_zero_sentinel": {
     "roots": {
-      "set_metronome": "config",
       "set_clips": "clips[0]",
       "set_midi_clips": "clips[0]",
-      "set_graph": "spec.nodes[0]",
-      "bounce_offline": "options",
-      "freeze_offline": "options"
+      "set_graph": "spec.nodes[0]"
     },
     "cases": [
       { "id": "set_metronome_click_samples_accepted", "entry": "set_metronome", "key": "click_samples", "value": 96, "accepted": true },

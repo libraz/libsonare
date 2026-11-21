@@ -135,7 +135,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   SonareError err = sonare_spectral_edit(
       data, length, sr, config_ptr, n_ops > 0 ? ops.data() : nullptr, n_ops, &out, &out_length);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

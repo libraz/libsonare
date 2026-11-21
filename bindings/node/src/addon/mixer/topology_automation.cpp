@@ -47,8 +47,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   if (sonare_mixer_add_strip(mixer_, id.c_str(), &strip_options) == nullptr) {
     // The metering bag is the C options struct flattened, so a refusal reads in its keys.
     const SonareError code = sonare_last_error_code();
-    sonare_node::ThrowSonareErrorFlattening(env, code == SONARE_OK ? SONARE_ERROR_UNKNOWN : code,
-                                            "options");
+    sonare_node::ThrowSonareError(env, code == SONARE_OK ? SONARE_ERROR_UNKNOWN : code);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

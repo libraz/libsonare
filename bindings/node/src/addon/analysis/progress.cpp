@@ -64,7 +64,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -133,7 +133,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_detect_boundaries(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

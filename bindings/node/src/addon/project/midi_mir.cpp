@@ -622,7 +622,7 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
       take_sample_rate, &config, &raw_anchors, &count, &alignment);
   std::unique_ptr<SonareProjectWarpAnchor, WarpAnchorArrayDeleter> anchors(raw_anchors);
   if (code != SONARE_OK) {
-    ThrowSonareErrorFlattening(env, code, "config");
+    ThrowSonareError(env, code);
     return env.Undefined();
   }
 

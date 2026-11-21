@@ -446,7 +446,7 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   size_t out_length = 0;
   const SonareError err = sonare_polyphonic_render(analysis_, &config, &out, &out_length);
   if (err != SONARE_OK) {
-    ThrowSonareErrorFlattening(env, err, "config");
+    ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto result = CopyToFloat32(env, out, out_length);

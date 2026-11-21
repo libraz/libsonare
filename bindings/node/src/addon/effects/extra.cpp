@@ -223,7 +223,7 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
       sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_count,
                              &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Array components = Napi::Array::New(env, component_count);
@@ -269,7 +269,7 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
       inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_count,
       &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   // Layout: component c, channel ch starts at (c * channel_count + ch) * component_length.

@@ -87,8 +87,23 @@ inline std::string SurfaceSpelling(std::string_view entry, std::string_view subj
   return sonare::util::check::camel_path(std::string(subject));
 }
 
+// The C roots naming an entry's object argument, whose keys the node caller writes bare.
+inline constexpr std::array<std::string_view, 2> kObjectRoots = {"options.", "config."};
+
+// @p subject without a leading object-argument root, or without "<c_root>." when given.
+inline std::string_view Unrooted(std::string_view subject, std::string_view c_root) {
+  for (const std::string_view root : kObjectRoots) {
+    if (subject.substr(0, root.size()) == root) return subject.substr(root.size());
+  }
+  if (!c_root.empty() && subject.size() > c_root.size() && subject[c_root.size()] == '.' &&
+      subject.substr(0, c_root.size()) == c_root) {
+    return subject.substr(c_root.size() + 1);
+  }
+  return subject;
+}
+
 // The last C refusal with each subject in the node caller's spelling, looked up under the
-// refused entry; @p c_root strips a "<c_root>." prefix the request keys do not carry.
+// refused entry; @p c_root strips a "<c_root>." prefix beyond the object-argument roots.
 inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
     std::string_view c_root = {}) {
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
@@ -96,13 +111,10 @@ inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
   if (refusal->caller_spelled()) return *refusal;
   const char* entry = sonare_c_detail::last_refusal_entry();
   const std::string_view key = entry != nullptr ? entry : "";
-  const std::string root = c_root.empty() ? std::string() : std::string(c_root) + ".";
   return refusal->respelled(
       refusal->code(),
-      [key, &root](const std::string& subject) {
-        const bool rooted = !root.empty() && subject.rfind(root, 0) == 0;
-        return SurfaceSpelling(key, rooted ? std::string_view(subject).substr(root.size())
-                                           : std::string_view(subject));
+      [key, c_root](const std::string& subject) {
+        return SurfaceSpelling(key, Unrooted(subject, c_root));
       },
       true);
 }

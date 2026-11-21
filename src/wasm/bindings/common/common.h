@@ -127,6 +127,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/frame.h"
+#include "util/json_schema.h"
 #include "util/padding.h"
 #include "util/parameter_checks.h"
 #include "util/peak.h"
@@ -230,8 +231,8 @@ inline void rethrowLastCRefusal() {
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err));
 }
 
-/// @brief throwCodedCError for a call whose config struct's refusal subjects carry a
-///        "<c_root>." prefix the request keys do not: the prefix is stripped as they are spelled.
+/// @brief throwCodedCError for a call whose struct's refusal subjects carry a "<c_root>." prefix
+///        beyond the `options` / `config` every refusal already drops; it is stripped too.
 [[noreturn]] inline void throwCodedCErrorFlattening(SonareError err, const char* c_root) {
   if (std::optional<sonare::SonareParameterRefusal> shown =
           sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
@@ -265,17 +266,6 @@ inline std::vector<std::string> lastDiagnosticMessages() {
   const char* detail = sonare_last_error_message();
   const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(code);
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code), text);
-}
-
-/// @brief throwLastCError for a call whose options struct's refusal subjects carry a
-///        "<c_root>." prefix the request keys do not: the prefix is stripped as they are spelled.
-[[noreturn]] inline void throwLastCErrorFlattening(
-    const char* c_root, SonareError fallback = SONARE_ERROR_INVALID_STATE) {
-  if (std::optional<sonare::SonareParameterRefusal> shown =
-          sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
-    throw *shown;
-  }
-  throwLastCError(fallback);
 }
 
 /// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.
@@ -667,7 +657,7 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
   const double number = value.as<double>();
   if (!std::isfinite(number)) {
-    throw WasmRangeError(std::string(subject) + "." + key + " must be finite");
+    throw WasmRangeError(sonare::util::json::schema::child_path(subject, key) + " must be finite");
   }
   return number;
 }
@@ -679,7 +669,7 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
 ///        range rather than truncated or cast into undefined behavior.
 inline int64_t requireInt64Property(const val& object, const char* key, const char* subject) {
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
-  return checkedInt64FromVal(value, (std::string(subject) + "." + key).c_str());
+  return checkedInt64FromVal(value, sonare::util::json::schema::child_path(subject, key).c_str());
 }
 
 /// @brief Reads a required integer-valued property from an object.
@@ -689,7 +679,7 @@ inline int64_t requireInt64Property(const val& object, const char* key, const ch
 /// @throws WasmArgumentError naming @p subject and @p key.
 inline int requireIntProperty(const val& object, const char* key, const char* subject) {
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
-  return checkedIntFromVal(value, (std::string(subject) + "." + key).c_str());
+  return checkedIntFromVal(value, sonare::util::json::schema::child_path(subject, key).c_str());
 }
 
 inline bool requireBoolProperty(const val& object, const char* key, const char* subject) {

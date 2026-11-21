@@ -129,7 +129,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   const SonareError error = sonare_transcribe(samples.Data(), samples.ElementLength(), sample_rate,
                                               tempo_bpm, &config, &result.value);
   if (error != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, error, "config");
+    sonare_node::ThrowSonareError(env, error);
     return env.Undefined();
   }
 
@@ -175,7 +175,7 @@ Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
       sonare_project_transcribe_to_clip(project_, clip_id, samples.Data(), samples.ElementLength(),
                                         sample_rate, &config, &note_count);
   if (error != SONARE_OK) {
-    sonare_node::ThrowSonareErrorFlattening(env, error, "config");
+    sonare_node::ThrowSonareError(env, error);
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(note_count));

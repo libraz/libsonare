@@ -478,7 +478,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
                           envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), f0_data,
                           voiced_data, n_frames, frame_rate, &config, &out, &out_length);
   if (err != SONARE_OK) {
-    ThrowSonareErrorFlattening(env, err, "config");
+    ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto result = CopyToFloat32(env, out, out_length);
@@ -824,7 +824,7 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
   const SonareError err =
       sonare_extract_percussive_events(data, length, sr, &config, &result.value);
   if (err != SONARE_OK) {
-    ThrowSonareErrorFlattening(env, err, "config");
+    ThrowSonareError(env, err);
     return env.Undefined();
   }
   // Audio in which nothing was detected comes back as a NULL pointer and a zero
@@ -868,7 +868,7 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
       sonare_render_percussive_events(data, length, sr, events.empty() ? nullptr : events.data(),
                                       events.size(), &config, &out, &out_length);
   if (err != SONARE_OK) {
-    ThrowSonareErrorFlattening(env, err, "config");
+    ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto result = CopyToFloat32(env, out, out_length);

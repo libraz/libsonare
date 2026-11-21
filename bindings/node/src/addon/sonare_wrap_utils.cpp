@@ -25,10 +25,10 @@ namespace sonare_node {
 
 using sonare::constants::kDefaultNFft;
 
-std::string ErrorMessageForCode(SonareError err, const char* c_root) {
+std::string ErrorMessageForCode(SonareError err) {
   // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
   if (const std::optional<sonare::SonareParameterRefusal> shown =
-          sonare_field_spelling::node::SpelledLastRefusal(c_root != nullptr ? c_root : "")) {
+          sonare_field_spelling::node::SpelledLastRefusal()) {
     return shown->what();
   }
   const char* detail = sonare_last_error_message();
@@ -58,8 +58,8 @@ bool LastRefusalIsShape() {
   return refusal != nullptr && refusal->shape_error();
 }
 
-std::optional<sonare::SonareParameterRefusal> ShownLastRefusal(const char* c_root) {
-  return sonare_field_spelling::node::SpelledLastRefusal(c_root != nullptr ? c_root : "");
+std::optional<sonare::SonareParameterRefusal> ShownLastRefusal() {
+  return sonare_field_spelling::node::SpelledLastRefusal();
 }
 
 namespace {
@@ -775,7 +775,7 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
   if (err != SONARE_OK) {
     // Same classification as the async analyze path (RangeError for a refused
     // argument, coded SonareError otherwise).
-    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

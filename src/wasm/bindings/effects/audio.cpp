@@ -511,7 +511,7 @@ val js_biquad_filter(val samples, const val& sample_rate, const val& type, const
       sonare_biquad_filter(input.data(), input.size(), rate, &config, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
-    throwCodedCErrorFlattening(err, "config");
+    throwCodedCError(err);
   }
   std::vector<float> result(output, output + output_length);
   sonare_free_floats(output);

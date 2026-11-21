@@ -682,7 +682,8 @@ describe('the constant-Q family answers the shared corpus with one text on every
 });
 
 type EngineZeroCase = ReaderSplitCase & { entry: string; pending?: Record<string, string> };
-type EngineZeroSection = { roots: Record<string, string>; cases: EngineZeroCase[] };
+/** `roots` holds the path to an entry's nested record; an object argument's keys are bare. */
+type EngineZeroSection = { roots: Record<string, string | undefined>; cases: EngineZeroCase[] };
 
 /** Each engine entry called with one field of its request replaced. */
 const ENGINE_ZERO_CALLS: Record<
@@ -731,9 +732,10 @@ describe('an engine field whose native 0 is a sentinel refuses 0 out of domain u
           return;
         }
         const root = section.roots[testCase.entry];
+        const subject = root === undefined ? key : `${root}.${key}`;
         expect(call).toThrow(
           new RangeError(
-            `RealtimeEngine.${camelKey(testCase.entry)}: ${root}.${key} ${testCase.predicate}`,
+            `RealtimeEngine.${camelKey(testCase.entry)}: ${subject} ${testCase.predicate}`,
           ),
         );
       } finally {
