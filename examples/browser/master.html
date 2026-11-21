@@ -21,7 +21,7 @@
       result.textContent = 'Mastering…';
       try {
         const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await input.arrayBuffer()));
-        const mastered = audio.masteringChain({ loudness: { enabled: true, targetLufs: -14, ceilingDb: -1 } });
+        const mastered = audio.masterAudio({ overrides: { loudness: { enabled: true, targetLufs: -14, ceilingDbtp: -1 } } });
         downloadPcm16Wav('mastered.wav', mastered.samples, mastered.sampleRate);
         result.textContent = JSON.stringify(mastered.report, null, 2);
       } catch (error) {

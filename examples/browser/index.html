@@ -13,30 +13,32 @@
     const cancel = document.querySelector('#cancel');
     const result = document.querySelector('#result');
     const offline = new OfflineWorkerClient();
-    let currentTask;
+    let currentAbort;
     const promptCancel = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
     if (!promptCancel) {
       cancel.title = 'Prompt cancellation requires cross-origin isolation (COOP/COEP).';
     }
 
-    cancel.addEventListener('click', () => currentTask?.cancel());
+    cancel.addEventListener('click', () => currentAbort?.abort());
     input.addEventListener('change', async () => {
       const file = input.files?.[0];
       if (!file) return;
       result.textContent = 'Analyzing…';
       input.disabled = true;
-      let task;
+      const abort = new AbortController();
+      currentAbort = abort;
       try {
         const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await file.arrayBuffer()));
-        task = offline.analyze(
-          { samples: audio.data, sampleRate: audio.sampleRate },
+        const task = offline.analyze(
           {
-            onProgress: ({ progress, stage }) => {
+            samples: audio.data,
+            sampleRate: audio.sampleRate,
+            onProgress: (progress, stage) => {
               result.textContent = `Analyzing ${Math.round(progress * 100)}% (${stage})…`;
             },
           },
+          { signal: abort.signal },
         );
-        currentTask = task;
         cancel.disabled = !promptCancel;
         if (!promptCancel) {
           result.textContent = 'Analyzing… (prompt cancellation requires COOP/COEP)';
@@ -45,8 +47,8 @@
       } catch (error) {
         result.textContent = error instanceof Error ? error.message : String(error);
       } finally {
-        if (currentTask === task) {
-          currentTask = undefined;
+        if (currentAbort === abort) {
+          currentAbort = undefined;
           cancel.disabled = true;
           input.disabled = false;
         }

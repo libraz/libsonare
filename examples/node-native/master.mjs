@@ -10,8 +10,8 @@ if (!inputPath || !outputPath) {
 
 const audio = Audio.fromFile(inputPath);
 try {
-  const result = audio.masteringChain({
-    loudness: { enabled: true, targetLufs: -14, ceilingDb: -1 },
+  const result = audio.masterAudio({
+    overrides: { loudness: { enabled: true, targetLufs: -14, ceilingDbtp: -1 } },
   });
   writePcm16Wav(outputPath, result.samples, result.sampleRate);
   console.log(`LUFS: ${result.inputLufs.toFixed(1)} -> ${result.outputLufs.toFixed(1)}`);

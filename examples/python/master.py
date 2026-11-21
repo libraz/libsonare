@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 
 import libsonare
+import numpy as np
 from pcm16_wav import write_pcm16_wav
 
 
@@ -25,6 +26,8 @@ def json_safe(value: object) -> object:
         return {key: json_safe(item) for key, item in value.items()}
     if isinstance(value, list):
         return [json_safe(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return json_safe(value.tolist())
     if isinstance(value, tuple):
         return [json_safe(item) for item in value]
     return value
@@ -36,8 +39,8 @@ def main() -> int:
         return 2
 
     with libsonare.Audio.from_file(sys.argv[1]) as audio:
-        result = audio.mastering_chain(
-            {"loudness": {"enabled": True, "targetLufs": -14.0, "ceilingDb": -1.0}}
+        result = audio.master_audio(
+            overrides={"loudness": {"enabled": True, "targetLufs": -14.0, "ceilingDbtp": -1.0}}
         )
     write_wav(sys.argv[2], result.samples, result.sample_rate)
     print(f"LUFS: {result.input_lufs:.1f} -> {result.output_lufs:.1f}")

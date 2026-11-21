@@ -1,4 +1,4 @@
-import { Project } from '@libraz/libsonare-native';
+import { Project, midiNoteOff, midiNoteOn } from '@libraz/libsonare-native';
 
 import { writePcm16Wav } from './wav.mjs';
 
@@ -8,17 +8,22 @@ if (!outputPath) {
   process.exit(2);
 }
 
-const project = Project.create();
+const project = new Project();
 try {
   project.setSampleRate(48000);
   const { clipId } = project.addMidiClip(0, 4);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(1, 0, 0, 60),
-    Project.midiNoteOn(1, 0, 0, 64, 100),
-    Project.midiNoteOff(2, 0, 0, 64),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60 }),
+    midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 64, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 64 }),
   ]);
-  const samples = project.bounceWithSynthInstrument('sawLead', { numChannels: 2 });
+  const { channels } = project.bounce({ numChannels: 2, synthInstruments: [{ instrument: { preset: 'sawLead' } }] });
+  const samples = new Float32Array(channels[0].length * 2);
+  channels[0].forEach((left, i) => {
+    samples[2 * i] = left;
+    samples[2 * i + 1] = channels[1][i];
+  });
   writePcm16Wav(outputPath, samples, 48000, 2);
 } finally {
   project.destroy();

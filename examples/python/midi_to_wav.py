@@ -20,7 +20,7 @@ def main() -> int:
 
     with libsonare.Project() as project:
         project.set_sample_rate(48000)
-        _, clip_id = project.add_midi_clip(0.0, 4.0)
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_midi_events(
             clip_id,
             [
@@ -30,7 +30,7 @@ def main() -> int:
                 libsonare.Project.midi_note_off(2.0, 0, 0, 64),
             ],
         )
-        audio = project.bounce_with_synth_instrument("sawLead", num_channels=2)
+        audio = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
     write_wav(sys.argv[1], audio, 48000)
     return 0
 
