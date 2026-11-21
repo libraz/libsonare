@@ -940,6 +940,14 @@ void sonare_spectral_region_op_init(SonareSpectralRegionOp* op) {
   op->mode = SONARE_SPECTRAL_EDIT_MODE_GAIN;
 }
 
+namespace {
+
+// The core spells the STFT framing bare; here they are members of `config`.
+const std::array<CName, 2> kSpectralEditNames{
+    {{"n_fft", "config.n_fft"}, {"hop_length", "config.hop_length"}}};
+
+}  // namespace
+
 SonareError sonare_spectral_edit(const float* samples, size_t length, int sample_rate,
                                  const SonareSpectralEditConfig* config,
                                  const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
@@ -1006,7 +1014,9 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
                                [&](const Audio& audio) -> Audio {
-                                 return spectral_edit(audio, core_config, core_ops.data(), n_ops);
+                                 return with_c_names(kSpectralEditNames, [&] {
+                                   return spectral_edit(audio, core_config, core_ops.data(), n_ops);
+                                 });
                                });
   SONARE_C_CATCH
 }

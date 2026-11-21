@@ -128,6 +128,21 @@ TEST_CASE("spectral_edit refuses a window or mode out of range by name", "[c_api
   CHECK(last_message() == "ops[0].mode must be an integer in [0, 3]");
 }
 
+TEST_CASE("spectral_edit names a hop sparser than half overlap as a config member",
+          "[c_api][effects]") {
+  const auto samples = tone(4096);
+  float* out = nullptr;
+  size_t out_length = 0;
+
+  SonareSpectralEditConfig config;
+  sonare_spectral_edit_config_init(&config);
+  config.n_fft = 1024;
+  config.hop_length = 513;
+  CHECK(sonare_spectral_edit(samples.data(), samples.size(), kRate, &config, nullptr, 0, &out,
+                             &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.hop_length must be at most config.n_fft / 2");
+}
+
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
 TEST_CASE("polyphonic accessors refuse a note or out past what they hold by name",
