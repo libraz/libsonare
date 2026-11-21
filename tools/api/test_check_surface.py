@@ -2405,8 +2405,10 @@ REFUSALS = (
             _field("c", "SonareRegion", "frame_count", "int"),
             _field("c", "SonareRegion", "start_sample", "size_t"),
             _field("c", "SonareRegion", "sample_rate", "float"),
+            _field("c", "SonareMidiEventView", "word_count", "uint8_t"),
         ],
         [
+            "c field SonareMidiEventView.word_count: word_count is size_t, not uint8_t",
             "c field SonareRegion.frame_count: frame_count is size_t, not int",
             "c field SonareRegion.start_sample: start_sample is int64_t, not size_t",
             "c field SonareRegion.sample_rate: sample_rate is int, not float",
@@ -2613,6 +2615,21 @@ class Refusals(CheckerCase):
                 self.assertEqual(
                     sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    ")), []
                 )
+
+
+class FixedLayoutRecords(CheckerCase):
+    """A count inside a named fixed-layout realtime record keeps its width and is counted."""
+
+    def test_a_fixed_layout_record_count_is_counted_not_refused(self):
+        _, before = self.run_check("--check", "c-count-types")
+        self.add(
+            _field("c", "SonareEngineMidiEvent", "word_count", "uint8_t"),
+            _field("c", "SonareScopeTelemetryRecord", "point_count", "uint32_t"),
+        )
+        _, lines = self.run_check("--check", "c-count-types")
+        added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
+        self.assertEqual(len(added), 1, added)
+        self.assertTrue(added[0].startswith("not compared: 2 count member(s) of fixed-layout"))
 
 
 class AllowCategories(CheckerCase):

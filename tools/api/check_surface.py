@@ -17,7 +17,8 @@ tools/api/surface_allowlist.toml (four categories) or, for the Python surface of
 librosa-named function, by tools/api/librosa_mirrors.toml. A name ``unit-in-name`` would
 flag whose quantity has no unit is listed, with its class and range, in
 tools/api/dimensionless_names.toml. ``--audit-allowlist``
-fails on any allowlist entry that excused nothing in a full run.
+fails on any allowlist entry that excused nothing in a full run; ``--audit-only`` (which
+implies it) makes that and the validation problems the only causes of a non-zero exit.
 
 Exit 0 only when nothing failed.
 """
@@ -1606,8 +1607,18 @@ _POS_SAMPLE = re.compile(
 )
 
 
+# Records whose bounded counts keep their fixed width: realtime event records packed for an
+# SPSC queue or a UMP stream, where a size_t count breaks the packing and pads the record.
+FIXED_LAYOUT_RECORDS = {
+    "SonareEngineMidiEvent": "UMP event record (word_count uint8_t)",
+    "SonareExternalMidiEvent": "external MIDI event record (byte_count uint32_t)",
+    "SonareScopeTelemetryRecord": "SPSC telemetry record (band_count, point_count uint32_t)",
+}
+
+
 def chk_c_count_types(ctx):
     cands, bad = 0, []
+    fixed: list[str] = []
     for r in recs(ctx, ("c",), ("option", "field")):
         n = r["member"]
         t = r.get("type", "").replace("const", "").replace("*", "").strip()
@@ -1622,9 +1633,17 @@ def chk_c_count_types(ctx):
             want = "int"
         if want is None:
             continue
+        if r["kind"] == "field" and r["name"].split(".")[0] in FIXED_LAYOUT_RECORDS:
+            fixed.append(r["name"])
+            continue
         cands += 1
         if t != want:
             bad.append((r, f"{n} is {want}, not {t}"))
+    if fixed:
+        ctx.not_compared["c-count-types"].append(
+            f"{len(fixed)} count member(s) of fixed-layout realtime records keep their width: "
+            + "; ".join(f"{k}: {v}" for k, v in FIXED_LAYOUT_RECORDS.items())
+        )
     return cands, bad
 
 
@@ -2716,6 +2735,7 @@ def run(args) -> tuple[int, list[str], dict]:
             }
         )
 
+    stale_entries = False
     if args.audit_allowlist:
         if args.surface or args.domain or args.match or args.check or args.skip_check:
             out.append(
@@ -2729,6 +2749,7 @@ def run(args) -> tuple[int, list[str], dict]:
         )
         out += [f"  allow {a.index}: {a.check} {a.surface} {a.name}" for a in stale]
         failed |= bool(stale)
+        stale_entries = bool(stale)
 
     splits = domain_splits(ctx.records, want_domains)
     out.append(f"domain splits: {len(splits)}")
@@ -2753,6 +2774,8 @@ def run(args) -> tuple[int, list[str], dict]:
         }
     )
     code = 1 if failed else 0
+    if args.audit_only:
+        code = 1 if stale_entries or problems else 0
     report["exit"] = code
     return code, out, report
 
@@ -2776,6 +2799,11 @@ def parse_args(argv):
     )
     ap.add_argument("--domains-file", type=Path, default=DEFAULT_DOMAINS)
     ap.add_argument("--audit-allowlist", action="store_true")
+    ap.add_argument(
+        "--audit-only",
+        action="store_true",
+        help="with --audit-allowlist, exit on stale allowlist entries alone, not on violations",
+    )
     ap.add_argument("--inventory", action="store_true", help="print the inventory as TSV and exit")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--inventory-file", type=Path)
@@ -2803,6 +2831,7 @@ def parse_args(argv):
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    args.audit_allowlist |= args.audit_only
     code, lines, report = run(args)
     if args.json and not args.inventory:
         json.dump(report, sys.stdout, indent=1, sort_keys=True)
