@@ -277,6 +277,16 @@ class FailureClassTest(_SyntheticTree):
         )
         self.assertEqual(self.evaluate(root), [])
 
+    def test_an_argtype_argument_through_the_bool_flag_reports_nothing(self) -> None:
+        """The flag is 0 or 1, which no integer ctype narrows."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_flag.argtypes = [ctypes.c_void_p, ctypes.c_int]\n\n\n"
+            "def f(lib, handle, on):\n"
+            "    lib.sonare_set_flag(handle, _bool_flag(on, 'on'))\n"
+        )
+        self.assertEqual(self.evaluate(root), [])
+
     def test_a_local_bound_by_a_shared_reader_reports_nothing(self) -> None:
         """The value was range-checked before the name was; reading the name cannot tell."""
         root = self.tree(
