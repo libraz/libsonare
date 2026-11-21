@@ -710,6 +710,22 @@ def test_inline_flag_values_match_the_native_cli() -> None:
     assert body.count("lowered ==") == len(_FALSE_FLAG_LITERALS)
 
 
+def test_cli_exit_codes_are_the_contracts_named_table() -> None:
+    """Every library error code exits with the code the shared contract names for it."""
+    import libsonare._cli_common as common
+
+    manifest = (
+        Path(__file__).resolve().parents[3] / "tests" / "conformance" / "cli_contract_v2.json"
+    )
+    exit_codes = json.loads(manifest.read_text(encoding="utf-8"))["exit_codes"]
+    for name, code in exit_codes.items():
+        assert getattr(common, f"EXIT_{name.upper()}") == code, name
+        error = getattr(common, f"SONARE_ERROR_{name.upper()}", None)
+        if error is not None:
+            assert common._SONARE_CODE_TO_EXIT[error] == code, name
+    assert set(common._SONARE_CODE_TO_EXIT.values()) <= set(exit_codes.values())
+
+
 def _native_function_body(source: str, signature: str) -> str:
     """The body of one native CLI function, read from its own source."""
     start = source.index(signature)

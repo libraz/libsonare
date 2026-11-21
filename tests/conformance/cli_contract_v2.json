@@ -11,7 +11,15 @@
     "invalid_parameter": 3,
     "file_not_found": 4,
     "invalid_format": 5,
-    "invalid_state": 9
+    "decode_failed": 6,
+    "out_of_memory": 7,
+    "not_supported": 8,
+    "invalid_state": 9,
+    "error": 10,
+    "cancelled": 11,
+    "encode_failed": 12,
+    "abi_mismatch": 13,
+    "stale_result": 14
   },
   "comparison": {
     "absolute": 1e-06,
@@ -6017,6 +6025,70 @@
           }
         }
       ],
+      "sections": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "4.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.22",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
       "spectral": [
         {
           "name": "hop-length",
@@ -8517,11 +8589,9 @@
       ]
     },
     "sections": {
-      "classification": "intentional_variant",
-      "status": "intentional_variant",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "both front-ends take the same options, but the Python section result does not carry the form yet, so the Python payload has no form key"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "melody": {
       "classification": "shared",
@@ -24685,6 +24755,132 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "sections",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "4.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.22",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "form": "string",
+            "count": "integer",
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "keys": {
+                  "type": "string",
+                  "start": "number",
+                  "end": "number",
+                  "energy": "number",
+                  "confidence": "number",
+                  "group": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "sections",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "threshold_domain",
+          "argv": [
+            "sections",
+            "{audio}",
+            "--threshold",
+            "-1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

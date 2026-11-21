@@ -765,6 +765,28 @@ class CliContractSelfTest(unittest.TestCase):
             self.assertIn(record["reason_kind"], {"by_design", "unported"}, path)
             self.assertGreaterEqual(len(record["reason"].strip()), 24, path)
 
+    def _with_one_sided_sections(self) -> dict:
+        """The manifest with ``sections`` recorded as a by-design variant.
+
+        Both front-ends ship every command alike, so the ledger holds no
+        one-sided record for the reason rules to be exercised on; this copy
+        stands one in, valid as written, for each test to break one way.
+        """
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["sections"] = {
+            "classification": "intentional_variant",
+            "status": "intentional_variant",
+            "option_status": "pending",
+            "reason_kind": "by_design",
+            "reason": "both front-ends take the same options, but the payloads differ by design",
+        }
+        candidate["active_paths"] = [
+            contract for contract in candidate["active_paths"] if contract["path"] != "sections"
+        ]
+        del candidate["inventory"]["expected_options"]["sections"]
+        self.assertEqual(CHECKER.validate_manifest(copy.deepcopy(candidate)), [])
+        return candidate
+
     def test_unported_commands_are_enumerated(self) -> None:
         """The open CLI gaps are a closed list, so closing one is a diff here.
 
@@ -772,27 +794,24 @@ class CliContractSelfTest(unittest.TestCase):
         ledger row, and a row retitled by_design without the port, both fail
         naming the command.
 
-        The set is currently empty, and an empty set is the one value that
-        could also mean the query stopped finding anything. The second
-        assertion is what separates those: the ledger still carries one-sided
-        commands, they are all ``by_design``, and a reason_kind that stopped
-        being read would take that count to zero too.
+        Both sets are currently empty, and an empty set is the one value that
+        could also mean the query stopped finding anything. The injected
+        variant is what separates those: the same query has to find it.
         """
-        unported = {
-            path
-            for path, record in self.manifest["commands"].items()
-            if record.get("reason_kind") == "unported"
-        }
-        self.assertEqual(unported, set())
-        by_design = {
-            path
-            for path, record in self.manifest["commands"].items()
-            if record.get("reason_kind") == "by_design"
-        }
-        self.assertEqual(by_design, {"sections"})
+
+        def by_kind(manifest: dict, kind: str) -> set[str]:
+            return {
+                path
+                for path, record in manifest["commands"].items()
+                if record.get("reason_kind") == kind
+            }
+
+        self.assertEqual(by_kind(self.manifest, "unported"), set())
+        self.assertEqual(by_kind(self.manifest, "by_design"), set())
+        self.assertEqual(by_kind(self._with_one_sided_sections(), "by_design"), {"sections"})
 
     def test_a_missing_reason_is_rejected(self) -> None:
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"].pop("reason")
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(
@@ -811,20 +830,20 @@ class CliContractSelfTest(unittest.TestCase):
         )
 
     def test_an_intentional_variant_may_not_be_unported(self) -> None:
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"]["reason_kind"] = "unported"
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(any("not an unclosed gap" in error for error in errors), errors)
 
     def test_a_reason_too_short_to_say_anything_is_rejected(self) -> None:
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"]["reason"] = "TODO"
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(any("commands.sections.reason" in error for error in errors), errors)
 
     def test_a_reason_citing_a_function_the_package_does_not_export_is_rejected(self) -> None:
         """A route a reason sends the caller down must exist on the Python side."""
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"]["reason"] = (
             "a librosa-style primitive; a Python caller reaches it as libsonare.constant_q()"
         )
@@ -837,7 +856,7 @@ class CliContractSelfTest(unittest.TestCase):
 
     def test_a_reason_cites_a_function_through_the_package_name(self) -> None:
         """A bare name cannot be resolved, so it cannot be checked either."""
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"]["reason"] = (
             "a librosa-style primitive; a Python caller reaches it as cqt()"
         )
@@ -854,7 +873,7 @@ class CliContractSelfTest(unittest.TestCase):
         No reason in the ledger cites a function today, so the citations are written into one.
         """
         schema = sys.modules["cli_contract_schema"]
-        candidate = copy.deepcopy(self.manifest)
+        candidate = self._with_one_sided_sections()
         candidate["commands"]["sections"]["reason"] = (
             "a Python caller reaches the form through libsonare.cqt() and libsonare.vqt()"
         )
@@ -957,7 +976,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 118)
+        self.assertEqual(len(shared), 119)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(self.manifest["commands"][path]["option_status"], "active", path)

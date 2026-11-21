@@ -40,30 +40,29 @@ from cli_contract_schema import (
 
 
 def _validate_exit_codes(exit_codes: Any, errors: list[str]) -> None:
-    """The five named exit codes and the values the contract fixes them at."""
-    if _exact(
-        exit_codes,
-        {
-            "success",
-            "usage",
-            "invalid_parameter",
-            "file_not_found",
-            "invalid_format",
-            "invalid_state",
-        },
-        "manifest.exit_codes",
-        errors,
-    ):
-        expected = {
-            "success": 0,
-            "usage": 2,
-            "invalid_parameter": 3,
-            "file_not_found": 4,
-            "invalid_format": 5,
-            "invalid_state": 9,
-        }
-        if exit_codes != expected:
-            errors.append(f"manifest.exit_codes: expected {expected!r}")
+    """The named exit codes and the values the contract fixes them at.
+
+    Both front-ends map every library error code onto this one table; abi_mismatch
+    is Python-only, since the native CLI links its library statically.
+    """
+    expected = {
+        "success": 0,
+        "usage": 2,
+        "invalid_parameter": 3,
+        "file_not_found": 4,
+        "invalid_format": 5,
+        "decode_failed": 6,
+        "out_of_memory": 7,
+        "not_supported": 8,
+        "invalid_state": 9,
+        "error": 10,
+        "cancelled": 11,
+        "encode_failed": 12,
+        "abi_mismatch": 13,
+        "stale_result": 14,
+    }
+    if _exact(exit_codes, set(expected), "manifest.exit_codes", errors) and exit_codes != expected:
+        errors.append(f"manifest.exit_codes: expected {expected!r}")
 
 
 def _validate_comparison(comparison: Any, errors: list[str]) -> None:

@@ -1322,15 +1322,31 @@ TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument
   }
 }
 
-TEST_CASE("CLI exception exit codes include cancellation", "[cli][contract]") {
-  // This table is intentionally exercised through the same exception-to-exit
-  // mapping used by main(), rather than making cancellation a synthetic CLI
-  // command.  Cancellation is emitted by cooperative core operations.
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled) == 11);
-}
-
-TEST_CASE("CLI exit code for StaleResult is 14, not its error code", "[cli][contract]") {
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult) == 14);
+TEST_CASE("CLI exit codes are the contract's named table", "[cli][contract]") {
+  // Exercised through the exception-to-exit mapping main() uses, since most of
+  // these codes (cancellation, out of memory) have no command that provokes them.
+  std::ifstream input("tests/conformance/cli_contract_v2.json");
+  REQUIRE(input.good());
+  const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  const auto exit_codes = sonare::util::json::parse_strict(text)["exit_codes"];
+  const std::pair<sonare::ErrorCode, const char*> mapped[] = {
+      {sonare::ErrorCode::InvalidParameter, "invalid_parameter"},
+      {sonare::ErrorCode::FileNotFound, "file_not_found"},
+      {sonare::ErrorCode::InvalidFormat, "invalid_format"},
+      {sonare::ErrorCode::DecodeFailed, "decode_failed"},
+      {sonare::ErrorCode::OutOfMemory, "out_of_memory"},
+      {sonare::ErrorCode::NotSupported, "not_supported"},
+      {sonare::ErrorCode::InvalidState, "invalid_state"},
+      {sonare::ErrorCode::Cancelled, "cancelled"},
+      {sonare::ErrorCode::EncodeFailed, "encode_failed"},
+      {sonare::ErrorCode::StaleResult, "stale_result"},
+      // SONARE_ERROR_UNKNOWN, which the mapping does not name.
+      {static_cast<sonare::ErrorCode>(99), "error"},
+  };
+  for (const auto& [error, name] : mapped) {
+    CAPTURE(name);
+    REQUIRE(cli_exit_code_for_error(error) == exit_codes[name].as_int());
+  }
 }
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
