@@ -47,6 +47,20 @@ category = "hot-path"
 reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
 
 [[allow]]
+check = "one-positional-form"
+surface = "node"
+name = "RealtimeVoiceChanger.processInterleavedInto"
+category = "hot-path"
+reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "RealtimeVoiceChanger.processInterleavedInto"
+category = "hot-path"
+reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
+
+[[allow]]
 check = "token-case"
 surface = "node"
 name = "MasteringInsertParamUnit='Hz'"
