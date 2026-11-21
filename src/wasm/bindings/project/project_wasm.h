@@ -118,7 +118,7 @@ struct ProjectWasm {
 
   // Sets the project sample rate in Hz. Must be in [8000, 384000]; anything
   // outside that range throws (the C ABI rejects it).
-  void setSampleRate(double sample_rate);
+  void setSampleRate(const val& sample_rate);
 
   uint32_t addTrack(val desc);
   uint32_t addClip(val desc);

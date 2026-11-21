@@ -263,8 +263,8 @@ class PlaybackRendererWasm {
     return takeCString(text);
   }
 
-  uint32_t nonFiniteDiscardCount() const {
-    uint32_t out = 0;
+  size_t nonFiniteDiscardCount() const {
+    size_t out = 0;
     checkPlayback(sonare_playback_renderer_non_finite_discard_count(renderer_.get(), &out));
     return out;
   }

@@ -78,7 +78,7 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.role = has_role ? wasmCString(roles.back(), "role") : nullptr;
     descriptor.layout = layout;
     descriptor.planar_samples = planes.data();
-    descriptor.frame_count = static_cast<int64_t>(frames);
+    descriptor.frame_count = frames;
     descriptor.start_frame =
         optionalDomainValue<int64_t>(stem["startFrame"], "startFrame",
                                      sonare_c_detail::kExternalStemStartFrameDomain)

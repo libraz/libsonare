@@ -338,10 +338,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'A divisor guard over a bin count the core returned; the false branch reports an empty shape, not a default.',
   ],
   [
-    'bindings/node/src/addon/sonare_wrap_polyphony.cpp:frame_count_',
-    'An allocation size taken from analysis state the handle already holds; 0 allocates nothing.',
-  ],
-  [
     'bindings/node/src/addon/sonare_wrap_streaming.cpp:written',
     'The number of samples the C ABI reported writing; it bounds a memcpy and is never a request.',
   ],

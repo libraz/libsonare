@@ -487,7 +487,7 @@ val js_midi_route_events(val events, val config) {
   std::vector<SonareMidiEventPod> output(input.size());
   size_t output_count = 0;
   int overflowed = 0;
-  uint32_t overflow_count = 0;
+  size_t overflow_count = 0;
   const SonareError err =
       sonare_midi_route_events(input.empty() ? nullptr : input.data(), input.size(), &route,
                                output.empty() ? nullptr : output.data(), output.size(),

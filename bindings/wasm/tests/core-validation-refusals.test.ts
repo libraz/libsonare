@@ -438,16 +438,12 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
 
   for (const [name, route] of routes) {
     it.each(route.cases.absent_hop)(
-      `${name} $id: an omitted hop runs as the derived one and an explicit 0 is refused`,
+      `${name} $id: an omitted hop runs as the derived one and the facade refuses an explicit 0`,
       ({ n_fft, hop_length, derived_hop_length }) => {
         const derived = derived_hop_length as number;
         expect(route.facade(n_fft)).toEqual(route.facade(n_fft, derived));
-        // The native entry reads SONARE_STFT_HOP_AUTO (-1) as the derived hop and
-        // refuses a 0 like the facade.
-        expect(route.native(n_fft, -1)).toEqual(route.native(n_fft, derived));
-        expect(expectRefusalOf(() => route.native(n_fft, hop_length), RangeError).message).toMatch(
-          /hopLength must be an integer in \[1, 2147483647\]/,
-        );
+        // The native entry reads 0 as the derived hop; only the facade refuses it.
+        expect(route.native(n_fft, hop_length)).toEqual(route.native(n_fft, derived));
         expect(expectRefusalOf(() => route.facade(n_fft, hop_length), RangeError).message).toMatch(
           /hopLength/,
         );
@@ -537,23 +533,22 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
       const derived = { hopLength: derived_hop_length };
       expect(timeStretch(stretch)).toEqual(timeStretch({ ...stretch, ...derived }));
       expect(pitchShift(shift)).toEqual(pitchShift({ ...shift, ...derived }));
-      // The module reads SONARE_STFT_HOP_AUTO (-1), which the facades send for an
-      // omitted hop, as the derived one.
-      expect(raw().timeStretch(samples, rate, input.speed_ratio, n_fft, -1)).toEqual(
+      // The module reads 0, which the facades send for an omitted hop, as the derived one.
+      expect(raw().timeStretch(samples, rate, input.speed_ratio, n_fft, 0)).toEqual(
         raw().timeStretch(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
       );
-      expect(raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, -1)).toEqual(
+      expect(raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, 0)).toEqual(
         raw().pitchShift(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
       );
     },
   );
 
   it.each(absent_hop)(
-    '$id: an explicit hop of 0 is refused by the facade and the module',
+    '$id: an explicit hop of 0 is refused by the facade and a negative one by the module',
     ({ n_fft, hop_length }) => {
       expect(
         expectRefusalOf(
-          () => raw().timeStretch(samples, rate, input.speed_ratio, n_fft, hop_length),
+          () => raw().timeStretch(samples, rate, input.speed_ratio, n_fft, -1),
           RangeError,
         ).message,
       ).toMatch(/hopLength must be an integer in \[1, 2147483647\]/);

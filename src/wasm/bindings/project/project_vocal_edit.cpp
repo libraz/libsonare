@@ -189,7 +189,7 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
     invalid("renderedMono length must equal expectedSourceSampleCount");
   }
   storage->desc.rendered_mono = storage->rendered.data();
-  storage->desc.rendered_sample_count = static_cast<int64_t>(storage->rendered.size());
+  storage->desc.rendered_sample_count = storage->rendered.size();
   storage->desc.rendered_sample_rate =
       domainNumberFromVal<uint32_t>(property(request, "renderedSampleRate"), "renderedSampleRate",
                                     sonare::kAudioSampleRateDomain);
@@ -321,7 +321,7 @@ OriginalStorage originalsFromVal(const val& originals) {
                                                     sonare::kAudioSampleRateDomain);
     storage.buffers.push_back(copyMono(property(source, "mono"), "original.mono"));
     row.mono = storage.buffers.back().data();
-    row.sample_count = static_cast<int64_t>(storage.buffers.back().size());
+    row.sample_count = storage.buffers.back().size();
   }
   return storage;
 }

@@ -495,11 +495,17 @@ int checkedIntFromVal(const val& value, const char* key) {
   return static_cast<int>(number);
 }
 
+int wholeHertzSampleRateFromVal(const val& value) {
+  const double sample_rate = numberFromVal(value, "sampleRate");
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    throw WasmRangeError("sampleRate must be a whole number of hertz within 8000..384000");
+  }
+  return static_cast<int>(sample_rate);
+}
+
 int resynthesisHopFromVal(const val& value) {
-  constexpr int kStftHopAuto = -1;
   const int hop_length = checkedIntFromVal(value, "hopLength");
-  if (hop_length == kStftHopAuto) return 0;
-  if (hop_length < 1) throw WasmRangeError("hopLength must be an integer in [1, 2147483647]");
+  if (hop_length < 0) throw WasmRangeError("hopLength must be an integer in [1, 2147483647]");
   return hop_length;
 }
 

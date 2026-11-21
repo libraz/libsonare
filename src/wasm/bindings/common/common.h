@@ -444,10 +444,12 @@ void requireIntegral(double number, const char* key);
 ///          driving the embind classes directly.
 /// @throws WasmArgumentError naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
-/// @brief Reads the hop of a resynthesizing call for the core: -1 (the C ABI's
-///        SONARE_STFT_HOP_AUTO, which the facades send for an omitted hop) is the
-///        core's automatic hop 0, a quarter of n_fft; any other value below 1 is
-///        refused in the C ABI's words.
+/// @brief Reads a sample rate that must be a whole number of hertz in the supported range.
+/// @throws WasmTypeError for a non-number, WasmRangeError otherwise.
+int wholeHertzSampleRateFromVal(const val& value);
+/// @brief Reads the hop of a resynthesizing call for the core: 0 (which the facades
+///        send for an omitted hop) is the automatic hop, a quarter of n_fft; a
+///        negative value is refused in the C ABI's words.
 /// @throws WasmArgumentError naming hopLength.
 int resynthesisHopFromVal(const val& value);
 /// @brief Reads an integer MIDI note in the 7-bit domain [0, 127].
