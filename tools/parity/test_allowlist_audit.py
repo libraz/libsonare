@@ -317,6 +317,27 @@ def test_the_suppression_record_does_not_depend_on_declaration_order() -> None:
     )
 
 
+def test_an_alias_key_naming_no_c_function_is_reported() -> None:
+    saved = compare._ALIAS_COVERAGE
+    compare._ALIAS_COVERAGE = {"mastering_apply": ("apply",), "mastering_apply_ex": ("apply",)}
+    try:
+        rep = _report(_c("mastering_apply"), _facade("python"), allowlist_mod.Allowlist())
+    finally:
+        compare._ALIAS_COVERAGE = saved
+    assert rep.stale_aliases == ["mastering_apply_ex"], rep.stale_aliases
+    assert check_parity._audit_allowlist(rep, list(SURFACES), Path("allowlist.toml")) == 1
+
+
+def test_an_alias_table_naming_live_functions_reports_nothing() -> None:
+    saved = compare._ALIAS_COVERAGE
+    compare._ALIAS_COVERAGE = {"mastering_apply": ("apply",)}
+    try:
+        rep = _report(_c("mastering_apply"), _facade("python"), allowlist_mod.Allowlist())
+    finally:
+        compare._ALIAS_COVERAGE = saved
+    assert rep.stale_aliases == [], rep.stale_aliases
+
+
 def test_the_repository_allowlist_holds_its_ratcheted_sections_empty() -> None:
     """Both are empty today; widening one is a deliberate edit, not a drift."""
     allow = allowlist_mod.load(_HERE / "allowlist.toml")
@@ -329,6 +350,7 @@ def test_the_repository_allowlist_carries_no_expired_entry() -> None:
     rep = check_parity.run(root=root, selected=list(SURFACES))
     expired = rep.allowlist.expired_entries()
     assert expired == [], [f"[{s}] {p} ({state})" for s, p, state in expired]
+    assert rep.stale_aliases == [], rep.stale_aliases
 
 
 def _run_all() -> int:

@@ -150,8 +150,18 @@ def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
             file=sys.stderr,
         )
         return 1
+    if rep.stale_aliases:
+        print(
+            f"{len(rep.stale_aliases)} _ALIAS_COVERAGE key(s) in tools/parity/compare.py "
+            "name no C function; move each to the function it folded into, or remove it:",
+            file=sys.stderr,
+        )
+        for key in rep.stale_aliases:
+            print(f"  {key}", file=sys.stderr)
     expired = rep.allowlist.expired_entries() if rep.allowlist else []
     if not expired:
+        if rep.stale_aliases:
+            return 1
         print(
             "every allowlist entry still excuses a divergence a comparison found, "
             f"and nothing sits in a held-empty section: {path}"

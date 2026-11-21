@@ -274,24 +274,28 @@ _ALIAS_COVERAGE = {
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
     "system_info_json": ("system_info",),
-    # Named mastering processors and analyses, under the facades' verb-last names.
-    # Each facade derives the frame counts, so one name covers the base and _ex calls.
-    "mastering_apply_pair_processor_ex": ("mastering_apply_pair_processor",),
-    "mastering_apply_pair_processor_stereo_ex": ("mastering_apply_pair_processor_stereo",),
-    "mastering_analyze_pair_ex": ("mastering_analyze_pair",),
-    # One EQ match method covers the single-length base and the per-buffer _ex.
-    "eq_match_ex": ("match",),
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),
     "audio_duration_sec": ("duration_sec", "get_duration_sec"),
     "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
-    # The V2 meter drains append input-tap peaks to the legacy record shape;
-    # each facade keeps the established drain method and selects the versioned
-    # C entry point internally rather than exposing a second public spelling.
-    "engine_drain_meter_telemetry_v2": ("drain_meter_telemetry",),
-    "engine_drain_meter_telemetry_wide_v2": ("drain_meter_telemetry_wide",),
+    "engine_drain_meter_telemetry": ("drain_meter_telemetry",),
+    "engine_drain_meter_telemetry_wide": ("drain_meter_telemetry_wide",),
+    "engine_render_offline": ("render_offline",),
+    "project_add_automation_lane": ("add_automation_lane",),
+    "project_edit_automation_lane": ("edit_automation_lane",),
+    "stream_analyzer_read_frames_i16": ("read_frames_i16",),
+    "stream_analyzer_read_frames_u8": ("read_frames_u8",),
+    # One EQ match method under the handle's verb.
+    "eq_match": ("match",),
+    # The assistant's suggestion is one C entry; the facades name it by layout.
+    "mastering_assistant_suggest": (
+        "mastering_assistant_suggest_chain",
+        "mastering_assistant_suggest_chain_stereo",
+    ),
+    # The diagnosing split returns its report beside the spans.
+    "split_silence_common": ("split_silence_common_with_report",),
     "mixer_get_strip_count": ("strip_count",),
     "realtime_voice_changer_get_config": ("config", "config_json", "config_pod"),
     # Whole-object JSON serialize/deserialize -> to_json / from_json.
@@ -304,109 +308,33 @@ _ALIAS_COVERAGE = {
     # of surface-only. Measured: deleting it raises four active findings.
     "polyphonic_analyze": ("analyze_polyphonic", "analyze"),
     "project_deserialize": ("from_json",),
-    # JSON-config setter -> the typed set_config the facades expose.
-    "realtime_voice_changer_set_config_json": ("set_config",),
-    # The default config is the public neutral-monitor preset config. Facades
-    # expose the latter rather than a duplicate no-argument default helper.
-    "realtime_voice_changer_config_default": ("realtime_voice_changer_preset_config",),
     # Standalone preset validator (the facade reorders the name to lead with the
     # verb): validate_realtime_voice_changer_preset_json.
     "realtime_voice_changer_validate_preset_json": ("validate_realtime_voice_changer_preset_json",),
-    # Quantized read _ex variants -> the public read_frames_{i16,u8}.
-    "stream_analyzer_read_frames_i16_ex": ("read_frames_i16",),
-    "stream_analyzer_read_frames_u8_ex": ("read_frames_u8",),
-    # Explicit-Mel-range forward transforms -> the base mel_spectrogram / mfcc
-    # facade, which exposes the fmin/fmax/htk arguments and routes to the _ex C
-    # entry point. Anchored to the base member so the credit holds only while the
-    # base facade actually exists (and, by the params it now carries, exposes the
-    # explicit Mel range needed to round-trip with mel_to_stft / mel_to_audio).
-    "mel_spectrogram_ex": ("mel_spectrogram",),
-    "mfcc_ex": ("mfcc",),
-    # Two-rate take alignment -> the base facade, whose take-rate argument
-    # routes to the _ex C entry point.
-    "align_take_to_reference_ex": ("align_take_to_reference",),
-    # The insert descriptor query takes an optional sample rate on every facade and
-    # routes to the _at_rate C entry point when one is given.
-    "mastering_insert_param_info_at_rate": ("mastering_insert_param_info",),
-    # Extended one-shot variants folded into their base facade functions. Each
-    # base function exposes the extended fields and routes to this C entry point.
-    "analyze_json_ex": ("analyze",),
     # The C entry point returns the estimate as JSON; each facade parses it and
     # exposes the same operation under the unsuffixed name.
     "estimate_meter_json": ("estimate_meter",),
-    # Onset facades take the complete extended option set under the base name.
-    "detect_onsets_ex": ("detect_onsets",),
-    "chroma_cens_ex": ("chroma_cens",),
-    "chroma_cqt_ex": ("chroma_cqt",),
-    "mfcc_to_audio_ex2": ("mfcc_to_audio",),
-    "mfcc_to_mel_ex": ("mfcc_to_mel",),
-    "spectral_bandwidth_ex": ("spectral_bandwidth",),
-    "nnls_chroma_ex": ("nnls_chroma",),
-    # The one _ex here that is NOT folded into its base facade, and deliberately
-    # so: the base returns the intervals alone and the report is a second return
-    # value rather than an option, so folding it would change what every existing
-    # caller of the base gets back. Anchored to the separate facade instead, which
-    # is where the capability is on all three surfaces.
-    "split_silence_common_ex": ("split_silence_common_with_report",),
-    # Additive DSP-option variants remain the same public operation on every
-    # facade.  The facade method owns the options bag and routes non-default
-    # values to the extended C entry point.
-    "hpss_ex": ("hpss",),
-    "time_stretch_ex": ("time_stretch",),
-    "pitch_shift_ex": ("pitch_shift",),
+    # The RMS normalizer is the facades' normalize with a mode argument.
     "normalize_rms": ("normalize",),
     # Same fold one channel count up: every facade reaches both statistics
     # through one stereo function with a mode argument.
     "normalize_rms_stereo": ("normalize_stereo",),
-    "trim_ex": ("trim",),
-    "nnls_chroma_ex2": ("nnls_chroma",),
-    "analyze_impulse_response_ex": ("analyze_impulse_response",),
     # Same operation, and the two names differ because the two CONTRACTS do: the
     # C entry point reads and writes a config the caller owns, while each facade
     # takes the taste options and returns a finished config. Renaming either to
     # match the other would put a name on it that its own behaviour contradicts.
     "mastering_repair_dereverb_apply_room_estimate": ("mastering_repair_dereverb_config_for_room",),
-    # NMF warm-start variant -> the base decompose facade, which exposes the
-    # `init` initialiser argument and routes to sonare_decompose_with_init.
-    # (Python / WASM expose decompose_with_init by name, matched directly before
-    # this; the alias credits the Node fold onto the base decompose() function.)
-    "decompose_with_init": ("decompose",),
     # Correction toward a fixed MIDI target is the time-varying corrector with its
     # default target mode, so every facade reaches it through that one function.
     "pitch_correct_to_midi_timevarying": ("pitch_correct_timevarying",),
-    # Progress-callback mastering variants -> base fn with an optional callback.
-    "master_audio_with_progress": ("master_audio",),
-    # The C entry writes the chain config as its canonical JSON text because a C
-    # entry can only hand back a string; every facade parses that text and
-    # returns the params mapping the mastering entry points accept as overrides,
-    # so the facade carries no `_json` in its name. Anchored to the facade
-    # members that deliver it, so the credit lapses if one is removed.
-    "mastering_assistant_suggest_chain_json": ("mastering_assistant_suggest_chain",),
-    "mastering_assistant_suggest_chain_json_stereo": ("mastering_assistant_suggest_chain_stereo",),
-    # Same reasoning as the suggest_chain_json alias above: the C entry can only
-    # hand back a string, and every facade parses it into the params mapping
+    # The C entry can only hand back a string, and every facade parses it into the params mapping
     # masteringPresetParams returns, so the `_json` spelling never appears there.
     "mastering_preset_params_json": ("mastering_preset_params",),
     # The JS facades name the multichannel LUFS meters by layout, not storage.
     "lufs_interleaved": ("lufs_multichannel",),
     "lufs_series_interleaved": ("lufs_series_multichannel",),
-    # The JS scopes take maxPoints and call the decimated entry for every request.
-    "metering_vectorscope_decimated": ("metering_vectorscope",),
-    "metering_phase_scope_decimated": ("metering_phase_scope",),
     # The JS facades parse the preset document and drop the _json suffix.
     "mixing_scene_preset_json": ("mixing_scene_preset",),
-    "master_audio_stereo_with_progress": ("master_audio_stereo",),
-    # C cancellation is additive in `_ex` variants; every facade folds it into
-    # the same progress-capable method rather than exposing a second spelling.
-    "analyze_json_with_progress_ex": ("analyze_with_progress",),
-    "master_audio_with_progress_ex": ("master_audio",),
-    "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
-    # The offline render's `finalize` flag is additive in the `_ex` variant;
-    # every facade folds it into the one render_offline / renderOffline member
-    # (a request field on Node and WASM, a keyword argument on Python) rather
-    # than exposing a second spelling. Anchored to the base member, so the
-    # credit lapses if that facade method ever disappears.
-    "engine_render_offline_ex": ("render_offline",),
     # Sidechain EQ -> the mono/stereo-specific setters the facades expose.
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
     # The N-channel planar block processor, exposed by channel count for the same
@@ -438,12 +366,6 @@ _ALIAS_COVERAGE = {
     # The full URI feeds the ProjectSource builder behind source_by_index and
     # unresolved_audio_sources.
     "project_get_audio_source_uri": ("source_by_index", "sources", "unresolved_audio_sources"),
-    # Typed automation is an additive C descriptor overload. Each facade keeps
-    # one add/edit method and dispatches to `_ex` only when targetKind is
-    # supplied, so coverage belongs to that canonical public method rather than
-    # a redundant second spelling.
-    "project_add_automation_lane_ex": ("add_automation_lane",),
-    "project_edit_automation_lane_ex": ("edit_automation_lane",),
     # ProjectSource is the facade's aggregate read model; its source-by-index
     # projection includes the owning audio metadata strings for audio sources.
     "project_get_audio_source_metadata": ("source_by_index", "sources"),
@@ -489,8 +411,6 @@ _ALIAS_COVERAGE = {
     "engine_parameter_info_by_index": ("parameters",),
     # The fixed-point latency is read in (fractional) samples.
     "engine_graph_latency_samples_q8": ("graph_latency_samples",),
-    # One marker setter carries the optional name the `_ex` variant adds.
-    "project_set_marker_ex": ("set_marker",),
     # Deprecated C alias of project_bake_midi_fx; the facades expose the bake only.
     "project_set_midi_fx": ("bake_midi_fx",),
     # One strip family addressed by a strip reference: a track id or 'master'
@@ -547,16 +467,10 @@ _ALIAS_COVERAGE = {
     # A mixer scene is the mixer's document: the facades read and load it as JSON.
     "mixer_to_scene_json": ("to_json",),
     "mixer_from_scene_json": ("from_json",),
-    # One strip-meter read takes the optional tap.
-    "strip_meter_tap": ("strip_meter",),
     # The voice changer processes planar channels or writes interleaved audio
     # into a caller buffer; the stereo pair is the two-channel planar case.
     "realtime_voice_changer_process_interleaved": ("process_interleaved_into",),
-    "realtime_voice_changer_process_interleaved_with_carrier": (
-        "process_interleaved_with_carrier_into",
-    ),
     "realtime_voice_changer_process_planar_stereo": ("process_planar",),
-    "realtime_voice_changer_process_planar_stereo_with_carrier": ("process_planar_with_carrier",),
 }
 
 
@@ -604,6 +518,9 @@ class Report:
     # C entries a surface calls from its own native or ctypes layer and exposes through no
     # facade, as (key, surface, call site). Informational coverage, derived on every run.
     binding_consumed: list[tuple[str, str, str]] = field(default_factory=list)
+    # _ALIAS_COVERAGE keys that name no C function. A key outliving its function keeps
+    # its credit parked on a facade name, and the next C symbol to take it inherits it.
+    stale_aliases: list[str] = field(default_factory=list)
 
     def decline(
         self, category: str, key: str, surface: str, reason: str, location: str = ""
@@ -949,6 +866,7 @@ def build_report(
     c_bodies = _c_entry_bodies((native_sources or {}).get("c", []))
 
     rep.handle_keys = sorted(k for k in c_index if _is_handle_key(k, handle_prefixes))
+    rep.stale_aliases = sorted(k for k in _ALIAS_COVERAGE if k not in c_index)
 
     # --- Coverage matrix ---
     for key in sorted(all_keys):
