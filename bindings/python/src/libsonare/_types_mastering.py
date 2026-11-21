@@ -278,7 +278,7 @@ class StreamingLoudnessGain:
     which is where the offline chain measures, so ``loudness_static_gain_db``
     equals the gain :func:`master_audio` applies, ceiling clamp included.
     Pass ``loudness_static_gain_db`` and ``true_peak_dbtp`` as the constructor's
-    ``loudness_static_gain_db`` and ``loudness_static_gain_peak_db``. A silent or
+    ``loudness_static_gain_db`` and ``loudness_static_gain_peak_dbtp``. A silent or
     below-gate stage input has no ``integrated_lufs`` (``None``) and a gain of 0;
     digital silence has no ``true_peak_dbtp`` (``None``), which the constructor
     reads as no measured peak.

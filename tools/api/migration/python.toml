@@ -8146,6 +8146,13 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "option"
+old = "StreamingMasteringChain.constructor(loudness_static_gain_peak_db)"
+new = "StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "Project.rehydrate_vocal_edits(original_sources)"
 new = "Project.rehydrate_vocal_edits(originals)"
 domain = "project"

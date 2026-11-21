@@ -426,7 +426,7 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
         sample_rate=44100,
         max_block_size=512,
         loudness_static_gain_db=3.0,
-        loudness_static_gain_peak_db=-1.0,
+        loudness_static_gain_peak_dbtp=-1.0,
         num_channels=1,
     )
     out = chain.process_mono([0.1] * 512)

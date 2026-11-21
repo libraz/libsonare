@@ -2581,6 +2581,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels` |
+| `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
 | `mastering_insert_param_info(name)` | `mastering_insert_param_info(insert)` |

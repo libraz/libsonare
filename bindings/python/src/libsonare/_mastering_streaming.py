@@ -90,7 +90,7 @@ def streaming_loudness_gain(
             sample_rate=48000,
             num_channels=1,
             loudness_static_gain_db=gain.loudness_static_gain_db,
-            loudness_static_gain_peak_db=gain.true_peak_dbtp,
+            loudness_static_gain_peak_dbtp=gain.true_peak_dbtp,
         )
     """
     lib = _get_lib()
@@ -187,7 +187,7 @@ class StreamingMasteringChain:
         num_channels: int,
         max_block_size: int | None = None,
         loudness_static_gain_db: float | None = None,
-        loudness_static_gain_peak_db: float | None = None,
+        loudness_static_gain_peak_dbtp: float | None = None,
     ) -> None:
         """Build and prepare a streaming mastering chain.
 
@@ -206,7 +206,7 @@ class StreamingMasteringChain:
                 config raises unless a static gain is supplied here; when
                 supplied it is applied per block before the loudness stage's
                 true-peak limiter.
-            loudness_static_gain_peak_db: True peak (dBFS) of the loudness
+            loudness_static_gain_peak_dbtp: True peak (dBFS) of the loudness
                 stage's input the static gain was computed for. When given, the static
                 gain is clamped to ``(ceilingDbtp - peak) +
                 max(max_limiter_gain_reduction_db, 0)`` so the streaming preview
@@ -229,8 +229,8 @@ class StreamingMasteringChain:
             # a saturating one would arrive as that same reading.
             peak = (
                 math.nan
-                if loudness_static_gain_peak_db is None
-                else _narrow_float(loudness_static_gain_peak_db, "loudness_static_gain_peak_db")
+                if loudness_static_gain_peak_dbtp is None
+                else _narrow_float(loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp")
             )
             rc = lib.sonare_streaming_mastering_chain_create_ex(
                 config_json,

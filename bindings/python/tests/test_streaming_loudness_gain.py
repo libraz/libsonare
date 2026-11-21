@@ -61,7 +61,7 @@ def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
         sample_rate=SR,
         max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
-        loudness_static_gain_peak_db=gain.true_peak_dbtp,
+        loudness_static_gain_peak_dbtp=gain.true_peak_dbtp,
         num_channels=1,
     ) as chain:
         assert len(chain.process_mono([0.0] * 512)) == 512
@@ -76,7 +76,7 @@ def test_streaming_chain_built_from_the_helper_tracks_the_offline_render() -> No
         sample_rate=SR,
         max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
-        loudness_static_gain_peak_db=gain.true_peak_dbtp,
+        loudness_static_gain_peak_dbtp=gain.true_peak_dbtp,
         num_channels=1,
     ) as chain:
         out: list[float] = []
