@@ -16,16 +16,16 @@
     "past it means lowering it deliberately in the same change."
   ],
   "floor": {
-    "sites": 15,
-    "comparisons": 220,
+    "sites": 14,
+    "comparisons": 219,
     "helper_calls": 18
   },
   "sites": [
     {
       "file": "src/wasm/bindings/realtime/transport.cpp",
       "value": "click_seconds",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_engine.cpp metronome click; moves with it."
+      "measured": "yes",
+      "reason": "Metronome click length. A negative or non-finite length is refused in front of the filter, so the comparison reads as a test against zero and nothing the caller chooses reaches the substitution except the sentinel itself."
     },
     {
       "file": "src/c_api/project_bounce_internal.h",
