@@ -258,8 +258,8 @@ facade's convention is nearly always dropped for all of them, and a field that
 differs on exactly one surface is the shape drift looks like.
 
 `extra_fields` is for a facade record that is a genuinely richer read model than
-the C struct (the TS `AnalysisResult` mirrors the parsed `sonare_analyze_json`
-document; C's `SonareAnalysisResult` is a lean POD). It excuses fields the facade
+the C struct (one that mirrors a parsed JSON document, say, beside a lean C POD);
+no record currently needs it. It excuses fields the facade
 *adds* while still reporting a C field the facade *drops*, so a record under
 active development can be excused without naming — and thereby pre-blessing —
 fields that do not exist yet. `[record.records]` is the blunt form and goes blind
