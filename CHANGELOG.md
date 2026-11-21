@@ -2,7 +2,7 @@
 
 ## v2.0.0 (unreleased)
 
-This release rebuilds the music-analysis front end: beat, downbeat and onset times mark the start of their evidence, chords and keys are read from a beat-pooled constant-Q chroma with HMM smoothing and measured tuning by default, and section analysis runs on a beat grid and reports which sections repeat the same material. The realtime voice changer gains a low-latency PSOLA engine (now the default), pitch correction, harmony, MIDI note input, a channel vocoder and character and echo stages. Monophonic transcription gains a `singing` model, the synthesizer a self-oscillating singing engine and further engine parameters, and room impulse responses apply air absorption and model the room's modes by default. Errors are classed by cause on every surface: a refused argument is `RangeError` / `SonareValueError`, and a refused document is `InvalidFormat`. Three ABI counters moved, so every binding and native consumer must be rebuilt together.
+This release gives the public interface one set of conventions on every surface and rebuilds the music-analysis front end. Names carry their unit (`*Sec`, `*Hz`, `*Lufs`), a closed set is a lowerCamel string token, an option left out is absent (`None` in Python) rather than `0`, `-1` or `""`, results are typed values rather than JSON strings, and each operation has one entry point. An argument the library refuses is a `TypeError` or `RangeError` (`SonareValueError` in Python) naming the argument as the caller spelled it, and a refused document is `InvalidFormat`. The C ABI sizes its configuration structs by `struct_size`, seeds them with `*_init`, returns `SonareError` from constructors and releases every result with the function named after it, and the native and Python command lines share commands, options, defaults and exit codes. No 1.x spelling is kept as an alias; `UPGRADING.md` lists every renamed, removed and reshaped name per surface. On the analysis side, beat, downbeat and onset times mark the start of their evidence, chords and keys are read from a beat-pooled constant-Q chroma with HMM smoothing and measured tuning by default, and section analysis runs on a beat grid and reports which sections repeat the same material. The realtime voice changer gains a low-latency PSOLA engine (now the default), pitch correction, harmony, MIDI note input, a channel vocoder and character and echo stages; monophonic transcription gains a `singing` model, the synthesizer a self-oscillating singing engine, and room impulse responses apply air absorption and model the room's modes by default.
 
 ### Upgrade notes
 
@@ -10,40 +10,40 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 
 - The aggregate ABI is `0x06040308` (was `0x05030207`): `SONARE_FEATURE_ABI_VERSION` 8, `SONARE_PROJECT_ABI_VERSION` 3, `SONARE_VOICE_CHANGER_ABI_VERSION` 4 and `SONARE_ACOUSTIC_ABI_VERSION` 6. `SONARE_ENGINE_ABI_VERSION` is 4, and the vocal edit and vocal project APIs now carry their own counters, `SONARE_VOCAL_EDIT_ABI_VERSION` and `SONARE_VOCAL_PROJECT_ABI_VERSION`, both 1. A binding loaded against a library on another aggregate reports `AbiMismatch`.
 - Feature ABI 8: `SonareSection` gains a trailing `int32_t group` and is 24 bytes instead of 20.
-- Voice changer ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused.
-- Acoustic ABI 6: `SonareRirSynthConfig` and `SonareRoomMorphConfig` replace `air_absorption_enabled` with the `air_absorption` selector (see below).
-- `SonareTranscribeConfig` is `struct_version` 4, adding `monophonic_model`; versions 1 to 3 are still read.
-- Voice-changer preset documents are written as schema version 2, which an older library refuses; version 1 documents still load.
-- In C++, `SectionConfig::kernel_size` is removed; the novelty window is twice `min_section_sec` on each side of a boundary.
-- In C++, the three `SectionAnalyzer` constructors that took boundaries from outside are removed; call `SectionAnalyzer(audio, config)` or `SectionAnalyzer(audio, SectionGrid, spec, config)`, which refuses a grid that is not ascending or whose downbeat index is out of range.
-- In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>` and `auto_tuning` is removed: leave `tuning` unset to measure it.
+- Every configuration struct passed by pointer leads with `uint32_t struct_size`; call its `*_init` function, which writes `struct_size` and every default, before setting fields. The `struct_version` fields, `SONARE_SYNTH_PATCH_STRUCT_VERSION` and the vocal-edit and vocal-project `schema_version` members are removed.
+- A struct field is read literally: a 0 that selected the library value in 1.x is refused unless the header documents its meaning (a `hop_length` of 0 is a quarter of `n_fft`, and `SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT` bounces the whole arrangement). `sonare_project_tempo_options_default` is replaced by `sonare_project_tempo_options_init`.
+- Voice-changer preset documents are schema version 4, and a document of any other version is refused.
 
-#### Removed and renamed
+#### Renamed, removed and reshaped
 
-- The C field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused.
-- The reed engine parameter `flowGain` is now `zeta`, the dimensionless flow-to-pressure gain (the old value divided by the square root of `pressureScale` × `closingPressure`), clamped to [0, 0.9].
-- The `chords` command's `--triads-only`, `--nnls` and `--use-hmm` are replaced by `--with-seventh`, `--chroma-method cqt|stft|nnls` and `--no-hmm`, and `analyze --no-hpss` by `--hpss`, on both command lines; the old flags fail as unknown options.
-- Key detection's automatic search over HPSS and loudness-weighted chroma and its harmonic high-pass retry are removed; `use_hpss` and `loudness_weighted` remain as explicit options.
+- `UPGRADING.md` lists every change by surface (C, Python, Node, WASM, command line) and by area of the library, with the convention behind each and a before and after.
+- The command lines read the primary input as a positional argument, and the legacy exit-code mode is gone: a failure exits with the code of its cause (2 usage through 14 stale result) on both front-ends.
+- The `chords` command decodes triads with HMM smoothing on the constant-Q chroma unless given `--with-seventh`, `--chroma-method stft|nnls` or `--no-hmm`, and `analyze` runs HPSS only with `--hpss`, on both command lines; `--triads-only`, `--nnls`, `--use-hmm` and `--no-hpss` fail as unknown options.
+- Key detection no longer searches over HPSS and loudness-weighted chroma or retries with a harmonic high-pass by itself; `use_hpss` and `loudness_weighted` remain as explicit options.
+- The reed engine's flow gain is now the `zeta` engine parameter, the dimensionless flow-to-pressure gain (the old value divided by the square root of `pressureScale` × `closingPressure`), in [0, 0.9].
+- In C++, `SectionConfig` has no novelty kernel size; the novelty window is twice `min_section_sec` on each side of a boundary.
+- In C++, the three `SectionAnalyzer` constructors that took boundaries from outside are removed; call `SectionAnalyzer(audio, config)` or `SectionAnalyzer(audio, grid, spec, config)` with a `SectionGrid`, which refuses a grid that is not ascending or whose downbeat index is out of range.
+- In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`: leave `tuning` unset to measure it.
 
 #### Now refused
 
-- Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it, including the one-shot named-processor calls, `mixStereo` pan, `Mixer.addStrip` `truePeakOversample`, `masteringInsertTiming`, `hzToNote` and `noteToHz`; a Node or WASM `SonareError` handler no longer catches them, and the Python message drops its `[4]` prefix.
+- Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it, including the one-shot named-processor calls, `mixStereo` pan, the `Mixer.addStrip` metering `truePeakOversample`, `masteringInsertTiming`, `hzToNote` and `noteToHz`; a Node or WASM `SonareError` handler no longer catches them, and the Python message drops its `[4]` prefix.
 - A loader refusing the content of a document reports `InvalidFormat` (C `SONARE_ERROR_INVALID_FORMAT`) on every surface: mixer scene, renderer config, mastering chain, EQ band, realtime voice-changer config, MIDI FX, part rig and repair-session JSON, and HRTF set bytes.
-- A `StreamAnalyzer` asked for `computeMagnitude` reports `NotSupported` instead of `InvalidParameter`.
 - Flushing a streaming mastering chain (`flushMono`, `flushStereo`, `flush_mono`, `sonare_streaming_mastering_chain_flush_mono`) while an enabled stage has an unbounded tail is refused with `NotSupported` and writes nothing; feed a bounded number of silent blocks instead.
-- Reverb inserts refuse an out-of-range tail length instead of clamping it (`effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], and `effects.reverb.velvet` `decaySec` and `reverbTimeS` and `effects.reverb.dattorro` `decaySec` at the ranges `capabilityCatalog()` publishes).
+- Reverb inserts refuse an out-of-range tail length instead of clamping it (`effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], and `effects.reverb.velvet` `decaySec` and `reverbTimeS` and `effects.reverb.plate` `decaySec` at the ranges `capabilityCatalog()` publishes).
 - An insert `seed` is read as a 32-bit unsigned integer and a negative one is refused by name instead of read as 0; WASM also refuses a present seed that is not a uint32 instead of using the module default.
 - Surround pan azimuth, divergence and `lfe` out of range are refused instead of clamped on the C ABI, in scene JSON and on every binding.
 - Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field; an absent key keeps its default.
-- The flat camelCase voice-changer config (Node and WASM) requires every field, and fractional `retuneGrainSize` and `reverbSeed` are refused.
+- The flat camelCase `RealtimeVoiceChangerConfig` (Node and WASM) requires every field except `retuneGrainSizeSamples`, whose omission selects the automatic grain, and a fractional `retuneGrainSizeSamples` or `reverbSeed` is refused.
 - Remix `intervals` of odd length are refused (`RangeError` on Node, `SonareValueError` on Python).
 - Node refuses a non-string detector or enum spelling with `TypeError` and an unknown one with a `RangeError` listing the accepted spellings, and a note, edit, event, target or op that is not a plain object with `TypeError`.
 - WASM refuses a positional boolean argument that is not a boolean with `TypeError` instead of coercing it, and `spectralEdit` ops and modes with a `TypeError` naming the failing index.
 - A non-number vocal-edit request or original-source field on a `Project` is a `TypeError` on Node and WASM, and an out-of-domain number a `RangeError`.
 - `tempogram` refuses an onset envelope shorter than its window.
 - Realtime sample-rate and block-size ceilings and out-of-range FFT, CQT, mel and NNLS configuration values are refused by field name before anything is allocated, with the same ranges on every surface.
+- The mixing assistant's output and track sample rates and the mel and MFCC resynthesis sample rate are refused outside [8000, 384000].
 - Framing a signal into more than `INT_MAX` frames (`sonare_frame_signal`) and peak picking over more than `INT_MAX` samples (`sonare_peak_pick`) are refused as `InvalidParameter`, as are DCT dimension products that overflow and a `sonare_render_percussive_events` gain or output length that overflows.
-- The segmentation entries (`cross_similarity`, `recurrence_matrix`, `subsegment`, `agglomerative`) refuse a feature-matrix shape whose element count overflows or exceeds `INT_MAX`.
+- The segmentation entries (`sonare_segment_cross_similarity`, `sonare_segment_recurrence_matrix`, `sonare_segment_subsegment`, `sonare_segment_agglomerative`) refuse a feature-matrix shape whose element count overflows or exceeds `INT_MAX`.
 - Writing a WAV file refuses a channel count or sample rate whose block align or byte rate does not fit the header.
 - Karplus-Strong `haloDampS` publishes 0 to 1.5 s instead of 0 to 10 s; no sound changes.
 - In C++, `TransientShaper` refuses a non-finite attack or sustain gain, `VocalRider` a non-finite target, noise floor or output gain, and `BinauralRenderer::prepare` a non-finite or out-of-range sample rate, block size or ITD.
@@ -52,22 +52,48 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 
 #### Analysis
 
-- Every section carries a `group`: sections sharing a value repeat the same material, numbered from 0 in order of first appearance (`SonareSection.group`, `sections[].group` in the analyze JSON, `Section.group` in C++, Python, Node and WASM, `AnalysisSection.group` on Node, and the `group` key in the `sections` and `analyze` output of both command lines).
-- `detect_key_candidates` takes a `tuning` on every surface (a number, or `"auto"` to measure it), and C adds `sonare_detect_key_candidates_with_tuning`, which reports the tuning used through an optional `out_tuning`.
-- `SonareChordDetectionOptions.chroma_method` accepts 2 for the constant-Q chroma, and Python and Node/WASM take `chroma_method="cqt"` / `chromaMethod: 'cqt'`.
+- Every section carries a `group`: sections sharing a value repeat the same material, numbered from 0 in order of first appearance (`SonareSection.group`, `sections[].group` in the analyze JSON, `Section.group` in C++, Python, Node and WASM, and the `group` key in the `sections` and `analyze` output of both command lines).
+- `detect_key_candidates` takes a tuning on every surface (`tuning_cents`, `tuningCents`: a number of cents, or `"auto"` to measure it) and reports the tuning it used.
+- `SonareChordDetectionOptions.chroma_method` takes `SONARE_CHROMA_METHOD_CQT` for the constant-Q chroma, and Python and Node/WASM take `chroma_method="cqt"` / `chromaMethod: 'cqt'`.
+- `detect_bpm` and `detect_beats` on a Python `Audio` take keyword-only `bpm_min` / `bpm_max` (`None` means the shared 60 / 200 BPM), and an inverted, non-positive or non-finite range raises `SonareValueError`, as on the free functions.
+- `analyzeSections` on Node and WASM takes a `threshold` in `AnalyzeSectionsRequest`; omitted means the library default and a negative or non-finite value is a `RangeError`.
 - In C++, `onset_center_shift_frames` returns the onset envelope's centering shift and `envelope_frame_time` the time of the evidence an envelope frame carries.
 
 #### Editing and alignment
 
-- The realtime voice changer gains a PSOLA engine (`voiceEngine.engine`, `psola` or `grain`), auto pitch correction and robot mode over a key and scale, up to three harmony voices, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (`process*WithCarrier`, Python `process_*_with_carrier`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo; the `voice.changer` insert exposes each as a parameter.
-- Six voice-changer presets: `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`.
+- The realtime voice changer gains a PSOLA engine (`voiceEngine`, `psola` or `grain`), auto pitch correction and robot mode over a key and scale, up to three harmony voices, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (the `carrier` argument of `processMono` and `processPlanar`, Python `process_mono` and `process_planar`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo; the `voice.changer` insert exposes each as a parameter.
+- Six voice-changer presets: `hardTune`, `robotMonotone`, `choirHarmony`, `vocoderStrings`, `megaphone` and `radioVoice`.
+- `config()` on the Node and WASM `RealtimeVoiceChanger` returns the flat record `setConfig` takes, so setting what it returned leaves the configuration unchanged.
 - Monophonic transcription takes a model: `segments` (the default) or `singing`, which decodes notes jointly over pitch and holds vibrato and intonation drift within one note (`monophonic_model` in `SonareTranscribeConfig` and C++ `TranscribeConfig`, `monophonic_model="singing"` in Python, `monophonicModel: 'singing'` on Node and WASM, `--monophonic-model singing` on both command lines).
 - The `singing` model defaults `min_note_ms` to 45, reads `segmentation_threshold_cents` as the pitch movement held within one note, and is refused together with `polyphonic`.
+- Node names the `VocalNotesResult` record its vocal-notes calls return, matching WASM and Python.
 - In C++, `transcribe_monophonic_track` transcribes notes along a caller-supplied F0 track.
+
+#### Realtime engine and project
+
+- The `maxBlockSize` getter (Python `max_block_size`) reports the largest block a handle's process calls accept on the realtime voice changer, the streaming mastering chain, the equalizer, `Mixer`, `PlaybackRenderer` and the realtime engine, so a caller that left the block size to the library can chunk at the reported value; C adds `sonare_realtime_voice_changer_max_block_size`, `sonare_streaming_mastering_chain_max_block_size`, `sonare_eq_max_block_size`, `sonare_mixer_max_block_size`, `sonare_playback_renderer_max_block_size` and `sonare_engine_max_block_size`.
+- The `Mixer` meters its master output through `sonare_mixer_configure_master_meter` and `sonare_mixer_master_meter` with `SonareMixerMasterMeterConfig` in C, `configureMeter` and `meterSnapshot` on Node (WASM routes its existing methods through the same entries and now meters every process call), and `Mixer.configure_meter` and `Mixer.meter_snapshot` in Python; the true-peak oversample factor is 4 or 8, and a snapshot read before the meter was first enabled is `InvalidState`.
+- `sonare_project_track_name_by_index` and `sonare_project_source_name_or_uri_by_index` read the full track name and source name or URI, so `Project.tracks()` and `Project.sources()` return a 64-byte name and a 128-byte URI unchanged.
+- `sonare_project_diagnostic_code_name` and `sonare_project_diagnostic_severity_name` give the lowerCamel token of each compile diagnostic code and severity, contiguous from 0 and `NULL` past the end.
+- `SONARE_AUTOMATION_TARGET_UNCHANGED` lets `sonare_project_edit_automation_lane` keep a lane's current kind.
+- `RealtimeEngine.setMarkers` on Node and WASM takes entries without an `id` and assigns each the lowest id above every id the engine has stored or assigned.
+- Node names the `EngineProcessWithMonitorResult` record `RealtimeEngine.process(channels, { withMonitor: true })` returns, matching WASM and Python.
+
+#### Playback renderer
+
+- `PlaybackRenderer.processSilence` (Python `process_silence`, C `sonare_playback_renderer_process_silence`) renders a block of silence for a host with no input connected yet, without fixing or switching an automatic input layout.
+- `sonare_playback_renderer_max_input_channels` reports the fixed input layout's channel count (8 under the auto layout), and `sonare_playback_config_num_output_channels` reads a renderer config document and reports its output channel count without creating a renderer.
+
+#### Mastering and repair
+
+- A chain configuration document is read into the nested chain config on every surface: `sonare_mastering_chain_config_from_json` in C, `masteringChainConfigFromJson` on Node and WASM, and `mastering_chain_config_from_json` in Python; a malformed document, an unsupported version, an unknown key or a value outside its domain is `InvalidFormat` naming the field.
+- `fade` and `biquadFilter` (Python `fade`, `biquad_filter`) take request objects on Node and WASM and keyword arguments in Python, with a closed filter-type token and refusals named by the request key.
+- `systemInfo` (Python `system_info`, C `sonare_system_info_json`) reports core counts, memory sizes and the parallel strategy, and leaves a fact the platform cannot report absent rather than 0.
+- `masterAudioAsync` and `masterAudioStereoAsync` on Node accept a `null` or omitted preset and run the overrides alone, as the synchronous entry does.
 
 #### MIDI and synthesizer
 
-- A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`, `'singing'`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model through a vocal tract, with force as breath pressure, position and brightness moving the vowel, morph leaning the register, and an alveolar tap on a non-slurred note; its parameters are listed by `synthEngineParamInfo('singing')`.
+- A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`, `'singing'`), reached through the `singingVoice` preset: a self-oscillating vocal-fold model through a vocal tract, with force as breath pressure, position and brightness moving the vowel, morph leaning the register, and an alveolar tap on a non-slurred note; `synthEngineParamInfo('singing')` lists its parameters.
 - The engine parameter unit vocabulary gains `midiNote`, declared by `sustainKeyBreak` and the harpsichord's `undampedFromNote` and listed in `MasteringInsertParamUnit`, its Python `Literal` and the capability catalog schema.
 - New `engineParams` keys, each leaving the sound unchanged at its default and listed by `synthEngineParamInfo()`:
   - subtractive: `sustainKeySlopeDb` and `sustainKeyBreak`, lowering the held level per semitone above a key
@@ -80,49 +106,68 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
   - additive and percussion: `velocityExponent`
 - GS display SysEx (model `0x45`: display text, dot data, page and time) is recognised and accepted without changing the sound.
 
+#### Command-line tools
+
+- The Python command line gains `gain`, `fade`, `filter` and `system-info`, with the native command's options, refusals and JSON keys.
+- `repair --stages` takes a comma list over `declip`, `declick`, `decrackle`, `dehum`, `denoise` and `dereverb` and runs exactly those stages at their defaults plus `--params`, on both command lines; an unknown or repeated stage, and `--stages` beside `--preset`, `--detect` or `--explain`, are refused.
+
+#### Errors
+
+- `SONARE_ERROR_STALE_RESULT` (11) reports an operation on a result its source has invalidated (`ErrorCode.STALE_RESULT` in Python, code name `StaleResult` on Node and WASM); both command lines exit 14 for it.
+- `sonare_last_refusal_entry` names the C entry that recorded the last parameter refusal, and Python re-renders a refusal with the caller's own keyword (a librosa-style mirror refused on its rate reads `sr`, not `sample_rate`).
+- A C library built without mastering or mixing support defines every entry of `sonare_c_mastering.h` and `sonare_c_mixing.h`: status entries refuse with `SONARE_ERROR_NOT_SUPPORTED`, constructors fail with that code, and name tables and initializers answer as the real entries do.
+
 ### Behaviour changes
 
 #### Analysis
 
 - Beat, downbeat and onset times are 46.4 ms earlier on every public surface (32 ms for 16 kHz input), marking the start of the evidence that produced them; frame indices and the onset envelope are unchanged, and direct C++ `BeatAnalyzer` and `OnsetAnalyzer` calls move by the centering shift at their input rate.
-- The downbeat phase is chosen from low-frequency energy and harmonic change at each beat instead of onset strength, so downbeats and `downbeatPhase` change on most music; `detectDownbeats`, `analyze` and rhythm analysis report the same phase, and chord analysis no longer moves the downbeats; `estimateMeter`, which has no audio, keeps its own phase.
-- Beat-synchronous chord windows start at the reported beat times, and `lowFrequencyEnergy` in the beat observations is read at those times.
+- The downbeat phase is chosen from low-frequency energy and harmonic change at each beat instead of onset strength, so downbeats and `downbeatPhase` (Python `downbeat_phase`) change on most music; `detectDownbeats`, `analyze` and rhythm analysis report the same phase, and chord analysis no longer moves the downbeats; `estimateMeter`, which has no audio, keeps its own phase.
+- Beat-synchronous chord windows start at the reported beat times, and `lowFrequencyEnergy` (Python `low_frequency_energy`) in the beat observations is read at those times.
 - Chords are read from a constant-Q chroma averaged over each beat and smoothed with an HMM, so every label from `detect_chords`, `chord_functional_analysis` and `analyze` can change.
 - `detect_chords` and `chord_functional_analysis` default to triads only, HMM smoothing and the constant-Q chroma on every surface (C++ `ChordConfig`, Python `use_triads_only=True, use_hmm=True, chroma_method="cqt"`, Node and WASM `useTriadsOnly: true, useHmm: true, chromaMethod: 'cqt'`); pass `use_triads_only=False` (`useTriadsOnly: false`) for seventh and extended chords, or `chroma_method="stft"` with `use_hmm=False` for the previous front end.
-- The legacy `sonare_detect_chords` follows the new defaults; a zero-initialized `SonareChordDetectionOptions` still selects STFT without HMM.
+- `detect_chords` and `chord_functional_analysis` accept a smoothing window of 0 as no smoothing; only a negative or non-finite window is refused.
 - `analyze` defaults to no HPSS and HMM chord smoothing (`use_hpss` false, `use_chord_hmm` true) and reads chords through the same front end as `detect_chords`.
 - Chord segment confidence is the duration-weighted mean of its beats, and with key context on (`use_key_context`, `use_chord_key_context`) the beat-synchronous decoder changes chord more readily.
 - Keys are read from the constant-Q chord chroma after an 80 Hz high-pass, and chord-based key refinement weighs cadences and relative-tonic returns, so every key from `detect_key`, `detect_key_candidates` and `analyze` can change with its confidence.
-- `detect_key`, `detect_key_candidates`, `detect_chords`, `chord_functional_analysis` and `analyze` measure the recording's tuning unless given one, on every surface and in the C entry points that take none; pass `tuning=0` (`tuning: 0`) for concert A440. A zero-initialized `SonareChordDetectionOptions` or `SonareMusicAnalyzeOptions` still reads tuning 0, and the `key`, `chords` and `analyze` commands measure it with no flag.
+- `detect_key`, `detect_key_candidates`, `detect_chords`, `chord_functional_analysis` and `analyze` measure the recording's tuning unless given one, on every surface; pass `tuning_cents=0` (`tuningCents: 0`) for concert A440, and the `key`, `chords` and `analyze` commands measure it with no flag.
 - Measured tuning can also move `analyze` sections and downbeats on detuned recordings.
-- `detect_key` and `detect_key_candidates` default to `n_fft` 2048 and `high_pass_hz` 80 (`nFft`, `highPassHz`; `key --n-fft 2048 --high-pass-hz 80` on the command lines); `n_fft` only sets the optional HPSS window, and the Python command line no longer warns about an `--n-fft` below 4096.
+- `detect_key` and `detect_key_candidates` default to `n_fft` 2048 and an 80 Hz chroma high-pass (`chroma_high_pass_hz`, `chromaHighPassHz`; `key --n-fft 2048 --high-pass-hz 80` on the command lines); `n_fft` only sets the optional HPSS window, and the Python command line no longer warns about an `--n-fft` below 4096.
 - Auto-tune detects its key with measured tuning when given none; its correction grid stays at A440.
-- Section analysis runs on a beat grid: boundaries are novelty peaks kept where the harmony changes, sections are compared as sequences, and labels follow a fixed rule table over the groups, so the number of sections, boundaries, labels, `form` and `confidence` change on real music, and the Pre-Chorus label (`PreChorus`, `P` in `form`) now occurs.
-- A labelled section's `confidence` is in [0.5, 1] and an Unknown section's is 0, and instrumental tracks with repetition now get Chorus and Verse.
+- Section analysis runs on a beat grid: boundaries are novelty peaks kept where the harmony changes, sections are compared as sequences, and labels follow a fixed rule table over the groups, so the number of sections, boundaries, labels, `form` and `confidence` change on real music, and the pre-chorus label (`preChorus`, `P` in `form`) now occurs.
+- A labelled section's `confidence` is in [0.5, 1] and an unknown section's is 0, and instrumental tracks with repetition now get chorus and verse labels.
 - `SectionConfig::boundary_threshold` defaults to 0.22 for section analysis, and the native command line's `sections --threshold` defaults to 0.22; `detect_boundaries` keeps 0.3.
 - `SectionAnalyzer::section_self_similarity()` returns sequence-match scores, and `boundary_times()` the boundaries found on the beat grid.
 - `analyze_sections` and the other entry points that take only audio track the beats themselves and can return different sections from `analyze()` on the same track.
 - Streaming chord and key analysis are unchanged.
+- `zero_crossings` refuses a non-finite sample in the core, so the C ABI and Python refuse it as the JS facades did.
+- `chordSymbolFromAnalysis` on Node and WASM leaves `slashBassPc` out when the bass is the root instead of returning 255.
 
 #### Editing and alignment
 
-- The realtime voice changer defaults to the `psola` engine, so the same preset sounds different and latency drops from 2263 to 717 samples at 48 kHz; `voiceEngine.engine = grain` (`voice_engine_engine="grain"`) keeps the previous processing.
+- The realtime voice changer defaults to the `psola` engine, so the same preset sounds different and latency drops from 2263 to 717 samples at 48 kHz; `voiceEngine: 'grain'` (`voice_engine="grain"`) keeps the previous processing.
 - A voice-changer voice that drops out fades from its last target instead of cutting, and voice targets update on a 128-sample grid.
+- A PSOLA voice changer produces the same samples however the input is split into blocks.
 - Auto-tune, pitch correction and monophonic transcription refine each voiced frame's pYIN F0 below the pitch-bin resolution, so their F0 tracks shift slightly; `pyin` output is unchanged.
 - Monophonic `segments` transcription repairs pitch estimates locked onto a fraction of the fundamental, joins adjacent notes of compatible pitch with no onset between them, and splits repeated attacks at brief level dips, so its notes can change.
+- `synthesizeRir` and `roomMorph` on Node and WASM read an explicit `seed`, `crossfadeMs`, `airTemperatureC` or `airHumidityPercent` of 0 as a value (a seed, a hard switch, 0 degC, 0 %RH) instead of the library default; the defaults are seed 1, crossfade 5 ms, 20 degC and 50 %RH.
 
 #### Mastering and repair
 
 - Synthesized room impulse responses, the room reverb and the room morph apply ISO 9613-1 air absorption at 20 °C and 50 % RH by default; pass `airAbsorptionEnabled: false` (`air_absorption_enabled=False`) for the geometry-only decay.
 - Below the room's Schroeder frequency the late tail is built from the room's own modes, so the bass changes with source and listener position.
 - `estimateRoom` (`estimate_room`) removes the reference-climate air absorption from its per-band absorptions and anchors the volume on the 500 Hz and 1 kHz bands.
-- Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither to a stream not already on the target grid; on-grid streams and exact zeros are written unchanged.
+- Writing 16- or 24-bit WAV (the command lines, bounce output and C++ `save_wav`) applies deterministic TPDF dither to a stream not already on the target grid; on-grid streams and exact zeros are written unchanged.
 - The dynamic EQ and the equalizer update on a 64-sample grid anchored to the stream position, so output no longer depends on how a stream is split into calls.
 - `tailSamples` reports an unbounded tail for tape with non-zero bias, a bitcrusher with active noise, hum or dither, and a waveshaper whose bias leaves a steady output.
+- An omitted `highHz` on `stereo.monoCompatCheckLogBands` reads as 20 kHz or Nyquist, whichever is lower, so the insert no longer refuses its own default at low sample rates; a given `highHz` above Nyquist is refused by name.
 
 #### Realtime engine and project
 
 - Engine automation is evaluated at each span's timeline offset, so realtime output no longer depends on the host block size.
+- A clip set with no `length_samples` / `lengthSamples` on Node and Python plays to the end of its source from `clipOffsetSamples`, as WASM does.
+- Under the auto input layout a `PlaybackRenderer` whose stream never changes layout reports zero layout switches.
+- `RealtimeEngine` on WASM refuses 0 or a negative in an engine field whose native 0 is a sentinel (`setMetronome`, `setClips`, `setMidiClips`, `setGraph`, `bounceOffline`, `freezeOffline`) with the range text Node prints, and `clickSamples` is bounded at 384000, `clickSec` at (0, 1] and `ditherBits` at [2, 32].
 
 #### MIDI and synthesizer
 
@@ -132,15 +177,25 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 - Drum keys 0 to 16 and 27 to 30 of the built-in kit sound voices of their own instead of one shared burst.
 - A GS drum kit with voices of its own sounds only the keys its tone map lists, on the built-in synth and the SoundFont player's drum fallback alike.
 
+#### Command-line tools
+
+- The Python command line resolves an omitted polyphonic `--reattack-ratio` to 2.0, so both front-ends write the same notes.
+- A refused `mastering-profile` or `mastering-streaming` call on the native command line exits with the library's code and message.
+- Both command lines write the playback renderer config with the camelCase keys the config document reads and report `--json` diagnostics in snake_case.
+
 ### Fixes
 
 #### Errors
 
 - Null-returning constructors and catalog getters report the code the library recorded (an allocation failure as `OutOfMemory`) on Node, WASM and Python, and catalogs that returned an empty list after a failure raise it.
+- C refusals that returned a bare `SONARE_ERROR_INVALID_PARAMETER` name the refused argument and cause, for example `sonare_waveform_peaks` and `sonare_waveform_peak_pyramid`.
+- An FFT size checked before the core is refused under the caller's spelling with the core's whole rule: an STFT `n_fft` is an even integer in [2, 524288]; `sonare_griffin_lim`, `sonare_decompose_stems` and the percussive event entries take an even `n_fft` of at least 4; and `sonare_spectral_edit` takes a `config.n_fft` that is a power of two in [4, 262144].
 - WASM mixer and project calls report the library's code instead of `InvalidState`, so an out-of-range strip index is a `RangeError` as on Node.
 - WASM `tuningToReferenceHz`, `referenceHzToTuning` and `noteSegments` refusals carry a readable message instead of a native pointer.
+- WASM reads a parameter id as a 32-bit unsigned integer (`parameterInfo`, `setAutomationLane`, `setParameter`), refuses a non-number `assertInt32` argument with `TypeError`, and lets the core state the retune domain for a non-finite pitch or mix.
 - A Python progress or cancel callback that raises stops the call and re-raises its exception instead of letting it cross into native code.
-- A Node vocal render `renderAsync` with an already-aborted signal rejects with an `AbortError`, and a WASM render cancelled midway rejects with a `Cancelled` `SonareError`.
+- Python raises the recorded error from `realtime_voice_changer_preset_names` instead of returning an empty list.
+- A vocal render `renderAsync` with an already-aborted signal rejects with a `Cancelled` `SonareError` on Node, and a WASM render cancelled midway rejects the same way.
 - The WASM voice-changer worklet reports a refused control message instead of dropping it.
 
 #### Mastering and repair
@@ -170,6 +225,8 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 
 #### Realtime engine and project
 
+- Python `RealtimeEngine.bounce_offline` returns the `frames`, `num_channels`, `sample_rate` and `integrated_lufs` it measured instead of zeros.
+- Python `Project.add_loop_recording_takes` refuses `audio_channels` whenever the audio is planar.
 - In C++, `RealtimeEngine`, `ClipPlayer` and `Graph` use the default 48 kHz rate for a non-finite sample rate as for a non-positive one.
 - In C++, `samples_to_ppq_duration` returns 0 for a non-finite tempo or sample rate, and `ppq_to_spp_beats` returns 0 for a NaN position and saturates an infinite one.
 - A project tempo map estimated from audio (`Project.autoTempo`, `auto_tempo`, `sonare_project_auto_tempo`) keeps every ramp ending on the next segment's tempo.
@@ -185,7 +242,8 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 
 ### Performance
 
-- Chord and key analysis keep four constant-Q kernels cached and build kernels row by row.
+- Constant-Q kernels build on up to eight threads on native builds, copy rows a cached kernel on the same grid already holds, and rank only the columns near the discard boundary when sparsifying a row; the kernel is identical for every thread count, and the cache holds twelve kernels, so chord and full-analysis calls rebuild fewer.
+- `PlaybackRenderer` construction takes 7 to 250 ms instead of 200 to 1300 ms on x86, because the decay-horizon probes no longer run on subnormal numbers.
 - Streaming momentary and short-term loudness and LRA run in bounded memory.
 - Chroma, onset, spectral flux, dynamics, swing, RQA, reassignment and section analysis, cascaded biquads and vocal assembly do less work or copy less, with unchanged results.
 
