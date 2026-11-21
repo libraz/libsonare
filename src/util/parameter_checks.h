@@ -207,6 +207,24 @@ inline void integer_at_least(T value, long long bound, const char* subject) {
   if (static_cast<long long>(value) < bound) refuse_outside(integer_domain_of<T>(bound), subject);
 }
 
+/// @brief Refuses an integer @p value outside an integer @p domain, compared as integers so a
+///        64-bit value past 2^53 is judged exactly and an unsigned one past LLONG_MAX is refused.
+template <typename T>
+inline void integer_within(T value, const NumericDomain& domain, const char* subject) {
+  static_assert(std::is_integral_v<T>, "integer_within takes an integer");
+  if constexpr (std::is_unsigned_v<T>) {
+    if (static_cast<unsigned long long>(value) >
+        static_cast<unsigned long long>(std::numeric_limits<long long>::max())) {
+      refuse_outside(domain, subject);
+    }
+  }
+  const auto v = static_cast<long long>(value);
+  if ((domain.lo && v < static_cast<long long>(*domain.lo)) ||
+      (domain.hi && v > static_cast<long long>(*domain.hi))) {
+    refuse_outside(domain, subject);
+  }
+}
+
 /// @brief Refuses @p value unless it is a power of two in [lo, hi].
 inline void power_of_two_in_range(long long value, long long lo, long long hi,
                                   const char* subject) {
