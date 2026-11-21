@@ -185,8 +185,6 @@ export const ROWS: Row[] = [
       params: { bandsPerOctave: 2, highHz: 8000 },
     },
     invalid: { analysis: 'no.such' },
-    knownRed:
-      "the default upper band edge (20 kHz) is above Nyquist at the row's rate, which the band layout refuses",
     oneOf: [
       {
         fields: ['analysis'],
