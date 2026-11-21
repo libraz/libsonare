@@ -357,6 +357,10 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         "generated refusal field-spelling table: tools/api/gen_field_spelling.py output, no public signatures",
         ("_field_spelling.py",),
     ),
+    (
+        "generated integer-domain table: tools/api/gen_integer_domains.py output, no public signatures",
+        ("_integer_domains.py",),
+    ),
 )
 
 
