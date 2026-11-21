@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.11.0 (2026-11-17)
+## v2.0.0 (unreleased)
 
 This release rebuilds the music-analysis front end: beat, downbeat and onset times mark the start of their evidence, chords and keys are read from a beat-pooled constant-Q chroma with HMM smoothing and measured tuning by default, and section analysis runs on a beat grid and reports which sections repeat the same material. The realtime voice changer gains a low-latency PSOLA engine (now the default), pitch correction, harmony, MIDI note input, a channel vocoder and character and echo stages. Monophonic transcription gains a `singing` model, the synthesizer a self-oscillating singing engine and further engine parameters, and room impulse responses apply air absorption and model the room's modes by default. Errors are classed by cause on every surface: a refused argument is `RangeError` / `SonareValueError`, and a refused document is `InvalidFormat`. Three ABI counters moved, so every binding and native consumer must be rebuilt together.
 
@@ -8,7 +8,7 @@ This release rebuilds the music-analysis front end: beat, downbeat and onset tim
 
 #### Rebuild
 
-- The aggregate ABI is `0x06040208` (was `0x05030207`): `SONARE_FEATURE_ABI_VERSION` 8, `SONARE_PROJECT_ABI_VERSION` 2 (unchanged), `SONARE_VOICE_CHANGER_ABI_VERSION` 4 and `SONARE_ACOUSTIC_ABI_VERSION` 6. A binding loaded against a library on another aggregate reports `AbiMismatch`.
+- The aggregate ABI is `0x06040308` (was `0x05030207`): `SONARE_FEATURE_ABI_VERSION` 8, `SONARE_PROJECT_ABI_VERSION` 3, `SONARE_VOICE_CHANGER_ABI_VERSION` 4 and `SONARE_ACOUSTIC_ABI_VERSION` 6. `SONARE_ENGINE_ABI_VERSION` is 4, and the vocal edit and vocal project APIs now carry their own counters, `SONARE_VOCAL_EDIT_ABI_VERSION` and `SONARE_VOCAL_PROJECT_ABI_VERSION`, both 1. A binding loaded against a library on another aggregate reports `AbiMismatch`.
 - Feature ABI 8: `SonareSection` gains a trailing `int32_t group` and is 24 bytes instead of 20.
 - Voice changer ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused.
 - Acoustic ABI 6: `SonareRirSynthConfig` and `SonareRoomMorphConfig` replace `air_absorption_enabled` with the `air_absorption` selector (see below).
