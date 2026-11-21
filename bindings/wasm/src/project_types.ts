@@ -20,7 +20,7 @@ import type { KeyMode } from './public_types_music.js';
  * `SONARE_PROJECT_ABI_VERSION` the ABI tooling checks, not part of the package
  * entry.
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 2;
+export const EXPECTED_PROJECT_ABI_VERSION = 3;
 
 /**
  * Render options for {@link Project.bounce}.

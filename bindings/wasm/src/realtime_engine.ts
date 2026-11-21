@@ -182,7 +182,7 @@ function resolveRenderFrame(renderFrame: number | null | undefined): number | un
 }
 
 /** Engine ABI version this wrapper was written against; an internal mirror, not part of any package entry. */
-export const EXPECTED_ENGINE_ABI_VERSION = 3;
+export const EXPECTED_ENGINE_ABI_VERSION = 4;
 
 /** Most lanes {@link RealtimeEngine.setTrackLanes} accepts (`SONARE_ENGINE_MAX_TRACK_LANES`). */
 export const MAX_TRACK_LANES = 32;

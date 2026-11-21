@@ -22,7 +22,7 @@ export type ProjectAutomationCurve = AutomationCurve;
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 2;
+export const EXPECTED_PROJECT_ABI_VERSION = 3;
 
 /** What a track carries. */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux';

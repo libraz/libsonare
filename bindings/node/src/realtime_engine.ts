@@ -3001,7 +3001,7 @@ export class RealtimeEngine {
  * Engine C-ABI version this package's TypeScript was built against; an internal
  * mirror the ABI tooling checks, not part of the package entry.
  */
-export const EXPECTED_ENGINE_ABI_VERSION = 3;
+export const EXPECTED_ENGINE_ABI_VERSION = 4;
 
 /** Most lanes {@link RealtimeEngine.setTrackLanes} accepts (`SONARE_ENGINE_MAX_TRACK_LANES`). */
 export const MAX_TRACK_LANES = 32;

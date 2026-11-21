@@ -11,7 +11,7 @@
 
 namespace sonare_node::engine {
 
-constexpr uint32_t kExpectedEngineAbiVersion = 3;
+constexpr uint32_t kExpectedEngineAbiVersion = 4;
 
 // Fills a fixed C field from a JS string; a value that does not fit is refused, never cut.
 inline bool CopyString(Napi::Env env, char* dest, size_t capacity, const std::string& value,
