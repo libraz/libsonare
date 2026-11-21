@@ -463,7 +463,6 @@ inline constexpr std::string_view kTokens[] = {
     "mastering_enum_value",
     "mastering_insert_names",
     "mastering_insert_param_info",
-    "mastering_insert_param_info_at_rate",
     "mastering_insert_param_names",
     "mastering_insert_timing",
     "mastering_pair_analysis_names",

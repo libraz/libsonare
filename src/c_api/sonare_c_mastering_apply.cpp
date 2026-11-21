@@ -449,31 +449,21 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_json);
-  SONARE_C_REQUIRE_NONNULL(insert);
-  SONARE_C_REQUIRE_NONNULL(out_json);
-  SONARE_C_TRY
-  *out_json = copy_string(sonare::mastering::api::insert_param_info_json(insert));
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
-                                                       char** out_json) {
+SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
+                                               char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(insert);
   SONARE_C_TRY
-  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+  if (sample_rate != 0 && (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_REQUIRE_NONNULL(out_json);
-  *out_json =
-      copy_string(sonare::mastering::api::insert_param_info_json_at_rate(insert, sample_rate));
+  *out_json = copy_string(sample_rate == 0 ? sonare::mastering::api::insert_param_info_json(insert)
+                                           : sonare::mastering::api::insert_param_info_json_at_rate(
+                                                 insert, sample_rate));
   return SONARE_OK;
   SONARE_C_CATCH
 }

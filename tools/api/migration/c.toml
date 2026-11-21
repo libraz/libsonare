@@ -254,18 +254,17 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_amp_preset_catal
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []; takes int sample_rate after insert, 0 for the rate-less query and otherwise the host rate the nyquist-relative ceilings resolve for"
 domain = "mastering"
 rule = "c-free"
-test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_mastering_insert_param_info reports realtime param descriptors"
+test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
 
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info_at_rate"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []"
+removed = "call sonare_mastering_insert_param_info, which takes the sample rate"
 domain = "mastering"
-rule = "c-free"
-test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"

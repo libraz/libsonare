@@ -185,16 +185,8 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
   return "";
 }
 
-SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_json);
-  (void)insert;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
-}
-
-SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
-                                                       char** out_json) {
+SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
+                                               char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
   (void)insert;

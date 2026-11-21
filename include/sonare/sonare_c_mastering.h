@@ -528,31 +528,19 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   `min` and `max` are measured with them at their defaults. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
+///   Every key whose `maxRelativeTo` is `"nyquist"` reports, as `max` and `maxExclusive`,
+///   the bound accepted when the insert is built and prepared at @p sample_rate: an EQ
+///   band frequency reaches 48000 for a 96000 Hz host. With @p sample_rate 0 those keys
+///   keep the 24000 cap of the 48 kHz probe, independent of earlier calls here.
 /// @param insert Insert processor name (see @ref sonare_mastering_insert_names);
 ///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
-/// @param[out] out_json Receives the document; the caller releases it with
-///   @ref sonare_free_string. Set to NULL on failure.
-SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json);
-/// @brief @ref sonare_mastering_insert_param_info with the rate-following ceilings
-///        resolved for one host rate.
-/// @details Identical to the rate-less query except that every key whose
-///   `maxRelativeTo` is `"nyquist"` reports, as `max` and `maxExclusive`, the
-///   bound actually accepted when the insert is built and prepared at
-///   @p sample_rate. An insert built for a known rate (one-shot processing, a
-///   strip built in a prepared engine) takes that rate's Nyquist frequency, so
-///   an EQ band frequency reaches 48000 for a 96000 Hz host; the rate-less query
-///   keeps the 24000 cap of the 48 kHz probe and does not depend on earlier
-///   calls here.
-/// @param insert Insert processor name (see @ref sonare_mastering_insert_names);
-///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
-/// @param sample_rate Host rate in Hz, within the range the other sample-rate
-///   arguments of this header accept; outside it the call fails with
+/// @param sample_rate Host rate in Hz, within the range the other sample-rate arguments
+///   of this header accept, or 0 for the rate-less query; anything else is refused with
 ///   SONARE_ERROR_INVALID_PARAMETER.
-/// @param[out] out_json Receives a document in the layout of
-///   @ref sonare_mastering_insert_param_info (`[]` for an unknown @p insert); the
-///   caller releases it with @ref sonare_free_string. Set to NULL on failure.
-SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
-                                                       char** out_json);
+/// @param[out] out_json Receives the document (`[]` for an unknown @p insert); the caller
+///   releases it with @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_mastering_insert_param_info(const char* insert, int sample_rate,
+                                               char** out_json);
 /// @brief Latency and tail of one insert built from @p params and prepared at
 ///        @p sample_rate.
 /// @details What a host needs for delay compensation of a slot whose

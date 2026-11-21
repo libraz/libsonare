@@ -601,17 +601,18 @@ TEST_CASE("a rate-specific descriptor publishes the ceiling accepted at that rat
 
 TEST_CASE("the rate-specific descriptor query refuses a rate outside the supported range",
           "[mastering][catalog]") {
-  for (int rate : {0, -48000, 100000000}) {
+  for (int rate : {-1, -48000, 100000000}) {
     CAPTURE(rate);
-    CHECK(sonare_test::c_string_error(sonare_mastering_insert_param_info_at_rate, "eq.parametric",
-                                      rate) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_test::c_string_error(sonare_mastering_insert_param_info, "eq.parametric", rate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info_at_rate, "eq.parametric", 44100) ==
+  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "eq.parametric", 44100) ==
         insert_param_info_json_at_rate("eq.parametric", 44100.0));
-  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info_at_rate, "no.such.insert",
-                              44100) == "[]");
+  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "no.such.insert", 44100) == "[]");
+  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info, "eq.parametric", 0) ==
+        insert_param_info_json("eq.parametric"));
 }
 
 TEST_CASE("published defaults come from the config struct's own initializers",

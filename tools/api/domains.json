@@ -910,7 +910,6 @@
 "mastering_insert_param_choice": {"domain": "mastering", "surfaces": ["node", "python", "wasm"]},
 "mastering_insert_param_dependency": {"domain": "mastering", "surfaces": ["node", "python", "wasm"]},
 "mastering_insert_param_info": {"domain": "mastering", "surfaces": ["c", "node", "python", "wasm"]},
-"mastering_insert_param_info_at_rate": {"domain": "mastering", "surfaces": ["c"]},
 "mastering_insert_param_info_request": {"domain": "mastering", "surfaces": ["node", "wasm"]},
 "mastering_insert_param_names": {"domain": "mastering", "surfaces": ["c", "node", "python", "wasm"]},
 "mastering_insert_param_relation": {"domain": "mastering", "surfaces": ["node", "python", "wasm"]},
