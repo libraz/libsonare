@@ -24,6 +24,8 @@ This release gives the public interface one set of conventions on every surface 
 - In C++, `SectionConfig` has no novelty kernel size; the novelty window is twice `min_section_sec` on each side of a boundary.
 - In C++, the three `SectionAnalyzer` constructors that took boundaries from outside are removed; call `SectionAnalyzer(audio, config)` or `SectionAnalyzer(audio, grid, spec, config)` with a `SectionGrid`, which refuses a grid that is not ascending or whose downbeat index is out of range.
 - In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`: leave `tuning` unset to measure it.
+- On Node and WASM, `masteringAssistantSuggestChain` and `masteringAssistantSuggestChainStereo` are removed: the same flat chain configuration is `chainConfig` on the result of `masteringAssistantSuggest` and `masteringAssistantSuggestStereo`.
+- On Node and WASM, engine meter telemetry has one record shape: `drainMeterTelemetry` returns `EngineMeterTelemetry` records carrying every plane (`numChannels`, and per-plane `peakDb`, `rmsDb`, `truePeakDbtp` and `inputPeakDb` in place of the `L`/`R` fields), and `drainMeterTelemetryWide` and `EngineMeterTelemetryWide` are removed.
 
 #### Now refused
 

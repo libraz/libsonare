@@ -24759,18 +24759,16 @@ test = "bindings/wasm/tests/mastering-assistant-preset.test.ts::rejects an unkno
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChain"
-changed = "one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig"
+removed = "read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration"
 domain = "mastering"
-rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+rule = "individual"
 
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChainStereo"
-changed = "request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig"
+removed = "read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration"
 domain = "mastering"
-rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+rule = "individual"
 
 [[entry]]
 kind = "function"
@@ -26354,20 +26352,20 @@ rule = "one-positional-form"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbL"
-to = "EngineMeterTelemetry.truePeakDbtpL"
-changed = "truePeakDbL -> truePeakDbtpL"
+to = "EngineMeterTelemetry.truePeakDbtp"
+changed = "truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long"
 domain = "engine"
 rule = "loudness-names"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtpL"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtp[0]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbR"
-to = "EngineMeterTelemetry.truePeakDbtpR"
-changed = "truePeakDbR -> truePeakDbtpR"
+to = "EngineMeterTelemetry.truePeakDbtp"
+changed = "truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long"
 domain = "engine"
 rule = "loudness-names"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtpR"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtp[1]"
 
 [[entry]]
 kind = "field"
@@ -26377,33 +26375,6 @@ changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "engine"
 rule = "loudness-names"
 test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::?.maxTruePeakDbtp"
-
-[[entry]]
-kind = "field"
-old = "EngineMeterTelemetryWide.truePeakDb"
-to = "EngineMeterTelemetryWide.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
-domain = "engine"
-rule = "loudness-names"
-test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.truePeakDbtp"
-
-[[entry]]
-kind = "field"
-old = "EngineMeterTelemetryWide.maxTruePeakDb"
-to = "EngineMeterTelemetryWide.maxTruePeakDbtp"
-changed = "maxTruePeakDb -> maxTruePeakDbtp"
-domain = "engine"
-rule = "loudness-names"
-test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.maxTruePeakDbtp"
-
-[[entry]]
-kind = "field"
-old = "EngineMeterTelemetryWide.channelCount"
-to = "EngineMeterTelemetryWide.numChannels"
-changed = "channelCount -> numChannels"
-domain = "engine"
-rule = "num-channels"
-test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.numChannels"
 
 [[entry]]
 kind = "field"
@@ -35323,3 +35294,71 @@ old = "StreamAnalyzer.processWithOffset"
 removed = "Call process(samples, startSample)."
 domain = "analysis"
 rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.peakDbL"
+to = "EngineMeterTelemetry.peakDb"
+changed = "peakDbL -> peakDb[0]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.peakDb[0]"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.peakDbR"
+to = "EngineMeterTelemetry.peakDb"
+changed = "peakDbR -> peakDb[1]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.peakDb[1]"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.rmsDbL"
+to = "EngineMeterTelemetry.rmsDb"
+changed = "rmsDbL -> rmsDb[0]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.rmsDb[0]"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.rmsDbR"
+to = "EngineMeterTelemetry.rmsDb"
+changed = "rmsDbR -> rmsDb[1]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.rmsDb[1]"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.inputPeakDbL"
+to = "EngineMeterTelemetry.inputPeakDb"
+changed = "inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::last?.inputPeakDb[0]"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.inputPeakDbR"
+to = "EngineMeterTelemetry.inputPeakDb"
+changed = "inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::last?.inputPeakDb[1]"
+
+[[entry]]
+kind = "type"
+old = "EngineMeterTelemetryWide"
+removed = "use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb)"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.drainMeterTelemetryWide"
+removed = "use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane"
+domain = "engine"
+rule = "individual"

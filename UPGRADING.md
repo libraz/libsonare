@@ -5651,8 +5651,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text |
 | `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
-| `masteringAssistantSuggestChainStereo` | request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig |
-| `masteringAssistantSuggestChain` | one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
 | `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
@@ -5973,6 +5971,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
+| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration |
+| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration |
 
 ### Node: Realtime engine, synthesis, MIDI and playback
 
@@ -6001,10 +6001,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
-| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
-| `EngineMeterTelemetryWide.maxTruePeakDb` | `EngineMeterTelemetryWide.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetryWide.truePeakDb` | `EngineMeterTelemetryWide.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -6324,7 +6322,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceResult.numChannels` | removed: read channels.length |
-| `EngineMeterTelemetryWide.channelCount` | `EngineMeterTelemetryWide.numChannels`: channelCount -> numChannels |
 | `RenderPlaybackRequest.channels` | `RenderPlaybackRequest.numChannels` |
 | `RenderPlaybackResult.channels` | `RenderPlaybackResult.numChannels` |
 
@@ -6459,6 +6456,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
+| `EngineMeterTelemetry.inputPeakDbL` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.inputPeakDbR` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.peakDbL` | `EngineMeterTelemetry.peakDb`: peakDbL -> peakDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.peakDbR` | `EngineMeterTelemetry.peakDb`: peakDbR -> peakDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.rmsDbL` | `EngineMeterTelemetry.rmsDb`: rmsDbL -> rmsDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.rmsDbR` | `EngineMeterTelemetry.rmsDb`: rmsDbR -> rmsDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
+| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
 
 ### Node: Projects, arrangement and vocal editing
@@ -10358,8 +10363,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masterAudioStereo(sampleRate)` | removed: pass sampleRate as a field of MasterAudioStereoRequest |
 | `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
-| `masteringAssistantSuggestChainStereo` | request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig |
-| `masteringAssistantSuggestChain` | one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
 | `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
@@ -10910,6 +10913,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `createSonareMeterRingBuffer` (`./worklet`) | `createMeterRingBuffer`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `createSonareSpectrumRingBuffer` (`./worklet`) | `createSpectrumRingBuffer`: takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
+| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration |
+| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration |
 | `sonareMeterRingBufferByteLength` (`./worklet`) | `meterRingBufferByteLength`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareSpectrumRingBufferByteLength` (`./worklet`) | `spectrumRingBufferByteLength`: takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 
@@ -10976,10 +10981,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
-| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
-| `EngineMeterTelemetryWide.maxTruePeakDb` | `EngineMeterTelemetryWide.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetryWide.truePeakDb` | `EngineMeterTelemetryWide.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -11361,7 +11364,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.channels` (`./worklet`) | `CaptureOptions.numChannels` |
 | `EngineBounceResult.numChannels` | removed: read channels.length |
-| `EngineMeterTelemetryWide.channelCount` | `EngineMeterTelemetryWide.numChannels`: channelCount -> numChannels |
 | `RenderPlaybackRequest.channels` | `RenderPlaybackRequest.numChannels` |
 | `RenderPlaybackResult.channels` | `RenderPlaybackResult.numChannels` |
 | `SonareEngineOptions.blockSize` (`./worklet`) | `SonareEngineOptions.maxBlockSize` |
@@ -11723,10 +11725,18 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.bufferFrames` (`./worklet`) | `CaptureOptions.capacityFrames` |
 | `ClipPageRequest` | `ClipPageSampleRequest` |
+| `EngineMeterTelemetry.inputPeakDbL` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.inputPeakDbR` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.peakDbL` | `EngineMeterTelemetry.peakDb`: peakDbL -> peakDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.peakDbR` | `EngineMeterTelemetry.peakDb`: peakDbR -> peakDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.rmsDbL` | `EngineMeterTelemetry.rmsDb`: rmsDbL -> rmsDb[0]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.rmsDbR` | `EngineMeterTelemetry.rmsDb`: rmsDbR -> rmsDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0 |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.consumeExternalMidiScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |
+| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
 | `RealtimeEngine.externalMidiScratchByteCount` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
 | `RealtimeEngine.externalMidiScratchByteWord` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
 | `RealtimeEngine.externalMidiScratchDestinationId` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
