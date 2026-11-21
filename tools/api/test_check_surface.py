@@ -2379,6 +2379,16 @@ REFUSALS = (
         ["c function sonare_detect_bpm_ex: suffix _ex marks a second form of one operation"],
     ),
     (
+        "options-struct:suffix",
+        [_fn("c", "sonare_room_morph", "SonareError"), _fn("c", "sonare_room_morph_stereo")],
+        [
+            (
+                "c function sonare_room_morph_stereo: is sonare_room_morph plus _stereo,"
+                " a second form of sonare_room_morph"
+            )
+        ],
+    ),
+    (
         "options-struct:struct-size",
         [
             _rec("c", "type", "SonareFadeOptions", c_kind="struct"),
@@ -2630,6 +2640,78 @@ class FixedLayoutRecords(CheckerCase):
         added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
         self.assertEqual(len(added), 1, added)
         self.assertTrue(added[0].startswith("not compared: 2 count member(s) of fixed-layout"))
+
+
+class SecondFormExtensions(CheckerCase):
+    """A C function named as another plus an extension is a second form unless it names
+    what it acts on or is allowlisted as a distinct operation."""
+
+    def allow(self, name, category="distinct-operation"):
+        return self.write(
+            "allow.toml",
+            f'[[allow]]\ncheck = "options-struct:suffix"\nsurface = "c"\nname = "{name}"\n'
+            f'category = "{category}"\nreason = "r"\n',
+        )
+
+    def flagged(self, lines):
+        return [x.strip() for x in lines if x.startswith("    c function")]
+
+    def test_an_initializer_and_a_release_are_counted_not_refused(self):
+        _, before = self.run_check("--check", "options-struct:suffix")
+        self.add(
+            _fn("c", "sonare_render"),
+            _fn("c", "sonare_render_options_init"),
+            _fn("c", "sonare_render_event_config_init"),
+            _fn("c", "sonare_free_frames"),
+            _fn("c", "sonare_free_frames_i16"),
+        )
+        _, lines = self.run_check("--check", "options-struct:suffix")
+        added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
+        self.assertEqual(
+            added,
+            [
+                (
+                    "not compared: functions named as another plus an extension that names"
+                    " what they act on: 1 releases of a distinct result type; 2 struct"
+                    " initializers"
+                )
+            ],
+        )
+
+    def test_a_distinct_operation_is_excused(self):
+        self.add(_fn("c", "sonare_cqt"), _fn("c", "sonare_cqt_to_audio"))
+        allow = self.allow("sonare_cqt_to_audio")
+        _, lines = self.run_check("--check", "options-struct:suffix", allowlist=allow)
+        self.assertEqual(self.flagged(lines), [])
+        self.assertIn("excused 1", "\n".join(lines))
+
+    def test_a_distinct_operation_does_not_excuse_a_fixed_suffix(self):
+        self.add(_fn("c", "sonare_cqt"), _fn("c", "sonare_cqt_ex"))
+        allow = self.allow("sonare_cqt_ex")
+        code, lines = self.run_check("--check", "options-struct:suffix", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            self.flagged(lines),
+            [
+                (
+                    "c function sonare_cqt_ex: suffix _ex marks a second form of one operation;"
+                    " allowlisted as distinct-operation, but a fixed second-form suffix names"
+                    " no other operation"
+                )
+            ],
+        )
+
+    def test_the_category_covers_no_other_check(self):
+        allow = self.write(
+            "allow.toml",
+            '[[allow]]\ncheck = "c-free"\nsurface = "c"\nname = "x"\n'
+            'category = "distinct-operation"\nreason = "r"\n',
+        )
+        self.run_check("--check", "c-free", allowlist=allow)
+        self.assertIn(
+            "surface_allowlist.toml allow 1: category distinct-operation does not apply to c-free",
+            self.report["problems"],
+        )
 
 
 class AllowCategories(CheckerCase):

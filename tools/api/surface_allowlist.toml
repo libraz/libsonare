@@ -4,9 +4,10 @@
 #   check     a check id (slug or slug:aspect)
 #   surface   wasm | node | python | c | cli-python | cli-native | cli
 #   name      fnmatch pattern on the qualified symbol name
-#   category  librosa-mirror | platform | wire-format | hot-path | standard-symbol | scalar
+#   category  librosa-mirror | platform | wire-format | hot-path | standard-symbol | scalar | distinct-operation
 #             standard-symbol: token-case only; a symbol fixed by a named standard, never one with a word separator
 #             scalar: one-positional-form only; at most four number or boolean parameters and no options
+#             distinct-operation: options-struct:suffix only; a C function named as another plus an extension that is a different operation, never a fixed second-form suffix
 #   reason    one line
 # --audit-allowlist fails on an entry that excused nothing in a full run.
 
@@ -198,3 +199,262 @@ surface = "wasm"
 name = "scaleCorrectionSemitones"
 category = "scalar"
 reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_bpm"
+category = "distinct-operation"
+reason = "Tempo analysis alone with its own search range; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_dynamics"
+category = "distinct-operation"
+reason = "Dynamics analysis alone; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_impulse_response"
+category = "distinct-operation"
+reason = "Measures an impulse response, not a music analysis."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_melody"
+category = "distinct-operation"
+reason = "Melody contour extraction alone; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_rhythm"
+category = "distinct-operation"
+reason = "Rhythm analysis alone; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_sections"
+category = "distinct-operation"
+reason = "Song-structure section detection alone; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_analyze_timbre"
+category = "distinct-operation"
+reason = "Timbre analysis alone; sonare_analyze runs the whole quick pipeline."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_audio_spectrum_frame"
+category = "distinct-operation"
+reason = "One windowed frame's spectrum, where sonare_audio_spectrum is a Welch average over the whole buffer."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_metering_spectrum_frame"
+category = "distinct-operation"
+reason = "One windowed frame's spectrum, where sonare_metering_spectrum is a Welch average over the whole buffer."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_chroma_cens"
+category = "librosa-mirror"
+reason = "librosa.feature.chroma_cens, a separate feature from chroma_stft."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_chroma_cqt"
+category = "librosa-mirror"
+reason = "librosa.feature.chroma_cqt, a separate feature from chroma_stft."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_onset_strength_multi"
+category = "librosa-mirror"
+reason = "librosa.onset.onset_strength_multi, a per-band envelope matrix rather than one envelope."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_tempogram_ratio"
+category = "librosa-mirror"
+reason = "librosa.feature.tempogram_ratio, aggregated over a tempogram rather than computing one."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_mfcc_to_audio"
+category = "librosa-mirror"
+reason = "librosa.feature.inverse.mfcc_to_audio, the inverse of the MFCC transform."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_mfcc_to_mel"
+category = "librosa-mirror"
+reason = "librosa.feature.inverse.mfcc_to_mel, the inverse of the MFCC transform."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_cqt_to_audio"
+category = "distinct-operation"
+reason = "Inverts a CQT magnitude to audio; sonare_cqt computes one."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_vqt_to_audio"
+category = "distinct-operation"
+reason = "Inverts a VQT magnitude to audio; sonare_vqt computes one."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_decompose_note_pitch"
+category = "distinct-operation"
+reason = "Splits a note's pitch curve into centre, drift and vibrato; unrelated to the NMF of sonare_decompose."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_decompose_stems"
+category = "distinct-operation"
+reason = "Returns phase-carrying audio stems, where sonare_decompose returns the NMF factor matrices."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_detect_key_candidates"
+category = "distinct-operation"
+reason = "Ranks every key candidate, where sonare_detect_key returns the one detected key."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_marker_by_index"
+category = "distinct-operation"
+reason = "Enumerates the marker map by position; sonare_engine_marker reads one marker by id."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_marker_count"
+category = "distinct-operation"
+reason = "Counts the marker map, the bound for sonare_engine_marker_by_index."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_parameter_info_by_index"
+category = "distinct-operation"
+reason = "Enumerates host-registered parameters by position; sonare_engine_parameter_info reads one by id."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_bus_strip_pan_law"
+category = "distinct-operation"
+reason = "Sets the pan law, a separate strip parameter from the pan position."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_bus_strip_pan_mode"
+category = "distinct-operation"
+reason = "Sets the pan mode, a separate strip parameter from the pan position."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_track_strip_pan_law"
+category = "distinct-operation"
+reason = "Sets the pan law, a separate strip parameter from the pan position."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_engine_set_track_strip_pan_mode"
+category = "distinct-operation"
+reason = "Sets the pan mode, a separate strip parameter from the pan position."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_strip_set_pan_law"
+category = "distinct-operation"
+reason = "Sets the pan law's far-channel taper, a separate strip parameter from the pan position."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_eq_clear_sidechain"
+category = "distinct-operation"
+reason = "Clears the external sidechain; sonare_eq_clear removes the bands."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_last_diagnostic_count"
+category = "distinct-operation"
+reason = "Counts the diagnostics the last call published, the bound for reading them by index."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_last_refusal_subject_count"
+category = "distinct-operation"
+reason = "Counts the refused subjects, the bound for sonare_last_refusal_subject's index."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_lufs_series_interleaved"
+category = "distinct-operation"
+reason = "Per-block momentary and short-term series, where sonare_lufs reports the integrated measurement."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_midi_cc_index_for_name"
+category = "distinct-operation"
+reason = "Looks a controller up by its standard name; sonare_midi_cc packs a CC event."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_midi_cc_learn"
+category = "distinct-operation"
+reason = "Runs MIDI learn over an event stream; sonare_midi_cc packs a CC event."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_midi_cc_name"
+category = "distinct-operation"
+reason = "Returns a controller's standard name; sonare_midi_cc packs a CC event."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_midi_cc_to_breakpoint"
+category = "distinct-operation"
+reason = "Converts a CC event to an automation breakpoint; sonare_midi_cc packs a CC event."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
+name = "sonare_remix_aligned_intervals"
+category = "distinct-operation"
+reason = "Resolves the cut points without cutting; sonare_remix performs the cut."

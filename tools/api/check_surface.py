@@ -13,7 +13,7 @@ old name's, and a ledger domain disagreeing with the file is a validation proble
 
 A check that examined zero candidates fails in an unfiltered run, because an
 extractor that stopped feeding it reads exactly like a clean tree. Violations may be excused by
-tools/api/surface_allowlist.toml (four categories) or, for the Python surface of a
+tools/api/surface_allowlist.toml (categories listed at its head) or, for the Python surface of a
 librosa-named function, by tools/api/librosa_mirrors.toml. A name ``unit-in-name`` would
 flag whose quantity has no unit is listed, with its class and range, in
 tools/api/dimensionless_names.toml. ``--audit-allowlist``
@@ -138,11 +138,13 @@ ALLOW_CATEGORIES = (
     "hot-path",
     "standard-symbol",
     "scalar",
+    "distinct-operation",
 )
 # A category that only one kind of finding can use.
 _CATEGORY_CHECKS = {
     "standard-symbol": ("token-case",),
     "scalar": ("one-positional-form",),
+    "distinct-operation": ("options-struct:suffix",),
 }
 EXAMPLE_SURFACES = ("wasm", "node", "python", "c", "cli")
 
@@ -1507,15 +1509,48 @@ def chk_progress_callback(ctx):
 
 
 _C_SUFFIX = re.compile(r"_(ex|ex2|v2|checked|with_options|with_progress)$")
+# Extensions that name what they act on rather than a second form of their base: the
+# initializer of the struct the base takes, and the release of a distinct result type.
+_C_STRUCTURAL_EXTENSION = (
+    (re.compile(r"_(?:\w+_)?(?:options|config)_init$"), "struct initializers"),
+    (re.compile(r"^sonare_free_"), "releases of a distinct result type"),
+)
+_C_EXTENSION_MESSAGE = "is {base} plus _{rest}, a second form of {base}"
 
 
 def chk_options_suffix(ctx):
     cands = recs(ctx, ("c",), ("function",))
-    bad = [
-        (r, f"suffix {_C_SUFFIX.search(r['name']).group(0)} marks a second form of one operation")
-        for r in cands
-        if _C_SUFFIX.search(r["name"])
-    ]
+    names = {r["name"] for r in cands}
+    bad = []
+    structural: collections.Counter = collections.Counter()
+    for r in cands:
+        name = r["name"]
+        fixed = _C_SUFFIX.search(name)
+        if fixed:
+            bad.append((r, f"suffix {fixed.group(0)} marks a second form of one operation"))
+            continue
+        tokens = name.split("_")
+        base = next(
+            (
+                "_".join(tokens[:i])
+                for i in range(len(tokens) - 1, 1, -1)
+                if "_".join(tokens[:i]) in names
+            ),
+            None,
+        )
+        if base is None:
+            continue
+        label = next((lbl for rx, lbl in _C_STRUCTURAL_EXTENSION if rx.search(name)), None)
+        if label:
+            structural[label] += 1
+            continue
+        rest = name[len(base) + 1 :]
+        bad.append((r, _C_EXTENSION_MESSAGE.format(base=base, rest=rest)))
+    if structural:
+        ctx.not_compared["options-struct:suffix"].append(
+            "functions named as another plus an extension that names what they act on: "
+            + "; ".join(f"{n} {lbl}" for lbl, n in sorted(structural.items()))
+        )
     return len(cands), bad
 
 
@@ -2413,6 +2448,10 @@ _CATEGORY_FITS = {
     "standard-symbol": (
         _standard_symbol,
         "a token with a word separator has a lowerCamel form",
+    ),
+    "distinct-operation": (
+        lambda r, msg: not _C_SUFFIX.search(r["name"]),
+        "a fixed second-form suffix names no other operation",
     ),
 }
 
