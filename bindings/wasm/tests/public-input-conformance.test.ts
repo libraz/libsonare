@@ -673,3 +673,65 @@ describe('the constant-Q family answers the shared corpus with one text on every
     }
   }
 });
+
+type EngineZeroCase = ReaderSplitCase & { entry: string; pending?: Record<string, string> };
+type EngineZeroSection = { roots: Record<string, string>; cases: EngineZeroCase[] };
+
+/** Each engine entry called with one field of its request replaced. */
+const ENGINE_ZERO_CALLS: Record<
+  string,
+  (engine: RealtimeEngine, key: string, value: unknown) => void
+> = {
+  set_metronome: (engine, key, value) => engine.setMetronome({ enabled: true, [key]: value }),
+  set_clips: (engine, key, value) =>
+    engine.setClips([
+      { id: 1, channels: [new Float32Array(256)], startPpq: 0, [key]: value } as never,
+    ]),
+  set_midi_clips: (engine, key, value) =>
+    engine.setMidiClips([
+      { events: [], lengthSamples: 100, loop: true, loopLengthSamples: 50, [key]: value } as never,
+    ]),
+  set_graph: (engine, key, value) =>
+    engine.setGraph({
+      nodes: [{ id: 'in', [key]: value } as never, { id: 'out' }],
+      connections: [{ sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0 }],
+      inputNode: 'in',
+      outputNode: 'out',
+    }),
+  bounce_offline: (engine, key, value) =>
+    engine.bounceOffline({ totalFrames: 128, numChannels: 2, dither: 'tpdf', [key]: value }),
+  freeze_offline: (engine, key, value) =>
+    engine.freezeOffline({ totalFrames: 128, numChannels: 2, [key]: value }),
+};
+
+describe('an engine field whose native 0 is a sentinel refuses 0 out of domain under the caller path', () => {
+  beforeAll(async () => {
+    await init();
+  });
+  const section = (corpus as unknown as { engine_zero_sentinel: EngineZeroSection })
+    .engine_zero_sentinel;
+  for (const testCase of section.cases) {
+    const pending = testCase.pending?.[SURFACE];
+    const test = pending ? it.fails : it;
+    test(`${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        const key = camelKey(testCase.key);
+        const call = () =>
+          ENGINE_ZERO_CALLS[testCase.entry](engine, key, corpusValue(testCase.value));
+        if (testCase.accepted) {
+          expect(call).not.toThrow();
+          return;
+        }
+        const root = section.roots[testCase.entry];
+        expect(call).toThrow(
+          new RangeError(
+            `RealtimeEngine.${camelKey(testCase.entry)}: ${root}.${key} ${testCase.predicate}`,
+          ),
+        );
+      } finally {
+        engine.destroy();
+      }
+    });
+  }
+});

@@ -449,5 +449,53 @@
       { "id": "top_bin_over_nyquist", "options": {"fmin_hz": 1000, "n_bins": 84}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2" },
       { "id": "hop_length_one_names_no_internal_failure", "options": {"hop_length": 1}, "only": ["pseudo_cqt"], "no_internal_text": true }
     ]
+  },
+  "engine_zero_sentinel": {
+    "roots": {
+      "set_metronome": "config",
+      "set_clips": "clips[0]",
+      "set_midi_clips": "clips[0]",
+      "set_graph": "spec.nodes[0]",
+      "bounce_offline": "options",
+      "freeze_offline": "options"
+    },
+    "cases": [
+      { "id": "set_metronome_click_samples_accepted", "entry": "set_metronome", "key": "click_samples", "value": 96, "accepted": true },
+      { "id": "set_metronome_click_samples_zero", "entry": "set_metronome", "key": "click_samples", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 384000]" },
+      { "id": "set_metronome_click_samples_negative", "entry": "set_metronome", "key": "click_samples", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 384000]" },
+      { "id": "set_metronome_click_samples_above", "entry": "set_metronome", "key": "click_samples", "value": 384001, "refused": "range", "predicate": "must be an integer in [1, 384000]" },
+      { "id": "set_metronome_click_sec_accepted", "entry": "set_metronome", "key": "click_sec", "value": 0.01, "accepted": true },
+      { "id": "set_metronome_click_sec_zero", "entry": "set_metronome", "key": "click_sec", "value": 0, "refused": "range", "predicate": "must be finite and in (0, 1]" },
+      { "id": "set_metronome_click_sec_negative", "entry": "set_metronome", "key": "click_sec", "value": -1, "refused": "range", "predicate": "must be finite and in (0, 1]" },
+      { "id": "set_metronome_click_sec_above", "entry": "set_metronome", "key": "click_sec", "value": 2, "refused": "range", "predicate": "must be finite and in (0, 1]" },
+      { "id": "set_clips_length_samples_accepted", "entry": "set_clips", "key": "length_samples", "value": 100, "accepted": true },
+      { "id": "set_clips_length_samples_zero", "entry": "set_clips", "key": "length_samples", "value": 0, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_clips_length_samples_negative", "entry": "set_clips", "key": "length_samples", "value": -1, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_midi_clips_length_samples_accepted", "entry": "set_midi_clips", "key": "length_samples", "value": 50, "accepted": true },
+      { "id": "set_midi_clips_length_samples_zero", "entry": "set_midi_clips", "key": "length_samples", "value": 0, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_midi_clips_length_samples_negative", "entry": "set_midi_clips", "key": "length_samples", "value": -1, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_midi_clips_loop_length_samples_accepted", "entry": "set_midi_clips", "key": "loop_length_samples", "value": 50, "accepted": true },
+      { "id": "set_midi_clips_loop_length_samples_zero", "entry": "set_midi_clips", "key": "loop_length_samples", "value": 0, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_midi_clips_loop_length_samples_negative", "entry": "set_midi_clips", "key": "loop_length_samples", "value": -1, "refused": "range", "predicate": "must be an integer of at least 1" },
+      { "id": "set_graph_num_ports_accepted", "entry": "set_graph", "key": "num_ports", "value": 2, "accepted": true },
+      { "id": "set_graph_num_ports_zero", "entry": "set_graph", "key": "num_ports", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "set_graph_num_ports_negative", "entry": "set_graph", "key": "num_ports", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_block_size_accepted", "entry": "bounce_offline", "key": "block_size", "value": 64, "accepted": true },
+      { "id": "bounce_offline_block_size_zero", "entry": "bounce_offline", "key": "block_size", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_block_size_negative", "entry": "bounce_offline", "key": "block_size", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_target_sample_rate_accepted", "entry": "bounce_offline", "key": "target_sample_rate", "value": 48000, "accepted": true },
+      { "id": "bounce_offline_target_sample_rate_zero", "entry": "bounce_offline", "key": "target_sample_rate", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_target_sample_rate_negative", "entry": "bounce_offline", "key": "target_sample_rate", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_source_sample_rate_accepted", "entry": "bounce_offline", "key": "source_sample_rate", "value": 48000, "accepted": true },
+      { "id": "bounce_offline_source_sample_rate_zero", "entry": "bounce_offline", "key": "source_sample_rate", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_source_sample_rate_negative", "entry": "bounce_offline", "key": "source_sample_rate", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "bounce_offline_dither_bits_accepted", "entry": "bounce_offline", "key": "dither_bits", "value": 24, "accepted": true },
+      { "id": "bounce_offline_dither_bits_zero", "entry": "bounce_offline", "key": "dither_bits", "value": 0, "refused": "range", "predicate": "must be an integer in [2, 32]" },
+      { "id": "bounce_offline_dither_bits_below", "entry": "bounce_offline", "key": "dither_bits", "value": 1, "refused": "range", "predicate": "must be an integer in [2, 32]" },
+      { "id": "bounce_offline_dither_bits_above", "entry": "bounce_offline", "key": "dither_bits", "value": 33, "refused": "range", "predicate": "must be an integer in [2, 32]" },
+      { "id": "freeze_offline_block_size_accepted", "entry": "freeze_offline", "key": "block_size", "value": 64, "accepted": true },
+      { "id": "freeze_offline_block_size_zero", "entry": "freeze_offline", "key": "block_size", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "freeze_offline_block_size_negative", "entry": "freeze_offline", "key": "block_size", "value": -1, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" }
+    ]
   }
 }

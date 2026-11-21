@@ -212,6 +212,8 @@ function assertUmpWords(words: UmpWords): UmpWords {
 const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
 const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
 const DITHERS = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
+/** Longest explicit metronome click, one second at the highest supported rate (`sonare_c_types_engine.h`). */
+const METRONOME_CLICK_SAMPLES_MAX = 384000;
 const GRAPH_NODE_TYPES = { passThrough: 0, gain: 1 } as const;
 const GRAPH_MIXES = { replace: 0, add: 1 } as const;
 const CAPTURE_SOURCES = { output: 0, input: 1 } as const;
@@ -394,6 +396,7 @@ export function engineCapabilities(): EngineCapabilities {
 /** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its embind instance. */
 function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
   const { warpMode, pageProvider, ...rest } = clip;
+  engineCount(`${label}.lengthSamples`, rest.lengthSamples);
   return {
     ...rest,
     ...(warpMode === undefined
@@ -406,27 +409,26 @@ function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
 }
 
 /**
- * A sample count on a MIDI clip schedule whose `0` would read as "not given": absent stays
- * absent, and `0`, a negative or a fraction is refused by name.
+ * An optional engine count whose native `0` is a sentinel: absent stays `undefined`, and `0`, a
+ * negative or a value past `max` is refused out of domain under the path the caller typed.
  */
-function scheduleSampleCount(
-  index: number,
-  field: string,
-  value: unknown,
-  meaning: string,
-): number | undefined {
+function engineCount(path: string, value: unknown, max?: number): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
-  const where = `clips[${index}].${field}`;
+  const name = path.slice(path.lastIndexOf('.') + 1);
   if (typeof value !== 'number') {
-    throw refuseType(`${where} must be an integer`);
+    throw refuseType(`${name} must be a number`);
   }
-  if (value === 0) {
-    throw refuse(`${where} must not be 0; omit it for ${meaning}`);
+  if (!Number.isInteger(value)) {
+    throw refuse(`${name} must be an integer`);
   }
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(`${where} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
+  if (value < 1 || (max !== undefined && value > max)) {
+    throw refuse(
+      max === undefined
+        ? `${path} must be an integer of at least 1`
+        : `${path} must be an integer in [1, ${max}]`,
+    );
   }
   return value;
 }
@@ -441,13 +443,11 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
       return clip;
     }
     const { lengthSamples, loopLengthSamples, ...rest } = clip;
-    const length = scheduleSampleCount(index, 'lengthSamples', lengthSamples, 'open-ended');
-    const loopLength = scheduleSampleCount(
-      index,
-      'loopLengthSamples',
-      loopLengthSamples,
-      'no loop length',
-    );
+    const length = engineCount(`clips[${index}].lengthSamples`, lengthSamples);
+    const loopLength = engineCount(`clips[${index}].loopLengthSamples`, loopLengthSamples);
+    if (rest.loop && loopLength === undefined) {
+      throw refuse(`clips[${index}].loopLengthSamples must be an integer of at least 1`);
+    }
     return {
       ...rest,
       ...(length === undefined ? {} : { lengthSamples: length }),
@@ -1843,12 +1843,16 @@ export class RealtimeEngine {
     const { clickSamples, clickSec, ...rest } = config;
     const hasSamples = clickSamples !== undefined && clickSamples !== null;
     const hasSec = clickSec !== undefined && clickSec !== null;
-    for (const [name, value] of [
-      ['clickSamples', clickSamples],
-      ['clickSec', clickSec],
-    ] as const) {
-      if (value === 0) {
-        throw refuse(`${name} must not be 0; omit it for the default`);
+    engineCount('config.clickSamples', clickSamples, METRONOME_CLICK_SAMPLES_MAX);
+    if (hasSec) {
+      if (typeof clickSec !== 'number') {
+        throw refuseType('clickSec must be a number');
+      }
+      if (!Number.isFinite(clickSec)) {
+        throw refuse('clickSec must be finite');
+      }
+      if (!(clickSec > 0 && clickSec <= 1)) {
+        throw refuse('config.clickSec must be finite and in (0, 1]');
       }
     }
     if (hasSamples && hasSec) {
@@ -1897,7 +1901,7 @@ export class RealtimeEngine {
             }
             graphName(`nodes[${i}].id`, entry.id);
             const { type, numPorts, ...node } = entry;
-            const ports = optionalCount(`nodes[${i}].numPorts`, numPorts);
+            const ports = engineCount(`spec.nodes[${i}].numPorts`, numPorts, C_INT_MAX);
             return {
               ...node,
               ...(type === undefined || type === null
@@ -2812,29 +2816,27 @@ export class RealtimeEngine {
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
     noOrdinal('dither', options.dither);
-    for (const name of [
-      'blockSize',
-      'targetSampleRate',
-      'sourceSampleRate',
-      'targetLufs',
-    ] as const) {
-      const value = options[name];
-      if (value === undefined || value === null) {
-        continue;
-      }
-      if (typeof value === 'number' && value === 0 && name !== 'targetLufs') {
-        throw refuse(`${name} must not be 0; omit it for the default`);
-      }
-      if (typeof value === 'number' && !Number.isFinite(value)) {
-        throw refuse(`${name} must be finite`);
-      }
+    for (const name of ['blockSize', 'targetSampleRate', 'sourceSampleRate'] as const) {
+      engineCount(`options.${name}`, options[name], C_INT_MAX);
+    }
+    if (typeof options.targetLufs === 'number' && !Number.isFinite(options.targetLufs)) {
+      throw refuse('targetLufs must be finite');
     }
     const { dither, ...rest } = options;
+    const ditherCode =
+      dither === undefined ? undefined : (tokenCode('dither', dither, DITHERS) as 1 | 2 | 3);
+    const bits = options.ditherBits;
+    if (ditherCode !== undefined && typeof bits === 'number') {
+      if (!Number.isInteger(bits)) {
+        throw refuse('ditherBits must be an integer');
+      }
+      if (bits < 2 || bits > 32) {
+        throw refuse('options.ditherBits must be an integer in [2, 32]');
+      }
+    }
     const result = this.native.bounceOffline({
       ...rest,
-      ...(dither === undefined
-        ? {}
-        : { dither: tokenCode('dither', dither, DITHERS) as 1 | 2 | 3 }),
+      ...(ditherCode === undefined ? {} : { dither: ditherCode }),
     });
     return {
       channels: deinterleavePlanes(result.interleaved, result.numChannels),
@@ -2856,7 +2858,7 @@ export class RealtimeEngine {
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     requestObject('freezeOffline', options, 'options', true);
     const { blockSize, clipId, ...rest } = options;
-    const block = optionalCount('blockSize', blockSize);
+    const block = engineCount('options.blockSize', blockSize, C_INT_MAX);
     const clip = optionalId('clipId', clipId);
     return this.native.freezeOffline({
       ...rest,

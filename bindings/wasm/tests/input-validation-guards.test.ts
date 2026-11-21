@@ -483,7 +483,9 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
   it('refuses a zero clip length and derives the source length only when it is omitted', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ ...validClip(), lengthSamples: 0 }])).toThrow(
-      /clip lengthSamples must be an integer of at least 1/,
+      new RangeError(
+        'RealtimeEngine.setClips: clips[0].lengthSamples must be an integer of at least 1',
+      ),
     );
     expect(() => engine.setClips([{ ...validClip(), lengthSamples: undefined }])).not.toThrow();
   });

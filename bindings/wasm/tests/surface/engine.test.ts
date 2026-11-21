@@ -479,7 +479,9 @@ describe('absent versus zero', () => {
       for (const field of ['targetSampleRate', 'sourceSampleRate']) {
         const error = caught(() => engine.bounceOffline({ ...base, [field]: 0 }));
         expect(error, field).toBeInstanceOf(RangeError);
-        expect((error as Error).message).toContain('omit it for the default');
+        expect((error as Error).message).toContain(
+          `options.${field} must be an integer in [1, 2147483647]`,
+        );
       }
       expect(() =>
         engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: 0 }),
@@ -528,7 +530,9 @@ describe('absent versus zero', () => {
       ]) {
         const error = caught(run);
         expect(error).toBeInstanceOf(RangeError);
-        expect((error as Error).message).toContain('omit it for the default');
+        expect((error as Error).message).toContain(
+          'options.blockSize must be an integer in [1, 2147483647]',
+        );
       }
       expect(caught(() => engine.bounceOffline({ totalFrames: 256 } as never))).toBeInstanceOf(
         TypeError,

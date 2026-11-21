@@ -254,17 +254,14 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
         outputNode: 'out',
         ...patch,
       });
-      expect(() => engine.setGraph(graph({}, 0))).toThrow(
-        new RangeError(
-          'RealtimeEngine.setGraph: nodes[0].numPorts must not be 0; omit it for the default',
-        ),
-      );
-      expect(() => engine.setGraph(graph({}, -1))).toThrow(
-        /numPorts must be an integer in \[1, 2147483647\]/,
-      );
-      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(
-        /numPorts must be an integer in \[1, 2147483647\]/,
-      );
+      for (const port of [0, -1]) {
+        expect(() => engine.setGraph(graph({}, port))).toThrow(
+          new RangeError(
+            'RealtimeEngine.setGraph: spec.nodes[0].numPorts must be an integer in [1, 2147483647]',
+          ),
+        );
+      }
+      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(/numPorts must be an integer$/);
       expect(() => engine.setGraph(graph({ numChannels: 0 }))).toThrow(
         new RangeError(
           'RealtimeEngine.setGraph: numChannels must not be 0; omit it for the default',
@@ -358,30 +355,35 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
 
   it('refuses 0, a negative and a fraction by name', () => {
     withEngine((engine) => {
+      // A looping clip needs its loop length, so both fields are measured on one.
+      const looping = (extra: Record<string, unknown>) =>
+        clip({ lengthSamples: 100, loop: true, loopLengthSamples: 50, ...extra });
       for (const field of ['lengthSamples', 'loopLengthSamples']) {
-        expect(() => engine.setMidiClips([clip({ [field]: 0 })] as never)).toThrow(
-          new RangeError(
-            `RealtimeEngine.setMidiClips: clips[0].${field} must not be 0; omit it for ${
-              field === 'lengthSamples' ? 'open-ended' : 'no loop length'
-            }`,
-          ),
-        );
-        for (const bad of [-1, 1.5]) {
-          expect(() => engine.setMidiClips([clip({ [field]: bad })] as never)).toThrow(
+        for (const bad of [0, -1]) {
+          expect(() => engine.setMidiClips([looping({ [field]: bad })] as never)).toThrow(
             new RangeError(
-              `RealtimeEngine.setMidiClips: clips[0].${field} must be an integer in [1, 9007199254740991]`,
+              `RealtimeEngine.setMidiClips: clips[0].${field} must be an integer of at least 1`,
             ),
           );
         }
-        engine.setMidiClips([clip({ [field]: undefined })] as never);
-        engine.setMidiClips([clip({ [field]: null })] as never);
+        expect(() => engine.setMidiClips([looping({ [field]: 1.5 })] as never)).toThrow(
+          new RegExp(`${field} must be an integer$`),
+        );
       }
+      for (const absent of [undefined, null]) {
+        engine.setMidiClips([clip({ lengthSamples: absent })] as never);
+        engine.setMidiClips([clip({ loopLengthSamples: absent })] as never);
+      }
+      expect(() =>
+        engine.setMidiClips([clip({ loop: true, loopLengthSamples: undefined })] as never),
+      ).toThrow(
+        new RangeError(
+          'RealtimeEngine.setMidiClips: clips[0].loopLengthSamples must be an integer of at least 1',
+        ),
+      );
       engine.setMidiClips([
         clip({ lengthSamples: 100, loop: true, loopLengthSamples: 50 }),
       ] as never);
-      expect(() => engine.setMidiClips([clip({ loop: true })] as never)).toThrow(
-        /clip loopLengthSamples must be an integer of at least 1/,
-      );
     });
   });
 });

@@ -778,12 +778,11 @@ describe('Sonare WASM Module', () => {
         outputNode: 'out',
         numChannels: 2,
       });
-      expect(() => engine.setGraph(graph(0))).toThrow(
-        /setGraph: nodes\[0\]\.numPorts must not be 0; omit it for the default/,
-      );
-      expect(() => engine.setGraph(graph(-1))).toThrow(
-        /numPorts must be an integer in \[1, 2147483647\]/,
-      );
+      for (const port of [0, -1]) {
+        expect(() => engine.setGraph(graph(port))).toThrow(
+          /setGraph: spec\.nodes\[0\]\.numPorts must be an integer in \[1, 2147483647\]$/,
+        );
+      }
       expect(() => engine.setGraph(graph(undefined))).not.toThrow();
       expect(engine.graphNodeCount).toBe(3);
       engine.destroy();
