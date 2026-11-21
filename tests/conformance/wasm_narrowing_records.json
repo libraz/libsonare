@@ -45,16 +45,6 @@
       "reason": "The sibling enum resolver for the automation target kind. Like automationCurveFromVal it exists to accept both spellings of one enum, and its numeric path requires a finite, integral ordinal inside the enum's bounds before the cast, so a saturated, negative or fractional one is refused rather than landing on a member."
     },
     {
-      "file": "bindings/project/project_transcribe.cpp",
-      "symbol": "signedField",
-      "reason": "Not a conversion: the narrowing is delegated whole to the shared floatProperty, and what is local is the field's own sign domain, asked only when the key is present. Presence has to be what decides it -- 0 is the C ABI's 'use the library default' on every field it reads (the sign-domain and ratio fields), and an omitted key still has to arrive as 0, so a value check would either refuse omission or accept a written zero and answer with a default under a number the caller did not choose. Both directions measured: with each key omitted and again explicitly undefined or null, the note list is identical to the baseline, while a written 0 on referenceHz, minNoteMs or segmentationThresholdCents and a non-negative velocityFloorDb are refused with InvalidParameter."
-    },
-    {
-      "file": "bindings/project/project_transcribe.cpp",
-      "symbol": "rangeField",
-      "reason": "signedField's standing, over the shared intProperty, for the transcription fields whose domain is an integer range rather than a sign (fixedVelocity in [1, 127], maxPolyphony in [1, 64], minNoteDivision in [1, 128]). The same presence gate applies for the same reason, and 0 is additionally outside every range. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
-    },
-    {
       "file": "bindings/realtime/midi_io.cpp",
       "symbol": "umpWordsFromVal",
       "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLikeLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
