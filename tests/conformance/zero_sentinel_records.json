@@ -16,17 +16,11 @@
     "past it means lowering it deliberately in the same change."
   ],
   "floor": {
-    "sites": 16,
-    "comparisons": 230,
+    "sites": 15,
+    "comparisons": 220,
     "helper_calls": 18
   },
   "sites": [
-    {
-      "file": "src/c_api/sonare_c_engine.cpp",
-      "value": "config.click_sec",
-      "measured": "no",
-      "reason": "Metronome click length; core response to a negative or non-finite length not driven."
-    },
     {
       "file": "src/wasm/bindings/realtime/transport.cpp",
       "value": "click_seconds",
@@ -68,12 +62,6 @@
       "value": "db_amin",
       "measured": "yes",
       "reason": "Metering spectrum dB floor; guarded by the same test as db_ref."
-    },
-    {
-      "file": "src/c_api/sonare_c_engine_render.cpp",
-      "value": "options->dither_bits",
-      "measured": "no",
-      "reason": "Dither target bit depth; core response to a negative not driven."
     },
     {
       "file": "src/wasm/bindings/editing/polyphony.cpp",
