@@ -125,7 +125,7 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 
-TEST_CASE("the CQT-family entries refuse each member by its core name", "[c_api][feature]") {
+TEST_CASE("the CQT-family entries refuse each member by its C parameter name", "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   SonareCqtResult out{};
   const auto refused = [&](int hop, float fmin, int n_bins, int bpo, float filter_scale = 1.0f) {
@@ -134,7 +134,7 @@ TEST_CASE("the CQT-family entries refuse each member by its core name", "[c_api]
     return last_message();
   };
   CHECK(refused(0, 32.7f, 24, 12) == "hop_length must be an integer in [1, 65536]");
-  CHECK(refused(512, 0.0f, 24, 12) == "fmin must be finite and greater than 0");
+  CHECK(refused(512, 0.0f, 24, 12) == "fmin_hz must be finite and greater than 0");
   CHECK(refused(512, 32.7f, 0, 12) == "n_bins must be an integer in [1, 2147483647]");
   CHECK(refused(512, 32.7f, 24, 0) == "bins_per_octave must be an integer in [1, 2147483647]");
   CHECK(refused(512, 32.7f, 24, 12, 0.0f) == "filter_scale must be finite and greater than 0");
@@ -169,7 +169,7 @@ TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][featu
   CHECK(message(24, 4, 100, 512, 32.7f, 12, 4) ==
         "sample_rate must be an integer in [8000, 384000]");
   CHECK(message(24, 4, 22050, 0, 32.7f, 12, 4) == "hop_length must be an integer in [1, 65536]");
-  CHECK(message(24, 4, 22050, 512, 0.0f, 12, 4) == "fmin must be finite and greater than 0");
+  CHECK(message(24, 4, 22050, 512, 0.0f, 12, 4) == "fmin_hz must be finite and greater than 0");
   CHECK(message(24, 4, 22050, 512, 32.7f, 0, 4) ==
         "bins_per_octave must be an integer in [1, 2147483647]");
   CHECK(message(24, 4, 22050, 512, 32.7f, 12, 0) == "n_iter must be an integer in [1, 256]");

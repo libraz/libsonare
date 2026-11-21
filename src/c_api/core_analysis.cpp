@@ -572,6 +572,29 @@ void sonare_section_options_init(SonareSectionOptions* options) {
   options->threshold = config.boundary_threshold;
 }
 
+namespace {
+
+// The core's config member names, as the options struct spells them.
+const std::array<CName, 4> kSectionOptionNames{{{"n_fft", "options.n_fft"},
+                                                {"hop_length", "options.hop_length"},
+                                                {"min_section_sec", "options.min_section_sec"},
+                                                {"boundary_threshold", "options.threshold"}}};
+
+const std::array<CName, 11> kBoundaryOptionNames{
+    {{"n_fft", "options.n_fft"},
+     {"hop_length", "options.hop_length"},
+     {"kernel_size", "options.kernel_size"},
+     {"n_mfcc", "options.n_mfcc"},
+     {"n_chroma", "options.n_chroma"},
+     {"threshold", "options.threshold"},
+     {"absolute_threshold", "options.absolute_threshold"},
+     {"peak_distance", "options.peak_distance_sec"},
+     {"reference_window", "options.reference_window_sec"},
+     {"use_mfcc", "options.use_mfcc"},
+     {"use_chroma", "options.use_chroma"}}};
+
+}  // namespace
+
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
                                     const SonareSectionOptions* options, SonareSectionResult* out) {
   SONARE_C_API_ENTRY;
@@ -585,7 +608,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareSectionOptions),
                                              "options", "sonare_section_options_init");
-        validate_section_config(config);
+        with_c_names(kSectionOptionNames, [&] { validate_section_config(config); });
       });
       err != SONARE_OK) {
     return err;
@@ -655,7 +678,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareBoundaryOptions),
                                              "options", "sonare_boundary_options_init");
-        validate_boundary_config(config);
+        with_c_names(kBoundaryOptionNames, [&] { validate_boundary_config(config); });
       });
       err != SONARE_OK) {
     return err;

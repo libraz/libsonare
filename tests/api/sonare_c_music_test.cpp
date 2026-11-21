@@ -863,6 +863,8 @@ TEST_CASE("sonare_analyze_sections refuses NULL options and a bad threshold", "[
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(result.sections == nullptr);
     CHECK(result.section_count == 0);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "options.threshold must be finite and at least 0");
   }
 }
 

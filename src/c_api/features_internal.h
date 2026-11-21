@@ -2,6 +2,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -29,6 +30,9 @@
 
 using namespace sonare;
 using namespace sonare_c_detail;
+
+/// The core spells the mel range "fmin" / "fmax"; every mel entry takes them as fmin_hz / fmax_hz.
+inline const std::array<CName, 2> kMelRangeNames{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
 
 SonareError fill_inverse_result(const std::vector<float>& data, int rows, int n_frames,
                                 SonareInverseResult* out);

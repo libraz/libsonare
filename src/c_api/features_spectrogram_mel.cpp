@@ -10,7 +10,7 @@ MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, flo
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
-  validate_mel_bounds(fmin, fmax);
+  with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
   config.fmin = fmin;
   config.fmax = fmax;
   config.htk = htk != 0;
@@ -101,7 +101,8 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                      [&](const Audio& audio) -> SonareError {
                        const MelConfig config =
                            make_mel_config(n_fft, hop_length, n_mels, fmin_hz, fmax_hz, htk);
-                       MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+                       MelSpectrogram mel = with_c_names(
+                           kMelRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
 
                        out->n_mels = mel.n_mels();
                        out->n_frames = mel.n_frames();
@@ -148,7 +149,8 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
   return run_offline(
       "mfcc_ex", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, fmin_hz, fmax_hz, htk);
-        MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+        MelSpectrogram mel =
+            with_c_names(kMelRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
         std::vector<float> mfcc_data = mel.mfcc(n_mfcc, lifter);
 
         out->n_mfcc = n_mfcc;

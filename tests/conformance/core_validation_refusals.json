@@ -163,7 +163,7 @@
       { "id": "clean_signal" }
     ],
     "refused": [
-      { "id": "nan_sample", "nan_at": 1, "cause": "argument", "message": "y contains a non-finite sample at index 1" }
+      { "id": "nan_sample", "nan_at": 1, "cause": "argument", "message": "y contains a non-finite sample at index 1", "c_message": "samples contains a non-finite sample at index 1" }
     ]
   },
   "master_audio": {

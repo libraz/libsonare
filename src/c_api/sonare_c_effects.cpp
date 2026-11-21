@@ -244,8 +244,10 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
   config.hop_length = core_stft_hop(hop_length);
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(
-      samples, length, sample_rate, out, out_length,
-      [speed_ratio, config](const Audio& a) { return time_stretch(a, speed_ratio, config); });
+      samples, length, sample_rate, out, out_length, [speed_ratio, config](const Audio& a) {
+        return with_c_names(std::array<CName, 1>{{{"rate", "speed_ratio"}}},
+                            [&] { return time_stretch(a, speed_ratio, config); });
+      });
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,

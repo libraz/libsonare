@@ -135,7 +135,13 @@ type MasterAudioRoute = {
   accepted: MasterAudioCase[];
   refused: MasterAudioCase[];
 };
-type ZeroCrossingsCase = { id: string; nan_at?: number; cause?: Cause; message?: string };
+type ZeroCrossingsCase = {
+  id: string;
+  nan_at?: number;
+  cause?: Cause;
+  message?: string;
+  c_message?: string;
+};
 type ZeroCrossingsRoute = {
   input: { length: number; fill: number };
   accepted: ZeroCrossingsCase[];
@@ -751,8 +757,9 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
 
   it.each(refused)('refuses $id in the core', (item) => {
     const kind = errorClassFor[item.cause as Cause];
-    // The corpus holds the core's text; the C entry in front of it gives way to the public name.
-    const text = literal((item.message as string).replace(/^zero_crossings: /, 'zeroCrossings: '));
+    // The addon reaches the C entry, whose text the public name replaces.
+    const message = (item.c_message ?? item.message) as string;
+    const text = literal(message.replace(/^zero_crossings: /, 'zeroCrossings: '));
     const samples = samplesFor(item);
     expectRefusal(() => addon.zeroCrossings(samples, 1e-10, false, true, true), kind, text);
   });

@@ -359,9 +359,10 @@ def test_zero_crossings_refuses(case: dict) -> None:
     samples = _zero_crossings_input(case)
     with pytest.raises(error_class):
         libsonare.zero_crossings(samples)
-    # The facade's buffer guard names a non-finite sample first, so the core's message is
-    # read through a direct call to the C entry, without its C name.
-    with pytest.raises(error_class, match=re.escape(_without_c_entry(case["message"]))):
+    # The facade's buffer guard names a non-finite sample first, so the C entry's message is
+    # read through a direct call to it, without its C name.
+    expected = case.get("c_message", case["message"])
+    with pytest.raises(error_class, match=re.escape(_without_c_entry(expected))):
         _zero_crossings_core(samples)
 
 

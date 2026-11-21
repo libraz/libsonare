@@ -488,7 +488,11 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   config.tempo_max = bpm_max;
   config.win_length = win_length;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  return copy_vector(plp(input, config), out, out_length);
+  return copy_vector(with_c_names(std::array<CName, 3>{{{"sr", "sample_rate"},
+                                                        {"tempo_min", "bpm_min"},
+                                                        {"tempo_max", "bpm_max"}}},
+                                  [&] { return plp(input, config); }),
+                     out, out_length);
   SONARE_C_CATCH
 }
 

@@ -21,8 +21,11 @@ SonareError sonare_tone(float frequency_hz, int sample_rate, float duration_sec,
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
-  return fill_audio_samples(tone(frequency_hz, sample_rate, duration_sec, phase, amplitude), out,
-                            out_length);
+  return with_c_names(
+      std::array<CName, 2>{{{"sr", "sample_rate"}, {"duration", "duration_sec"}}}, [&] {
+        return fill_audio_samples(tone(frequency_hz, sample_rate, duration_sec, phase, amplitude),
+                                  out, out_length);
+      });
   SONARE_C_CATCH
 }
 
@@ -38,8 +41,15 @@ SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float du
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
-  return fill_audio_samples(chirp(fmin_hz, fmax_hz, sample_rate, duration_sec, linear != 0), out,
+  return with_c_names(std::array<CName, 4>{{{"fmin", "fmin_hz"},
+                                            {"fmax", "fmax_hz"},
+                                            {"sr", "sample_rate"},
+                                            {"duration", "duration_sec"}}},
+                      [&] {
+                        return fill_audio_samples(
+                            chirp(fmin_hz, fmax_hz, sample_rate, duration_sec, linear != 0), out,
                             out_length);
+                      });
   SONARE_C_CATCH
 }
 
@@ -54,8 +64,14 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
   SONARE_C_TRY
   std::vector<float> values;
   if (time_count) values.assign(times, times + time_count);
-  return fill_audio_samples(clicks(values, sample_rate, length, frequency_hz, click_duration_sec),
+  return with_c_names(std::array<CName, 3>{{{"sr", "sample_rate"},
+                                            {"frequency", "frequency_hz"},
+                                            {"click_duration", "click_duration_sec"}}},
+                      [&] {
+                        return fill_audio_samples(
+                            clicks(values, sample_rate, length, frequency_hz, click_duration_sec),
                             out, out_length);
+                      });
   SONARE_C_CATCH
 }
 
@@ -245,7 +261,9 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
         config.hop_length = hop_length;
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result =
-            spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
+            with_c_names(std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}}, [&] {
+              return spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
+            });
         int rows = n_bands + 1;
         int cols = spec.n_frames();
         *out_rows = rows;
@@ -303,7 +321,10 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
 
   SONARE_C_TRY
   std::vector<int> result =
-      zero_crossings(samples, length, threshold, ref_magnitude != 0, pad != 0, zero_pos != 0);
+      with_c_names(std::array<CName, 2>{{{"y", "samples"}, {"n", "length"}}}, [&] {
+        return zero_crossings(samples, length, threshold, ref_magnitude != 0, pad != 0,
+                              zero_pos != 0);
+      });
   *out_count = result.size();
   if (result.empty()) return SONARE_OK;
   std::unique_ptr<int[]> tmp(new int[result.size()]);
@@ -458,7 +479,9 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold);
+        PiptrackResult result = with_c_names(
+            std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}},
+            [&] { return piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold); });
         const size_t total = result.pitches.size();
         if (result.magnitudes.size() != total) return SONARE_ERROR_UNKNOWN;
         std::unique_ptr<float[]> pitches(total ? new float[total] : nullptr);

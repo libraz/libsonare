@@ -714,11 +714,14 @@ TEST_CASE("zero_crossings refusals are owned by the core function",
     require_argument_refusal([&] { sonare::zero_crossings(samples.data(), samples.size()); },
                              message);
 
+    // The C entry names its own parameter where the core says y.
+    const std::string c_message =
+        item.contains("c_message") ? item["c_message"].as_string() : message;
     int* out = nullptr;
     size_t out_count = 0;
     CHECK(sonare_zero_crossings(samples.data(), samples.size(), 1e-10f, 0, 1, 1, &out,
                                 &out_count) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(c_message));
   }
 }
 
