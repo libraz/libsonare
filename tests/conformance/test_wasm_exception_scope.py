@@ -46,7 +46,6 @@ GATED_IN_ANALYSIS_BUILD = frozenset(
         "wasm/bindings/features/core.cpp",
         "wasm/bindings/features/pitch.cpp",
         "wasm/bindings/features/spectral.cpp",
-        "wasm/bindings/features/spectrogram.cpp",
         "wasm/bindings/metering/metering.cpp",
     }
 )
