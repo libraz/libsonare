@@ -1,0 +1,1469 @@
+// Definitions of the mastering C ABI for a build without mastering support. The library lists this
+// file in place of the mastering translation units, so the exported symbol set does not depend on
+// the build options: every entry refuses with SONARE_ERROR_NOT_SUPPORTED and clears its outputs.
+
+#include <sonare/sonare_c.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+#include "sonare_c_internal.h"
+#include "util/constants.h"
+
+using namespace sonare_c_detail;
+
+namespace {
+
+constexpr const char* kNotCompiledIn = "mastering support is not compiled in";
+// The value the real entries publish before a measurement exists.
+const SonareStreamingLoudnessGain kUndefinedLoudnessGain = {
+    0.0f, sonare::constants::kFloorDb, -std::numeric_limits<float>::infinity()};
+
+}  // namespace
+
+void sonare_mastering_config_init(SonareMasteringConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
+                                     const SonareMasteringConfig* config,
+                                     SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_processor(const char* processor, const float* samples,
+                                             size_t length, int sample_rate,
+                                             const SonareMasteringParam* params, size_t param_count,
+                                             SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_processor_stereo(
+    const char* processor, const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+const char* sonare_mastering_preset_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)preset;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_chain_config_from_json(const char* document, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)document;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
+                                int sample_rate, const char* overrides_json,
+                                SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
+                                       size_t length, int sample_rate, const char* overrides_json,
+                                       SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
+                                              size_t length, int sample_rate,
+                                              const char* overrides_json,
+                                              SonareMasteringProgressCallback callback,
+                                              void* user_data, SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  (void)callback;
+  (void)user_data;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio_with_progress_ex(
+    const char* preset, const float* samples, size_t length, int sample_rate,
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  (void)callback;
+  (void)user_data;
+  (void)cancel_cb;
+  (void)cancel_user_data;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio_stereo_with_progress(const char* preset, const float* left,
+                                                     const float* right, size_t length,
+                                                     int sample_rate, const char* overrides_json,
+                                                     SonareMasteringProgressCallback callback,
+                                                     void* user_data,
+                                                     SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  (void)callback;
+  (void)user_data;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_master_audio_stereo_with_progress_ex(
+    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)preset;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)overrides_json;
+  (void)callback;
+  (void)user_data;
+  (void)cancel_cb;
+  (void)cancel_user_data;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+const char* sonare_mastering_processor_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+const char* sonare_mastering_pair_processor_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+const char* sonare_mastering_pair_analysis_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+const char* sonare_mastering_stereo_analysis_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+SonareError sonare_mastering_processor_catalog(char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_amp_preset_catalog(char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_capability_catalog_json(char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+const char* sonare_mastering_insert_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+const char* sonare_mastering_insert_param_names(const char* insert) {
+  SONARE_C_API_ENTRY;
+  (void)insert;
+  return "";
+}
+
+SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+  (void)insert;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
+                                                       char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+  (void)insert;
+  (void)sample_rate;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
+                                           int* out_latency_samples, int* out_tail_samples) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_latency_samples, out_tail_samples);
+  (void)insert;
+  (void)params;
+  (void)sample_rate;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
+                                        int* out_is_enum, double* out_value) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_is_enum, out_value);
+  (void)processor;
+  (void)key;
+  (void)name;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
+                                                  const float* reference, size_t length,
+                                                  int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)source;
+  (void)reference;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_pair_processor_ex(
+    const char* processor, const float* source, size_t source_length, const float* reference,
+    size_t reference_length, int reference_sample_rate, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)source;
+  (void)source_length;
+  (void)reference;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_pair_processor_stereo(
+    const char* processor, const float* source_left, const float* source_right,
+    const float* reference_left, const float* reference_right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)source_left;
+  (void)source_right;
+  (void)reference_left;
+  (void)reference_right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_apply_pair_processor_stereo_ex(
+    const char* processor, const float* source_left, const float* source_right,
+    size_t source_length, const float* reference_left, const float* reference_right,
+    size_t reference_length, int reference_sample_rate, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)processor;
+  (void)source_left;
+  (void)source_right;
+  (void)source_length;
+  (void)reference_left;
+  (void)reference_right;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
+                                          const float* reference, size_t length, int sample_rate,
+                                          const SonareMasteringParam* params, size_t param_count,
+                                          char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)analysis;
+  (void)source;
+  (void)reference;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* source,
+                                             size_t source_length, const float* reference,
+                                             size_t reference_length, int reference_sample_rate,
+                                             int sample_rate, const SonareMasteringParam* params,
+                                             size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)analysis;
+  (void)source;
+  (void)source_length;
+  (void)reference;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
+                                            const float* right, size_t length, int sample_rate,
+                                            const SonareMasteringParam* params, size_t param_count,
+                                            char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)analysis;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_ab_match_loudness(const float* source, size_t source_length,
+                                               const float* reference, size_t reference_length,
+                                               int reference_sample_rate, int sample_rate,
+                                               float** out, size_t* out_length,
+                                               SonareLoudnessMatch* out_match) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length, out_match);
+  (void)source;
+  (void)source_length;
+  (void)reference;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)sample_rate;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_ab_match_loudness_stereo(
+    const float* source_left, const float* source_right, size_t source_length,
+    const float* reference_left, const float* reference_right, size_t reference_length,
+    int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
+    SonareLoudnessMatch* out_match) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_match);
+  (void)source_left;
+  (void)source_right;
+  (void)source_length;
+  (void)reference_left;
+  (void)reference_right;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)sample_rate;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+const char* sonare_mastering_platform_names(void) {
+  SONARE_C_API_ENTRY;
+  return "";
+}
+
+int sonare_mastering_platform_from_name(const char* name) {
+  SONARE_C_API_ENTRY;
+  (void)name;
+  return -1;
+}
+
+int sonare_mastering_preset_from_name(const char* name) {
+  SONARE_C_API_ENTRY;
+  (void)name;
+  return -1;
+}
+
+void sonare_free_mastering_result(SonareMasteringResult* result) { (void)result; }
+
+void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result) { (void)result; }
+
+void sonare_free_mastering_chain_result(SonareMasteringChainResult* result) { (void)result; }
+
+void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result) {
+  (void)result;
+}
+
+void sonare_compressor_config_init(SonareCompressorConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareCompressorConfig* config, float** out,
+                                                 size_t* out_length, int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_gate_config_init(SonareGateConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, int sample_rate,
+                                           const SonareGateConfig* config, float** out,
+                                           size_t* out_length, int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareTransientShaperConfig* config,
+                                                       float** out, size_t* out_length,
+                                                       int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
+                                               const SonareStreamingPlatform* platforms,
+                                               size_t platform_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)platforms;
+  (void)platform_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_streaming_preview_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareStreamingPlatform* platforms,
+                                                      size_t platform_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)platforms;
+  (void)platform_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
+                                           const char* config_json,
+                                           SonareStreamingLoudnessGain* out) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = kUndefinedLoudnessGain;
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const char* config_json,
+                                                  SonareStreamingLoudnessGain* out) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = kUndefinedLoudnessGain;
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
+                                               const SonareMasteringParam* params,
+                                               size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareMasteringParam* params,
+                                                      size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, size_t length,
+                                                          int sample_rate,
+                                                          const SonareMasteringParam* params,
+                                                          size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_audio_profile_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)params;
+  (void)param_count;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)sample_rate;
+  (void)max_block_size;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_eq_destroy(SonareEq* eq) { (void)eq; }
+
+SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)index;
+  (void)band_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_eq_clear(SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+}
+
+SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)mode;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
+                            size_t length, int sample_rate, int max_bands) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)source;
+  (void)reference;
+  (void)length;
+  (void)sample_rate;
+  (void)max_bands;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_length,
+                               int sample_rate, const float* reference, size_t reference_length,
+                               int reference_sample_rate, int max_bands) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)source;
+  (void)source_length;
+  (void)sample_rate;
+  (void)reference;
+  (void)reference_length;
+  (void)reference_sample_rate;
+  (void)max_bands;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_eq_set_auto_gain(SonareEq* eq, int enabled) {
+  (void)eq;
+  (void)enabled;
+}
+
+float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
+  (void)eq;
+  return 0.0f;
+}
+
+SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)scale;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)gain_db;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)pan;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+int sonare_eq_latency_samples(const SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  return 0;
+}
+
+SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_max_block_size);
+  (void)eq;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
+  (void)eq;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
+                                    int num_samples) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)channels;
+  (void)num_channels;
+  (void)num_samples;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_eq_clear_sidechain(SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+}
+
+SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
+                              int num_samples) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)channels;
+  (void)num_channels;
+  (void)num_samples;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)eq;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
+                                         const float* frequencies_hz, size_t count, float* out_db) {
+  SONARE_C_API_ENTRY;
+  (void)eq;
+  (void)placement;
+  (void)frequencies_hz;
+  (void)count;
+  (void)out_db;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_create(const char* config_json,
+                                                    SonareStreamingMasteringChain** out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)config_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
+                                                       float loudness_static_gain_db,
+                                                       float loudness_static_gain_peak_db,
+                                                       SonareStreamingMasteringChain** out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)config_json;
+  (void)loudness_static_gain_db;
+  (void)loudness_static_gain_peak_db;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
+                                                     int sample_rate, int max_block_size,
+                                                     int num_channels) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  (void)sample_rate;
+  (void)max_block_size;
+  (void)num_channels;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
+                                                          float* samples, size_t num_samples) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  (void)samples;
+  (void)num_samples;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
+                                                            float* left, float* right,
+                                                            size_t num_samples) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  (void)left;
+  (void)right;
+  (void)num_samples;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain* handle,
+                                                        float* samples, size_t capacity,
+                                                        size_t* samples_written) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(samples_written);
+  (void)handle;
+  (void)samples;
+  (void)capacity;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
+                                                          float* left, float* right,
+                                                          size_t capacity,
+                                                          size_t* samples_written) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(samples_written);
+  (void)handle;
+  (void)left;
+  (void)right;
+  (void)capacity;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain* handle,
+                                                           const char* key, double value) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  (void)key;
+  (void)value;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  return 0;
+}
+
+SonareError sonare_streaming_mastering_chain_max_block_size(
+    const SonareStreamingMasteringChain* handle, int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_max_block_size);
+  (void)handle;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+const char* sonare_streaming_mastering_chain_stage_names(
+    const SonareStreamingMasteringChain* handle) {
+  SONARE_C_API_ENTRY;
+  (void)handle;
+  return "";
+}
+
+SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
+  (void)handle;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
+  (void)handle;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle) {
+  (void)handle;
+}
+
+void sonare_declick_config_init(SonareDeclickConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDeclickConfig* config,
+                                                  SonareClickDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_declick_stereo(const float* left, const float* right,
+                                                   size_t length, int sample_rate,
+                                                   const SonareDeclickConfig* config,
+                                                   SonareDeclickStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
+                                            const SonareDeclickConfig* config,
+                                            SonareDeclickResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_declick_result(SonareDeclickResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDenoiseClassicalConfig* config,
+                                                       SonareNoiseDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, int* out_bins) {
+  SONARE_C_API_ENTRY;
+  if (out_bins != nullptr) {
+    for (int i = 0; i < SONARE_REPAIR_NOISE_BAND_EDGE_COUNT; ++i) out_bins[i] = 0;
+  }
+  (void)n_fft;
+  (void)sample_rate;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_denoise_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareDenoiseClassicalConfig* config,
+                                                      SonareDenoiseResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_denoise_result(SonareDenoiseResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_denoise_classical_linked(
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, float* const* out_channels,
+    SonareDenoiseReport* out_report) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_report);
+  (void)channels;
+  (void)num_channels;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  (void)out_channels;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_declip_config_init(SonareDeclipConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
+                                                    int sample_rate,
+                                                    const SonareDeclipConfig* config,
+                                                    SonareClipDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_declip_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareDeclipConfig* config,
+                                                  SonareDeclipStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
+                                           const SonareDeclipConfig* config,
+                                           SonareDeclipResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_declip_result(SonareDeclipResult* result) { (void)result; }
+
+void sonare_decrackle_config_init(SonareDecrackleConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
+                                                   int sample_rate,
+                                                   const SonareDecrackleConfig* config,
+                                                   SonareCrackleDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const float* right,
+                                                     size_t length, int sample_rate,
+                                                     const SonareDecrackleConfig* config,
+                                                     SonareDecrackleStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
+                                              const SonareDecrackleConfig* config,
+                                              SonareDecrackleResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_decrackle_result(SonareDecrackleResult* result) { (void)result; }
+
+void sonare_dehum_config_init(SonareDehumConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
+                                               const SonareDehumConfig* config,
+                                               SonareHumDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float* right,
+                                                 size_t length, int sample_rate,
+                                                 const SonareDehumConfig* config,
+                                                 SonareDehumStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
+                                          const SonareDehumConfig* config, SonareDehumResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_dehum_result(SonareDehumResult* result) { (void)result; }
+
+void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDereverbClassicalConfig* config,
+                                                  SonareReverbDetection* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_dereverb_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDereverbClassicalConfig* config,
+                                                       SonareDereverbResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_dereverb_result(SonareDereverbResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_dereverb_classical_linked(
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, float* const* out_channels,
+    SonareDereverbReport* out_report) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_report);
+  (void)channels;
+  (void)num_channels;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  (void)out_channels;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
+    const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config) {
+  SONARE_C_API_ENTRY;
+  (void)estimate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+}
+
+SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareTrimSilenceConfig* config,
+                                                      SonareTrimRange* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, const float* right,
+                                                             size_t length, int sample_rate,
+                                                             const SonareTrimSilenceConfig* config,
+                                                             SonareTrimRange* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareTrimSilenceConfig* config,
+                                                        SonareTrimSilenceStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)left;
+  (void)right;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareTrimSilenceConfig* config,
+                                                 SonareTrimSilenceResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  (void)samples;
+  (void)length;
+  (void)sample_rate;
+  (void)config;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+void sonare_free_trim_silence_result(SonareTrimSilenceResult* result) { (void)result; }
+
+SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t num_channels,
+                                            size_t length, int sample_rate,
+                                            const char* request_json, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  (void)channels;
+  (void)num_channels;
+  (void)length;
+  (void)sample_rate;
+  (void)request_json;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+SonareError sonare_mastering_repair_apply(const float* const* channels, size_t num_channels,
+                                          size_t length, int sample_rate, const char* stages_json,
+                                          SonareMasteringProgressCallback callback, void* user_data,
+                                          float* const* out_channels, char** reports_json_out,
+                                          SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(reports_json_out);
+  (void)channels;
+  (void)num_channels;
+  (void)length;
+  (void)sample_rate;
+  (void)stages_json;
+  (void)callback;
+  (void)user_data;
+  (void)out_channels;
+  (void)cancel_cb;
+  (void)cancel_user_data;
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
+  return SONARE_ERROR_NOT_SUPPORTED;
+}

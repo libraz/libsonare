@@ -1175,9 +1175,15 @@ if(BUILD_SHARED)
          c_api/sonare_c_mastering_preset.cpp
          c_api/sonare_c_mastering_repair.cpp
          c_api/sonare_c_mastering_streaming.cpp)
+  else()
+    # Without the feature its entries still export and refuse with NOT_SUPPORTED, so the
+    # exported symbol set does not depend on the build options.
+    list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_mastering_stubs.cpp)
   endif()
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES ${SONARE_C_MIXING_SOURCES})
+  else()
+    list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_mixing_stubs.cpp)
   endif()
   # Always compile the acoustic C ABI translation unit so the public header's
   # symbols exist in feature-off shared builds; it returns NOT_SUPPORTED unless
