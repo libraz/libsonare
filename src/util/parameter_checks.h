@@ -233,6 +233,24 @@ inline void odd_integer_in_range(long long value, long long lo, long long hi, co
   }
 }
 
+/// @brief power_of_two_in_range over a closed integer @p domain, so the range is a named constant.
+inline void power_of_two_within(long long value, const NumericDomain& domain, const char* subject) {
+  power_of_two_in_range(value, static_cast<long long>(*domain.lo),
+                        static_cast<long long>(*domain.hi), subject);
+}
+
+/// @brief even_integer_in_range over a closed integer @p domain.
+inline void even_within(long long value, const NumericDomain& domain, const char* subject) {
+  even_integer_in_range(value, static_cast<long long>(*domain.lo),
+                        static_cast<long long>(*domain.hi), subject);
+}
+
+/// @brief odd_integer_in_range over a closed integer @p domain.
+inline void odd_within(long long value, const NumericDomain& domain, const char* subject) {
+  odd_integer_in_range(value, static_cast<long long>(*domain.lo),
+                       static_cast<long long>(*domain.hi), subject);
+}
+
 /// @brief Refuses @p value unless it is one of @p values, the set the caller's check tests.
 template <typename Values>
 void one_of(long long value, const Values& values, const char* subject) {
