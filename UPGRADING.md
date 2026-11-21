@@ -1051,9 +1051,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `lufs(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `momentary_lufs(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `short_term_lufs(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `lufs(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `momentary_lufs(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `short_term_lufs(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -1708,18 +1708,18 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `decompose_stems(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `decompose_stems_linked(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `harmonic(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `hpss(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `hpss_with_residual(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `normalize(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `normalize_stereo(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `percussive(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `phase_vocoder(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `pitch_shift(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `time_stretch(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `trim(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `decompose_stems(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `decompose_stems_linked(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `harmonic(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `hpss(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `hpss_with_residual(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `normalize(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `normalize_stereo(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `percussive(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `phase_vocoder(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `pitch_shift(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `time_stretch(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `trim(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
 #### String values are lowerCamelCase tokens
 
@@ -2060,31 +2060,31 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `ebur128_loudness_range(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `lufs_interleaved(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `lufs_series_interleaved(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `mastering_dynamics_compressor(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `mastering_dynamics_gate(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `mastering_dynamics_transient_shaper(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_crest_factor_db(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_crest_factor_db_stereo(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_dc_offset(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_detect_clipping(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_dynamic_range(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_peak_db(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_phase_scope(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_phase_scope_decimated(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_rms_db(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_silence_ratio(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_spectrum(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_spectrum_frame(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_stereo_correlation(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_stereo_width(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_true_peak_db(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_vectorscope(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `metering_vectorscope_decimated(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `waveform_peak_pyramid(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
-| `waveform_peaks(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `ebur128_loudness_range(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `lufs_interleaved(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `lufs_series_interleaved(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `mastering_dynamics_compressor(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `mastering_dynamics_gate(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `mastering_dynamics_transient_shaper(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_crest_factor_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_crest_factor_db_stereo(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_dc_offset(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_detect_clipping(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_dynamic_range(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_peak_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_phase_scope(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_phase_scope_decimated(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_rms_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_silence_ratio(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_spectrum(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_spectrum_frame(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_stereo_correlation(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_stereo_width(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_true_peak_db(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_vectorscope(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `metering_vectorscope_decimated(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `waveform_peak_pyramid(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `waveform_peaks(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -2778,7 +2778,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `ClipPageProvider.destroy` | removed: call close(), or use the object as a context manager |
 | `EngineTelemetry.audibleTimelineSample` | removed: read audible_timeline_sample |
 | `EngineTelemetry.graphLatencySamplesQ8` | removed: read graph_latency_samples_q8 |
 | `EngineTelemetry.renderFrame` | removed: read render_frame |
@@ -2913,7 +2912,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `align_take_to_reference(validate)` | removed: removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
+| `align_take_to_reference(validate)` | removed: every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -3098,6 +3097,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ClipPageProvider.destroy` | removed: call close(), or use the object as a context manager |
 | `FileClipPageProvider.destroy` | removed: call close(), or use the provider as a context manager |
 | `Project.delete` | removed: call close(), or use the object as a context manager |
 | `Project.destroy` | removed: call close(), or use the object as a context manager |
