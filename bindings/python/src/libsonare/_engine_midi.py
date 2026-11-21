@@ -11,6 +11,7 @@ import ctypes
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
+from ._cstruct import CStruct
 from ._errors import _entry, _refuse
 from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
 from ._project import (
@@ -60,6 +61,18 @@ def _ump_words_to_c(words: Iterable[int]) -> tuple[ctypes.Array[ctypes.c_uint32]
     """Narrow ``words`` onto a ``uint32_t`` array; the C side validates the count."""
     values = [_to_c_uint32(word, f"words[{i}]").value for i, word in enumerate(words)]
     return (ctypes.c_uint32 * len(values))(*values), len(values)
+
+
+def _write_fields(source: CStruct, target: CStruct) -> None:
+    """Write every field but ``struct_size`` from ``source`` onto ``target``.
+
+    The engine instrument configs are their own C typedefs with their own init function, so
+    the engine entries take a struct that init seeded and the facade's fields written over it.
+    """
+    for field in source._fields_:
+        name = field[0]
+        if name != "struct_size":
+            setattr(target, name, getattr(source, name))
 
 
 # The live push argument rule of src/midi/live_push_args.h: same ranges, order and wording.
@@ -305,7 +318,10 @@ class _EngineMidiMixin:
         destination render through the built-in synth.
         """
         lib = _get_lib()
-        cfg = (config if config is not None else BuiltinSynthConfig())._to_c()
+        given = (config if config is not None else BuiltinSynthConfig())._to_c()
+        cfg = type(given).from_buffer_copy(given)
+        lib.sonare_engine_builtin_synth_config_init(ctypes.byref(cfg))
+        _write_fields(given, cfg)
         _check(
             lib.sonare_engine_set_builtin_instrument(
                 self._require_handle(),
@@ -451,7 +467,10 @@ class _EngineMidiMixin:
         synthesizer GM fallback bank (the data-free floor).
         """
         lib = _get_lib()
-        cfg = (config if config is not None else Sf2InstrumentConfig())._to_c()
+        given = (config if config is not None else Sf2InstrumentConfig())._to_c()
+        cfg = type(given).from_buffer_copy(given)
+        lib.sonare_engine_sf2_instrument_config_init(ctypes.byref(cfg))
+        _write_fields(given, cfg)
         _check(
             lib.sonare_engine_set_sf2_instrument(
                 self._require_handle(),

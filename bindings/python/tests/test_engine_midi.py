@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -13,9 +15,11 @@ from libsonare import (
     ExternalMidiEvent,
     MidiCcBinding,
     RealtimeEngine,
+    Sf2InstrumentConfig,
     SonareError,
     SonareValueError,
 )
+from libsonare._runtime import _get_lib
 
 from ._helpers import _midi1_word, raises_coded
 
@@ -33,6 +37,48 @@ def test_engine_builtin_instrument_bind_and_clear() -> None:
         assert engine.midi_instrument_count == 1
         engine.clear_midi_instrument(0)
         assert engine.midi_instrument_count == 0
+
+
+@pytest.mark.parametrize(
+    ("bind", "config", "init", "entry"),
+    [
+        (
+            "set_builtin_instrument",
+            BuiltinSynthConfig(waveform="saw", gain=0.5),
+            "sonare_engine_builtin_synth_config_init",
+            "sonare_engine_set_builtin_instrument",
+        ),
+        (
+            "set_sf2_instrument",
+            Sf2InstrumentConfig(gain=0.5),
+            "sonare_engine_sf2_instrument_config_init",
+            "sonare_engine_set_sf2_instrument",
+        ),
+    ],
+)
+def test_an_engine_instrument_config_is_seeded_by_the_engines_own_init(
+    monkeypatch: pytest.MonkeyPatch, bind: str, config: Any, init: str, entry: str
+) -> None:
+    lib = _get_lib()
+    seeded: list[int] = []
+    passed: list[tuple[int, float]] = []
+    real_init, real_entry = getattr(lib, init), getattr(lib, entry)
+
+    def record_init(ptr: Any) -> None:
+        real_init(ptr)
+        seeded.append(ptr._obj.struct_size)
+
+    def record_entry(handle: Any, destination: Any, ptr: Any) -> int:
+        passed.append((ptr._obj.struct_size, ptr._obj.gain))
+        return int(real_entry(handle, destination, ptr))
+
+    monkeypatch.setattr(lib, init, record_init)
+    monkeypatch.setattr(lib, entry, record_entry)
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        getattr(engine, bind)(config, 0)
+        assert engine.midi_instrument_count == 1
+    assert len(seeded) == 1 and seeded[0] > 0
+    assert passed == [(seeded[0], 0.5)]
 
 
 def test_engine_midi_cc_bindings() -> None:
