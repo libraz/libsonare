@@ -3176,10 +3176,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Audio.lufs(options)` | removed: removed; the options bag held only validate, and the call always scans its samples for NaN and infinity |
-| `Audio.momentaryLufs(options)` | removed: removed; the options bag held only validate, and the call always scans its samples for NaN and infinity |
-| `Audio.shortTermLufs(options)` | removed: removed; the options bag held only validate, and the call always scans its samples for NaN and infinity |
-| `ValidateOptions` | removed: removed; no call takes a validate option, and every call scans its input for NaN and infinity |
+| `Audio.lufs(options)` | removed: the options bag held only validate, and the call always scans its samples for NaN and infinity |
+| `Audio.momentaryLufs(options)` | removed: the options bag held only validate, and the call always scans its samples for NaN and infinity |
+| `Audio.shortTermLufs(options)` | removed: the options bag held only validate, and the call always scans its samples for NaN and infinity |
+| `ValidateOptions` | removed: no call takes a validate option, and every call scans its input for NaN and infinity |
 
 #### String values are lowerCamelCase tokens
 
@@ -3673,6 +3673,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
+#### Every call scans its input for non-finite values
+
+| 1.x | 2.0.0 |
+|---|---|
+| `LufsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -3706,6 +3712,31 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ChordFunctionsInput.root` | type PitchClass |
 | `ChordFunctionsKey.mode` | type KeyMode only |
 | `ChordFunctionsKey.root` | type PitchClass only |
+| `ChordQuality.Add9` | `ChordQuality='add9'` |
+| `ChordQuality.Augmented` | `ChordQuality='augmented'` |
+| `ChordQuality.Dim7` | `ChordQuality='dim7'` |
+| `ChordQuality.Diminished` | `ChordQuality='diminished'` |
+| `ChordQuality.Dominant11` | `ChordQuality='dominant11'` |
+| `ChordQuality.Dominant13` | `ChordQuality='dominant13'` |
+| `ChordQuality.Dominant7Flat9` | `ChordQuality='dominant7Flat9'` |
+| `ChordQuality.Dominant7Sharp9` | `ChordQuality='dominant7Sharp9'` |
+| `ChordQuality.Dominant7Sus4` | `ChordQuality='dominant7Sus4'` |
+| `ChordQuality.Dominant7` | `ChordQuality='dominant7'` |
+| `ChordQuality.Dominant9` | `ChordQuality='dominant9'` |
+| `ChordQuality.HalfDim7` | `ChordQuality='halfDim7'` |
+| `ChordQuality.Major6` | `ChordQuality='major6'` |
+| `ChordQuality.Major7` | `ChordQuality='major7'` |
+| `ChordQuality.Major9` | `ChordQuality='major9'` |
+| `ChordQuality.Major` | `ChordQuality='major'` |
+| `ChordQuality.Minor6` | `ChordQuality='minor6'` |
+| `ChordQuality.Minor7` | `ChordQuality='minor7'` |
+| `ChordQuality.MinorAdd9` | `ChordQuality='minorAdd9'` |
+| `ChordQuality.MinorMajor7` | `ChordQuality='minorMajor7'` |
+| `ChordQuality.Minor` | `ChordQuality='minor'` |
+| `ChordQuality.Sus2Add4` | `ChordQuality='sus2Add4'` |
+| `ChordQuality.Sus2` | `ChordQuality='sus2'` |
+| `ChordQuality.Sus4` | `ChordQuality='sus4'` |
+| `ChordQuality.Unknown` | `ChordQuality='unknown'` |
 | `ChordQualityName='add9'` | `ChordQuality='add9'` |
 | `ChordQualityName='augmented'` | `ChordQuality='augmented'` |
 | `ChordQualityName='dim7'` | `ChordQuality='dim7'` |
@@ -4299,6 +4330,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ChromaRequest.binsPerOctave` | removed: chroma does not take it; chromaCqt and chromaCens take binsPerOctave on ChromaCqtRequest and ChromaCensRequest |
+| `ChromaRequest.nChroma` | removed: chroma does not take it; chromaCqt and chromaCens take nChroma on ChromaCqtRequest and ChromaCensRequest |
 | `MelResultToAudioRequest` | removed: Use MelToAudioRequest: pass the forward result's power Matrix2D as power, with its sampleRate, nFft, hopLength, fminHz, fmaxHz and htk. |
 | `MelResultToStftRequest` | removed: Use MelToStftRequest: pass the forward result's power Matrix2D as power, with its sampleRate, nFft, fminHz, fmaxHz and htk. |
 | `MfccResultToAudioRequest` | removed: Use MfccToAudioRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels, sampleRate, nFft and hopLength. |
@@ -4433,18 +4466,19 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AnalysisProgressCallback` | removed: use ProgressCallback |
 | `DetectKeyOptions` | removed: use KeyDetectionOptions on wasm and DetectKeyRequest on node |
 | `DynamicsAnalysisResult` | removed: use DynamicsResult |
-| `MelSpectrogramResult.isDb` | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
-| `MfccResult.isDb` | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MelSpectrogramResult.isDb` | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MfccResult.isDb` | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
 | `ScaleName` | removed: use KeyMode |
 | `StreamAnalyzer.readFramesSoa` | removed: call readFrames, which returns StreamFrames with band-major Matrix2D mel and chroma |
-| `StreamAnalyzerConfig.computeMagnitude` | removed: removed; it never took effect, so drop it from the config |
-| `StreamAnalyzerConfig.magnitudeDownsample` | removed: removed; the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config |
-| `StreamAnalyzerConfig.outputFormat` | removed: removed; it never took effect, so drop it from the config and read frames with readFrames |
+| `StreamAnalyzerConfig.computeMagnitude` | removed: it never took effect, so drop it from the config |
+| `StreamAnalyzerConfig.magnitudeDownsample` | removed: the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config |
+| `StreamAnalyzerConfig.outputFormat` | removed: it never took effect, so drop it from the config and read frames with readFrames |
 
 #### Other individual changes
 
 | 1.x | 2.0.0 |
 |---|---|
+| `BpmHypothesis.value` | `AnalysisBpmCandidate.bpm` |
 | `CqtRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
 | `CqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `FunctionalChord.roman` | `FunctionalChord.romanNumeral` |
@@ -4452,6 +4486,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `NoteSegmentsConfig` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on NoteSegmentsRequest |
 | `NoteSegmentsRequest.config` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on the request |
 | `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
+| `OnsetStrengthMultiRequest.fmax` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
+| `OnsetStrengthMultiRequest.fmin` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
+| `OnsetStrengthMultiRequest.htk` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `PcenOptions` | removed: put timeConstant, gain, bias, power and eps on PcenRequest |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` | norm option removed |
@@ -4563,6 +4600,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `RirSynthOptions.maxSeconds` | `SynthesizeRirRequest.maxSec` |
 | `RoomGeometryOptions.maxSeconds` | `RoomGeometry.maxSec`: maxSeconds -> maxSec |
+| `RoomMorphOptions.maxSeconds` | `RoomMorphOptions.maxSec` |
+| `RoomMorphRequest.maxSeconds` | `RoomMorphRequest.maxSec` |
+| `RoomMorphStereoRequest.maxSeconds` | `RoomMorphStereoRequest.maxSec` |
 
 #### Physical quantities carry their unit in the name
 
@@ -4570,7 +4610,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `DeclipOptions.clipThreshold` | `DeclipOptions.clipThresholdDb`: clipThreshold -> clipThresholdDb (linear clip level -> dBFS; default 20*log10(0.98) ~ -0.175 dBFS) |
 | `MasteringRepairDeclipRequest.clipThreshold` | `MasteringRepairDeclipRequest.clipThresholdDb`: clipThreshold -> clipThresholdDb |
+| `MasteringRepairDeclipStereoRequest.clipThreshold` | removed: give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectClippingRequest.clipThreshold` | removed: give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectTrimRangeRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectTrimRangeStereoRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
 | `MasteringRepairTrimSilenceRequest.threshold` | `MasteringRepairTrimSilenceRequest.thresholdDb`: threshold -> thresholdDb |
+| `MasteringRepairTrimSilenceStereoRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
 | `RealtimeVoiceChangerConfig.retuneGrainSize` | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `masteringRepairAnalyze` | the recommended stages carry no linear clipThreshold (the declip threshold is clipThresholdDb, in dBFS), and masteringRepairApply takes them as they stand |
 
@@ -4615,8 +4660,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `VoiceChangeOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `VoiceChangeRealtimeRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeRealtimeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
 #### String values are lowerCamelCase tokens
 
@@ -4811,6 +4857,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `NoteEdit.formantShiftSemitones` | `NoteEdit.formantSemitones` |
+| `NoteEdit.pitchShiftSemitones` | `NoteEdit.pitchSemitones` |
 | `PitchShiftRequest.semitones` | `PitchShiftRequest.pitchSemitones`: semitones -> pitchSemitones |
 | `RealtimeVoiceChangerConfig.retuneSemitones` | `RealtimeVoiceChangerConfig.retunePitchSemitones`: retuneSemitones -> retunePitchSemitones |
 | `StreamingRetuneConfig.semitones` | `StreamingRetuneConfig.pitchSemitones`: semitones -> pitchSemitones (renamed) |
@@ -4850,6 +4898,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AutoTuneOptions.referenceMidi` | `AutoTuneOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `AutoTuneOptions.strength` | `AutoTuneOptions.retuneAmount`: strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength |
+| `AutoTuneRequest.referenceMidi` | `AutoTuneRequest.scaleReferenceMidi` |
+| `AutoTuneRequest.strength` | `AutoTuneRequest.retuneAmount` |
 | `ClipDetection.sampleCount` | `ClipDetection.clippedSamples`: sampleCount -> clippedSamples |
 | `ClipDetection.sampleFraction` | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
 | `MasteringRepairStage` | discriminated union: ({stage:'declick'} & DeclickOptions) \| ({stage:'declip'} & DeclipOptions) \| ({stage:'decrackle'} & DecrackleOptions) \| ({stage:'dehum'} & DehumOptions) \| ({stage:'denoise'} & DenoiseClassicalOptions) \| ({stage:'dereverb'} & DereverbClassicalOptions) |
@@ -4867,6 +4917,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PhaseVocoderRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core |
 | `PitchCorrectOptions.mode` | `PitchCorrectOptions.targetMode`: mode -> targetMode (type PitchTargetMode = 'midi'\|'scale') |
 | `PitchCorrectOptions.referenceMidi` | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
+| `PitchCorrectTimevaryingRequest.mode` | `PitchCorrectTimevaryingRequest.targetMode` |
+| `PitchCorrectTimevaryingRequest.referenceMidi` | `PitchCorrectTimevaryingRequest.scaleReferenceMidi` |
 | `PitchCorrectToMidiRequest.currentMidi` | optional -> required |
 | `PitchCorrectToMidiRequest.targetMidi` | optional -> required |
 | `RealtimeVoiceChanger.processPlanarStereo` | removed: call processPlanar([left, right]), which returns the processed channels |
@@ -4888,6 +4940,24 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomGeometryOptions.sourceX` | `RoomGeometry.source`: sourceX -> source (RoomPlacement {x, y, z} (metres)) |
 | `RoomGeometryOptions.sourceY` | `RoomGeometry.source`: sourceY -> source (RoomPlacement {x, y, z} (metres)) |
 | `RoomGeometryOptions.sourceZ` | `RoomGeometry.source`: sourceZ -> source (RoomPlacement {x, y, z} (metres)) |
+| `RoomMorphOptions.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphOptions.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphOptions.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphOptions.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphOptions.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphOptions.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
+| `RoomMorphRequest.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphRequest.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphRequest.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphRequest.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphRequest.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
+| `RoomMorphStereoRequest.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphStereoRequest.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphStereoRequest.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphStereoRequest.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphStereoRequest.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphStereoRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
@@ -4969,7 +5039,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `LufsSeriesResult.shortTerm` | `LufsSeriesResult.shortTermLufs`: shortTerm -> shortTermLufs |
 | `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu |
 | `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MasteringAudioProfile.loudness.crestFactorDb` | `MasteringAudioProfileLoudness.crestFactorDb` |
+| `MasteringAudioProfile.loudness.integratedLufs` | `MasteringAudioProfileLoudness.integratedLufs` |
+| `MasteringAudioProfile.loudness.lraLu` | `MasteringAudioProfileLoudness.loudnessRangeLu` |
+| `MasteringAudioProfile.loudness.truePeakDb` | `MasteringAudioProfileLoudness.truePeakDbtp` |
 | `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb} |
+| `MasteringChainConfig.loudness.ceilingDb` | `MasteringChainConfig.loudness.ceilingDbtp` |
+| `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `MasteringChainResult.outputLra` | `MasteringChainResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
 | `MasteringChainStereoResult.outputLra` | `MasteringChainStereoResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
 | `MasteringLoudnessSummary.loudnessRange` | `MasteringLoudnessSummary.loudnessRangeLu`: loudnessRange -> loudnessRangeLu |
@@ -4990,6 +5066,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
+| `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringInsertParamInfo.default` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringInsertParamInfo.id` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -5033,19 +5110,40 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MeteringDynamicRangeOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MeteringTruePeakRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TransientShaperOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CompressorOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `GateOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsCompressorRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsGateRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsTransientShaperRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSilenceRatioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumFrameRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringTruePeakRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TransientShaperOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeakPyramidRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeaksRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AutomationCurve='s-curve'` | `AutomationCurve='sCurve'` |
 | `AutomationCurve` | 'linear' \| 'exponential' \| 'hold' \| 'sCurve' |
+| `CompressorDetector='log_rms'` | `CompressorDetector='logRms'` |
 | `CompressorDetector` | 'peak' \| 'rms' \| 'logRms' (log_rms and the ordinals 0\|1\|2 removed) |
 | `CompressorOptions.detector` | CompressorDetector ('peak'\|'rms'\|'logRms'); numbers refused |
 | `MasteringDynamicsCompressorRequest.detector` | CompressorDetector; numbers refused |
 | `MultibandCompressorBand.detector` | CompressorDetector ('peak'\|'rms'\|'logRms'); numbers refused |
+| `PanLaw='const3dB'` | `PanLaw='const3Db'` |
+| `PanLaw='const4.5dB'` | `PanLaw='const4.5Db'` |
+| `PanLaw='const6dB'` | `PanLaw='const6Db'` |
+| `PanLaw='linear0dB'` | `PanLaw='linear0Db'` |
+| `PanMode='dual-pan'` | `PanMode='dualPan'` |
+| `PanMode='stereo-pan'` | `PanMode='stereoPan'` |
 | `PanMode` | 'balance' \| 'stereoPan' \| 'dualPan' |
 | `StreamingEqualizer.setPhaseMode` | setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' \| 'natural' \| 'linear'; synonyms and numbers refused |
 
@@ -5080,7 +5178,31 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `JsonResult` | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
-| `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb} |
+| `MasteringAudioProfileDefects.clickCount` | removed: read defects.click.count |
+| `MasteringAudioProfileDefects.clickLongestRunSamples` | removed: read defects.click.longestRunSamples |
+| `MasteringAudioProfileDefects.clickPerSecond` | removed: read defects.click.perSecond |
+| `MasteringAudioProfileDefects.clickRejected` | removed: read defects.click.rejected |
+| `MasteringAudioProfileDefects.clipFlatLevel` | removed: read defects.clip.flatLevel |
+| `MasteringAudioProfileDefects.clipFlatRunCount` | removed: read defects.clip.flatRunCount |
+| `MasteringAudioProfileDefects.clipFlatSampleCount` | removed: read defects.clip.flatSampleCount |
+| `MasteringAudioProfileDefects.clipLongestFlatRunSamples` | removed: read defects.clip.longestFlatRunSamples |
+| `MasteringAudioProfileDefects.clipLongestRunSamples` | removed: read defects.clip.longestRunSamples |
+| `MasteringAudioProfileDefects.clipRunCount` | removed: read defects.clip.runCount |
+| `MasteringAudioProfileDefects.clipSampleCount` | removed: read defects.clip.clippedSamples |
+| `MasteringAudioProfileDefects.clipSampleFraction` | removed: read defects.clip.clippedRatio |
+| `MasteringAudioProfileDefects.cracklePerSecond` | removed: read defects.crackle.perSecond |
+| `MasteringAudioProfileDefects.crackleSampleCount` | removed: read defects.crackle.sampleCount |
+| `MasteringAudioProfileDefects.crackleSampleFraction` | removed: read defects.crackle.sampleFraction |
+| `MasteringAudioProfileDefects.humFundamentalDbfs` | removed: read defects.hum.harmonicDbfs[0] |
+| `MasteringAudioProfileDefects.humFundamentalHz` | removed: read defects.hum.fundamentalHz |
+| `MasteringAudioProfileDefects.humFundamentalProminence` | removed: read defects.hum.fundamentalProminence |
+| `MasteringAudioProfileDefects.humHarmonics` | removed: read defects.hum.harmonics |
+| `MasteringAudioProfileDefects.humPeakHarmonicDbfs` | removed: read the largest entry of defects.hum.harmonicDbfs |
+| `MasteringAudioProfileDefects.lateDecayRatioDb` | removed: read defects.reverb.lateDecayRatioDb |
+| `MasteringAudioProfileDefects.noiseBandPeakDbfs` | removed: read the largest entry of defects.noise.bandFloorDbfs |
+| `MasteringAudioProfileDefects.noiseBandPeakIndex` | removed: read the index of the largest entry of defects.noise.bandFloorDbfs |
+| `MasteringAudioProfileDefects.noiseFloorDbfs` | removed: read defects.noise.floorDbfs |
+| `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: NoiseDetection, hum: HumDetection, reverb: ReverbDetection} |
 | `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainSection` | removed: Use MasteringChainConfig for a chain config, or Record<string, unknown> for a generic walk over its sections. |
 | `MasteringResult.latencySamples` | optional -> required |
@@ -5258,10 +5380,37 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DeclickStereoResult.leftReport` | removed: read reports[0] |
+| `DeclickStereoResult.left` | removed: read channels[0] |
+| `DeclickStereoResult.rightReport` | removed: read reports[1] |
+| `DeclickStereoResult.right` | removed: read channels[1] |
+| `DeclipStereoResult.leftReport` | removed: read reports[0] |
+| `DeclipStereoResult.left` | removed: read channels[0] |
+| `DeclipStereoResult.rightReport` | removed: read reports[1] |
+| `DeclipStereoResult.right` | removed: read channels[1] |
+| `DecrackleStereoResult.leftReport` | removed: read reports[0] |
+| `DecrackleStereoResult.left` | removed: read channels[0] |
+| `DecrackleStereoResult.rightReport` | removed: read reports[1] |
+| `DecrackleStereoResult.right` | removed: read channels[1] |
+| `DehumStereoResult.leftReport` | removed: read reports[0] |
+| `DehumStereoResult.left` | removed: read channels[0] |
+| `DehumStereoResult.rightReport` | removed: read reports[1] |
+| `DehumStereoResult.right` | removed: read channels[1] |
+| `DenoiseStereoResult.left` | removed: read channels[0] |
+| `DenoiseStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `DenoiseStereoResult.right` | removed: read channels[1] |
+| `DereverbStereoResult.left` | removed: read channels[0] |
+| `DereverbStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `DereverbStereoResult.right` | removed: read channels[1] |
 | `MixAssistantTrack.left` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixAssistantTrack.right` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixStereoRequest.leftChannels` | `MixStereoRequest.strips`: leftChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options)) |
 | `MixStereoRequest.rightChannels` | `MixStereoRequest.strips`: rightChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options)) |
+| `TrimSilenceStereoResult.leftRange` | removed: read ranges[0] |
+| `TrimSilenceStereoResult.left` | removed: read channels[0] |
+| `TrimSilenceStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `TrimSilenceStereoResult.rightRange` | removed: read ranges[1] |
+| `TrimSilenceStereoResult.right` | removed: read channels[1] |
 
 #### Channel counts are numChannels
 
@@ -5310,7 +5459,20 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DehumStereoResult` | `MasteringRepairDehumResult`: renamed to MasteringRepairDehumResult; shape {channels, reports} |
 | `DenoiseStereoResult` | `MasteringRepairDenoiseClassicalResult`: renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports} |
 | `DereverbStereoResult` | `MasteringRepairDereverbClassicalResult`: renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports} |
+| `MasteringAudioProfile.dynamics.attackDensity` | `MasteringAudioProfileDynamics.attackPerSecond` |
+| `MasteringAudioProfile.dynamics.shortTermLufsStd` | `MasteringAudioProfileDynamics.shortTermLufsStd` |
+| `MasteringAudioProfile.dynamics.sustainRatio` | `MasteringAudioProfileDynamics.sustainRatio` |
 | `MasteringAudioProfile.dynamics` | MasteringAudioProfileDynamics (named; attackDensity -> attackPerSecond, other fields unchanged) |
+| `MasteringAudioProfile.spectral.airRmsDb` | `MasteringAudioProfileSpectral.airRmsDb` |
+| `MasteringAudioProfile.spectral.centroidHz` | `MasteringAudioProfileSpectral.centroidHz` |
+| `MasteringAudioProfile.spectral.flatness` | `MasteringAudioProfileSpectral.flatness` |
+| `MasteringAudioProfile.spectral.highMidRmsDb` | `MasteringAudioProfileSpectral.highMidRmsDb` |
+| `MasteringAudioProfile.spectral.highRmsDb` | `MasteringAudioProfileSpectral.highRmsDb` |
+| `MasteringAudioProfile.spectral.lowMidRmsDb` | `MasteringAudioProfileSpectral.lowMidRmsDb` |
+| `MasteringAudioProfile.spectral.lowRmsDb` | `MasteringAudioProfileSpectral.lowRmsDb` |
+| `MasteringAudioProfile.spectral.midRmsDb` | `MasteringAudioProfileSpectral.midRmsDb` |
+| `MasteringAudioProfile.spectral.rolloffHz` | `MasteringAudioProfileSpectral.rolloffHz` |
+| `MasteringAudioProfile.spectral.subRmsDb` | `MasteringAudioProfileSpectral.subRmsDb` |
 | `MasteringAudioProfile.spectral` | MasteringAudioProfileSpectral (named; fields unchanged) |
 | `MasteringInsertParamInfo` | every field and array is readonly; copy before mutating |
 | `MasteringOptions` | `MasteringNormalizeLoudnessOptions` |
@@ -5328,7 +5490,16 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MeteringTruePeakRequest` | `MeteringTruePeakDbtpRequest` |
 | `MixAlignmentPair` | `MixTrackAlignment` |
 | `MixBandName` | `MixAnalysisBand` |
+| `MixSceneStrip.metering.enabled` | `StripMeteringOptions.enabled` |
+| `MixSceneStrip.metering.lufs` | `StripMeteringOptions.lufs` |
+| `MixSceneStrip.metering.truePeakOversample` | `StripMeteringOptions.truePeakOversample` |
+| `MixSceneStrip.metering.truePeak` | `StripMeteringOptions.truePeak` |
 | `MixSceneStrip.metering` | inline object -> Required<StripMeteringOptions> |
+| `MixSceneStrip.surroundPan.azimuth` | `SurroundPan.azimuth` |
+| `MixSceneStrip.surroundPan.distance` | removed: SurroundPan carries azimuth, divergence and lfe only, and a distance key is refused |
+| `MixSceneStrip.surroundPan.divergence` | `SurroundPan.divergence` |
+| `MixSceneStrip.surroundPan.elevation` | removed: SurroundPan carries azimuth, divergence and lfe only, and a elevation key is refused |
+| `MixSceneStrip.surroundPan.lfe` | `SurroundPan.lfe` |
 | `MixSceneStrip.surroundPan` | inline object -> Required<SurroundPan> |
 | `StripMeteringOptions` | moves to types_mixing.ts (scene document type); fields unchanged |
 | `SuggestMixSceneRequest` | `MixingAssistantSuggestRequest` |
@@ -5433,6 +5604,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineBounceOptions.sourceSampleRate` | absent means the engine rate; an explicit 0 is a RangeError |
 | `EngineBounceOptions.targetSampleRate` | absent keeps the source rate; an explicit 0 is a RangeError |
 | `EngineBus.outputBusId` | absent is the master mix; an explicit 0 is a RangeError |
+| `EngineCapturePunchRequest.enabled` | removed: a punch window is active while CaptureOptions.punch is given; omit punch to record without one |
 | `EngineClip.lengthSamples` | omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source) |
 | `EngineExternalMidiEvent.destinationId` | `ExternalMidiEvent.destinationId`: absent for clock and transport bytes meant for every external port, instead of 0xFFFFFFFF |
 | `EngineFreezeOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
@@ -5470,6 +5642,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ControllerInput='pitch-bend'` | `ControllerInput='pitchBend'` |
 | `ControllerInput='poly-pressure'` | `ControllerInput='polyPressure'` |
 | `EngineClip.warpMode` | 'off' \| 'repitch' \| 'tempoSync' \| 'timeStretch'; a number is a TypeError |
+| `MarkerKind.CuePoint` | `MarkerKind='cuePoint'` |
+| `MarkerKind.KeySignature` | `MarkerKind='keySignature'` |
+| `MarkerKind.Lyric` | `MarkerKind='lyric'` |
+| `MarkerKind.Marker` | `MarkerKind='marker'` |
+| `MarkerKind.Text` | `MarkerKind='text'` |
 | `PlaybackChannelRole='C'` | `PlaybackChannelRole='center'` |
 | `PlaybackChannelRole='L'` | `PlaybackChannelRole='left'` |
 | `PlaybackChannelRole='LFE'` | `PlaybackChannelRole='lfe'` |
@@ -5923,6 +6100,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.addAutomationLane` | targetKind is trackFaderDb / trackPan, not the hyphenated spelling |
+| `ProjectAutomationCurve='s-curve'` | `ProjectAutomationCurve='sCurve'` |
+| `ProjectAutomationCurve='scurve'` | removed: spell it 'sCurve', the AutomationCurve token; 'scurve' is refused |
 | `ProjectAutomationTargetKind='track-fader-db'` | `ProjectAutomationTargetKind='trackFaderDb'` |
 | `ProjectAutomationTargetKind='track-pan'` | `ProjectAutomationTargetKind='trackPan'` |
 | `ProjectFadeCurve='equal-power'` | `ProjectFadeCurve='equalPower'` |
@@ -5979,12 +6158,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `VocalUint64` | removed: removed; 64-bit counters in VocalStateToken are plain decimal strings |
+| `VocalUint64` | removed: 64-bit counters in VocalStateToken are plain decimal strings |
 
 #### Cancellation uses signal for promises and cancel for sync calls
 
 | 1.x | 2.0.0 |
 |---|---|
+| `VocalRenderRequest.signal` | `VocalRenderAsyncRequest.signal` |
 | `VocalRenderRequest` | carries cancel?: () => boolean instead of signal and is the request of render only; renderAsync takes VocalRenderAsyncRequest (range, requestId, signal) and beginRenderJob takes VocalRenderJobRequest (range, requestId) |
 | `VocalRenderSnapshot.beginRenderJob` | takes VocalRenderJobRequest (range, requestId) and no signal; the caller stops the job with abort() |
 | `VocalRenderSnapshot.render` | takes cancel: () => boolean, polled between render work units, instead of signal; returning true throws SonareError code Cancelled with no partial PCM |
@@ -6232,6 +6412,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
 | `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
 | `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed |
+| `ProjectClipFade.curve` | removed: give fadeInCurve or fadeOutCurve on ProjectClipFadeRequest |
+| `ProjectClipFade.lengthPpq` | removed: give fadeInPpq or fadeOutPpq on ProjectClipFadeRequest |
 | `ProjectMidiCcBinding.ccLsbNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `ProjectMidiCcBinding.ccNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `ProjectMidiCcBinding.selectorLsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorLsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
@@ -6293,7 +6475,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `ValidateOptions` | removed: removed; no call takes a validate option, and every call scans its input for NaN and infinity |
+| `Ebur128LoudnessRangeRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `Ebur128LoudnessRangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ValidateOptions` | removed: no call takes a validate option, and every call scans its input for NaN and infinity |
 
 #### String values are lowerCamelCase tokens
 
@@ -7086,45 +7270,88 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `AnalyzeBpmOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeBpmOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeDynamicsOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeDynamicsOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzePolyphonicRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeRhythmOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeRhythmOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeTimbreOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AnalyzeTimbreOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `BassChromaSpectrogramRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `BassChromaSpectrogramRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `ChordDetectionOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `ChordDetectionOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `CqtToAudioRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `CqtToAudioRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `FourierTempogramRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `FourierTempogramRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `GriffinLimRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `GriffinLimRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `KeyDetectionOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `KeyDetectionOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelDeltaRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelDeltaRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelToAudioRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelToAudioRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelToStftRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MelToStftRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MfccToAudioRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MfccToAudioRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MfccToMelRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MfccToMelRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MusicAnalyzeRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MusicAnalyzeRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `OnsetEnvelopeRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `OnsetEnvelopeRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TempogramRatioRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TempogramRatioRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `VqtToAudioRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `VqtToAudioRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeBpmOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeBpmOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeBpmRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeBpmRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeDynamicsOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeDynamicsOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeDynamicsRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeDynamicsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeImpulseResponseRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeImpulseResponseRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeMelodyRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeMelodyRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzePolyphonicRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeRhythmOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeRhythmOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeRhythmRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeRhythmRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeSectionsRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeSectionsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeTimbreOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeTimbreOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeTimbreRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AnalyzeTimbreRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `BassChromaSpectrogramRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `BassChromaSpectrogramRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ChordDetectionOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ChordDetectionOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ChordFunctionalAnalysisRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ChordFunctionalAnalysisRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CqtRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CqtRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CqtToAudioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CqtToAudioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectAcousticRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectAcousticRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectBoundariesRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectBoundariesRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectChordsRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectChordsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectKeyCandidatesRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectKeyCandidatesRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectKeyRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectKeyRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `DetectOnsetsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `FourierTempogramRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `FourierTempogramRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `GriffinLimRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `GriffinLimRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `KeyDetectionOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `KeyDetectionOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelDeltaRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelDeltaRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelSpectrogramRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelSpectrogramRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelToAudioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelToAudioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelToStftRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MelToStftRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccToAudioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccToAudioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccToMelRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MfccToMelRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MusicAnalyzeRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MusicAnalyzeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NnlsChromaRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NnlsChromaRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `OnsetEnvelopeRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `OnsetEnvelopeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `OnsetStrengthMultiRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `OnsetStrengthMultiRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ReassignedSpectrogramRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ReassignedSpectrogramRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TempogramRatioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TempogramRatioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VqtRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VqtRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VqtToAudioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VqtToAudioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
 #### String values are lowerCamelCase tokens
 
@@ -7177,6 +7404,56 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ChordFunctionsKey.mode` | type KeyMode only |
 | `ChordFunctionsKey.root` (`./analysis`) | type PitchClass only |
 | `ChordFunctionsKey.root` | type PitchClass only |
+| `ChordQuality.Add9` (`./analysis`) | `ChordQuality='add9'` |
+| `ChordQuality.Add9` | `ChordQuality='add9'` |
+| `ChordQuality.Augmented` (`./analysis`) | `ChordQuality='augmented'` |
+| `ChordQuality.Augmented` | `ChordQuality='augmented'` |
+| `ChordQuality.Dim7` (`./analysis`) | `ChordQuality='dim7'` |
+| `ChordQuality.Dim7` | `ChordQuality='dim7'` |
+| `ChordQuality.Diminished` (`./analysis`) | `ChordQuality='diminished'` |
+| `ChordQuality.Diminished` | `ChordQuality='diminished'` |
+| `ChordQuality.Dominant11` (`./analysis`) | `ChordQuality='dominant11'` |
+| `ChordQuality.Dominant11` | `ChordQuality='dominant11'` |
+| `ChordQuality.Dominant13` (`./analysis`) | `ChordQuality='dominant13'` |
+| `ChordQuality.Dominant13` | `ChordQuality='dominant13'` |
+| `ChordQuality.Dominant7Flat9` (`./analysis`) | `ChordQuality='dominant7Flat9'` |
+| `ChordQuality.Dominant7Flat9` | `ChordQuality='dominant7Flat9'` |
+| `ChordQuality.Dominant7Sharp9` (`./analysis`) | `ChordQuality='dominant7Sharp9'` |
+| `ChordQuality.Dominant7Sharp9` | `ChordQuality='dominant7Sharp9'` |
+| `ChordQuality.Dominant7Sus4` (`./analysis`) | `ChordQuality='dominant7Sus4'` |
+| `ChordQuality.Dominant7Sus4` | `ChordQuality='dominant7Sus4'` |
+| `ChordQuality.Dominant7` (`./analysis`) | `ChordQuality='dominant7'` |
+| `ChordQuality.Dominant7` | `ChordQuality='dominant7'` |
+| `ChordQuality.Dominant9` (`./analysis`) | `ChordQuality='dominant9'` |
+| `ChordQuality.Dominant9` | `ChordQuality='dominant9'` |
+| `ChordQuality.HalfDim7` (`./analysis`) | `ChordQuality='halfDim7'` |
+| `ChordQuality.HalfDim7` | `ChordQuality='halfDim7'` |
+| `ChordQuality.Major6` (`./analysis`) | `ChordQuality='major6'` |
+| `ChordQuality.Major6` | `ChordQuality='major6'` |
+| `ChordQuality.Major7` (`./analysis`) | `ChordQuality='major7'` |
+| `ChordQuality.Major7` | `ChordQuality='major7'` |
+| `ChordQuality.Major9` (`./analysis`) | `ChordQuality='major9'` |
+| `ChordQuality.Major9` | `ChordQuality='major9'` |
+| `ChordQuality.Major` (`./analysis`) | `ChordQuality='major'` |
+| `ChordQuality.Major` | `ChordQuality='major'` |
+| `ChordQuality.Minor6` (`./analysis`) | `ChordQuality='minor6'` |
+| `ChordQuality.Minor6` | `ChordQuality='minor6'` |
+| `ChordQuality.Minor7` (`./analysis`) | `ChordQuality='minor7'` |
+| `ChordQuality.Minor7` | `ChordQuality='minor7'` |
+| `ChordQuality.MinorAdd9` (`./analysis`) | `ChordQuality='minorAdd9'` |
+| `ChordQuality.MinorAdd9` | `ChordQuality='minorAdd9'` |
+| `ChordQuality.MinorMajor7` (`./analysis`) | `ChordQuality='minorMajor7'` |
+| `ChordQuality.MinorMajor7` | `ChordQuality='minorMajor7'` |
+| `ChordQuality.Minor` (`./analysis`) | `ChordQuality='minor'` |
+| `ChordQuality.Minor` | `ChordQuality='minor'` |
+| `ChordQuality.Sus2Add4` (`./analysis`) | `ChordQuality='sus2Add4'` |
+| `ChordQuality.Sus2Add4` | `ChordQuality='sus2Add4'` |
+| `ChordQuality.Sus2` (`./analysis`) | `ChordQuality='sus2'` |
+| `ChordQuality.Sus2` | `ChordQuality='sus2'` |
+| `ChordQuality.Sus4` (`./analysis`) | `ChordQuality='sus4'` |
+| `ChordQuality.Sus4` | `ChordQuality='sus4'` |
+| `ChordQuality.Unknown` (`./analysis`) | `ChordQuality='unknown'` |
+| `ChordQuality.Unknown` | `ChordQuality='unknown'` |
 | `ChordQuality` (`./analysis`) | string union of the former ChordQualityName tokens (unknown kept); the const object is removed; numbers refused |
 | `ChordQuality` | string union of the former ChordQualityName tokens (unknown kept); the const object is removed; numbers refused |
 | `DetectChordsRequest.keyMode` (`./analysis`) | type KeyMode only; numbers refused |
@@ -7195,6 +7472,20 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `KeyDetectionOptions.genreHint` | type GenreHint = 'auto'\|'edm'\|'electronic'\|'dance'\|'pop'\|'classical'\|'jazz'; unknown refused (RangeError) |
 | `KeyDetectionOptions.profile` (`./analysis`) | type KeyProfile (string union) only; numbers refused |
 | `KeyDetectionOptions.profile` | type KeyProfile (string union) only; numbers refused |
+| `KeyProfile.BellmanBudge` (`./analysis`) | `KeyProfile='bellmanBudge'` |
+| `KeyProfile.BellmanBudge` | `KeyProfile='bellmanBudge'` |
+| `KeyProfile.FaraldoEDMA` (`./analysis`) | `KeyProfile='faraldoEdma'` |
+| `KeyProfile.FaraldoEDMA` | `KeyProfile='faraldoEdma'` |
+| `KeyProfile.FaraldoEDMM` (`./analysis`) | `KeyProfile='faraldoEdmm'` |
+| `KeyProfile.FaraldoEDMM` | `KeyProfile='faraldoEdmm'` |
+| `KeyProfile.FaraldoEDMT` (`./analysis`) | `KeyProfile='faraldoEdmt'` |
+| `KeyProfile.FaraldoEDMT` | `KeyProfile='faraldoEdmt'` |
+| `KeyProfile.KrumhanslSchmuckler` (`./analysis`) | `KeyProfile='krumhanslSchmuckler'` |
+| `KeyProfile.KrumhanslSchmuckler` | `KeyProfile='krumhanslSchmuckler'` |
+| `KeyProfile.Shaath` (`./analysis`) | `KeyProfile='shaath'` |
+| `KeyProfile.Shaath` | `KeyProfile='shaath'` |
+| `KeyProfile.Temperley` (`./analysis`) | `KeyProfile='temperley'` |
+| `KeyProfile.Temperley` | `KeyProfile='temperley'` |
 | `KeyProfileName` (`./analysis`) | removed: Use the KeyProfile union of lowerCamelCase names: krumhanslSchmuckler, temperley, shaath, faraldoEdmt, faraldoEdma, faraldoEdmm, bellmanBudge. |
 | `KeyProfileName` | removed: Use the KeyProfile union of lowerCamelCase names: krumhanslSchmuckler, temperley, shaath, faraldoEdmt, faraldoEdma, faraldoEdmm, bellmanBudge. |
 | `KeyProfile` (`./analysis`) | string union 'krumhanslSchmuckler'\|'temperley'\|'shaath'\|'faraldoEdmt'\|'faraldoEdma'\|'faraldoEdmm'\|'bellmanBudge'; synonyms and numbers refused |
@@ -7205,6 +7496,22 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RhythmFeatures.grooveType` | `AnalysisRhythm.grooveType`: type GrooveType = 'straight'\|'shuffle'\|'swing' |
 | `Section.type` (`./analysis`) | type SectionType string union 'intro'\|'verse'\|'preChorus'\|'chorus'\|'bridge'\|'instrumental'\|'outro'\|'unknown' (core-owned) |
 | `Section.type` | type SectionType string union 'intro'\|'verse'\|'preChorus'\|'chorus'\|'bridge'\|'instrumental'\|'outro'\|'unknown' (core-owned) |
+| `SectionType.Bridge` (`./analysis`) | `SectionType='bridge'` |
+| `SectionType.Bridge` | `SectionType='bridge'` |
+| `SectionType.Chorus` (`./analysis`) | `SectionType='chorus'` |
+| `SectionType.Chorus` | `SectionType='chorus'` |
+| `SectionType.Instrumental` (`./analysis`) | `SectionType='instrumental'` |
+| `SectionType.Instrumental` | `SectionType='instrumental'` |
+| `SectionType.Intro` (`./analysis`) | `SectionType='intro'` |
+| `SectionType.Intro` | `SectionType='intro'` |
+| `SectionType.Outro` (`./analysis`) | `SectionType='outro'` |
+| `SectionType.Outro` | `SectionType='outro'` |
+| `SectionType.PreChorus` (`./analysis`) | `SectionType='preChorus'` |
+| `SectionType.PreChorus` | `SectionType='preChorus'` |
+| `SectionType.Unknown` (`./analysis`) | `SectionType='unknown'` |
+| `SectionType.Unknown` | `SectionType='unknown'` |
+| `SectionType.Verse` (`./analysis`) | `SectionType='verse'` |
+| `SectionType.Verse` | `SectionType='verse'` |
 | `SectionType` (`./analysis`) | const object removed; SectionType is the string union 'intro'\|'verse'\|'preChorus'\|'chorus'\|'bridge'\|'instrumental'\|'outro'\|'unknown' |
 | `SectionType` | const object removed; SectionType is the string union 'intro'\|'verse'\|'preChorus'\|'chorus'\|'bridge'\|'instrumental'\|'outro'\|'unknown' |
 | `SpectralEditWindow='rect'` (`./analysis`) | removed: Use 'rectangular' for the window option of spectralEdit; the type is now WindowType. |
@@ -7458,10 +7765,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `CyclicTempogramResult` | removed: removed; cyclicTempogram now returns a Matrix2D |
-| `FourierTempogramResult` | removed: removed; fourierTempogram now returns a Matrix2D |
-| `NnlsChromaResult` | removed: removed; nnlsChroma now returns a Matrix2D |
-| `TempogramResult` | removed: removed; tempogram now returns a Matrix2D |
+| `CyclicTempogramResult` | removed: cyclicTempogram now returns a Matrix2D |
+| `FourierTempogramResult` | removed: fourierTempogram now returns a Matrix2D |
+| `NnlsChromaResult` | removed: nnlsChroma now returns a Matrix2D |
+| `TempogramResult` | removed: tempogram now returns a Matrix2D |
 | `cyclicTempogram` (`./analysis`) | returns Matrix2D |
 | `cyclicTempogram` | returns Matrix2D |
 | `frameSignal` (`./analysis`) | returns Matrix2D; the second positional argument is sampleRate and sampleRate is required |
@@ -8460,16 +8767,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DetectKeyOptions` | removed: use KeyDetectionOptions on wasm and DetectKeyRequest on node |
 | `DynamicsAnalysisResult` (`./analysis`) | removed: use DynamicsResult |
 | `DynamicsAnalysisResult` | removed: use DynamicsResult |
-| `MelSpectrogramResult.isDb` (`./analysis`) | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
-| `MelSpectrogramResult.isDb` | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
-| `MfccResult.isDb` (`./analysis`) | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
-| `MfccResult.isDb` | removed: removed; it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MelSpectrogramResult.isDb` (`./analysis`) | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MelSpectrogramResult.isDb` | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MfccResult.isDb` (`./analysis`) | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
+| `MfccResult.isDb` | removed: it was always false for a forward transform, so read power as linear power and db as the dB form |
 | `Pitch` | removed: use PitchClass |
 | `ScaleName` (`./analysis`) | removed: use KeyMode |
 | `ScaleName` | removed: use KeyMode |
-| `StreamConfig.computeMagnitude` | removed: removed; it never took effect, so drop it from the config |
-| `StreamConfig.magnitudeDownsample` | removed: removed; the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config |
-| `StreamConfig.outputFormat` | removed: removed; it never took effect, so drop it from the config and read frames with readFrames |
+| `StreamConfig.computeMagnitude` | removed: it never took effect, so drop it from the config |
+| `StreamConfig.magnitudeDownsample` | removed: the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config |
+| `StreamConfig.outputFormat` | removed: it never took effect, so drop it from the config and read frames with readFrames |
 | `StreamConfigDefaults` | removed: use Required<StreamConfig> |
 
 #### The ./worklet entry exports only the documented surface
@@ -8488,6 +8795,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `AnalyzeBpmOptions.maxCandidates` (`./analysis`) | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
 | `AnalyzeBpmOptions.maxCandidates` | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
+| `BpmHypothesis.value` (`./analysis`) | `AnalysisBpmCandidate.bpm` |
+| `BpmHypothesis.value` | `AnalysisBpmCandidate.bpm` |
 | `CqtRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
 | `CqtRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
 | `CqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
@@ -8502,6 +8811,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
 | `PcenRequest.options` (`./analysis`) | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PcenRequest.options` | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
+| `PitchYinRequest.fillNa` (`./analysis`) | removed: drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError) |
+| `PitchYinRequest.fillNa` | removed: drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError) |
 | `PolyphonicAnalysis.setNoteEdit(edit)` | optional (absent clears the edit), as on Node |
 | `VqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
@@ -8668,6 +8979,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RirSynthOptions.maxSeconds` | `SynthesizeRirRequest.maxSec` |
 | `RoomGeometryOptions.maxSeconds` (`./analysis`) | `RoomGeometry.maxSec`: maxSeconds -> maxSec |
 | `RoomGeometryOptions.maxSeconds` | `RoomGeometry.maxSec`: maxSeconds -> maxSec |
+| `RoomMorphOptions.maxSeconds` (`./analysis`) | `RoomMorphOptions.maxSec` |
+| `RoomMorphOptions.maxSeconds` | `RoomMorphOptions.maxSec` |
+| `RoomMorphRequest.maxSeconds` | `RoomMorphRequest.maxSec` |
+| `RoomMorphStereoRequest.maxSeconds` | `RoomMorphStereoRequest.maxSec` |
 
 #### Physical quantities carry their unit in the name
 
@@ -8675,7 +8990,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `DeclipOptions.clipThreshold` | `DeclipOptions.clipThresholdDb`: clipThreshold -> clipThresholdDb (linear clip level -> dBFS; default 20*log10(0.98) ~ -0.175 dBFS) |
 | `MasteringRepairDeclipRequest.clipThreshold` | `MasteringRepairDeclipRequest.clipThresholdDb`: clipThreshold -> clipThresholdDb |
+| `MasteringRepairDeclipStereoRequest.clipThreshold` | removed: give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectClippingRequest.clipThreshold` | removed: give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectTrimRangeRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
+| `MasteringRepairDetectTrimRangeStereoRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
 | `MasteringRepairTrimSilenceRequest.threshold` | `MasteringRepairTrimSilenceRequest.thresholdDb`: threshold -> thresholdDb |
+| `MasteringRepairTrimSilenceStereoRequest.threshold` | removed: give thresholdDb, in dBFS (20*log10 of the old linear amplitude) |
 | `RealtimeVoiceChangerPodConfig.retuneGrainSize` (`./analysis`) | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `RealtimeVoiceChangerPodConfig.retuneGrainSize` | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `masteringRepairAnalyze` | the recommended stages carry no linear clipThreshold (the declip threshold is clipThresholdDb, in dBFS), and masteringRepairApply takes them as they stand |
@@ -8736,17 +9056,40 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `AcousticOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `AcousticOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `ExtractNotesRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `ExtractPercussiveEventsRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MergeNotesRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `RenderNotesRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `RenderPercussiveEventsRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TrimRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TrimRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `VoiceChangeOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `VoiceChangeRealtimeRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AcousticOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AcousticOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AutoTuneOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AutoTuneOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `AutoTuneRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `EstimateRoomRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ExtractNotesRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `ExtractPercussiveEventsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `HarmonicRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MergeNotesRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NormalizeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NormalizeStereoRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NoteMoveRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `NoteStretchRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PercussiveRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PhaseVocoderRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PhaseVocoderRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PitchCorrectOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PitchCorrectOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PitchCorrectTimevaryingRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PitchCorrectToMidiRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `PitchShiftRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `RenderNotesRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `RenderPercussiveEventsRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `RoomMorphRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `RoomMorphStereoRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `SpectralEditRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `SplitNoteRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TimeStretchRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TrimRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TrimRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeRealtimeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `VoiceChangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
 #### String values are lowerCamelCase tokens
 
@@ -9005,7 +9348,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `RealtimeVoiceChanger.bufferGeneration` | removed: removed; the views from createRealtimeMonoBuffer, createRealtimeInterleavedBuffer and createRealtimePlanarBuffer re-acquire themselves when the heap grows |
+| `RealtimeVoiceChanger.bufferGeneration` | removed: the views from createRealtimeMonoBuffer, createRealtimeInterleavedBuffer and createRealtimePlanarBuffer re-acquire themselves when the heap grows |
 | `RealtimeVoiceChanger.getInterleavedInputBuffer` | removed: call createRealtimeInterleavedBuffer and use its input and output views |
 | `RealtimeVoiceChanger.getInterleavedOutputBuffer` | removed: call createRealtimeInterleavedBuffer and use its input and output views |
 | `RealtimeVoiceChanger.getMonoInputBuffer` | removed: call createRealtimeMonoBuffer(numSamples) and use its input and output views |
@@ -9063,6 +9406,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `NoteEdit.formantShiftSemitones` (`./analysis`) | `NoteEdit.formantSemitones` |
+| `NoteEdit.formantShiftSemitones` | `NoteEdit.formantSemitones` |
+| `NoteEdit.pitchShiftSemitones` (`./analysis`) | `NoteEdit.pitchSemitones` |
+| `NoteEdit.pitchShiftSemitones` | `NoteEdit.pitchSemitones` |
 | `PitchShiftRequest.semitones` | `PitchShiftRequest.pitchSemitones`: semitones -> pitchSemitones |
 | `RealtimeVoiceChangerPodConfig.retuneSemitones` (`./analysis`) | `RealtimeVoiceChangerConfig.retunePitchSemitones`: retuneSemitones -> retunePitchSemitones |
 | `RealtimeVoiceChangerPodConfig.retuneSemitones` | `RealtimeVoiceChangerConfig.retunePitchSemitones`: retuneSemitones -> retunePitchSemitones |
@@ -9127,6 +9474,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AutoTuneOptions.referenceMidi` (`./analysis`) | `AutoTuneOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `AutoTuneOptions.referenceMidi` | `AutoTuneOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `AutoTuneOptions.strength` | `AutoTuneOptions.retuneAmount`: strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength |
+| `AutoTuneRequest.referenceMidi` | `AutoTuneRequest.scaleReferenceMidi` |
+| `AutoTuneRequest.strength` | `AutoTuneRequest.retuneAmount` |
 | `ClipDetection.sampleCount` (`./analysis`) | `ClipDetection.clippedSamples`: sampleCount -> clippedSamples |
 | `ClipDetection.sampleCount` | `ClipDetection.clippedSamples`: sampleCount -> clippedSamples |
 | `ClipDetection.sampleFraction` (`./analysis`) | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
@@ -9160,6 +9509,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PitchCorrectOptions.mode` | `PitchCorrectOptions.targetMode`: mode -> targetMode (type PitchTargetMode = 'midi'\|'scale') |
 | `PitchCorrectOptions.referenceMidi` (`./analysis`) | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `PitchCorrectOptions.referenceMidi` | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
+| `PitchCorrectTimevaryingRequest.mode` | `PitchCorrectTimevaryingRequest.targetMode` |
+| `PitchCorrectTimevaryingRequest.referenceMidi` | `PitchCorrectTimevaryingRequest.scaleReferenceMidi` |
 | `PitchCorrectToMidiRequest.currentMidi` | optional -> required |
 | `PitchCorrectToMidiRequest.targetMidi` | optional -> required |
 | `RealtimeVoiceChanger.prepare` | removed: the constructor prepares the changer; to change the sample rate, block size or channel count create a new RealtimeVoiceChanger |
@@ -9191,6 +9542,30 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryOptions.sourceY` | `RoomGeometry.source`: sourceY -> source (RoomPlacement {x, y, z} (metres)) |
 | `RoomGeometryOptions.sourceZ` (`./analysis`) | `RoomGeometry.source`: sourceZ -> source (RoomPlacement {x, y, z} (metres)) |
 | `RoomGeometryOptions.sourceZ` | `RoomGeometry.source`: sourceZ -> source (RoomPlacement {x, y, z} (metres)) |
+| `RoomMorphOptions.listenerX` (`./analysis`) | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphOptions.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphOptions.listenerY` (`./analysis`) | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphOptions.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphOptions.listenerZ` (`./analysis`) | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphOptions.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphOptions.sourceX` (`./analysis`) | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphOptions.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphOptions.sourceY` (`./analysis`) | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphOptions.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphOptions.sourceZ` (`./analysis`) | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
+| `RoomMorphOptions.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
+| `RoomMorphRequest.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphRequest.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphRequest.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphRequest.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphRequest.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
+| `RoomMorphStereoRequest.listenerX` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.x |
+| `RoomMorphStereoRequest.listenerY` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.y |
+| `RoomMorphStereoRequest.listenerZ` | removed: give listener: { x, y, z } (RoomPlacement) and set listener.z |
+| `RoomMorphStereoRequest.sourceX` | removed: give source: { x, y, z } (RoomPlacement) and set source.x |
+| `RoomMorphStereoRequest.sourceY` | removed: give source: { x, y, z } (RoomPlacement) and set source.y |
+| `RoomMorphStereoRequest.sourceZ` | removed: give source: { x, y, z } (RoomPlacement) and set source.z |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
 | `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
@@ -9293,6 +9668,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MeteringSpectrumFrameRequest.frameOffset` | `MeteringSpectrumFrameRequest.startSample`: frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position)) |
 | `MixAssistantTrackProfile.attackDensity` (`./analysis`) | `MixAssistantTrackProfile.attackPerSecond`: attackDensity -> attackPerSecond |
 | `MixAssistantTrackProfile.attackDensity` | `MixAssistantTrackProfile.attackPerSecond`: attackDensity -> attackPerSecond |
+| `StreamingMasteringChainConfig.repair.declip.clipThreshold` (`./analysis`) | `StreamingMasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
+| `StreamingMasteringChainConfig.repair.declip.clipThreshold` (`./worklet`) | `StreamingMasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
+| `StreamingMasteringChainConfig.repair.declip.clipThreshold` | `StreamingMasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
 | `meteringSpectrumFrame(frameOffset)` (`./analysis`) | `meteringSpectrumFrame(options)`: positional frameOffset removed; options.startSample |
 | `meteringSpectrumFrame(frameOffset)` | `meteringSpectrumFrame(options)`: positional frameOffset removed; options.startSample |
 
@@ -9308,7 +9686,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu |
 | `MasteringAssistantProfile.truePeakDb` (`./analysis`) | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MasteringAudioProfile.loudness.crestFactorDb` | `MasteringAudioProfileLoudness.crestFactorDb` |
+| `MasteringAudioProfile.loudness.integratedLufs` | `MasteringAudioProfileLoudness.integratedLufs` |
+| `MasteringAudioProfile.loudness.lraLu` | `MasteringAudioProfileLoudness.loudnessRangeLu` |
+| `MasteringAudioProfile.loudness.truePeakDb` | `MasteringAudioProfileLoudness.truePeakDbtp` |
 | `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb} |
+| `MasteringChainConfig.loudness.ceilingDb` (`./analysis`) | `MasteringChainConfig.loudness.ceilingDbtp` |
+| `MasteringChainConfig.loudness.ceilingDb` | `MasteringChainConfig.loudness.ceilingDbtp` |
+| `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./analysis`) | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
+| `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `MasteringChainResult.outputLra` (`./analysis`) | `MasteringChainResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
 | `MasteringChainResult.outputLra` | `MasteringChainResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
 | `MasteringChainStereoResult.outputLra` (`./analysis`) | `MasteringChainStereoResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
@@ -9335,6 +9721,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareWorkletMeterSnapshot.truePeakDb` (`./worklet`) | `WorkletMeterSnapshot.truePeakDbtp` |
 | `StreamingLoudnessGainResult.truePeakDb` (`./analysis`) | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingLoudnessGainResult.truePeakDb` | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `StreamingMasteringChainConfig.loudness.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
+| `StreamingMasteringChainConfig.loudness.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
+| `StreamingMasteringChainConfig.loudness.ceilingDb` | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
+| `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
+| `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
+| `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `StreamingPlatform.ceilingDb` (`./analysis`) | `StreamingPlatform.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 | `StreamingPlatform.ceilingDb` | `StreamingPlatform.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 
@@ -9344,6 +9736,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
+| `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringInsertParamInfo.default` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringInsertParamInfo.id` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -9396,27 +9789,63 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `LufsInterleavedRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `LufsInterleavedRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `LufsSeriesInterleavedRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `LufsSeriesInterleavedRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MeteringDynamicRangeOptions.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MeteringDynamicRangeOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MeteringTruePeakRequest.validate` (`./analysis`) | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `MeteringTruePeakRequest.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
-| `TransientShaperOptions.validate` | removed: removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `CompressorOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `GateOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsInterleavedRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsInterleavedRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsSeriesInterleavedRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `LufsSeriesInterleavedRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsCompressorRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsGateRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MasteringDynamicsTransientShaperRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDetectClippingRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeOptions.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringDynamicRangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSilenceRatioRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSilenceRatioRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumFrameRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumFrameRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringSpectrumRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringTruePeakRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `MeteringTruePeakRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `TransientShaperOptions.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeakPyramidRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeakPyramidRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeaksRequest.validate` (`./analysis`) | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
+| `WaveformPeaksRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AutomationCurve='s-curve'` (`./analysis`) | `AutomationCurve='sCurve'` |
+| `AutomationCurve='s-curve'` | `AutomationCurve='sCurve'` |
 | `AutomationCurve` (`./analysis`) | 'linear' \| 'exponential' \| 'hold' \| 'sCurve' |
 | `AutomationCurve` | 'linear' \| 'exponential' \| 'hold' \| 'sCurve' |
+| `CompressorDetector='log_rms'` | `CompressorDetector='logRms'` |
 | `CompressorDetector` | 'peak' \| 'rms' \| 'logRms' (log_rms and the ordinals 0\|1\|2 removed) |
 | `CompressorOptions.detector` | CompressorDetector ('peak'\|'rms'\|'logRms'); numbers refused |
 | `MasteringDynamicsCompressorRequest.detector` | CompressorDetector; numbers refused |
 | `MultibandCompressorBand.detector` (`./analysis`) | CompressorDetector ('peak'\|'rms'\|'logRms'); numbers refused |
 | `MultibandCompressorBand.detector` | CompressorDetector ('peak'\|'rms'\|'logRms'); numbers refused |
+| `PanLaw='const3dB'` (`./analysis`) | `PanLaw='const3Db'` |
+| `PanLaw='const3dB'` | `PanLaw='const3Db'` |
+| `PanLaw='const4.5dB'` (`./analysis`) | `PanLaw='const4.5Db'` |
+| `PanLaw='const4.5dB'` | `PanLaw='const4.5Db'` |
+| `PanLaw='const6dB'` (`./analysis`) | `PanLaw='const6Db'` |
+| `PanLaw='const6dB'` | `PanLaw='const6Db'` |
+| `PanLaw='linear0dB'` (`./analysis`) | `PanLaw='linear0Db'` |
+| `PanLaw='linear0dB'` | `PanLaw='linear0Db'` |
+| `PanMode='dual-pan'` (`./analysis`) | `PanMode='dualPan'` |
+| `PanMode='dual-pan'` | `PanMode='dualPan'` |
+| `PanMode='stereo-pan'` (`./analysis`) | `PanMode='stereoPan'` |
+| `PanMode='stereo-pan'` | `PanMode='stereoPan'` |
 | `PanMode` (`./analysis`) | 'balance' \| 'stereoPan' \| 'dualPan' |
 | `PanMode` | 'balance' \| 'stereoPan' \| 'dualPan' |
 | `StreamingEqualizer.setPhaseMode` | setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' \| 'natural' \| 'linear'; synonyms and numbers refused |
@@ -9467,7 +9896,31 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `JsonResult` | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
 | `MasteringAssistantResult.chainConfig` (`./analysis`) | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
-| `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb} |
+| `MasteringAudioProfileDefects.clickCount` | removed: read defects.click.count |
+| `MasteringAudioProfileDefects.clickLongestRunSamples` | removed: read defects.click.longestRunSamples |
+| `MasteringAudioProfileDefects.clickPerSecond` | removed: read defects.click.perSecond |
+| `MasteringAudioProfileDefects.clickRejected` | removed: read defects.click.rejected |
+| `MasteringAudioProfileDefects.clipFlatLevel` | removed: read defects.clip.flatLevel |
+| `MasteringAudioProfileDefects.clipFlatRunCount` | removed: read defects.clip.flatRunCount |
+| `MasteringAudioProfileDefects.clipFlatSampleCount` | removed: read defects.clip.flatSampleCount |
+| `MasteringAudioProfileDefects.clipLongestFlatRunSamples` | removed: read defects.clip.longestFlatRunSamples |
+| `MasteringAudioProfileDefects.clipLongestRunSamples` | removed: read defects.clip.longestRunSamples |
+| `MasteringAudioProfileDefects.clipRunCount` | removed: read defects.clip.runCount |
+| `MasteringAudioProfileDefects.clipSampleCount` | removed: read defects.clip.clippedSamples |
+| `MasteringAudioProfileDefects.clipSampleFraction` | removed: read defects.clip.clippedRatio |
+| `MasteringAudioProfileDefects.cracklePerSecond` | removed: read defects.crackle.perSecond |
+| `MasteringAudioProfileDefects.crackleSampleCount` | removed: read defects.crackle.sampleCount |
+| `MasteringAudioProfileDefects.crackleSampleFraction` | removed: read defects.crackle.sampleFraction |
+| `MasteringAudioProfileDefects.humFundamentalDbfs` | removed: read defects.hum.harmonicDbfs[0] |
+| `MasteringAudioProfileDefects.humFundamentalHz` | removed: read defects.hum.fundamentalHz |
+| `MasteringAudioProfileDefects.humFundamentalProminence` | removed: read defects.hum.fundamentalProminence |
+| `MasteringAudioProfileDefects.humHarmonics` | removed: read defects.hum.harmonics |
+| `MasteringAudioProfileDefects.humPeakHarmonicDbfs` | removed: read the largest entry of defects.hum.harmonicDbfs |
+| `MasteringAudioProfileDefects.lateDecayRatioDb` | removed: read defects.reverb.lateDecayRatioDb |
+| `MasteringAudioProfileDefects.noiseBandPeakDbfs` | removed: read the largest entry of defects.noise.bandFloorDbfs |
+| `MasteringAudioProfileDefects.noiseBandPeakIndex` | removed: read the index of the largest entry of defects.noise.bandFloorDbfs |
+| `MasteringAudioProfileDefects.noiseFloorDbfs` | removed: read defects.noise.floorDbfs |
+| `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: NoiseDetection, hum: HumDetection, reverb: ReverbDetection} |
 | `MasteringChainConfigDocument` (`./analysis`) | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringResult.latencySamples` (`./analysis`) | optional -> required |
@@ -9707,6 +10160,60 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `MasteringRepairDeclickStereoResult.leftReport` (`./analysis`) | removed: read reports[0] |
+| `MasteringRepairDeclickStereoResult.leftReport` | removed: read reports[0] |
+| `MasteringRepairDeclickStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDeclickStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDeclickStereoResult.rightReport` (`./analysis`) | removed: read reports[1] |
+| `MasteringRepairDeclickStereoResult.rightReport` | removed: read reports[1] |
+| `MasteringRepairDeclickStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDeclickStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairDeclipStereoResult.leftReport` (`./analysis`) | removed: read reports[0] |
+| `MasteringRepairDeclipStereoResult.leftReport` | removed: read reports[0] |
+| `MasteringRepairDeclipStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDeclipStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDeclipStereoResult.rightReport` (`./analysis`) | removed: read reports[1] |
+| `MasteringRepairDeclipStereoResult.rightReport` | removed: read reports[1] |
+| `MasteringRepairDeclipStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDeclipStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairDecrackleStereoResult.leftReport` (`./analysis`) | removed: read reports[0] |
+| `MasteringRepairDecrackleStereoResult.leftReport` | removed: read reports[0] |
+| `MasteringRepairDecrackleStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDecrackleStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDecrackleStereoResult.rightReport` (`./analysis`) | removed: read reports[1] |
+| `MasteringRepairDecrackleStereoResult.rightReport` | removed: read reports[1] |
+| `MasteringRepairDecrackleStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDecrackleStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairDehumStereoResult.leftReport` (`./analysis`) | removed: read reports[0] |
+| `MasteringRepairDehumStereoResult.leftReport` | removed: read reports[0] |
+| `MasteringRepairDehumStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDehumStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDehumStereoResult.rightReport` (`./analysis`) | removed: read reports[1] |
+| `MasteringRepairDehumStereoResult.rightReport` | removed: read reports[1] |
+| `MasteringRepairDehumStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDehumStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairDenoiseClassicalStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDenoiseClassicalStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDenoiseClassicalStereoResult.report` (`./analysis`) | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairDenoiseClassicalStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairDenoiseClassicalStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDenoiseClassicalStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairDereverbClassicalStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairDereverbClassicalStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairDereverbClassicalStereoResult.report` (`./analysis`) | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairDereverbClassicalStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairDereverbClassicalStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairDereverbClassicalStereoResult.right` | removed: read channels[1] |
+| `MasteringRepairTrimSilenceStereoResult.leftRange` (`./analysis`) | removed: read ranges[0] |
+| `MasteringRepairTrimSilenceStereoResult.leftRange` | removed: read ranges[0] |
+| `MasteringRepairTrimSilenceStereoResult.left` (`./analysis`) | removed: read channels[0] |
+| `MasteringRepairTrimSilenceStereoResult.left` | removed: read channels[0] |
+| `MasteringRepairTrimSilenceStereoResult.report` (`./analysis`) | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairTrimSilenceStereoResult.report` | removed: read reports[0] (reports holds one per channel) |
+| `MasteringRepairTrimSilenceStereoResult.rightRange` (`./analysis`) | removed: read ranges[1] |
+| `MasteringRepairTrimSilenceStereoResult.rightRange` | removed: read ranges[1] |
+| `MasteringRepairTrimSilenceStereoResult.right` (`./analysis`) | removed: read channels[1] |
+| `MasteringRepairTrimSilenceStereoResult.right` | removed: read channels[1] |
 | `MixAssistantTrack.left` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixAssistantTrack.right` | `MixAssistantTrack.channels`: left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo) |
 | `MixStereoRequest.leftChannels` | `MixStereoRequest.strips`: leftChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options)) |
@@ -9761,6 +10268,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MultibandCompressorBand.sidechainHpfEnabled` | `MultibandCompressorBand.sidechainHighPassHz`: sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off) |
 | `MultibandCompressorBand.sidechainHpfHz` (`./analysis`) | `MultibandCompressorBand.sidechainHighPassHz`: sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off) |
 | `MultibandCompressorBand.sidechainHpfHz` | `MultibandCompressorBand.sidechainHighPassHz`: sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off) |
+| `StreamingMasteringChainConfig.dynamics.deesser.bandpassQ` (`./analysis`) | `StreamingMasteringChainConfig.dynamics.deesser.bandPassQ`: renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ |
+| `StreamingMasteringChainConfig.dynamics.deesser.bandpassQ` (`./worklet`) | `StreamingMasteringChainConfig.dynamics.deesser.bandPassQ`: renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ |
+| `StreamingMasteringChainConfig.dynamics.deesser.bandpassQ` | `StreamingMasteringChainConfig.dynamics.deesser.bandPassQ`: renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ |
 
 #### One type name per record on every surface
 
@@ -9775,7 +10285,20 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `LufsSeriesInterleavedRequest` | `LufsSeriesMultichannelRequest` |
 | `MasteringAssistantParamsRequest` | `MasteringAssistantSuggestRequest` |
 | `MasteringAssistantStereoParamsRequest` | `MasteringAssistantSuggestStereoRequest` |
+| `MasteringAudioProfile.dynamics.attackDensity` | `MasteringAudioProfileDynamics.attackPerSecond` |
+| `MasteringAudioProfile.dynamics.shortTermLufsStd` | `MasteringAudioProfileDynamics.shortTermLufsStd` |
+| `MasteringAudioProfile.dynamics.sustainRatio` | `MasteringAudioProfileDynamics.sustainRatio` |
 | `MasteringAudioProfile.dynamics` | MasteringAudioProfileDynamics (named; attackDensity -> attackPerSecond, other fields unchanged) |
+| `MasteringAudioProfile.spectral.airRmsDb` | `MasteringAudioProfileSpectral.airRmsDb` |
+| `MasteringAudioProfile.spectral.centroidHz` | `MasteringAudioProfileSpectral.centroidHz` |
+| `MasteringAudioProfile.spectral.flatness` | `MasteringAudioProfileSpectral.flatness` |
+| `MasteringAudioProfile.spectral.highMidRmsDb` | `MasteringAudioProfileSpectral.highMidRmsDb` |
+| `MasteringAudioProfile.spectral.highRmsDb` | `MasteringAudioProfileSpectral.highRmsDb` |
+| `MasteringAudioProfile.spectral.lowMidRmsDb` | `MasteringAudioProfileSpectral.lowMidRmsDb` |
+| `MasteringAudioProfile.spectral.lowRmsDb` | `MasteringAudioProfileSpectral.lowRmsDb` |
+| `MasteringAudioProfile.spectral.midRmsDb` | `MasteringAudioProfileSpectral.midRmsDb` |
+| `MasteringAudioProfile.spectral.rolloffHz` | `MasteringAudioProfileSpectral.rolloffHz` |
+| `MasteringAudioProfile.spectral.subRmsDb` | `MasteringAudioProfileSpectral.subRmsDb` |
 | `MasteringAudioProfile.spectral` | MasteringAudioProfileSpectral (named; fields unchanged) |
 | `MasteringInsertParamInfo` | every field and array is readonly; copy before mutating |
 | `MasteringOptions` (`./analysis`) | `MasteringNormalizeLoudnessOptions` |
@@ -9798,8 +10321,26 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MeteringStereoRequest` | removed: Use the request type of the function: MeteringStereoCorrelationRequest, MeteringStereoWidthRequest or MeteringCrestFactorDbStereoRequest. |
 | `MeteringTruePeakRequest` (`./analysis`) | `MeteringTruePeakDbtpRequest` |
 | `MeteringTruePeakRequest` | `MeteringTruePeakDbtpRequest` |
+| `MixSceneStrip.metering.enabled` (`./analysis`) | `StripMeteringOptions.enabled` |
+| `MixSceneStrip.metering.enabled` | `StripMeteringOptions.enabled` |
+| `MixSceneStrip.metering.lufs` (`./analysis`) | `StripMeteringOptions.lufs` |
+| `MixSceneStrip.metering.lufs` | `StripMeteringOptions.lufs` |
+| `MixSceneStrip.metering.truePeakOversample` (`./analysis`) | `StripMeteringOptions.truePeakOversample` |
+| `MixSceneStrip.metering.truePeakOversample` | `StripMeteringOptions.truePeakOversample` |
+| `MixSceneStrip.metering.truePeak` (`./analysis`) | `StripMeteringOptions.truePeak` |
+| `MixSceneStrip.metering.truePeak` | `StripMeteringOptions.truePeak` |
 | `MixSceneStrip.metering` (`./analysis`) | inline object -> Required<StripMeteringOptions> |
 | `MixSceneStrip.metering` | inline object -> Required<StripMeteringOptions> |
+| `MixSceneStrip.surroundPan.azimuth` (`./analysis`) | `SurroundPan.azimuth` |
+| `MixSceneStrip.surroundPan.azimuth` | `SurroundPan.azimuth` |
+| `MixSceneStrip.surroundPan.distance` (`./analysis`) | removed: SurroundPan carries azimuth, divergence and lfe only, and a distance key is refused |
+| `MixSceneStrip.surroundPan.distance` | removed: SurroundPan carries azimuth, divergence and lfe only, and a distance key is refused |
+| `MixSceneStrip.surroundPan.divergence` (`./analysis`) | `SurroundPan.divergence` |
+| `MixSceneStrip.surroundPan.divergence` | `SurroundPan.divergence` |
+| `MixSceneStrip.surroundPan.elevation` (`./analysis`) | removed: SurroundPan carries azimuth, divergence and lfe only, and a elevation key is refused |
+| `MixSceneStrip.surroundPan.elevation` | removed: SurroundPan carries azimuth, divergence and lfe only, and a elevation key is refused |
+| `MixSceneStrip.surroundPan.lfe` (`./analysis`) | `SurroundPan.lfe` |
+| `MixSceneStrip.surroundPan.lfe` | `SurroundPan.lfe` |
 | `MixSceneStrip.surroundPan` (`./analysis`) | inline object -> Required<SurroundPan> |
 | `MixSceneStrip.surroundPan` | inline object -> Required<SurroundPan> |
 | `MixerMeterSnapshot` | removed: Mixer.meterSnapshot() returns MixMeterSnapshot, the same record stripMeter and busMeter return, with the loudness, mono-compatibility and per-plane fields the master reading lacked |
@@ -9868,6 +10409,74 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PanLawInput` | removed: use PanLaw and pass the canonical name such as const3Db; aliases and ordinals are refused |
 | `PanLawName` (`./analysis`) | removed: use PanLaw and pass the canonical name such as const3Db; aliases and ordinals are refused |
 | `PanLawName` | removed: use PanLaw and pass the canonical name such as const3Db; aliases and ordinals are refused |
+| `SoloProcessor='effects.reverb.dattorro'` (`./analysis`) | `SoloProcessor='effects.reverb.plate'` |
+| `SoloProcessor='effects.reverb.dattorro'` | `SoloProcessor='effects.reverb.plate'` |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs` (`./analysis`) | removed: set bands[2].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs` (`./worklet`) | removed: set bands[2].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs` | removed: set bands[2].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz` (`./analysis`) | removed: set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz` (`./worklet`) | removed: set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz` | removed: set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highRatio` (`./analysis`) | removed: set bands[2].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highRatio` (`./worklet`) | removed: set bands[2].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highRatio` | removed: set bands[2].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs` (`./analysis`) | removed: set bands[2].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs` (`./worklet`) | removed: set bands[2].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs` | removed: set bands[2].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb` (`./analysis`) | removed: set bands[2].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb` (`./worklet`) | removed: set bands[2].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb` | removed: set bands[2].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs` (`./analysis`) | removed: set bands[0].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs` (`./worklet`) | removed: set bands[0].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs` | removed: set bands[0].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz` (`./analysis`) | removed: set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz` (`./worklet`) | removed: set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz` | removed: set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio` (`./analysis`) | removed: set bands[0].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio` (`./worklet`) | removed: set bands[0].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio` | removed: set bands[0].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs` (`./analysis`) | removed: set bands[0].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs` (`./worklet`) | removed: set bands[0].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs` | removed: set bands[0].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb` (`./analysis`) | removed: set bands[0].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb` (`./worklet`) | removed: set bands[0].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb` | removed: set bands[0].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs` (`./analysis`) | removed: set bands[1].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs` (`./worklet`) | removed: set bands[1].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs` | removed: set bands[1].attackMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midRatio` (`./analysis`) | removed: set bands[1].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midRatio` (`./worklet`) | removed: set bands[1].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midRatio` | removed: set bands[1].ratio; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs` (`./analysis`) | removed: set bands[1].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs` (`./worklet`) | removed: set bands[1].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs` | removed: set bands[1].releaseMs; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb` (`./analysis`) | removed: set bands[1].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb` (`./worklet`) | removed: set bands[1].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb` | removed: set bands[1].thresholdDb; the low/mid/high shorthand is refused |
+| `StreamingMasteringChainConfig.eq.pivotHz` (`./analysis`) | removed: use eq.tilt.pivotHz |
+| `StreamingMasteringChainConfig.eq.pivotHz` (`./worklet`) | removed: use eq.tilt.pivotHz |
+| `StreamingMasteringChainConfig.eq.pivotHz` | removed: use eq.tilt.pivotHz |
+| `StreamingMasteringChainConfig.eq.tiltDb` (`./analysis`) | removed: use eq.tilt.tiltDb |
+| `StreamingMasteringChainConfig.eq.tiltDb` (`./worklet`) | removed: use eq.tilt.tiltDb |
+| `StreamingMasteringChainConfig.eq.tiltDb` | removed: use eq.tilt.tiltDb |
+| `StreamingMasteringChainConfig.repair.ddAlpha` (`./analysis`) | removed: use repair.denoise.ddAlpha |
+| `StreamingMasteringChainConfig.repair.ddAlpha` (`./worklet`) | removed: use repair.denoise.ddAlpha |
+| `StreamingMasteringChainConfig.repair.ddAlpha` | removed: use repair.denoise.ddAlpha |
+| `StreamingMasteringChainConfig.repair.denoise.gainFloor` (`./analysis`) | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.denoise.gainFloor` (`./worklet`) | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.denoise.gainFloor` | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.gainFloor` (`./analysis`) | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.gainFloor` (`./worklet`) | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.gainFloor` | removed: use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor)) |
+| `StreamingMasteringChainConfig.repair.hopLength` (`./analysis`) | removed: use repair.denoise.hopLength |
+| `StreamingMasteringChainConfig.repair.hopLength` (`./worklet`) | removed: use repair.denoise.hopLength |
+| `StreamingMasteringChainConfig.repair.hopLength` | removed: use repair.denoise.hopLength |
+| `StreamingMasteringChainConfig.repair.nFft` (`./analysis`) | removed: use repair.denoise.nFft |
+| `StreamingMasteringChainConfig.repair.nFft` (`./worklet`) | removed: use repair.denoise.nFft |
+| `StreamingMasteringChainConfig.repair.nFft` | removed: use repair.denoise.nFft |
+| `StreamingMasteringChainConfig.repair.reductionDb` (`./analysis`) | removed: use repair.denoise.reductionDb |
+| `StreamingMasteringChainConfig.repair.reductionDb` (`./worklet`) | removed: use repair.denoise.reductionDb |
+| `StreamingMasteringChainConfig.repair.reductionDb` | removed: use repair.denoise.reductionDb |
 
 #### The ./worklet entry exports only the documented surface
 
@@ -9990,6 +10599,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineBounceOptions.sourceSampleRate` | absent means the engine rate; an explicit 0 is a RangeError |
 | `EngineBounceOptions.targetSampleRate` | absent keeps the source rate; an explicit 0 is a RangeError |
 | `EngineBus.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
+| `EngineCapturePunchRequest.enabled` | removed: a punch window is active while CaptureOptions.punch is given; omit punch to record without one |
 | `EngineClip.lengthSamples` | omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source) |
 | `EngineFreezeOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `EngineFreezeOptions.clipId` | omit it for the default clip id; an explicit 0 is a RangeError reading 'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default', any other value an integer in [1, 4294967295] |
@@ -10833,6 +11443,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ProjectAutomationCurve='s-curve'` | `ProjectAutomationCurve='sCurve'` |
+| `ProjectAutomationCurve='scurve'` | removed: spell it 'sCurve', the AutomationCurve token; 'scurve' is refused |
 | `ProjectAutomationTargetKind='track-fader-db'` | `ProjectAutomationTargetKind='trackFaderDb'` |
 | `ProjectAutomationTargetKind='track-pan'` | `ProjectAutomationTargetKind='trackPan'` |
 | `ProjectFadeCurve='equal-power'` | removed: Use 'equalPower'; fade curves are 'linear', 'equalPower', 'exponential' and 'logarithmic'. |
@@ -10906,8 +11518,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `VocalEditWorkerSession.draftToken` | removed: read the token getter on the session or on its VocalEditWorkerDraft |
 | `VocalEditWorkerSession.latestToken` | removed: read the token getter on the session or on its VocalEditWorkerDraft |
 | `VocalEditWorkerSession.updateToken` | removed: internal bookkeeping, no longer exposed; the session tracks its token itself, so read the token getter |
-| `VocalStateBytes` | removed: removed; exportState() returns a Uint8Array directly |
-| `VocalUint64` | removed: removed; 64-bit counters in VocalStateToken are plain decimal strings |
+| `VocalStateBytes` | removed: exportState() returns a Uint8Array directly |
+| `VocalUint64` | removed: 64-bit counters in VocalStateToken are plain decimal strings |
 | `VocalWorkerCancelMessage` | removed: a worker wire-protocol type, no longer exported; use VocalEditWorkerClient and VocalEditWorkerSession |
 | `VocalWorkerCreateMessage` | removed: a worker wire-protocol type, no longer exported; use VocalEditWorkerClient and VocalEditWorkerSession |
 | `VocalWorkerCreateRequest` | removed: a worker wire-protocol type, no longer exported; use VocalEditWorkerClient and VocalEditWorkerSession |
@@ -10930,6 +11542,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `VocalEditWorkerTask` | removed: Await the promise VocalEditWorkerClient methods return; pass { signal } with an AbortController to cancel, which rejects with a SonareError coded Cancelled. |
+| `VocalRenderRequest.signal` | `VocalRenderAsyncRequest.signal` |
 | `VocalRenderRequest` | carries cancel?: () => boolean instead of signal and is the request of render only; renderAsync and the worker preview take VocalRenderAsyncRequest (range, requestId, signal) and beginRenderJob takes VocalRenderJobRequest (range, requestId) |
 | `VocalRenderSnapshot.beginRenderJob` | takes VocalRenderJobRequest (range, requestId) and no signal; the caller stops the job with abort() |
 | `VocalRenderSnapshot.renderAsync` | an already-aborted signal rejects with a Cancelled SonareError instead of a DOMException AbortError |

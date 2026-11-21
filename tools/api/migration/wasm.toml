@@ -5988,7 +5988,7 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "CyclicTempogramResult"
-removed = "removed; cyclicTempogram now returns a Matrix2D"
+removed = "cyclicTempogram now returns a Matrix2D"
 domain = "analysis"
 rule = "no-internal-types"
 
@@ -6042,7 +6042,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "type"
 old = "FourierTempogramResult"
-removed = "removed; fourierTempogram now returns a Matrix2D"
+removed = "fourierTempogram now returns a Matrix2D"
 domain = "analysis"
 rule = "no-internal-types"
 
@@ -6205,7 +6205,7 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "NnlsChromaResult"
-removed = "removed; nnlsChroma now returns a Matrix2D"
+removed = "nnlsChroma now returns a Matrix2D"
 domain = "analysis"
 rule = "no-internal-types"
 
@@ -6466,7 +6466,7 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "TempogramResult"
-removed = "removed; tempogram now returns a Matrix2D"
+removed = "tempogram now returns a Matrix2D"
 domain = "analysis"
 rule = "no-internal-types"
 
@@ -7049,14 +7049,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.isDb"
-removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
+removed = "it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.isDb"
-removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
+removed = "it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 entry = "./analysis"
@@ -7371,14 +7371,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MfccResult.isDb"
-removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
+removed = "it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.isDb"
-removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
+removed = "it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 entry = "./analysis"
@@ -14093,14 +14093,14 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "field"
 old = "StreamConfig.computeMagnitude"
-removed = "removed; it never took effect, so drop it from the config"
+removed = "it never took effect, so drop it from the config"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "StreamConfig.magnitudeDownsample"
-removed = "removed; the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config"
+removed = "the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -14121,7 +14121,7 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "StreamConfig.outputFormat"
-removed = "removed; it never took effect, so drop it from the config and read frames with readFrames"
+removed = "it never took effect, so drop it from the config and read frames with readFrames"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -20232,7 +20232,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceCharacterPresetI
 [[entry]]
 kind = "method"
 old = "RealtimeVoiceChanger.bufferGeneration"
-removed = "removed; the views from createRealtimeMonoBuffer, createRealtimeInterleavedBuffer and createRealtimePlanarBuffer re-acquire themselves when the heap grows"
+removed = "the views from createRealtimeMonoBuffer, createRealtimeInterleavedBuffer and createRealtimePlanarBuffer re-acquire themselves when the heap grows"
 domain = "effects"
 rule = "getters"
 
@@ -21323,7 +21323,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::bounces the timeline
 [[entry]]
 kind = "type"
 old = "VocalUint64"
-removed = "removed; 64-bit counters in VocalStateToken are plain decimal strings"
+removed = "64-bit counters in VocalStateToken are plain decimal strings"
 domain = "project"
 rule = "no-internal-types"
 
@@ -21344,7 +21344,7 @@ rule = "typed-results"
 [[entry]]
 kind = "type"
 old = "VocalStateBytes"
-removed = "removed; exportState() returns a Uint8Array directly"
+removed = "exportState() returns a Uint8Array directly"
 domain = "project"
 rule = "no-internal-types"
 
@@ -25415,7 +25415,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorDetect
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileDefects"
-changed = "{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb}"
+changed = "{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: NoiseDetection, hum: HumDetection, reverb: ReverbDetection}"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -29571,14 +29571,14 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::griffinLim: nFft 
 [[entry]]
 kind = "field"
 old = "AcousticOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AcousticOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29586,14 +29586,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29601,14 +29601,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalyzeDynamicsOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AnalyzeDynamicsOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29616,21 +29616,21 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalyzePolyphonicRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AnalyzeRhythmOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AnalyzeRhythmOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29638,14 +29638,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalyzeTimbreOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "AnalyzeTimbreOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29653,14 +29653,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "BassChromaSpectrogramRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "BassChromaSpectrogramRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29668,14 +29668,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "ChordDetectionOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "ChordDetectionOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29683,14 +29683,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "CqtToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "CqtToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29698,28 +29698,28 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "ExtractNotesRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "ExtractPercussiveEventsRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "FourierTempogramRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "FourierTempogramRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29727,14 +29727,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "GriffinLimRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "GriffinLimRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29742,14 +29742,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "KeyDetectionOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "KeyDetectionOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29757,14 +29757,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29772,14 +29772,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29787,14 +29787,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MelDeltaRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MelDeltaRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29802,14 +29802,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MelToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MelToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29817,14 +29817,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MelToStftRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MelToStftRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29832,21 +29832,21 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MergeNotesRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MeteringDynamicRangeOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MeteringDynamicRangeOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29854,14 +29854,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29869,14 +29869,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MfccToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MfccToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29884,14 +29884,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MfccToMelRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MfccToMelRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29899,14 +29899,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MusicAnalyzeRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "MusicAnalyzeRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29914,14 +29914,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "OnsetEnvelopeRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "OnsetEnvelopeRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29929,28 +29929,28 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "RenderNotesRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "RenderPercussiveEventsRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "TempogramRatioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "TempogramRatioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29958,21 +29958,21 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "TransientShaperOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "mastering"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "TrimRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "TrimRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -29980,28 +29980,28 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "VoiceChangeOptions.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "effects"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "VqtToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 
 [[entry]]
 kind = "field"
 old = "VqtToAudioRequest.validate"
-removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
 domain = "analysis"
 rule = "input-always-scanned"
 entry = "./analysis"
@@ -30009,7 +30009,7 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "ValidateOptions"
-removed = "removed; no call takes a validate option, and every call scans its input for NaN and infinity"
+removed = "no call takes a validate option, and every call scans its input for NaN and infinity"
 domain = "core"
 rule = "input-always-scanned"
 [[entry]]
@@ -32276,3 +32276,3214 @@ removed = "pass it as the remaining clip fields in EngineClip"
 domain = "engine"
 rule = "one-positional-form"
 entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeImpulseResponseRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeImpulseResponseRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeRhythmRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeRhythmRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeSectionsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeSectionsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeTimbreRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeTimbreRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "CompressorOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectAcousticRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "DetectAcousticRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectBoundariesRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "DetectBoundariesRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DetectOnsetsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "Ebur128LoudnessRangeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "core"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "Ebur128LoudnessRangeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "core"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "EstimateRoomRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "GateOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "HarmonicRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "LufsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "LufsRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsCompressorRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsGateRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsTransientShaperRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringSilenceRatioRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringSilenceRatioRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumFrameRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumFrameRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NnlsChromaRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "NnlsChromaRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NormalizeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "NormalizeStereoRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "NoteMoveRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "OnsetStrengthMultiRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "OnsetStrengthMultiRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PercussiveRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectTimevaryingRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "PitchShiftRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "SplitNoteRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TimeStretchRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VqtRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VqtRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeakPyramidRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeakPyramidRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksRequest.validate"
+removed = "every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.formantShiftSemitones"
+new = "NoteEdit.formantSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.formantShiftSemitones"
+new = "NoteEdit.formantSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.pitchShiftSemitones"
+new = "NoteEdit.pitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.pitchShiftSemitones"
+new = "NoteEdit.pitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.maxSeconds"
+new = "RoomMorphOptions.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.maxSeconds"
+new = "RoomMorphOptions.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.maxSeconds"
+new = "RoomMorphRequest.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.maxSeconds"
+new = "RoomMorphStereoRequest.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "value"
+old = "AutomationCurve='s-curve'"
+new = "AutomationCurve='sCurve'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "AutomationCurve='s-curve'"
+new = "AutomationCurve='sCurve'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Add9"
+new = "ChordQuality='add9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Add9"
+new = "ChordQuality='add9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Augmented"
+new = "ChordQuality='augmented'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Augmented"
+new = "ChordQuality='augmented'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dim7"
+new = "ChordQuality='dim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dim7"
+new = "ChordQuality='dim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Diminished"
+new = "ChordQuality='diminished'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Diminished"
+new = "ChordQuality='diminished'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant11"
+new = "ChordQuality='dominant11'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant11"
+new = "ChordQuality='dominant11'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant13"
+new = "ChordQuality='dominant13'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant13"
+new = "ChordQuality='dominant13'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7"
+new = "ChordQuality='dominant7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7"
+new = "ChordQuality='dominant7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Flat9"
+new = "ChordQuality='dominant7Flat9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Flat9"
+new = "ChordQuality='dominant7Flat9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Sharp9"
+new = "ChordQuality='dominant7Sharp9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Sharp9"
+new = "ChordQuality='dominant7Sharp9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Sus4"
+new = "ChordQuality='dominant7Sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant7Sus4"
+new = "ChordQuality='dominant7Sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant9"
+new = "ChordQuality='dominant9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Dominant9"
+new = "ChordQuality='dominant9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.HalfDim7"
+new = "ChordQuality='halfDim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.HalfDim7"
+new = "ChordQuality='halfDim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major"
+new = "ChordQuality='major'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major"
+new = "ChordQuality='major'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major6"
+new = "ChordQuality='major6'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major6"
+new = "ChordQuality='major6'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major7"
+new = "ChordQuality='major7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major7"
+new = "ChordQuality='major7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major9"
+new = "ChordQuality='major9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Major9"
+new = "ChordQuality='major9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor"
+new = "ChordQuality='minor'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor"
+new = "ChordQuality='minor'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor6"
+new = "ChordQuality='minor6'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor6"
+new = "ChordQuality='minor6'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor7"
+new = "ChordQuality='minor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Minor7"
+new = "ChordQuality='minor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.MinorAdd9"
+new = "ChordQuality='minorAdd9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.MinorAdd9"
+new = "ChordQuality='minorAdd9'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.MinorMajor7"
+new = "ChordQuality='minorMajor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.MinorMajor7"
+new = "ChordQuality='minorMajor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus2"
+new = "ChordQuality='sus2'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus2"
+new = "ChordQuality='sus2'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus2Add4"
+new = "ChordQuality='sus2Add4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus2Add4"
+new = "ChordQuality='sus2Add4'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus4"
+new = "ChordQuality='sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Sus4"
+new = "ChordQuality='sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Unknown"
+new = "ChordQuality='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQuality.Unknown"
+new = "ChordQuality='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "CompressorDetector='log_rms'"
+new = "CompressorDetector='logRms'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.BellmanBudge"
+new = "KeyProfile='bellmanBudge'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.BellmanBudge"
+new = "KeyProfile='bellmanBudge'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.KrumhanslSchmuckler"
+new = "KeyProfile='krumhanslSchmuckler'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.KrumhanslSchmuckler"
+new = "KeyProfile='krumhanslSchmuckler'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.Shaath"
+new = "KeyProfile='shaath'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.Shaath"
+new = "KeyProfile='shaath'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.Temperley"
+new = "KeyProfile='temperley'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.Temperley"
+new = "KeyProfile='temperley'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const3dB'"
+new = "PanLaw='const3Db'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const3dB'"
+new = "PanLaw='const3Db'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const4.5dB'"
+new = "PanLaw='const4.5Db'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const4.5dB'"
+new = "PanLaw='const4.5Db'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const6dB'"
+new = "PanLaw='const6Db'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='const6dB'"
+new = "PanLaw='const6Db'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='linear0dB'"
+new = "PanLaw='linear0Db'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanLaw='linear0dB'"
+new = "PanLaw='linear0Db'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanMode='dual-pan'"
+new = "PanMode='dualPan'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanMode='dual-pan'"
+new = "PanMode='dualPan'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PanMode='stereo-pan'"
+new = "PanMode='stereoPan'"
+domain = "mastering"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PanMode='stereo-pan'"
+new = "PanMode='stereoPan'"
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationCurve='s-curve'"
+new = "ProjectAutomationCurve='sCurve'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Bridge"
+new = "SectionType='bridge'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Bridge"
+new = "SectionType='bridge'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Chorus"
+new = "SectionType='chorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Chorus"
+new = "SectionType='chorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Instrumental"
+new = "SectionType='instrumental'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Instrumental"
+new = "SectionType='instrumental'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Intro"
+new = "SectionType='intro'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Intro"
+new = "SectionType='intro'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Outro"
+new = "SectionType='outro'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Outro"
+new = "SectionType='outro'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.PreChorus"
+new = "SectionType='preChorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.PreChorus"
+new = "SectionType='preChorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Unknown"
+new = "SectionType='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Unknown"
+new = "SectionType='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Verse"
+new = "SectionType='verse'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.Verse"
+new = "SectionType='verse'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneRequest.referenceMidi"
+new = "AutoTuneRequest.scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneRequest.strength"
+new = "AutoTuneRequest.retuneAmount"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "BpmHypothesis.value"
+new = "AnalysisBpmCandidate.bpm"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "BpmHypothesis.value"
+new = "AnalysisBpmCandidate.bpm"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "EngineCapturePunchRequest.enabled"
+removed = "a punch window is active while CaptureOptions.punch is given; omit punch to record without one"
+domain = "engine"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.dynamics.attackDensity"
+new = "MasteringAudioProfileDynamics.attackPerSecond"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.dynamics.shortTermLufsStd"
+new = "MasteringAudioProfileDynamics.shortTermLufsStd"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.dynamics.sustainRatio"
+new = "MasteringAudioProfileDynamics.sustainRatio"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.loudness.crestFactorDb"
+new = "MasteringAudioProfileLoudness.crestFactorDb"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.loudness.integratedLufs"
+new = "MasteringAudioProfileLoudness.integratedLufs"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.loudness.lraLu"
+new = "MasteringAudioProfileLoudness.loudnessRangeLu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.loudness.truePeakDb"
+new = "MasteringAudioProfileLoudness.truePeakDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.airRmsDb"
+new = "MasteringAudioProfileSpectral.airRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.centroidHz"
+new = "MasteringAudioProfileSpectral.centroidHz"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.flatness"
+new = "MasteringAudioProfileSpectral.flatness"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.highMidRmsDb"
+new = "MasteringAudioProfileSpectral.highMidRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.highRmsDb"
+new = "MasteringAudioProfileSpectral.highRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.lowMidRmsDb"
+new = "MasteringAudioProfileSpectral.lowMidRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.lowRmsDb"
+new = "MasteringAudioProfileSpectral.lowRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.midRmsDb"
+new = "MasteringAudioProfileSpectral.midRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.rolloffHz"
+new = "MasteringAudioProfileSpectral.rolloffHz"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral.subRmsDb"
+new = "MasteringAudioProfileSpectral.subRmsDb"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clickCount"
+removed = "read defects.click.count"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clickLongestRunSamples"
+removed = "read defects.click.longestRunSamples"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clickPerSecond"
+removed = "read defects.click.perSecond"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clickRejected"
+removed = "read defects.click.rejected"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipFlatLevel"
+removed = "read defects.clip.flatLevel"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipFlatRunCount"
+removed = "read defects.clip.flatRunCount"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipFlatSampleCount"
+removed = "read defects.clip.flatSampleCount"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipLongestFlatRunSamples"
+removed = "read defects.clip.longestFlatRunSamples"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipLongestRunSamples"
+removed = "read defects.clip.longestRunSamples"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipRunCount"
+removed = "read defects.clip.runCount"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipSampleCount"
+removed = "read defects.clip.clippedSamples"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.clipSampleFraction"
+removed = "read defects.clip.clippedRatio"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.cracklePerSecond"
+removed = "read defects.crackle.perSecond"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.crackleSampleCount"
+removed = "read defects.crackle.sampleCount"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.crackleSampleFraction"
+removed = "read defects.crackle.sampleFraction"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.humFundamentalDbfs"
+removed = "read defects.hum.harmonicDbfs[0]"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.humFundamentalHz"
+removed = "read defects.hum.fundamentalHz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.humFundamentalProminence"
+removed = "read defects.hum.fundamentalProminence"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.humHarmonics"
+removed = "read defects.hum.harmonics"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.humPeakHarmonicDbfs"
+removed = "read the largest entry of defects.hum.harmonicDbfs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.lateDecayRatioDb"
+removed = "read defects.reverb.lateDecayRatioDb"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.measured"
+removed = "test whether defects is present; it is absent when detectDefects is false"
+domain = "mastering"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.noiseBandPeakDbfs"
+removed = "read the largest entry of defects.noise.bandFloorDbfs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.noiseBandPeakIndex"
+removed = "read the index of the largest entry of defects.noise.bandFloorDbfs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDefects.noiseFloorDbfs"
+removed = "read defects.noise.floorDbfs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.loudness.ceilingDb"
+new = "MasteringChainConfig.loudness.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.loudness.ceilingDb"
+new = "MasteringChainConfig.loudness.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb"
+new = "MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb"
+new = "MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoRequest.clipThreshold"
+removed = "give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.leftReport"
+removed = "read reports[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoResult.rightReport"
+removed = "read reports[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectClippingRequest.clipThreshold"
+removed = "give clipThresholdDb, in dBFS at or below 0 (20*log10 of the old linear amplitude)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectTrimRangeRequest.threshold"
+removed = "give thresholdDb, in dBFS (20*log10 of the old linear amplitude)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectTrimRangeStereoRequest.threshold"
+removed = "give thresholdDb, in dBFS (20*log10 of the old linear amplitude)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoRequest.threshold"
+removed = "give thresholdDb, in dBFS (20*log10 of the old linear amplitude)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.left"
+removed = "read channels[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.leftRange"
+removed = "read ranges[0]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.leftRange"
+removed = "read ranges[0]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.report"
+removed = "read reports[0] (reports holds one per channel)"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.right"
+removed = "read channels[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.rightRange"
+removed = "read ranges[1]"
+domain = "mastering"
+rule = "stereo-pair"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoResult.rightRange"
+removed = "read ranges[1]"
+domain = "mastering"
+rule = "stereo-pair"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.enabled"
+new = "StripMeteringOptions.enabled"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.enabled"
+new = "StripMeteringOptions.enabled"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.lufs"
+new = "StripMeteringOptions.lufs"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.lufs"
+new = "StripMeteringOptions.lufs"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.truePeak"
+new = "StripMeteringOptions.truePeak"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.truePeak"
+new = "StripMeteringOptions.truePeak"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.truePeakOversample"
+new = "StripMeteringOptions.truePeakOversample"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering.truePeakOversample"
+new = "StripMeteringOptions.truePeakOversample"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.azimuth"
+new = "SurroundPan.azimuth"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.azimuth"
+new = "SurroundPan.azimuth"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.distance"
+removed = "SurroundPan carries azimuth, divergence and lfe only, and a distance key is refused"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.distance"
+removed = "SurroundPan carries azimuth, divergence and lfe only, and a distance key is refused"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.divergence"
+new = "SurroundPan.divergence"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.divergence"
+new = "SurroundPan.divergence"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.elevation"
+removed = "SurroundPan carries azimuth, divergence and lfe only, and a elevation key is refused"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.elevation"
+removed = "SurroundPan carries azimuth, divergence and lfe only, and a elevation key is refused"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.lfe"
+new = "SurroundPan.lfe"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan.lfe"
+new = "SurroundPan.lfe"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectTimevaryingRequest.mode"
+new = "PitchCorrectTimevaryingRequest.targetMode"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectTimevaryingRequest.referenceMidi"
+new = "PitchCorrectTimevaryingRequest.scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "PitchYinRequest.fillNa"
+removed = "drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError)"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "PitchYinRequest.fillNa"
+removed = "drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError)"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerX"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerX"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.x"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerY"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerY"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.y"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerZ"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.listenerZ"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.z"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceX"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceX"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.x"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceY"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceY"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.y"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceZ"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.sourceZ"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.z"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.listenerX"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.listenerY"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.listenerZ"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.sourceX"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.sourceY"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.sourceZ"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.listenerX"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.listenerY"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.listenerZ"
+removed = "give listener: { x, y, z } (RoomPlacement) and set listener.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.sourceX"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.x"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.sourceY"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.y"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.sourceZ"
+removed = "give source: { x, y, z } (RoomPlacement) and set source.z"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.deesser.bandpassQ"
+changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ"
+to = "StreamingMasteringChainConfig.dynamics.deesser.bandPassQ"
+test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.deesser.bandpassQ"
+changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ"
+to = "StreamingMasteringChainConfig.dynamics.deesser.bandPassQ"
+test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"
+domain = "mastering"
+rule = "high-pass"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.deesser.bandpassQ"
+changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ"
+to = "StreamingMasteringChainConfig.dynamics.deesser.bandPassQ"
+test = "bindings/wasm/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"
+domain = "mastering"
+rule = "high-pass"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs"
+removed = "set bands[2].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs"
+removed = "set bands[2].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highAttackMs"
+removed = "set bands[2].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz"
+removed = "set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz"
+removed = "set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highCutoffHz"
+removed = "set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highRatio"
+removed = "set bands[2].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highRatio"
+removed = "set bands[2].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highRatio"
+removed = "set bands[2].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs"
+removed = "set bands[2].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs"
+removed = "set bands[2].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highReleaseMs"
+removed = "set bands[2].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb"
+removed = "set bands[2].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb"
+removed = "set bands[2].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.highThresholdDb"
+removed = "set bands[2].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs"
+removed = "set bands[0].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs"
+removed = "set bands[0].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowAttackMs"
+removed = "set bands[0].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz"
+removed = "set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz"
+removed = "set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowCutoffHz"
+removed = "set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio"
+removed = "set bands[0].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio"
+removed = "set bands[0].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowRatio"
+removed = "set bands[0].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs"
+removed = "set bands[0].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs"
+removed = "set bands[0].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowReleaseMs"
+removed = "set bands[0].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb"
+removed = "set bands[0].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb"
+removed = "set bands[0].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.lowThresholdDb"
+removed = "set bands[0].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs"
+removed = "set bands[1].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs"
+removed = "set bands[1].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midAttackMs"
+removed = "set bands[1].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midRatio"
+removed = "set bands[1].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midRatio"
+removed = "set bands[1].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midRatio"
+removed = "set bands[1].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs"
+removed = "set bands[1].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs"
+removed = "set bands[1].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midReleaseMs"
+removed = "set bands[1].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb"
+removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb"
+removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.dynamics.multibandComp.midThresholdDb"
+removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.pivotHz"
+removed = "use eq.tilt.pivotHz"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.pivotHz"
+removed = "use eq.tilt.pivotHz"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.pivotHz"
+removed = "use eq.tilt.pivotHz"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.tiltDb"
+removed = "use eq.tilt.tiltDb"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.tiltDb"
+removed = "use eq.tilt.tiltDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.eq.tiltDb"
+removed = "use eq.tilt.tiltDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudness.ceilingDb"
+new = "StreamingMasteringChainConfig.loudness.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudness.ceilingDb"
+new = "StreamingMasteringChainConfig.loudness.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudness.ceilingDb"
+new = "StreamingMasteringChainConfig.loudness.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb"
+new = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb"
+new = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb"
+new = "StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.ddAlpha"
+removed = "use repair.denoise.ddAlpha"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.ddAlpha"
+removed = "use repair.denoise.ddAlpha"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.ddAlpha"
+removed = "use repair.denoise.ddAlpha"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.declip.clipThreshold"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError"
+to = "StreamingMasteringChainConfig.repair.declip.clipThresholdDb"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.declip.clipThreshold"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError"
+to = "StreamingMasteringChainConfig.repair.declip.clipThresholdDb"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.declip.clipThreshold"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError"
+to = "StreamingMasteringChainConfig.repair.declip.clipThresholdDb"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.denoise.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.denoise.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.denoise.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.hopLength"
+removed = "use repair.denoise.hopLength"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.hopLength"
+removed = "use repair.denoise.hopLength"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.hopLength"
+removed = "use repair.denoise.hopLength"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.nFft"
+removed = "use repair.denoise.nFft"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.nFft"
+removed = "use repair.denoise.nFft"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.nFft"
+removed = "use repair.denoise.nFft"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.reductionDb"
+removed = "use repair.denoise.reductionDb"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.reductionDb"
+removed = "use repair.denoise.reductionDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.repair.reductionDb"
+removed = "use repair.denoise.reductionDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderRequest.signal"
+new = "VocalRenderAsyncRequest.signal"
+domain = "project"
+rule = "cancellation"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMA"
+new = "KeyProfile='faraldoEdma'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMA"
+new = "KeyProfile='faraldoEdma'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMM"
+new = "KeyProfile='faraldoEdmm'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMM"
+new = "KeyProfile='faraldoEdmm'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMT"
+new = "KeyProfile='faraldoEdmt'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FaraldoEDMT"
+new = "KeyProfile='faraldoEdmt'"
+domain = "analysis"
+rule = "string-closed-sets"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationCurve='scurve'"
+removed = "spell it 'sCurve', the AutomationCurve token; 'scurve' is refused"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SoloProcessor='effects.reverb.dattorro'"
+new = "SoloProcessor='effects.reverb.plate'"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "SoloProcessor='effects.reverb.dattorro'"
+new = "SoloProcessor='effects.reverb.plate'"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
