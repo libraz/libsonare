@@ -164,6 +164,14 @@ void sonare_voice_change_config_init(SonareVoiceChangeConfig* config) {
   config->formant_mode = SONARE_FORMANT_MODE_RELATIVE;
 }
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
+namespace {
+const std::array<CName, 3> kVoiceChangeNames{{{"formant_factor", "config.formant_factor"},
+                                              {"pitch_semitones", "config.pitch_semitones"},
+                                              {"formant_mode", "config.formant_mode"}}};
+}  // namespace
+#endif
+
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 const SonareVoiceChangeConfig* config, float** out,
                                 size_t* out_length) {
@@ -202,7 +210,7 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
                                        ? editing::voice_changer::FormantMode::Absolute
                                        : editing::voice_changer::FormantMode::Relative;
         editing::voice_changer::VoiceChanger changer(core_config);
-        Audio result = changer.process(audio);
+        Audio result = with_c_names(kVoiceChangeNames, [&] { return changer.process(audio); });
         return copy_audio_result(result, out, out_length);
       });
 #else

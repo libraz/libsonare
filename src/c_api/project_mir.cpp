@@ -460,6 +460,13 @@ void sonare_take_align_config_init(SonareTakeAlignConfig* config) {
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+const std::array<CName, 1> kReferenceRateNames{{{"sample_rate", "reference_sample_rate"}}};
+const std::array<CName, 1> kTakeRateNames{{{"sample_rate", "take_sample_rate"}}};
+}  // namespace
+#endif
+
 SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
                                            int reference_sample_rate, const float* take,
                                            size_t take_len, int take_sample_rate,
@@ -471,13 +478,20 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
   if (out_count != nullptr) *out_count = 0;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (const SonareError err = validate_audio_params(
-          "align_take_to_reference", "reference", reference, reference_len, reference_sample_rate);
+  if (const SonareError err = run_validation([&] {
+        with_c_names(kReferenceRateNames, [&] {
+          sonare::validate_offline_audio_input("reference", reference, reference_len,
+                                               reference_sample_rate);
+        });
+      });
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = validate_audio_params("align_take_to_reference", "take", take,
-                                                    take_len, take_sample_rate);
+  if (const SonareError err = run_validation([&] {
+        with_c_names(kTakeRateNames, [&] {
+          sonare::validate_offline_audio_input("take", take, take_len, take_sample_rate);
+        });
+      });
       err != SONARE_OK) {
     return err;
   }

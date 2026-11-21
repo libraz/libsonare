@@ -48,7 +48,7 @@ namespace {
 
 // The subject naming one hosted instrument as the caller's array spells it.
 std::string instrument_subject(size_t index) {
-  return "instruments[" + std::to_string(index) + "]";
+  return "options.instruments[" + std::to_string(index) + "]";
 }
 
 static_assert(sonare::engine::InstrumentRack::kMaxInstruments == 16,
@@ -61,7 +61,7 @@ SonareError hosted_instrument_bind_error(const sonare::engine::RealtimeEngine& p
   namespace check = sonare::util::check;
   switch (probe.last_midi_instrument_bind_status()) {
     case sonare::engine::MidiInstrumentBindStatus::kRackFull:
-      check::refuse("instruments", "must hold at most 16 instruments");
+      check::refuse("options.instruments", "must hold at most 16 instruments");
     case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
       check::refuse(instrument_subject(index).c_str(), "must not be bound to two destinations");
     case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
@@ -316,7 +316,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     }
     const int pdc_samples = probe.midi_instrument_latency_samples();
     if (pdc_samples < 0) {
-      check::refuse("instruments", "must report a combined latency of at least 0 samples");
+      check::refuse("options.instruments", "must report a combined latency of at least 0 samples");
     }
     pdc = static_cast<int64_t>(pdc_samples);
     for (const HostedInstrument& hosted : instruments) {
@@ -419,7 +419,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   }
   size_t pdc_count = 0;
   if (!checked_frame_count(pdc, &pdc_count)) {
-    check::refuse("instruments", "must report a latency small enough to be addressed");
+    check::refuse("options.instruments", "must report a latency small enough to be addressed");
   }
   std::vector<std::vector<float>> channels;
   if (!render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
@@ -582,16 +582,16 @@ void check_unique_destinations(const SonareProjectBounceOptions& options) {
     }
   };
   for (size_t i = 0; i < options.instrument_count; ++i) {
-    claim(options.instruments[i].destination_id, "instruments", i);
+    claim(options.instruments[i].destination_id, "options.instruments", i);
   }
   for (size_t i = 0; i < options.builtin_instrument_count; ++i) {
-    claim(options.builtin_instruments[i].destination_id, "builtin_instruments", i);
+    claim(options.builtin_instruments[i].destination_id, "options.builtin_instruments", i);
   }
   for (size_t i = 0; i < options.synth_instrument_count; ++i) {
-    claim(options.synth_instruments[i].destination_id, "synth_instruments", i);
+    claim(options.synth_instruments[i].destination_id, "options.synth_instruments", i);
   }
   for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
-    claim(options.sf2_instruments[i].destination_id, "sf2_instruments", i);
+    claim(options.sf2_instruments[i].destination_id, "options.sf2_instruments", i);
   }
 }
 
@@ -613,7 +613,7 @@ SonareError collect_bounce_instruments(const SonareProject* project,
   // Every callback instrument must supply a render function (the audio source).
   for (size_t i = 0; i < options.instrument_count; ++i) {
     if (options.instruments[i].callbacks.render == nullptr) {
-      check::refuse(check::indexed_subject("instruments", i, "callbacks.render").c_str(),
+      check::refuse(check::indexed_subject("options.instruments", i, "callbacks.render").c_str(),
                     sonare::util::refusal::kNonNullPredicate);
     }
   }
@@ -621,23 +621,24 @@ SonareError collect_bounce_instruments(const SonareProject* project,
   // bindings and then failing.
   for (size_t i = 0; i < options.builtin_instrument_count; ++i) {
     const SonareBuiltinInstrumentBinding& binding = options.builtin_instruments[i];
-    sonare_c_detail::require_struct_size(binding.config.struct_size,
-                                         sizeof(SonareBuiltinSynthConfig),
-                                         "builtin_instruments[" + std::to_string(i) + "].config",
-                                         "sonare_builtin_synth_config_init");
+    sonare_c_detail::require_struct_size(
+        binding.config.struct_size, sizeof(SonareBuiltinSynthConfig),
+        "options.builtin_instruments[" + std::to_string(i) + "].config",
+        "sonare_builtin_synth_config_init");
     check::integer_in_range(
         binding.config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
-        check::indexed_subject("builtin_instruments", i, "config.waveform").c_str());
+        check::indexed_subject("options.builtin_instruments", i, "config.waveform").c_str());
   }
   for (size_t i = 0; i < options.synth_instrument_count; ++i) {
     sonare_c_detail::require_struct_size(
         options.synth_instruments[i].patch.struct_size, sizeof(SonareSynthPatch),
-        "synth_instruments[" + std::to_string(i) + "].patch", "sonare_synth_patch_init");
+        "options.synth_instruments[" + std::to_string(i) + "].patch", "sonare_synth_patch_init");
   }
   for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
     sonare_c_detail::require_struct_size(
         options.sf2_instruments[i].config.struct_size, sizeof(SonareSf2InstrumentConfig),
-        "sf2_instruments[" + std::to_string(i) + "].config", "sonare_sf2_instrument_config_init");
+        "options.sf2_instruments[" + std::to_string(i) + "].config",
+        "sonare_sf2_instrument_config_init");
   }
   check_unique_destinations(options);
 
@@ -658,7 +659,7 @@ SonareError collect_bounce_instruments(const SonareProject* project,
     const SonareBuiltinInstrumentBinding& binding = options.builtin_instruments[i];
     out->builtins.push_back(
         std::make_unique<sonare::midi::BuiltinSynth>(sonare_c_detail::builtin_synth_config_from_c(
-            binding.config, "builtin_instruments[" + std::to_string(i) + "].config.")));
+            binding.config, "options.builtin_instruments[" + std::to_string(i) + "].config.")));
     out->hosted.push_back({binding.destination_id, out->builtins.back().get()});
   }
 
@@ -701,7 +702,7 @@ SonareError collect_bounce_instruments(const SonareProject* project,
   for (size_t i = 0; i < options.sf2_instrument_count; ++i) {
     const SonareSf2InstrumentBinding& binding = options.sf2_instruments[i];
     auto player_config = sonare_c_detail::sf2_player_config_from_c(
-        binding.config, "sf2_instruments[" + std::to_string(i) + "].config.");
+        binding.config, "options.sf2_instruments[" + std::to_string(i) + "].config.");
 #if defined(SONARE_WITH_MASTERING)
     // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
     // mastering factory itself, so the host injects it.

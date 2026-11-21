@@ -321,7 +321,7 @@
     },
     {
       "entry": "audio_from_file",
-      "param": "channel_index",
+      "param": "options.channel_index",
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
@@ -475,17 +475,6 @@
     },
     {
       "entry": "chroma_cens",
-      "param": "bins_per_octave",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 306783378,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "chroma_cens",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -507,8 +496,8 @@
       "sentinel": null
     },
     {
-      "entry": "chroma_cqt",
-      "param": "bins_per_octave",
+      "entry": "chroma_cens",
+      "param": "options.bins_per_octave",
       "kind": "integer",
       "lo": 1,
       "hi": 306783378,
@@ -534,6 +523,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "chroma_cqt",
+      "param": "options.bins_per_octave",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 306783378,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1003,7 +1003,7 @@
     },
     {
       "entry": "detect_key",
-      "param": "hop_length",
+      "param": "options.hop_length",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -1014,7 +1014,7 @@
     },
     {
       "entry": "detect_key",
-      "param": "n_fft",
+      "param": "options.n_fft",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -1025,7 +1025,7 @@
     },
     {
       "entry": "detect_key_candidates",
-      "param": "hop_length",
+      "param": "options.hop_length",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -1036,7 +1036,7 @@
     },
     {
       "entry": "detect_key_candidates",
-      "param": "n_fft",
+      "param": "options.n_fft",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -4292,7 +4292,7 @@
     },
     {
       "entry": "nnls_chroma",
-      "param": "hop_length",
+      "param": "options.hop_length",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
@@ -4303,7 +4303,7 @@
     },
     {
       "entry": "nnls_chroma",
-      "param": "stft_blend_n_fft",
+      "param": "options.stft_blend_n_fft",
       "kind": "integer",
       "lo": 2,
       "hi": 2147483647,
@@ -4875,7 +4875,18 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.attack_ms",
+      "param": "options.block_size",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.builtin_instruments[].config.attack_ms",
       "kind": "real",
       "lo": 0,
       "hi": 20000,
@@ -4886,7 +4897,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.decay_ms",
+      "param": "options.builtin_instruments[].config.decay_ms",
       "kind": "real",
       "lo": 0,
       "hi": 20000,
@@ -4897,7 +4908,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.gain",
+      "param": "options.builtin_instruments[].config.gain",
       "kind": "real",
       "lo": 0,
       "hi": 4,
@@ -4908,7 +4919,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.polyphony",
+      "param": "options.builtin_instruments[].config.polyphony",
       "kind": "integer",
       "lo": 1,
       "hi": 64,
@@ -4919,7 +4930,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.release_ms",
+      "param": "options.builtin_instruments[].config.release_ms",
       "kind": "real",
       "lo": 0,
       "hi": 20000,
@@ -4930,22 +4941,11 @@
     },
     {
       "entry": "project_bounce",
-      "param": "builtin_instruments[].config.sustain",
+      "param": "options.builtin_instruments[].config.sustain",
       "kind": "real",
       "lo": 0,
       "hi": 1,
       "lo_included": false,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": null
-    },
-    {
-      "entry": "project_bounce",
-      "param": "options.block_size",
-      "kind": "integer",
-      "lo": 1,
-      "hi": 2147483647,
-      "lo_included": true,
       "hi_included": true,
       "stricter": null,
       "sentinel": null
@@ -4985,18 +4985,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "options.total_frames",
-      "kind": "integer",
-      "lo": 1,
-      "hi": null,
-      "lo_included": true,
-      "hi_included": true,
-      "stricter": null,
-      "sentinel": -1
-    },
-    {
-      "entry": "project_bounce",
-      "param": "sf2_instruments[].config.clear_bank_rig",
+      "param": "options.sf2_instruments[].config.clear_bank_rig",
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
@@ -5007,7 +4996,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "sf2_instruments[].config.gain",
+      "param": "options.sf2_instruments[].config.gain",
       "kind": "real",
       "lo": 0,
       "hi": 4,
@@ -5018,7 +5007,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "sf2_instruments[].config.gs_efx_realization",
+      "param": "options.sf2_instruments[].config.gs_efx_realization",
       "kind": "integer",
       "lo": 0,
       "hi": 1,
@@ -5029,7 +5018,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "sf2_instruments[].config.polyphony",
+      "param": "options.sf2_instruments[].config.polyphony",
       "kind": "integer",
       "lo": 1,
       "hi": 64,
@@ -5040,7 +5029,7 @@
     },
     {
       "entry": "project_bounce",
-      "param": "sf2_instruments[].config.prefer_model_for_modeled_families",
+      "param": "options.sf2_instruments[].config.prefer_model_for_modeled_families",
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
@@ -5048,6 +5037,17 @@
       "hi_included": true,
       "stricter": null,
       "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.total_frames",
+      "kind": "integer",
+      "lo": 1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
     },
     {
       "entry": "project_edit_automation_lane",

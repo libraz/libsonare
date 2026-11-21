@@ -445,7 +445,7 @@ TEST_CASE("sonare_voice_change selects the formant mode", "[voice_changer][forma
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
   // 2^(3/12) = 1.1892, so the warp range reaches [0.65406, 1.96219] at +3 semitones.
   REQUIRE(std::string(sonare_last_error_message()) ==
-          "formant_factor must be finite and in [0.6541, 1.962]");
+          "config.formant_factor must be finite and in [0.6541, 1.962]");
 
   config.formant_factor = 1.1f;
   config.formant_mode = 2;

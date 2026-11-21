@@ -3126,7 +3126,7 @@ TEST_CASE("project bounce entries refuse a NULL pointer by its header name", "[p
   const SonareInstrumentBinding no_render{};
   REQUIRE(bounce_with_instruments(project, nullptr, &no_render, 1, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "instruments[0].callbacks.render must not be NULL");
+  CHECK(message() == "options.instruments[0].callbacks.render must not be NULL");
 
   sonare_project_destroy(project);
 }
@@ -3164,13 +3164,13 @@ TEST_CASE("project bounce hosts several instrument kinds and refuses a destinati
   builtin[1].destination_id = 3;
   REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "builtin_instruments[1].destination_id must not be bound twice");
+  CHECK(message() == "options.builtin_instruments[1].destination_id must not be bound twice");
 
   builtin[1].destination_id = 4;
   synth.destination_id = 4;
   REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "synth_instruments[0].destination_id must not be bound twice");
+  CHECK(message() == "options.synth_instruments[0].destination_id must not be bound twice");
 
   options.synth_instruments = nullptr;
   REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
@@ -3253,7 +3253,7 @@ TEST_CASE("project bounce refuses options and instrument members by their header
   builtin.config.waveform = 9;
   REQUIRE(bounce_with_builtin_instruments(project, nullptr, &builtin, 1, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "builtin_instruments[0].config.waveform must be an integer in [0, 3]");
+  CHECK(message() == "options.builtin_instruments[0].config.waveform must be an integer in [0, 3]");
 
   SonareSf2InstrumentBinding sf2{};
   sonare_sf2_instrument_config_init(&sf2.config);
@@ -3261,7 +3261,8 @@ TEST_CASE("project bounce refuses options and instrument members by their header
   REQUIRE(bounce_with_sf2_instruments(project, nullptr, &sf2, 1, &out, &len, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() ==
-        "sf2_instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
+        "options.sf2_instruments[0].config.struct_size must be set by "
+        "sonare_sf2_instrument_config_init");
 
   sonare_project_destroy(project);
 }
@@ -3284,27 +3285,27 @@ TEST_CASE("project bounce refuses each built-in synth field by name", "[project]
   };
   SonareBuiltinInstrumentBinding bad = binding;
   bad.config.struct_size = 0;
-  refused(
-      bad,
-      "builtin_instruments[0].config.struct_size must be set by sonare_builtin_synth_config_init");
+  refused(bad,
+          "options.builtin_instruments[0].config.struct_size must be set by "
+          "sonare_builtin_synth_config_init");
   bad = binding;
   bad.config.gain = 0.0f;
-  refused(bad, "builtin_instruments[0].config.gain must be finite and in (0, 4]");
+  refused(bad, "options.builtin_instruments[0].config.gain must be finite and in (0, 4]");
   bad = binding;
   bad.config.attack_ms = 0.0f;
-  refused(bad, "builtin_instruments[0].config.attack_ms must be finite and in (0, 20000]");
+  refused(bad, "options.builtin_instruments[0].config.attack_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.decay_ms = 0.0f;
-  refused(bad, "builtin_instruments[0].config.decay_ms must be finite and in (0, 20000]");
+  refused(bad, "options.builtin_instruments[0].config.decay_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.sustain = 1.5f;
-  refused(bad, "builtin_instruments[0].config.sustain must be finite and in (0, 1]");
+  refused(bad, "options.builtin_instruments[0].config.sustain must be finite and in (0, 1]");
   bad = binding;
   bad.config.release_ms = 0.0f;
-  refused(bad, "builtin_instruments[0].config.release_ms must be finite and in (0, 20000]");
+  refused(bad, "options.builtin_instruments[0].config.release_ms must be finite and in (0, 20000]");
   bad = binding;
   bad.config.polyphony = 0;
-  refused(bad, "builtin_instruments[0].config.polyphony must be an integer in [1, 64]");
+  refused(bad, "options.builtin_instruments[0].config.polyphony must be an integer in [1, 64]");
 
   sonare_project_destroy(project);
 }
@@ -3329,24 +3330,26 @@ TEST_CASE("project bounce refuses each SF2 player field by name", "[project][ref
   SonareSf2InstrumentBinding bad = binding;
   bad.config.struct_size = 0;
   refused(bad,
-          "sf2_instruments[0].config.struct_size must be set by sonare_sf2_instrument_config_init");
+          "options.sf2_instruments[0].config.struct_size must be set by "
+          "sonare_sf2_instrument_config_init");
   bad = binding;
   bad.config.gain = -1.0f;
-  refused(bad, "sf2_instruments[0].config.gain must be finite and in [0, 4]");
+  refused(bad, "options.sf2_instruments[0].config.gain must be finite and in [0, 4]");
   bad = binding;
   bad.config.polyphony = 0;
-  refused(bad, "sf2_instruments[0].config.polyphony must be an integer in [1, 64]");
+  refused(bad, "options.sf2_instruments[0].config.polyphony must be an integer in [1, 64]");
   bad = binding;
   bad.config.prefer_model_for_modeled_families = -1;
   refused(bad,
-          "sf2_instruments[0].config.prefer_model_for_modeled_families must be an integer in [0, "
-          "2147483647]");
+          "options.sf2_instruments[0].config.prefer_model_for_modeled_families must be an integer "
+          "in [0, 2147483647]");
   bad = binding;
   bad.config.clear_bank_rig = -1;
-  refused(bad, "sf2_instruments[0].config.clear_bank_rig must be an integer in [0, 2147483647]");
+  refused(bad,
+          "options.sf2_instruments[0].config.clear_bank_rig must be an integer in [0, 2147483647]");
   bad = binding;
   bad.config.gs_efx_realization = 2;
-  refused(bad, "sf2_instruments[0].config.gs_efx_realization must be an integer in [0, 1]");
+  refused(bad, "options.sf2_instruments[0].config.gs_efx_realization must be an integer in [0, 1]");
 
   sonare_project_destroy(project);
 }

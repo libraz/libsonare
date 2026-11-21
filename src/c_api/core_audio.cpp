@@ -179,7 +179,8 @@ SonareError sonare_audio_from_file(const char* path, const SonareAudioFileOption
   if (resolved.channel_index != SONARE_AUDIO_CHANNEL_DOWNMIX) {
     if (const SonareError err = run_validation([&] {
           util::check::integer_within(resolved.channel_index,
-                                      sonare_c_detail::kAudioChannelIndexDomain, "channel_index");
+                                      sonare_c_detail::kAudioChannelIndexDomain,
+                                      "options.channel_index");
         });
         err != SONARE_OK) {
       return err;

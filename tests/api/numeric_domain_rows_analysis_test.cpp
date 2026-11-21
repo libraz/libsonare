@@ -125,10 +125,10 @@ struct Frame {
   size_t hop_length = 512;
 };
 
-Frame frame_of(const std::string& param, double value) {
+Frame frame_of(const std::string& param, double value, const std::string& prefix = "") {
   Frame f;
-  if (is_param(param, "n_fft")) f.n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) f.hop_length = as_size(value);
+  if (is_param(param, (prefix + "n_fft").c_str())) f.n_fft = static_cast<int>(value);
+  if (is_param(param, (prefix + "hop_length").c_str())) f.hop_length = as_size(value);
   return f;
 }
 
@@ -167,7 +167,7 @@ SonareError probe_analyze_rhythm(const std::string& param, double value) {
 
 // The key entries share one options struct; the frame fields are set from the probed value.
 SonareError probe_detect_key(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
+  const Frame f = frame_of(param, value, "options.");
   SonareDetectKeyOptions o;
   sonare_detect_key_options_init(&o);
   o.n_fft = f.n_fft;
@@ -177,7 +177,7 @@ SonareError probe_detect_key(const std::string& param, double value) {
 }
 
 SonareError probe_detect_key_candidates(const std::string& param, double value) {
-  const Frame f = frame_of(param, value);
+  const Frame f = frame_of(param, value, "options.");
   SonareDetectKeyOptions o;
   sonare_detect_key_options_init(&o);
   o.n_fft = f.n_fft;
@@ -302,11 +302,14 @@ struct ChromaCqt {
   int bins_per_octave = 36;
 };
 
-ChromaCqt chroma_cqt_of(const std::string& param, double value) {
+ChromaCqt chroma_cqt_of(const std::string& param, double value,
+                        const std::string& bins_prefix = "") {
   ChromaCqt c;
   if (is_param(param, "hop_length")) c.hop_length = as_size(value);
   if (is_param(param, "n_chroma")) c.n_chroma = static_cast<int>(value);
-  if (is_param(param, "bins_per_octave")) c.bins_per_octave = static_cast<int>(value);
+  if (is_param(param, (bins_prefix + "bins_per_octave").c_str())) {
+    c.bins_per_octave = static_cast<int>(value);
+  }
   return c;
 }
 
@@ -316,7 +319,7 @@ SonareError finish_chroma(SonareError err, SonareChromaResult* out) {
 }
 
 SonareError probe_chroma_cqt(const std::string& param, double value) {
-  const ChromaCqt c = chroma_cqt_of(param, value);
+  const ChromaCqt c = chroma_cqt_of(param, value, "options.");
   SonareChromaCqtOptions options{};
   sonare_chroma_cqt_options_init(&options);
   options.bins_per_octave = c.bins_per_octave;
@@ -327,7 +330,7 @@ SonareError probe_chroma_cqt(const std::string& param, double value) {
 }
 
 SonareError probe_chroma_cens(const std::string& param, double value) {
-  const ChromaCqt c = chroma_cqt_of(param, value);
+  const ChromaCqt c = chroma_cqt_of(param, value, "options.");
   SonareChromaCensOptions options{};
   sonare_chroma_cens_options_init(&options);
   options.bins_per_octave = c.bins_per_octave;
@@ -682,8 +685,9 @@ SonareError probe_nnls_chroma(const std::string& param, double value) {
   sonare_nnls_chroma_options_init(&options);
   options.stft_blend_weight = 0.5f;
   options.stft_blend_n_fft = 2048;
-  if (is_param(param, "stft_blend_n_fft")) options.stft_blend_n_fft = static_cast<int>(value);
-  if (is_param(param, "hop_length")) options.hop_length = as_size(value);
+  if (is_param(param, "options.stft_blend_n_fft"))
+    options.stft_blend_n_fft = static_cast<int>(value);
+  if (is_param(param, "options.hop_length")) options.hop_length = as_size(value);
   float* out = nullptr;
   size_t out_length = 0;
   int n_frames = 0;
@@ -749,7 +753,7 @@ SonareError probe_downmix(const std::string& param, double value) {
 SonareError probe_audio_from_file(const std::string& param, double value) {
   SonareAudioFileOptions options;
   sonare_audio_file_options_init(&options);
-  if (is_param(param, "channel_index")) options.channel_index = static_cast<int>(value);
+  if (is_param(param, "options.channel_index")) options.channel_index = static_cast<int>(value);
   SonareAudio* out = nullptr;
   const SonareError err = sonare_audio_from_file("/nonexistent/probe.wav", &options, &out);
   if (err == SONARE_OK) sonare_audio_destroy(out);
@@ -1027,7 +1031,7 @@ const std::map<std::string, Probe>& probes() {
 double analysis_inside_value(const NumericDomainRow& row) {
   const std::string entry = row.entry;
   const std::string param = row.param;
-  if ((param == "bins_per_octave" && entry.rfind("chroma", 0) == 0) ||
+  if ((param == "options.bins_per_octave" && entry.rfind("chroma", 0) == 0) ||
       param == "config.bins_per_octave") {
     return 12.0;
   }

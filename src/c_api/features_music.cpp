@@ -3,6 +3,12 @@
 
 namespace {
 
+const std::array<CName, 1> kChromaCqtOptionNames{{{"bins_per_octave", "options.bins_per_octave"}}};
+const std::array<CName, 3> kNnlsChromaOptionNames{
+    {{"stft_blend_n_fft", "options.stft_blend_n_fft"},
+     {"stft_blend_weight", "options.stft_blend_weight"},
+     {"hop_length", "options.hop_length"}}};
+
 SonareError fill_chroma_result(const Chroma& chroma, SonareChromaResult* out) {
   out->n_chroma = chroma.n_chroma();
   out->n_frames = chroma.n_frames();
@@ -39,8 +45,10 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
   SONARE_C_ZERO_OUTS(out);
   Config config;
   if (const SonareError err = run_validation([&] {
-        chroma_cqt_base(config) =
-            make_chroma_cqt_config(core_length(hop_length), n_chroma, bins_per_octave);
+        with_c_names(kChromaCqtOptionNames, [&] {
+          chroma_cqt_base(config) =
+              make_chroma_cqt_config(core_length(hop_length), n_chroma, bins_per_octave);
+        });
       });
       err != SONARE_OK) {
     return err;
@@ -50,7 +58,7 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
   return run_offline(
       fn, name, samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         Chroma chroma = sonare::detail::with_derived_cqt_grid(
-            "bins_per_octave", "sample_rate", [&] { return transform(audio, config); });
+            "options.bins_per_octave", "sample_rate", [&] { return transform(audio, config); });
         return fill_chroma_result(chroma, out);
       });
 }
@@ -224,7 +232,7 @@ SonareError sonare_nnls_chroma(const float* samples, size_t length, int sample_r
         config.enable_stft_blend = resolved.enable_stft_blend != 0;
         config.stft_blend_weight = resolved.stft_blend_weight;
         config.stft_blend_n_fft = resolved.stft_blend_n_fft;
-        validate_nnls_chroma_config(config);
+        with_c_names(kNnlsChromaOptionNames, [&] { validate_nnls_chroma_config(config); });
       });
       err != SONARE_OK) {
     return err;

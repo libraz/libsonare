@@ -127,7 +127,7 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { check::greater_than(p, 0.0, "p"); });
+  if (const SonareError err = run_validation([&] { check::greater_than(p, 0.0, "options.p"); });
       err != SONARE_OK) {
     return err;
   }

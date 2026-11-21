@@ -184,13 +184,14 @@ TEST_CASE("the chroma-from-CQT entries restate the derived grid in their own arg
   for (const bool cens : {false, true}) {
     CHECK(run(cens, 8000, 36) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
-          "bins_per_octave puts the top chroma bin at or above half of sample_rate");
+          "options.bins_per_octave puts the top chroma bin at or above half of sample_rate");
     CHECK(run(cens, 22050, 96) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
-          "bins_per_octave puts more bins in the CQT kernel than fit at sample_rate");
+          "options.bins_per_octave puts more bins in the CQT kernel than fit at sample_rate");
     CHECK(run(cens, 22050, 1200) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() ==
-          "bins_per_octave must keep every filter at most 131072 samples long at sample_rate");
+          "options.bins_per_octave must keep every filter at most 131072 samples long at "
+          "sample_rate");
   }
 }
 
@@ -340,7 +341,7 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
   sonare_audio_file_options_init(&file_options);
   file_options.channel_index = -2;
   CHECK(sonare_audio_from_file("x.wav", &file_options, &audio) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "channel_index must be an integer in [0, 2147483647]");
+  CHECK(last_message() == "options.channel_index must be an integer in [0, 2147483647]");
   CHECK(sonare_audio_file_num_channels("x.wav", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_channels must not be NULL");
 #endif

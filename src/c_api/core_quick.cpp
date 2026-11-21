@@ -34,6 +34,9 @@ std::optional<float> tuning_from_c(float tuning_cents, int tuning_auto) {
   return tuning_auto != 0 ? std::nullopt : std::optional<float>(tuning_from_cents(tuning_cents));
 }
 
+const std::array<CName, 2> kKeyOptionNames{
+    {{"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
+
 // The key arguments in header order: the scalars through the core's rule for them, then the mode
 // list and the profile selector, which are this layer's own.
 SonareError validate_key_arguments(int n_fft, size_t hop_length, int use_hpss,
@@ -45,7 +48,7 @@ SonareError validate_key_arguments(int n_fft, size_t hop_length, int use_hpss,
         config.hop_length = core_length(hop_length);
         config.use_hpss = use_hpss != 0;
         config.high_pass_hz = chroma_high_pass_hz;
-        validate_key_config(config);
+        with_c_names(kKeyOptionNames, [&] { validate_key_config(config); });
       });
       err != SONARE_OK) {
     return err;
