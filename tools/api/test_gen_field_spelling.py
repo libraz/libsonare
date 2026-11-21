@@ -101,6 +101,17 @@ class RequestFieldTest(unittest.TestCase):
         self.assertEqual(rows["python"], [gen.Row("cqt", "fmin_hz", "fmin")])
         self.assertEqual(unbound, [])
 
+    def test_a_rename_binds_a_name_another_subject_pairs_with(self) -> None:
+        facts = [
+            Fact("align", "sample_rate", "param", "python", "sample_rate"),
+            Fact("align", "reference_sample_rate", "param", "python", None),
+        ]
+        rows, unbound, idle = gen.derive(
+            facts, {}, {"python": {"reference_sample_rate": "sample_rate"}}
+        )
+        self.assertEqual(rows["python"], [gen.Row("align", "reference_sample_rate", "sample_rate")])
+        self.assertEqual((unbound, idle), ([], []))
+
     def test_a_rename_is_per_surface(self) -> None:
         facts = [
             Fact("cqt", "fmin_hz", "param", "node", None),

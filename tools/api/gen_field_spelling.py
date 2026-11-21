@@ -5,12 +5,12 @@ the way its caller wrote it: Node and WASM by the mechanical snake->camel rule,
 Python by identity. A row here is a subject whose facade binding departs from
 that rule. Positional parameters and struct-mirroring records are paired by the
 parity extractors (``tools/parity/facts.field_bindings``). A C subject those
-leave unbound is looked up among the facade names on the same entry that pair
-with no C subject, plus on Node and WASM the fields of the entry's object-typed
-parameters (``ts_request_fields.cjs``), by canonical name
-and then, on every surface, by the per-surface ruled renames in
-``field_spelling_renames.toml``, which bind only where the entry carries the
-renamed spelling unpaired. A subject still unbound is reported, not tabled, and a
+leave unbound is looked up among the facade names on the same entry, plus on Node
+and WASM the fields of the entry's object-typed parameters (``ts_request_fields.cjs``),
+by canonical name and then, on every surface, by the per-surface ruled renames in
+``field_spelling_renames.toml``, which bind only where the entry carries the renamed
+spelling. A name another C subject already pairs with counts: a second form folded
+into the entry (an ``_ex``) can name the same argument differently. A subject still unbound is reported, not tabled, and a
 ruled rename that binds nowhere fails the run. Every unbound parameter carries a
 reason in ``field_spelling_unbound.toml``; unbound record fields are output records
 and are counted only.
@@ -103,7 +103,7 @@ def derive(
         for row in entries:
             names[(surface, entry_key(row["entry"]))].update(row["fields"])
     for b in bindings:
-        if b.c_subject is None:
+        if b.surface_spelling is not None:
             names[(b.surface, b.c_key)].add(b.surface_spelling)
     rows: dict[str, set[Row]] = {s: set() for s in SURFACES}
     unbound: list[Unbound] = []

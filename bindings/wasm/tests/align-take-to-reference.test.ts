@@ -194,6 +194,20 @@ describe('WASM alignTakeToReference', () => {
     expect(() => alignTakeToReference({ reference, take, sampleRate: 400000 })).toThrow(RangeError);
   });
 
+  it('refuses a resolution the rate cannot carry in the two fields that decide it', () => {
+    // The CQT's fmin and nBins are derived, so its Nyquist refusal names what the caller set.
+    const slow = glide(16000);
+    let thrown: unknown;
+    try {
+      alignTakeToReference({ reference: slow, take: slow, sampleRate: 8000, binsPerOctave: 24 });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(expectArgumentRefusal(thrown).message).toBe(
+      'alignTakeToReference: binsPerOctave puts the top chroma bin at or above half of sampleRate',
+    );
+  });
+
   it('reads a written zero as the library value, the way the C ABI defines it', () => {
     // 0 is the C ABI's "use the library value" on both fields, so a written 0 and an
     // omitted key are one request -- the same answer the other two surfaces give,

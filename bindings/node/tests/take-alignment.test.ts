@@ -164,6 +164,21 @@ describe('alignTakeToReference', () => {
     }
   });
 
+  it('refuses a resolution the rate cannot carry in the two fields that decide it', () => {
+    // The CQT's fmin and nBins are derived, so its Nyquist refusal names what the caller set.
+    const slow = glide(261.63, 0.5, { sampleRate: 8000 });
+    expect(
+      alignTakeToReference({ reference: slow, take: slow, sampleRate: 8000 }).anchors.length,
+    ).toBeGreaterThan(1);
+    expect(() =>
+      alignTakeToReference({ reference: slow, take: slow, sampleRate: 8000, binsPerOctave: 24 }),
+    ).toThrow(
+      new RangeError(
+        'alignTakeToReference: binsPerOctave puts the top chroma bin at or above half of sampleRate',
+      ),
+    );
+  });
+
   it('reports an unalignable pair rather than answering with an unusable map', () => {
     // One chroma frame per signal cannot yield two distinct anchors, and the
     // library says so instead of handing back a map setWarpMap would refuse.

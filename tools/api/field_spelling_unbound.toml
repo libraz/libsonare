@@ -6,7 +6,6 @@
 # until that lands it sits under [pending] with the change that retires it, and the
 # run fails once it binds.
 [pending]
-"metering_detect_clipping.threshold_db" = "unit split: retires when the Python facade takes threshold_db"
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"
@@ -26,11 +25,19 @@
 "deemphasis.use_zi" = "folded into zi: given or absent"
 "preemphasis.use_zi" = "folded into zi: given or absent"
 "downmix.num_channels" = "derived length: channel count"
+"hpss.use_soft_mask" = "folded into hard_mask: its negation"
+"hpss.with_residual" = "C-only plumbing: set by the entry, hpss or hpss_with_residual"
 "fourier_tempogram.norm" = "C-only plumbing: the facade passes a fixed value"
 "mastering_ab_match_loudness.reference_length" = "derived length: reference.length"
 "mastering_ab_match_loudness.source_length" = "derived length: source.length"
 "mastering_ab_match_loudness_stereo.reference_length" = "derived length: reference.length"
 "mastering_ab_match_loudness_stereo.source_length" = "derived length: source.length"
+"mastering_analyze_pair.reference_length" = "derived length: reference.length"
+"mastering_analyze_pair.source_length" = "derived length: source.length"
+"mastering_apply_pair_processor.reference_length" = "derived length: reference.length"
+"mastering_apply_pair_processor.source_length" = "derived length: source.length"
+"mastering_apply_pair_processor_stereo.reference_length" = "derived length: reference.length"
+"mastering_apply_pair_processor_stereo.source_length" = "derived length: source.length"
 "master_audio.overrides_json" = "folded into overrides"
 "master_audio_stereo.overrides_json" = "folded into overrides"
 "mastering_repair_analyze.request_json" = "C-only plumbing: serialized from the facade's options"

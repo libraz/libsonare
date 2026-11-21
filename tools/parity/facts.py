@@ -21,7 +21,7 @@ parameter was folded (a C ``preset`` taken as keyword ``config``).
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -35,6 +35,8 @@ from model import FunctionSig, RecordShape
 
 # Canonical spellings of the sample rate, which C marks structural.
 _RATE_NAMES = frozenset({"sample_rate", "sr"})
+# Entry suffixes the C layer folds away when it keys a refusal, in its match order.
+_FOLDED_SUFFIXES = ("_with_progress", "_with_options", "_checked", "_ex2", "_ex", "_v2")
 
 Surface = Literal["node", "wasm", "python"]
 FACADES: tuple[Surface, ...] = ("node", "wasm", "python")
@@ -149,18 +151,45 @@ def _record_rows(c_rec: RecordShape, rec: RecordShape, surface: Surface) -> list
     return rows
 
 
+def _folded_variants(
+    functions: list[FunctionSig], c_funcs: dict[str, FunctionSig]
+) -> dict[str, list[FunctionSig]]:
+    """Second forms (``_ex``, ``_with_progress``, ...) by the base key they fold into.
+
+    The C layer reports a refusal from a second form under its base entry's key
+    (``c_entry_key`` in ``src/c_api/sonare_c_internal.cpp``), so a parameter only the
+    second form declares is a subject of the base key too.
+    """
+    out: dict[str, list[FunctionSig]] = {}
+    for f in functions:
+        for suffix in _FOLDED_SUFFIXES:
+            base = f.key[: -len(suffix)]
+            if f.key.endswith(suffix) and base and base in c_funcs:
+                out.setdefault(base, []).append(f)
+                break
+    return out
+
+
 def field_bindings(root: Path, surfaces: tuple[Surface, ...] = FACADES) -> list[FieldBinding]:
     """Every (C subject, facade) pairing the parity extractors make, plus unpaired facade names."""
     extract = check_parity._EXTRACTORS
     c_ex = extract["c"](root)
     c_funcs = compare._index(c_ex)
     c_recs = compare._index_records(c_ex)
+    variants = _folded_variants(c_ex.functions, c_funcs)
     rows: list[FieldBinding] = []
     for surface in surfaces:
         ex = extract[surface](root)
         funcs = compare._index(ex)
         for key in sorted(c_funcs.keys() & funcs.keys()):
-            rows.extend(_param_rows(c_funcs[key], funcs[key], surface))
+            base = _param_rows(c_funcs[key], funcs[key], surface)
+            rows.extend(base)
+            seen = {r.c_subject for r in base}
+            for variant in variants.get(key, []):
+                for row in _param_rows(replace(variant, key=key), funcs[key], surface):
+                    if row.c_subject is not None and row.c_subject not in seen:
+                        seen.add(row.c_subject)
+                        rows.append(row)
         recs = compare._index_records(ex)
         for key in sorted(c_recs.keys() & recs.keys()):
             rows.extend(_record_rows(c_recs[key], recs[key], surface))

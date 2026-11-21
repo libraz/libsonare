@@ -89,6 +89,18 @@ def test_record_skips_facade_only_fields_and_locates_unbound_rows_in_c():
     assert all(b.c_subject is not None for b in rows), rows
 
 
+def test_a_second_form_parameter_is_a_subject_of_the_key_it_folds_into():
+    base = FunctionSig(key="align", surface="c", params=[Param(name="rate", raw_name="rate")])
+    ex = FunctionSig(
+        key="align_ex",
+        surface="c",
+        params=[Param(name="rate", raw_name="rate"), Param(name="take_rate", raw_name="take_rate")],
+    )
+    other = FunctionSig(key="other_ex", surface="c", params=[])
+    folded = facts._folded_variants([base, ex, other], {"align": base})
+    assert folded == {"align": [ex]}, folded
+
+
 def test_real_tree_yields_bound_rows_of_both_kinds_on_every_facade():
     rows = facts.field_bindings(_HERE.parent.parent)
     bound = Counter((b.surface, b.kind) for b in rows if b.c_subject and b.surface_spelling)

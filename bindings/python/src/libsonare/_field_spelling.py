@@ -2,6 +2,7 @@
 
 # (C entry key, C-ABI subject) pairs whose Python keyword is not the C spelling.
 OVERRIDES: dict[tuple[str, str], str] = {
+    ("align_take_to_reference", "reference_sample_rate"): "sample_rate",
     ("chirp", "duration_sec"): "duration",
     ("chirp", "fmax_hz"): "fmax",
     ("chirp", "fmin_hz"): "fmin",
@@ -24,6 +25,8 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("mel_to_stft", "fmax_hz"): "fmax",
     ("mel_to_stft", "fmin_hz"): "fmin",
     ("mel_to_stft", "sample_rate"): "sr",
+    ("mfcc", "fmax_hz"): "fmax",
+    ("mfcc", "fmin_hz"): "fmin",
     ("mfcc", "sample_rate"): "sr",
     ("mfcc_to_audio", "fmax_hz"): "fmax",
     ("mfcc_to_audio", "fmin_hz"): "fmin",

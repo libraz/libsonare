@@ -25,6 +25,8 @@ _TONE = (0.5 * np.sin(2 * np.pi * 440 * np.arange(_SR // 2) / _SR)).astype(np.fl
 # A valid value for each required argument the swept entries take.
 _REQUIRED: dict[str, Any] = {
     "samples": _TONE,
+    "reference": _TONE,
+    "take": _TONE,
     "onset_envelope": np.abs(_TONE[:2048]),
     "mel": np.ones((128, 4), np.float32),
     "coefficients": np.ones((20, 4), np.float32),
