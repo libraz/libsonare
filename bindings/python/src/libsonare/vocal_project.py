@@ -12,8 +12,6 @@ from numpy.typing import NDArray
 
 from ._errors import _refuse, _refuse_type, _unknown_error
 from ._ffi_types_vocal import (
-    VOCAL_MAX_SAMPLE_RATE,
-    VOCAL_MIN_SAMPLE_RATE,
     SonareVocalCancelCallback,
     SonareVocalStateToken,
 )
@@ -286,22 +284,9 @@ def _apply_project_vocal_edit(
             f"({source.size} != {expected_count})"
         )
     expected_rate = _narrow_int(
-        expected_source_sample_rate,
-        "expected_source_sample_rate",
-        VOCAL_MIN_SAMPLE_RATE,
-        VOCAL_MAX_SAMPLE_RATE,
+        expected_source_sample_rate, "expected_source_sample_rate", 0, _UINT32_MAX
     )
-    rendered_rate = _narrow_int(
-        rendered_sample_rate,
-        "rendered_sample_rate",
-        VOCAL_MIN_SAMPLE_RATE,
-        VOCAL_MAX_SAMPLE_RATE,
-    )
-    if rendered_rate != expected_rate:
-        raise _refuse(
-            "rendered_sample_rate must equal expected_source_sample_rate "
-            f"({rendered_rate} != {expected_rate})"
-        )
+    rendered_rate = _narrow_int(rendered_sample_rate, "rendered_sample_rate", 0, _UINT32_MAX)
     start = _narrow_int(rendered_start_sample, "rendered_start_sample", _INT64_MIN, _INT64_MAX)
     if start != 0:
         raise _refuse("rendered_start_sample must be zero for the v1 Project vocal API")
@@ -317,7 +302,7 @@ def _apply_project_vocal_edit(
     desc.clip_id = _narrow_int(clip_id, "clip_id", 0, _UINT32_MAX)
     # None binds the clip's base source (C 0); no take is allocated id 0.
     if _optional_nonzero(take_id, "take_id", "the clip's base source"):
-        desc.take_id = _id(take_id, "take_id")
+        desc.take_id = _narrow_int(take_id, "take_id", 0, _UINT32_MAX)
     desc.expected_source_id = _id(expected_source_id, "expected_source_id")
     desc.expected_source_sample_rate = expected_rate
     desc.expected_source_sample_count = expected_count
@@ -359,7 +344,7 @@ def _project_vocal_edit_dependencies(
         lib.sonare_free_project_vocal_edit_dependencies_result(ctypes.byref(result))
 
 
-def _original_sources_to_c(
+def _originals_to_c(
     originals: Sequence[ProjectVocalOriginalSource],
 ) -> tuple[ctypes.Array[SonareProjectVocalOriginalSource] | None, list[np.ndarray]]:
     if not originals:
@@ -369,21 +354,19 @@ def _original_sources_to_c(
     buffers: list[np.ndarray] = []
     seen: set[int] = set()
     for index, original in enumerate(originals):
-        source_id = _id(original.source_id, f"original_sources[{index}].source_id")
+        source_id = _narrow_int(original.source_id, f"originals[{index}].source_id", 0, _UINT32_MAX)
         if source_id in seen:
-            raise _refuse(
-                f"original_sources[{index}].source_id must be unique among original_sources"
-            )
+            raise _refuse(f"originals[{index}].source_id must be unique among originals")
         seen.add(source_id)
         sample_rate = _narrow_int(
             original.sample_rate,
-            f"original_sources[{index}].sample_rate",
-            VOCAL_MIN_SAMPLE_RATE,
-            VOCAL_MAX_SAMPLE_RATE,
+            f"originals[{index}].sample_rate",
+            0,
+            _UINT32_MAX,
         )
         buffer = _validate_samples(
             original.mono,
-            arg_name=f"original_sources[{index}].mono",
+            arg_name=f"originals[{index}].mono",
         )
         buffers.append(buffer)
         lib.sonare_project_vocal_original_source_init(ctypes.byref(rows[index]))
@@ -424,7 +407,7 @@ def _project_cancel_callback(
 
 def _rehydrate_project_vocal_edits(
     project: Project,
-    original_sources: Sequence[ProjectVocalOriginalSource],
+    originals: Sequence[ProjectVocalOriginalSource],
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> tuple[ProjectVocalRehydrateItem, ...]:
@@ -433,11 +416,11 @@ def _rehydrate_project_vocal_edits(
     Any truthy return from ``cancel`` cancels the call.
     """
 
-    originals = tuple(original_sources)
+    originals = tuple(originals)
     original_count = _narrow_int(
         len(originals), "original_count", 0, min(_UINT64_MAX, _MAX_RESULT_ITEMS)
     )
-    rows, buffers = _original_sources_to_c(originals)
+    rows, buffers = _originals_to_c(originals)
     callback, callback_errors = _project_cancel_callback(cancel)
     result = SonareProjectVocalRehydrateResult()
     lib = _get_lib()

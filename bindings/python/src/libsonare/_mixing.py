@@ -182,7 +182,7 @@ class Mixer:
             out = ctypes.c_void_p()
             _check(
                 lib.sonare_mixer_create(
-                    _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
+                    _to_c_int(sample_rate, "sample_rate"),
                     _to_c_int(
                         _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
                     ),
@@ -1205,7 +1205,7 @@ def mix_stereo(
     lib = _get_lib()
     if not strips:
         raise _refuse("strips must not be empty")
-    c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)
+    c_sample_rate = _to_c_int(sample_rate, "sample_rate")
 
     # A per-strip option may be shorter than the strip list (the remaining
     # strips keep their defaults, as on Node and WASM) but never longer: the

@@ -3089,7 +3089,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `apply_project_vocal_edit` | removed: call the method Project.apply_vocal_edit(...) with the same keywords |
 | `get_project_vocal_edit_dependencies` | removed: call the method Project.vocal_edit_dependencies() |
-| `rehydrate_project_vocal_edits` | removed: call the method Project.rehydrate_vocal_edits(original_sources, cancel=...) |
+| `rehydrate_project_vocal_edits` | removed: call the method Project.rehydrate_vocal_edits(originals, cancel=...) |
 
 #### Synchronous construction is new X(config); create() is async
 
@@ -3172,6 +3172,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.clear_soundfont` | `Project.clear_sound_font` |
 | `Project.load_soundfont` | `Project.load_sound_font` |
+| `Project.rehydrate_vocal_edits(original_sources)` | `Project.rehydrate_vocal_edits(originals)` |
 | `Project.soundfont_manifest` | `Project.sound_font_manifest` |
 | `ProjectMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only, the field order of EngineMarker |
 | `ProjectSource.channel_count` | `ProjectSource.num_channels` |

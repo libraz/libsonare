@@ -365,7 +365,7 @@ class Project(
     @_entry("Project.rehydrate_vocal_edits")
     def rehydrate_vocal_edits(
         self,
-        original_sources: Sequence[ProjectVocalOriginalSource],
+        originals: Sequence[ProjectVocalOriginalSource],
         *,
         cancel: Callable[[], bool] | None = None,
     ) -> tuple[ProjectVocalRehydrateItem, ...]:
@@ -377,7 +377,7 @@ class Project(
 
         return _rehydrate_project_vocal_edits(
             self,
-            original_sources=original_sources,
+            originals=originals,
             cancel=cancel,
         )
 

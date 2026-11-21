@@ -160,6 +160,21 @@ def named_keywords(package: Path = PACKAGE) -> set[tuple[str, str]]:
     return out
 
 
+def _keyword(param: str, entry: str, spelled: dict[tuple[str, str], str]) -> str:
+    """The caller's spelling of a row's subject.
+
+    A member of a struct argument is a keyword of its own; a member of an array element
+    keeps its path from the first indexed container (``originals[].source_id``), the
+    spelling a facade refusal takes once its index is written empty.
+    """
+    path = param.split(".")
+    first = next((i for i, part in enumerate(path) if part.endswith("[]")), None)
+    if first is None or first == len(path) - 1:
+        subject = path[-1].removesuffix("[]")
+        return spelled.get((entry, subject), subject)
+    return ".".join(path[first:])
+
+
 def _explicit_bounds(row: dict) -> tuple[int, int | None]:
     """The bounds an explicitly given value must meet: the row's, less its sentinel.
 
@@ -198,8 +213,7 @@ def rows(
     for row in domains:
         if row["kind"] != "integer":
             continue
-        subject = re.sub(r"\[\]", "", row["param"].rpartition(".")[2])
-        keyword = spelled.get((row["entry"], subject), subject)
+        keyword = _keyword(row["param"], row["entry"], spelled)
         stricter = row["stricter"] if row["stricter"] in _KIND_STRICTER else None
         value = (*_explicit_bounds(row), stricter)
         by_c.setdefault(row["entry"], []).append((keyword, value, row.get("sentinel") is not None))
@@ -223,18 +237,21 @@ def _quoted(stricter: str | None) -> str:
     return "None" if stricter is None else f'"{stricter}"'
 
 
-def _row(key: str, values: list[str]) -> str:
+def _row(entry: str, keyword: str, values: list[str]) -> str:
     """One table line, split the way the formatter splits a line past 100 columns."""
+    key = f'("{entry}", "{keyword}")'
     line = f"    {key}: ({', '.join(values)}),\n"
     if len(line) <= 101:
         return line
+    if len(f"    {key}: (") > 100:
+        return f'    (\n        "{entry}",\n        "{keyword}",\n    ): ({", ".join(values)}),\n'
     inner = "".join(f"        {v},\n" for v in values)
     return f"    {key}: (\n{inner}    ),\n"
 
 
 def render(table: dict[tuple[str, str], Domain]) -> str:
     body = "".join(
-        _row(f'("{entry}", "{keyword}")', [str(lo), str(hi), _quoted(stricter)])
+        _row(entry, keyword, [str(lo), str(hi), _quoted(stricter)])
         for (entry, keyword), (lo, hi, stricter) in table.items()
     )
     return (

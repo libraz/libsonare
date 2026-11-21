@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import re
 from collections.abc import Callable
 from enum import IntEnum
 from typing import Literal, ParamSpec, TypeVar, cast
@@ -144,7 +145,7 @@ def _integer_domain_text(entry: str, exc: BaseException) -> None:
     name = getattr(exc, _INTEGER_SUBJECT, None)
     if name is None:
         return
-    domain = _INTEGER_DOMAINS.get((entry, name))
+    domain = _INTEGER_DOMAINS.get((entry, re.sub(r"\[\d+\]", "[]", name)))
     if domain is None:
         return
     lo, hi, stricter = domain

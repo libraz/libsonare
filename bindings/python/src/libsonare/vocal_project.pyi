@@ -112,7 +112,7 @@ def _project_vocal_edit_dependencies(
 ) -> tuple[ProjectVocalEditDependency, ...]: ...
 def _rehydrate_project_vocal_edits(
     project: Project,
-    original_sources: Sequence[ProjectVocalOriginalSource],
+    originals: Sequence[ProjectVocalOriginalSource],
     *,
     cancel: Callable[[], bool] | None = ...,
 ) -> tuple[ProjectVocalRehydrateItem, ...]: ...

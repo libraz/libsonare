@@ -78,6 +78,8 @@ _REQUIRED: dict[str, Any] = {
 
 # Entries whose required argument of a shared name needs another shape.
 _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
+    "mix_stereo": {"strips": [(_TONE, _TONE)]},
+    "mixing_assistant_suggest": {"tracks": [libsonare.MixAssistantTrack("a", [_TONE])]},
     "segment_cross_similarity": {
         "x": np.ones((8, 16), np.float32),
         "y": np.ones((8, 16), np.float32),
@@ -179,7 +181,9 @@ def _domain_text(keyword: str, lo: int, hi: int | None, stricter: str | None = N
 
 
 def test_the_table_reaches_the_public_entries() -> None:
-    assert len(_rows()) >= len(DOMAINS) // 2
+    # A member of an array element is keyed by its path, which no signature names.
+    keywords = [key for key in DOMAINS if "[" not in key[1]]
+    assert len(_rows()) >= len(keywords) // 2
 
 
 @pytest.mark.parametrize(("entry", "keyword", "lo", "hi", "stricter"), _rows())

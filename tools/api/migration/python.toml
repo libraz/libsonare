@@ -8137,9 +8137,16 @@ domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
+kind = "option"
+old = "Project.rehydrate_vocal_edits(original_sources)"
+new = "Project.rehydrate_vocal_edits(originals)"
+domain = "project"
+rule = "individual"
+
+[[entry]]
 kind = "function"
 old = "rehydrate_project_vocal_edits"
-removed = "call the method Project.rehydrate_vocal_edits(original_sources, cancel=...)"
+removed = "call the method Project.rehydrate_vocal_edits(originals, cancel=...)"
 domain = "project"
 rule = "one-entry-per-operation"
 
