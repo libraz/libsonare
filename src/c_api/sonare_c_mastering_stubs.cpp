@@ -695,7 +695,7 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
-SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
+SonareError sonare_eq_create(int sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   (void)sample_rate;
@@ -805,7 +805,7 @@ SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
-SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   (void)eq;
@@ -982,7 +982,7 @@ const char* sonare_streaming_mastering_chain_stage_names(
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    const SonareStreamingMasteringChain* handle, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   (void)handle;
@@ -991,7 +991,7 @@ SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    const SonareStreamingMasteringChain* handle, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   (void)handle;

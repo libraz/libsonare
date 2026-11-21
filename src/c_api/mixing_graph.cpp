@@ -318,7 +318,7 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
 }
 
 SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
-                                                      uint32_t* out_count) {
+                                                      size_t* out_count) {
   // A single relaxed atomic load once the bus is found, so it is safe to poll
   // from the audio thread alongside the meters; it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;

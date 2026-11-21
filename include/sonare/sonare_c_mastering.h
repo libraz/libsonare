@@ -62,7 +62,7 @@ typedef struct {
   ///
   /// Which stages can contribute depends on the call that filled this result,
   /// so what a zero means is stated on each of them rather than here.
-  uint32_t non_finite_substitution_count;
+  size_t non_finite_substitution_count;
 } SonareMasteringResult;
 
 /// @brief One flat key/value processor or chain parameter.
@@ -90,7 +90,7 @@ typedef struct {
   int loudness_target_limited;
   /// See @c SonareMasteringResult::non_finite_substitution_count. Aggregated
   /// over both channels.
-  uint32_t non_finite_substitution_count;
+  size_t non_finite_substitution_count;
 } SonareMasteringStereoResult;
 
 /// @brief Progress callback type. Called per chain stage completion.
@@ -180,7 +180,7 @@ typedef struct {
   /// Only the true-peak limiters replace anything, so with the maximizer's
   /// limiter and the loudness stage both disabled a zero here means no stage
   /// was able to replace anything rather than that nothing needed replacing.
-  uint32_t non_finite_substitution_count;
+  size_t non_finite_substitution_count;
 } SonareMasteringChainResult;
 
 /// @brief Result of running the mastering chain on a stereo pair.
@@ -208,7 +208,7 @@ typedef struct {
   size_t stage_gain_reductions_count;  ///< Length of both arrays.
   SonareMasteringReport report;        ///< Before/after measurements of the whole run.
   /// @copydoc SonareMasteringChainResult::non_finite_substitution_count
-  uint32_t non_finite_substitution_count;
+  size_t non_finite_substitution_count;
 } SonareMasteringChainStereoResult;
 
 /// @details This call always runs exactly one true-peak limiter, so
@@ -932,14 +932,14 @@ typedef struct {
 } SonareEqSnapshot;
 
 /// @brief Creates a prepared equalizer handle.
-/// @param sample_rate Processing sample rate in Hz; finite and within [8000, 384000].
+/// @param sample_rate Processing sample rate in Hz, an integer within [8000, 384000].
 /// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process; 0 selects
 ///   the library default (512 frames); otherwise it must be within [1, 1048576].
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///   @ref sonare_eq_destroy, which is what invalidates it; no other call does.
 /// @return SONARE_OK, or SONARE_ERROR_INVALID_PARAMETER when the arguments are invalid (or
 ///   @p out is NULL), or another error code when allocation fails.
-SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out);
+SonareError sonare_eq_create(int sample_rate, int max_block_size, SonareEq** out);
 /// @brief Destroys an equalizer handle. Accepts NULL.
 void sonare_eq_destroy(SonareEq* eq);
 /// @brief Sets one of the @c SONARE_EQ_MAX_BANDS equalizer bands from JSON.
@@ -1018,7 +1018,7 @@ SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size
 ///   created and never cleared, so two readings bracket a span of audio.
 ///   Returns @c SONARE_ERROR_INVALID_PARAMETER if eq or out_count is NULL.
 ///   Realtime-safe.
-SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count);
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_count);
 /// @brief Sets an external detector sidechain for dynamic bands.
 /// @details @p num_samples must not exceed the next @ref sonare_eq_process
 /// block; a shorter key (including zero samples) stays bound and reads as
@@ -1220,7 +1220,7 @@ const char* sonare_streaming_mastering_chain_stage_names(
 ///   stages and so clears it. Realtime-safe.
 /// @param out_count Receives the count; must not be NULL.
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count);
+    const SonareStreamingMasteringChain* handle, size_t* out_count);
 /// @brief Processing calls in which a stage discarded its own recursive state
 ///        because a non-finite value had reached it.
 /// @details The companion to
@@ -1246,7 +1246,7 @@ SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
 ///   does not undo. Realtime-safe.
 /// @param out_count Receives the count; must not be NULL.
 SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count);
+    const SonareStreamingMasteringChain* handle, size_t* out_count);
 
 /// @brief Destroy and free the handle.
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
@@ -1294,7 +1294,7 @@ typedef struct {
   int mode;                ///< SONARE_DENOISE_MODE_* (default LOG_MMSE)
   int noise_estimator;     ///< SONARE_DENOISE_NOISE_ESTIMATOR_* (default QUANTILE)
   int n_fft;               ///< STFT size (default 1024, power of two)
-  int hop_length;          ///< hop in samples (default 256)
+  size_t hop_length;       ///< hop in samples (default 256)
   float dd_alpha;          ///< decision-directed SNR smoothing (default 0.98)
   float reduction_db;      ///< deepest attenuation in dB, >= 0 (default 26)
   float over_subtraction;  ///< Berouti alpha (SpectralSubtraction only; default 2)
@@ -1908,7 +1908,7 @@ typedef struct {
   float threshold;         ///< late-reverb detection threshold (default 0, no gate)
   float attenuation;       ///< suppression amount, linear (default 1, full)
   int n_fft;               ///< STFT size (default 1024, power of two)
-  int hop_length;          ///< hop in samples, at most n_fft / 2 (default 256)
+  size_t hop_length;       ///< hop in samples, at most n_fft / 2 (default 256)
   float t60_sec;           ///< estimated T60 (default 0.4)
   float late_delay_ms;     ///< late-reverb onset relative to direct (default 50)
   float over_subtraction;  ///< Berouti alpha (default 1.0)

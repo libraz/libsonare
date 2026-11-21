@@ -1383,7 +1383,7 @@ TEST_CASE("C-API set output bus does not compile the graph", "[mixing][capi][rou
   REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
-  uint32_t count = 0;
+  size_t count = 0;
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "sub", &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_set_output_bus(mixer, "sub", "sub") == SONARE_ERROR_INVALID_PARAMETER);

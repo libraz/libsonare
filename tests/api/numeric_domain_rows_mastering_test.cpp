@@ -444,20 +444,20 @@ SonareError probe_frame_signal(const std::string& param, double value) {
 }
 
 SonareError probe_metering_silence_ratio(const std::string& param, double value) {
-  int frame_length = 1024;
-  int hop_length = 512;
-  if (is_param(param, "frame_length")) frame_length = as_int(value);
-  if (is_param(param, "hop_length")) hop_length = as_int(value);
+  size_t frame_length = 1024;
+  size_t hop_length = 512;
+  if (is_param(param, "frame_length")) frame_length = as_size(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   float ratio = 0.0f;
   return sonare_metering_silence_ratio(analysis_samples().data(), analysis_samples().size(),
                                        kAnalysisRate, -45.0f, frame_length, hop_length, &ratio);
 }
 
 SonareError probe_audio_silence_ratio(const std::string& param, double value) {
-  int frame_length = 1024;
-  int hop_length = 512;
-  if (is_param(param, "frame_length")) frame_length = as_int(value);
-  if (is_param(param, "hop_length")) hop_length = as_int(value);
+  size_t frame_length = 1024;
+  size_t hop_length = 512;
+  if (is_param(param, "frame_length")) frame_length = as_size(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   SonareAudio* audio = nullptr;
   REQUIRE(sonare_audio_from_buffer(analysis_samples().data(), analysis_samples().size(),
                                    kAnalysisRate, &audio) == SONARE_OK);
@@ -934,7 +934,7 @@ SonareError probe_audio_profile_stereo(const std::string& param, double value) {
 
 SonareError probe_eq_set_band(const std::string& param, double value) {
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   const int index = is_param(param, "index") ? as_int(value) : 0;
   const SonareError err = sonare_eq_set_band(eq, index, "{}");
   sonare_eq_destroy(eq);
@@ -943,7 +943,7 @@ SonareError probe_eq_set_band(const std::string& param, double value) {
 
 SonareError probe_eq_match(const std::string& param, double value) {
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   const int max_bands = is_param(param, "max_bands") ? as_int(value) : 8;
   const SonareError err = sonare_eq_match(eq, analysis_samples().data(), analysis_samples().data(),
                                           analysis_samples().size(), kAnalysisRate, max_bands);
@@ -953,7 +953,7 @@ SonareError probe_eq_match(const std::string& param, double value) {
 
 SonareError probe_eq_match_ex(const std::string& param, double value) {
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   const int max_bands = is_param(param, "max_bands") ? as_int(value) : 8;
   const SonareError err = sonare_eq_match_ex(
       eq, analysis_samples().data(), analysis_samples().size(), kAnalysisRate,

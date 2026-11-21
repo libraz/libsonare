@@ -148,7 +148,7 @@ TEST_CASE("mastering eq entries refuse in header order", "[c_api][header_order]"
   CHECK(last_message() == "eq must not be NULL");
 
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_set_band(eq, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "band_json must not be NULL");

@@ -1714,7 +1714,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
 
   SECTION("hop_length above n_fft is refused by the shared pre-check on all three entries") {
     SonareDereverbClassicalConfig bad = base;
-    bad.hop_length = bad.n_fft * 2;
+    bad.hop_length = static_cast<size_t>(bad.n_fft) * 2;
     SonareDereverbResult mono_out{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(
                 reverberant.data(), length, sr, &bad, &mono_out) == SONARE_ERROR_INVALID_PARAMETER);

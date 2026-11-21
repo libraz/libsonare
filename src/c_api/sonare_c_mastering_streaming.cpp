@@ -529,7 +529,7 @@ const char* sonare_streaming_mastering_chain_stage_names(
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    const SonareStreamingMasteringChain* handle, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(handle);
@@ -539,7 +539,7 @@ SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
-    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    const SonareStreamingMasteringChain* handle, size_t* out_count) {
   // A single relaxed atomic load, so it is safe to poll from the audio thread
   // alongside the process entries; it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;

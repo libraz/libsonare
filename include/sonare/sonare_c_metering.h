@@ -23,8 +23,8 @@ SonareError sonare_metering_rms_db(const float* samples, size_t length, int samp
 
 /// @brief Fraction of analysis frames whose RMS is below @p threshold_db.
 SonareError sonare_metering_silence_ratio(const float* samples, size_t length, int sample_rate,
-                                          float threshold_db, int frame_length, int hop_length,
-                                          float* out_ratio);
+                                          float threshold_db, size_t frame_length,
+                                          size_t hop_length, float* out_ratio);
 
 /// @brief Crest factor in dB (peak_db - rms_db).
 SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
@@ -51,10 +51,10 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
 /// @brief A single contiguous run of samples that clipped (or exceeded
 ///        @p threshold). Mirrors @c sonare::metering::ClippingRegion.
 typedef struct {
-  size_t start_sample;  ///< Index of the first clipped sample of the run.
-  size_t end_sample;    ///< One past the last clipped sample of the run (exclusive).
-  size_t length;        ///< Run length in samples (end_sample - start_sample).
-  float peak;           ///< Largest absolute linear amplitude inside the run.
+  int64_t start_sample;  ///< Index of the first clipped sample of the run.
+  int64_t end_sample;    ///< One past the last clipped sample of the run (exclusive).
+  size_t length;         ///< Run length in samples (end_sample - start_sample).
+  float peak;            ///< Largest absolute linear amplitude inside the run.
 } SonareClippingRegion;
 
 /// @brief Aggregated clipping report for a buffer. @c regions is heap-allocated
@@ -411,7 +411,7 @@ SonareError sonare_audio_crest_factor_db(const SonareAudio* audio, float* out_db
 
 /// @brief Handle form of @ref sonare_metering_silence_ratio.
 SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold_db,
-                                       int frame_length, int hop_length, float* out_ratio);
+                                       size_t frame_length, size_t hop_length, float* out_ratio);
 
 /// @brief Handle form of @ref sonare_metering_true_peak_dbtp.
 SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample_factor,

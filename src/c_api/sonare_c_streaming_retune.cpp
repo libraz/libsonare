@@ -104,7 +104,7 @@ void sonare_streaming_retune_destroy(SonareStreamingRetune* retune) {
 #endif
 }
 
-SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, double sample_rate,
+SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, int sample_rate,
                                             int max_block_size) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)

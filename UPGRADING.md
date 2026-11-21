@@ -337,6 +337,23 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_free_percussive_events` | `sonare_free_percussive_events_result` |
 | `sonare_free_pitch_decomposition` | `sonare_free_pitch_decomposition_result` |
 
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareDereverbClassicalConfig.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_note_move(offset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_note_move(onset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_note_move(target_onset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_note_stretch(offset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_note_stretch(onset_sample)` | the sample position is an int64_t instead of an int |
+| `sonare_pitch_correct_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_correct_to_midi_timevarying(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double |
+| `sonare_trim_ex(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_trim_ex(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+
 #### Every C failure sets the error message
 
 | 1.x | 2.0.0 |
@@ -459,6 +476,28 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_mastering_insert_param_info_at_rate` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering [] |
 | `sonare_mastering_insert_param_info` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering [] |
 | `sonare_mastering_processor_catalog` | returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string |
+
+#### C counts are size_t and returned through an out parameter
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareClippingRegion.end_sample` | the sample position is an int64_t instead of a size_t |
+| `SonareClippingRegion.start_sample` | the sample position is an int64_t instead of a size_t |
+| `SonareDenoiseClassicalConfig.hop_length` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `SonareMasteringChainResult.non_finite_substitution_count` | the count is a size_t instead of a uint32_t |
+| `SonareMasteringChainStereoResult.non_finite_substitution_count` | the count is a size_t instead of a uint32_t |
+| `SonareMasteringResult.non_finite_substitution_count` | the count is a size_t instead of a uint32_t |
+| `SonareMasteringStereoResult.non_finite_substitution_count` | the count is a size_t instead of a uint32_t |
+| `sonare_audio_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_audio_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_eq_create(sample_rate)` | the sample rate is an int instead of a double |
+| `sonare_eq_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_metering_silence_ratio(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_metering_silence_ratio(hop_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_mixer_bus_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_streaming_mastering_chain_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)` | the count is a size_t instead of a uint32_t |
+| `sonare_strip_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 
 #### Each operation has exactly one entry point
 

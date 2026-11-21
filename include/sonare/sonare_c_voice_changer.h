@@ -424,7 +424,7 @@ SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoi
 ///   and the number does not depend on a dimension the caller did not choose.
 ///   Realtime-safe.
 SonareError sonare_realtime_voice_changer_non_finite_discard_count(
-    const SonareRealtimeVoiceChanger* handle, uint32_t* out_count);
+    const SonareRealtimeVoiceChanger* handle, size_t* out_count);
 /// @brief Returns the live (normalized) configuration of the handle as a JSON
 ///        document. Useful for UI sync and for round-tripping the post-
 ///        normalize state across language boundaries.

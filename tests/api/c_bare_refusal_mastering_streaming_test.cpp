@@ -46,7 +46,7 @@ TEST_CASE("the streaming chain refuses a NULL handle by name", "[c_api][masterin
   float sample = 0.0f;
   size_t written = 7;
   int max_block = 7;
-  uint32_t count = 7;
+  size_t count = 7;
 
   REQUIRE(sonare_streaming_mastering_chain_prepare(nullptr, 48000, 0, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);

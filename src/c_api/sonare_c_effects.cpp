@@ -516,7 +516,8 @@ void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result) {
 }
 
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
-                           int frame_length, int hop_length, float** out, size_t* out_length) {
+                           size_t frame_length, size_t hop_length, float** out,
+                           size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err =
@@ -536,7 +537,9 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
                                [threshold_db, frame_length, hop_length](const Audio& a) {
-                                 return trim_absolute(a, threshold_db, frame_length, hop_length);
+                                 return trim_absolute(a, threshold_db,
+                                                      static_cast<int>(frame_length),
+                                                      static_cast<int>(hop_length));
                                });
 }
 

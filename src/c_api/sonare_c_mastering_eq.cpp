@@ -42,7 +42,7 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 }  // namespace
 
-SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
+SonareError sonare_eq_create(int sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -51,9 +51,9 @@ SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** 
   }
   SONARE_C_TRY
   auto handle = std::make_unique<SonareEq>();
-  handle->sample_rate = sample_rate;
+  handle->sample_rate = static_cast<double>(sample_rate);
   handle->max_block_size = max_block_size;
-  handle->processor.prepare(sample_rate, max_block_size);
+  handle->processor.prepare(static_cast<double>(sample_rate), max_block_size);
   *out = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH
@@ -181,7 +181,7 @@ SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size
   return SONARE_OK;
 }
 
-SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_count) {
   // A single relaxed atomic load, so it is safe to poll from the audio thread
   // alongside process(); it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;

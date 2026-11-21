@@ -2599,3 +2599,235 @@ old = "SONARE_SYNTH_PATCH_STRUCT_VERSION"
 removed = "the macro is gone; initialise the struct with sonare_synth_patch_init, which sets struct_size"
 domain = "engine"
 rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_move(onset_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note region entries refuse each position by its parameter name"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_move(offset_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note region entries refuse each position by its parameter name"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_move(target_onset_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note region entries refuse each position by its parameter name"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_stretch(onset_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note region entries refuse each position by its parameter name"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_stretch(offset_sample)"
+changed = "the sample position is an int64_t instead of an int"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note region entries refuse each position by its parameter name"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_correct_timevarying(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the time-varying correction entries refuse the track arguments by name"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_correct_to_midi_timevarying(hop_length)"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the time-varying correction entries refuse the track arguments by name"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_ex(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim_ex uses custom framing"
+
+[[entry]]
+kind = "option"
+old = "sonare_trim_ex(hop_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim_ex uses custom framing"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringChainResult.non_finite_substitution_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringChainStereoResult.non_finite_substitution_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringResult.non_finite_substitution_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringStereoResult.non_finite_substitution_count"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::every mastering chain entry point reports the true non-finite substitution count"
+
+[[entry]]
+kind = "option"
+old = "sonare_eq_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_eq_non_finite_discard_count reports the state the EQ discarded"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_mastering_chain_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_streaming_mastering_chain_non_finite_discard_count reports a lost stage"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_mastering_chain_non_finite_substitution_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/c_bare_refusal_mastering_streaming_test.cpp::the streaming chain refuses a NULL handle by name"
+
+[[entry]]
+kind = "option"
+old = "sonare_eq_create(sample_rate)"
+changed = "the sample rate is an int instead of a double"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_eq_create rejects an out-of-range sample rate"
+
+[[entry]]
+kind = "field"
+old = "SonareDenoiseClassicalConfig.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_denoise_classical"
+
+[[entry]]
+kind = "field"
+old = "SonareDereverbClassicalConfig.hop_length"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::sonare_mastering_repair_dereverb_classical"
+
+[[entry]]
+kind = "field"
+old = "SonareClippingRegion.start_sample"
+changed = "the sample position is an int64_t instead of a size_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_metering_extra_test.cpp::Handle-form detect_clipping matches its buffer twin field by field"
+
+[[entry]]
+kind = "field"
+old = "SonareClippingRegion.end_sample"
+changed = "the sample position is an int64_t instead of a size_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/sonare_c_metering_extra_test.cpp::Handle-form detect_clipping matches its buffer twin field by field"
+
+[[entry]]
+kind = "option"
+old = "sonare_audio_silence_ratio(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries name the refused argument"
+
+[[entry]]
+kind = "option"
+old = "sonare_audio_silence_ratio(hop_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries name the refused argument"
+
+[[entry]]
+kind = "option"
+old = "sonare_metering_silence_ratio(frame_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries name the refused argument"
+
+[[entry]]
+kind = "option"
+old = "sonare_metering_silence_ratio(hop_length)"
+changed = "the length is a size_t instead of an int; a value above 2147483647 is refused"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/api/c_bare_refusal_editing_test.cpp::the silence ratio entries name the refused argument"
+
+[[entry]]
+kind = "option"
+old = "sonare_mixer_bus_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API reports the state a bus discarded after a non-finite sample"
+
+[[entry]]
+kind = "option"
+old = "sonare_strip_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "mastering"
+rule = "c-count-types"
+test = "tests/mixing/mixing_meter_panner_capi_test.cpp::Mixing C API reports the state a strip discarded after a non-finite sample"
+
+[[entry]]
+kind = "option"
+old = "sonare_realtime_voice_changer_non_finite_discard_count(out_count)"
+changed = "the count is a size_t instead of a uint32_t"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/editing/voice_changer_preset_capi_test.cpp::realtime voice changer audio-thread entries leave the error channel untouched"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_prepare(sample_rate)"
+changed = "the sample rate is an int instead of a double"
+domain = "effects"
+rule = "c-count-types"
+test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"

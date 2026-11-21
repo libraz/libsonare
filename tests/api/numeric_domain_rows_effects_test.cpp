@@ -220,7 +220,7 @@ SonareError probe_trim_ex(const std::string& param, double value) {
   size_t out_length = 0;
   const SonareError err =
       sonare_trim_ex(analysis_samples().data(), analysis_samples().size(), kAnalysisRate, -60.0f,
-                     framing.frame_length, framing.hop_length, &out, &out_length);
+                     as_size(framing.frame_length), as_size(framing.hop_length), &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -797,7 +797,7 @@ SonareError probe_pitch_correct_to_midi_timevarying(const std::string& param, do
   const SonareError err = sonare_pitch_correct_to_midi_timevarying(
       analysis_samples().data(), analysis_samples().size(), kAnalysisRate, track_f0().data(),
       nullptr, track_voiced().data(), hop ? track_f0().size() : as_size(value),
-      hop ? static_cast<int>(value) : 512, 60.0f, &out, &out_length);
+      hop ? as_size(value) : 512, 60.0f, &out, &out_length);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -806,9 +806,9 @@ SonareError probe_pitch_correct_timevarying(const std::string& param, double val
   SonarePitchCorrectionConfig config{};
   sonare_pitch_correction_config_init(&config);
   size_t n_frames = track_f0().size();
-  int hop_length = 512;
+  size_t hop_length = 512;
   if (is_param(param, "n_frames")) n_frames = as_size(value);
-  if (is_param(param, "hop_length")) hop_length = static_cast<int>(value);
+  if (is_param(param, "hop_length")) hop_length = as_size(value);
   if (is_param(param, "config.scale_root")) config.scale_root = static_cast<int>(value);
   if (is_param(param, "config.scale_mode_mask")) config.scale_mode_mask = as_u32(value);
   float* out = nullptr;

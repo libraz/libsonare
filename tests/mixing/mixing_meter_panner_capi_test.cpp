@@ -354,7 +354,7 @@ TEST_CASE("Mixing C API reports the state a strip discarded after a non-finite s
 
   // Pre-set to a value the entry must overwrite, so a read that never writes
   // cannot pass as a zero count.
-  uint32_t count = 0xDEADu;
+  size_t count = 0xDEADu;
   REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
   REQUIRE(count == 0u);
 
@@ -427,7 +427,7 @@ TEST_CASE("A strip's discard count reaches a meter that met a non-finite sample"
     right[static_cast<size_t>(i)] = 0.25f;
   }
 
-  uint32_t count = 0xDEADu;
+  size_t count = 0xDEADu;
   strip->strip.process(channels, 2, kBlock);
   REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
   REQUIRE(count == 0u);
@@ -461,7 +461,7 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "verb", "aux") == SONARE_OK);
 
-  uint32_t count = 0xDEADu;
+  size_t count = 0xDEADu;
   // A declared bus has no DSP record until a compile builds one, so it is
   // reported as unknown rather than as a zero that would read as "clean".
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) ==

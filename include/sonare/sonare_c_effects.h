@@ -134,8 +134,8 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      int sample_rate, const float* f0_hz,
                                                      const float* voiced_prob,
                                                      const int32_t* voiced, size_t n_frames,
-                                                     int hop_length, float target_midi, float** out,
-                                                     size_t* out_length);
+                                                     size_t hop_length, float target_midi,
+                                                     float** out, size_t* out_length);
 
 /// @brief Target selector for @ref sonare_pitch_correct_timevarying.
 typedef enum SONARE_ENUM_BASE {
@@ -193,7 +193,8 @@ void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config);
 ///       @ref sonare_free_floats.
 SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
                                              const float* f0_hz, const float* voiced_prob,
-                                             const int32_t* voiced, size_t n_frames, int hop_length,
+                                             const int32_t* voiced, size_t n_frames,
+                                             size_t hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length);
 
@@ -227,13 +228,13 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
 ///        the core's own text on sonare_last_error_message().
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
-                                int onset_sample, int offset_sample, float stretch_ratio,
+                                int64_t onset_sample, int64_t offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);
 /// Move a note region to a new onset sample while preserving its duration.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
-                             int offset_sample, int target_onset_sample, float** out,
-                             size_t* out_length);
+SonareError sonare_note_move(const float* samples, size_t length, int sample_rate,
+                             int64_t onset_sample, int64_t offset_sample,
+                             int64_t target_onset_sample, float** out, size_t* out_length);
 // ============================================================================
 // Effects - Note objects
 // ============================================================================
@@ -1088,7 +1089,7 @@ void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result);
 /// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
-                           int frame_length, int hop_length, float** out, size_t* out_length);
+                           size_t frame_length, size_t hop_length, float** out, size_t* out_length);
 
 /// @brief Non-negative matrix factorisation of a non-negative spectrogram
 ///        (mirror of @c sonare::decompose / librosa.decompose.decompose).

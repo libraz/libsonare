@@ -121,10 +121,10 @@ TEST_CASE("streaming mastering chain prepare resolves a zero block size to its d
 TEST_CASE("sonare_eq_create resolves a zero block size to its default",
           "[c_api][mastering][streaming]") {
   SonareEq* refused_eq = nullptr;
-  CHECK(sonare_eq_create(48000.0, -1, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_eq_create(48000, -1, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(refused_eq == nullptr);
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 0, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
 
   std::vector<float> left(512, 0.1f);

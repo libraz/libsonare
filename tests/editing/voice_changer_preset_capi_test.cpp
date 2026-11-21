@@ -797,7 +797,7 @@ TEST_CASE("realtime voice changer audio-thread entries leave the error channel u
   REQUIRE(queue_full);
   REQUIRE(sonare_realtime_voice_changer_all_notes_off(handle) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
-  uint32_t discarded = 0;
+  size_t discarded = 0;
   REQUIRE(sonare_realtime_voice_changer_non_finite_discard_count(handle, &discarded) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == recorded);
 
@@ -951,8 +951,7 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
   REQUIRE(retune != nullptr);
 
   SECTION("null handles are rejected rather than dereferenced") {
-    REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000.0, 128) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000, 128) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_streaming_retune_reset(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_streaming_retune_set_config(nullptr, 0.0f, 1.0f, 0) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -965,11 +964,11 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
   }
 
   SECTION("prepare validates its arguments") {
-    REQUIRE(sonare_streaming_retune_prepare(retune, 0.0, 128) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_retune_prepare(retune, -1.0, 128) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, -1) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 0) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 128) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 0, 128) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, -1, 128) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000, -1) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 0) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 128) == SONARE_OK);
   }
 
   SECTION("processing before prepare is reported, not silently ignored") {
@@ -982,7 +981,7 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
   }
 
   SECTION("a block past the prepared maximum is refused") {
-    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 64) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 64) == SONARE_OK);
     std::array<float, 128> block{};
     REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -992,7 +991,7 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
   SECTION("a non-finite input sample is refused rather than zeroed") {
     // Zeroing keeps the grain history clean but tells the caller nothing, so a
     // block silently becomes a different block.
-    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 64) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 64) == SONARE_OK);
     std::array<float, 64> block{};
     block[7] = std::numeric_limits<float>::quiet_NaN();
     REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) ==
@@ -1022,7 +1021,7 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain == 0);  // Nothing resolved before prepare.
 
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 256) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
   REQUIRE(grain == 2232);
@@ -1042,7 +1041,7 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain == 2232);
 
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 256) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain == 512);
 
@@ -1194,7 +1193,7 @@ TEST_CASE("sonare_streaming_retune config grain reads back as configured",
   SonareStreamingRetune* retune = nullptr;
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 516, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 256) == SONARE_OK);
 
   auto check = [&](int configured, int in_use) {
     int grain = -1;
@@ -1209,16 +1208,16 @@ TEST_CASE("sonare_streaming_retune config grain reads back as configured",
   };
   check(516, 516);
   REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 516) == SONARE_OK);
-  REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 96000, 256) == SONARE_OK);
   check(516, 516);
   sonare_streaming_retune_destroy(retune);
 
   // Automatic: config keeps 0 while the grain in use tracks the rate.
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 256) == SONARE_OK);
   check(0, 2232);
-  REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 96000, 256) == SONARE_OK);
   int grain = 0;
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain > 2232);

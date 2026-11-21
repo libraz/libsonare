@@ -423,7 +423,7 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
 #endif
 #if defined(SONARE_WITH_MASTERING)
     SonareEq* eq = nullptr;
-    REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
+    REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     REQUIRE(sonare_eq_set_band(eq, 0, json) == SONARE_ERROR_INVALID_FORMAT);
     sonare_eq_destroy(eq);
@@ -540,7 +540,7 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 #endif  // defined(SONARE_WITH_MIXING)
 #if defined(SONARE_WITH_MASTERING)
     SonareEq* refused_eq = nullptr;
-    REQUIRE(sonare_eq_create(0.0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_create(0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_eq == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     SonareStreamingMasteringChain* refused_chain = nullptr;
@@ -638,7 +638,7 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
 #if defined(SONARE_WITH_MASTERING)
   SECTION("mastering constructors record a code on validation failure") {
     SonareEq* refused_eq = nullptr;
-    REQUIRE(sonare_eq_create(0.0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_create(0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_eq == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
     SonareStreamingMasteringChain* refused_chain = nullptr;

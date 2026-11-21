@@ -178,7 +178,7 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
 
 TEST_CASE("sonare_eq_set_band refuses an unknown key by name", "[c_api][warning]") {
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDB":3})") == SONARE_ERROR_INVALID_FORMAT);
   CHECK(std::string(sonare_last_error_message()).find("unknown key gainDB") != std::string::npos);

@@ -495,7 +495,7 @@ TEST_CASE("equalizer prepare refusals are owned by the core function",
     sonare::mastering::eq::EqualizerProcessor core;
     CHECK_NOTHROW(core.prepare(rate, block));
     SonareEq* handle = nullptr;
-    CHECK(sonare_eq_create(rate, block, &handle) == SONARE_OK);
+    CHECK(sonare_eq_create(static_cast<int>(rate), block, &handle) == SONARE_OK);
     sonare_eq_destroy(handle);
   }
 
@@ -510,7 +510,8 @@ TEST_CASE("equalizer prepare refusals are owned by the core function",
     require_argument_refusal([&] { core.prepare(rate, block); }, message);
 
     SonareEq* handle = nullptr;
-    CHECK(sonare_eq_create(rate, block, &handle) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_eq_create(static_cast<int>(rate), block, &handle) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(handle == nullptr);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
@@ -611,7 +612,7 @@ TEST_CASE("streaming retune prepare refusals are owned by the core function",
     CHECK_NOTHROW(core.prepare(rate, block));
     SonareStreamingRetune* handle = nullptr;
     REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &handle) == SONARE_OK);
-    CHECK(sonare_streaming_retune_prepare(handle, rate, block) == SONARE_OK);
+    CHECK(sonare_streaming_retune_prepare(handle, static_cast<int>(rate), block) == SONARE_OK);
     sonare_streaming_retune_destroy(handle);
   }
 
@@ -627,7 +628,8 @@ TEST_CASE("streaming retune prepare refusals are owned by the core function",
 
     SonareStreamingRetune* handle = nullptr;
     REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &handle) == SONARE_OK);
-    CHECK(sonare_streaming_retune_prepare(handle, rate, block) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_streaming_retune_prepare(handle, static_cast<int>(rate), block) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
     sonare_streaming_retune_destroy(handle);
   }

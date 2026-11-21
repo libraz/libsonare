@@ -18,11 +18,11 @@ T* sentinel() {
 
 TEST_CASE("sonare_eq_create returns its error and leaves out NULL on failure",
           "[c_api][c_create]") {
-  CHECK(sonare_eq_create(48000.0, 512, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_eq_create(48000, 512, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   SonareEq* eq = sentinel<SonareEq>();
-  CHECK(sonare_eq_create(0.0, 512, &eq) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_eq_create(0, 512, &eq) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(eq == nullptr);
-  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
   CHECK(eq != nullptr);
   sonare_eq_destroy(eq);
 }

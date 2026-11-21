@@ -476,7 +476,7 @@ SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixM
   SONARE_C_CATCH
 }
 
-SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, uint32_t* out_count) {
+SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, size_t* out_count) {
   // A single relaxed atomic load, so it is safe to poll from the audio
   // thread alongside the meters; it touches no diagnostic string.
   SONARE_C_RT_API_ENTRY;

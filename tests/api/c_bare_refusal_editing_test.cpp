@@ -54,7 +54,7 @@ TEST_CASE("the silence ratio entries name the refused argument", "[c_api][editin
   REQUIRE(sonare_audio_silence_ratio(audio, kNaN, 512, 256, &ratio) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "threshold_db must be finite and in [-3.4028235e38, 3.4028235e38]");
-  REQUIRE(sonare_audio_silence_ratio(audio, -60.0f, -1, 256, &ratio) ==
+  REQUIRE(sonare_audio_silence_ratio(audio, -60.0f, size_t{2147483648u}, 256, &ratio) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() == "frame_length" + frame_range);
   REQUIRE(sonare_audio_silence_ratio(audio, -60.0f, 512, 0, &ratio) ==

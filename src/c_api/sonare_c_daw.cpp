@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -64,12 +65,15 @@ void clear_percussive_events_result(SonarePercussiveEventsResult& out) {
 
 /// Refuses a note region with no sample inside the buffer, by the C parameter names. An
 /// offset past the end is clamped to it, as the editor does.
-void check_note_region(int onset_sample, int offset_sample, size_t length) {
-  util::check::integer_in_range(onset_sample, 0, static_cast<long long>(length) - 1,
-                                "onset_sample");
+void check_note_region(int64_t onset_sample, int64_t offset_sample, size_t length) {
+  // The core holds sample indices as int, so a position past INT_MAX is refused, not narrowed.
+  constexpr long long kMaxIndex = std::numeric_limits<int>::max();
+  util::check::integer_in_range(
+      onset_sample, 0, std::min(static_cast<long long>(length) - 1, kMaxIndex), "onset_sample");
   if (offset_sample <= onset_sample) {
     util::check::refuse_relation({"offset_sample", "onset_sample"}, "{0} must be greater than {1}");
   }
+  util::check::integer_in_range(offset_sample, 0, kMaxIndex, "offset_sample");
 }
 
 /// Checks the separation framing of a percussive config and copies it onto the core one.
@@ -165,7 +169,7 @@ void check_pitch_track(const float* f0_hz, const float* voiced_prob, const int32
 }
 
 /// Refuses the frame count and hop of a time-varying correction call.
-SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, int hop_length) {
+SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, size_t hop_length) {
   SONARE_C_REQUIRE_NONNULL(f0_hz);
   return run_validation([&] {
     util::check::integer_within(n_frames, kTimeVaryingFrameCountDomain, "n_frames");
@@ -195,10 +199,10 @@ void apply_correction_knobs(const SonarePitchCorrectionConfig& config,
 /// Builds the F0Track the time-varying correctors consume from the C arrays.
 editing::pitch_editor::F0Track build_pitch_track(const float* f0_hz, const float* voiced_prob,
                                                  const int32_t* voiced, size_t n_frames,
-                                                 int hop_length, int sample_rate) {
+                                                 size_t hop_length, int sample_rate) {
   editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;
-  track.hop_length = hop_length;
+  track.hop_length = static_cast<int>(hop_length);
   track.f0_hz.assign(f0_hz, f0_hz + n_frames);
   track.voiced.resize(n_frames);
   track.voiced_prob.resize(n_frames);
@@ -568,8 +572,8 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      int sample_rate, const float* f0_hz,
                                                      const float* voiced_prob,
                                                      const int32_t* voiced, size_t n_frames,
-                                                     int hop_length, float target_midi, float** out,
-                                                     size_t* out_length) {
+                                                     size_t hop_length, float target_midi,
+                                                     float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
   SONARE_C_REQUIRE_NONNULL(out);
@@ -627,7 +631,8 @@ void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config) {
 
 SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
                                              const float* f0_hz, const float* voiced_prob,
-                                             const int32_t* voiced, size_t n_frames, int hop_length,
+                                             const int32_t* voiced, size_t n_frames,
+                                             size_t hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length) {
   SONARE_C_API_ENTRY;
@@ -745,7 +750,7 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
 }
 
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
-                                int onset_sample, int offset_sample, float stretch_ratio,
+                                int64_t onset_sample, int64_t offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Validated before the gate, so the stub below refuses and zeroes the same way.
@@ -769,8 +774,8 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
   return run_offline("note_stretch", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        editing::pitch_editor::NoteRegion region;
-                       region.onset_sample = onset_sample;
-                       region.offset_sample = offset_sample;
+                       region.onset_sample = static_cast<int>(onset_sample);
+                       region.offset_sample = static_cast<int>(offset_sample);
                        editing::pitch_editor::NoteEditor editor;
                        Audio result = editor.stretch_note(audio, region, stretch_ratio);
                        return copy_audio_result(result, out, out_length);
@@ -1348,9 +1353,9 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
   SONARE_C_CATCH
 }
 
-SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
-                             int offset_sample, int target_onset_sample, float** out,
-                             size_t* out_length) {
+SonareError sonare_note_move(const float* samples, size_t length, int sample_rate,
+                             int64_t onset_sample, int64_t offset_sample,
+                             int64_t target_onset_sample, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Validated before the gate, so the stub below refuses and zeroes the same way.
   SONARE_C_ZERO_OUTS(out, out_length);
@@ -1361,8 +1366,11 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
   }
   if (const SonareError err = run_validation([&] {
         check_note_region(onset_sample, offset_sample, length);
-        util::check::integer_in_range(target_onset_sample, 0, static_cast<long long>(length) - 1,
-                                      "target_onset_sample");
+        util::check::integer_in_range(
+            target_onset_sample, 0,
+            std::min(static_cast<long long>(length) - 1,
+                     static_cast<long long>(std::numeric_limits<int>::max())),
+            "target_onset_sample");
       });
       err != SONARE_OK) {
     return err;
@@ -1371,15 +1379,15 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
   SONARE_C_REQUIRE_NONNULL(out_length);
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
-  return run_offline("note_move", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       editing::pitch_editor::NoteRegion region;
-                       region.onset_sample = onset_sample;
-                       region.offset_sample = offset_sample;
-                       editing::pitch_editor::NoteEditor editor;
-                       Audio result = editor.move_note(audio, region, target_onset_sample);
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_offline(
+      "note_move", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        editing::pitch_editor::NoteRegion region;
+        region.onset_sample = static_cast<int>(onset_sample);
+        region.offset_sample = static_cast<int>(offset_sample);
+        editing::pitch_editor::NoteEditor editor;
+        Audio result = editor.move_note(audio, region, static_cast<int>(target_onset_sample));
+        return copy_audio_result(result, out, out_length);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
                               target_onset_sample, out, out_length);

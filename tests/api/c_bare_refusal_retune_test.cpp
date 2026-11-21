@@ -23,7 +23,7 @@ constexpr int kBlock = 64;
 SonareStreamingRetune* prepared_retune() {
   SonareStreamingRetune* retune = nullptr;
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, kBlock) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, kBlock) == SONARE_OK);
   return retune;
 }
 
@@ -33,8 +33,7 @@ TEST_CASE("streaming retune refuses a NULL handle or out by name", "[c_api][retu
   CHECK(sonare_streaming_retune_create(0.0f, 1.0f, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
 
-  CHECK(sonare_streaming_retune_prepare(nullptr, 48000.0, kBlock) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_streaming_retune_prepare(nullptr, 48000, kBlock) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "retune must not be NULL");
   CHECK(sonare_streaming_retune_reset(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "retune must not be NULL");

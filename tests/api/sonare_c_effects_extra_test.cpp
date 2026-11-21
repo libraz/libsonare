@@ -1391,15 +1391,9 @@ TEST_CASE("C scalar guards reject every non-finite argument", "[c_api][validatio
 }
 
 #ifdef SONARE_WITH_MASTERING
-TEST_CASE("sonare_eq_create rejects a non-finite or out-of-range sample rate",
-          "[c_api][validation]") {
-  const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
-                              std::numeric_limits<double>::infinity(),
-                              -std::numeric_limits<double>::infinity(),
-                              7999.0,
-                              384001.0,
-                              1.0e9};
-  for (double bad_rate : bad_rates) {
+TEST_CASE("sonare_eq_create rejects an out-of-range sample rate", "[c_api][validation]") {
+  const int bad_rates[] = {std::numeric_limits<int>::min(), -1, 0, 7999, 384001, 1000000000};
+  for (int bad_rate : bad_rates) {
     CAPTURE(bad_rate);
     SonareEq* refused_eq = nullptr;
     REQUIRE(sonare_eq_create(bad_rate, 512, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1411,32 +1405,27 @@ TEST_CASE("sonare_eq_create rejects a non-finite or out-of-range sample rate",
   }
 
   SonareEq* eq = nullptr;
-  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
+  REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   sonare_eq_destroy(eq);
 }
 #endif
 
 #ifdef SONARE_WITH_VOICE_CHANGER
-TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite or out-of-range sample rate",
+TEST_CASE("sonare_streaming_retune_prepare rejects an out-of-range sample rate",
           "[c_api][validation]") {
   SonareStreamingRetune* retune = nullptr;
   REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
 
-  const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
-                              std::numeric_limits<double>::infinity(),
-                              -std::numeric_limits<double>::infinity(),
-                              7999.0,
-                              384001.0,
-                              1.0e9};
-  for (double bad_rate : bad_rates) {
+  const int bad_rates[] = {-1, 0, 7999, 384001, 1000000000};
+  for (int bad_rate : bad_rates) {
     CAPTURE(bad_rate);
     REQUIRE(sonare_streaming_retune_prepare(retune, bad_rate, 512) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 512) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000, 512) == SONARE_OK);
   sonare_streaming_retune_destroy(retune);
 }
 #endif
@@ -1455,7 +1444,7 @@ TEST_CASE("sonare streaming retune exports deterministic feature-off stubs",
   REQUIRE(detail[0] != '\0');
 
   sonare_streaming_retune_destroy(nullptr);
-  REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000.0, 128) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000, 128) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_streaming_retune_reset(nullptr) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_streaming_retune_set_config(nullptr, 0.0f, 1.0f, 0) == SONARE_ERROR_NOT_SUPPORTED);
 

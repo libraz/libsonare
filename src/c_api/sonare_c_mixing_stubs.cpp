@@ -222,7 +222,7 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
 }
 
 SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
-                                                      uint32_t* out_count) {
+                                                      size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   (void)mixer;
@@ -239,7 +239,7 @@ size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGo
   return 0;
 }
 
-SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, uint32_t* out_count) {
+SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
   (void)strip;

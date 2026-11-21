@@ -876,7 +876,7 @@ SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoi
 }
 
 SonareError sonare_realtime_voice_changer_non_finite_discard_count(
-    const SonareRealtimeVoiceChanger* handle, uint32_t* out_count) {
+    const SonareRealtimeVoiceChanger* handle, size_t* out_count) {
   // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
   SONARE_C_RT_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)

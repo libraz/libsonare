@@ -52,8 +52,8 @@ SonareError fill_clipping_result(const metering::ClippingResult& result,
   if (result.regions.empty()) return SONARE_OK;
   std::unique_ptr<SonareClippingRegion[]> tmp(new SonareClippingRegion[result.regions.size()]);
   for (size_t i = 0; i < result.regions.size(); ++i) {
-    tmp[i].start_sample = result.regions[i].start_sample;
-    tmp[i].end_sample = result.regions[i].end_sample;
+    tmp[i].start_sample = static_cast<int64_t>(result.regions[i].start_sample);
+    tmp[i].end_sample = static_cast<int64_t>(result.regions[i].end_sample);
     tmp[i].length = result.regions[i].length;
     tmp[i].peak = result.regions[i].peak;
   }
@@ -111,7 +111,8 @@ SonareError sonare_metering_rms_db(const float* samples, size_t length, int samp
 
 namespace {
 
-SonareError validate_silence_ratio_params(float threshold_db, int frame_length, int hop_length) {
+SonareError validate_silence_ratio_params(float threshold_db, size_t frame_length,
+                                          size_t hop_length) {
   return run_validation([&] {
     util::check::finite_float(threshold_db, "threshold_db");
     util::check::integer_within(frame_length, metering::kSilenceRatioFrameLengthDomain,
@@ -123,8 +124,8 @@ SonareError validate_silence_ratio_params(float threshold_db, int frame_length, 
 }  // namespace
 
 SonareError sonare_metering_silence_ratio(const float* samples, size_t length, int sample_rate,
-                                          float threshold_db, int frame_length, int hop_length,
-                                          float* out_ratio) {
+                                          float threshold_db, size_t frame_length,
+                                          size_t hop_length, float* out_ratio) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_ratio);
   if (const SonareError err = validate_silence_ratio_params(threshold_db, frame_length, hop_length);
@@ -134,8 +135,9 @@ SonareError sonare_metering_silence_ratio(const float* samples, size_t length, i
   SONARE_C_REQUIRE_NONNULL(out_ratio);
   return run_offline("metering_silence_ratio", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
-                       *out_ratio =
-                           metering::silence_ratio(audio, threshold_db, frame_length, hop_length);
+                       *out_ratio = metering::silence_ratio(audio, threshold_db,
+                                                            static_cast<int>(frame_length),
+                                                            static_cast<int>(hop_length));
                        return SONARE_OK;
                      });
 }
@@ -565,7 +567,7 @@ SonareError sonare_audio_crest_factor_db(const SonareAudio* audio, float* out_db
 }
 
 SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold_db,
-                                       int frame_length, int hop_length, float* out_ratio) {
+                                       size_t frame_length, size_t hop_length, float* out_ratio) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_ratio);
   SONARE_C_REQUIRE_NONNULL(audio);
@@ -575,7 +577,8 @@ SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold
   }
   SONARE_C_REQUIRE_NONNULL(out_ratio);
   SONARE_C_TRY
-  *out_ratio = metering::silence_ratio(audio->audio, threshold_db, frame_length, hop_length);
+  *out_ratio = metering::silence_ratio(audio->audio, threshold_db, static_cast<int>(frame_length),
+                                       static_cast<int>(hop_length));
   return SONARE_OK;
   SONARE_C_CATCH
 }

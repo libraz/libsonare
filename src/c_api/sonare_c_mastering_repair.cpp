@@ -84,6 +84,13 @@ sonare::mastering::repair::DenoiseNoiseEstimator to_cpp_denoise_noise_estimator(
                                 "unknown denoise noise estimator");
 }
 
+// A hop above INT_MAX saturates there, so the core's own range check refuses it rather than a
+// wrapped, in-domain value.
+int saturate_to_int(size_t value) {
+  constexpr size_t kMax = static_cast<size_t>(std::numeric_limits<int>::max());
+  return static_cast<int>(value > kMax ? kMax : value);
+}
+
 sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
     const SonareDenoiseClassicalConfig* config) {
   sonare::mastering::repair::DenoiseClassicalConfig cpp;
@@ -92,7 +99,7 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
   cpp.mode = to_cpp_denoise_mode(config->mode);
   cpp.noise_estimator = to_cpp_denoise_noise_estimator(config->noise_estimator);
   cpp.n_fft = config->n_fft;
-  cpp.hop_length = config->hop_length;
+  cpp.hop_length = saturate_to_int(config->hop_length);
   cpp.dd_alpha = config->dd_alpha;
   cpp.reduction_db = config->reduction_db;
   cpp.over_subtraction = config->over_subtraction;
@@ -170,7 +177,7 @@ sonare::mastering::repair::DereverbClassicalConfig to_cpp_dereverb_config(
   cpp.threshold = config->threshold;
   cpp.attenuation = config->attenuation;
   cpp.n_fft = config->n_fft;
-  cpp.hop_length = config->hop_length;
+  cpp.hop_length = saturate_to_int(config->hop_length);
   cpp.t60_sec = config->t60_sec;
   cpp.late_delay_ms = config->late_delay_ms;
   cpp.over_subtraction = config->over_subtraction;
@@ -587,7 +594,7 @@ void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config) 
   config->mode = to_c_denoise_mode(cpp.mode);
   config->noise_estimator = to_c_denoise_noise_estimator(cpp.noise_estimator);
   config->n_fft = cpp.n_fft;
-  config->hop_length = cpp.hop_length;
+  config->hop_length = static_cast<size_t>(cpp.hop_length);
   config->dd_alpha = cpp.dd_alpha;
   config->reduction_db = cpp.reduction_db;
   config->over_subtraction = cpp.over_subtraction;
@@ -642,7 +649,7 @@ void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config
   config->threshold = cpp.threshold;
   config->attenuation = cpp.attenuation;
   config->n_fft = cpp.n_fft;
-  config->hop_length = cpp.hop_length;
+  config->hop_length = static_cast<size_t>(cpp.hop_length);
   config->t60_sec = cpp.t60_sec;
   config->late_delay_ms = cpp.late_delay_ms;
   config->over_subtraction = cpp.over_subtraction;
