@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -23,13 +24,116 @@
 
 namespace sonare::util::check {
 
+/// @brief Whether a numeric domain holds integers or real numbers.
+enum class NumberKind { Integer, Real };
+
+/// @brief A numeric domain: the one statement of what a member accepts, read by the core check
+///        that refuses it and by a binding's reader before it narrows a caller's number, so a
+///        fraction, a NaN or a value no target type holds is refused in the domain's own text.
+/// @details An absent bound leaves that side open. An integer domain is closed at both ends or
+///          open above; a real domain may be open or half-open at either end.
+struct NumericDomain {
+  NumberKind kind = NumberKind::Real;
+  std::optional<double> lo;
+  std::optional<double> hi;
+  bool lo_included = true;
+  bool hi_included = true;
+};
+
+/// @brief The integers in [lo, hi].
+constexpr NumericDomain integer_domain(long long lo, long long hi) {
+  return {NumberKind::Integer, static_cast<double>(lo), static_cast<double>(hi), true, true};
+}
+
+/// @brief The integers of at least @p lo, for a 64-bit position or count.
+constexpr NumericDomain integer_domain_at_least(long long lo) {
+  return {NumberKind::Integer, static_cast<double>(lo), std::nullopt, true, true};
+}
+
+/// @brief The integers of at least @p lo that @p T holds: closed at T's maximum when T is no
+///        wider than int, open above otherwise.
+template <typename T>
+constexpr NumericDomain integer_domain_of(long long lo) {
+  static_assert(std::is_integral_v<T>, "integer_domain_of takes an integer type");
+  if constexpr (sizeof(T) <= sizeof(int)) {
+    return integer_domain(lo, static_cast<long long>(std::numeric_limits<T>::max()));
+  } else {
+    return integer_domain_at_least(lo);
+  }
+}
+
+/// @brief The finite reals between @p lo and @p hi, each end included as given.
+constexpr NumericDomain real_domain(double lo, bool lo_included, double hi, bool hi_included) {
+  return {NumberKind::Real, lo, hi, lo_included, hi_included};
+}
+
+/// @brief The finite reals in [lo, hi].
+constexpr NumericDomain real_domain(double lo, double hi) {
+  return real_domain(lo, true, hi, true);
+}
+
+/// @brief The finite reals of at least @p bound, or greater than it when @p included is false.
+constexpr NumericDomain real_domain_above(double bound, bool included) {
+  return {NumberKind::Real, bound, std::nullopt, included, true};
+}
+
+/// @brief The finite reals of at most @p bound, or less than it when @p included is false.
+constexpr NumericDomain real_domain_below(double bound, bool included) {
+  return {NumberKind::Real, std::nullopt, bound, true, included};
+}
+
+/// @brief Every value a 32-bit float holds, for a float member with no narrower domain.
+constexpr NumericDomain float_domain() {
+  return real_domain(-static_cast<double>(std::numeric_limits<float>::max()),
+                     static_cast<double>(std::numeric_limits<float>::max()));
+}
+
+/// @brief The predicate text that states @p domain.
+inline std::string domain_predicate(const NumericDomain& domain) {
+  if (domain.kind == NumberKind::Integer) {
+    if (domain.hi) return refusal::integer_range_predicate(*domain.lo, *domain.hi);
+    return refusal::integer_at_least_predicate(static_cast<long long>(*domain.lo));
+  }
+  if (domain.lo && domain.hi) {
+    return refusal::interval_predicate(*domain.lo, domain.lo_included, *domain.hi,
+                                       domain.hi_included);
+  }
+  if (domain.lo) {
+    return domain.lo_included ? refusal::at_least_predicate(*domain.lo)
+                              : refusal::greater_than_predicate(*domain.lo);
+  }
+  if (domain.hi) {
+    return domain.hi_included ? refusal::at_most_predicate(*domain.hi)
+                              : refusal::less_than_predicate(*domain.hi);
+  }
+  return refusal::kFiniteDoublePredicate;
+}
+
+/// @brief Whether @p value lies in @p domain: finite, whole for an integer domain, inside both
+///        ends.
+inline bool in_domain(double value, const NumericDomain& domain) {
+  if (!std::isfinite(value)) return false;
+  if (domain.kind == NumberKind::Integer && std::trunc(value) != value) return false;
+  if (domain.lo && !(domain.lo_included ? value >= *domain.lo : value > *domain.lo)) return false;
+  if (domain.hi && !(domain.hi_included ? value <= *domain.hi : value < *domain.hi)) return false;
+  return true;
+}
+
+/// @brief Refuses @p subject as outside @p domain, stating the domain and carrying it as data.
+[[noreturn]] inline void refuse_outside(const NumericDomain& domain, const char* subject) {
+  throw SonareParameterRefusal::predicate(
+      ErrorCode::InvalidParameter, subject, domain_predicate(domain),
+      RefusalDomain{domain.lo, domain.hi, domain.lo_included, domain.hi_included});
+}
+
+/// @brief Refuses @p value unless it lies in @p domain.
+inline void within(double value, const NumericDomain& domain, const char* subject) {
+  if (!in_domain(value, domain)) refuse_outside(domain, subject);
+}
+
 /// @brief Refuses @p value unless it is finite and in [lo, hi].
 inline void in_range(double value, double lo, double hi, const char* subject) {
-  if (!(std::isfinite(value) && value >= lo && value <= hi)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::range_predicate(lo, hi),
-                                            RefusalDomain{lo, hi, true, true});
-  }
+  within(value, real_domain(lo, hi), subject);
 }
 
 /// @brief in_range for bounds computed at run time; the refusal prints them rounded inward.
@@ -44,50 +148,27 @@ inline void in_computed_range(double value, double lo, double hi, const char* su
 /// @brief Refuses @p value unless it is finite and in the interval with the given ends.
 inline void in_interval(double value, double lo, bool lo_included, double hi, bool hi_included,
                         const char* subject) {
-  const bool above = lo_included ? value >= lo : value > lo;
-  const bool below = hi_included ? value <= hi : value < hi;
-  if (!(std::isfinite(value) && above && below)) {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, subject,
-        refusal::interval_predicate(lo, lo_included, hi, hi_included),
-        RefusalDomain{lo, hi, lo_included, hi_included});
-  }
+  within(value, real_domain(lo, lo_included, hi, hi_included), subject);
 }
 
 /// @brief Refuses @p value unless it is finite and at least @p bound.
 inline void at_least(double value, double bound, const char* subject) {
-  if (!(std::isfinite(value) && value >= bound)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::at_least_predicate(bound),
-                                            RefusalDomain{bound, std::nullopt, true, true});
-  }
+  within(value, real_domain_above(bound, true), subject);
 }
 
 /// @brief Refuses @p value unless it is finite and greater than @p bound.
 inline void greater_than(double value, double bound, const char* subject) {
-  if (!(std::isfinite(value) && value > bound)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::greater_than_predicate(bound),
-                                            RefusalDomain{bound, std::nullopt, false, true});
-  }
+  within(value, real_domain_above(bound, false), subject);
 }
 
 /// @brief Refuses @p value unless it is finite and at most @p bound.
 inline void at_most(double value, double bound, const char* subject) {
-  if (!(std::isfinite(value) && value <= bound)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::at_most_predicate(bound),
-                                            RefusalDomain{std::nullopt, bound, true, true});
-  }
+  within(value, real_domain_below(bound, true), subject);
 }
 
 /// @brief Refuses @p value unless it is finite and less than @p bound.
 inline void less_than(double value, double bound, const char* subject) {
-  if (!(std::isfinite(value) && value < bound)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::less_than_predicate(bound),
-                                            RefusalDomain{std::nullopt, bound, true, false});
-  }
+  within(value, real_domain_below(bound, false), subject);
 }
 
 /// @brief Refuses @p value unless it is finite, for a float member with no narrower domain.
@@ -111,14 +192,10 @@ inline std::string indexed_subject(const char* array, std::size_t index, const c
   return std::string(array) + "[" + std::to_string(index) + "]." + field;
 }
 
-/// @brief Refuses @p value unless it is in [lo, hi].
+/// @brief Refuses @p value unless it is in [lo, hi]. Compared as an integer, so a 64-bit value
+///        past 2^53 is judged exactly.
 inline void integer_in_range(long long value, long long lo, long long hi, const char* subject) {
-  if (value < lo || value > hi) {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, subject,
-        refusal::integer_range_predicate(static_cast<double>(lo), static_cast<double>(hi)),
-        RefusalDomain{static_cast<double>(lo), static_cast<double>(hi), true, true});
-  }
+  if (value < lo || value > hi) refuse_outside(integer_domain(lo, hi), subject);
 }
 
 /// @brief Refuses @p value unless it is at least @p bound. A type no wider than int states its
@@ -127,19 +204,7 @@ inline void integer_in_range(long long value, long long lo, long long hi, const 
 template <typename T>
 inline void integer_at_least(T value, long long bound, const char* subject) {
   static_assert(std::is_integral_v<T>, "integer_at_least takes an integer");
-  if (static_cast<long long>(value) >= bound) return;
-  if constexpr (sizeof(T) <= sizeof(int)) {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, subject,
-        refusal::integer_range_predicate(static_cast<double>(bound),
-                                         static_cast<double>(std::numeric_limits<T>::max())),
-        RefusalDomain{static_cast<double>(bound),
-                      static_cast<double>(std::numeric_limits<T>::max()), true, true});
-  } else {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, subject, refusal::integer_at_least_predicate(bound),
-        RefusalDomain{static_cast<double>(bound), std::nullopt, true, true});
-  }
+  if (static_cast<long long>(value) < bound) refuse_outside(integer_domain_of<T>(bound), subject);
 }
 
 /// @brief Refuses @p value unless it is a power of two in [lo, hi].

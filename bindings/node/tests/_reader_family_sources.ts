@@ -83,6 +83,7 @@ export const READER_FAMILIES: Readonly<
     BoolProperty: 'refuse',
     DbfsAsLinearProperty: 'refuse', // a dBFS value read through DomainFloatProperty
     DomainFloatProperty: 'refuse',
+    DomainProperty: 'refuse',
     DoubleProperty: 'refuse',
     AutoFiniteFloatProperty: 'refuse',
     FiniteFloatProperty: 'refuse',

@@ -28,6 +28,9 @@
 
 namespace sonare_node {
 
+// Defined in sonare_wrap_utils.cpp; the positional domain readers report a core refusal through it.
+void ThrowCurrentException(Napi::Env env);
+
 /// @brief Number.MAX_SAFE_INTEGER, the largest integer a JS number holds exactly.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
@@ -488,6 +491,34 @@ inline float DomainFloatProperty(const Napi::Object& obj, const char* key, float
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
+}
+
+/// @brief Narrow a JS number onto @p T after checking it against the core's statement of its
+///        domain, so a fraction, a NaN, an infinity or a value @p T cannot hold is refused in the
+///        domain's own text rather than in a reader text or a facade copy of the bound.
+/// @details @p domain must lie inside @p T. The refusal unwinds as the core's, with @p name taken
+///   as already in the caller's spelling.
+template <typename T>
+inline T node_domain_number(const Napi::Value& value, const char* name,
+                            const sonare::util::check::NumericDomain& domain) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  try {
+    sonare::util::check::within(number, domain, name);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw refusal.as_caller_spelled();
+  }
+  return static_cast<T>(number);
+}
+
+/// @brief Read a number property checked against @p domain (@ref node_domain_number).
+/// @details Absent returns @p fallback; a present value that is not a number is refused by name.
+template <typename T>
+inline T DomainProperty(const Napi::Object& obj, const char* key, T fallback,
+                        const sonare::util::check::NumericDomain& domain) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return node_domain_number<T>(value, key, domain);
 }
 
 /// @brief Read a dBFS level property as the linear amplitude a core config holds.
@@ -1184,6 +1215,40 @@ inline bool RequiredDoubleArg(Napi::Env env, const Napi::CallbackInfo& info, siz
 inline bool RequiredBoolArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                             const char* name, bool* out) {
   return RequiredBoolValue(env, info[index], name, out);
+}
+
+/// @brief Read a required number positional argument checked against @p domain
+///        (@ref node_domain_number).
+/// @details Reports through a pending exception, this family's contract: a wrong type is the
+///   TypeError, a value outside @p domain the core's refusal.
+template <typename T>
+inline bool RequiredDomainArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, const sonare::util::check::NumericDomain& domain,
+                              T* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!RequireNumberValue(env, info[index], name)) return false;
+  try {
+    *out = node_domain_number<T>(info[index], name, domain);
+  } catch (...) {
+    ThrowCurrentException(env);
+    return false;
+  }
+  return true;
+}
+
+/// @brief Optional sibling of @ref RequiredDomainArg: absent, undefined or null reads as
+///        @p fallback.
+template <typename T>
+inline bool OptionalDomainArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, T fallback,
+                              const sonare::util::check::NumericDomain& domain, T* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredDomainArg(env, info, index, name, domain, out);
 }
 
 /// @brief Read an optional int positional argument.

@@ -192,6 +192,10 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['DomainFloatProperty', 'Reads a float; truncation is not in play.'],
+  [
+    'DomainProperty',
+    "Checks the number against the core's domain before narrowing, so a fraction is refused in the domain text instead of truncating onto a zero.",
+  ],
   ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
   ['ChoiceProperty', 'Reads an enum name, so it has no numeric fallback at all.'],

@@ -576,6 +576,31 @@ std::optional<float> optionalNumber(const val& v, const char* key);
 ///          to an infinity, so the consumer's "<key> must be finite and in [lo, hi]" refuses all.
 /// @throws WasmArgumentError naming @p key when @p v is present and not a number.
 std::optional<float> optionalDomainNumber(const val& v, const char* key);
+/// @brief Narrows a JS number onto @p T after checking it against the core's statement of its
+///        domain, so a fraction, a NaN, an infinity or a value @p T cannot hold is refused in the
+///        domain's own text rather than in a reader text or a facade copy of the bound.
+/// @details @p domain must lie inside @p T; the refusal is the core's, with @p key taken as
+///          already in the caller's spelling.
+/// @throws WasmArgumentError naming @p key when @p value is not a number.
+template <typename T>
+T domainNumberFromVal(const val& value, const char* key,
+                      const sonare::util::check::NumericDomain& domain) {
+  const double number = numberFromVal(value, key);
+  try {
+    sonare::util::check::within(number, domain, key);
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    throw refusal.as_caller_spelled();
+  }
+  return static_cast<T>(number);
+}
+/// @brief Optional sibling of domainNumberFromVal: omitted, `undefined` or `null` is
+///        std::nullopt.
+template <typename T>
+std::optional<T> optionalDomainValue(const val& v, const char* key,
+                                     const sonare::util::check::NumericDomain& domain) {
+  if (v.isUndefined() || v.isNull()) return std::nullopt;
+  return domainNumberFromVal<T>(v, key, domain);
+}
 /// @brief Boolean sibling of optionalNumber.
 /// @throws WasmArgumentError naming @p key when @p v is present
 ///         and not a JS boolean.

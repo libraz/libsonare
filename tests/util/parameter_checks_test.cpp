@@ -3,6 +3,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 
@@ -222,4 +223,40 @@ TEST_CASE("an integer bound is written in plain digits, never in exponent form",
   CHECK(refusal::integer_bound_text(500000000.0) == "500000000");
   CHECK(refusal::integer_bound_text(4294967295.0) == "4294967295");
   CHECK(refusal::integer_bound_text(0.5) == "0.5");
+}
+
+TEST_CASE("a numeric domain refuses a fraction, a NaN and an out-of-type value in its own text",
+          "[util][refusal]") {
+  const check::NumericDomain hop = check::integer_domain_of<int>(1);
+  const std::string hop_text = "hop_length must be an integer in [1, 2147483647]";
+  CHECK(refusal_text([&] { check::within(2.5, hop, "hop_length"); }) == hop_text);
+  CHECK(refusal_text([&] { check::within(std::nan(""), hop, "hop_length"); }) == hop_text);
+  CHECK(refusal_text([&] { check::within(4294967296.0, hop, "hop_length"); }) == hop_text);
+  CHECK(refusal_text([&] { check::within(0.0, hop, "hop_length"); }) == hop_text);
+  CHECK(refusal_text([&] { check::within(512.0, hop, "hop_length"); }).empty());
+  // The integer helper states the same domain the descriptor does.
+  CHECK(refusal_text([] { check::integer_at_least(0, 1, "hop_length"); }) == hop_text);
+
+  const check::NumericDomain position = check::integer_domain_of<int64_t>(0);
+  CHECK(refusal_text([&] { check::within(-1.0, position, "start"); }) ==
+        "start must be an integer of at least 0");
+
+  const check::NumericDomain ratio = check::real_domain(0.0, false, 1.0, true);
+  CHECK(refusal_text([&] { check::within(0.0, ratio, "ratio"); }) ==
+        "ratio must be finite and in (0, 1]");
+  CHECK(refusal_text([&] { check::within(0.5, ratio, "ratio"); }).empty());
+  CHECK(refusal_text([&] { check::within(1e300, check::float_domain(), "gain"); }) ==
+        std::string("gain ") + refusal::kFloatRangePredicate);
+  CHECK(refusal_text([&] { check::within(INFINITY, check::NumericDomain{}, "t"); }) ==
+        "t must be finite");
+
+  try {
+    check::within(2.5, check::real_domain_above(3.0, false), "x");
+    FAIL("refused nothing");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    REQUIRE(e.domain());
+    CHECK(*e.domain()->lo == 3.0);
+    CHECK_FALSE(e.domain()->lo_included);
+    CHECK_FALSE(e.domain()->hi);
+  }
 }
