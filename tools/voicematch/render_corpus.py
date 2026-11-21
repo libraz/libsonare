@@ -2,7 +2,7 @@
 
 For each representative GM program this builds an idiomatic short phrase,
 imports it as an SMF into a libsonare project, bounces it through
-``bounce_with_sf2_instrument`` with NO SoundFont loaded (so every program
+``Project.bounce(sf2_instruments=...)`` with NO SoundFont loaded (so every program
 plays through the NativeSynth GM fallback bank — the path under improvement),
 writes a WAV, and prints objective per-file metrics:
 
@@ -220,8 +220,11 @@ def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
     proj = libsonare.Project()
     try:
         proj.import_smf(smf_bytes)
-        audio = proj.bounce_with_sf2_instrument(
-            total_frames=int(seconds * SR), sample_rate=SR, num_channels=2
+        audio = proj.bounce(
+            sf2_instruments=[(0, libsonare.Sf2InstrumentConfig())],
+            total_frames=int(seconds * SR),
+            sample_rate=SR,
+            num_channels=2,
         )
         manifest = proj.soundfont_manifest()
     finally:

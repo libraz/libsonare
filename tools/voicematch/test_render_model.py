@@ -173,7 +173,7 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
         def import_smf(self, _data):
             pass
 
-        def bounce_with_sf2_instrument(self, _cfg, *, total_frames, sample_rate):
+        def bounce(self, *, sf2_instruments, total_frames, sample_rate):
             seen["bounce_rate"] = sample_rate
             seen["frames"] = total_frames
             return [[0.0, 0.0]] * total_frames
@@ -238,7 +238,7 @@ def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
         def import_smf(self, _data):
             pass
 
-        def bounce_with_sf2_instrument(self, _cfg, *, total_frames, sample_rate):
+        def bounce(self, *, sf2_instruments, total_frames, sample_rate):
             dump = os.environ.get(render_model.PATH_DUMP_ENV)
             seen["dump_paths"].append(dump)
             if record is not None:

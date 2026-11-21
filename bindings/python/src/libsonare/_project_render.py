@@ -188,53 +188,53 @@ class _ProjectRenderMixin:
         errors: list[BaseException] = []
         keepalive: list[object] = []
         if instruments is not None:
-            bindings = [(dst, inst) for dst, inst in instruments]
-            c_external = (SonareInstrumentBinding * len(bindings))()
-            for i, (dst, inst) in enumerate(bindings):
+            external_bindings = [(dst, inst) for dst, inst in instruments]
+            c_external = (SonareInstrumentBinding * len(external_bindings))()
+            for i, (dst, inst) in enumerate(external_bindings):
                 if not callable(getattr(inst, "render", None)):
                     raise _refuse_type(
                         "each instrument must provide a render(channels, num_frames) method"
                     )
                 c_external[i].destination_id = dst
                 c_external[i].callbacks = _make_instrument_callbacks(inst, errors, keepalive)
-            if bindings:
+            if external_bindings:
                 options.instruments = c_external
-                options.instrument_count = _to_c_size_t(len(bindings), "count")
+                options.instrument_count = _to_c_size_t(len(external_bindings), "count")
         if builtin_instruments is not None:
-            bindings = [(dst, patch) for dst, patch in builtin_instruments]
-            c_builtin = (SonareBuiltinInstrumentBinding * len(bindings))()
-            for i, (dst, patch) in enumerate(bindings):
+            builtin_bindings = [(dst, config) for dst, config in builtin_instruments]
+            c_builtin = (SonareBuiltinInstrumentBinding * len(builtin_bindings))()
+            for i, (dst, config) in enumerate(builtin_bindings):
                 c_builtin[i].destination_id = dst
-                c_builtin[i].config = patch._to_c()
-            if bindings:
+                c_builtin[i].config = config._to_c()
+            if builtin_bindings:
                 options.builtin_instruments = c_builtin
-                options.builtin_instrument_count = _to_c_size_t(len(bindings), "count")
+                options.builtin_instrument_count = _to_c_size_t(len(builtin_bindings), "count")
         # Each converted patch borrows its engine params; copying it into the
         # binding array copies bytes only, so these stay alive past the C call.
         c_patches = []
         if synth_instruments is not None:
             synth_bindings = [(dst, _synth_patch_arg(patch)) for dst, patch in synth_instruments]
             c_synth = (SonareSynthInstrumentBinding * len(synth_bindings))()
-            for i, (dst, patch) in enumerate(synth_bindings):
+            for i, (dst, synth_patch) in enumerate(synth_bindings):
                 c_synth[i].destination_id = dst
-                c_patch = patch._to_c()
+                c_patch = synth_patch._to_c()
                 c_patches.append(c_patch)
                 c_synth[i].patch = c_patch
-                c_synth[i].use_gm_programs = 1 if patch.use_gm_programs else 0
-                bank = patch.sample_bank
+                c_synth[i].use_gm_programs = 1 if synth_patch.use_gm_programs else 0
+                bank = synth_patch.sample_bank
                 c_synth[i].sample_bank = bank._require_handle() if bank is not None else None
             if synth_bindings:
                 options.synth_instruments = c_synth
                 options.synth_instrument_count = _to_c_size_t(len(synth_bindings), "count")
         if sf2_instruments is not None:
-            bindings = [(dst, patch) for dst, patch in sf2_instruments]
-            c_sf2 = (SonareSf2InstrumentBinding * len(bindings))()
-            for i, (dst, patch) in enumerate(bindings):
+            sf2_bindings = [(dst, sf2_config) for dst, sf2_config in sf2_instruments]
+            c_sf2 = (SonareSf2InstrumentBinding * len(sf2_bindings))()
+            for i, (dst, sf2_config) in enumerate(sf2_bindings):
                 c_sf2[i].destination_id = dst
-                c_sf2[i].config = patch._to_c()
-            if bindings:
+                c_sf2[i].config = sf2_config._to_c()
+            if sf2_bindings:
                 options.sf2_instruments = c_sf2
-                options.sf2_instrument_count = _to_c_size_t(len(bindings), "count")
+                options.sf2_instrument_count = _to_c_size_t(len(sf2_bindings), "count")
 
         width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):

@@ -1,6 +1,6 @@
 """Model-side renderer: SMF bytes -> audio through libsonare's GM fallback bank.
 
-Renders via `Project.import_smf` + `bounce_with_sf2_instrument` with NO
+Renders via `Project.import_smf` + `Project.bounce(sf2_instruments=...)` with NO
 SoundFont loaded, which forces every program through the built-in synthesizer
 GM fallback (`gm_fallback_map` -> NativeSynth physical voices) — exactly the
 code path being tuned. The shared library is resolved through SONARE_LIB_PATH, and
@@ -297,19 +297,18 @@ def _bounce(libsonare, smf_bytes: bytes, total_seconds: float, sr: int, *, rig: 
         # (`project_bounce.cpp`), and a new project does not start at the rate a
         # capture was recorded at. Every module capture records 44.1 kHz, so
         # without this the model cannot be rendered against any of them at all.
-        project.set_sample_rate(float(sr))
+        project.set_sample_rate(sr)
         project.import_smf(smf_bytes)
         if preset:
-            audio = project.bounce_with_synth_instrument(
-                instrument=preset,
-                auto_select_gm=False,
+            audio = project.bounce(
+                synth_instruments=[(0, preset)],
                 total_frames=round(total_seconds * sr),
                 sample_rate=sr,
             )
             manifest = None
         else:
-            audio = project.bounce_with_sf2_instrument(
-                libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),
+            audio = project.bounce(
+                sf2_instruments=[(0, libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig))],
                 total_frames=round(total_seconds * sr),
                 sample_rate=sr,
             )

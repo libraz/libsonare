@@ -200,12 +200,11 @@ def _render_c(
 def _render_python(
     serialized: str, use_gm_programs: bool, types: tuple[object, ...]
 ) -> np.ndarray:
-    Project = types[0]
+    Project, SynthPatch = types[0], types[1]
     project = Project.from_json(serialized)
     try:
-        samples = project.bounce_with_synth_instrument(
-            "sine",
-            auto_select_gm=use_gm_programs,
+        samples = project.bounce(
+            synth_instruments=[(0, SynthPatch(preset="sine", use_gm_programs=use_gm_programs))],
             total_frames=TOTAL_FRAMES,
             block_size=BLOCK_SIZE,
             num_channels=NUM_CHANNELS,
@@ -234,10 +233,12 @@ const projectJson = Buffer.from(encoded, 'base64').toString('utf8');
 {init_line}
 const project = Project.fromJson(projectJson);
 try {{
-  const result = project.bounceWithSynthInstruments(
-    [{{ instrument: {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }} }}],
-    {{ totalFrames: {TOTAL_FRAMES}, blockSize: {BLOCK_SIZE}, numChannels: {NUM_CHANNELS} }},
-  );
+  const result = project.bounce({{
+    synthInstruments: [{{ instrument: {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }} }}],
+    totalFrames: {TOTAL_FRAMES},
+    blockSize: {BLOCK_SIZE},
+    numChannels: {NUM_CHANNELS},
+  }});
   if (result.sampleRate !== {SAMPLE_RATE}) throw new Error(`render rate ${{result.sampleRate}}`);
   const samples = result.channels[0];
   if (!(samples instanceof Float32Array)) throw new Error('render did not return Float32Array');
