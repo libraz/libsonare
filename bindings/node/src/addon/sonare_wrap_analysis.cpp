@@ -1162,7 +1162,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.tuning_auto = tuning_auto ? 1 : 0;
   SonareError err = sonare_detect_chords(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
     return env.Undefined();
   }
 
@@ -1265,7 +1265,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options, key_root,
                                                      key_mode, &detected, &roman, &functions);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "options");
     return env.Undefined();
   }
 

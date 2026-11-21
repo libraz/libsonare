@@ -168,7 +168,7 @@ describe('zero counts the C ABI accepts', () => {
 
   it('still refuses the negatives and fractions the C ABI refuses', () => {
     expect(() => detectChords({ samples, sampleRate: SR, smoothingWindowSec: -1 })).toThrow(
-      new RangeError('detectChords: smoothingWindow must be finite and at least 0'),
+      new RangeError('detectChords: smoothingWindowSec must be finite and at least 0'),
     );
     expectRefusal(() => analyzeBpm({ samples, sampleRate: SR, maxCandidates: -1 }), RangeError);
     expectRefusal(() => analyzeBpm({ samples, sampleRate: SR, maxCandidates: 1.5 }), RangeError);
