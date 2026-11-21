@@ -564,7 +564,7 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "--platforms",
             '[{"name":"a","target_lufs":-14,"ceilingDb":-1}]',
         ],
-        "argument --platforms: unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+        "argument --platforms: unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
     ),
     (
         [
