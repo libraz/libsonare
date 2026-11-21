@@ -1121,6 +1121,18 @@ _INT_MAX = "2147483647"
             "spectral_bandwidth: p must be finite and greater than 0",
         ),
         (
+            lambda: libsonare.chroma_cqt(_tone(), SR, bins_per_octave=18),
+            "chroma_cqt: bins_per_octave must be a multiple of n_chroma",
+        ),
+        (
+            lambda: libsonare.chroma_cens(_tone(), SR, bins_per_octave=18),
+            "chroma_cens: bins_per_octave must be a multiple of n_chroma",
+        ),
+        (
+            lambda: libsonare.nnls_chroma(_tone(), SR, stft_blend_n_fft=3),
+            "nnls_chroma: stft_blend_n_fft must be an even integer in [2, 2147483647]",
+        ),
+        (
             lambda: libsonare.spectral_flux(_tone(), SR, lag=0),
             f"spectral_flux: lag must be an integer in [1, {_INT_MAX}]",
         ),

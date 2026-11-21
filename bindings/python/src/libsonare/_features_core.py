@@ -437,7 +437,7 @@ def _chroma_variant(
         args.append(ctypes.byref(options))
     args.append(ctypes.byref(out))
     rc = getattr(lib, fn_name)(*args)
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return ChromaResult(
             sample_rate=out.sample_rate,

@@ -228,7 +228,7 @@ def detect_key(
         ctypes.byref(out_key),
         ctypes.byref(out_tuning),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     return KeyDetection(
         root=PitchClass(out_key.root),
         mode=_key_mode_token(out_key.mode),
@@ -281,7 +281,7 @@ def detect_key_candidates(
         ctypes.byref(out_count),
         None,
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return [
             KeyCandidate(

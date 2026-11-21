@@ -392,7 +392,7 @@ class Audio:
             None if options is None else ctypes.byref(options),
             ctypes.byref(handle),
         )
-        _check(rc)
+        _check(rc, flattened="options")
         return cls(handle, lib)
 
     @classmethod

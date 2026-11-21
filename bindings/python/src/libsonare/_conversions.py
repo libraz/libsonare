@@ -989,7 +989,7 @@ def nnls_chroma(
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
         )
-        _check(rc)
+        _check(rc, flattened="options")
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
