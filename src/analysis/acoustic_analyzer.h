@@ -27,15 +27,25 @@ struct AcousticConfig {
   float noise_floor_margin_db = 10.0f;
 };
 
+/// @brief Domains of the AcousticConfig members, stated once for the core check and the readers.
+inline constexpr util::check::NumericDomain kAcousticBandCountDomain =
+    util::check::integer_domain_of<int>(0);
+inline constexpr util::check::NumericDomain kAcousticMinDecayDbDomain =
+    util::check::real_domain_above(0.0, false);
+inline constexpr util::check::NumericDomain kAcousticNoiseFloorMarginDbDomain =
+    util::check::real_domain_above(0.0, true);
+
 /// @brief Refuses an AcousticConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) for a negative band or subband count, a
 ///         non-finite or non-positive min_decay_db, or a negative or non-finite
 ///         noise_floor_margin_db.
 inline void validate_acoustic_config(const AcousticConfig& config) {
-  util::check::integer_at_least(config.n_octave_bands, 0, "n_octave_bands");
-  util::check::integer_at_least(config.n_third_octave_subbands, 0, "n_third_octave_subbands");
-  util::check::greater_than(config.min_decay_db, 0.0, "min_decay_db");
-  util::check::at_least(config.noise_floor_margin_db, 0.0, "noise_floor_margin_db");
+  util::check::within(config.n_octave_bands, kAcousticBandCountDomain, "n_octave_bands");
+  util::check::within(config.n_third_octave_subbands, kAcousticBandCountDomain,
+                      "n_third_octave_subbands");
+  util::check::within(config.min_decay_db, kAcousticMinDecayDbDomain, "min_decay_db");
+  util::check::within(config.noise_floor_margin_db, kAcousticNoiseFloorMarginDbDomain,
+                      "noise_floor_margin_db");
 }
 
 /// @brief Acoustic room parameters.
