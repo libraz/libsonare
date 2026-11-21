@@ -2082,22 +2082,39 @@ class SkipCheck(CheckerCase):
 
 
 class UpgradeNotes(unittest.TestCase):
-    def test_render_is_deterministic(self):
-        text = upgrade_notes.render(TD / "ledgers", TD / "rules.toml")
-        self.assertEqual(text, upgrade_notes.render(TD / "ledgers", TD / "rules.toml"))
-        self.assertIn("## Title of getters", text)
+    GUIDE = TD / "guide.toml"
+
+    def render(self, ledgers=TD / "ledgers", rules=TD / "rules.toml"):
+        return upgrade_notes.render(ledgers, rules, self.GUIDE)
+
+    def test_rows_sit_under_their_surface_domain_and_rule(self):
+        text = self.render()
+        self.assertEqual(text, self.render())
         self.assertIn(
-            "### WASM (`.`)\n\n| 1.x | 2.0.0 |\n|---|---|\n| `getBpm` | `detectBpm` |", text
+            "### WASM: Analysis\n\n#### Title of getters\n\n| 1.x | 2.0.0 |\n|---|---|\n"
+            "| `getBpm` | `detectBpm` |",
+            text,
         )
         self.assertIn(
             "| `bpm --verbose` (native CLI only) | removed: drop the flag; the output is the same |",
             text,
         )
         self.assertIn("| `detect_bpm` | sample_rate is a required argument. |", text)
+        self.assertIn("## Python\n\nLead of Python.", text)
+        python = text[text.index("## Python") : text.index("## Node")]
         self.assertLess(
-            text.index("## Title of sample-rate-required"), text.index("## Title of individual")
+            python.index("#### Title of sample-rate-required"),
+            python.index("#### Title of individual"),
         )
-        self.assertNotIn("## Title of teardown", text)
+        # The C fixture ledger has no entries, so the surface has no section.
+        self.assertNotIn("## C\n", text)
+        self.assertLess(text.index("## Python"), text.index("## WASM"))
+        self.assertLess(text.index("## WASM"), text.index("## Command line"))
+
+    def test_a_wasm_row_names_a_subpath_entry(self):
+        e = {"old": "getBpm", "entry": "./analysis"}
+        self.assertEqual(upgrade_notes._old("wasm", e), "`getBpm` (`./analysis`)")
+        self.assertEqual(upgrade_notes._old("wasm", {"old": "getBpm", "entry": "."}), "`getBpm`")
 
     def test_removed_row_says_what_replaces_it(self):
         self.assertEqual(upgrade_notes._target({"removed": "call x"}), "removed: call x")
@@ -2110,7 +2127,7 @@ class UpgradeNotes(unittest.TestCase):
         e = {"old": "a", "changed": "takes an object", "to": "b"}
         self.assertEqual(upgrade_notes._target(e), "`b`: takes an object")
 
-    def test_rule_no_entry_cites_renders_when_it_has_an_example(self):
+    def test_conventions_list_cited_rules_and_rules_with_an_example(self):
         base = (TD / "rules.toml").read_text()
         anchor = 'summary = "Summary of teardown."\n'
         self.assertIn(anchor, base)
@@ -2118,10 +2135,29 @@ class UpgradeNotes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rules = Path(tmp) / "rules.toml"
             rules.write_text(base.replace(anchor, anchor + example), encoding="utf-8")
-            text = upgrade_notes.render(TD / "ledgers", rules)
-        self.assertIn("## Title of teardown\n\nSummary of teardown.", text)
-        self.assertIn("```ts\nold()\n```", text)
-        self.assertNotIn("## Title of async-teardown", text)
+            text = self.render(rules=rules)
+        conventions = text[text.index("## The conventions behind the changes") :]
+        self.assertIn("### Title of teardown\n\nSummary of teardown.", conventions)
+        self.assertIn("WASM, 1.x:\n\n```ts\nold()\n```", conventions)
+        self.assertIn("### Title of getters", conventions)
+        self.assertNotIn("### Title of async-teardown", conventions)
+
+    def test_a_row_with_no_section_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            for s in LEDGER_FILES:
+                (d / f"{s}.toml").write_text(
+                    (TD / "ledgers" / f"{s}.toml").read_text(), encoding="utf-8"
+                )
+            for field, value in (("domain", "nowhere"), ("rule", "no-such-rule")):
+                row = {"domain": "analysis", "rule": "getters", field: value}
+                (d / "node.toml").write_text(
+                    '[[entry]]\nkind = "function"\nold = "lost"\nnew = "found"\n'
+                    f'domain = "{row["domain"]}"\nrule = "{row["rule"]}"\n',
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "'lost'"):
+                    self.render(ledgers=d)
 
     def test_entry_order_does_not_change_output(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2136,9 +2172,33 @@ class UpgradeNotes(unittest.TestCase):
             )
             base = (d / "wasm.toml").read_text()
             (d / "wasm.toml").write_text(base + "\n" + extra)
-            first = upgrade_notes.render(d, TD / "rules.toml")
+            first = self.render(ledgers=d)
             (d / "wasm.toml").write_text(extra + "\n" + base)
-            self.assertEqual(first, upgrade_notes.render(d, TD / "rules.toml"))
+            self.assertEqual(first, self.render(ledgers=d))
+
+    def test_check_fails_on_a_stale_file_and_passes_on_a_fresh_one(self):
+        args = [
+            "--ledger-dir",
+            str(TD / "ledgers"),
+            "--rules-file",
+            str(TD / "rules.toml"),
+            "--guide-file",
+            str(self.GUIDE),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "UPGRADING.md"
+            self.assertEqual(upgrade_notes.main([*args, "--check", "-o", str(out)]), 1)
+            self.assertEqual(upgrade_notes.main([*args, "-o", str(out)]), 0)
+            self.assertEqual(upgrade_notes.main([*args, "--check", "-o", str(out)]), 0)
+            out.write_text(out.read_text() + "edited\n", encoding="utf-8")
+            self.assertEqual(upgrade_notes.main([*args, "--check", "-o", str(out)]), 1)
+
+    def test_the_guide_has_a_section_for_every_ledger_and_domain(self):
+        guide = upgrade_notes._load(upgrade_notes.DEFAULT_GUIDE)
+        self.assertEqual({s["key"] for s in guide["surface"]}, set(LEDGER_FILES))
+        self.assertEqual(tuple(d["key"] for d in guide["domain"]), domains.DOMAINS)
+        fixture = upgrade_notes._load(self.GUIDE)
+        self.assertEqual(tuple(d["key"] for d in fixture["domain"]), domains.DOMAINS)
 
 
 class RateFromCEntry(CheckerCase):

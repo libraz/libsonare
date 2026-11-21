@@ -1,0 +1,53 @@
+# Guide fixture: one surface per ledger, one domain per tools/api/domains.py entry.
+
+title = "Fixture guide"
+intro = ["Intro paragraph."]
+
+[[surface]]
+key = "c"
+title = "C"
+lead = "Lead of C."
+
+[[surface]]
+key = "python"
+title = "Python"
+lead = "Lead of Python."
+
+[[surface]]
+key = "node"
+title = "Node"
+lead = "Lead of Node."
+
+[[surface]]
+key = "wasm"
+title = "WASM"
+lead = "Lead of WASM."
+
+[[surface]]
+key = "cli"
+title = "Command line"
+lead = "Lead of the command line."
+
+[[domain]]
+key = "core"
+title = "Core"
+
+[[domain]]
+key = "analysis"
+title = "Analysis"
+
+[[domain]]
+key = "effects"
+title = "Effects"
+
+[[domain]]
+key = "mastering"
+title = "Mastering"
+
+[[domain]]
+key = "engine"
+title = "Engine"
+
+[[domain]]
+key = "project"
+title = "Project"

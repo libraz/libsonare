@@ -107,6 +107,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Never take a relative threshold against the bare maximum of the whole input: use a sliding maximum for local contrast, a maximum that sets aside the top few events for body or summary decisions, and an absolute floor beside either.
 - Hold a high-level analyzer's window lengths as time quantities and rescale them once at its entry; librosa-named functions keep plain sample counts.
 - When you fix a parity divergence, delete its allowlist entry in the same change.
+- When you rename, remove or reshape a public name, add its row to the surface's ledger under `tools/api/migration/` and run `make upgrade-notes`: `UPGRADING.md` is generated from the ledgers, and `make surface-check` fails while the tracked file differs from the render.
 
 ### The command-line front-ends
 

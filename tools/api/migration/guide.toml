@@ -1,0 +1,61 @@
+# Hand-written text of UPGRADING.md. tools/api/upgrade_notes.py reads this file,
+# rules.toml and the five ledgers, and nothing else; edit here, then run
+# `make upgrade-notes`.
+
+title = "Upgrading from 1.10 to 2.0.0"
+
+intro = [
+  "2.0.0 changes the public interface of every binding, the C ABI and both command-line front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, flag or token is refused under its old name, and a JSON document written by 1.10 that uses a removed key or token is refused with `InvalidFormat` naming the current spelling. Nothing converts an old document on load.",
+  "The guide has one section per surface, and inside it one section per area of the library. Each area groups its changes by the convention behind them: the heading states the convention, and the table lists every affected name. The left column is the 1.x name; the right column is the 2.0.0 name when only the name changed, `removed:` and what to use instead (or `removed, no replacement:` and why), or the change a caller has to make when the name stays. The conventions themselves, with a before and after for each, close the guide.",
+]
+
+# One per ledger, in this order.
+[[surface]]
+key = "c"
+title = "C"
+lead = "Configuration structs carry `struct_size` and are seeded by their `*_init` function, which writes every default; a field the header documents as optional is left NaN (a float) or at its named constant to mean not given. Constructors return `SonareError` and hand the object back through an out pointer, and every result is released by the function named after the struct it releases. Rebuild every consumer against the 2.0.0 headers."
+
+[[surface]]
+key = "python"
+title = "Python"
+lead = "Keyword arguments and attributes are snake_case, records are frozen dataclasses built from keyword arguments, a closed set is a lowerCamel string token, an option left out is `None`, and a quantity names its unit (`_hz`, `_sec`, `_db`). Every public type imports from `libsonare`."
+
+[[surface]]
+key = "node"
+title = "Node"
+lead = "The Node addon and the WASM package share one vocabulary, so a name in this section has the same 2.0.0 spelling in the WASM section. Closed sets are string unions, an option left out is absent, results are typed values rather than JSON strings, and a refused argument is a `TypeError` or `RangeError`."
+
+[[surface]]
+key = "wasm"
+title = "WASM"
+lead = "Names are listed with the package entry point that exports them: `@libraz/libsonare` (`.`), `./analysis`, `./worklet` and `./vocal-edit-worker`. The conventions are those of the Node section."
+
+[[surface]]
+key = "cli"
+title = "Command line"
+lead = "The native `sonare-cli` and the Python `sonare` take the same commands, options and defaults; a row marked for one CLI applies to that front-end only. Input files are positional arguments. A failure exits with the code of its cause on both front-ends: 2 a usage error (decided before the input is read), 3 an invalid parameter, 4 an input that cannot be found or read, 5 a document that cannot be parsed, 6 audio that cannot be decoded, 7 out of memory, 8 not supported, 9 invalid state, 10 another error, 11 cancelled, 12 an output that cannot be written, 13 an ABI mismatch (Python only) and 14 a stale result. `SONARE_LEGACY_EXIT` is not read."
+
+# One per domain of tools/api/domains.py, in that file's order.
+[[domain]]
+key = "core"
+title = "Loading, versions, audio buffers and errors"
+
+[[domain]]
+key = "analysis"
+title = "Analysis and features"
+
+[[domain]]
+key = "effects"
+title = "Effects, separation, repair and room acoustics"
+
+[[domain]]
+key = "mastering"
+title = "Mastering, mixing and loudness"
+
+[[domain]]
+key = "engine"
+title = "Realtime engine, synthesis, MIDI and playback"
+
+[[domain]]
+key = "project"
+title = "Projects, arrangement and vocal editing"

@@ -3,7 +3,7 @@
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
-       surface-coverage surface-coverage-check surface-check upgrade-notes \
+       surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
        gs-classic-models gs-classic-check gs-classic-overlays-check gs-efx-soundings-drift \
@@ -743,6 +743,7 @@ surface-coverage-check:
 surface-check:
 	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
 	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
+	python3 tools/api/upgrade_notes.py --check
 
 # Type-checks every TSDoc @example on the Node and WASM facades against the package
 # sources; an unfenced example or a fence other than ```ts is a finding. Needs each
@@ -750,9 +751,13 @@ surface-check:
 doc-examples:
 	node tools/api/check_doc_examples.mjs
 
-# UPGRADING.md is generated from tools/api/migration/rules.toml and the ledgers.
+# UPGRADING.md is generated from the ledgers, rules.toml and guide.toml under
+# tools/api/migration; edit those and rerun. The check variant fails on a stale file.
 upgrade-notes:
 	python3 tools/api/upgrade_notes.py -o UPGRADING.md
+
+upgrade-notes-check:
+	python3 tools/api/upgrade_notes.py --check
 
 # The GS address census: which addresses real Standard MIDI Files reach, and how
 # many files reach each. The corpus is not in the repository (see

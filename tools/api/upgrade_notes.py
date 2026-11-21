@@ -1,11 +1,12 @@
-"""Render UPGRADING.md text from the migration ledgers and rules.toml.
+"""Render UPGRADING.md from the migration ledgers, rules.toml and guide.toml.
 
-One section per rule (in rules.toml order) that a ledger entry cites or that
-carries an example: its title, summary and before/after examples, then one
-``| 1.x | 2.0.0 |`` table per surface (and per WASM entry) listing each old name
-with its new name, "removed", or the change a caller must make. Entries citing
-``individual`` are rendered last under that rule's own heading. Output is
-deterministic.
+One section per surface (guide.toml order) with its lead, then one subsection per
+domain (tools/api/domains.py order) holding that surface's ledger entries for the
+domain, grouped under the title of the rule each entry cites: a ``| 1.x | 2.0.0 |``
+table listing each old name with its new name, "removed", or the change a caller
+must make. WASM rows name their package entry point. A closing section states
+every rule with its summary and before/after examples. Output is deterministic;
+``--check`` fails when a file differs from it instead of writing.
 """
 
 from __future__ import annotations
@@ -18,35 +19,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 DEFAULT_LEDGER_DIR = HERE / "migration"
 DEFAULT_RULES = HERE / "migration" / "rules.toml"
+DEFAULT_GUIDE = HERE / "migration" / "guide.toml"
+DEFAULT_OUTPUT = HERE.parent.parent / "UPGRADING.md"
 
-LEDGER_SURFACES = ("wasm", "node", "python", "c", "cli")
-SURFACE_TITLES = {"wasm": "WASM", "node": "Node", "python": "Python", "c": "C", "cli": "CLI"}
 FENCES = {"wasm": "ts", "node": "ts", "python": "python", "c": "c", "cli": "sh"}
-TITLE = "# Upgrading from 1.10 to 2.0.0"
-INTRO = [
-    (
-        "2.0.0 changes the public interface of every binding, the C ABI and both command-line "
-        "front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, "
-        "flag or token is refused under its old name, and a JSON document written by 1.10 that "
-        "uses a removed key or token is refused with `InvalidFormat` naming the current spelling. "
-        "Nothing converts an old document on load."
-    ),
-    (
-        "The changes are grouped by the convention behind them. Each section states the "
-        "convention, shows a before and after where the change does not show in a signature, and "
-        "then lists every affected name, one table per surface. WASM tables are split by package "
-        "entry point."
-    ),
-    (
-        "The examples and tables write 1.10 as 1.x. In each table row the left column is the 1.x "
-        "name and the right column is one of:"
-    ),
-    (
-        "- the 2.0.0 name, when only the name changed;\n"
-        "- `removed:` and what to use instead, or `removed, no replacement:` and why;\n"
-        "- the change a caller has to make, when the name stays."
-    ),
-]
 
 
 def _load(path: Path) -> dict:
@@ -72,27 +48,63 @@ def _old(surface: str, e: dict) -> str:
     text = f"`{_cell(e['old'])}`"
     if surface == "cli" and e.get("frontend"):
         text += f" ({e['frontend']} CLI only)"
+    if surface == "wasm" and e.get("entry", ".") != ".":
+        text += f" (`{e['entry']}`)"
     return text
 
 
-def render(ledger_dir: Path, rules_file: Path) -> str:
+def render(ledger_dir: Path, rules_file: Path, guide_file: Path) -> str:
+    guide = _load(guide_file)
     rules = _load(rules_file).get("rule", [])
-    entries: dict[str, list[tuple[str, dict]]] = {}
-    for s in LEDGER_SURFACES:
-        for e in _load(ledger_dir / f"{s}.toml").get("entry", []):
-            entries.setdefault(e.get("rule", ""), []).append((s, e))
-    ordered = [r for r in rules if r.get("slug") != "individual"]
-    ordered += [r for r in rules if r.get("slug") == "individual"]
-    out = [TITLE, ""]
-    for paragraph in INTRO:
-        out += [paragraph, ""]
-    for rule in ordered:
-        rows = entries.get(rule.get("slug"), [])
+    surfaces = guide.get("surface", [])
+    domains = guide.get("domain", [])
+    rule_order = {r.get("slug"): i for i, r in enumerate(rules)}
+    # Entries citing `individual` close each domain, after every named convention.
+    individual = len(rules)
+    rule_order["individual"] = individual
+    rule_titles = {r.get("slug"): r.get("title", r.get("slug")) for r in rules}
+
+    cited: set[str] = set()
+    out = [f"# {guide.get('title', '')}", ""]
+    for paragraph in guide.get("intro", []):
+        out += [paragraph.strip(), ""]
+
+    for surface in surfaces:
+        key = surface["key"]
+        entries = _load(ledger_dir / f"{key}.toml").get("entry", [])
+        domain_keys = {d["key"] for d in domains}
+        for e in entries:
+            # A row the guide has no section for would vanish from the render.
+            if e.get("domain") not in domain_keys or e.get("rule", "individual") not in rule_order:
+                raise ValueError(
+                    f"{key}.toml entry {e.get('old')!r}: domain {e.get('domain')!r} or "
+                    f"rule {e.get('rule')!r} has no section in the guide"
+                )
+        if not entries:
+            continue
+        out += [f"## {surface['title']}", "", surface.get("lead", "").strip(), ""]
+        for domain in domains:
+            in_domain = [e for e in entries if e.get("domain") == domain["key"]]
+            if not in_domain:
+                continue
+            out += [f"### {surface['title']}: {domain['title']}", ""]
+            by_rule: dict[str, list[dict]] = {}
+            for e in in_domain:
+                by_rule.setdefault(e.get("rule", "individual"), []).append(e)
+            cited.update(by_rule)
+            for slug in sorted(by_rule, key=lambda s: (rule_order.get(s, individual), s)):
+                out += [f"#### {rule_titles.get(slug, slug)}", "", "| 1.x | 2.0.0 |", "|---|---|"]
+                out += sorted({f"| {_old(key, e)} | {_target(e)} |" for e in by_rule[slug]})
+                out += [""]
+
+    titles = {s["key"]: s["title"] for s in surfaces}
+    out += ["## The conventions behind the changes", ""]
+    for rule in rules:
         # A rule no ledger entry cites still breaks callers when it shows a before and after.
-        if not rows and not rule.get("example"):
+        if rule.get("slug") not in cited and not rule.get("example"):
             continue
         out += [
-            f"## {rule.get('title', rule.get('slug'))}",
+            f"### {rule.get('title', rule.get('slug'))}",
             "",
             rule.get("summary", "").strip(),
             "",
@@ -100,49 +112,37 @@ def render(ledger_dir: Path, rules_file: Path) -> str:
         for ex in rule.get("example", []):
             surface = ex.get("surface", "")
             fence = FENCES.get(surface, "")
-            label = SURFACE_TITLES.get(surface, surface)
-            out += [
-                f"{label}, 1.x:",
-                "",
-                f"```{fence}",
-                ex.get("before", "").strip("\n"),
-                "```",
-                "",
-            ]
-            out += [
-                f"{label}, 2.0.0:",
-                "",
-                f"```{fence}",
-                ex.get("after", "").strip("\n"),
-                "```",
-                "",
-            ]
-        groups: dict[tuple[str, str], list[dict]] = {}
-        for s, e in rows:
-            entry = e.get("entry", ".") if s == "wasm" else ""
-            groups.setdefault((s, entry), []).append(e)
-        for s in LEDGER_SURFACES:
-            for (gs, entry), es in sorted(groups.items()):
-                if gs != s:
-                    continue
-                title = SURFACE_TITLES[s] + (f" (`{entry}`)" if s == "wasm" else "")
-                out += [f"### {title}", "", "| 1.x | 2.0.0 |", "|---|---|"]
-                lines = sorted({f"| {_old(s, e)} | {_target(e)} |" for e in es})
-                out += lines + [""]
+            label = titles.get(surface, surface)
+            for when, text in (("1.x", ex.get("before", "")), ("2.0.0", ex.get("after", ""))):
+                out += [f"{label}, {when}:", "", f"```{fence}", text.strip("\n"), "```", ""]
     return "\n".join(out).rstrip("\n") + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("-o", "--output", type=Path, help="write to this path instead of stdout")
+    ap.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT)
+    ap.add_argument("--stdout", action="store_true", help="print instead of writing --output")
+    ap.add_argument(
+        "--check", action="store_true", help="fail when --output differs from the render"
+    )
     ap.add_argument("--ledger-dir", type=Path, default=DEFAULT_LEDGER_DIR)
     ap.add_argument("--rules-file", type=Path, default=DEFAULT_RULES)
+    ap.add_argument("--guide-file", type=Path, default=DEFAULT_GUIDE)
     args = ap.parse_args(argv)
-    text = render(args.ledger_dir, args.rules_file)
-    if args.output:
-        args.output.write_text(text, encoding="utf-8")
-    else:
+    text = render(args.ledger_dir, args.rules_file, args.guide_file)
+    if args.stdout:
         sys.stdout.write(text)
+        return 0
+    if args.check:
+        current = args.output.read_text(encoding="utf-8") if args.output.exists() else None
+        if current != text:
+            print(
+                f"{args.output} does not match the migration ledgers; run `make upgrade-notes`",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+    args.output.write_text(text, encoding="utf-8")
     return 0
 
 
