@@ -3193,6 +3193,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.masteringProcess` | `Audio.masteringApplyProcessor`: renamed to masteringApplyProcessor<P extends SoloProcessor>(options: OptionsOf<MasteringApplyProcessorRequest<P>>): MasteringResult |
 | `Audio.mastering` | `Audio.masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness(options?: MasteringNormalizeLoudnessOptions): MasteringNormalizeLoudnessResult |
 
+#### Synchronous construction is new X(config); create() is async
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Audio` | new Audio(...) is a TypeError naming the factories: build one with Audio.fromBuffer or another factory |
+
 #### Channel counts are numChannels
 
 | 1.x | 2.0.0 |
@@ -3519,6 +3525,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `framesToSamples(nFft)` | absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring) |
 | `samplesToFrames(nFft)` | absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring) |
 
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -3606,7 +3620,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `TempogramMode='ac'` | removed: Use 'autocorrelation'; the only modes are 'autocorrelation' and 'cosine', and numbers are refused. |
 | `TempogramMode='auto'` | removed: Use 'autocorrelation'; the only modes are 'autocorrelation' and 'cosine', and numbers are refused. |
 | `TempogramMode` | string union 'autocorrelation'\|'cosine' |
-| `downmix(targetLayout)` | a ChannelLayout name ('mono' \| 'stereo' \| '5.1' \| '7.1'); a number is a TypeError, an unknown name a RangeError |
+| `downmix(targetLayout)` | a ChannelLayout name ('mono' \| 'stereo' \| '5.1' \| '7.1'); a number is a TypeError, an unknown name a RangeError, and a layout with more channels than the input is a SonareError coded NotSupported ('downmix cannot upmix') |
 | `vectorNormalize` | normType: number -> norm: NormType ('max'\|'l1'\|'l2'\|'power') |
 
 #### Results are typed values, not JSON strings
@@ -3792,7 +3806,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `amplitudeToDb(topDb)` | removed: pass topDb as a field of AmplitudeToDbRequest |
 | `amplitudeToDb(values)` | removed: pass values as a field of AmplitudeToDbRequest |
 | `amplitudeToDb` | request-only: amplitudeToDb(request: AmplitudeToDbRequest) |
-| `analyzeAsync` | request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required |
+| `analyzeAsync` | request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required; a rejection is named like a synchronous throw (analyzeAsync: samples must be a Float32Array), where 1.x rejected with the addon's bare text |
 | `analyzeDynamics` | one positional form (analyzeDynamics(samples, sampleRate, options?: Omit<AnalyzeDynamicsRequest,'samples'\|'sampleRate'>)); request form takes AnalyzeDynamicsRequest |
 | `analyzeImpulseResponse(minDecayDb)` | removed: pass minDecayDb as a field of AnalyzeImpulseResponseRequest |
 | `analyzeImpulseResponse(nOctaveBands)` | removed: pass nOctaveBands as a field of AnalyzeImpulseResponseRequest |
@@ -3825,11 +3839,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `chromaCens(binsPerOctave)` | removed: pass binsPerOctave as a field of ChromaCensRequest |
 | `chromaCens(hopLength)` | removed: pass hopLength as a field of ChromaCensRequest |
 | `chromaCens(nChroma)` | removed: pass nChroma as a field of ChromaCensRequest |
-| `chromaCens` | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest |
+| `chromaCens` | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `chromaCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of ChromaCqtRequest |
 | `chromaCqt(hopLength)` | removed: pass hopLength as a field of ChromaCqtRequest |
 | `chromaCqt(nChroma)` | removed: pass nChroma as a field of ChromaCqtRequest |
-| `chromaCqt` | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest |
+| `chromaCqt` | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `chroma` | one positional form (chroma(samples, sampleRate, options?: Omit<ChromaRequest,'samples'\|'sampleRate'>)); request form takes ChromaRequest |
 | `clicks(clickDuration)` | removed: pass it as clickDurationSec in ClicksRequest |
 | `clicks(frequency)` | removed: pass it as frequencyHz in ClicksRequest |
@@ -4291,12 +4305,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `CqtRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
+| `CqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `FunctionalChord.roman` | `FunctionalChord.romanNumeral` |
 | `GriffinLimRequest.nFft` | omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError |
 | `NoteSegmentsConfig` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on NoteSegmentsRequest |
 | `NoteSegmentsRequest.config` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on the request |
 | `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
 | `PcenOptions` | removed: put timeConstant, gain, bias, power and eps on PcenRequest |
+| `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `noteSegments` | request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed |
@@ -4415,6 +4432,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringRepairDeclipRequest.clipThreshold` | `MasteringRepairDeclipRequest.clipThresholdDb`: clipThreshold -> clipThresholdDb |
 | `MasteringRepairTrimSilenceRequest.threshold` | `MasteringRepairTrimSilenceRequest.thresholdDb`: threshold -> thresholdDb |
 | `RealtimeVoiceChangerConfig.retuneGrainSize` | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
+| `masteringRepairAnalyze` | the recommended stages carry no linear clipThreshold (the declip threshold is clipThresholdDb, in dBFS), and masteringRepairApply takes them as they stand |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -4443,6 +4461,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamingRetuneConfig.grainSize` | `StreamingRetuneConfig.grainSizeSamples`: grainSize -> grainSizeSamples (grain size in samples, a multiple of 4 in [4, 8192]; absent = the automatic grain derived from the sample rate; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `scaleCorrectionSemitones(referenceMidi)` | `scaleCorrectionSemitones(scaleReferenceMidi)`: scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0 |
 | `scaleQuantizeMidi(referenceMidi)` | `scaleQuantizeMidi(scaleReferenceMidi)`: scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0 |
+
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `HpssWithResidualRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
 #### Every call scans its input for non-finite values
 
@@ -4544,10 +4571,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
-| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry |
+| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
 | `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
-| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult |
+| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
 | `timeStretch` | one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `voiceChangeRealtime` | request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] |
@@ -4620,6 +4647,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `EffectSamplesRequest` | removed: a shared base interface, no longer exported; NoteStretchRequest and NoteMoveRequest each declare samples and sampleRate themselves |
 
+#### Documents in a 1.x spelling are refused
+
+| 1.x | 2.0.0 |
+|---|---|
+| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -4666,6 +4699,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomGeometryOptions.sourceZ` | `RoomGeometry.source`: sourceZ -> source (RoomPlacement {x, y, z} (metres)) |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
+| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
 | `VoiceChangeRealtimeRequest.preset` | `VoiceChangeRealtimeRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
@@ -4729,7 +4763,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `CapabilityCatalogMasteringPreset.truePeakCeilingDb` | `MasteringPresetCatalogEntry.truePeakCeilingDbtp` |
 | `MasteringAssistantProfile.attackDensity` | `MasteringAssistantProfile.attackPerSecond`: attackDensity -> attackPerSecond |
-| `MasteringChainConfig.repair.declip.clipThreshold` | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default) |
+| `MasteringChainConfig.repair.declip.clipThreshold` | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
 | `MeteringDetectClippingOptions.threshold` | `MeteringDetectClippingOptions.thresholdDb`: threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0)) |
 | `MeteringDetectClippingRequest.threshold` | `MeteringDetectClippingRequest.thresholdDb`: threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level) |
 | `MeteringSpectrumFrameRequest.frameOffset` | `MeteringSpectrumFrameRequest.startSample`: frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position)) |
@@ -4856,7 +4890,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `JsonResult` | removed: Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast. |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb} |
-| `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document. |
+| `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringChainSection` | removed: Use MasteringChainConfig for a chain config, or Record<string, unknown> for a generic walk over its sections. |
 | `MasteringResult.latencySamples` | optional -> required |
 | `TypedJson` | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
@@ -4873,23 +4907,23 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `WaveformPeakPyramidOptions` | removed: Set samplesPerBucketLevels in WaveformPeakPyramidRequest beside channels. |
 | `WaveformPeaksOptions` | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
 | `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
-| `masterAudioAsync` | one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain |
-| `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain |
+| `masterAudioAsync` | one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioAsync: ...), where 1.x rejected with the addon's bare text |
+| `masterAudioStereoAsync` | request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain; a rejection is named like a synchronous throw (masterAudioStereoAsync: ...), where 1.x rejected with the addon's bare text |
 | `masterAudioStereo` | request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masterAudio` | one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain |
 | `masteringAssistantSuggestChainStereo` | request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig |
 | `masteringAssistantSuggestChain` | one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
-| `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult |
+| `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
 | `masteringAudioProfile` | one positional form (masteringAudioProfile(samples, sampleRate, options?: OptionsOf<MasteringAudioProfileRequest>)); request form takes MasteringAudioProfileRequest; returns MasteringAudioProfile |
 | `masteringDynamicsCompressor` | one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsGate` | one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
-| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming |
+| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
-| `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult |
+| `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
 | `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
 | `meteringCrestFactorDb` | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number |
 | `meteringDcOffset` | one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number |
@@ -4963,7 +4997,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>) |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001) |
 | `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object) |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
@@ -5107,7 +5141,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError |
+| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
 
 #### Other individual changes
 
@@ -5117,8 +5151,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MeteringDynamicRangeOptions.lowPercentile` | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
-| `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
+| `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 
 ### Node: Realtime engine, synthesis, MIDI and playback
 
@@ -5157,14 +5191,21 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `EngineBounceOptions.ditherBits` | with dither set, an integer in [2, 32]: 0, 1 and 33 are a RangeError reading 'options.ditherBits must be an integer in [2, 32]' (0 used to select 16) |
+| `EngineBounceOptions.ditherSeed` | 0 is the seed 0; omit it for the default seed (1.x read 0 as the default seed) |
 | `EngineBounceOptions.numChannels` | required; no channel count is assumed |
 | `EngineBounceOptions.sourceSampleRate` | absent means the engine rate; an explicit 0 is a RangeError |
 | `EngineBounceOptions.targetSampleRate` | absent keeps the source rate; an explicit 0 is a RangeError |
 | `EngineBus.outputBusId` | absent is the master mix; an explicit 0 is a RangeError |
+| `EngineClip.lengthSamples` | omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source) |
 | `EngineExternalMidiEvent.destinationId` | `ExternalMidiEvent.destinationId`: absent for clock and transport bytes meant for every external port, instead of 0xFFFFFFFF |
 | `EngineFreezeOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `EngineFreezeOptions.clipId` | omit it for the default clip id; an explicit 0 is a RangeError reading 'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default', any other value an integer in [1, 4294967295] |
 | `EngineFreezeOptions.numChannels` | required; no channel count is assumed |
-| `EngineMetronomeConfig.clickSamples` | optional; an explicit 0 is a RangeError and giving both clickSamples and clickSec is a RangeError |
+| `EngineGraphNode.numPorts` | omit it for the spec's channel count; an explicit 0 is a RangeError reading 'spec.nodes[i].numPorts must be an integer in [1, 2147483647]' (0 used to select the channel count) |
+| `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
+| `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
+| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
 | `EngineTrackLane.outputBusId` | absent is the master mix; an explicit 0 is a RangeError |
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
@@ -5485,7 +5526,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `PartRigInsert.params` | an object only; a JSON string is a TypeError |
 | `PlaybackRenderer.setConfig` | config is a PlaybackRendererConfig object only; a JSON string is a TypeError |
-| `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError, and the core refuses an unknown key, a 1.x snake_case key or role token at any depth as SonareError InvalidFormat |
 | `RenderPlaybackRequest.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
 
 #### Historical aliases are removed
@@ -5649,6 +5690,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
 | `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
 | `Project.lastBounceCompileResult` | returns { diagnostics } only |
+| `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compileTimeline() returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
 | `ProjectCompileTimelineResult.hasTimeline` | removed: Test timeline !== null on the result. |
@@ -5675,7 +5717,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.analyzeTempo` | also takes one request object |
-| `Project.bakeMidiFx` | takes one request object and always returns a result; the positional form is gone |
+| `Project.bakeMidiFx` | takes one request object and always returns a result; the positional form is gone; config is a MidiFxConfig object of camelCase keys, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
 | `Project.clearPartRig` | takes one key object; the positional form is gone |
 | `Project.setAssistSidecar` | takes one input object |
 | `Project.setAudioSourceMetadata` | takes one { sourceId, contentHash, externalStemRole } object |
@@ -5884,7 +5926,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key |
+| `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
+| `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
+| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed |
+| `ProjectMidiCcBinding.ccLsbNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.ccNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.selectorLsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorLsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.selectorMsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorMsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `ProjectVocalEditApplyRequest.sve1` | `ProjectVocalEditApplyRequest.vocalState` |
 
 ## WASM
@@ -6160,6 +6208,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.masteringProcess` | `Audio.masteringApplyProcessor`: renamed to masteringApplyProcessor<P extends SoloProcessor>(options: OptionsOf<MasteringApplyProcessorRequest<P>>): MasteringResult |
 | `Audio.mastering` | `Audio.masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness(options?: MasteringNormalizeLoudnessOptions): MasteringNormalizeLoudnessResult |
 
+#### Synchronous construction is new X(config); create() is async
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Audio` | new Audio(...) is a TypeError naming the factories: build one with Audio.fromBuffer or another factory |
+
 #### Setters take labelled objects, not positional booleans
 
 | 1.x | 2.0.0 |
@@ -6214,6 +6268,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.detectClipping` | delegates to meteringDetectClipping: an unknown option key is a TypeError reading 'Audio.detectClipping: unknown key k (expected ...)' (was "unknown option 'k'") |
+| `Audio.dynamicRange` | delegates to meteringDynamicRange: an unknown option key is a TypeError reading 'Audio.dynamicRange: unknown key k (expected ...)' (was "unknown option 'k'") |
+| `Audio.spectrumFrame` | delegates to meteringSpectrumFrame: an unknown option key is a TypeError reading 'Audio.spectrumFrame: unknown key k (expected ...)' (was "unknown option 'k'"); an explicit nFft of 0 is a RangeError |
+| `Audio.spectrum` | delegates to meteringSpectrum: an unknown option key is a TypeError reading 'Audio.spectrum: unknown key k (expected ...)' (was "unknown option 'k'"); an explicit nFft of 0 is a RangeError |
 | `createSonareScopeRingBuffer` (`./worklet`) | `createScopeRingBuffer`: takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareScopeRingBufferByteLength` (`./worklet`) | `scopeRingBufferByteLength`: takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 
@@ -6699,6 +6757,17 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `samplesToFrames(nFft)` (`./analysis`) | absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring) |
 | `samplesToFrames(nFft)` | absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring) |
 
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `GriffinLimRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MelToAudioRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MfccToAudioRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+
 #### Every call scans its input for non-finite values
 
 | 1.x | 2.0.0 |
@@ -6835,7 +6904,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `TempogramMode` | string union 'autocorrelation'\|'cosine' |
 | `VectorNormalizeRequest.normType` (`./analysis`) | `VectorNormalizeRequest.norm` |
 | `VectorNormalizeRequest.normType` | `VectorNormalizeRequest.norm` |
-| `downmix(targetLayout)` | a ChannelLayout name ('mono' \| 'stereo' \| '5.1' \| '7.1'); a number is a TypeError, an unknown name a RangeError |
+| `downmix(targetLayout)` | a ChannelLayout name ('mono' \| 'stereo' \| '5.1' \| '7.1'); a number is a TypeError, an unknown name a RangeError, and a layout with more channels than the input is a SonareError coded NotSupported ('downmix cannot upmix') |
 | `vectorNormalize` (`./analysis`) | normType: number -> norm: NormType ('max'\|'l1'\|'l2'\|'power') |
 | `vectorNormalize` | normType: number -> norm: NormType ('max'\|'l1'\|'l2'\|'power') |
 
@@ -7209,16 +7278,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `chromaCens(hopLength)` | removed: pass hopLength as a field of ChromaCensRequest |
 | `chromaCens(nChroma)` (`./analysis`) | removed: pass nChroma as a field of ChromaCensRequest |
 | `chromaCens(nChroma)` | removed: pass nChroma as a field of ChromaCensRequest |
-| `chromaCens` (`./analysis`) | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest |
-| `chromaCens` | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest |
+| `chromaCens` (`./analysis`) | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
+| `chromaCens` | one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'\|'sampleRate'>)); request form takes ChromaCensRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `chromaCqt(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of ChromaCqtRequest |
 | `chromaCqt(binsPerOctave)` | removed: pass binsPerOctave as a field of ChromaCqtRequest |
 | `chromaCqt(hopLength)` (`./analysis`) | removed: pass hopLength as a field of ChromaCqtRequest |
 | `chromaCqt(hopLength)` | removed: pass hopLength as a field of ChromaCqtRequest |
 | `chromaCqt(nChroma)` (`./analysis`) | removed: pass nChroma as a field of ChromaCqtRequest |
 | `chromaCqt(nChroma)` | removed: pass nChroma as a field of ChromaCqtRequest |
-| `chromaCqt` (`./analysis`) | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest |
-| `chromaCqt` | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest |
+| `chromaCqt` (`./analysis`) | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
+| `chromaCqt` | one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'\|'sampleRate'>)); request form takes ChromaCqtRequest; hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `chroma` (`./analysis`) | one positional form (chroma(samples, sampleRate, options?: Omit<ChromaRequest,'samples'\|'sampleRate'>)); request form takes ChromaRequest |
 | `chroma` | one positional form (chroma(samples, sampleRate, options?: Omit<ChromaRequest,'samples'\|'sampleRate'>)); request form takes ChromaRequest |
 | `clicks(clickDuration)` (`./analysis`) | removed: pass it as clickDurationSec in ClicksRequest |
@@ -8103,6 +8172,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalyzeBpmOptions.maxCandidates` (`./analysis`) | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
+| `AnalyzeBpmOptions.maxCandidates` | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
+| `CqtRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
+| `CqtRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
+| `CqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
+| `CqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `FourierTempogramRequest.norm` (`./analysis`) | removed: the option had no effect in 1.x (the Fourier tempogram never read it); remove the argument, the output is unchanged |
 | `FourierTempogramRequest.norm` | removed: the option had no effect in 1.x (the Fourier tempogram never read it); remove the argument, the output is unchanged |
 | `FunctionalChord.roman` (`./analysis`) | `FunctionalChord.romanNumeral` |
@@ -8114,6 +8189,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PcenRequest.options` (`./analysis`) | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PcenRequest.options` | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PolyphonicAnalysis.setNoteEdit(edit)` | optional (absent clears the edit), as on Node |
+| `VqtToAudioRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
+| `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` (`./analysis`) | norm option removed |
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
@@ -8287,6 +8364,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringRepairTrimSilenceRequest.threshold` | `MasteringRepairTrimSilenceRequest.thresholdDb`: threshold -> thresholdDb |
 | `RealtimeVoiceChangerPodConfig.retuneGrainSize` (`./analysis`) | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `RealtimeVoiceChangerPodConfig.retuneGrainSize` | `RealtimeVoiceChangerConfig.retuneGrainSizeSamples`: retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
+| `masteringRepairAnalyze` | the recommended stages carry no linear clipThreshold (the declip threshold is clipThresholdDb, in dBFS), and masteringRepairApply takes them as they stand |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -8329,6 +8407,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `StreamingRetuneConfig.grainSize` | `StreamingRetuneConfig.grainSizeSamples`: grainSize -> grainSizeSamples (grain size in samples, a multiple of 4 in [4, 8192]; absent = the automatic grain derived from the sample rate; 0 and any other value outside the domain -> RangeError, never rounded or clamped) |
 | `scaleCorrectionSemitones(referenceMidi)` | `scaleCorrectionSemitones(scaleReferenceMidi)`: scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0 |
 | `scaleQuantizeMidi(referenceMidi)` | `scaleQuantizeMidi(scaleReferenceMidi)`: scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0 |
+
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `HpssWithResidualRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `HpssWithResidualRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+| `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
 #### Every call scans its input for non-finite values
 
@@ -8472,10 +8560,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `remix` | one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'\|'sampleRate'>)); request form takes RemixRequest; returns Float32Array |
 | `renderNotes` | one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'\|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array |
 | `renderPercussiveEvents` | one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'\|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array |
-| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry |
+| `roomGeometryFromEstimate` | request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry; a key its source or listener placement does not declare is a TypeError reading 'roomGeometryFromEstimate: unknown key source.height (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
 | `spectralEdit` | one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array |
 | `splitNote` | one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'\|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[] |
-| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult |
+| `synthesizeRir` | request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult; a key its source or listener placement does not declare is a TypeError reading 'synthesizeRir: unknown key listener.w (expected x, y, z)' (1.x read x, y and z and ignored the rest) |
 | `timeStretch` | one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'\|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array |
 | `trim` (`./analysis`) | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
 | `trim` | one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'\|'sampleRate'>)); request form takes TrimRequest; returns Float32Array |
@@ -8595,6 +8683,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareRealtimeVoiceChangerResetMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; configure the processor through SonareRealtimeVoiceChangerWorkletProcessorOptions |
 | `SonareRealtimeVoiceChangerSetConfigMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; configure the processor through SonareRealtimeVoiceChangerWorkletProcessorOptions |
 
+#### Documents in a 1.x spelling are refused
+
+| 1.x | 2.0.0 |
+|---|---|
+| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -8668,6 +8762,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryOptions.sourceZ` | `RoomGeometry.source`: sourceZ -> source (RoomPlacement {x, y, z} (metres)) |
 | `SpectralEditRequest.ops` | optional -> required (readonly SpectralRegionOp[]); empty array returns a copy |
 | `SplitNoteRequest.frame` | required -> optional; exactly one of frame / frameSec; both or neither -> RangeError |
+| `StreamingRetune.setConfig` | the constructor and setConfig check their keys against pitchSemitones, mix and grainSizeSamples: any other key is a TypeError (StreamingRetune.setConfig: unknown key <key> (expected grainSizeSamples, mix, pitchSemitones)), the 1.x grainSize key included, and a refused config leaves the current one in place; a non-finite pitchSemitones or mix is a RangeError reading 'must be finite and in [-24, 24]' ('[0, 1]' for mix) |
 | `VoiceChangeRealtimeRequest.preset` | `VoiceChangeRealtimeRequest.config`: preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor') |
 | `voiceCharacterPresetId` | voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed |
 
@@ -8757,8 +8852,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `CapabilityCatalogMasteringPreset.truePeakCeilingDb` | `MasteringPresetCatalogEntry.truePeakCeilingDbtp` |
 | `MasteringAssistantProfile.attackDensity` (`./analysis`) | `MasteringAssistantProfile.attackPerSecond`: attackDensity -> attackPerSecond |
 | `MasteringAssistantProfile.attackDensity` | `MasteringAssistantProfile.attackPerSecond`: attackDensity -> attackPerSecond |
-| `MasteringChainConfig.repair.declip.clipThreshold` (`./analysis`) | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default) |
-| `MasteringChainConfig.repair.declip.clipThreshold` | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default) |
+| `MasteringChainConfig.repair.declip.clipThreshold` (`./analysis`) | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
+| `MasteringChainConfig.repair.declip.clipThreshold` | `MasteringChainConfig.repair.declip.clipThresholdDb`: renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default); the domain is [-890, 0] dBFS with both ends accepted, anything else a RangeError |
 | `MeteringDetectClippingOptions.threshold` (`./analysis`) | `MeteringDetectClippingOptions.thresholdDb`: threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0)) |
 | `MeteringDetectClippingOptions.threshold` | `MeteringDetectClippingOptions.thresholdDb`: threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0)) |
 | `MeteringDetectClippingRequest.threshold` (`./analysis`) | `MeteringDetectClippingRequest.thresholdDb`: threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level) |
@@ -8942,8 +9037,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringAssistantResult.chainConfig` (`./analysis`) | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAssistantResult.chainConfig` | MasteringChainConfig (was MasteringChainConfigDocument {version, params}) |
 | `MasteringAudioProfileDefects` | {click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb} |
-| `MasteringChainConfigDocument` (`./analysis`) | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document. |
-| `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document. |
+| `MasteringChainConfigDocument` (`./analysis`) | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
+| `MasteringChainConfigDocument` | removed: Use MasteringChainConfig, the nested config object, instead of the version and flat params document; a stored chain document is read with masteringChainConfigFromJson as { "version": 2, "params": { ... } } (version may be left out, version 1 is refused as InvalidFormat), and a refusal names the path from the document root |
 | `MasteringResult.latencySamples` (`./analysis`) | optional -> required |
 | `MasteringResult.latencySamples` | optional -> required |
 | `TypedJson` (`./analysis`) | removed: Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse. |
@@ -8980,16 +9075,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringAssistantSuggestChainStereo` | request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig |
 | `masteringAssistantSuggestChain` | one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig |
 | `masteringAssistantSuggestStereo` | request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult |
-| `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult |
+| `masteringAssistantSuggest` | one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult; the preset domain lists only the mastering presets, so a restoration preset (vinyl, tapeHiss, fieldRecording, voiceMemo, shellac78) is a RangeError like any unknown name, where 1.x listed it as valid and then refused it from the library |
 | `masteringAudioProfileStereo` | request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile |
 | `masteringAudioProfile` | one positional form (masteringAudioProfile(samples, sampleRate, options?: OptionsOf<MasteringAudioProfileRequest>)); request form takes MasteringAudioProfileRequest; returns MasteringAudioProfile |
 | `masteringDynamicsCompressor` | one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsGate` | one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult |
 | `masteringDynamicsTransientShaper` | one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult |
 | `masteringInsertParamInfo` | request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[] |
-| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming |
+| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
-| `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult |
+| `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
 | `meteringCrestFactorDbStereo` (`./analysis`) | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
 | `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
 | `meteringCrestFactorDb` (`./analysis`) | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number |
@@ -9094,7 +9189,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringPairProcessStereo` | `masteringApplyPairProcessorStereo`: renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only) |
 | `masteringPairProcess` | `masteringApplyPairProcessor`: renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs) |
 | `masteringProcessStereo` | `masteringApplyProcessorStereo`: renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only) |
-| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>) |
+| `masteringProcess` | `masteringApplyProcessor`: renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult \| (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>); params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it; the repair.trimSilence param is thresholdDb, a dBFS peak level (default -60), where 1.x took threshold, a linear amplitude (default 0.001) |
 | `masteringStereoAnalyze` | `masteringAnalyzeStereo`: renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object) |
 | `mastering` | `masteringNormalizeLoudness`: renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult \| (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions) |
 | `mixSourceClassFromName` | `mixingAssistantSourceClassFromName`: renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number |
@@ -9301,8 +9396,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringChainConfig` (`./analysis`) | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError |
-| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError |
+| `MasteringChainConfig` (`./analysis`) | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
+| `MasteringChainConfig` | sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError; null, which is also what a NaN or an infinity serializes to, is a TypeError, and an empty list a RangeError |
 
 #### Other individual changes
 
@@ -9319,10 +9414,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
-| `SurroundPan.distance` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `SurroundPan.elevation` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `SurroundPan.distance` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
+| `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
+| `SurroundPan.elevation` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
+| `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `createSonareMeterRingBuffer` (`./worklet`) | `createMeterRingBuffer`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `createSonareSpectrumRingBuffer` (`./worklet`) | `createSpectrumRingBuffer`: takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareMeterRingBufferByteLength` (`./worklet`) | `meterRingBufferByteLength`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
@@ -9401,13 +9496,19 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `EngineBounceOptions.ditherBits` | with dither set, an integer in [2, 32]: 0, 1 and 33 are a RangeError reading 'options.ditherBits must be an integer in [2, 32]' (0 used to select 16) |
+| `EngineBounceOptions.ditherSeed` | 0 is the seed 0; omit it for the default seed (1.x read 0 as the default seed) |
 | `EngineBounceOptions.numChannels` | required; no channel count is assumed |
 | `EngineBounceOptions.sourceSampleRate` | absent means the engine rate; an explicit 0 is a RangeError |
 | `EngineBounceOptions.targetSampleRate` | absent keeps the source rate; an explicit 0 is a RangeError |
 | `EngineBus.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
+| `EngineClip.lengthSamples` | omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source) |
 | `EngineFreezeOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
+| `EngineFreezeOptions.clipId` | omit it for the default clip id; an explicit 0 is a RangeError reading 'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default', any other value an integer in [1, 4294967295] |
 | `EngineFreezeOptions.numChannels` | required; no channel count is assumed |
-| `EngineMetronomeConfig.clickSamples` | optional: give clickSamples or clickSec, never both; an explicit 0 is a RangeError |
+| `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
+| `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
+| `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
 | `EngineTrackLane.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
@@ -9614,7 +9715,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
-| `SonareRealtimeEngineNode.onSyncError` (`./worklet`) | the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload |
+| `SonareRealtimeEngineNode.onSyncError` (`./worklet`) | the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload, and its text names the public entry whose call posted the sync (SonareEngine.setTempo: ...), not the audio thread's inner RealtimeEngine name |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -9874,7 +9975,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `PartRigInsert.params` | an object only; a JSON string is a TypeError |
 | `PlaybackRenderer.setConfig` | config is a PlaybackRendererConfig object only; a JSON string is a TypeError |
-| `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
+| `PlaybackRendererOptions.config` | PlaybackRendererConfig object only; a JSON string is a TypeError, and the core refuses an unknown key, a 1.x snake_case key or role token at any depth as SonareError InvalidFormat |
 | `RealtimeEngine.pushMidiUmp` | words is a Uint32Array or number array; a bare number is a TypeError |
 | `RenderPlaybackRequest.config` | PlaybackRendererConfig object only; a JSON string is a TypeError |
 
@@ -10102,7 +10203,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.scopeScratchPointRight` | removed: use drainScopeTelemetry(maxRecords) and read the fields of each EngineScopeTelemetry |
 | `RealtimeEngine.scopeScratchRenderFrame` | removed: use drainScopeTelemetry(maxRecords) and read the fields of each EngineScopeTelemetry |
 | `RealtimeEngine.scopeScratchTargetId` | removed: use drainScopeTelemetry(maxRecords) and read the fields of each EngineScopeTelemetry |
-| `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
+| `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names; a node's numPorts may be omitted for the spec's channel count, and an explicit 0 is a RangeError reading 'spec.nodes[i].numPorts must be an integer in [1, 2147483647]' (0 used to select the channel count); a node id longer than 63 bytes is a RangeError, as on Node |
 | `RealtimeEngine.telemetryScratchAudibleTimelineSample` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
 | `RealtimeEngine.telemetryScratchError` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
 | `RealtimeEngine.telemetryScratchGraphLatencySamplesQ8` | removed: use drainTelemetry(maxRecords) and read the fields of each EngineTelemetry |
@@ -10297,7 +10398,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `Project.analyzeTempo` | analyzeTempo also takes one request object { samples, sampleRate, ...options } |
 | `Project.autoTempo` | autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments |
-| `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult |
+| `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
 | `Project.clearPartRig` | clearPartRig takes one PartRigKey object instead of (destinationId, part) |
 | `Project.rehydrateVocalEdits` | the cancel predicate moves into an options object: rehydrateVocalEdits(originals, { cancel }) |
 | `Project.setAssistSidecar` | the six-argument positional form is gone; pass one ProjectAssistSidecarInput |
@@ -10521,11 +10622,17 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AlignTakeToReferenceRequest.binsPerOctave` | a value whose top chroma bin reaches half of sampleRate is a RangeError naming binsPerOctave and sampleRate (24 bins per octave needs a rate above 8 kHz); lower binsPerOctave or raise the rate (was a bare 'Invalid parameter') |
+| `AlignTakeToReferenceRequest.hopLength` | an integer in [0, 65536] (RangeError 'alignTakeToReference: hopLength must be an integer in [0, 65536]'); 0 still selects the library hop; a negative hop was refused as a bare 'Invalid parameter' and a hop above 65536 was passed on to the constant-Q stage |
 | `ClipPageStreamer.addSource` | pageFrames and numSamples are each refused by name unless an integer in [1, 9007199254740991]; a fractional size used to pass |
 | `ClipPageStreamerRequest.clipId` | ClipPageStreamerRequest is the union ClipPageSampleRequest \| ClipPagePageRequest; clipId is on both members |
 | `ClipPageStreamerRequest.pageIndex` | only on ClipPagePageRequest; narrow with "pageIndex" in request |
 | `ClipPageStreamerRequest.sample` | only on ClipPageSampleRequest, which also carries channel; narrow with "sample" in request |
-| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key |
+| `Project.setMixerSceneJson` | returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key, and a scene document is version 2: any other version is refused as InvalidFormat and an absent version reads as 2, so a stored 1.x scene needs version set to 2 and its surroundPan distance and elevation keys removed |
+| `ProjectMidiCcBinding.ccLsbNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccLsbNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.ccNumber` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'ccNumber must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.selectorLsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorLsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
+| `ProjectMidiCcBinding.selectorMsb` | an integer in [0, 127]; a value from 128 to 255 is a RangeError reading 'selectorMsb must be an integer in [0, 127]' under bindMidiCc, midiCcToBreakpoint and midiParamToCc (1.x let a selector byte in that range through and refused a bad controller number without naming the field) |
 | `compareUint64` | removed: never callable: 1.x re-exported it type-only; a VocalUint64 is a decimal string, so order two values with BigInt(a) < BigInt(b) |
 | `createSonareClipPageRequestRingBuffer` (`./worklet`) | `createClipPageRequestRingBuffer`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareClipPageRequestRingBufferByteLength` (`./worklet`) | `clipPageRequestRingBufferByteLength`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
@@ -11551,7 +11658,7 @@ const v = magnitude.data[bin * magnitude.cols + frame];
 
 ### Public types never expose Wasm* names
 
-WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `SonareModuleHandle`.
+WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `ModuleHandle`.
 
 WASM, 1.x:
 
