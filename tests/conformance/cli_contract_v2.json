@@ -18302,6 +18302,24 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "unknown_param_refused",
+          "argv": [
+            "mastering-profile",
+            "{audio}",
+            "--params",
+            "foo=1",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "(expected detectDefects, hopLength, nFft, truePeakOversample)"
+          ]
         }
       ],
       "artifacts": {}

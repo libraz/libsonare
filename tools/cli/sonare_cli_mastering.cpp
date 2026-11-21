@@ -690,10 +690,9 @@ int cmd_mastering_presets(const CliArgs& args, const Audio&) {
 /// the same reason @ref analysis_json_for_cli exists: CLI stdout is snake_case
 /// throughout, and the core does not change convention for one pair of callers.
 int print_c_api_json(SonareError err, char* json) {
-  if (err != SONARE_OK || json == nullptr) {
+  if (err != SONARE_OK) {
     sonare_free_string(json);
-    throw std::runtime_error(std::string("mastering analysis failed: ") +
-                             sonare_error_message(err));
+    throw_c_failure(err, nullptr);
   }
   const std::string document(json);
   sonare_free_string(json);

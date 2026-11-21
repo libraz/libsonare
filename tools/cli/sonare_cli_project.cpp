@@ -405,7 +405,7 @@ void print_project_usage(std::ostream& out) {
       "rate)\n"
       "  --frames <n>         Bounce length in frames\n"
       "  --channels <n>       Bounce channel count: 1, 2, 6, or 8, at most the scene master's own "
-      "width (default 2)\n"
+      "width (default: the scene master's width)\n"
       "  --strict             Treat project load diagnostics as validation failures\n"
       "  --audio <id>=<file>  Bind decoded PCM to project audio source <id> (bounce;\n"
       "                       repeat once per source, since project JSON carries only a\n"
