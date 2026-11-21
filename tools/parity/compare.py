@@ -280,8 +280,10 @@ _ALIAS_COVERAGE = {
     "audio_duration_sec": ("duration_sec", "get_duration_sec"),
     "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
-    "engine_drain_meter_telemetry": ("drain_meter_telemetry",),
-    "engine_drain_meter_telemetry_wide": ("drain_meter_telemetry_wide",),
+    "engine_drain_meter_telemetry": ("drain_meter_telemetry", "drain_meter_telemetry_wide"),
+    "engine_prepare": ("prepare",),
+    "engine_bind_midi_cc": ("bind_midi_cc",),
+    "project_set_marker": ("set_marker",),
     "engine_render_offline": ("render_offline",),
     "project_add_automation_lane": ("add_automation_lane",),
     "project_edit_automation_lane": ("edit_automation_lane",),
@@ -347,19 +349,12 @@ _ALIAS_COVERAGE = {
     "project_bounce": ("bounce",),
     "project_export_smf": ("export_smf",),
     "project_import_smf": ("import_smf",),
-    # Plural builtin-instrument bounce -> singular facade method (one or many).
-    "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
-    # Plural SF2-instrument bounce -> singular facade method (one or many).
-    "project_bounce_with_sf2_instruments": ("bounce_with_sf2_instrument",),
-    # Plural NativeSynth-instrument bounce -> singular facade method (one or many).
-    "project_bounce_with_synth_instruments": ("bounce_with_synth_instrument",),
     # The Project facade presents aggregate descriptors rather than the C ABI's
     # component accessors / name resolver.
     "project_fade_curve_from_name": ("set_clip_fade",),
     "project_marker_name_by_index": ("marker_by_index", "markers"),
     "project_track_name_by_index": ("track_by_index", "tracks"),
     "project_source_name_or_uri_by_index": ("source_by_index", "sources"),
-    "project_set_marker_ex_name": ("set_marker_ex", "set_marker"),
     "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_by_index": ("unresolved_audio_sources",),
@@ -369,9 +364,6 @@ _ALIAS_COVERAGE = {
     # ProjectSource is the facade's aggregate read model; its source-by-index
     # projection includes the owning audio metadata strings for audio sources.
     "project_get_audio_source_metadata": ("source_by_index", "sources"),
-    # prepare() accepts maxChannels and routes to this C entry point when it is
-    # available, retaining a fallback for older native libraries in Python.
-    "engine_prepare_with_channels": ("prepare",),
     # SoundFont ops: the C symbols spell "soundfont" as one word while the
     # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
     # An idiomatic spelling difference shared by both JS facades (Python matches
@@ -456,7 +448,6 @@ _ALIAS_COVERAGE = {
     "engine_can_set_master_sidechain": ("can_set_strip_sidechain",),
     # Solo/mute is addressed by track id; the facade resolves the lane.
     "engine_set_solo_mute": ("set_track_solo_mute",),
-    "engine_bind_midi_cc_binding": ("bind_midi_cc",),
     # Capture is configured in one call carrying buffer, punch, source, input
     # monitor and record offset.
     "engine_set_capture_buffer": ("configure_capture",),
