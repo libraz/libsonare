@@ -176,7 +176,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalCoreResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
+  if (!OptionalResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input("samples", data, length, sr);
@@ -216,7 +216,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalCoreResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
+  if (!OptionalResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input("samples", data, length, sr);

@@ -125,15 +125,15 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  int start = 0;
-  int end = 0;
+  int64_t start = 0;
+  int64_t end = 0;
   SonareError err = sonare_trim_silence(arr.Data(), arr.ElementLength(), top_db, frame_length,
                                         hop_length, &out, &count, &start, &end);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("audio", FloatResult(env, out, count));
-  result.Set("startSample", start);
-  result.Set("endSample", end);
+  result.Set("startSample", Napi::Number::New(env, static_cast<double>(start)));
+  result.Set("endSample", Napi::Number::New(env, static_cast<double>(end)));
   return result;
   SONARE_NODE_CATCH(env)
 }

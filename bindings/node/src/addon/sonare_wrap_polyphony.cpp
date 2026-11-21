@@ -214,7 +214,7 @@ Napi::Value PolyphonicAnalysisWrap::FrameCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
-  return Napi::Number::New(env, frame_count_);
+  return Napi::Number::New(env, static_cast<double>(frame_count_));
   SONARE_NODE_CATCH(env)
 }
 
@@ -305,7 +305,7 @@ Napi::Value PolyphonicAnalysisWrap::Polyphony(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
-  std::vector<int32_t> counts(frame_count_ > 0 ? static_cast<size_t>(frame_count_) : 0, 0);
+  std::vector<int32_t> counts(frame_count_, 0);
   size_t written = 0;
   const SonareError err = sonare_polyphonic_polyphony(
       analysis_, counts.empty() ? nullptr : counts.data(), counts.size(), &written);

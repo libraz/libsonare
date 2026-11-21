@@ -212,7 +212,7 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
     return false;
   }
   storage->desc.rendered_mono = storage->rendered.data();
-  storage->desc.rendered_sample_count = static_cast<int64_t>(storage->rendered.size());
+  storage->desc.rendered_sample_count = storage->rendered.size();
   storage->desc.sve1 = storage->sve1.data();
   storage->desc.sve1_size = storage->sve1.size();
   return true;
@@ -264,7 +264,7 @@ bool ReadOriginals(Napi::Env env, const Napi::Value& value, OriginalStorage* sto
       return false;
     }
     row.mono = storage->buffers.back().data();
-    row.sample_count = static_cast<int64_t>(storage->buffers.back().size());
+    row.sample_count = storage->buffers.back().size();
   }
   return true;
 }
@@ -317,8 +317,7 @@ Napi::Object ApplyResultToObject(Napi::Env env, const SonareProjectVocalEditAppl
 }
 
 Napi::Object DependencyToObject(Napi::Env env, const SonareProjectVocalEditDependency& dependency) {
-  if (dependency.source_sample_count < 0 ||
-      static_cast<double>(dependency.source_sample_count) > sonare_node::kMaxSafeInteger) {
+  if (static_cast<double>(dependency.source_sample_count) > sonare_node::kMaxSafeInteger) {
     Napi::RangeError::New(env, "dependency.sourceSampleCount is outside the safe integer range")
         .ThrowAsJavaScriptException();
     return Napi::Object::New(env);

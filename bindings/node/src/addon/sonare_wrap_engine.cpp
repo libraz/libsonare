@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "c_api/engine_config_domains.h"
-#include "core/audio.h"
 #include "engine/common.h"
 #include "engine/realtime_engine.h"
 #include "midi/live_push_args.h"
@@ -38,21 +37,6 @@ bool ReadPositiveUint32(Napi::Env env, const Napi::Value& value, const char* lab
     return false;
   }
   *out = static_cast<uint32_t>(number);
-  return true;
-}
-
-bool ReadEngineSampleRate(Napi::Env env, const Napi::Value& value, double* out) {
-  if (out == nullptr || !value.IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-  const double sample_rate = value.As<Napi::Number>().DoubleValue();
-  if (!sonare::is_supported_sample_rate(sample_rate)) {
-    Napi::RangeError::New(env, "sampleRate must be a whole number of hertz within 8000..384000")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = sample_rate;
   return true;
 }
 
@@ -382,9 +366,9 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
             ". The prebuilt addon is incompatible with this binding.");
     return;
   }
-  double sample_rate = 48000.0;
+  int sample_rate = 48000;
   if (info.Length() > 0 && !info[0].IsUndefined() &&
-      !ReadEngineSampleRate(env, info[0], &sample_rate)) {
+      !sonare_node::ReadWholeHertzSampleRate(env, info[0], &sample_rate)) {
     return;
   }
   // Absent arguments pass 0, which the C entry resolves to the library default.
@@ -436,8 +420,8 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   // The sample rate is required: an absent one reads as undefined and is
   // rejected by the reader below, so it reaches the caller as a TypeError rather
   // than as a silent no-op.
-  double sample_rate = 0.0;
-  if (!ReadEngineSampleRate(env, info[0], &sample_rate)) return env.Undefined();
+  int sample_rate = 0;
+  if (!sonare_node::ReadWholeHertzSampleRate(env, info[0], &sample_rate)) return env.Undefined();
   int max_block_size = 0;
   int64_t command_capacity = 0;
   int64_t telemetry_capacity = 0;
@@ -1081,7 +1065,7 @@ Napi::Value RealtimeEngineWrap::ClipPageRequestOverflowCount(const Napi::Callbac
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t count = 0;
+  size_t count = 0;
   ThrowIfError(env, sonare_engine_clip_page_request_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
@@ -1092,7 +1076,7 @@ Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t count = 0;
+  size_t count = 0;
   ThrowIfError(env, sonare_engine_warp_stretch_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));

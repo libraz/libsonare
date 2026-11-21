@@ -49,7 +49,7 @@ Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
   return out;
 }
 
-using CqtFn = SonareError (*)(const float*, size_t, int, int, float, int, int, float,
+using CqtFn = SonareError (*)(const float*, size_t, int, size_t, float, int, int, float,
                               SonareCqtResult*);
 
 Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
@@ -330,7 +330,7 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalCoreResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
+  if (!OptionalResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
@@ -374,10 +374,7 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!RequiredIntArg(env, info, 4, "nFft", &n_fft)) return env.Undefined();
   int hop_length{};
-  // An absent hop is SONARE_STFT_HOP_AUTO, which the C ABI runs as a quarter of n_fft.
-  if (!Int32Arg(env, info, 5, "hopLength", SONARE_STFT_HOP_AUTO, &hop_length)) {
-    return env.Undefined();
-  }
+  if (!OptionalResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
   int n_iter{};
   if (!OptionalDomainArg(env, info, 6, "nIter", 32, sonare_c_detail::kGriffinLimIterationsDomain,
                          &n_iter)) {
@@ -455,7 +452,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalCoreResynthesisHopArg(env, info, 6, &hop_length)) return env.Undefined();
+  if (!OptionalResynthesisHopArg(env, info, 6, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 7, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};

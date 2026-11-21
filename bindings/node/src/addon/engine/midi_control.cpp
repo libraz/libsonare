@@ -305,7 +305,7 @@ Napi::Value RealtimeEngineWrap::LegatoFallbackCount(const Napi::CallbackInfo& in
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
-  uint32_t count = 0;
+  size_t count = 0;
   ThrowIfError(env, sonare_engine_legato_fallback_count(engine_, destination_id, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));

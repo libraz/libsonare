@@ -252,11 +252,11 @@ bool ReadUnmatchedTargetPolicy(Napi::Env env, const Napi::Object& opts, int32_t*
 /// Reads the four separation keys both percussive-event entry points share. The
 /// framing is one input, not a knob each side restates, so neither can lift a
 /// signal out on a framing the other did not measure on.
-void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, int32_t* hop_length,
+void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, size_t* hop_length,
                               int32_t* kernel_harmonic, int32_t* kernel_percussive) {
   *n_fft = IntProperty(opts, "nFft", *n_fft);
-  *hop_length = IntInRangeOrAbsentProperty(opts, "hopLength", 1, std::numeric_limits<int>::max(),
-                                           *hop_length);
+  *hop_length = static_cast<size_t>(IntInRangeOrAbsentProperty(
+      opts, "hopLength", 1, std::numeric_limits<int>::max(), static_cast<int>(*hop_length)));
   *kernel_harmonic = IntProperty(opts, "hpssKernelHarmonic", *kernel_harmonic);
   *kernel_percussive = IntProperty(opts, "hpssKernelPercussive", *kernel_percussive);
 }

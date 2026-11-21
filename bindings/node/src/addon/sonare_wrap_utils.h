@@ -154,7 +154,11 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
 /// analyse a different meter set than requested) and a non-numeric entry.
 bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
                                   int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
-                                  int* count);
+                                  size_t* count);
+
+/// @brief Read a required sample rate that must be a whole number of hertz in the supported range.
+/// @return false with one pending JS exception: TypeError for a non-number, RangeError otherwise.
+bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out);
 
 /// @brief The arguments both HPSS entry points take after the audio and its
 ///        sample rate: the two median-filter kernels, the STFT geometry, and

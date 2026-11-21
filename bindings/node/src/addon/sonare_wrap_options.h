@@ -1315,17 +1315,13 @@ inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index
   return Int32Value(env, value, name, out);
 }
 
-/// @brief Read an optional resynthesis hop for a call that reaches the core directly.
-/// @details Absent and @c SONARE_STFT_HOP_AUTO both select the automatic hop, which @p out
-///   receives in the core's spelling (0); any other value below 1 is refused in the C ABI's words.
-inline bool OptionalCoreResynthesisHopArg(Napi::Env env, const Napi::CallbackInfo& info,
-                                          size_t index, int* out) {
-  if (!Int32Arg(env, info, index, "hopLength", SONARE_STFT_HOP_AUTO, out)) return false;
-  if (*out == SONARE_STFT_HOP_AUTO) {
-    *out = 0;
-    return true;
-  }
-  if (*out < 1) {
+/// @brief Read an optional resynthesis hop whose 0 is the automatic hop (@ref ZeroIsSentinel).
+/// @details Absent and 0 both select the automatic hop, a quarter of the FFT size; a negative
+///   value is refused in the C ABI's words.
+inline bool OptionalResynthesisHopArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                      int* out) {
+  if (!OptionalIntArg(env, info, index, "hopLength", kZeroIsSentinel, out)) return false;
+  if (*out < 0) {
     Napi::RangeError::New(env, "hopLength must be an integer in [1, 2147483647]")
         .ThrowAsJavaScriptException();
     return false;

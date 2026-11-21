@@ -28,13 +28,13 @@ export function resolveFftOptions(
 /** The largest even C `int`, the top of a resynthesizing effect's `nFft` domain. */
 const MAX_EFFECT_N_FFT = 2147483646;
 
-/** `SONARE_STFT_HOP_AUTO`: the hop native runs as a quarter of `nFft`. */
-const STFT_HOP_AUTO = -1;
+/** A hop of 0 is the automatic hop native runs as a quarter of `nFft`. */
+const AUTO_HOP = 0;
 
 /**
  * The same pair for an effect that resynthesizes audio: the symmetric Hann
  * synthesis window is all zeros at two points, so the smallest size is 4. An
- * omitted hop reaches native as `SONARE_STFT_HOP_AUTO`, a quarter of `nFft`.
+ * omitted hop reaches native as 0, the automatic hop of a quarter of `nFft`.
  */
 export function resolveEffectFftOptions(
   nFft: unknown,
@@ -52,11 +52,11 @@ export function resolveEffectFftOptions(
 
 /**
  * The hop of a resynthesizing call as native reads it: omitted is
- * `SONARE_STFT_HOP_AUTO`, a quarter of `nFft`; a given hop is a positive integer.
+ * 0, the automatic hop of a quarter of `nFft`; a given hop is a positive integer.
  */
 export function resolveResynthesisHop(hopLength: unknown): number {
   if (hopLength === undefined) {
-    return STFT_HOP_AUTO;
+    return AUTO_HOP;
   }
   assertPositiveInteger(hopLength, 'hopLength');
   return hopLength;

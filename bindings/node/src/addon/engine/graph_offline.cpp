@@ -422,11 +422,11 @@ Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo
   }
   const int interval_frames = sonare_node::node_narrow_int(env, info[0], "intervalFrames");
   const unsigned int band_count = sonare_node::node_narrow_uint32(env, info[1], "bandCount");
-  unsigned int applied = 0;
+  size_t applied = 0;
   ThrowIfError(
       env, sonare_engine_configure_scope_telemetry(engine_, interval_frames, band_count, &applied));
   if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, applied);
+  return Napi::Number::New(env, static_cast<double>(applied));
   SONARE_NODE_CATCH(env)
 }
 

@@ -80,7 +80,7 @@ class PolyphonicAnalysisWrap : public Napi::ObjectWrap<PolyphonicAnalysisWrap> {
   /// Held unsigned so it can be a buffer size without a cast that would turn an
   /// inverted span into a four-billion-element allocation.
   std::vector<size_t> spans_;
-  int32_t frame_count_ = 0;
+  size_t frame_count_ = 0;
 };
 
 }  // namespace sonare_node

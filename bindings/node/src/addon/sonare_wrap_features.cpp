@@ -331,19 +331,22 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
 
 namespace {
 
-using ChromaFn = SonareError (*)(const float*, size_t, int, int, int, SonareChromaResult*);
-using ChromaExFn = SonareError (*)(const float*, size_t, int, int, int, int, SonareChromaResult*);
+using ChromaFn = SonareError (*)(const float*, size_t, int, size_t, int, SonareChromaResult*);
+using ChromaExFn = SonareError (*)(const float*, size_t, int, size_t, int, int,
+                                   SonareChromaResult*);
 
-SonareError ChromaCensWithBins(const float* samples, size_t length, int sample_rate, int hop_length,
-                               int n_chroma, int bins_per_octave, SonareChromaResult* out) {
+SonareError ChromaCensWithBins(const float* samples, size_t length, int sample_rate,
+                               size_t hop_length, int n_chroma, int bins_per_octave,
+                               SonareChromaResult* out) {
   SonareChromaCensOptions options;
   sonare_chroma_cens_options_init(&options);
   options.bins_per_octave = bins_per_octave;
   return sonare_chroma_cens(samples, length, sample_rate, hop_length, n_chroma, &options, out);
 }
 
-SonareError ChromaCqtWithBins(const float* samples, size_t length, int sample_rate, int hop_length,
-                              int n_chroma, int bins_per_octave, SonareChromaResult* out) {
+SonareError ChromaCqtWithBins(const float* samples, size_t length, int sample_rate,
+                              size_t hop_length, int n_chroma, int bins_per_octave,
+                              SonareChromaResult* out) {
   SonareChromaCqtOptions options;
   sonare_chroma_cqt_options_init(&options);
   options.bins_per_octave = bins_per_octave;

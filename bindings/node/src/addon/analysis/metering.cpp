@@ -56,7 +56,7 @@ Napi::Float32Array EmitFloatSeries(Napi::Env env, const float* values, size_t co
 }
 
 Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResult& result) {
-  const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
+  const size_t total = static_cast<size_t>(result.num_channels) * result.bucket_count;
   auto min_values = Napi::Float32Array::New(env, total);
   auto max_values = Napi::Float32Array::New(env, total);
   if (total > 0) {
@@ -66,7 +66,7 @@ Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResu
   Napi::Object out = Napi::Object::New(env);
   out.Set("min", min_values);
   out.Set("max", max_values);
-  out.Set("channels", Napi::Number::New(env, result.channels));
+  out.Set("channels", Napi::Number::New(env, result.num_channels));
   out.Set("bucketCount", Napi::Number::New(env, result.bucket_count));
   out.Set("samplesPerBucket", Napi::Number::New(env, result.samples_per_bucket));
   return out;

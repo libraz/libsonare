@@ -102,7 +102,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     desc.role = role.IsUndefined() || role.IsNull() ? nullptr : roles.back().c_str();
     desc.layout = layout;
     desc.planar_samples = stem_planes.data();
-    desc.frame_count = static_cast<int64_t>(frame_count);
+    desc.frame_count = frame_count;
     desc.start_frame = sonare_node::DomainProperty<int64_t>(
         stem, "startFrame", desc.start_frame, sonare_c_detail::kExternalStemStartFrameDomain);
     descriptors.push_back(desc);

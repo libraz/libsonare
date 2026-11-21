@@ -360,7 +360,7 @@ Napi::Value PlaybackRendererWrap::NonFiniteDiscardCount(const Napi::CallbackInfo
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
-  uint32_t count = 0;
+  size_t count = 0;
   sonare_node::ThrowIfError(env,
                             sonare_playback_renderer_non_finite_discard_count(renderer_, &count));
   if (env.IsExceptionPending()) return env.Undefined();

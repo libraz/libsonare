@@ -13,6 +13,7 @@
 #include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_refusal_record.h"
 #include "c_entry_names.h"
+#include "core/audio.h"
 #include "effects/hpss.h"
 #include "field_spelling.h"
 #include "sonare_wrap_options.h"
@@ -369,9 +370,24 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, boo
   SetSonareErrorProperties(env, error, err);
 }
 
+bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
+  if (out == nullptr || !value.IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  const double sample_rate = value.As<Napi::Number>().DoubleValue();
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    Napi::RangeError::New(env, "sampleRate must be a whole number of hertz within 8000..384000")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<int>(sample_rate);
+  return true;
+}
+
 bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
                                   int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
-                                  int* count) {
+                                  size_t* count) {
   Napi::Env env = object.Env();
   const Napi::Value value = object.Get(key);
   if (value.IsUndefined() || value.IsNull()) return true;
@@ -400,7 +416,7 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
     }
   }
   std::copy(std::begin(staged), std::end(staged), numerators);
-  *count = static_cast<int>(length);
+  *count = length;
   return true;
 }
 
@@ -465,7 +481,7 @@ bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArgume
       !OptionalIntArg(env, info, 3, "kernelPercussive", defaults.kernel_size_percussive,
                       &out->kernel_percussive) ||
       !OptionalIntArg(env, info, 4, "nFft", kDefaultNFft, &out->n_fft) ||
-      !OptionalCoreResynthesisHopArg(env, info, 5, &out->hop_length) ||
+      !OptionalResynthesisHopArg(env, info, 5, &out->hop_length) ||
       !OptionalBoolArg(env, info, 6, "hardMask", false, &out->hard_mask)) {
     return false;
   }

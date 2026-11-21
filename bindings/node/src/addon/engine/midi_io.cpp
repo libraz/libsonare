@@ -546,7 +546,7 @@ Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t count = 0;
+  size_t count = 0;
   ThrowIfError(env, sonare_engine_external_midi_dropped_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));

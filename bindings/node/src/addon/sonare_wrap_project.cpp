@@ -287,8 +287,8 @@ Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  double sample_rate = 0.0;
-  if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate)) return env.Undefined();
+  int sample_rate = 0;
+  if (!sonare_node::ReadWholeHertzSampleRate(env, info[0], &sample_rate)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_sample_rate(project_, sample_rate));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
