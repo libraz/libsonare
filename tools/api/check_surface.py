@@ -1573,45 +1573,57 @@ def _c_channel_twin(rec: dict, base: dict, form: str) -> str | None:
 
 # The decided sample formats of one read: the same call returning its buffers in another
 # element type. A twin is one only while its parameters match and its result struct differs
-# from the base's in buffer element type alone.
+# from the reference's in buffer element type alone. The reference is the float base, or,
+# where there is none, the read's other sample format.
 _C_SAMPLE_FORMATS = {"u8": "uint8_t", "i16": "int16_t"}
 _C_SAMPLE_FORMAT_MESSAGE = "is the _{fmt} sample format of {base} but differs from it"
+_C_SAMPLE_SIBLING_MESSAGE = "is the _{fmt} sample format beside {base} but differs from it"
 
 
-def _c_sample_format_twin(ctx, rec: dict, base: dict, fmt: str) -> str | None:
-    """None when the twin is its base with buffers of another element type, else what differs."""
-    suffix = fmt.upper()
-    elem = _C_SAMPLE_FORMATS[fmt]
-    sig = lambda r: (r.get("sigs") or [{}])[0]
+def _c_sample_format_twin(ctx, rec: dict, fmt: str, ref: dict, ref_fmt: str = "") -> str | None:
+    """None when ``rec`` is ``ref`` with buffers of another element type, else what differs.
+
+    ``ref_fmt`` is empty for the float base, or the reference's own sample format."""
     norm = lambda t: " ".join(t.split())
-    mine = [(norm(p.get("type", "")), p.get("name", "")) for p in sig(rec).get("params", [])]
-    theirs = [(norm(p.get("type", "")), p.get("name", "")) for p in sig(base).get("params", [])]
-    pairs = {}
-    renamed = []
-    for t, n in mine:
-        m = re.match(rf"^(\w+){suffix}\*$", t)
-        if m:
-            pairs[m.group(1)] = m.group(1) + suffix
-            t = f"{m.group(1)}*"
-        renamed.append((t, n))
+
+    def side(r, f):
+        suffix = f.upper()
+        params, structs = [], {}
+        for p in ((r.get("sigs") or [{}])[0]).get("params", []):
+            t = norm(p.get("type", ""))
+            m = re.match(rf"^(\w+){suffix}\*$", t) if f else None
+            if m:
+                structs[m.group(1)] = m.group(1) + suffix
+                t = f"{m.group(1)}*"
+            params.append((t, p.get("name", "")))
+        return params, structs, ((r.get("sigs") or [{}])[0]).get("returns")
+
+    mine, my_structs, my_ret = side(rec, fmt)
+    theirs, their_structs, their_ret = side(ref, ref_fmt)
     diffs = []
-    if renamed != theirs or sig(rec).get("returns") != sig(base).get("returns"):
-        extra = [f"{t} {n}" for t, n in renamed if (t, n) not in theirs]
-        gone = [f"{t} {n}" for t, n in theirs if (t, n) not in renamed]
+    if mine != theirs or my_ret != their_ret:
+        extra = [f"{t} {n}" for t, n in mine if (t, n) not in theirs]
+        gone = [f"{t} {n}" for t, n in theirs if (t, n) not in mine]
         diffs.append(
-            f"parameters: base has {', '.join(gone) or 'nothing else'};"
+            f"parameters: {ref['name']} has {', '.join(gone) or 'nothing else'};"
             f" twin has {', '.join(extra) or 'nothing else'}"
         )
     fields = collections.defaultdict(dict)
     for f in recs(ctx, ("c",), ("field",)):
-        owner = f["name"].split(".")[0]
-        fields[owner][f["member"]] = norm(f.get("type", ""))
-    for b, t in sorted(pairs.items()):
-        bf, tf = fields.get(b, {}), fields.get(t, {})
-        gone = [m for m in bf if m not in tf]
-        extra = [m for m in tf if m not in bf]
+        fields[f["name"].split(".")[0]][f["member"]] = norm(f.get("type", ""))
+
+    def as_float(t, f):
+        return t.replace(_C_SAMPLE_FORMATS[f], "float") if f else t
+
+    for stem, twin in sorted(my_structs.items()):
+        other = their_structs.get(stem, stem)
+        rf, tf = fields.get(other, {}), fields.get(twin, {})
+        gone = [m for m in rf if m not in tf]
+        extra = [m for m in tf if m not in rf]
         retyped = [
-            m for m in bf if m in tf and tf[m] != bf[m] and tf[m] != bf[m].replace("float", elem)
+            m
+            for m in rf
+            if m in tf and tf[m] != rf[m] and as_float(tf[m], fmt) != as_float(rf[m], ref_fmt)
         ]
         for label, ms in (
             ("lacks", gone),
@@ -1619,7 +1631,7 @@ def _c_sample_format_twin(ctx, rec: dict, base: dict, fmt: str) -> str | None:
             ("retypes beyond the element", retyped),
         ):
             if ms:
-                diffs.append(f"{t} {label} {', '.join(ms)}")
+                diffs.append(f"{twin} {label} {', '.join(ms)}")
     return "; ".join(diffs) or None
 
 
@@ -1636,6 +1648,19 @@ def chk_options_suffix(ctx):
         fixed = _C_SUFFIX.search(name)
         if fixed:
             bad.append((r, f"suffix {fixed.group(0)} marks a second form of one operation"))
+            continue
+        fmt_m = re.search(r"_(" + "|".join(_C_SAMPLE_FORMATS) + r")$", name)
+        stem = name[: fmt_m.start()] if fmt_m else ""
+        siblings = [f"{stem}_{f}" for f in _C_SAMPLE_FORMATS if fmt_m and f != fmt_m.group(1)]
+        sibling = next((x for x in siblings if x in names), None)
+        if fmt_m and stem not in names and sibling:
+            ref_fmt = sibling[len(stem) + 1 :]
+            diff = _c_sample_format_twin(ctx, r, fmt_m.group(1), by_name[sibling], ref_fmt)
+            if diff is None:
+                sample_formats += 1
+            else:
+                msg = _C_SAMPLE_SIBLING_MESSAGE.format(fmt=fmt_m.group(1), base=sibling)
+                bad.append((r, f"{msg}: {diff}"))
             continue
         tokens = name.split("_")
         base = next(
@@ -1662,7 +1687,7 @@ def chk_options_suffix(ctx):
                 bad.append((r, f"{msg}: {diff}"))
             continue
         if rest in _C_SAMPLE_FORMATS:
-            diff = _c_sample_format_twin(ctx, r, by_name[base], rest)
+            diff = _c_sample_format_twin(ctx, r, rest, by_name[base])
             if diff is None:
                 sample_formats += 1
             else:
@@ -2587,7 +2612,7 @@ _CATEGORY_FITS = {
         lambda r, msg: (
             not _C_SUFFIX.search(r["name"])
             and " channel form of " not in msg
-            and " sample format of " not in msg
+            and " sample format " not in msg
         ),
         "a fixed second-form suffix, a channel form or a sample format names no other operation",
     ),

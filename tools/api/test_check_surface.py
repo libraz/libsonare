@@ -2822,12 +2822,52 @@ class SecondFormExtensions(CheckerCase):
             [
                 (
                     "c function sonare_read_frames_i16: is the _i16 sample format of"
-                    " sonare_read_frames but differs from it: parameters: base has nothing"
-                    " else; twin has const SonareQuantizeConfig* config; SonareFramesI16"
+                    " sonare_read_frames but differs from it: parameters: sonare_read_frames"
+                    " has nothing else; twin has const SonareQuantizeConfig* config; SonareFramesI16"
                     " lacks chord_root; allowlisted as distinct-operation, but a fixed"
                     " second-form suffix, a channel form or a sample format names no other"
                     " operation"
                 )
+            ],
+        )
+
+    def test_two_sample_formats_with_no_base_are_compared_with_each_other(self):
+        self.add(
+            *self.frames("SonareQuantU8", "uint8_t"),
+            *self.frames("SonareQuantI16", "int16_t"),
+            self.reader("sonare_read_quantized_u8", "SonareQuantU8"),
+            self.reader("sonare_read_quantized_i16", "SonareQuantI16"),
+        )
+        code, lines = self.run_check("--check", "options-struct:suffix")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.flagged(lines), [])
+        self.assertIn("sample-format twins", "\n".join(lines))
+
+    def test_sibling_sample_formats_that_differ_are_refused_and_not_excusable(self):
+        self.add(
+            *self.frames("SonareQuantU8", "uint8_t"),
+            _field("c", "SonareQuantU8", "chord_root", "int*", index=2),
+            *self.frames("SonareQuantI16", "int16_t"),
+            self.reader("sonare_read_quantized_u8", "SonareQuantU8"),
+            self.reader("sonare_read_quantized_i16", "SonareQuantI16"),
+        )
+        allow = self.allow("sonare_read_quantized_i16")
+        code, lines = self.run_check("--check", "options-struct:suffix", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            self.flagged(lines),
+            [
+                (
+                    "c function sonare_read_quantized_i16: is the _i16 sample format beside"
+                    " sonare_read_quantized_u8 but differs from it: SonareQuantI16 lacks"
+                    " chord_root; allowlisted as distinct-operation, but a fixed second-form"
+                    " suffix, a channel form or a sample format names no other operation"
+                ),
+                (
+                    "c function sonare_read_quantized_u8: is the _u8 sample format beside"
+                    " sonare_read_quantized_i16 but differs from it: SonareQuantU8 adds"
+                    " chord_root"
+                ),
             ],
         )
 
