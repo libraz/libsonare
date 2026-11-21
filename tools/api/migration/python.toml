@@ -4320,6 +4320,55 @@ changed = "replaced by KeyMode, a Literal of the lowercase mode tokens (\"major\
 domain = "core"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_a_non_string_mode_is_a_type_error"
+[[entry]]
+kind = "value"
+old = "Mode.DORIAN"
+new = "KeyMode='dorian'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.LOCRIAN"
+new = "KeyMode='locrian'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.LYDIAN"
+new = "KeyMode='lydian'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.MAJOR"
+new = "KeyMode='major'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.MINOR"
+new = "KeyMode='minor'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.MIXOLYDIAN"
+new = "KeyMode='mixolydian'"
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode.PHRYGIAN"
+new = "KeyMode='phrygian'"
+domain = "core"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -4328,6 +4377,55 @@ changed = "a Literal of lowerCamel tokens (\"krumhanslSchmuckler\", \"faraldoEdm
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_an_unknown_or_legacy_profile_names_the_accepted_tokens"
+[[entry]]
+kind = "value"
+old = "KeyProfile.BELLMAN_BUDGE"
+new = "KeyProfile='bellmanBudge'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FARALDO_EDMA"
+new = "KeyProfile='faraldoEdma'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FARALDO_EDMM"
+new = "KeyProfile='faraldoEdmm'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.FARALDO_EDMT"
+new = "KeyProfile='faraldoEdmt'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.KRUMHANSL_SCHMUCKLER"
+new = "KeyProfile='krumhanslSchmuckler'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.SHAATH"
+new = "KeyProfile='shaath'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile.TEMPERLEY"
+new = "KeyProfile='temperley'"
+domain = "analysis"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -4336,6 +4434,62 @@ changed = "a Literal of lowerCamel tokens (\"intro\", \"preChorus\", ...) instea
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_section_types_are_tokens"
+[[entry]]
+kind = "value"
+old = "SectionType.BRIDGE"
+new = "SectionType='bridge'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.CHORUS"
+new = "SectionType='chorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.INSTRUMENTAL"
+new = "SectionType='instrumental'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.INTRO"
+new = "SectionType='intro'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.OUTRO"
+new = "SectionType='outro'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.PRE_CHORUS"
+new = "SectionType='preChorus'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.UNKNOWN"
+new = "SectionType='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SectionType.VERSE"
+new = "SectionType='verse'"
+domain = "analysis"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "field"
@@ -5350,6 +5504,13 @@ changed = "Literal['auto', 'blind', 'impulseResponse']"
 domain = "effects"
 rule = "token-case"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_room_estimate_mode_is_impulse_response_in_lower_camel"
+[[entry]]
+kind = "value"
+old = "AcousticModeName='impulse_response'"
+new = "AcousticModeName='impulseResponse'"
+domain = "effects"
+rule = "token-case"
+
 
 [[entry]]
 kind = "option"
@@ -5993,6 +6154,34 @@ changed = "Literal['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']; the IntEn
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+[[entry]]
+kind = "value"
+old = "PanLaw.CONST_3DB"
+new = "PanLaw='const3Db'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "PanLaw.CONST_4_5DB"
+new = "PanLaw='const4.5Db'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "PanLaw.CONST_6DB"
+new = "PanLaw='const6Db'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "PanLaw.LINEAR_0DB"
+new = "PanLaw='linear0Db'"
+domain = "mastering"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6001,6 +6190,34 @@ changed = "Literal['linear', 'exponential', 'hold', 'sCurve']; the IntEnum and i
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+[[entry]]
+kind = "value"
+old = "AutomationCurve.EXPONENTIAL"
+new = "AutomationCurve='exponential'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "AutomationCurve.HOLD"
+new = "AutomationCurve='hold'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "AutomationCurve.LINEAR"
+new = "AutomationCurve='linear'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "AutomationCurve.S_CURVE"
+new = "AutomationCurve='sCurve'"
+domain = "mastering"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "method"
@@ -6124,6 +6341,20 @@ changed = "Literal['preFader', 'postFader']; the IntEnum and its members are rem
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+[[entry]]
+kind = "value"
+old = "MeterTap.POST_FADER"
+new = "MeterTap='postFader'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MeterTap.PRE_FADER"
+new = "MeterTap='preFader'"
+domain = "mastering"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6132,6 +6363,20 @@ changed = "Literal['postFader', 'preFader']; the IntEnum and its members are rem
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+[[entry]]
+kind = "value"
+old = "SendTiming.POST_FADER"
+new = "SendTiming='postFader'"
+domain = "mastering"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SendTiming.PRE_FADER"
+new = "SendTiming='preFader'"
+domain = "mastering"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6140,6 +6385,20 @@ changed = "Literal['track', 'bus']; the IntEnum and its members are removed"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+[[entry]]
+kind = "value"
+old = "SidechainSourceKind.BUS"
+new = "SidechainSourceKind='bus'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "SidechainSourceKind.TRACK"
+new = "SidechainSourceKind='track'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6148,6 +6407,34 @@ changed = "Literal['mono', 'stereo', '5.1', '7.1']; the IntEnum and its members 
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+[[entry]]
+kind = "value"
+old = "ChannelLayout.FIVE_POINT_ONE"
+new = "ChannelLayout='5.1'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChannelLayout.MONO"
+new = "ChannelLayout='mono'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChannelLayout.SEVEN_POINT_ONE"
+new = "ChannelLayout='7.1'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChannelLayout.STEREO"
+new = "ChannelLayout='stereo'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "option"
@@ -6371,6 +6658,20 @@ changed = "Literal['processBlock', 'error']; the IntEnum and its members are rem
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+[[entry]]
+kind = "value"
+old = "EngineTelemetryType.ERROR"
+new = "EngineTelemetryType='error'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryType.PROCESS_BLOCK"
+new = "EngineTelemetryType='processBlock'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6379,6 +6680,153 @@ changed = "Literal of the lowerCamel error tokens in ordinal order, 'invalidComm
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_engine_telemetry_error_parameter_base_overflow_ordinal"
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.AUTOMATION_BIND_TARGET_OVERFLOW"
+new = "EngineTelemetryError='automationBindTargetOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.BOUNDARY_OVERFLOW"
+new = "EngineTelemetryError='boundaryOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.CAPTURE_OVERFLOW"
+new = "EngineTelemetryError='captureOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.CLIP_PAGE_UNDERRUN"
+new = "EngineTelemetryError='clipPageUnderrun'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.COMMAND_BACKLOG_DEFERRED"
+new = "EngineTelemetryError='commandBacklogDeferred'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.COMMAND_QUEUE_OVERFLOW"
+new = "EngineTelemetryError='commandQueueOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.INSERT_AUTOMATION_OVERFLOW"
+new = "EngineTelemetryError='insertAutomationOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.MAX_BLOCK_EXCEEDED"
+new = "EngineTelemetryError='maxBlockExceeded'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.MAX_CHANNELS_EXCEEDED"
+new = "EngineTelemetryError='maxChannelsExceeded'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.METRONOME_OVERFLOW"
+new = "EngineTelemetryError='metronomeOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.MIDI_CLOCK_OVERFLOW"
+new = "EngineTelemetryError='midiClockOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.NONE"
+new = "EngineTelemetryError='none'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.NON_QUEUEABLE_COMMAND"
+new = "EngineTelemetryError='nonQueueableCommand'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.NON_REALTIME_SAFE_PARAMETER"
+new = "EngineTelemetryError='nonRealtimeSafeParameter'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.NOT_PREPARED"
+new = "EngineTelemetryError='notPrepared'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.PARAMETER_BASE_OVERFLOW"
+new = "EngineTelemetryError='parameterBaseOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.PENDING_COMMAND_OVERFLOW"
+new = "EngineTelemetryError='pendingCommandOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.SMOOTHED_PARAMETER_CAPACITY"
+new = "EngineTelemetryError='smoothedParameterCapacity'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.STALE_AUTOMATION_LANES"
+new = "EngineTelemetryError='staleAutomationLanes'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.TELEMETRY_OVERFLOW"
+new = "EngineTelemetryError='telemetryOverflow'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTelemetryError.UNKNOWN_TARGET"
+new = "EngineTelemetryError='unknownTarget'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6387,6 +6835,27 @@ changed = "Literal['off', 'pfl', 'afl']; the IntEnum and its members are removed
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_imports.py::test_track_monitor_mode_is_a_public_literal"
+[[entry]]
+kind = "value"
+old = "EngineTrackMonitorMode.AFL"
+new = "EngineTrackMonitorMode='afl'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTrackMonitorMode.OFF"
+new = "EngineTrackMonitorMode='off'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineTrackMonitorMode.PFL"
+new = "EngineTrackMonitorMode='pfl'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "method"
@@ -6403,6 +6872,41 @@ changed = "Literal['marker', 'text', 'lyric', 'cuePoint', 'keySignature']; the I
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_integer_narrowing.py::test_a_marker_kind_is_an_exact_token"
+[[entry]]
+kind = "value"
+old = "MarkerKind.CUE_POINT"
+new = "MarkerKind='cuePoint'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.KEY_SIGNATURE"
+new = "MarkerKind='keySignature'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.LYRIC"
+new = "MarkerKind='lyric'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.MARKER"
+new = "MarkerKind='marker'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.TEXT"
+new = "MarkerKind='text'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "field"
@@ -6427,6 +6931,20 @@ changed = "Literal['passThrough', 'gain']; the IntEnum and its members are remov
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+[[entry]]
+kind = "value"
+old = "EngineGraphNodeType.GAIN"
+new = "EngineGraphNodeType='gain'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineGraphNodeType.PASS_THROUGH"
+new = "EngineGraphNodeType='passThrough'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6435,6 +6953,20 @@ changed = "Literal['replace', 'add']; the IntEnum and its members are removed"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_graph_connection_mix_is_replace_or_add_only"
+[[entry]]
+kind = "value"
+old = "EngineGraphMix.ADD"
+new = "EngineGraphMix='add'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "EngineGraphMix.REPLACE"
+new = "EngineGraphMix='replace'"
+domain = "engine"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "field"
@@ -6551,6 +7083,27 @@ changed = "Literal['none', 'center', 'curve']; the IntEnum and its members are r
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+[[entry]]
+kind = "value"
+old = "VocalTargetMode.CENTER"
+new = "VocalTargetMode='center'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "VocalTargetMode.CURVE"
+new = "VocalTargetMode='curve'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "VocalTargetMode.NONE"
+new = "VocalTargetMode='none'"
+domain = "project"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6559,6 +7112,20 @@ changed = "Literal['preserve', 'shift']; the IntEnum and its members are removed
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+[[entry]]
+kind = "value"
+old = "VocalFormantMode.PRESERVE"
+new = "VocalFormantMode='preserve'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "VocalFormantMode.SHIFT"
+new = "VocalFormantMode='shift'"
+domain = "project"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6567,6 +7134,20 @@ changed = "Literal['preserve', 'reset']; the IntEnum and its members are removed
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exact_token"
+[[entry]]
+kind = "value"
+old = "VocalMergePolicy.PRESERVE"
+new = "VocalMergePolicy='preserve'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "VocalMergePolicy.RESET"
+new = "VocalMergePolicy='reset'"
+domain = "project"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "type"
@@ -6589,6 +7170,27 @@ changed = "Literal['rehydrated', 'alreadyReady', 'unresolved']; the IntEnum and 
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+[[entry]]
+kind = "value"
+old = "ProjectVocalRehydrateStatus.ALREADY_READY"
+new = "ProjectVocalRehydrateStatus='alreadyReady'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalRehydrateStatus.REHYDRATED"
+new = "ProjectVocalRehydrateStatus='rehydrated'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalRehydrateStatus.UNRESOLVED"
+new = "ProjectVocalRehydrateStatus='unresolved'"
+domain = "project"
+rule = "string-closed-sets"
+
 
 [[entry]]
 kind = "field"
@@ -12213,7 +12815,7 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_move_clip_keep
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.polyphony"
-changed = "int | None, default None: None selects 16 voices and an explicit 0 raises SonareValueError"
+changed = "int | None, default None: None selects 16 voices; a given count is read literally and 0 or a count outside [1, 64] raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default"
@@ -12221,7 +12823,7 @@ test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional
 [[entry]]
 kind = "field"
 old = "Sf2InstrumentConfig.polyphony"
-changed = "int | None, default None: None selects 48 voices and an explicit 0 raises SonareValueError"
+changed = "int | None, default None: None selects 48 voices; a given count is read literally and 0 or a count outside [1, 64] raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default"
@@ -12341,50 +12943,50 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_sample_source_
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.gain"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value; a given value is read literally and a value outside (0, 4] (0 included) raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain"
 
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.attack_ms"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain"
 
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.decay_ms"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain"
 
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.sustain"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value; a given value is read literally and a value outside (0, 1] (0 included) raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain"
 
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.release_ms"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_builtin_synth_zero_level_or_time_is_refused_by_the_native_domain"
 
 [[entry]]
 kind = "field"
 old = "Sf2InstrumentConfig.gain"
-changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+changed = "float | None, default None: None selects the library value (0.5); a given value is read literally, so 0 is silence and a value outside [0, 4] raises SonareValueError"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_sf2_instrument_zero_gain_is_silence_and_a_negative_gain_is_refused"
 
 [[entry]]
 kind = "field"
@@ -12620,3 +13222,346 @@ changed = "a preset document must carry schemaVersion 4 (1.x wrote 2) and an ear
 domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_preset_document_names_the_grain_in_samples"
+
+[[entry]]
+kind = "option"
+old = "Mixer.constructor(handle)"
+removed = "build the mixer with Mixer(sample_rate=..., scene=...) or Mixer.from_json; a native handle is not accepted"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "Mixer.constructor(scene_warnings)"
+removed = "the mixer records its own scene load's warnings; read them with scene_warnings()"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter.constructor(channels)"
+new = "PlaybackLoudnessMeter.constructor(num_channels)"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc(channel)"
+removed = "pass a MidiCcBinding record and set its channel field"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc(controller)"
+removed = "pass a MidiCcBinding record and set its cc_number field"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc(max_value)"
+removed = "pass a MidiCcBinding record and set its max_value field"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc(min_value)"
+removed = "pass a MidiCcBinding record and set its min_value field"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc(param_id)"
+removed = "pass a MidiCcBinding record and set its param_id field"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_bus_strip_json(scene_json)"
+removed = "set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping as settings"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_master_strip_json(scene_json)"
+removed = "set_strip('master', settings) takes one MixSceneStripInput mapping as settings"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_json(scene_json)"
+removed = "set_strip(ref, settings) takes one MixSceneStripInput mapping as settings"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_json(track_id)"
+removed = "set_strip(ref, settings) names the strip by ref, a track id or 'master'"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_pan_law(track_id)"
+removed = "set_strip_pan_law(ref, pan_law) names the strip by ref, a track id or 'master'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_capture_punch(enabled)"
+removed = "pass configure_capture(..., punch=CapturePunch(...)) to gate capture and omit punch to leave it ungated"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_capture_punch(start_sample)"
+removed = "set CapturePunch(start_sample=...) and pass it as configure_capture(..., punch=...)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_capture_punch(start_sec)"
+removed = "set CapturePunch(start_sec=...) and pass it as configure_capture(..., punch=...)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_capture_punch(end_sample)"
+removed = "set CapturePunch(end_sample=...) and pass it as configure_capture(..., punch=...)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_capture_punch(end_sec)"
+removed = "set CapturePunch(end_sec=...) and pass it as configure_capture(..., punch=...)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_input_monitor(enabled)"
+removed = "pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain))"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_input_monitor(gain)"
+removed = "pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain))"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_record_offset_samples(offset_samples)"
+removed = "pass configure_capture(..., record_offset_samples=...)"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "RealtimeVoiceChanger.constructor(channels)"
+new = "RealtimeVoiceChanger.constructor(num_channels)"
+domain = "effects"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "RealtimeVoiceChanger.constructor(preset)"
+new = "RealtimeVoiceChanger.constructor(config)"
+domain = "effects"
+rule = "one-input-form"
+
+[[entry]]
+kind = "option"
+old = "agglomerative(cols)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "agglomerative(rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cross_similarity(x_cols)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cross_similarity(x_rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cross_similarity(y_cols)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cross_similarity(y_rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "lag_to_recurrence(n_lags)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "lag_to_recurrence(n_rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "path_enhance(n)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "recurrence_matrix(cols)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "recurrence_matrix(rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "recurrence_to_lag(n)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "subsegment(cols)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "subsegment(rows)"
+removed = "read from the 2-D array's shape"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mastering_insert_param_info(name)"
+new = "mastering_insert_param_info(insert)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_insert_timing(name)"
+new = "mastering_insert_timing(insert)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mixing_scene_preset_json(preset_name)"
+new = "mixing_scene_preset(name)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "AnalysisBeatObservations.chordChange"
+removed = "read the BeatObservations.chord_change field"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "AnalysisBeatObservations.lowFrequencyEnergy"
+removed = "read the BeatObservations.low_frequency_energy field"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "AnalysisBeatObservations.onsetStrength"
+removed = "read the BeatObservations.onset_strength field"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "ClipPageProvider.destroy"
+removed = "call close(), or use the object as a context manager"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.delete"
+removed = "call close(), or use the object as a context manager"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.destroy"
+removed = "call close(), or use the object as a context manager"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChangerConfig.from_pod"
+removed = "the C struct mirror is internal; build the record by keyword, or read RealtimeVoiceChanger.config"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChangerConfig.to_pod"
+removed = "the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...)"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChain.aliases"
+removed = "a chain key resolves through its descriptor or list; there is no alias table to read"
+domain = "core"
+rule = "aliases-removed"

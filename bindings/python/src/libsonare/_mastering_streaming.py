@@ -490,6 +490,8 @@ class StreamingEqualizer:
         sample_rate: Sample rate in Hz the equalizer was created with.
     """
 
+    sample_rate: int
+
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 

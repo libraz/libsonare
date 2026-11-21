@@ -699,6 +699,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Mode.DORIAN` | `KeyMode='dorian'` |
+| `Mode.LOCRIAN` | `KeyMode='locrian'` |
+| `Mode.LYDIAN` | `KeyMode='lydian'` |
+| `Mode.MAJOR` | `KeyMode='major'` |
+| `Mode.MINOR` | `KeyMode='minor'` |
+| `Mode.MIXOLYDIAN` | `KeyMode='mixolydian'` |
+| `Mode.PHRYGIAN` | `KeyMode='phrygian'` |
 | `Mode` | `KeyMode`: replaced by KeyMode, a Literal of the lowercase mode tokens ("major" ... "locrian"); an int is refused with TypeError |
 
 #### Python arrays are numpy arrays
@@ -838,6 +845,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `CapabilityCatalogChain.aliases` | removed: a chain key resolves through its descriptor or list; there is no alias table to read |
 | `CapabilityCatalogChainAlias` | removed: a chain key resolves through its descriptor or list; there is no alias table to read |
 
 #### Versions and features come from *AbiVersion() and capabilities()
@@ -1052,8 +1060,23 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `Key.mode` | a KeyMode token string instead of a Mode IntEnum |
+| `KeyProfile.BELLMAN_BUDGE` | `KeyProfile='bellmanBudge'` |
+| `KeyProfile.FARALDO_EDMA` | `KeyProfile='faraldoEdma'` |
+| `KeyProfile.FARALDO_EDMM` | `KeyProfile='faraldoEdmm'` |
+| `KeyProfile.FARALDO_EDMT` | `KeyProfile='faraldoEdmt'` |
+| `KeyProfile.KRUMHANSL_SCHMUCKLER` | `KeyProfile='krumhanslSchmuckler'` |
+| `KeyProfile.SHAATH` | `KeyProfile='shaath'` |
+| `KeyProfile.TEMPERLEY` | `KeyProfile='temperley'` |
 | `KeyProfile` | a Literal of lowerCamel tokens ("krumhanslSchmuckler", "faraldoEdmt", ...) instead of an IntEnum; ordinals raise TypeError and legacy aliases such as "ks" raise SonareValueError |
 | `Section.type` | a SectionType token string instead of an IntEnum |
+| `SectionType.BRIDGE` | `SectionType='bridge'` |
+| `SectionType.CHORUS` | `SectionType='chorus'` |
+| `SectionType.INSTRUMENTAL` | `SectionType='instrumental'` |
+| `SectionType.INTRO` | `SectionType='intro'` |
+| `SectionType.OUTRO` | `SectionType='outro'` |
+| `SectionType.PRE_CHORUS` | `SectionType='preChorus'` |
+| `SectionType.UNKNOWN` | `SectionType='unknown'` |
+| `SectionType.VERSE` | `SectionType='verse'` |
 | `SectionType` | a Literal of lowerCamel tokens ("intro", "preChorus", ...) instead of an IntEnum |
 | `StreamBarChord.quality` | a CHORD_QUALITIES token (was the ordinal) |
 | `StreamChordChange.quality` | a CHORD_QUALITIES token (was the ordinal) |
@@ -1201,10 +1224,16 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StftResult.n_bins` | removed: read it from the 2-D array's shape |
 | `StftResult.n_frames` | removed: read it from the 2-D array's shape |
 | `StftResult.power` | float32 (n_bins, n_frames) ndarray instead of a flat list |
+| `agglomerative(cols)` | removed: read from the 2-D array's shape |
+| `agglomerative(rows)` | removed: read from the 2-D array's shape |
 | `agglomerative` | `segment_agglomerative`: takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int] |
 | `cqt_to_audio(n_bins)` | removed: taken from the 2-D array's shape |
 | `cqt_to_audio(n_frames)` | removed: taken from the 2-D array's shape |
 | `cqt_to_audio` | takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray |
+| `cross_similarity(x_cols)` | removed: read from the 2-D array's shape |
+| `cross_similarity(x_rows)` | removed: read from the 2-D array's shape |
+| `cross_similarity(y_cols)` | removed: read from the 2-D array's shape |
+| `cross_similarity(y_rows)` | removed: read from the 2-D array's shape |
 | `cross_similarity` | `segment_cross_similarity`: takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix |
 | `cyclic_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
 | `fourier_tempogram` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
@@ -1212,6 +1241,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `griffin_lim(n_bins)` | removed: taken from the 2-D array's shape |
 | `griffin_lim(n_frames)` | removed: taken from the 2-D array's shape |
 | `griffin_lim` | takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray |
+| `lag_to_recurrence(n_lags)` | removed: read from the 2-D array's shape |
+| `lag_to_recurrence(n_rows)` | removed: read from the 2-D array's shape |
 | `lag_to_recurrence` | `segment_lag_to_recurrence`: takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix |
 | `mel_delta(n_features)` | removed: taken from the 2-D array's shape |
 | `mel_delta(n_frames)` | removed: taken from the 2-D array's shape |
@@ -1230,13 +1261,19 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mfcc_to_mel` | takes one 2-D (n_mfcc, n_frames) array and returns a float32 (n_mels, n_frames) ndarray instead of MelPowerResult |
 | `nnls_chroma` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
 | `onset_strength_multi` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
+| `path_enhance(n)` | removed: read from the 2-D array's shape |
 | `path_enhance` | `segment_path_enhance`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix |
 | `pcen(n_bins)` | removed: taken from the 2-D array's shape |
 | `pcen(n_frames)` | removed: taken from the 2-D array's shape |
 | `pcen` | takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray of the same shape |
+| `recurrence_matrix(cols)` | removed: read from the 2-D array's shape |
+| `recurrence_matrix(rows)` | removed: read from the 2-D array's shape |
 | `recurrence_matrix` | `segment_recurrence_matrix`: takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix |
+| `recurrence_to_lag(n)` | removed: read from the 2-D array's shape |
 | `recurrence_to_lag` | `segment_recurrence_to_lag`: takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix |
 | `stft_db` | returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list |
+| `subsegment(cols)` | removed: read from the 2-D array's shape |
+| `subsegment(rows)` | removed: read from the 2-D array's shape |
 | `subsegment` | `segment_subsegment`: takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int] |
 | `tempogram_ratio(tempogram_data)` | `tempogram_ratio(tempogram)` |
 | `tempogram_ratio(win_length)` | removed: pass the 2-D tempogram; win_length is its row count |
@@ -1270,6 +1307,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalysisBeatObservations.chordChange` | removed: read the BeatObservations.chord_change field |
+| `AnalysisBeatObservations.lowFrequencyEnergy` | removed: read the BeatObservations.low_frequency_energy field |
+| `AnalysisBeatObservations.onsetStrength` | removed: read the BeatObservations.onset_strength field |
 | `EqSpectrumSnapshot.bandGainDb` | removed: read band_gain_db |
 | `EqSpectrumSnapshot.lastAutoGainDb` | removed: read last_auto_gain_db |
 | `EqSpectrumSnapshot.postLeft` | removed: read post_left |
@@ -1685,6 +1725,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AcousticModeName='impulse_response'` | `AcousticModeName='impulseResponse'` |
 | `AcousticModeName` | Literal['auto', 'blind', 'impulseResponse'] |
 | `estimate_room(mode)` | the impulse-response mode is impulseResponse; impulse_response raises SonareValueError |
 | `realtime_voice_changer_preset_config(preset)` | takes a VoicePresetId token (the lowerCamel preset ids) only; a kebab id raises SonareValueError and an int ordinal or a bool is TypeError |
@@ -1826,6 +1867,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `RealtimeVoiceChanger.constructor(channels)` | `RealtimeVoiceChanger.constructor(num_channels)` |
 | `RealtimeVoiceChanger.process_interleaved(channels)` | `RealtimeVoiceChanger.process_interleaved(num_channels)` |
 | `RealtimeVoiceChanger` | num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError |
 | `voice_change_realtime(channels)` | `voice_change_realtime(num_channels)` |
@@ -1857,6 +1899,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `RealtimeVoiceChanger.constructor(preset)` | `RealtimeVoiceChanger.constructor(config)` |
 | `normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
 | `normalize_stereo(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
 
@@ -1888,6 +1931,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `PitchDecomposition.centre_hz` | `PitchDecompositionResult.center_hz`: None for a note with no usable pitch (was 0.0) |
+| `RealtimeVoiceChangerConfig.from_pod` | removed: the C struct mirror is internal; build the record by keyword, or read RealtimeVoiceChanger.config |
+| `RealtimeVoiceChangerConfig.to_pod` | removed: the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...) |
 | `auto_tune(reference_midi)` | `auto_tune(scale_reference_midi)` |
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
@@ -2045,9 +2090,21 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AutomationCurve.EXPONENTIAL` | `AutomationCurve='exponential'` |
+| `AutomationCurve.HOLD` | `AutomationCurve='hold'` |
+| `AutomationCurve.LINEAR` | `AutomationCurve='linear'` |
+| `AutomationCurve.S_CURVE` | `AutomationCurve='sCurve'` |
 | `AutomationCurve` | Literal['linear', 'exponential', 'hold', 'sCurve']; the IntEnum and its members are removed |
+| `MeterTap.POST_FADER` | `MeterTap='postFader'` |
+| `MeterTap.PRE_FADER` | `MeterTap='preFader'` |
 | `MeterTap` | Literal['preFader', 'postFader']; the IntEnum and its members are removed |
+| `PanLaw.CONST_3DB` | `PanLaw='const3Db'` |
+| `PanLaw.CONST_4_5DB` | `PanLaw='const4.5Db'` |
+| `PanLaw.CONST_6DB` | `PanLaw='const6Db'` |
+| `PanLaw.LINEAR_0DB` | `PanLaw='linear0Db'` |
 | `PanLaw` | Literal['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']; the IntEnum and its members are removed |
+| `SendTiming.POST_FADER` | `SendTiming='postFader'` |
+| `SendTiming.PRE_FADER` | `SendTiming='preFader'` |
 | `SendTiming` | Literal['postFader', 'preFader']; the IntEnum and its members are removed |
 | `StreamingEqualizer.magnitude_response(placement)` | one of 'stereo', 'left', 'right', 'mid', 'side' exactly; another case is refused and an ordinal is a TypeError |
 | `StreamingEqualizer.set_phase_mode(mode)` | one of 'zero', 'natural', 'linear'; an ordinal is a TypeError and the hyphenated, underscored and capitalised aliases are refused |
@@ -2311,6 +2368,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
+| `mastering_insert_param_info(name)` | `mastering_insert_param_info(insert)` |
+| `mastering_insert_timing(name)` | `mastering_insert_timing(insert)` |
 | `mastering_pair_analyze(analysis_name)` | `mastering_analyze_pair(analysis)` |
 | `mastering_pair_process(processor_name)` | `mastering_apply_pair_processor(processor)` |
 | `mastering_pair_process_stereo(processor_name)` | `mastering_apply_pair_processor_stereo(processor)` |
@@ -2319,6 +2378,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)` |
 | `metering_dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `metering_dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
+| `mixing_scene_preset_json(preset_name)` | `mixing_scene_preset(name)` |
 
 ### Python: Realtime engine, synthesis, MIDI and playback
 
@@ -2415,16 +2475,55 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `AutomationPoint.curve_to_next` | an AutomationCurve token, default 'linear'; a number is TypeError |
+| `ChannelLayout.FIVE_POINT_ONE` | `ChannelLayout='5.1'` |
+| `ChannelLayout.MONO` | `ChannelLayout='mono'` |
+| `ChannelLayout.SEVEN_POINT_ONE` | `ChannelLayout='7.1'` |
+| `ChannelLayout.STEREO` | `ChannelLayout='stereo'` |
 | `ChannelLayout` | Literal['mono', 'stereo', '5.1', '7.1']; the IntEnum and its members are removed |
 | `EngineBounceOptions.dither` | an EngineDither token ('rpdf', 'tpdf', 'noiseShaped') or None for no dither; the 0..3 ordinals are TypeError |
 | `EngineCaptureStatus.source` | typed as the EngineCaptureSource Literal ('output' \| 'input') |
 | `EngineClip.warp_mode` | takes a ProjectWarpMode token ('off' default, 'repitch', 'tempoSync', 'timeStretch'); 'tempo-sync' and 'time-stretch' raise SonareValueError and a number is TypeError |
+| `EngineGraphMix.ADD` | `EngineGraphMix='add'` |
+| `EngineGraphMix.REPLACE` | `EngineGraphMix='replace'` |
 | `EngineGraphMix` | Literal['replace', 'add']; the IntEnum and its members are removed |
+| `EngineGraphNodeType.GAIN` | `EngineGraphNodeType='gain'` |
+| `EngineGraphNodeType.PASS_THROUGH` | `EngineGraphNodeType='passThrough'` |
 | `EngineGraphNodeType` | Literal['passThrough', 'gain']; the IntEnum and its members are removed |
 | `EngineMarker.kind` | a MarkerKind token, default 'marker'; an ordinal is TypeError |
+| `EngineTelemetryError.AUTOMATION_BIND_TARGET_OVERFLOW` | `EngineTelemetryError='automationBindTargetOverflow'` |
+| `EngineTelemetryError.BOUNDARY_OVERFLOW` | `EngineTelemetryError='boundaryOverflow'` |
+| `EngineTelemetryError.CAPTURE_OVERFLOW` | `EngineTelemetryError='captureOverflow'` |
+| `EngineTelemetryError.CLIP_PAGE_UNDERRUN` | `EngineTelemetryError='clipPageUnderrun'` |
+| `EngineTelemetryError.COMMAND_BACKLOG_DEFERRED` | `EngineTelemetryError='commandBacklogDeferred'` |
+| `EngineTelemetryError.COMMAND_QUEUE_OVERFLOW` | `EngineTelemetryError='commandQueueOverflow'` |
+| `EngineTelemetryError.INSERT_AUTOMATION_OVERFLOW` | `EngineTelemetryError='insertAutomationOverflow'` |
+| `EngineTelemetryError.MAX_BLOCK_EXCEEDED` | `EngineTelemetryError='maxBlockExceeded'` |
+| `EngineTelemetryError.MAX_CHANNELS_EXCEEDED` | `EngineTelemetryError='maxChannelsExceeded'` |
+| `EngineTelemetryError.METRONOME_OVERFLOW` | `EngineTelemetryError='metronomeOverflow'` |
+| `EngineTelemetryError.MIDI_CLOCK_OVERFLOW` | `EngineTelemetryError='midiClockOverflow'` |
+| `EngineTelemetryError.NONE` | `EngineTelemetryError='none'` |
+| `EngineTelemetryError.NON_QUEUEABLE_COMMAND` | `EngineTelemetryError='nonQueueableCommand'` |
+| `EngineTelemetryError.NON_REALTIME_SAFE_PARAMETER` | `EngineTelemetryError='nonRealtimeSafeParameter'` |
+| `EngineTelemetryError.NOT_PREPARED` | `EngineTelemetryError='notPrepared'` |
+| `EngineTelemetryError.PARAMETER_BASE_OVERFLOW` | `EngineTelemetryError='parameterBaseOverflow'` |
+| `EngineTelemetryError.PENDING_COMMAND_OVERFLOW` | `EngineTelemetryError='pendingCommandOverflow'` |
+| `EngineTelemetryError.SMOOTHED_PARAMETER_CAPACITY` | `EngineTelemetryError='smoothedParameterCapacity'` |
+| `EngineTelemetryError.STALE_AUTOMATION_LANES` | `EngineTelemetryError='staleAutomationLanes'` |
+| `EngineTelemetryError.TELEMETRY_OVERFLOW` | `EngineTelemetryError='telemetryOverflow'` |
+| `EngineTelemetryError.UNKNOWN_TARGET` | `EngineTelemetryError='unknownTarget'` |
 | `EngineTelemetryError` | Literal of the lowerCamel error tokens in ordinal order, 'invalidCommand' included; the IntEnum and its members are removed |
+| `EngineTelemetryType.ERROR` | `EngineTelemetryType='error'` |
+| `EngineTelemetryType.PROCESS_BLOCK` | `EngineTelemetryType='processBlock'` |
 | `EngineTelemetryType` | Literal['processBlock', 'error']; the IntEnum and its members are removed |
+| `EngineTrackMonitorMode.AFL` | `EngineTrackMonitorMode='afl'` |
+| `EngineTrackMonitorMode.OFF` | `EngineTrackMonitorMode='off'` |
+| `EngineTrackMonitorMode.PFL` | `EngineTrackMonitorMode='pfl'` |
 | `EngineTrackMonitorMode` | Literal['off', 'pfl', 'afl']; the IntEnum and its members are removed |
+| `MarkerKind.CUE_POINT` | `MarkerKind='cuePoint'` |
+| `MarkerKind.KEY_SIGNATURE` | `MarkerKind='keySignature'` |
+| `MarkerKind.LYRIC` | `MarkerKind='lyric'` |
+| `MarkerKind.MARKER` | `MarkerKind='marker'` |
+| `MarkerKind.TEXT` | `MarkerKind='text'` |
 | `MarkerKind` | Literal['marker', 'text', 'lyric', 'cuePoint', 'keySignature']; the IntEnum and its members are removed |
 | `Mixer.add_bus(role)` | a MixBusRole token ("master", "aux", "submix"); an unknown token raises SonareValueError, a non-string TypeError |
 | `Mixer.add_send(timing)` | a SendTiming token, default 'postFader'; 'pre-fader' / 'pre_fader' are SonareValueError, a number is TypeError |
@@ -2451,9 +2550,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_controller_note_tracking` | dimension and tracking take MpeDimension / NoteTracking tokens; an ordinal is TypeError |
 | `RealtimeEngine.set_master_sidechain(source_kind)` | `RealtimeEngine.set_strip_sidechain(source)`: 'track' or 'bus' exactly; other casings are SonareValueError, an ordinal is TypeError |
 | `RealtimeEngine.set_track_monitor_mode` | mode takes 'off', 'pfl' or 'afl' exactly; a case-folded spelling is SonareValueError and an ordinal is TypeError |
+| `RealtimeEngine.set_track_strip_pan_law(track_id)` | removed: set_strip_pan_law(ref, pan_law) names the strip by ref, a track id or 'master' |
 | `RealtimeEngine.set_track_strip_pan_law` | `RealtimeEngine.set_strip_pan_law`: takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError |
 | `RealtimeEngine.set_track_strip_pan_mode(pan_mode)` | `RealtimeEngine.set_strip_pan_mode(pan_mode)`: a PanMode token; 'stereo-pan' / 'dual-pan' and ordinals are refused |
 | `SampleBank.add_sample` | loop_mode takes a SampleDescLoopMode token ('none' default); the 0..3 ordinals are TypeError |
+| `SidechainSourceKind.BUS` | `SidechainSourceKind='bus'` |
+| `SidechainSourceKind.TRACK` | `SidechainSourceKind='track'` |
 | `SidechainSourceKind` | Literal['track', 'bus']; the IntEnum and its members are removed |
 | `synth_engine_param_info` | returns frozen SynthParamInfo dataclasses read by attribute; engine_mode takes a SynthEngineMode token and an ordinal is TypeError |
 
@@ -2532,14 +2634,24 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `RealtimeEngine.set_capture_buffer` | `RealtimeEngine.configure_capture`: configure_capture(capacity_frames=..., num_channels=...) sets the whole capture setup; the buffer is reallocated only when its shape changes, and reallocating while armed raises SonareError (INVALID_STATE) |
+| `RealtimeEngine.set_capture_punch(enabled)` | removed: pass configure_capture(..., punch=CapturePunch(...)) to gate capture and omit punch to leave it ungated |
+| `RealtimeEngine.set_capture_punch(end_sample)` | removed: set CapturePunch(end_sample=...) and pass it as configure_capture(..., punch=...) |
+| `RealtimeEngine.set_capture_punch(end_sec)` | removed: set CapturePunch(end_sec=...) and pass it as configure_capture(..., punch=...) |
+| `RealtimeEngine.set_capture_punch(start_sample)` | removed: set CapturePunch(start_sample=...) and pass it as configure_capture(..., punch=...) |
+| `RealtimeEngine.set_capture_punch(start_sec)` | removed: set CapturePunch(start_sec=...) and pass it as configure_capture(..., punch=...) |
 | `RealtimeEngine.set_capture_punch` | `RealtimeEngine.configure_capture`: configure_capture(..., punch=CapturePunch(...)) sets the whole capture setup; each bound is exactly one of *_ppq, *_sample or *_sec, and an omitted punch (not enabled=False) leaves capture ungated |
+| `RealtimeEngine.set_input_monitor(enabled)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
+| `RealtimeEngine.set_input_monitor(gain)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
 | `RealtimeEngine.set_input_monitor` | `RealtimeEngine.configure_capture`: configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) sets the whole capture setup; an omitted monitor is enabled at gain 1 |
+| `RealtimeEngine.set_record_offset_samples(offset_samples)` | removed: pass configure_capture(..., record_offset_samples=...) |
 | `RealtimeEngine.set_record_offset_samples` | `RealtimeEngine.configure_capture`: configure_capture(..., record_offset_samples=...) sets the whole capture setup; an omitted offset is 0 |
 
 #### Synchronous construction is new X(config); create() is async
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Mixer.constructor(handle)` | removed: build the mixer with Mixer(sample_rate=..., scene=...) or Mixer.from_json; a native handle is not accepted |
+| `Mixer.constructor(scene_warnings)` | removed: the mixer records its own scene load's warnings; read them with scene_warnings() |
 | `Mixer.from_scene_json` | `Mixer.from_json`: renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping |
 | `Mixer.to_scene_json` | `Mixer.to_json`: renamed to pair with Mixer.from_json |
 | `PlaybackLoudnessMeter` | num_channels and sample_rate are keyword-only |
@@ -2550,6 +2662,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `EngineBounceOptions.num_channels` | required (was 2 by default) |
 | `EngineFreezeOptions.num_channels` | required (was 2 by default) |
+| `PlaybackLoudnessMeter.constructor(channels)` | `PlaybackLoudnessMeter.constructor(num_channels)` |
 | `PlaybackRenderer.process_interleaved(in_channels)` | `PlaybackRenderer.process_interleaved(num_input_channels)` |
 | `PlaybackRenderer.render_offline(in_channels)` | `PlaybackRenderer.render_offline(num_input_channels)` |
 | `render_playback(channels)` | `render_playback(num_channels)` |
@@ -2634,14 +2747,21 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `PlaybackRenderer.constructor(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
 | `PlaybackRenderer.set_config(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
+| `RealtimeEngine.bind_midi_cc(channel)` | removed: pass a MidiCcBinding record and set its channel field |
+| `RealtimeEngine.bind_midi_cc(controller)` | removed: pass a MidiCcBinding record and set its cc_number field |
+| `RealtimeEngine.bind_midi_cc(max_value)` | removed: pass a MidiCcBinding record and set its max_value field |
+| `RealtimeEngine.bind_midi_cc(min_value)` | removed: pass a MidiCcBinding record and set its min_value field |
+| `RealtimeEngine.bind_midi_cc(param_id)` | removed: pass a MidiCcBinding record and set its param_id field |
 | `RealtimeEngine.bind_midi_cc_binding(binding)` | `RealtimeEngine.bind_midi_cc(binding)`: binding is a MidiCcBinding record; a mapping is TypeError |
 | `RealtimeEngine.bind_midi_cc_binding` | `RealtimeEngine.bind_midi_cc` |
 | `RealtimeEngine.bind_midi_cc` | takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value |
 | `RealtimeEngine.set_bus_strip_eq_band(band)` | `RealtimeEngine.set_bus_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_bus_strip_eq_band_json` | removed: call set_bus_eq_band(bus_id, band_index, band) with an EqBandInput mapping (json.loads the text first) |
+| `RealtimeEngine.set_bus_strip_json(scene_json)` | removed: set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping as settings |
 | `RealtimeEngine.set_bus_strip_json` | `RealtimeEngine.set_bus_strip`: set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its buses[0]) |
 | `RealtimeEngine.set_master_strip_eq_band(band)` | `RealtimeEngine.set_strip_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_master_strip_eq_band_json` | removed: call set_strip_eq_band('master', band_index, band) with an EqBandInput mapping (json.loads the text first) |
+| `RealtimeEngine.set_master_strip_json(scene_json)` | removed: set_strip('master', settings) takes one MixSceneStripInput mapping as settings |
 | `RealtimeEngine.set_master_strip_json` | `RealtimeEngine.set_strip`: set_strip('master', settings) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
 | `RealtimeEngine.set_midi_fx(config_json)` | `RealtimeEngine.set_midi_fx(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `RealtimeEngine.set_tempo_segments(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored |
@@ -2649,6 +2769,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_track_lanes(lanes)` | each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the lane on the master mix and 0 raises SonareValueError |
 | `RealtimeEngine.set_track_strip_eq_band(band)` | `RealtimeEngine.set_strip_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_track_strip_eq_band_json` | removed: call set_strip_eq_band(track_id, band_index, band) with an EqBandInput mapping (json.loads the text first) |
+| `RealtimeEngine.set_track_strip_json(scene_json)` | removed: set_strip(ref, settings) takes one MixSceneStripInput mapping as settings |
+| `RealtimeEngine.set_track_strip_json(track_id)` | removed: set_strip(ref, settings) names the strip by ref, a track id or 'master' |
 | `RealtimeEngine.set_track_strip_json` | `RealtimeEngine.set_strip`: set_strip(track_id, settings) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
 | `render_playback(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
 
@@ -2656,12 +2778,15 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ClipPageProvider.destroy` | removed: call close(), or use the object as a context manager |
 | `EngineTelemetry.audibleTimelineSample` | removed: read audible_timeline_sample |
 | `EngineTelemetry.graphLatencySamplesQ8` | removed: read graph_latency_samples_q8 |
 | `EngineTelemetry.renderFrame` | removed: read render_frame |
 | `EngineTelemetry.timelineSample` | removed: read timeline_sample |
 | `Mixer.meter_tap(strip)` | `Mixer.strip_meter(strip)`: carried over unchanged by the rename to strip_meter |
 | `Mixer.meter_tap` | `Mixer.strip_meter`: renamed to strip_meter; tap takes a MeterTap token ("preFader", "postFader") instead of an enum member, string variant or ordinal |
+| `RealtimeEngine.delete` | removed: call close(), or use the object as a context manager |
+| `RealtimeEngine.destroy` | removed: call close(), or use the object as a context manager |
 
 #### RealtimeEngine and SonareEngine share one vocabulary
 
@@ -2720,12 +2845,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `BuiltinSynthConfig.attack_ms` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
-| `BuiltinSynthConfig.decay_ms` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
-| `BuiltinSynthConfig.gain` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
-| `BuiltinSynthConfig.polyphony` | int \| None, default None: None selects 16 voices and an explicit 0 raises SonareValueError |
-| `BuiltinSynthConfig.release_ms` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
-| `BuiltinSynthConfig.sustain` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
+| `BuiltinSynthConfig.attack_ms` | float \| None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError |
+| `BuiltinSynthConfig.decay_ms` | float \| None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError |
+| `BuiltinSynthConfig.gain` | float \| None, default None: None selects the library value; a given value is read literally and a value outside (0, 4] (0 included) raises SonareValueError |
+| `BuiltinSynthConfig.polyphony` | int \| None, default None: None selects 16 voices; a given count is read literally and 0 or a count outside [1, 64] raises SonareValueError |
+| `BuiltinSynthConfig.release_ms` | float \| None, default None: None selects the library value; a given value is read literally and a value outside (0, 20000] (0 included) raises SonareValueError |
+| `BuiltinSynthConfig.sustain` | float \| None, default None: None selects the library value; a given value is read literally and a value outside (0, 1] (0 included) raises SonareValueError |
 | `MidiCcBinding.channel` | None for a binding that answers any channel (was 0xFF); 0xFF or anything outside 0..15 raises SonareValueError |
 | `Project.add_clip(audio_channels)` | required alongside audio and refused without it (was 1 by default) |
 | `Project.add_clip(audio_sample_rate)` | required alongside audio and refused without it (the 0 default is gone) |
@@ -2774,8 +2899,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `ProjectVocalEditApplyResult.take_id` | int \| None: None when the edit belongs to the clip's base source (was 0) |
 | `ProjectVocalEditDependency.take_id` | int \| None: None when the edit belongs to the clip's base source (was 0) |
 | `ProjectVocalRehydrateItem.take_id` | int \| None: None when the edit belongs to the clip's base source (was 0) |
-| `Sf2InstrumentConfig.gain` | float \| None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it |
-| `Sf2InstrumentConfig.polyphony` | int \| None, default None: None selects 48 voices and an explicit 0 raises SonareValueError |
+| `Sf2InstrumentConfig.gain` | float \| None, default None: None selects the library value (0.5); a given value is read literally, so 0 is silence and a value outside [0, 4] raises SonareValueError |
+| `Sf2InstrumentConfig.polyphony` | int \| None, default None: None selects 48 voices; a given count is read literally and 0 or a count outside [1, 64] raises SonareValueError |
 | `VocalNote.center_midi` | None on an unpitched note (was 0.0) |
 | `VocalNote.f0_stability` | None on an unpitched note (was 0.0) |
 | `VocalNote.has_pitch` | removed: the pitch fields are None on an unpitched note |
@@ -2823,15 +2948,25 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `ProjectVocalReason` | `VocalReason` |
 | `ProjectVocalRehydrateItem.reason` | a VocalReason token instead of a number or IntEnum |
 | `ProjectVocalRehydrateItem.status` | a ProjectVocalRehydrateStatus token instead of a number or IntEnum |
+| `ProjectVocalRehydrateStatus.ALREADY_READY` | `ProjectVocalRehydrateStatus='alreadyReady'` |
+| `ProjectVocalRehydrateStatus.REHYDRATED` | `ProjectVocalRehydrateStatus='rehydrated'` |
+| `ProjectVocalRehydrateStatus.UNRESOLVED` | `ProjectVocalRehydrateStatus='unresolved'` |
 | `ProjectVocalRehydrateStatus` | Literal['rehydrated', 'alreadyReady', 'unresolved']; the IntEnum and its members are removed |
 | `Sf2ProgramStatus.backend` | a SourceBackend token ('synth' or 'sf2') instead of an ordinal |
 | `VocalEditError.reason` | a VocalReason token instead of a number |
+| `VocalFormantMode.PRESERVE` | `VocalFormantMode='preserve'` |
+| `VocalFormantMode.SHIFT` | `VocalFormantMode='shift'` |
 | `VocalFormantMode` | Literal['preserve', 'shift']; the IntEnum and its members are removed |
 | `VocalMergeNotes.merge_policy` | takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError |
+| `VocalMergePolicy.PRESERVE` | `VocalMergePolicy='preserve'` |
+| `VocalMergePolicy.RESET` | `VocalMergePolicy='reset'` |
 | `VocalMergePolicy` | Literal['preserve', 'reset']; the IntEnum and its members are removed |
 | `VocalNoteEdit.formant_mode` | takes a VocalFormantMode token ('preserve' default); an ordinal is TypeError |
 | `VocalNoteEdit.target_mode` | takes a VocalTargetMode token ('none' default); an ordinal is TypeError |
 | `VocalOperationKind` | removed: build the operation record itself (VocalSetNoteEdit, VocalSplitNote, ...); its class is the kind |
+| `VocalTargetMode.CENTER` | `VocalTargetMode='center'` |
+| `VocalTargetMode.CURVE` | `VocalTargetMode='curve'` |
+| `VocalTargetMode.NONE` | `VocalTargetMode='none'` |
 | `VocalTargetMode` | Literal['none', 'center', 'curve']; the IntEnum and its members are removed |
 | `key_mode_from_analysis` | returns the ProjectKeyMode token that Project.annotate_keys takes as mode (was the annotation ordinal) |
 
