@@ -64,7 +64,9 @@ inline constexpr std::array<Override, 40> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 0> kLengths = {{}};
+inline constexpr std::array<Override, 1> kLengths = {{
+    {"project_apply_vocal_edit", "rendered_sample_count", "renderedMono"},
+}};
 
 template <std::size_t N>
 inline const Override* Find(const std::array<Override, N>& table, std::string_view entry,
