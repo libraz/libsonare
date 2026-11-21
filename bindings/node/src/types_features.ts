@@ -138,6 +138,12 @@ export interface StreamFramesU8 {
   spectralCentroid?: Uint8Array;
   /** Per-frame spectral flatness. */
   spectralFlatness?: Uint8Array;
+  /** Per-frame chord root as a pitch class 0-11; -1 when unknown. Present with `chroma`. */
+  chordRoot?: Int8Array;
+  /** Chord quality ordinals; decode each through `CHORD_QUALITIES`. */
+  chordQuality?: Int8Array;
+  /** Per-frame chord confidence, quantized to uint8 over `[0, 1]`. */
+  chordConfidence?: Uint8Array;
 }
 
 /** Quantized (int16) frame buffer (`StreamAnalyzer.readFramesI16`); a feature array is absent when not computed. */
@@ -158,6 +164,12 @@ export interface StreamFramesI16 {
   spectralCentroid?: Int16Array;
   /** Per-frame spectral flatness. */
   spectralFlatness?: Int16Array;
+  /** Per-frame chord root as a pitch class 0-11; -1 when unknown. Present with `chroma`. */
+  chordRoot?: Int8Array;
+  /** Chord quality ordinals; decode each through `CHORD_QUALITIES`. */
+  chordQuality?: Int8Array;
+  /** Per-frame chord confidence, quantized to int16 over `[0, 1]`. */
+  chordConfidence?: Int16Array;
 }
 
 /** A chord change in a progressive estimate. */

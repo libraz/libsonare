@@ -101,6 +101,9 @@ Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
   out.Set("rmsEnergy", TypedArrayFromVec<Array>(env, buffer.rms_energy));
   out.Set("spectralCentroid", TypedArrayFromVec<Array>(env, buffer.spectral_centroid));
   out.Set("spectralFlatness", TypedArrayFromVec<Array>(env, buffer.spectral_flatness));
+  out.Set("chordRoot", TypedArrayFromVec<Napi::Int8Array>(env, buffer.chord_root));
+  out.Set("chordQuality", TypedArrayFromVec<Napi::Int8Array>(env, buffer.chord_quality));
+  out.Set("chordConfidence", TypedArrayFromVec<Array>(env, buffer.chord_confidence));
   return out;
 }
 

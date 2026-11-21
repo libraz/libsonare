@@ -346,7 +346,7 @@ const STREAM_FEATURE_SPECTRAL = 8;
 
 type StreamArray = Float32Array | Uint8Array | Int16Array;
 
-interface NativeStreamFrames<T extends StreamArray> {
+interface NativeStreamFrames<T extends StreamArray, R extends Int32Array | Int8Array = Int8Array> {
   nFrames: number;
   nMels: number;
   nChroma: number;
@@ -358,9 +358,9 @@ interface NativeStreamFrames<T extends StreamArray> {
   rmsEnergy: T;
   spectralCentroid: T;
   spectralFlatness: T;
-  chordRoot: Int32Array;
-  chordQuality: Int32Array;
-  chordConfidence: Float32Array;
+  chordRoot: R;
+  chordQuality: R;
+  chordConfidence: T;
 }
 
 interface NativeStreamChord {
@@ -425,7 +425,9 @@ function streamBandMajor<T extends StreamArray>(flat: T, nFrames: number, nBands
 }
 
 /** The per-frame arrays every read path shares, absent where the feature was not computed. */
-function streamSharedArrays<T extends StreamArray>(native: NativeStreamFrames<T>) {
+function streamSharedArrays<T extends StreamArray>(
+  native: NativeStreamFrames<T, Int32Array | Int8Array>,
+) {
   const out: { onsetStrength?: T; rmsEnergy: T; spectralCentroid?: T; spectralFlatness?: T } = {
     rmsEnergy: native.rmsEnergy,
   };
@@ -442,12 +444,21 @@ function streamSharedArrays<T extends StreamArray>(native: NativeStreamFrames<T>
 function streamQuantizedFrames<T extends Uint8Array | Int16Array>(
   native: NativeStreamFrames<T>,
 ): StreamFramesU8 | StreamFramesI16 {
-  const out: { mel?: T; chroma?: T } = {};
+  const out: {
+    mel?: T;
+    chroma?: T;
+    chordRoot?: Int8Array;
+    chordQuality?: Int8Array;
+    chordConfidence?: T;
+  } = {};
   if (native.featureFlags & STREAM_FEATURE_MEL) {
     out.mel = streamBandMajor(native.mel, native.nFrames, native.nMels);
   }
   if (native.featureFlags & STREAM_FEATURE_CHROMA) {
     out.chroma = streamBandMajor(native.chroma, native.nFrames, native.nChroma);
+    out.chordRoot = native.chordRoot;
+    out.chordQuality = native.chordQuality;
+    out.chordConfidence = native.chordConfidence;
   }
   return {
     nFrames: native.nFrames,
@@ -648,7 +659,10 @@ export class StreamAnalyzer {
    * bands, cols are frames).
    */
   readFrames(maxFrames: number): StreamFrames {
-    const native = this.native.readFramesSoa(maxFrames) as NativeStreamFrames<Float32Array>;
+    const native = this.native.readFramesSoa(maxFrames) as NativeStreamFrames<
+      Float32Array,
+      Int32Array
+    >;
     const out: StreamFrames = {
       nFrames: native.nFrames,
       timestampsSec: native.timestampsSec,
