@@ -631,7 +631,7 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
 void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
                                        const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
   // C-ABI translation unit here, so the mapping is reproduced): malformed or
   // oversized requests and payloads the destination cannot prepare are a

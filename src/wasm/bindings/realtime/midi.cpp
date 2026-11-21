@@ -255,7 +255,7 @@ double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_
 // SoundFont they were created with).
 void RealtimeEngineWasm::loadSoundFont(val data) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   // Empty input is a parameter error and oversized or unparsable bytes a format
   // error, as in sonare_engine_load_soundfont; parse() applies the same SF2 file
   // size limit, and the engine's SoundFont is replaced only after it succeeds.

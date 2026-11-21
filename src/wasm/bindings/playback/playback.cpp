@@ -86,7 +86,7 @@ std::string takeCString(char* text) {
 class HrtfSetWasm {
  public:
   explicit HrtfSetWasm(val bytes) {
-    const std::vector<uint8_t> data = uint8ArrayToVector(bytes);
+    const std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
     checkPlayback(sonare_hrtf_set_create_from_memory(data.data(), data.size(), &set_));
   }
   ~HrtfSetWasm() { sonare_hrtf_set_destroy(set_); }

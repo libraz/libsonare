@@ -373,7 +373,7 @@ Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
 std::vector<float> loadValidatedInterleaved(const char* name, val samples, int channels,
                                             int sample_rate, size_t* frames);
 std::vector<int32_t> int32ArrayToVector(val arr);
-std::vector<uint8_t> uint8ArrayToVector(val arr);
+std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,

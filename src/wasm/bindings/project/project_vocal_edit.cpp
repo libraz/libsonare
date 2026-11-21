@@ -124,7 +124,7 @@ std::vector<float> copyMono(const val& value, const char* field) {
 std::vector<uint8_t> copySVE1(const val& value) {
   const size_t count = wasmArrayLikeLength(value, "sve1", "byteLength");
   if (count == 0) invalid("sve1 must not be empty");
-  return uint8ArrayToVector(value);
+  return uint8ArrayToVector(value, "sve1");
 }
 
 struct TokenStorage {

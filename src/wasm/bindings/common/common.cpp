@@ -314,8 +314,8 @@ std::vector<int32_t> int32ArrayToVector(val arr) {
   return result;
 }
 
-std::vector<uint8_t> uint8ArrayToVector(val arr) {
-  const size_t n = wasmArrayLikeLength(arr, "Uint8Array", "byteLength");
+std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject) {
+  const size_t n = wasmArrayLikeLength(arr, subject, "byteLength");
   std::vector<uint8_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));

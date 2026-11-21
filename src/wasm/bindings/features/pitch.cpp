@@ -98,7 +98,7 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
       throw WasmRangeError("voicedProb must have the same length as f0Hz");
     }
   } else {
-    const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags);
+    const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags, "voicedFlags");
     if (raw.size() != f0.size()) {
       throw WasmRangeError("voicedFlags must have the same length as f0Hz");
     }

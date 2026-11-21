@@ -11,14 +11,14 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  alignTakeToReference,
   Audio,
+  alignTakeToReference,
   downmix,
   init,
+  Mixer,
   melToAudio,
   melToStft,
   meteringSpectrumFrame,
-  Mixer,
   mixingScenePreset,
   noteTargetsFromSmf,
   PlaybackLoudnessMeter,
@@ -172,6 +172,7 @@ const DRIVERS: Record<string, Driver> = {
         : mixer.processStereo([new Float32Array(4)], [value] as never),
     ),
   mixing_scene_preset_json: (_spelling, value) => mixingScenePreset(value as never),
+  note_targets_from_smf: (spelling, value) => noteTargetsFromSmf({ [spelling]: value } as never),
   playback_loudness_meter_push_interleaved: (_spelling, value) =>
     using(new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 }), (meter) =>
       meter.pushInterleaved(value as Float32Array),
@@ -239,9 +240,7 @@ const OUTSIDE: unknown[] = [
  * Rows no value can make refuse as a parameter, or that need live state the harness cannot
  * build. Keyed `"entry.subject"`; the reason is one of the three fixed phrases.
  */
-const UNDRIVEN: Record<string, string> = {
-  'note_targets_from_smf.bytes': 'content refusal carries no subject',
-};
+const UNDRIVEN: Record<string, string> = {};
 
 const REASONS = ['no value refuses it', 'needs live state', 'content refusal carries no subject'];
 

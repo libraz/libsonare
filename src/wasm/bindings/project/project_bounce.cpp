@@ -577,7 +577,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
 }
 
 void ProjectWasm::loadSoundFont(val data) {
-  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   const SonareError err = sonare_project_load_soundfont(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {

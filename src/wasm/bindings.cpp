@@ -502,7 +502,7 @@ val js_realtime_voice_changer_preset_config(const val& preset_val) {
 #endif
 
 val js_audio_from_memory(val bytes) {
-  std::vector<uint8_t> data = uint8ArrayToVector(bytes);
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
   const Audio audio = Audio::from_memory(data.data(), data.size());
   const std::vector<float> samples(audio.data(), audio.data() + audio.size());
   val out = val::object();
@@ -530,7 +530,7 @@ struct CFloatBuffer {
 }  // namespace
 
 val js_decode_channels(val bytes) {
-  std::vector<uint8_t> data = uint8ArrayToVector(bytes);
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
   CFloatBuffer planar;
   size_t frames = 0;
   int channels = 0;

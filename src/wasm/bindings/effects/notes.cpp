@@ -543,7 +543,7 @@ val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, v
 // whose first track is a conductor track has its melody at 0.
 val js_note_targets_from_smf(val data, const val& track_index_val) {
   const int track_index = checkedIntFromVal(track_index_val, "trackIndex");
-  const std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  const std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   val out = val::array();
   for (const NoteTarget& target :
        midi::note_targets_from_smf(bytes.data(), bytes.size(), track_index)) {

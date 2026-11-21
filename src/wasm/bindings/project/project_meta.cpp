@@ -107,7 +107,7 @@ void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& sche
                                    double region_end_ppq, val payload) {
   const uint32_t schema_version = checkedUintFromVal(schema_version_val, "schemaVersion");
   const uint32_t target_track_id = checkedUintFromVal(target_track_id_val, "targetTrackId");
-  std::vector<uint8_t> bytes = uint8ArrayToVector(payload);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(payload, "payload");
   const SonareError err = sonare_project_set_assist_sidecar(
       project_.get(), wasmCString(module_id, "moduleId"), schema_version, target_track_id,
       region_start_ppq, region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());

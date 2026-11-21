@@ -37,7 +37,7 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
 }
 
 uint32_t ProjectWasm::importSmf(val data) {
-  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   uint32_t first_clip = 0;
   const SonareError err = sonare_project_import_smf(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
@@ -61,7 +61,7 @@ val ProjectWasm::exportSmf() {
 }
 
 uint32_t ProjectWasm::importClipFile(val data) {
-  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   uint32_t first_clip = 0;
   const SonareError err = sonare_project_import_clip_file(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
