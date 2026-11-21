@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -568,14 +568,19 @@ test-wasm: build-wasm-binding
 # Runs each JS suite with its public exports wrapped and ratchets how many of the
 # refusals it provokes name a field in C spelling (tests/conformance/
 # refusal_spelling_ratchet.json). Test failures are the test targets' business;
-# a capture holding no refusal fails the checker.
+# a capture holding no refusal fails the checker. `refusal-spelling-check` runs
+# against the builds already present, one surface per REFUSAL_SPELLING_SURFACES entry.
+REFUSAL_SPELLING_SURFACES ?= node wasm
+
 refusal-spelling: build-node build-wasm-binding
-	@dir=$$(mktemp -d) && \
-	(cd bindings/node && SONARE_REFUSAL_CAPTURE=$$dir/node.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/node.log 2>&1; true) && \
-	(cd bindings/wasm && SONARE_REFUSAL_CAPTURE=$$dir/wasm.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/wasm.log 2>&1; true) && \
-	touch $$dir/node.jsonl $$dir/wasm.jsonl && \
-	python3 tools/api/refusal_spelling.py --surface node $$dir/node.jsonl && \
-	python3 tools/api/refusal_spelling.py --surface wasm $$dir/wasm.jsonl
+	$(MAKE) refusal-spelling-check
+
+refusal-spelling-check:
+	@dir=$$(mktemp -d) && for surface in $(REFUSAL_SPELLING_SURFACES); do \
+	  (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE=$$dir/$$surface.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/$$surface.log 2>&1; true) && \
+	  touch $$dir/$$surface.jsonl && \
+	  python3 tools/api/refusal_spelling.py --surface $$surface $$dir/$$surface.jsonl || exit 1; \
+	done
 
 # Focused security-hardening gates. Each test command writes its complete log
 # under the matching build directory, and --no-tests=error prevents a renamed
@@ -746,6 +751,10 @@ surface-check:
 	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
 	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
 	python3 tools/api/upgrade_notes.py --check
+
+# Fails only on a surface_allowlist.toml entry that excused nothing, or a validation problem.
+surface-allowlist-audit:
+	python3 tools/api/check_surface.py --audit-only
 
 # Type-checks every TSDoc @example on the Node and WASM facades against the package
 # sources; an unfenced example or a fence other than ```ts is a finding. Needs each
@@ -1027,6 +1036,8 @@ conformance-checks:
 	$(CHECK) python3 tools/audition/test_wizard.py
 	$(CHECK) python3 tools/parity/surface_coverage.py --check
 	$(CHECK) python3 tools/parity/check_parity.py --audit-allowlist
+	$(CHECK) python3 tools/api/check_surface.py --audit-only
+	$(CHECK) python3 tools/api/unnamed_integer_bounds.py --count
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
 		echo "python3 tools/conformance/check_cli_contract.py --native $(BUILD_DIR)/bin/sonare-cli --python bindings/python/.venv/bin/python"; \
 		python3 tools/conformance/check_cli_contract.py \
