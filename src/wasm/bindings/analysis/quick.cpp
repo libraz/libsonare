@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -16,6 +17,7 @@
 #include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "c_api/sonare_c_internal.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 #include "util/zero_is_default.h"
@@ -526,7 +528,10 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
       break;
   }
   config.tuning = tuning.value();
-  validate_chord_config(config);
+  // The core refuses these members under its own names; the facade keys carry the unit.
+  static const std::array<sonare_c_detail::CName, 2> kFacadeNames{
+      {{"min_duration", "min_duration_sec"}, {"smoothing_window", "smoothing_window_sec"}}};
+  sonare_c_detail::with_c_names(kFacadeNames, [&] { validate_chord_config(config); });
   return config;
 }
 
@@ -544,8 +549,8 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
   const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
   const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
-  const float min_duration = checkedFloatFromVal(min_duration_val, "minDuration");
-  const float smoothing_window = checkedFloatFromVal(smoothing_window_val, "smoothingWindow");
+  const float min_duration = checkedFloatFromVal(min_duration_val, "minDurationSec");
+  const float smoothing_window = checkedFloatFromVal(smoothing_window_val, "smoothingWindowSec");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
 
   // Reject out-of-range enum-like fields up front, matching the C ABI's
@@ -586,8 +591,8 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   const int hmm_beam_width =
       domainNumberFromVal<int>(hmm_beam_width_val, "hmmBeamWidth", kChordBeamWidthDomain);
   const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
-  const float min_duration = checkedFloatFromVal(min_duration_val, "minDuration");
-  const float smoothing_window = checkedFloatFromVal(smoothing_window_val, "smoothingWindow");
+  const float min_duration = checkedFloatFromVal(min_duration_val, "minDurationSec");
+  const float smoothing_window = checkedFloatFromVal(smoothing_window_val, "smoothingWindowSec");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
 
   // Mirror the C ABI's sonare_chord_functional_analysis: chroma_method must be
