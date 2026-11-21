@@ -118,6 +118,18 @@ def _walk(
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
             name = child.name
+            if name == "__init__" and class_prefix:
+                ex.constructors.setdefault(
+                    class_prefix,
+                    FunctionSig(
+                        key="__init__",
+                        surface="python",
+                        raw_name=f"{class_prefix}.__init__",
+                        params=_params_from_args(child.args),
+                        file=file,
+                        line=child.lineno,
+                    ),
+                )
             if name.startswith("_"):
                 continue
             key = canonical_key(name, "python")
@@ -130,6 +142,7 @@ def _walk(
                     returns=_ann_to_str(child.returns),
                     file=file,
                     line=child.lineno,
+                    var_keyword=child.args.kwarg.arg if child.args.kwarg else "",
                 )
             )
         elif isinstance(child, ast.ClassDef):

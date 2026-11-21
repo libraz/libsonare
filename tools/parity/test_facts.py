@@ -209,6 +209,15 @@ def test_real_tree_binds_a_handle_op_desc_and_every_reached_struct_entry():
     assert "project_apply_vocal_edit" in facts.struct_entries_without_bindings(root, stripped)
 
 
+def test_real_tree_binds_constructor_keywords_a_method_forwards_through_kwargs():
+    rows = [b for b in facts.field_bindings(_HERE.parent.parent) if b.surface == "python"]
+    bound = {(b.c_key, b.c_subject) for b in rows if b.surface_spelling is not None}
+    unbound = {(b.c_key, b.c_subject) for b in rows if b.surface_spelling is None}
+    assert ("polyphonic_analyze", "cent_max_hz") in bound
+    assert ("project_apply_vocal_edit", "render_token") in bound
+    assert ("chord_functions", "start_sec") not in unbound
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

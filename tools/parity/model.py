@@ -68,6 +68,8 @@ class FunctionSig:
     # When True, this surface symbol has no canonical C counterpart by design /
     # by detection (surface-only helper). Compare against the allowlist.
     surface_only: bool = False
+    # Name of a ``**kwargs`` parameter the surface accepts, or empty when it takes none.
+    var_keyword: str = ""
 
     def core_params(self) -> list[Param]:
         """Params with structural artifacts removed (for positional diffing)."""
@@ -128,3 +130,5 @@ class Extraction:
     unparsed: int = 0
     # Human-readable notes about unparsed/skipped items (file:line + reason).
     unparsed_notes: list[str] = field(default_factory=list)
+    # Class constructors by class name, for a method forwarding ``**kwargs`` to one.
+    constructors: dict[str, FunctionSig] = field(default_factory=dict)

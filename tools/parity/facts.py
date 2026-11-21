@@ -95,6 +95,14 @@ def _caller_filled(p: Param, c_records: dict[str, RecordShape]) -> RecordShape |
     return c_records.get(m.group(1)) if m else None
 
 
+def _names_record(type_hint: str, records: dict[str, RecordShape], key: str) -> bool:
+    """Whether any identifier in ``type_hint`` (a union, say) names the record ``key``."""
+    return any(
+        (rec := _record_of(token, records)) is not None and rec.key == key
+        for token in re.findall(r"[A-Za-z_]\w*", type_hint)
+    )
+
+
 def _takes(sig: FunctionSig, c_rec: RecordShape, records: dict[str, RecordShape]) -> str | None:
     """The facade parameter typed as the record mirroring ``c_rec``, if any."""
     return next(
@@ -125,7 +133,7 @@ def _member_rows(
     rows: list[FieldBinding] = []
     for f in c_rec.core_fields():
         spelling = None
-        if f.name in facade and f.name not in bags:
+        if f.name in facade:
             spelling = facade.pop(f.name)
             spelling = spelling.raw_name or spelling.name
         else:
@@ -189,8 +197,13 @@ def _param_rows(
                 )
             )
             continue
-        renamed = same is not None and (rec := _record_of(same.type, records)) is not None
-        if c_rec is not None and (same is None or renamed and rec.key != c_rec.key):
+        renamed = (
+            same is not None
+            and c_rec is not None
+            and _record_of(same.type, records) is not None
+            and not _names_record(same.type, records, c_rec.key)
+        )
+        if c_rec is not None and (same is None or renamed):
             if (mirror := _takes(sig, c_rec, records)) is not None:
                 # The facade takes the mirrored struct; its interior is the record rows' job.
                 facade.pop(mirror, None)
@@ -307,7 +320,10 @@ def _as_method(c_sig: FunctionSig, method: bool, c_records: dict[str, RecordShap
 def _paired(
     c_funcs: dict[str, FunctionSig], ex: Extraction, c_records: dict[str, RecordShape]
 ) -> list[tuple[str, FunctionSig, FunctionSig]]:
-    """(key, C signature, facade signature) for every C entry the surface exposes."""
+    """(key, C signature, facade signature) for every C entry the surface exposes.
+
+    A method forwarding ``**kwargs`` to its class constructor also takes the constructor's.
+    """
     funcs = compare._index(ex)
     out = []
     for key in sorted(c_funcs):
@@ -321,7 +337,17 @@ def _paired(
             )
             if alias is not None:
                 out.append((key, c_funcs[key], alias))
-    return out
+    return [(key, c_sig, _with_constructor(sig, ex)) for key, c_sig, sig in out]
+
+
+def _with_constructor(sig: FunctionSig, ex: Extraction) -> FunctionSig:
+    """``sig`` plus its class constructor's parameters when it forwards ``**kwargs`` there."""
+    ctor = ex.constructors.get(sig.raw_name.split(".", 1)[0]) if "." in sig.raw_name else None
+    if not sig.var_keyword or ctor is None:
+        return sig
+    have = {p.name for p in sig.params}
+    extra = [p for p in ctor.params if p.name not in have and not p.structural]
+    return replace(sig, params=[*sig.params, *extra])
 
 
 def _folded_variants(
