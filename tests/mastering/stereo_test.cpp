@@ -21,6 +21,7 @@
 #include "mastering/stereo/stereo_balance.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::mastering::stereo;
@@ -665,6 +666,31 @@ TEST_CASE("MonoCompatCheck validates buffers", "[mastering][stereo]") {
   std::vector<float> left(4, 0.0f);
   std::vector<float> right(4, 0.0f);
   REQUIRE_THROWS(mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0, 0));
+}
+
+TEST_CASE("MonoCompatCheck log bands default the upper edge to Nyquist below 40 kHz",
+          "[mastering][stereo]") {
+  std::vector<float> left(4096, 0.0f);
+  std::vector<float> right(4096, 0.0f);
+  left[100] = 1.0f;
+  right[100] = -1.0f;
+
+  const auto bands = mono_compat_check_log_bands(left.data(), right.data(), left.size(), 32000.0);
+  REQUIRE_FALSE(bands.empty());
+  CHECK(bands.back().high_hz == 16000.0f);
+  const auto at_48k = mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0);
+  CHECK(at_48k.back().high_hz == 20000.0f);
+  // Nyquist itself is a valid given edge.
+  CHECK_NOTHROW(mono_compat_check_log_bands(left.data(), right.data(), left.size(), 32000.0, 3,
+                                            20.0f, 16000.0f));
+
+  try {
+    (void)mono_compat_check_log_bands(left.data(), right.data(), left.size(), 32000.0, 3, 20.0f,
+                                      17000.0f);
+    FAIL("a given edge above Nyquist was accepted");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    CHECK(e.subject() == "high_hz");
+  }
 }
 
 TEST_CASE("MonoCompatCheck log bands measure the whole interval, not its centre",

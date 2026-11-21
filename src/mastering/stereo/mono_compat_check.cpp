@@ -8,12 +8,17 @@
 #include "core/fft.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/stereo_metrics.h"
 
 namespace sonare::mastering::stereo {
 namespace {
 
+namespace check = sonare::util::check;
 using sonare::constants::kPiD;
+
+/// Upper band edge when the caller gives none, lowered to Nyquist at rates below 40 kHz.
+constexpr float kDefaultHighHz = 20000.0f;
 
 /// Smallest and largest analysis transform for the log-band measurement. The
 /// floor keeps a coarse request from measuring a band out of two bins; the
@@ -89,16 +94,19 @@ MonoCompatResult mono_compat_check(const float* left, const float* right, size_t
 std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left, const float* right,
                                                               size_t length, double sample_rate,
                                                               int bands_per_octave, float low_hz,
-                                                              float high_hz) {
+                                                              std::optional<float> high_hz_given) {
   if (length == 0 || left == nullptr || right == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "mono compatibility buffers must not be empty or null");
   }
-  if (!(sample_rate > 0.0) || bands_per_octave <= 0 || !(low_hz > 0.0f) || !(high_hz > low_hz) ||
-      high_hz >= static_cast<float>(sample_rate * 0.5)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "invalid mono compatibility band configuration");
-  }
+  check::greater_than(sample_rate, 0.0, "sample_rate");
+  check::integer_at_least(bands_per_octave, 1, "bands_per_octave");
+  const double nyquist = sample_rate * 0.5;
+  const double upper_limit =
+      high_hz_given ? nyquist : std::min(static_cast<double>(kDefaultHighHz), nyquist);
+  check::in_interval(low_hz, 0.0, false, upper_limit, false, "low_hz");
+  if (high_hz_given) check::in_interval(*high_hz_given, low_hz, false, nyquist, true, "high_hz");
+  const float high_hz = high_hz_given ? *high_hz_given : static_cast<float>(upper_limit);
 
   const double ratio = std::pow(2.0, 1.0 / static_cast<double>(bands_per_octave));
 

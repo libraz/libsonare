@@ -4,6 +4,7 @@
 /// @brief Stereo mono compatibility analysis helper.
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 namespace sonare::mastering::stereo {
@@ -32,10 +33,11 @@ struct MonoCompatBandResult {
 
 MonoCompatResult mono_compat_check(const float* left, const float* right, size_t length,
                                    float correlation_threshold = 0.0f);
-std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left, const float* right,
-                                                              size_t length, double sample_rate,
-                                                              int bands_per_octave = 3,
-                                                              float low_hz = 20.0f,
-                                                              float high_hz = 20000.0f);
+/// @brief Per-band stereo readout over log-spaced bands from @p low_hz to @p high_hz.
+/// @param high_hz Upper edge; absent reads as 20 kHz or Nyquist, whichever is lower. A given
+///        edge above Nyquist is refused.
+std::vector<MonoCompatBandResult> mono_compat_check_log_bands(
+    const float* left, const float* right, size_t length, double sample_rate,
+    int bands_per_octave = 3, float low_hz = 20.0f, std::optional<float> high_hz = std::nullopt);
 
 }  // namespace sonare::mastering::stereo

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -1152,9 +1153,11 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     util::json::put(root, "sideRms", result.side_rms);
     util::json::put(root, "likelyMonoCompatible", result.likely_mono_compatible);
   } else if (name == "stereo.monoCompatCheckLogBands") {
+    // An absent highHz is resolved by the band layout, which lowers it to Nyquist.
+    const float high_hz = f(map, "highHz", 20000.0f);
     auto bands = ::sonare::mastering::stereo::mono_compat_check_log_bands(
         left, right, length, sample_rate, i(map, "bandsPerOctave", 3), f(map, "lowHz", 20.0f),
-        f(map, "highHz", 20000.0f));
+        map.has("highHz") ? std::optional<float>(high_hz) : std::nullopt);
     json_ns::Array band_values;
     band_values.reserve(bands.size());
     for (const auto& band : bands) {
