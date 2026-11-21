@@ -785,79 +785,76 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     return project;
   }
 
-  it('reads bounceWithBuiltinInstruments bindings from the real array length', () => {
+  it('reads builtinInstruments bindings from the real array length', () => {
     // The control: a lone valid binding renders; a second binding with an
     // unknown waveform trips validation, which only fires if it was read.
     const one = buildMidiProject();
     expect(() =>
-      one.bounceWithBuiltinInstruments([{ destinationId: 0, instrument: {} }], {}),
+      one.bounce({ builtinInstruments: [{ destinationId: 0, instrument: {} }] }),
     ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithBuiltinInstruments(
-        [
+      two.bounce({
+        builtinInstruments: [
           { destinationId: 0, instrument: {} },
           { destinationId: 0, instrument: { waveform: 'bogus' as never } },
         ],
-        {},
-      ),
+      }),
     ).toThrow();
     two.destroy();
     // The facade's `.map` skips the holes, so the embind reader's own length
     // guard is reached through the facade and through the native handle alike.
     const attack = buildMidiProject();
-    expectRangeRefusal(() => attack.bounceWithBuiltinInstruments(hugeArray() as never, {}));
+    expectRangeRefusal(() => attack.bounce({ builtinInstruments: hugeArray() as never }));
     expectRangeRefusal(() =>
       nativeOf(attack).bounce({}, hugeArray(), undefined, undefined, undefined),
     );
     attack.destroy();
   });
 
-  it('reads bounceWithSynthInstruments bindings from the real array length', () => {
+  it('reads synthInstruments bindings from the real array length', () => {
     const one = buildMidiProject();
     expect(() =>
-      one.bounceWithSynthInstruments([{ destinationId: 0, instrument: {} }], {}),
+      one.bounce({ synthInstruments: [{ destinationId: 0, instrument: {} }] }),
     ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithSynthInstruments(
-        [
+      two.bounce({
+        synthInstruments: [
           { destinationId: 0, instrument: {} },
           { destinationId: 0, instrument: { waveform: 'bogus' } as never },
         ],
-        {},
-      ),
+      }),
     ).toThrow();
     two.destroy();
     const attack = buildMidiProject();
-    expectRangeRefusal(() => attack.bounceWithSynthInstruments(hugeArray() as never, {}));
+    expectRangeRefusal(() => attack.bounce({ synthInstruments: hugeArray() as never }));
     expectRangeRefusal(() =>
       nativeOf(attack).bounce({}, undefined, undefined, hugeArray(), undefined),
     );
     attack.destroy();
   });
 
-  it('reads bounceWithSf2Instruments bindings from the real array length', () => {
+  it('reads sf2Instruments bindings from the real array length', () => {
     const one = buildMidiProject();
     expect(() =>
-      one.bounceWithSf2Instruments([{ destinationId: 0, instrument: {} }], {}),
+      one.bounce({ sf2Instruments: [{ destinationId: 0, instrument: {} }] }),
     ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithSf2Instruments(
-        [
+      two.bounce({
+        sf2Instruments: [
           { destinationId: 0, instrument: {} },
           { destinationId: 0, instrument: { polyphony: 1.5 } },
         ],
-        {},
-      ),
+      }),
     ).toThrow();
     two.destroy();
     const attack = buildMidiProject();
-    expectRangeRefusal(() => attack.bounceWithSf2Instruments(hugeArray() as never, {}));
+    expectRangeRefusal(() => attack.bounce({ sf2Instruments: hugeArray() as never }));
     expectRangeRefusal(() =>
       nativeOf(attack).bounce({}, undefined, undefined, undefined, hugeArray()),
     );

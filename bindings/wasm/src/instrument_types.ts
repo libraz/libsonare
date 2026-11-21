@@ -13,7 +13,7 @@ export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'tr
 export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
 
 /**
- * Built-in synth patch for {@link Project.bounceWithBuiltinInstruments} and
+ * Built-in synth patch for {@link ProjectBounceOptions.builtinInstruments} and
  * {@link RealtimeEngine.setBuiltinInstrument}. Every field is optional; an
  * omitted field takes the library default (gain 0.2, attack 5ms, decay 60ms,
  * sustain 0.7, release 120ms, 16 voices), so `{}` is a usable default sine
@@ -42,9 +42,9 @@ export interface BuiltinSynthConfig {
 
 /**
  * One instrument bound to a MIDI destination for an instrument-bound bounce:
- * {@link Project.bounceWithBuiltinInstruments}, `bounceWithSynthInstruments`,
- * `bounceWithSf2Instruments` or `bounceWithInstruments`. The destination is part
- * of the pair, never of the instrument.
+ * the `builtinInstruments`, `synthInstruments`, `sf2Instruments` or `instruments`
+ * option of {@link Project.bounce}. The destination is part of the pair, never of
+ * the instrument.
  */
 export interface ProjectInstrumentBinding<T> {
   /** MIDI destination id the instrument answers to; omit for destination `0` (see {@link Project.setTrackMidiDestination}). */
@@ -67,7 +67,7 @@ export interface ExternalInstrumentEvent {
 }
 
 /**
- * A JavaScript instrument driven during {@link Project.bounceWithInstruments}.
+ * A JavaScript instrument driven during {@link Project.bounce} with `instruments`.
  * Only `render` is required. Every callback runs synchronously while the
  * bounce is blocked and must not return a Promise.
  */
@@ -95,7 +95,7 @@ export interface ExternalInstrument {
 }
 
 /**
- * SoundFont (SF2) player patch for {@link Project.bounceWithSf2Instruments}. Every field is optional; an
+ * SoundFont (SF2) player patch for {@link ProjectBounceOptions.sf2Instruments}. Every field is optional; an
  * omitted field takes the library default (gain 0.5, 48 voices), so `{}` is a usable default
  * patch. A given value is read literally and refused outside its range.
  */
@@ -691,7 +691,7 @@ export interface SynthModRouting {
 }
 
 /**
- * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstruments}
+ * Versioned NativeSynth patch for {@link ProjectBounceOptions.synthInstruments}
  * and {@link RealtimeEngine.setSynthInstrument}.
  *
  * The patch starts from a BASE — the named `preset` (see

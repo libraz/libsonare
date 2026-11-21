@@ -1,3 +1,10 @@
+import type {
+  BuiltinSynthConfig,
+  ExternalInstrument,
+  ProjectInstrumentBinding,
+  Sf2InstrumentConfig,
+  SynthPatch,
+} from './instrument_types.js';
 import type { Project, ProjectTimeline } from './project_class.js';
 import type { MidiFxConfig } from './public_types_engine.js';
 import type { MidiBank } from './public_types_midi_messages.js';
@@ -16,7 +23,7 @@ import type { KeyMode } from './public_types_music.js';
 export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
 /**
- * Render options for {@link Project.bounce} and the instrument-bound bounces.
+ * Render options for {@link Project.bounce}.
  * Every field is optional: an omitted field takes its default, and an explicit
  * `0` is refused (`RangeError`) rather than read as "the default".
  */
@@ -38,9 +45,17 @@ export interface ProjectBounceOptions {
   numChannels?: number;
   /** Host-instrument PDC (latency) fed to the compiler, in samples. */
   instrumentLatencySamples?: number;
+  /** Built-in oscillator synth bound to MIDI destinations. */
+  builtinInstruments?: ReadonlyArray<ProjectInstrumentBinding<BuiltinSynthConfig>>;
+  /** Patch-driven NativeSynth bound to MIDI destinations. */
+  synthInstruments?: ReadonlyArray<ProjectInstrumentBinding<SynthPatch>>;
+  /** GS-compatible SoundFont players bound to MIDI destinations. */
+  sf2Instruments?: ReadonlyArray<ProjectInstrumentBinding<Sf2InstrumentConfig>>;
+  /** JavaScript instruments driven synchronously during the render. */
+  instruments?: ReadonlyArray<ProjectInstrumentBinding<ExternalInstrument>>;
 }
 
-/** Planar result of {@link Project.bounce} and the instrument-bound bounces. */
+/** Planar result of {@link Project.bounce}. */
 export interface ProjectBounceResult {
   /** One `Float32Array` per output channel, all the same length. */
   readonly channels: Float32Array[];
@@ -999,17 +1014,20 @@ export interface ProjectDiagnostic {
   readonly message: string;
 }
 
-/** Diagnostics returned by {@link Project.compile}. */
+/** Options of {@link Project.compile}. */
+export interface ProjectCompileOptions {
+  /** Also keep the compiled timeline in the result's `timeline`. Omit for `false`. */
+  withTimeline?: boolean;
+}
+
+/** Result of {@link Project.compile}. */
 export interface ProjectCompileResult {
   /** Every diagnostic the compile surfaced; empty when it was clean. */
   readonly diagnostics: readonly ProjectDiagnostic[];
-}
-
-/** Result of {@link Project.compileTimeline}: the compile diagnostics plus the timeline they produced. */
-export interface ProjectCompileTimelineResult extends ProjectCompileResult {
   /**
-   * The compiled timeline; absent when compilation produced none (an error
-   * diagnostic; read {@link ProjectCompileResult.diagnostics}). Release it with
+   * The compiled timeline; present only when `withTimeline` was requested and
+   * compilation produced one (an error diagnostic means none; read
+   * {@link ProjectCompileResult.diagnostics}). Release it with
    * {@link ProjectTimeline.destroy}.
    */
   readonly timeline?: ProjectTimeline;

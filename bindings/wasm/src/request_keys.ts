@@ -219,6 +219,7 @@ import type {
   ProjectClipFadeInput,
   ProjectClipLoopInput,
   ProjectClipTakesOptions,
+  ProjectCompileOptions,
   ProjectMarkerInput,
   ProjectMidiFxBakeRequest,
   ProjectMidiFxPreviewRequest,
@@ -241,6 +242,7 @@ import type {
   EngineGraphSpec,
   EngineLoop,
   EngineMetronomeConfig,
+  EngineProcessOptions,
   EngineSetParameterOptions,
   RealtimeEngineConfig,
   RenderOfflineRequest,
@@ -2281,6 +2283,7 @@ const CapturePunchKeys = keysOf<CapturePunch>()([
   'endSample',
   'endSec',
 ]);
+const EngineProcessRequestKeys = keysOf<EngineProcessOptions>()(['withMonitor']);
 const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
 const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
 const SonareEngineRenderOfflineRequestKeys = keysOf<SonareEngineRenderOfflineRequest>()([
@@ -2639,7 +2642,12 @@ const ProjectBounceRequestKeys = keysOf<ProjectBounceOptions>()([
   'blockSize',
   'numChannels',
   'instrumentLatencySamples',
+  'builtinInstruments',
+  'synthInstruments',
+  'sf2Instruments',
+  'instruments',
 ]);
+const ProjectCompileRequestKeys = keysOf<ProjectCompileOptions>()(['withTimeline']);
 const ProjectAutoTempoRequestKeys = keysOf<ProjectAutoTempoRequest>()([
   'samples',
   'sampleRate',
@@ -2735,6 +2743,8 @@ export const REQUEST_SHAPES = {
     nested: { inputMonitor: CaptureInputMonitorKeys, punch: CapturePunchKeys },
   },
   armCapture: { keys: ArmCaptureRequestKeys },
+  process: { keys: EngineProcessRequestKeys },
+  processPrepared: { keys: EngineProcessRequestKeys },
   scheduleParam: { keys: ScheduleParamRequestKeys },
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },
@@ -2806,6 +2816,7 @@ export const REQUEST_SHAPES = {
   'Project.setAudioSourceMetadata': { keys: ProjectSetAudioSourceMetadataRequestKeys },
   'Project.setAssistSidecar': { keys: ProjectSetAssistSidecarRequestKeys },
   'Project.bounce': { keys: ProjectBounceRequestKeys },
+  'Project.compile': { keys: ProjectCompileRequestKeys },
   'Project.autoTempo': { keys: ProjectAutoTempoRequestKeys },
   'Project.analyzeTempo': { keys: ProjectAnalyzeTempoRequestKeys },
   transcribeToClip: { keys: TranscribeToClipRequestKeys },

@@ -52,7 +52,7 @@ beforeAll(async () => {
 describe('construction', () => {
   it('compiles a timeline that callers cannot construct', () => {
     withProject((project) => {
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       expect(timeline).not.toBeNull();
       try {
         expect('nativeId' in (timeline as object)).toBe(false);
@@ -314,7 +314,7 @@ describe('compile and bounce', () => {
       expect(diagnostic.severity).toBe('warning');
       expect(diagnostic.message).toContain('MIDI');
 
-      const compiled = project.compileTimeline();
+      const compiled = project.compile({ withTimeline: true });
       try {
         expect(Object.keys(compiled).sort()).toEqual(['diagnostics', 'timeline']);
         expect(compiled.diagnostics).toEqual(result.diagnostics);
@@ -326,6 +326,22 @@ describe('compile and bounce', () => {
       const last = project.lastBounceCompileResult();
       expect(Object.keys(last ?? {})).toEqual(['diagnostics']);
       expect(last?.diagnostics.map((d) => d.code)).toEqual(['midiClipNoInstrument']);
+    });
+  });
+
+  it('compile carries the timeline only when withTimeline is set', () => {
+    withProject((project) => {
+      project.addMidiClip(0, 4);
+      expect(project.compile()).not.toHaveProperty('timeline');
+      expect(project.compile({ withTimeline: false })).not.toHaveProperty('timeline');
+      const withTimeline = project.compile({ withTimeline: true });
+      try {
+        expect(withTimeline.timeline).toBeDefined();
+      } finally {
+        withTimeline.timeline?.destroy();
+      }
+      expect(() => project.compile({ withTimeline: 'yes' as never })).toThrow(TypeError);
+      expect(() => project.compile({ other: true } as never)).toThrow(TypeError);
     });
   });
 

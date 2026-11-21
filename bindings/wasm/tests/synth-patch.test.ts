@@ -1,6 +1,6 @@
 /**
  * NativeSynth WASM binding tests: synthPresetNames / synthPresetPatch,
- * Project.bounceWithSynthInstruments and the realtime engine
+ * the Project.bounce `synthInstruments` option and the realtime engine
  * setSynthInstrument entry.
  */
 
@@ -54,10 +54,10 @@ function bounceSynth(
   const { destinationId, ...instrument } = (
     typeof config === 'string' ? { preset: config } : config
   ) as { destinationId?: number };
-  const { channels } = project.bounceWithSynthInstruments(
-    [{ destinationId, instrument }] as never,
-    options,
-  );
+  const { channels } = project.bounce({
+    ...options,
+    synthInstruments: [{ destinationId, instrument }] as never,
+  });
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
   channels.forEach((channel, c) => {
     for (let i = 0; i < channel.length; i++) {

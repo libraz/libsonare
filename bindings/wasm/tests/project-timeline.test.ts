@@ -89,10 +89,12 @@ function buildProject(): Built {
 }
 
 function projectBounce(project: Project): Float32Array[] {
-  return project.bounceWithBuiltinInstruments(
-    [{ destinationId: DESTINATION, instrument: { ...SYNTH } }],
-    { totalFrames: FRAMES, blockSize: BLOCK_SIZE, numChannels: 2 },
-  ).channels;
+  return project.bounce({
+    totalFrames: FRAMES,
+    blockSize: BLOCK_SIZE,
+    numChannels: 2,
+    builtinInstruments: [{ destinationId: DESTINATION, instrument: { ...SYNTH } }],
+  }).channels;
 }
 
 function processBlock(engine: RealtimeEngine): void {
@@ -119,7 +121,7 @@ function engineBounce(engine: RealtimeEngine): Float32Array[] {
 /** Binds a fresh instrument so voice state from an earlier render cannot leak in. */
 function compileAndApply(engine: RealtimeEngine, project: Project): ProjectTimeline {
   engine.setBuiltinInstrument(DESTINATION, { ...SYNTH });
-  const { timeline } = project.compileTimeline();
+  const { timeline } = project.compile({ withTimeline: true });
   expect(timeline).not.toBeNull();
   engine.applyProjectTimeline(timeline as ProjectTimeline);
   return timeline as ProjectTimeline;
@@ -179,7 +181,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const { project } = buildProject();
     const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       expect(timeline).not.toBeNull();
       engine.play();
       processBlock(engine);
@@ -200,7 +202,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
     try {
       expect(diagnostics).toContain('dangling_clip_source');
-      const result = project.compileTimeline();
+      const result = project.compile({ withTimeline: true });
       expect(result).not.toHaveProperty('hasTimeline');
       expect(result).not.toHaveProperty('timeline');
       expect(result.diagnostics.length).toBeGreaterThan(0);
@@ -224,7 +226,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const { project } = buildProject();
     const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       expect(timeline).not.toBeNull();
       const releasedId = (timeline as unknown as { native: { id: number } }).native.id;
       (timeline as ProjectTimeline).destroy();
@@ -249,7 +251,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     let forgedTimeline: ProjectTimeline | null = null;
     try {
       currentTimeline = compileAndApply(engine, current);
-      const compiled = forgedSource.compileTimeline();
+      const compiled = forgedSource.compile({ withTimeline: true });
       forgedTimeline = compiled.timeline ?? null;
       expect(forgedTimeline).not.toBeNull();
       const nativeId = (forgedTimeline as unknown as { native: { id: number } }).native.id;

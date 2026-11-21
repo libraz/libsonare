@@ -63,6 +63,8 @@ const METHOD_SHAPES = [
   'importExternalSeparatedStem',
   'prepare',
   'previewMidiFx',
+  'process',
+  'processPrepared',
   'pushMidiInputProgram',
   'pushMidiProgram',
   'renderOffline',

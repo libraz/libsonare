@@ -417,7 +417,13 @@ export interface EngineFreezeResult {
   numChannels: number;
 }
 
-/** Program and monitor output from {@link RealtimeEngine.processWithMonitor}. */
+/** Options of {@link RealtimeEngine.process} and {@link RealtimeEngine.processPrepared}. */
+export interface EngineProcessOptions {
+  /** Keep the monitor (cue/listen) bus apart from the program mix. Omit for `false`. */
+  withMonitor?: boolean;
+}
+
+/** Program and monitor output from {@link RealtimeEngine.process} with `withMonitor: true`. */
 export interface EngineProcessWithMonitorResult {
   /** Program (main mix) output, one buffer per plane. */
   output: Float32Array[];

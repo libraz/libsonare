@@ -1,5 +1,5 @@
 /**
- * Pins the bounceWith*Instruments argument contract shared with the Node
+ * Pins the `Project.bounce` instrument-option argument contract shared with the Node
  * binding: a list of { destinationId?, instrument } pairs resolves through one
  * normalizer, and anything else (a single pair included) or an element that is
  * not a pair (an array or a bare config included) is refused by name before
@@ -45,7 +45,7 @@ const peak = (audio: { channels: Float32Array[] }): number =>
 type Bounce = (project: Project, value: unknown) => { channels: Float32Array[] };
 
 interface Family {
-  method: string;
+  option: 'builtinInstruments' | 'synthInstruments' | 'sf2Instruments';
   run: Bounce;
   /** Two instruments that must render differently: the control row. */
   instrument: unknown;
@@ -54,20 +54,20 @@ interface Family {
 
 const FAMILIES: Family[] = [
   {
-    method: 'bounceWithBuiltinInstruments',
-    run: (p, v) => p.bounceWithBuiltinInstruments(v as never, OPTIONS),
+    option: 'builtinInstruments',
+    run: (p, v) => p.bounce({ ...OPTIONS, builtinInstruments: v as never }),
     instrument: { waveform: 'saw' },
     other: { waveform: 'sine' },
   },
   {
-    method: 'bounceWithSynthInstruments',
-    run: (p, v) => p.bounceWithSynthInstruments(v as never, OPTIONS),
+    option: 'synthInstruments',
+    run: (p, v) => p.bounce({ ...OPTIONS, synthInstruments: v as never }),
     instrument: {},
     other: { preset: 'sawLead' },
   },
   {
-    method: 'bounceWithSf2Instruments',
-    run: (p, v) => p.bounceWithSf2Instruments(v as never, OPTIONS),
+    option: 'sf2Instruments',
+    run: (p, v) => p.bounce({ ...OPTIONS, sf2Instruments: v as never }),
     instrument: { gain: 0.8 },
     other: { gain: 0.2 },
   },
@@ -77,12 +77,12 @@ beforeAll(async () => {
   await init();
 });
 
-describe.each(FAMILIES)('$method', (family) => {
+describe.each(FAMILIES)('bounce $option', (family) => {
   it('refuses a single pair and renders the same pair in a list', () => {
     withProject((project) => {
       const pair = { destinationId: 0, instrument: family.instrument };
       const arrayError = new TypeError(
-        `Project.${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+        `Project.bounce: ${family.option} must be an array of { destinationId?, instrument } pairs`,
       );
       expect(() => family.run(project, pair)).toThrow(arrayError);
       expect(() => family.run(project, { instrument: family.instrument })).toThrow(arrayError);
@@ -109,20 +109,82 @@ describe.each(FAMILIES)('$method', (family) => {
       const pair = { instrument: family.instrument };
       const expected = '{ destinationId?, instrument } pair';
       expect(() => family.run(project, [pair, [pair]])).toThrow(
-        new TypeError(`Project.${family.method}: instruments[1] must be a ${expected}`),
+        new TypeError(`Project.bounce: ${family.option}[1] must be a ${expected}`),
       );
       expect(() => family.run(project, 42)).toThrow(
         new TypeError(
-          `Project.${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+          `Project.bounce: ${family.option} must be an array of { destinationId?, instrument } pairs`,
         ),
       );
       // A bare config, or a name, must be wrapped as a pair.
       expect(() => family.run(project, [family.instrument])).toThrow(
-        /: (unknown key instruments\[0\]\.\w+ \(expected destinationId, instrument\)|instruments\[0\]\.instrument must be given)$/,
+        new RegExp(
+          `: (unknown key ${family.option}\\[0\\]\\.\\w+ \\(expected destinationId, instrument\\)|${family.option}\\[0\\]\\.instrument must be given)$`,
+        ),
       );
       expect(() => family.run(project, ['piano'])).toThrow(
-        new TypeError(`Project.${family.method}: instruments[0] must be a ${expected}`),
+        new TypeError(`Project.bounce: ${family.option}[0] must be a ${expected}`),
       );
+    });
+  });
+});
+
+describe('bounce instrument options', () => {
+  it('bounce takes every instrument kind in its options', () => {
+    withProject((project) => {
+      const native = (
+        project as unknown as {
+          native: {
+            bounce: (...args: unknown[]) => { interleaved: Float32Array; numChannels: number };
+          };
+        }
+      ).native;
+      const planes = (raw: { interleaved: Float32Array; numChannels: number }): Float32Array[] => {
+        const frames = raw.interleaved.length / raw.numChannels;
+        return Array.from({ length: raw.numChannels }, (_, c) =>
+          Float32Array.from({ length: frames }, (_, i) => raw.interleaved[i * raw.numChannels + c]),
+        );
+      };
+      const kinds = [
+        { option: 'builtinInstruments', slot: 1, instrument: { waveform: 'saw' } },
+        { option: 'synthInstruments', slot: 3, instrument: { preset: 'sawLead' } },
+        { option: 'sf2Instruments', slot: 4, instrument: { gain: 0.8 } },
+      ] as const;
+      for (const { option, slot, instrument } of kinds) {
+        const pairs = [{ destinationId: 0, instrument }];
+        const viaOptions = project.bounce({ ...OPTIONS, [option]: pairs });
+        const args: unknown[] = [OPTIONS, undefined, undefined, undefined, undefined];
+        args[slot] = [{ ...instrument, destinationId: 0 }];
+        expect(viaOptions.channels).toEqual(planes(native.bounce(...args)));
+        expect(peak(viaOptions)).toBeGreaterThan(0);
+        expect(() => project.bounce({ ...OPTIONS, [option]: 'saw' as never })).toThrow(TypeError);
+        expect(() =>
+          project.bounce({
+            ...OPTIONS,
+            [option]: [
+              { destinationId: 0, instrument },
+              { destinationId: 0, instrument },
+            ],
+          }),
+        ).toThrow(RangeError);
+      }
+      expect(() => project.bounce({ ...OPTIONS, instruments: 7 as never })).toThrow(TypeError);
+      expect(() =>
+        project.bounce({ ...OPTIONS, instruments: [{ instrument: {} as never }] }),
+      ).toThrow(TypeError);
+      expect(project.bounce({ ...OPTIONS, instruments: [] })).toEqual(project.bounce(OPTIONS));
+    });
+  });
+
+  it('refuses a destination bound by two kinds', () => {
+    withProject((project) => {
+      expect(() =>
+        project.bounce({
+          ...OPTIONS,
+          builtinInstruments: [{ destinationId: 0, instrument: {} }],
+          synthInstruments: [{ destinationId: 0, instrument: {} }],
+        }),
+      ).toThrow(RangeError);
     });
   });
 });

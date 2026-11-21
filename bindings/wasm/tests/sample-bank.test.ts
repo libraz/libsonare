@@ -28,10 +28,10 @@ function bounceSynth(
   options?: ProjectBounceOptions,
 ): Float32Array {
   const { destinationId, ...instrument } = config as { destinationId?: number };
-  const { channels } = project.bounceWithSynthInstruments(
-    [{ destinationId, instrument }] as never,
-    options,
-  );
+  const { channels } = project.bounce({
+    ...options,
+    synthInstruments: [{ destinationId, instrument }] as never,
+  });
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
   channels.forEach((channel, c) => {
     for (let i = 0; i < channel.length; i++) {

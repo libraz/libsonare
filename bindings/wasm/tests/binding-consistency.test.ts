@@ -63,10 +63,11 @@ describe('WASM cross-binding consistency', () => {
     const bounceWaveform = (waveform: unknown, totalFrames = 4800): Float32Array => {
       const project = buildMidiOnlyProject();
       try {
-        return project.bounceWithBuiltinInstruments(
-          [{ instrument: { waveform: waveform as 'sine' } }],
-          { totalFrames, numChannels: 1 },
-        ).channels[0];
+        return project.bounce({
+          totalFrames,
+          numChannels: 1,
+          builtinInstruments: [{ instrument: { waveform: waveform as 'sine' } }],
+        }).channels[0];
       } finally {
         project.destroy();
       }
@@ -81,7 +82,7 @@ describe('WASM cross-binding consistency', () => {
       // spellings, so the in-domain 0..3 are refused exactly like 4, -1 or NaN.
       for (const waveform of [0, 3, 4, -1, 2 ** 31, Number.POSITIVE_INFINITY, Number.NaN]) {
         expect(() => bounceWaveform(waveform), `waveform ${waveform}`).toThrow(
-          new TypeError('Project.bounceWithBuiltinInstruments: waveform must be a name'),
+          new TypeError('Project.bounce: waveform must be a name'),
         );
       }
     });
@@ -101,10 +102,11 @@ describe('WASM cross-binding consistency', () => {
     it('accepts "sawtooth" as an alias of "saw"', () => {
       const project = buildMidiOnlyProject();
       try {
-        const [audio] = project.bounceWithBuiltinInstruments(
-          [{ instrument: { waveform: 'sawtooth', gain: 0.5 } }],
-          { totalFrames: SR, numChannels: 1 },
-        ).channels;
+        const [audio] = project.bounce({
+          totalFrames: SR,
+          numChannels: 1,
+          builtinInstruments: [{ instrument: { waveform: 'sawtooth', gain: 0.5 } }],
+        }).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {
@@ -119,9 +121,10 @@ describe('WASM cross-binding consistency', () => {
         // alias lets portable code share that name (tsc validates the alias
         // accepts the same shape as BuiltinSynthBinding).
         const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
-        const [audio] = project.bounceWithBuiltinInstruments([{ instrument: patch }], {
+        const [audio] = project.bounce({
           totalFrames: SR,
           numChannels: 1,
+          builtinInstruments: [{ instrument: patch }],
         }).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
@@ -133,9 +136,10 @@ describe('WASM cross-binding consistency', () => {
     it('bounces an explicitly empty instrument array to silence', () => {
       const project = buildMidiOnlyProject();
       try {
-        const [audio] = project.bounceWithBuiltinInstruments([], {
+        const [audio] = project.bounce({
           totalFrames: SR,
           numChannels: 1,
+          builtinInstruments: [],
         }).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBe(0);

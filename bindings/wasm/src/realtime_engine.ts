@@ -85,6 +85,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineProcessOptions,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineSetParameterOptions,
@@ -152,6 +153,7 @@ export type {
   EngineMidiClipSchedule,
   EngineMidiEvent,
   EngineParameterInfo,
+  EngineProcessOptions,
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineSetParameterOptions,
@@ -353,6 +355,25 @@ function normalizeEngineConfig(
     telemetryCapacity: optionalCount('telemetryCapacity', request.telemetryCapacity) ?? 0,
     maxChannels: request.maxChannels,
   };
+}
+
+/** Reads the `withMonitor` flag of a `process` / `processPrepared` options bag. */
+// A frozen options object cannot change once validated, so a render loop reusing one skips the key scan.
+const validatedFrozenProcessOptions = new WeakSet<object>();
+
+function engineProcessMonitor(
+  requestName: 'process' | 'processPrepared',
+  options: EngineProcessOptions,
+): boolean {
+  if (validatedFrozenProcessOptions.has(options)) {
+    return options.withMonitor === true;
+  }
+  requestObject(requestName, options, 'options', true);
+  const withMonitor = optionalBoolean(options.withMonitor, 'withMonitor', false);
+  if (Object.isFrozen(options)) {
+    validatedFrozenProcessOptions.add(options);
+  }
+  return withMonitor;
 }
 
 function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
@@ -687,8 +708,6 @@ function bandJson(band: unknown): string {
 @entryClass('RealtimeEngine', [
   'process',
   'processPrepared',
-  'processPreparedWithMonitor',
-  'processWithMonitor',
   'native',
   'laneIndexOf',
   'normalizeSends',
@@ -875,7 +894,7 @@ export class RealtimeEngine {
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
    * is a {@link SynthPatch} (a preset is named by its `preset` field, e.g.
    * `{ preset: 'sawLead' }`; see {@link synthPresetNames}), resolving exactly
-   * like {@link Project.bounceWithSynthInstruments}. Live note/CC commands and
+   * like {@link Project.bounce} with `synthInstruments`. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
    *
@@ -2716,8 +2735,25 @@ export class RealtimeEngine {
   /**
    * Renders in place, adding engine output to `channels`. Zero each plane first
    * when it contains no upstream input.
+   *
+   * With `{ withMonitor: true }` the monitor (cue/listen) bus is returned apart
+   * from the program mix instead of being folded into it: `output` is the
+   * program mix and `monitor` the monitor bus, one buffer per plane. Audio
+   * thread only; each plane must not exceed the prepared block size.
    */
-  process(channels: Float32Array[]): Float32Array[] {
+  process(channels: Float32Array[], options?: { withMonitor?: false }): Float32Array[];
+  process(channels: Float32Array[], options: { withMonitor: true }): EngineProcessWithMonitorResult;
+  process(
+    channels: Float32Array[],
+    options?: EngineProcessOptions,
+  ): Float32Array[] | EngineProcessWithMonitorResult {
+    if (options === undefined) {
+      return this.native.process(channels, undefined) as Float32Array[];
+    }
+    const withMonitor = engineProcessMonitor('process', options);
+    if (withMonitor) {
+      return this.native.process(channels, true) as EngineProcessWithMonitorResult;
+    }
     return this.native.process(channels, undefined) as Float32Array[];
   }
 
@@ -2745,16 +2781,27 @@ export class RealtimeEngine {
    * Zero each active span first when it contains no upstream input.
    * Allocation-free: safe to call on the AudioWorklet render thread after
    * `prepareChannels`.
+   *
+   * With `{ withMonitor: true }` the cue bus is written to the monitor scratch
+   * ({@link monitorChannelBuffer}) instead of being folded into the program
+   * output; that needs `prepareMonitorChannels` first.
    */
-  processPrepared(numFrames: number): void {
-    this.native.processPrepared(numFrames, undefined);
+  processPrepared(numFrames: number, options?: EngineProcessOptions): void {
+    if (options === undefined) {
+      this.native.processPrepared(numFrames, undefined);
+      return;
+    }
+    this.native.processPrepared(
+      numFrames,
+      engineProcessMonitor('processPrepared', options) ? true : undefined,
+    );
   }
 
   /**
    * Allocates the cue-bus counterpart of {@link prepareChannels}. Needed only
    * when PFL/AFL monitoring must reach a separate output: `processPrepared`
    * folds the cue bus into the program output, while
-   * {@link processPreparedWithMonitor} keeps the two apart. Call once, off the
+   * `processPrepared(frames, { withMonitor: true })` keeps the two apart. Call once, off the
    * audio thread, with at least as many channels as `prepareChannels` got.
    */
   prepareMonitorChannels(numChannels: number, maxFrames: number): void {
@@ -2764,30 +2811,10 @@ export class RealtimeEngine {
   /**
    * Returns a Float32Array view onto the persistent cue-bus scratch for one
    * channel (valid for up to `numFrames`). Read it after
-   * {@link processPreparedWithMonitor}. Re-acquire after WASM memory growth.
+   * `processPrepared(frames, { withMonitor: true })`. Re-acquire after WASM memory growth.
    */
   monitorChannelBuffer(channel: number, numFrames: number): Float32Array {
     return this.native.getMonitorChannelBuffer(channel, numFrames);
-  }
-
-  /**
-   * Runs the engine in place over the prepared scratch, writing the cue bus to
-   * the monitor scratch instead of folding it into the program output.
-   * Allocation-free: safe on the AudioWorklet render thread after
-   * `prepareChannels` and `prepareMonitorChannels`.
-   */
-  processPreparedWithMonitor(numFrames: number): void {
-    this.native.processPrepared(numFrames, true);
-  }
-
-  /**
-   * Renders one block in place like {@link process}, and also returns the monitor (cue/listen) bus output.
-   * Audio thread only; each plane must not exceed the prepared block size.
-   *
-   * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
-   */
-  processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
-    return this.native.process(channels, true) as EngineProcessWithMonitorResult;
   }
 
   /**

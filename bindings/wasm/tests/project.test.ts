@@ -562,7 +562,7 @@ describe('Sonare WASM Project', () => {
       expect(result).not.toHaveProperty('messages');
       expect(Array.isArray(result.diagnostics)).toBe(true);
       expect(result.diagnostics).toHaveLength(0);
-      const { timeline } = project.compileTimeline();
+      const { timeline } = project.compile({ withTimeline: true });
       try {
         expect(timeline).not.toBeNull();
       } finally {
@@ -625,13 +625,13 @@ describe('Sonare WASM Project', () => {
       const invalidOptions = { totalFrames: 128, blockSize: -1 };
       expectInvalidParameter(() => project.bounce(invalidOptions));
       expectInvalidParameter(() =>
-        project.bounceWithBuiltinInstruments([{ instrument: {} }], invalidOptions),
+        project.bounce({ ...invalidOptions, builtinInstruments: [{ instrument: {} }] }),
       );
       expectInvalidParameter(() =>
-        project.bounceWithSynthInstruments([{ instrument: {} }], invalidOptions),
+        project.bounce({ ...invalidOptions, synthInstruments: [{ instrument: {} }] }),
       );
       expectInvalidParameter(() =>
-        project.bounceWithSf2Instruments([{ instrument: {} }], invalidOptions),
+        project.bounce({ ...invalidOptions, sf2Instruments: [{ instrument: {} }] }),
       );
     } finally {
       project.destroy();
@@ -709,9 +709,10 @@ describe('Sonare WASM Project', () => {
 
       // Routing the built-in synth makes it audible.
       const audible = interleaved(
-        project.bounceWithBuiltinInstruments([{ instrument: { waveform: 'saw', gain: 0.5 } }], {
+        project.bounce({
           totalFrames: 48000,
           numChannels: 2,
+          builtinInstruments: [{ instrument: { waveform: 'saw', gain: 0.5 } }],
         }),
       );
       expect(audible.length).toBe(48000 * 2);
@@ -727,32 +728,40 @@ describe('Sonare WASM Project', () => {
     const pair = { instrument: {} };
     try {
       // No binding, undefined, an empty list and null all bind nothing: silence.
-      const omitted = interleaved(project.bounceWithBuiltinInstruments());
+      const omitted = interleaved(project.bounce());
       const explicitUndefined = interleaved(
-        project.bounceWithBuiltinInstruments(undefined, options),
+        project.bounce({ ...options, builtinInstruments: undefined }),
       );
-      const empty = interleaved(project.bounceWithBuiltinInstruments([], options));
-      const runtimeNull = interleaved(project.bounceWithBuiltinInstruments(null as never, options));
+      const empty = interleaved(project.bounce({ ...options, builtinInstruments: [] }));
+      const runtimeNull = interleaved(
+        project.bounce({ ...options, builtinInstruments: null as never }),
+      );
       expect(maxAbs(omitted)).toBe(0);
       expect(maxAbs(explicitUndefined)).toBe(0);
       expect(maxAbs(empty)).toBe(0);
       expect(maxAbs(runtimeNull)).toBe(0);
       // A single pair outside a list is refused, not read as a one-element list.
-      expect(() => project.bounceWithBuiltinInstruments(pair as never, options)).toThrow(TypeError);
+      expect(() => project.bounce({ ...options, builtinInstruments: pair as never })).toThrow(
+        TypeError,
+      );
       // An empty-config pair in a list binds the default instrument.
       expect(
-        maxAbs(interleaved(project.bounceWithBuiltinInstruments([pair], options))),
+        maxAbs(interleaved(project.bounce({ ...options, builtinInstruments: [pair] }))),
       ).toBeGreaterThan(0.01);
 
-      expect(maxAbs(interleaved(project.bounceWithSynthInstruments(undefined, options)))).toBe(0);
-      expect(maxAbs(interleaved(project.bounceWithSynthInstruments([], options)))).toBe(0);
+      expect(maxAbs(interleaved(project.bounce({ ...options, synthInstruments: undefined })))).toBe(
+        0,
+      );
+      expect(maxAbs(interleaved(project.bounce({ ...options, synthInstruments: [] })))).toBe(0);
       expect(
-        maxAbs(interleaved(project.bounceWithSynthInstruments([pair], options))),
+        maxAbs(interleaved(project.bounce({ ...options, synthInstruments: [pair] }))),
       ).toBeGreaterThan(0.01);
-      expect(maxAbs(interleaved(project.bounceWithSf2Instruments(undefined, options)))).toBe(0);
-      expect(maxAbs(interleaved(project.bounceWithSf2Instruments([], options)))).toBe(0);
+      expect(maxAbs(interleaved(project.bounce({ ...options, sf2Instruments: undefined })))).toBe(
+        0,
+      );
+      expect(maxAbs(interleaved(project.bounce({ ...options, sf2Instruments: [] })))).toBe(0);
       expect(
-        maxAbs(interleaved(project.bounceWithSf2Instruments([pair], options))),
+        maxAbs(interleaved(project.bounce({ ...options, sf2Instruments: [pair] }))),
       ).toBeGreaterThan(0.01);
     } finally {
       project.destroy();
@@ -781,19 +790,19 @@ describe('Sonare WASM Project', () => {
       // decay stage however the preset's own envelope is voiced.
       const envelope = { preset: 'warmPad', ampAttackMs: 20, ampDecayMs: 150 };
       const base = interleaved(
-        project.bounceWithSynthInstruments([{ instrument: envelope }], options),
+        project.bounce({ ...options, synthInstruments: [{ instrument: envelope }] }),
       );
       const explicitZero = interleaved(
-        project.bounceWithSynthInstruments(
-          [{ instrument: { ...envelope, ampSustain: 0 } }],
-          options,
-        ),
+        project.bounce({
+          ...options,
+          synthInstruments: [{ instrument: { ...envelope, ampSustain: 0 } }],
+        }),
       );
       const explicitLow = interleaved(
-        project.bounceWithSynthInstruments(
-          [{ instrument: { ...envelope, ampSustain: 0.2 } }],
-          options,
-        ),
+        project.bounce({
+          ...options,
+          synthInstruments: [{ instrument: { ...envelope, ampSustain: 0.2 } }],
+        }),
       );
 
       expect(maxAbs(base)).toBeGreaterThan(0.01);
@@ -813,13 +822,13 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('bounceWithBuiltinInstruments auto-derives length when totalFrames is omitted', () => {
+  it('bounce with builtinInstruments auto-derives length when totalFrames is omitted', () => {
     const project = buildMidiOnlyProject();
     try {
       // No totalFrames: the C ABI auto-derives the render length from the
       // arrangement (musical end + synth release tail).
       const audio = interleaved(
-        project.bounceWithBuiltinInstruments([{ instrument: {} }], { numChannels: 2 }),
+        project.bounce({ numChannels: 2, builtinInstruments: [{ instrument: {} }] }),
       );
       expect(audio.length).toBeGreaterThan(0);
       expect(maxAbs(audio)).toBeGreaterThan(0.01);
@@ -840,14 +849,15 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('bounceWithBuiltinInstruments accepts a default patch and per-destination array', () => {
+  it('bounce with builtinInstruments accepts a default patch and per-destination array', () => {
     const project = buildMidiOnlyProject();
     try {
       // Default ({}) sine patch.
       const def = interleaved(
-        project.bounceWithBuiltinInstruments([{ instrument: {} }], {
+        project.bounce({
           totalFrames: 24000,
           numChannels: 1,
+          builtinInstruments: [{ instrument: {} }],
         }),
       );
       expect(def.length).toBe(24000);
@@ -855,13 +865,11 @@ describe('Sonare WASM Project', () => {
 
       // Array of bindings (single destination 0 here).
       const arr = interleaved(
-        project.bounceWithBuiltinInstruments(
-          [{ destinationId: 0, instrument: { waveform: 'square' } }],
-          {
-            totalFrames: 24000,
-            numChannels: 1,
-          },
-        ),
+        project.bounce({
+          totalFrames: 24000,
+          numChannels: 1,
+          builtinInstruments: [{ destinationId: 0, instrument: { waveform: 'square' } }],
+        }),
       );
       expect(arr.length).toBe(24000);
       expect(maxAbs(arr)).toBeGreaterThan(0.01);
@@ -882,19 +890,19 @@ describe('Sonare WASM Project', () => {
     const options = { totalFrames: 24000, numChannels: 1 };
     try {
       const omitted = interleaved(
-        project.bounceWithSynthInstruments([{ instrument: { preset: 'sine' } }], options),
+        project.bounce({ ...options, synthInstruments: [{ instrument: { preset: 'sine' } }] }),
       );
       const fixed = interleaved(
-        project.bounceWithSynthInstruments(
-          [{ instrument: { preset: 'sine', useGmPrograms: false } }],
-          options,
-        ),
+        project.bounce({
+          ...options,
+          synthInstruments: [{ instrument: { preset: 'sine', useGmPrograms: false } }],
+        }),
       );
       const gm = interleaved(
-        project.bounceWithSynthInstruments(
-          [{ instrument: { preset: 'sine', useGmPrograms: true } }],
-          options,
-        ),
+        project.bounce({
+          ...options,
+          synthInstruments: [{ instrument: { preset: 'sine', useGmPrograms: true } }],
+        }),
       );
 
       expect(fixed).toEqual(omitted);
@@ -904,10 +912,10 @@ describe('Sonare WASM Project', () => {
       for (const invalid of [1, 'true']) {
         let caught: unknown;
         try {
-          project.bounceWithSynthInstruments(
-            [{ instrument: { preset: 'sine', useGmPrograms: invalid as never } }],
-            options,
-          );
+          project.bounce({
+            ...options,
+            synthInstruments: [{ instrument: { preset: 'sine', useGmPrograms: invalid as never } }],
+          });
         } catch (error) {
           caught = error;
         }
@@ -923,10 +931,11 @@ describe('Sonare WASM Project', () => {
       const project = buildGmProgramProject(program);
       try {
         const audio = interleaved(
-          project.bounceWithSynthInstruments([{ instrument: { preset: 'sine', useGmPrograms } }], {
+          project.bounce({
             totalFrames: 12000,
             blockSize: 128,
             numChannels: 1,
+            synthInstruments: [{ instrument: { preset: 'sine', useGmPrograms } }],
           }),
         );
         expect(audio.length).toBe(12000);

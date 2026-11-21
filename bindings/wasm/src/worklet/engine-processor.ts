@@ -92,6 +92,8 @@ function captureTransferList(channels: readonly Float32Array[]): Transferable[] 
 
 // An unchanged, still-missing page set is re-posted this often so a failed read is retried.
 const CLIP_PAGE_REPOST_SECONDS = 0.25;
+/** Shared options object so the render callback allocates nothing. */
+const WITH_MONITOR = Object.freeze({ withMonitor: true });
 const METER_TARGET_SLOTS = 42;
 // `meterScratchValue` fields past the stereo set: channel count, then four 8-plane blocks.
 const METER_SCRATCH_CHANNEL_COUNT = 11;
@@ -345,7 +347,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     // monitor variant keeps the cue bus out of the program planes so it can go
     // to its own output; the plain call folds it in, as it always has.
     if (this.cueOutput) {
-      this.engine.processPreparedWithMonitor(frames);
+      this.engine.processPrepared(frames, WITH_MONITOR);
     } else {
       this.engine.processPrepared(frames);
     }

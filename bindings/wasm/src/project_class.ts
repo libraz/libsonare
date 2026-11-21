@@ -4,7 +4,6 @@ import type {
   PartRigEntry,
   PartRigKey,
   PartRigRequest,
-  ProjectInstrumentBinding,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
@@ -80,8 +79,8 @@ import type {
   ProjectClipLoopInput,
   ProjectClipTake,
   ProjectClipTakesOptions,
+  ProjectCompileOptions,
   ProjectCompileResult,
-  ProjectCompileTimelineResult,
   ProjectDeserializeResult,
   ProjectKeySegment,
   ProjectLoopRecordingDesc,
@@ -247,7 +246,7 @@ const timelineToken = Symbol('ProjectTimeline');
 
 /**
  * An immutable compiled snapshot of a {@link Project}, produced by
- * {@link Project.compileTimeline} and installed into a stopped realtime engine
+ * {@link Project.compile} with `withTimeline` and installed into a stopped realtime engine
  * with `RealtimeEngine.applyProjectTimeline`.
  *
  * An engine keeps its own reference after an apply, so {@link destroy} may be
@@ -259,14 +258,16 @@ export class ProjectTimeline {
   private native: WasmProjectTimeline | null;
 
   /**
-   * Timelines are produced by {@link Project.compileTimeline}; the constructor is
+   * Timelines are produced by {@link Project.compile} with `withTimeline`; the constructor is
    * not callable from outside this module and throws `TypeError`.
    *
    * @internal
    */
   private constructor(token: symbol, native: WasmProjectTimeline) {
     if (token !== timelineToken) {
-      throw refuseType('ProjectTimeline cannot be constructed; use Project.compileTimeline()');
+      throw refuseType(
+        'ProjectTimeline cannot be constructed; use Project.compile({ withTimeline: true })',
+      );
     }
     this.native = native;
     registerProjectTimeline(this, native);
@@ -328,7 +329,7 @@ export class Project {
   private assertNotBusy(): void {
     if (this.instrumentBounceActive) {
       throw invalidState(
-        'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
+        'Project is busy: it cannot be used from inside a bounce instruments callback',
       );
     }
   }
@@ -911,18 +912,21 @@ export class Project {
     return this.native.snapToGrid(ppq, strength, division);
   }
 
-  /** Compile the project into a renderable timeline, surfacing diagnostics. */
-  compile(): ProjectCompileResult {
-    return projectCompileResultFromNative(this.native.compile(undefined));
-  }
-
   /**
-   * Compile the project and keep the resulting timeline. The result is
-   * {@link compile}'s plus `timeline`: a {@link ProjectTimeline} to install with
-   * `RealtimeEngine.applyProjectTimeline`, absent when an error diagnostic
+   * Compile the project, surfacing diagnostics. With `{ withTimeline: true }`
+   * the result also carries `timeline`: a {@link ProjectTimeline} to install
+   * with `RealtimeEngine.applyProjectTimeline`, absent when an error diagnostic
    * means nothing compiled.
    */
-  compileTimeline(): ProjectCompileTimelineResult {
+  compile(options?: ProjectCompileOptions): ProjectCompileResult {
+    const withTimeline = optionalBoolean(
+      optionsObject('Project.compile', options).withTimeline,
+      'withTimeline',
+      false,
+    );
+    if (!withTimeline) {
+      return projectCompileResultFromNative(this.native.compile(undefined));
+    }
     const { timeline, ...result } = this.native.compile(true);
     const compiled = projectCompileResultFromNative(result);
     if (timeline === null) {
@@ -975,106 +979,104 @@ export class Project {
 
   /**
    * Compile + render the project offline to planar float audio. MIDI tracks
-   * render silently here (no instrument is bound) — use
-   * {@link bounceWithBuiltinInstruments} to make MIDI audible.
+   * render silently unless an instrument kind is bound through the options:
+   * `builtinInstruments`, `synthInstruments`, `sf2Instruments` and
+   * `instruments`. Each is an array of `{ destinationId?, instrument }` pairs
+   * (`destinationId` omitted is destination `0`); an empty array binds nothing.
+   * A destination bound twice, within one kind or across kinds, is refused
+   * with a `RangeError`.
+   *
+   * - `builtinInstruments`: {@link BuiltinSynthConfig} oscillator synth. A bare
+   *   config without an `instrument` key is refused by name.
+   * - `synthInstruments`: patch-driven NativeSynth ({@link SynthPatch}; name a
+   *   catalog preset through its `preset` field, see {@link synthPresetNames}).
+   *   With `useGmPrograms` enabled, MIDI program changes select the matching
+   *   General MIDI voice while the patch remains the fallback. An
+   *   `engineMode: 'sample'` patch reads its PCM from the {@link SampleBank}
+   *   passed as `sampleBank`; the bank must still be alive when the bounce runs.
+   * - `sf2Instruments`: GS-compatible SoundFont player ({@link Sf2InstrumentConfig})
+   *   fed by the project's loaded SoundFont ({@link loadSoundFont}); programs the
+   *   SoundFont does not cover play through the built-in GM fallback bank.
+   * - `instruments`: {@link ExternalInstrument}s you implement in JavaScript.
+   *   Every callback runs synchronously while this method is blocked, so a
+   *   callback returning a Promise is refused with a `TypeError`. A callback
+   *   that throws stops all further callbacks, and the bounce rethrows that
+   *   first error once it returns (a native failure is reported ahead of it).
+   *   While the bounce runs, using this project from inside a callback throws
+   *   `InvalidState`. One instrument shared by tracks that feed different
+   *   channel strips throws a `SonareError` with `NOT_SUPPORTED`.
    *
    * When `totalFrames` is omitted the render length is derived from the
-   * arrangement, so a project with content renders without computing a frame
-   * count; an empty project yields no frames. The result is at the project
-   * sample rate; a bounce is never resampled.
+   * arrangement (plus the instruments' release tail), so a project with content
+   * renders without computing a frame count; an empty project yields no frames.
+   * The result is at the project sample rate; a bounce is never resampled.
    *
    * @example
    * ```ts
-   * const { channels, sampleRate } = project.bounce({ numChannels: 2 });
+   * const { channels, sampleRate } = project.bounce({
+   *   numChannels: 2,
+   *   builtinInstruments: [{ instrument: { waveform: 'saw' } }],
+   * });
    * ```
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
-    const native = this.bounceRequest(options);
-    return this.bounceResult(
-      this.native.bounce(native, undefined, undefined, undefined, undefined) as NativeProjectBounce,
-    );
-  }
-
-  /**
-   * Compile + render the project offline, routing MIDI tracks through the
-   * built-in oscillator synth so a MIDI-only arrangement bounces to audible
-   * audio. Each pair binds a {@link BuiltinSynthConfig} to a MIDI destination
-   * (`destinationId` omitted is destination `0`). An empty array renders
-   * silence for MIDI tracks, identical to {@link bounce}. A bare config without
-   * an `instrument` key is refused by name.
-   *
-   * Like {@link bounce}, omitting `totalFrames` derives the render length from
-   * the arrangement plus the synth's release tail.
-   *
-   * @example
-   * ```ts
-   * // MIDI-only project -> non-silent stereo audio.
-   * const { channels } = project.bounceWithBuiltinInstruments(
-   *   [{ instrument: { waveform: 'saw' } }],
-   *   { numChannels: 2 },
-   * );
-   * ```
-   */
-  bounceWithBuiltinInstruments(
-    instruments: ReadonlyArray<ProjectInstrumentBinding<BuiltinSynthConfig>> = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const bindings = normalizeInstrumentBindings(instruments, (instrument) => {
-      refuseBuiltinSynthOrdinals(instrument);
-      return instrument;
-    });
-    const native = this.bounceRequest(options);
-    return this.bounceResult(
-      this.native.bounce(native, bindings, undefined, undefined, undefined) as NativeProjectBounce,
-    );
-  }
-
-  /**
-   * Like {@link bounce}, but drives MIDI tracks routed to a destination through
-   * instruments you implement in JavaScript. Each pair binds an
-   * {@link ExternalInstrument} to a destination (`destinationId` omitted is
-   * destination `0`).
-   *
-   * Every callback runs synchronously while this method is blocked, so there is
-   * no async instrument: a callback that returns a Promise is refused with a
-   * `TypeError`. A callback that throws stops all further callbacks, and the
-   * bounce rethrows that first error once it returns (a native failure is
-   * reported ahead of it). The `outputs` passed to `render` are zero-filled
-   * scratch arrays, added into the engine's buffers when `render` returns
-   * normally.
-   *
-   * While the bounce runs, using this project from inside a callback (a
-   * mutation, a nested bounce, or `delete`) throws `InvalidState`.
-   *
-   * One instrument shared by tracks that feed different channel strips throws
-   * a `SonareError` with `NOT_SUPPORTED`, because callback audio carries no
-   * source-track attribution; bind one destination per strip instead.
-   */
-  bounceWithInstruments(
-    instruments: ReadonlyArray<ProjectInstrumentBinding<ExternalInstrument>> = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const pairs = Array.isArray(instruments) ? instruments : [instruments];
-    pairs.forEach((pair, index) => {
-      const instrument = (pair as { instrument?: ExternalInstrument } | null)?.instrument;
-      for (const key of ['prepare', 'onEvent', 'render'] as const) {
-        const callback = instrument?.[key];
-        if (
-          instrument !== undefined &&
-          typeof callback !== 'function' &&
-          (key === 'render' || (callback ?? null) !== null)
-        ) {
-          throw refuseType(`instruments[${index}].instrument.${key} must be a function`);
+    const request = optionsObject('Project.bounce', options);
+    const { builtinInstruments, instruments, synthInstruments, sf2Instruments } = request;
+    const builtinBindings =
+      builtinInstruments === undefined
+        ? undefined
+        : normalizeInstrumentBindings(
+            builtinInstruments,
+            (instrument) => {
+              refuseBuiltinSynthOrdinals(instrument);
+              return instrument;
+            },
+            'builtinInstruments',
+          );
+    if (instruments !== undefined && instruments !== null) {
+      const pairs = Array.isArray(instruments) ? instruments : [instruments];
+      pairs.forEach((pair, index) => {
+        const instrument = (pair as { instrument?: ExternalInstrument } | null)?.instrument;
+        for (const key of ['prepare', 'onEvent', 'render'] as const) {
+          const callback = instrument?.[key];
+          if (
+            instrument !== undefined &&
+            typeof callback !== 'function' &&
+            (key === 'render' || (callback ?? null) !== null)
+          ) {
+            throw refuseType(`instruments[${index}].instrument.${key} must be a function`);
+          }
         }
-      }
-    });
-    const bindings = normalizeInstrumentBindings(instruments, externalInstrumentBinding);
-    const nativeOptions = this.bounceRequest(options);
-    const native = this.native;
-    this.instrumentBounceActive = true;
+      });
+    }
+    const externalBindings =
+      instruments === undefined
+        ? undefined
+        : normalizeInstrumentBindings(instruments, externalInstrumentBinding, 'instruments');
+    const synthBindings =
+      synthInstruments === undefined
+        ? undefined
+        : normalizeInstrumentBindings(
+            synthInstruments,
+            (instrument) => normalizeSynthInstrument(instrument) as NativeSynthBinding,
+            'synthInstruments',
+          );
+    const sf2Bindings =
+      sf2Instruments === undefined
+        ? undefined
+        : normalizeInstrumentBindings(sf2Instruments, (instrument) => instrument, 'sf2Instruments');
+    const native = this.bounceRequest(options);
+    const nativeProject = this.native;
+    this.instrumentBounceActive = externalBindings !== undefined;
     let result: ReturnType<WasmProject['bounce']>;
     try {
-      result = native.bounce(nativeOptions, undefined, bindings, undefined, undefined);
+      result = nativeProject.bounce(
+        native,
+        builtinBindings,
+        externalBindings,
+        synthBindings,
+        sf2Bindings,
+      );
     } finally {
       this.instrumentBounceActive = false;
     }
@@ -1084,36 +1086,6 @@ export class Project {
       throw result.instrumentFailure;
     }
     return this.bounceResult(result);
-  }
-
-  /**
-   * Compile + render the project offline, routing MIDI tracks through the
-   * patch-driven NativeSynth — the full synthesizer (every
-   * {@link SynthEngineMode} engine plus the realism layer; the modes are
-   * enumerated by {@link SYNTH_ENGINE_MODES}). Each pair binds a
-   * {@link SynthPatch} (name a catalog preset through its `preset` field; see
-   * {@link synthPresetNames}) to a destination (`destinationId` omitted is
-   * destination `0`). An empty array renders silence for MIDI tracks. Unknown
-   * preset names throw. With `useGmPrograms` enabled, MIDI program changes
-   * select the corresponding General MIDI voice while the patch remains the
-   * fallback. Deterministic for a fixed project + options + patch.
-   *
-   * An `engineMode: 'sample'` patch reads its PCM from the {@link SampleBank}
-   * passed as `sampleBank`; the bank must still be alive when the bounce runs,
-   * and one bound without a bank renders silence.
-   */
-  bounceWithSynthInstruments(
-    instruments: ReadonlyArray<ProjectInstrumentBinding<SynthPatch>> = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const bindings = normalizeInstrumentBindings(
-      instruments,
-      (instrument) => normalizeSynthInstrument(instrument) as NativeSynthBinding,
-    );
-    const native = this.bounceRequest(options);
-    return this.bounceResult(
-      this.native.bounce(native, undefined, undefined, bindings, undefined) as NativeProjectBounce,
-    );
   }
 
   /**
@@ -1147,29 +1119,6 @@ export class Project {
    */
   soundFontManifest(): Sf2ProgramStatus[] {
     return this.native.soundFontManifest();
-  }
-
-  /**
-   * Like {@link bounceWithBuiltinInstruments}, but each bound destination
-   * renders through a GS-compatible SoundFont player fed by the project's
-   * loaded SoundFont ({@link loadSoundFont}): 16 MIDI channels per player,
-   * channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx resets
-   * honored. Programs the SoundFont does not cover — including bouncing with
-   * no SoundFont loaded at all — play through the built-in synthesizer GM
-   * fallback bank (the data-free floor; see {@link soundFontManifest} for the
-   * per-program backend). Each pair binds a {@link Sf2InstrumentConfig} to a
-   * destination (`destinationId` omitted is destination `0`); an empty array
-   * renders silence for MIDI tracks.
-   */
-  bounceWithSf2Instruments(
-    instruments: ReadonlyArray<ProjectInstrumentBinding<Sf2InstrumentConfig>> = [],
-    options?: ProjectBounceOptions,
-  ): ProjectBounceResult {
-    const bindings = normalizeInstrumentBindings(instruments, (instrument) => instrument);
-    const native = this.bounceRequest(options);
-    return this.bounceResult(
-      this.native.bounce(native, undefined, undefined, undefined, bindings) as NativeProjectBounce,
-    );
   }
 
   /** Remove a clip (undoable). */

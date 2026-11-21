@@ -853,7 +853,9 @@ describe('Sonare WASM Module', () => {
       expect(processed[1].at(-1)).toBeCloseTo(2, 4);
 
       engine.setTrackMonitorMode(10, 'pfl');
-      const withPfl = engine.processWithMonitor([new Float32Array(256), new Float32Array(256)]);
+      const withPfl = engine.process([new Float32Array(256), new Float32Array(256)], {
+        withMonitor: true,
+      });
       expect(withPfl.output[0].at(-1)).toBeCloseTo(2, 4);
       expect(withPfl.monitor[0].at(-1)).toBeCloseTo(1, 4);
       expect(withPfl.monitor[1].at(-1)).toBeCloseTo(1, 4);
@@ -907,9 +909,9 @@ describe('Sonare WASM Module', () => {
         engine.channelBuffer(ch, blockSize).fill(0);
         engine.monitorChannelBuffer(ch, blockSize).fill(0);
       }
-      engine.processPreparedWithMonitor(blockSize);
+      engine.processPrepared(blockSize, { withMonitor: true });
 
-      // Same split processWithMonitor produces: both lanes in the program
+      // Same split process({ withMonitor: true }) produces: both lanes in the program
       // output, only the PFL-tapped lane in the cue.
       expect(engine.channelBuffer(0, blockSize).at(-1)).toBeCloseTo(2, 4);
       expect(engine.channelBuffer(1, blockSize).at(-1)).toBeCloseTo(2, 4);
@@ -922,14 +924,14 @@ describe('Sonare WASM Module', () => {
     it('rejects a prepared monitor call that was never prepared or is too narrow', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       engine.prepareChannels(2, 256);
-      expect(() => engine.processPreparedWithMonitor(256)).toThrow();
+      expect(() => engine.processPrepared(256, { withMonitor: true })).toThrow();
       expect(() => engine.monitorChannelBuffer(0, 256)).toThrow();
       engine.prepareMonitorChannels(1, 256);
       // One cue plane cannot hold the two the engine writes.
-      expect(() => engine.processPreparedWithMonitor(256)).toThrow();
+      expect(() => engine.processPrepared(256, { withMonitor: true })).toThrow();
       engine.prepareMonitorChannels(2, 256);
-      expect(() => engine.processPreparedWithMonitor(512)).toThrow();
-      expect(() => engine.processPreparedWithMonitor(256)).not.toThrow();
+      expect(() => engine.processPrepared(512, { withMonitor: true })).toThrow();
+      expect(() => engine.processPrepared(256, { withMonitor: true })).not.toThrow();
       engine.destroy();
     });
 

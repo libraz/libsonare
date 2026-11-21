@@ -1,6 +1,6 @@
 /**
  * SoundFont (SF2) WASM binding tests: Project.loadSoundFont / soundFontManifest /
- * bounceWithSf2Instruments and the realtime engine SF2 instrument entry. The
+ * the bounce `sf2Instruments` option and the realtime engine SF2 instrument entry. The
  * host copies the .sf2 bytes into linear memory (the same convention as host
  * PCM); the fixture is the canonical minimal GS test SoundFont.
  */
@@ -34,10 +34,10 @@ function bounceSf2(
   options?: ProjectBounceOptions,
 ): Float32Array {
   const { destinationId, ...instrument } = config as { destinationId?: number };
-  const { channels } = project.bounceWithSf2Instruments(
-    [{ destinationId, instrument }] as never,
-    options,
-  );
+  const { channels } = project.bounce({
+    ...options,
+    sf2Instruments: [{ destinationId, instrument }] as never,
+  });
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
   channels.forEach((channel, c) => {
     for (let i = 0; i < channel.length; i++) {
@@ -190,7 +190,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     expect(modeled).not.toEqual(audio);
 
     // An explicitly empty bindings array renders silence.
-    const silent = project.bounceWithSf2Instruments([], { totalFrames: 2048, numChannels: 2 });
+    const silent = project.bounce({ totalFrames: 2048, numChannels: 2, sf2Instruments: [] });
     expect(silent.channels).toHaveLength(2);
     for (const channel of silent.channels) {
       expect(peak(channel)).toBe(0);

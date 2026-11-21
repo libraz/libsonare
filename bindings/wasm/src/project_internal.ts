@@ -141,8 +141,8 @@ export interface NativeProjectCompileResult {
   diagnostics: NativeProjectDiagnostic[];
 }
 
-/** `compileTimeline` as the embind layer returns it, before the facade wraps the handle. */
-export type NativeProjectCompileTimelineResult = NativeProjectCompileResult & {
+/** `compile(true)` as the embind layer returns it, before the facade wraps the handle. */
+export type NativeProjectCompileWithTimeline = NativeProjectCompileResult & {
   timeline: WasmProjectTimeline | null;
 };
 
@@ -257,9 +257,10 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding {
 }
 
 /**
- * Resolve the `bounceWith*Instruments` binding argument to the list the native
+ * Resolve an instrument binding option of `Project.bounce` to the list the native
  * layer reads. The argument is one `{ destinationId?, instrument }` pair or an
- * array of them (`null` and an empty array both mean no bindings). A pair
+ * array of them (`null` and an empty array both mean no bindings); `option` names
+ * the `Project.bounce` option it came from in refusals. A pair
  * without an `instrument` key (a bare config) is refused by name, and so is a
  * `destinationId` placed inside the instrument, since it belongs to the pair.
  * `entry` converts each instrument to the shape the native reader takes; the
@@ -271,15 +272,16 @@ const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
 export function normalizeInstrumentBindings<E, R extends object>(
   value: ReadonlyArray<ProjectInstrumentBinding<E>> | null | undefined,
   entry: (instrument: E) => R,
+  option = 'instruments',
 ): NativeInstrumentBinding<R>[] {
   if (value === null || value === undefined) {
     return [];
   }
   if (!Array.isArray(value)) {
-    throw refuseType(`instruments must be an array of { destinationId?, instrument } pairs`);
+    throw refuseType(`${option} must be an array of { destinationId?, instrument } pairs`);
   }
   return value.map((pair: unknown, index: number) => {
-    const label = `instruments[${index}]`;
+    const label = `${option}[${index}]`;
     if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
       throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
     }
@@ -484,7 +486,7 @@ export interface WasmProject {
   snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: {
     (withTimeline: undefined): NativeProjectCompileResult;
-    (withTimeline: true): NativeProjectCompileTimelineResult;
+    (withTimeline: true): NativeProjectCompileWithTimeline;
   };
   /**
    * Each trailing list binds one instrument kind (undefined binds none); only the callback
