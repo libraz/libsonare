@@ -702,8 +702,10 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     ),
     (
         ["hpss", "{input}", "--harmonic-only", "--percussive-only", "-o", "{output}"],
-        "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
-        "--percussive-only, or --with-residual",
+        (
+            "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
+            "--percussive-only, or --with-residual"
+        ),
     ),
     (
         ["trim-silence", "{input}", "--threshold-db", "-50", "--top-db", "30"],
@@ -712,8 +714,10 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (
         ["voice-change", "{input}", "--preset", "neutralMonitor", "--preset-json", "x.json"]
         + ["-o", "{output}"],
-        "voice-change preset selectors are mutually exclusive: choose one of --preset, "
-        "--preset-json, or --preset-pack",
+        (
+            "voice-change preset selectors are mutually exclusive: choose one of --preset, "
+            "--preset-json, or --preset-pack"
+        ),
     ),
     (
         ["voice-change", "{input}", "--preset-pack", "p.json", "-o", "{output}"],
@@ -735,15 +739,19 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (["voice-preset-validate", "p.json", "--set", "nopath"], "invalid --set assignment: nopath"),
     (
         ["voice-change", "{input}", "--preset", "noSuchPreset", "-o", "{output}"],
-        "argument --preset: must be one of neutralMonitor, brightIdol, softWhisper, "
-        "deepNarrator, robotMascot, darkVillain, hardTune, robotMonotone, choirHarmony, "
-        "vocoderStrings, megaphone, radioVoice",
+        (
+            "argument --preset: must be one of neutralMonitor, brightIdol, softWhisper, "
+            "deepNarrator, robotMascot, darkVillain, hardTune, robotMonotone, choirHarmony, "
+            "vocoderStrings, megaphone, radioVoice"
+        ),
     ),
     (
         ["polyphonic-render", "{input}", "--edit", "0.bogus=1", "-o", "{output}"],
-        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
-        "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
-        "vibrato_depth_change, drift_change, muted",
+        (
+            "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
+            "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
+            "vibrato_depth_change, drift_change, muted"
+        ),
     ),
     (
         ["transcribe", "{input}", "--reattack-ratio", "0.5", "-o", "{output}"],
