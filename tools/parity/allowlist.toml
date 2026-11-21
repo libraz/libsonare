@@ -701,12 +701,20 @@ fields = [
   "stream_stats.used_frames",
   "stream_stats.updated",
   "stream_stats.estimate",
-  # --- Beat times folded into beats (categories 2 and 1) ---
-  # C beat_times + beat_count become beats: Beat[], each beat carrying its time
-  # and the count being the array length.
-  # --- Tempo hypothesis spelled bpm (category 1) ---
-  # Every facade names a candidate's tempo `bpm`, as the result's own tempo is;
-  # the C struct calls the same float `value`.
+  # --- Out-params and callbacks folded into a record (category 1) ---
+  # The analysis progress/cancel callbacks arrive as onProgress / cancel request
+  # fields and the binding installs them natively.
+  "music_analyze_options.progress_callback",
+  "music_analyze_options.progress_user_data",
+  "music_analyze_options.cancel_callback",
+  "music_analyze_options.cancel_user_data",
+  # sonare_hpss's out_residual and sonare_project_compile's out_timeline become
+  # record fields, opted in by withResidual / withTimeline.
+  "hpss_result.residual",
+  "project_compile_result.timeline",
+  # A marker's name travels beside the C record (set_marker's name argument and
+  # project_marker_name_by_index); the facade record carries it.
+  "project_marker.name",
   # --- Fields with one permitted value (category 4) ---
   # MFCC is_db is always 0; the stream config's magnitude pair and output format
   # accept only their defaults. The facades pass those and do not expose them.
