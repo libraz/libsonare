@@ -2731,6 +2731,24 @@ class SecondFormExtensions(CheckerCase):
             ],
         )
 
+    def test_a_stereo_buffer_pair_matches_a_base_buffer(self):
+        _, before = self.run_check("--check", "options-struct:suffix")
+        self.add(
+            self.mono(
+                "sonare_morph", _c_param("out", "float**"), _c_param("out_length", "size_t*")
+            ),
+            self.stereo(
+                "sonare_morph_stereo",
+                _c_param("out_left", "float**"),
+                _c_param("out_right", "float**"),
+                _c_param("out_length", "size_t*"),
+            ),
+        )
+        _, lines = self.run_check("--check", "options-struct:suffix")
+        added = [x.strip() for x in set(lines) - set(before) if x.startswith("    ")]
+        self.assertEqual(len(added), 1, added)
+        self.assertIn("1 channel-form twins", added[0])
+
     def test_a_channel_form_with_another_result_is_refused_and_not_excusable(self):
         self.add(
             self.mono(

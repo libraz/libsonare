@@ -1528,17 +1528,24 @@ _C_AUDIO_EXTENTS = re.compile(r"^(?:length|frames|num_channels|\w+_length)$")
 
 def _c_after_audio(rec: dict, form: str = "") -> list[tuple[str, str, str]] | None:
     """(compared type, name, spelled type) past the audio buffers and their extents, then
-    the return type. A twin's ``<Form>Result`` compares as its base's ``Result``."""
+    the return type. A twin's ``<Form>Result`` compares as its base's ``Result``, and a
+    ``_stereo`` twin's ``<x>_left`` / ``<x>_right`` buffer pair as its base's ``<x>``."""
     sigs = rec.get("sigs") or []
     if not sigs:
         return None
     out = []
     for p in sigs[0]["params"]:
         t = " ".join(p.get("type", "").split())
-        if t in _C_AUDIO_TYPES or ("*" not in t and _C_AUDIO_EXTENTS.match(p.get("name", ""))):
+        name = p.get("name", "")
+        if t in _C_AUDIO_TYPES or ("*" not in t and _C_AUDIO_EXTENTS.match(name)):
             continue
         key = t.replace(f"{form.capitalize()}Result", "Result") if form else t
-        out.append((key, p.get("name", ""), t))
+        if form == "stereo" and name.endswith("_right") and out:
+            left = out[-1]
+            if left[1] == name[: -len("_right")] + "_left" and left[0] == key:
+                out[-1] = (key, name[: -len("_right")], f"{left[2]} {left[1]}, {t} {name}")
+                continue
+        out.append((key, name, t))
     returns = sigs[0].get("returns", "")
     return out + [(returns, "(return)", returns)]
 
@@ -1554,7 +1561,12 @@ def _c_channel_twin(rec: dict, base: dict, form: str) -> str | None:
 
     def only(a, b):
         other = keys(b)
-        return ", ".join(f"{t} {n}" for k, n, t in a if (k, n) not in other) or "nothing else"
+        return (
+            ", ".join(
+                t if " " in t and "," in t else f"{t} {n}" for k, n, t in a if (k, n) not in other
+            )
+            or "nothing else"
+        )
 
     return f"base has {only(theirs, mine)}; twin has {only(mine, theirs)}"
 
