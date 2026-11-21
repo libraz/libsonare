@@ -20,7 +20,7 @@ from ._errors import (
     _unknown_error,
 )
 from ._features_metering import (
-    _clipping_args,
+    _clipping_threshold,
     _dynamic_range_args,
     _oversample_factor,
     _spectrum_args,
@@ -1311,13 +1311,15 @@ class Audio:
         """Detect clipped runs; see :func:`libsonare.metering_detect_clipping`."""
         from ._ffi import SonareClippingResult
 
-        c_threshold, c_min_region = _clipping_args(threshold_db, min_region_samples)
+        c_threshold = _clipping_threshold(threshold_db)
         handle = self._require_handle()
         out = SonareClippingResult()
         rc = self._lib.sonare_audio_detect_clipping(
             handle,
             _domain_float(c_threshold, "threshold_db"),
-            c_min_region,
+            _to_c_size_t(
+                1 if min_region_samples is None else min_region_samples, "min_region_samples"
+            ),
             ctypes.byref(out),
         )
         _check(rc)

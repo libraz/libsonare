@@ -70,16 +70,9 @@ def _oversample_factor(oversample_factor: int | None) -> int | float:
     return _resolve_zero_default(oversample_factor, "oversample_factor")
 
 
-def _clipping_args(
-    threshold_db: float | None, min_region_samples: int | None
-) -> tuple[float, ctypes.c_size_t]:
-    """The clipping arguments, an omitted level as the C ABI's NaN and an omitted run as 1."""
-    return (
-        math.nan if threshold_db is None else _narrow_float(threshold_db, "threshold_db"),
-        ctypes.c_size_t(1)
-        if min_region_samples is None
-        else _to_c_size_t(min_region_samples, "min_region_samples"),
-    )
+def _clipping_threshold(threshold_db: float | None) -> float:
+    """The clipping level, an omitted one as the C ABI's NaN."""
+    return math.nan if threshold_db is None else _narrow_float(threshold_db, "threshold_db")
 
 
 def _spectrum_args(
@@ -446,7 +439,7 @@ def metering_detect_clipping(
     Default: the level of a linear 0.999 (the library's). ``min_region_samples``
     is the shortest run reported; 0 and 1 both list every run. Default: 1.
     """
-    c_threshold, c_min_region = _clipping_args(threshold_db, min_region_samples)
+    c_threshold = _clipping_threshold(threshold_db)
     sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -456,7 +449,7 @@ def metering_detect_clipping(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _domain_float(c_threshold, "threshold_db"),
-        c_min_region,
+        _to_c_size_t(1 if min_region_samples is None else min_region_samples, "min_region_samples"),
         ctypes.byref(out),
     )
     _check(rc)
