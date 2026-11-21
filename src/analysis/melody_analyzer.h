@@ -49,20 +49,30 @@ struct MelodyConfig {
   bool center = true;
 };
 
+/// @brief What MelodyConfig::fmin accepts, named as every surface takes it (f0_min_hz).
+inline constexpr util::check::NumericDomain kMelodyF0MinHzDomain =
+    util::check::real_domain_above(0.0, false);
+/// @brief What MelodyConfig::frame_length and hop_length accept.
+inline constexpr util::check::NumericDomain kMelodyFrameDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What MelodyConfig::threshold accepts.
+inline constexpr util::check::NumericDomain kMelodyThresholdDomain =
+    util::check::real_domain_above(0.0, false);
+
 /// @brief Refuses a MelodyConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless fmin is finite and positive, fmax is finite
 ///         and above fmin, frame_length and hop_length are positive, and threshold is finite and
 ///         positive.
 inline void validate_melody_config(const MelodyConfig& config) {
   // Subjects carry the parameter name every surface takes, not the config member.
-  util::check::greater_than(config.fmin, 0.0, "f0_min_hz");
+  util::check::within(config.fmin, kMelodyF0MinHzDomain, "f0_min_hz");
   if (!(std::isfinite(config.fmax) && config.fmax > config.fmin)) {
     util::check::refuse_relation({"f0_max_hz", "f0_min_hz"},
                                  "{0} must be finite and greater than {1}");
   }
-  util::check::integer_at_least(config.frame_length, 1, "frame_length");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
-  util::check::greater_than(config.threshold, 0.0, "threshold");
+  util::check::within(config.frame_length, kMelodyFrameDomain, "frame_length");
+  util::check::within(config.hop_length, kMelodyFrameDomain, "hop_length");
+  util::check::within(config.threshold, kMelodyThresholdDomain, "threshold");
 }
 
 /// @brief Melody analyzer using YIN (or, optionally, pYIN) pitch detection.
