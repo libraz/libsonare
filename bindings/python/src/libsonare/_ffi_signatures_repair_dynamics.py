@@ -11,91 +11,83 @@ from ._ffi_types import *  # noqa: F403,F405
 def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
     # --- Mastering: offline repair processors ---
 
-    if hasattr(lib, "sonare_mastering_repair_declick"):
-        lib.sonare_mastering_repair_declick.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_declick.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDeclickConfig),
-            ctypes.POINTER(SonareDeclickResult),
-        ]
+    lib.sonare_mastering_repair_declick.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_declick.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDeclickConfig),
+        ctypes.POINTER(SonareDeclickResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_declick_stereo"):
-        lib.sonare_mastering_repair_declick_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_declick_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDeclickConfig),
-            ctypes.POINTER(SonareDeclickStereoResult),
-        ]
+    lib.sonare_mastering_repair_declick_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_declick_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDeclickConfig),
+        ctypes.POINTER(SonareDeclickStereoResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_declip_stereo"):
-        lib.sonare_mastering_repair_declip_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_declip_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDeclipConfig),
-            ctypes.POINTER(SonareDeclipStereoResult),
-        ]
+    lib.sonare_mastering_repair_declip_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_declip_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDeclipConfig),
+        ctypes.POINTER(SonareDeclipStereoResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_decrackle_stereo"):
-        lib.sonare_mastering_repair_decrackle_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_decrackle_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDecrackleConfig),
-            ctypes.POINTER(SonareDecrackleStereoResult),
-        ]
+    lib.sonare_mastering_repair_decrackle_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_decrackle_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDecrackleConfig),
+        ctypes.POINTER(SonareDecrackleStereoResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_dehum_stereo"):
-        lib.sonare_mastering_repair_dehum_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_dehum_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDehumConfig),
-            ctypes.POINTER(SonareDehumStereoResult),
-        ]
+    lib.sonare_mastering_repair_dehum_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_dehum_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDehumConfig),
+        ctypes.POINTER(SonareDehumStereoResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_denoise_classical"):
-        lib.sonare_mastering_repair_denoise_classical.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_denoise_classical.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDenoiseClassicalConfig),
-            ctypes.POINTER(SonareDenoiseResult),
-        ]
+    lib.sonare_mastering_repair_denoise_classical.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_denoise_classical.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDenoiseClassicalConfig),
+        ctypes.POINTER(SonareDenoiseResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_denoise_classical_stereo"):
-        lib.sonare_mastering_repair_denoise_classical_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_denoise_classical_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDenoiseClassicalConfig),
-            ctypes.POINTER(SonareDenoiseStereoResult),
-        ]
+    lib.sonare_mastering_repair_denoise_classical_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_denoise_classical_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDenoiseClassicalConfig),
+        ctypes.POINTER(SonareDenoiseStereoResult),
+    ]
 
-    if hasattr(lib, "sonare_mastering_repair_dereverb_classical_stereo"):
-        lib.sonare_mastering_repair_dereverb_classical_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_dereverb_classical_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDereverbClassicalConfig),
-            ctypes.POINTER(SonareDereverbStereoResult),
-        ]
+    lib.sonare_mastering_repair_dereverb_classical_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_dereverb_classical_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDereverbClassicalConfig),
+        ctypes.POINTER(SonareDereverbStereoResult),
+    ]
 
     # The N-channel repairs take a pointer table in and a pointer table out, and
     # allocate nothing: the output planes are the caller's, written in place, so
@@ -103,31 +95,29 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
     # structs the pair entries fill with heap buffers.
     # One analysis and one application over any channel count: planar channels in,
     # JSON in and out, and the application writes caller-owned output planes.
-    if hasattr(lib, "sonare_mastering_repair_analyze"):
-        lib.sonare_mastering_repair_analyze.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_analyze.argtypes = [
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.c_size_t,
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_char_p),
-        ]
-    if hasattr(lib, "sonare_mastering_repair_apply"):
-        lib.sonare_mastering_repair_apply.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_apply.argtypes = [
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.c_size_t,
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            SonareMasteringProgressCallback,
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_char_p),
-            SonareCancelCallback,
-            ctypes.c_void_p,
-        ]
+    lib.sonare_mastering_repair_analyze.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_analyze.argtypes = [
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_char_p),
+    ]
+    lib.sonare_mastering_repair_apply.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_apply.argtypes = [
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        SonareMasteringProgressCallback,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_char_p),
+        SonareCancelCallback,
+        ctypes.c_void_p,
+    ]
 
     for _name, _linked_cfg, _linked_report in (
         (
@@ -141,40 +131,37 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             SonareDereverbReport,
         ),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-                ctypes.c_size_t,
-                ctypes.c_size_t,
-                ctypes.c_int,
-                ctypes.POINTER(_linked_cfg),
-                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-                ctypes.POINTER(_linked_report),
-            ]
-
-    if hasattr(lib, "sonare_mastering_repair_trim_silence_stereo"):
-        lib.sonare_mastering_repair_trim_silence_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_trim_silence_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
             ctypes.c_size_t,
             ctypes.c_int,
-            ctypes.POINTER(SonareTrimSilenceConfig),
-            ctypes.POINTER(SonareTrimSilenceStereoResult),
+            ctypes.POINTER(_linked_cfg),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(_linked_report),
         ]
 
-    if hasattr(lib, "sonare_mastering_repair_detect_trim_range_stereo"):
-        lib.sonare_mastering_repair_detect_trim_range_stereo.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_detect_trim_range_stereo.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareTrimSilenceConfig),
-            ctypes.POINTER(SonareTrimRange),
-        ]
+    lib.sonare_mastering_repair_trim_silence_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_trim_silence_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareTrimSilenceConfig),
+        ctypes.POINTER(SonareTrimSilenceStereoResult),
+    ]
+
+    lib.sonare_mastering_repair_detect_trim_range_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_detect_trim_range_stereo.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareTrimSilenceConfig),
+        ctypes.POINTER(SonareTrimRange),
+    ]
 
     # The measure-only entry points: one config type and one POD result each,
     # and nothing allocated, so they share a shape the repairs do not.
@@ -195,27 +182,25 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ),
         ("sonare_mastering_repair_detect_trim_range", SonareTrimSilenceConfig, SonareTrimRange),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.POINTER(ctypes.c_float),
-                ctypes.c_size_t,
-                ctypes.c_int,
-                ctypes.POINTER(_detect_cfg),
-                ctypes.POINTER(_detection),
-            ]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(_detect_cfg),
+            ctypes.POINTER(_detection),
+        ]
 
     # The band grid the noise floor is reported on: analysis geometry alone
     # decides it, so it takes neither audio nor a config and is registered
     # outside the detection loop above.
-    if hasattr(lib, "sonare_mastering_repair_noise_band_bins"):
-        lib.sonare_mastering_repair_noise_band_bins.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_noise_band_bins.argtypes = [
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_int),
-        ]
+    lib.sonare_mastering_repair_noise_band_bins.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_noise_band_bins.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+    ]
 
     for _name, _repair_cfg, _repair_result in (
         ("sonare_mastering_repair_declip", SonareDeclipConfig, SonareDeclipResult),
@@ -228,26 +213,24 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ),
         ("sonare_mastering_repair_trim_silence", SonareTrimSilenceConfig, SonareTrimSilenceResult),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.POINTER(ctypes.c_float),
-                ctypes.c_size_t,
-                ctypes.c_int,
-                ctypes.POINTER(_repair_cfg),
-                ctypes.POINTER(_repair_result),
-            ]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(_repair_cfg),
+            ctypes.POINTER(_repair_result),
+        ]
 
     # Config-shaping companion to the dereverb processor: it takes a room
     # estimate and an existing config rather than audio, so it is registered
     # outside the repair loop above.
-    if hasattr(lib, "sonare_mastering_repair_dereverb_apply_room_estimate"):
-        lib.sonare_mastering_repair_dereverb_apply_room_estimate.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_dereverb_apply_room_estimate.argtypes = [
-            ctypes.POINTER(SonareRoomEstimate),
-            ctypes.POINTER(SonareDereverbClassicalConfig),
-        ]
+    lib.sonare_mastering_repair_dereverb_apply_room_estimate.restype = ctypes.c_int32
+    lib.sonare_mastering_repair_dereverb_apply_room_estimate.argtypes = [
+        ctypes.POINTER(SonareRoomEstimate),
+        ctypes.POINTER(SonareDereverbClassicalConfig),
+    ]
 
     # The config initialisers: each writes sizeof and the defaults.
     for _name, _init_cfg in (
@@ -262,10 +245,9 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ("sonare_gate_config_init", SonareGateConfig),
         ("sonare_transient_shaper_config_init", SonareTransientShaperConfig),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = None
-            _fn.argtypes = [ctypes.POINTER(_init_cfg)]
+        _fn = getattr(lib, _name)
+        _fn.restype = None
+        _fn.argtypes = [ctypes.POINTER(_init_cfg)]
 
     # --- Mastering: offline dynamics processors ---
     # The dynamics signature appends `int* out_latency_samples` to the repair
@@ -275,18 +257,17 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ("sonare_mastering_dynamics_gate", SonareGateConfig),
         ("sonare_mastering_dynamics_transient_shaper", SonareTransientShaperConfig),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.POINTER(ctypes.c_float),
-                ctypes.c_size_t,
-                ctypes.c_int,
-                ctypes.POINTER(_dynamics_cfg),
-                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-                ctypes.POINTER(ctypes.c_size_t),
-                ctypes.POINTER(ctypes.c_int),
-            ]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(_dynamics_cfg),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+        ]
 
     # Each mono repair result is released by its own function, which frees the
     # samples and empties the struct.
@@ -299,9 +280,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ("dereverb", SonareDereverbResult),
         ("trim_silence", SonareTrimSilenceResult),
     ):
-        _free = getattr(lib, f"sonare_free_{_name}_result", None)
-        if _free is None:
-            continue
+        _free = getattr(lib, f"sonare_free_{_name}_result")
         _free.restype = None
         _free.argtypes = [ctypes.POINTER(_mono_result)]
 
@@ -316,8 +295,6 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         ("dereverb", SonareDereverbStereoResult),
         ("trim_silence", SonareTrimSilenceStereoResult),
     ):
-        _free = getattr(lib, f"sonare_free_{_name}_stereo_result", None)
-        if _free is None:
-            continue
+        _free = getattr(lib, f"sonare_free_{_name}_stereo_result")
         _free.restype = None
         _free.argtypes = [ctypes.POINTER(_result)]

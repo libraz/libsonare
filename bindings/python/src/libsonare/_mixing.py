@@ -19,7 +19,6 @@ from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
     _SIZE_T_MAX,
-    _WITHOUT_MIXING,
     AutomationCurve,
     ErrorCode,
     MeterTap,
@@ -43,7 +42,6 @@ from ._runtime import (
     _narrow_int,
     _pan_law_value,
     _pan_mode_value,
-    _require_export,
     _send_timing_value,
     _to_c_float,
     _to_c_float_array,
@@ -95,7 +93,6 @@ _MAX_SAMPLE_RATE = 384000
 def mixing_scene_preset_names() -> list[str]:
     """Return built-in mixer scene preset identifiers."""
     lib = _get_lib()
-    _require_export(lib, "sonare_mixing_scene_preset_names", _WITHOUT_MIXING)
     return _joined_names(lib.sonare_mixing_scene_preset_names(), "mixing scene preset names")
 
 
@@ -125,7 +122,6 @@ def mixing_scene_preset(name: str) -> MixSceneDocument:
 def _scene_handle(text: str, sample_rate: int, max_block_size: int | None) -> tuple[int, list[str]]:
     """Build a mixer handle from scene JSON text, with the warnings its load left."""
     lib = _get_lib()
-    _require_export(lib, "sonare_mixer_from_scene_json", _WITHOUT_MIXING)
     handle = lib.sonare_mixer_from_scene_json(
         _utf8_arg(text, "json"),
         _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
@@ -183,7 +179,6 @@ class Mixer:
             raise _refuse_type("scene must be a mapping (parse JSON text with json.loads first)")
         if scene is None:
             lib = _get_lib()
-            _require_export(lib, "sonare_mixer_create", _WITHOUT_MIXING)
             out = ctypes.c_void_p()
             _check(
                 lib.sonare_mixer_create(
@@ -244,7 +239,6 @@ class Mixer:
         """Return the number of strips in the mixer."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_get_strip_count", _WITHOUT_MIXING)
         out = ctypes.c_size_t()
         _check(lib.sonare_mixer_get_strip_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -278,7 +272,6 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_add_strip_ex", _WITHOUT_MIXING)
         # Returns the strip pointer rather than a SonareError, and NULL is the
         # whole failure signal -- the detail is in the thread-local error slot.
         # The pointer itself is mixer-owned and never surfaces: every strip op on
@@ -309,7 +302,6 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_add_bus", _WITHOUT_MIXING)
         _check(
             lib.sonare_mixer_add_bus(
                 self._handle,
@@ -323,7 +315,6 @@ class Mixer:
         """Remove a bus by id from the mixer topology."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_remove_bus", _WITHOUT_MIXING)
         _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(id, "id")))
 
     @_entry("Mixer.set_output_bus")
@@ -348,7 +339,6 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_set_output_bus", _WITHOUT_MIXING)
         _check(
             lib.sonare_mixer_set_output_bus(
                 self._handle, _utf8_arg(source_id, "source_id"), _utf8_arg(bus_id, "bus_id")
@@ -360,7 +350,6 @@ class Mixer:
         """Return the number of buses in the mixer topology."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_bus_count", _WITHOUT_MIXING)
         out = ctypes.c_size_t()
         _check(lib.sonare_mixer_bus_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -372,7 +361,6 @@ class Mixer:
         """Add a VCA group with the given id, gain offset, and strip members."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_add_vca_group", _WITHOUT_MIXING)
         member_list = list(members or [])
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
@@ -396,7 +384,6 @@ class Mixer:
         """Remove a VCA group by id from the mixer topology."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_remove_vca_group", _WITHOUT_MIXING)
         _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(id, "id")))
 
     @_entry("Mixer.set_vca_group_gain_db")
@@ -404,7 +391,6 @@ class Mixer:
         """Set an existing VCA group's gain in dB."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_set_vca_group_gain_db", _WITHOUT_MIXING)
         _check(
             lib.sonare_mixer_set_vca_group_gain_db(
                 self._handle,
@@ -418,7 +404,6 @@ class Mixer:
         """Replace an existing VCA group's strip membership."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_set_vca_group_members", _WITHOUT_MIXING)
         member_list = list(members)
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
@@ -441,7 +426,6 @@ class Mixer:
         """Return the number of VCA groups in the mixer topology."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_vca_group_count", _WITHOUT_MIXING)
         out = ctypes.c_size_t()
         _check(lib.sonare_mixer_vca_group_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -455,7 +439,6 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_strip_at", _WITHOUT_MIXING)
         if isinstance(strip, str):
             handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
@@ -716,7 +699,6 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         lib = _get_lib()
-        _require_export(lib, "sonare_strip_remove_send", _WITHOUT_MIXING)
         _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
     @_entry("Mixer.strip_meter")
@@ -734,7 +716,6 @@ class Mixer:
         handle = self._strip_handle(strip)
         lib = _get_lib()
         snapshot = SonareMixMeterSnapshot()
-        _require_export(lib, "sonare_strip_meter_tap", _WITHOUT_MIXING)
         _check(
             lib.sonare_strip_meter_tap(
                 handle, ctypes.c_int(_meter_tap_value(tap, "tap")), ctypes.byref(snapshot)
@@ -747,7 +728,6 @@ class Mixer:
         """Read the post-insert meter for a compiled bus, including master."""
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_bus_meter", _WITHOUT_MIXING)
         snapshot = SonareMixMeterSnapshot()
         _check(
             lib.sonare_mixer_bus_meter(
@@ -836,7 +816,6 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         lib = _get_lib()
-        _require_export(lib, "sonare_strip_non_finite_discard_count", _WITHOUT_MIXING)
         out = ctypes.c_uint32()
         _check_realtime(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
         return int(out.value)
@@ -858,7 +837,6 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        _require_export(lib, "sonare_mixer_bus_non_finite_discard_count", _WITHOUT_MIXING)
         out = ctypes.c_uint32()
         _check_realtime(
             lib.sonare_mixer_bus_non_finite_discard_count(
@@ -997,7 +975,6 @@ class Mixer:
         """
         handle = self._strip_handle(strip_index)
         lib = _get_lib()
-        _require_export(lib, "sonare_strip_schedule_insert_automation", _WITHOUT_MIXING)
         _check(
             lib.sonare_strip_schedule_insert_automation(
                 handle,
@@ -1226,7 +1203,6 @@ def mix_stereo(
         matches :func:`metering_true_peak_dbtp` over the same signal exactly.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mixer_create", _WITHOUT_MIXING)
     if not strips:
         raise _refuse("strips must not be empty")
     c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)

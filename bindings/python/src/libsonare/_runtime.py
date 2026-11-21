@@ -28,7 +28,6 @@ from ._errors import ErrorCode as ErrorCode
 from ._errors import ErrorCodeName as ErrorCodeName
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
-from ._errors import _not_supported as _not_supported
 from ._ffi import *  # noqa: F403
 from ._field_spelling import surface_spelling
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
@@ -78,16 +77,6 @@ def _get_lib() -> ctypes.CDLL:
     if _lib is None:
         _lib = load_library()
     return _lib
-
-
-_WITHOUT_MASTERING = "libsonare was built without mastering support"
-_WITHOUT_MIXING = "libsonare was built without mixing support"
-
-
-def _require_export(lib: Any, symbol: str, message: str) -> None:
-    """Raise NOT_SUPPORTED with ``message`` unless ``lib`` exports ``symbol``."""
-    if not hasattr(lib, symbol):
-        raise _not_supported(message)
 
 
 def _generic_error(rc: int) -> SonareError:

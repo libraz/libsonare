@@ -20,7 +20,6 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    _WITHOUT_MASTERING,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -30,7 +29,6 @@ from ._runtime import (
     _measured_db,
     _narrow_float,
     _narrow_int,
-    _require_export,
     _to_c_double,
     _to_c_float,
     _to_c_float_array,
@@ -96,7 +94,6 @@ def streaming_loudness_gain(
         )
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_streaming_loudness_gain", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     config_json = _chain_config_json(config, "config")
     out = SonareStreamingLoudnessGain()
@@ -125,7 +122,6 @@ def streaming_loudness_gain_stereo(
     the larger of the two channel peaks.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_streaming_loudness_gain_stereo", _WITHOUT_MASTERING)
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
@@ -221,7 +217,6 @@ class StreamingMasteringChain:
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
-        _require_export(lib, "sonare_streaming_mastering_chain_create", _WITHOUT_MASTERING)
         # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
         # layout remembered here would then differ from the one asked for.
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
@@ -229,7 +224,6 @@ class StreamingMasteringChain:
         config_json = _chain_config_json(config, "config")
         handle = ctypes.c_void_p()
         if loudness_static_gain_db is not None:
-            _require_export(lib, "sonare_streaming_mastering_chain_create_ex", _WITHOUT_MASTERING)
             # NaN is how the C ABI spells "no offline peak measured", so the
             # caller's own value is narrowed here rather than at the conversion:
             # a saturating one would arrive as that same reading.
@@ -373,9 +367,6 @@ class StreamingMasteringChain:
             raise _refuse_type("key must be a string")
         if not key:
             raise _refuse("key must not be empty")
-        _require_export(
-            self._lib, "sonare_streaming_mastering_chain_set_parameter", _WITHOUT_MASTERING
-        )
         key_bytes = _utf8_arg(key, "key")
         rc = self._lib.sonare_streaming_mastering_chain_set_parameter(
             self._handle,
@@ -417,11 +408,6 @@ class StreamingMasteringChain:
         block since construction; :meth:`reset` leaves it alone.
         """
         self._ensure_open()
-        _require_export(
-            self._lib,
-            "sonare_streaming_mastering_chain_non_finite_substitution_count",
-            _WITHOUT_MASTERING,
-        )
         out = ctypes.c_uint32()
         rc = self._lib.sonare_streaming_mastering_chain_non_finite_substitution_count(
             self._handle, ctypes.byref(out)
@@ -451,11 +437,6 @@ class StreamingMasteringChain:
         counters on one handle share an epoch.
         """
         self._ensure_open()
-        _require_export(
-            self._lib,
-            "sonare_streaming_mastering_chain_non_finite_discard_count",
-            _WITHOUT_MASTERING,
-        )
         out = ctypes.c_uint32()
         rc = self._lib.sonare_streaming_mastering_chain_non_finite_discard_count(
             self._handle, ctypes.byref(out)
@@ -472,9 +453,6 @@ class StreamingMasteringChain:
         count given at construction; stereo-only stages are absent for mono.
         """
         self._ensure_open()
-        _require_export(
-            self._lib, "sonare_streaming_mastering_chain_stage_names", _WITHOUT_MASTERING
-        )
         raw = self._lib.sonare_streaming_mastering_chain_stage_names(self._handle)
         return raw.decode("utf-8").splitlines() if raw else []
 
@@ -503,9 +481,6 @@ class StreamingMasteringChain:
 
     def _ensure_flush_ready(self) -> None:
         self._ensure_open()
-        _require_export(
-            self._lib, "sonare_streaming_mastering_chain_flush_mono", _WITHOUT_MASTERING
-        )
 
 
 class StreamingEqualizer:
@@ -525,7 +500,6 @@ class StreamingEqualizer:
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
-        _require_export(lib, "sonare_eq_create", _WITHOUT_MASTERING)
         # Narrowed rather than coerced: the rate reaches the C create as a float
         # but every later call as an int, so int() here would split the two.
         sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
@@ -791,7 +765,6 @@ class StreamingEqualizer:
             SonareValueError: If ``frequencies_hz`` holds a NaN or Inf value.
         """
         self._ensure_open()
-        _require_export(self._lib, "sonare_eq_magnitude_response", _WITHOUT_MASTERING)
         ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "placement")
         # Non-finite only: an empty curve is a result, a NaN frequency is not.
         frequencies = _validate_samples(frequencies_hz, arg_name="frequencies_hz", allow_empty=True)
@@ -851,7 +824,6 @@ class StreamingEqualizer:
         span of audio.
         """
         self._ensure_open()
-        _require_export(self._lib, "sonare_eq_non_finite_discard_count", _WITHOUT_MASTERING)
         out = ctypes.c_uint32()
         _check_realtime(
             self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out))

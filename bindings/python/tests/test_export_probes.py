@@ -1,23 +1,23 @@
-"""The binding never probes for a C entry point every shared build exports.
+"""The binding never probes for a C entry point the shared library exports.
 
-A ``hasattr(lib, "sonare_...")`` in front of an always-exported symbol is dead
-code on a current build and a silent fallback on a stale one, so the binding
-probes only for the symbols a feature-off shared build omits. That set is
-derived here from ``src/CMakeLists.txt`` and the C-ABI sources -- a symbol is
-gated when every translation unit defining it is compiled into the shared
-library only under an option -- so it shrinks by itself as gated entries gain
-NOT_SUPPORTED stubs. Source scan only; nothing here loads the library.
+Every C-ABI symbol is exported in every feature configuration; a compiled-out
+feature answers NOT_SUPPORTED from the call itself. So a
+``hasattr(lib, "sonare_...")`` in front of a C entry is dead code on a current
+build and a silent fallback on a stale one: the binding registers and calls
+every entry unconditionally. Source scan only; nothing here loads the library.
+
+A compiled-out call is not pinned from Python: the only dylib the suite loads is
+the default-feature build, and the feature-off rows of ``make
+build-feature-matrix`` build no shared library. The C suite owns that pin.
 """
 
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PACKAGE_DIR = REPO_ROOT / "bindings" / "python" / "src" / "libsonare"
-CMAKE_LISTS = REPO_ROOT / "src" / "CMakeLists.txt"
 
 # The loader's ABI skew check: a binary at SONARE_LIB_PATH may predate the
 # symbol, and must fail as AbiMismatch rather than as an AttributeError.
@@ -25,66 +25,9 @@ EXEMPT = {("_ffi.py", "sonare_abi_version")}
 
 # Functions whose probe takes its symbol as an argument, keyed by (file, function).
 EXEMPT_HELPERS = {
-    # The probe helper itself; every call site is scanned as a probe of its own.
-    ("_runtime.py", "_require_export"): "helper",
     # Asks whether a token in a C message names a C entry, to strip it; not a guard.
     ("_runtime.py", "_strip_c_entry"): "token lookup",
 }
-
-_TU = re.compile(r"c_api/[\w/]+\.cpp")
-
-
-def _shared_translation_units() -> dict[str, bool]:
-    """C-ABI translation unit -> whether the shared library compiles it unconditionally."""
-    lists: dict[str, list[str]] = {}
-    current: str | None = None
-    lines = [line.split("#")[0].strip() for line in CMAKE_LISTS.read_text().splitlines()]
-    for line in lines:
-        start = re.match(r"set\(\s*(SONARE_\w*SOURCES)\b(.*)", line)
-        if start:
-            current = start.group(1)
-            lists[current] = _TU.findall(start.group(2))
-        elif current:
-            lists[current] += _TU.findall(line)
-        if current and line.endswith(")"):
-            current = None
-
-    units = {tu: True for tu in lists.get("SONARE_SOURCES", [])}
-    stack: list[str] = []
-    appending = False
-    for line in lines:
-        if re.match(r"if\s*\(", line):
-            stack.append(line)
-        elif re.match(r"endif\s*\(", line):
-            stack.pop()
-        if re.match(r"(list|set)\(\s*(APPEND\s+)?SONARE_SHARED_SOURCES\b", line) or appending:
-            unconditional = all("BUILD_SHARED" in cond for cond in stack)
-            for tu in _TU.findall(line):
-                units[tu] = unconditional
-            for var in re.findall(r"\$\{(SONARE_\w+SOURCES)\}", line):
-                for tu in lists.get(var, []):
-                    units[tu] = unconditional
-            appending = not line.endswith(")")
-    return units
-
-
-def _defined_symbols(tu: str) -> set[str]:
-    text = re.sub(r"/\*.*?\*/", "", (REPO_ROOT / "src" / tu).read_text(), flags=re.S)
-    text = re.sub(r"//[^\n]*", "", text)
-    return set(re.findall(r"^[A-Za-z_][\w \t*]*?\b(sonare_\w+)\s*\([^;{]*\)\s*\{", text, re.M))
-
-
-def _gated_symbols() -> set[str]:
-    units = _shared_translation_units()
-    always: set[str] = set()
-    optional: set[str] = set()
-    for tu, unconditional in units.items():
-        (always if unconditional else optional).update(_defined_symbols(tu))
-    assert len(always) >= 600, (
-        f"only {len(always)} unconditionally compiled C-ABI definitions found; "
-        "the CMake or definition scan broke"
-    )
-    return optional - always
 
 
 def _constant_strings(
@@ -178,11 +121,7 @@ def _probe_sites() -> tuple[list[tuple[str, int, str | None]], set[tuple[str, st
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
                 continue
             name, args = node.func.id, node.args
-            probe = (
-                (name == "hasattr" and len(args) == 2)
-                or (name == "getattr" and len(args) == 3)
-                or (name == "_require_export" and len(args) >= 2)
-            )
+            probe = (name == "hasattr" and len(args) == 2) or (name == "getattr" and len(args) == 3)
             if not probe or not _is_library(args[0]):
                 continue
             helper = (path.name, _enclosing_function(tree, node) or "")
@@ -209,8 +148,7 @@ def _is_library(node: ast.expr) -> bool:
     return False
 
 
-def test_binding_probes_only_for_symbols_a_feature_off_build_omits() -> None:
-    gated = _gated_symbols()
+def test_binding_probes_for_no_c_entry() -> None:
     sites, helpers_seen = _probe_sites()
     exempt_seen = {(f, s) for f, _, s in sites if (f, s) in EXEMPT}
     assert exempt_seen == EXEMPT and helpers_seen == set(EXEMPT_HELPERS), (
@@ -219,12 +157,8 @@ def test_binding_probes_only_for_symbols_a_feature_off_build_omits() -> None:
     )
     unresolved = [(f, line) for f, line, s in sites if s is None]
     assert not unresolved, f"export probes whose symbol the scan cannot resolve: {unresolved}"
-    ungated = sorted(
-        (f, line, s)
-        for f, line, s in sites
-        if s is not None and (f, s) not in EXEMPT and s not in gated
-    )
-    assert not ungated, (
-        "these probes test for a symbol every shared build exports (ungated, or a "
-        f"NOT_SUPPORTED stub when its feature is off); call it directly: {ungated}"
+    probes = sorted((f, line, s) for f, line, s in sites if (f, s) not in EXEMPT)
+    assert not probes, (
+        "every shared build exports these (a NOT_SUPPORTED stub when the feature is off); "
+        f"register and call them directly: {probes}"
     )

@@ -24,14 +24,12 @@ from ._mastering_offline import (
 from ._narrowing import _narrow_double
 from ._result_records import _record
 from ._runtime import (
-    _WITHOUT_MASTERING,
     _check,
     _finite_or_none,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _out_float_array,
-    _require_export,
     _require_instance,
     _to_c_float_array,
     _to_c_int,
@@ -95,7 +93,6 @@ def mastering_apply_pair_processor(
     ``sample_rate``.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_apply_pair_processor", _WITHOUT_MASTERING)
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
@@ -159,7 +156,6 @@ def mastering_apply_pair_processor_stereo(
     _reject_nul(processor, "processor")
     param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_apply_pair_processor_stereo_ex", _WITHOUT_MASTERING)
     source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
     source_right_array, source_right_length = _to_c_float_array(
         source_right, arg_name="source_right"
@@ -238,7 +234,6 @@ def mastering_analyze_pair(
     :class:`MatchEstimateReferenceDelaySamplesResult`.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_analyze_pair", _WITHOUT_MASTERING)
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
@@ -305,7 +300,6 @@ def mastering_ab_match_loudness(
         -3.2
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_ab_match_loudness", _WITHOUT_MASTERING)
     source_array, source_length = _to_c_float_array(source, arg_name="source")
     reference_array, reference_length = _to_c_float_array(reference, arg_name="reference")
     match = SonareLoudnessMatch()
@@ -357,7 +351,6 @@ def mastering_ab_match_loudness_stereo(
     ``float32`` arrays.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_ab_match_loudness_stereo", _WITHOUT_MASTERING)
     source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
     source_right_array, source_right_length = _to_c_float_array(
         source_right, arg_name="source_right"
@@ -423,7 +416,6 @@ def mastering_analyze_stereo(
     ``stereo.monoCompatCheckLogBands`` :class:`StereoMonoCompatCheckLogBandsResult`.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_analyze_stereo", _WITHOUT_MASTERING)
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
@@ -617,7 +609,6 @@ def mastering_streaming_preview(
     built-in set and an empty list is refused.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_streaming_preview", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     platform_array, platform_count, _buffers = _streaming_platforms(platforms)
 
@@ -650,7 +641,6 @@ def mastering_assistant_suggest(
     :func:`mastering_assistant_suggest_chain` returns.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_assistant_suggest", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _assistant_params(params)
     json_ptr = ctypes.c_char_p()
@@ -689,7 +679,6 @@ def mastering_assistant_suggest_chain(
     returns down to the chain config it already carries.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_assistant_suggest_chain_json", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _assistant_params(params)
     json_ptr = ctypes.c_char_p()
@@ -723,7 +712,6 @@ def mastering_audio_profile(
     samples at 48000 Hz, rescaled to the input sample rate.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_audio_profile", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
@@ -796,7 +784,6 @@ def mastering_streaming_preview_stereo(
     :func:`mastering_streaming_preview`.
     """
     platform_array, platform_count, _buffers = _streaming_platforms(platforms)
-    _require_export(_get_lib(), "sonare_mastering_streaming_preview_stereo", _WITHOUT_MASTERING)
     json_text = _stereo_analysis_json(
         "sonare_mastering_streaming_preview_stereo",
         left,
@@ -824,7 +811,6 @@ def mastering_assistant_suggest_stereo(
     :func:`mastering_assistant_suggest` does.
     """
     param_array, param_count = _assistant_params(params)
-    _require_export(_get_lib(), "sonare_mastering_assistant_suggest_stereo", _WITHOUT_MASTERING)
     json_text = _stereo_analysis_json(
         "sonare_mastering_assistant_suggest_stereo",
         left,
@@ -846,9 +832,6 @@ def mastering_assistant_suggest_chain_stereo(
 ) -> MasteringChainConfig:
     """Stereo counterpart of :func:`mastering_assistant_suggest_chain`."""
     param_array, param_count = _assistant_params(params)
-    _require_export(
-        _get_lib(), "sonare_mastering_assistant_suggest_chain_json_stereo", _WITHOUT_MASTERING
-    )
     json_text = _stereo_analysis_json(
         "sonare_mastering_assistant_suggest_chain_json_stereo",
         left,
@@ -875,7 +858,6 @@ def mastering_preset_params(preset: str) -> MasteringChainConfig:
         SonareValueError: If ``preset`` is not a known preset name.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_preset_params_json", _WITHOUT_MASTERING)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_preset_params_json(
         _utf8_arg(preset, "preset"),
@@ -912,7 +894,6 @@ def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
     """
     _require_instance(document, str, "document")
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_chain_config_from_json", _WITHOUT_MASTERING)
     json_ptr = ctypes.c_char_p()
     _check(
         lib.sonare_mastering_chain_config_from_json(
@@ -941,7 +922,6 @@ def mastering_audio_profile_stereo(
     and their results are aggregated.
     """
     param_array, param_count = _mastering_params(params)
-    _require_export(_get_lib(), "sonare_mastering_audio_profile_stereo", _WITHOUT_MASTERING)
     json_text = _stereo_analysis_json(
         "sonare_mastering_audio_profile_stereo",
         left,
