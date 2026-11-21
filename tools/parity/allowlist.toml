@@ -368,6 +368,12 @@ python = [
   "downmix", # Python derives frames and channel_count from the channel arrays
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
   "mixing_assistant_suggest", # Python takes one list of MixAssistantTrack records and derives the per-track id/name/channel/length/rate arrays and the count from it
+  "mastering_analyze_pair", # Python derives both C lengths from array length and the param count from the params dict
+  "mastering_apply_pair_processor", # as mastering_analyze_pair; reference_sample_rate is an optional keyword that defaults to sample_rate
+  "mastering_apply_pair_processor_stereo", # the stereo form of mastering_apply_pair_processor, with the same derivations
+  "mfcc", # librosa mirror: positional (n_fft, hop_length, n_mels, n_mfcc) with the C options members spelled fmin/fmax/htk/lifter as keywords
+  "mfcc_to_audio", # librosa mirror: the options fold into fmin/fmax/htk/lifter keywords, spelled as librosa and the mel_to_audio sibling spell them
+  "midi2_program", # bank_valid folds into bank_msb/bank_lsb given together or both omitted
 ]
 
 # ---------------------------------------------------------------------------
