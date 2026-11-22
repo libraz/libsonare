@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -160,8 +161,14 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     Napi::Object options_object = info[1].As<Napi::Object>();
     options.loudness_static_gain_db =
         FloatProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db);
-    options.loudness_static_gain_peak_dbtp = FloatProperty(
-        options_object, "loudnessStaticGainPeakDbtp", options.loudness_static_gain_peak_dbtp);
+    // -Infinity is the measured peak of digital silence and leaves the gain unclamped.
+    const Napi::Value peak = options_object.Get("loudnessStaticGainPeakDbtp");
+    const bool silent_peak = peak.IsNumber() && peak.As<Napi::Number>().DoubleValue() ==
+                                                    -std::numeric_limits<double>::infinity();
+    options.loudness_static_gain_peak_dbtp =
+        silent_peak ? -std::numeric_limits<float>::infinity()
+                    : FloatProperty(options_object, "loudnessStaticGainPeakDbtp",
+                                    options.loudness_static_gain_peak_dbtp);
   }
 
   auto config = sonare::mastering::api::streaming_chain_config_from_json(

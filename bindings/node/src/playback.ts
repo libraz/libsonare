@@ -266,8 +266,11 @@ export class PlaybackLoudnessMeter {
     this.native.pushInterleaved(samples);
   }
 
-  /** Integrated loudness of everything pushed so far, in LUFS. */
-  get integratedLufs(): number {
+  /**
+   * Integrated loudness of everything pushed so far, in LUFS. `undefined` before
+   * the first gating block; `-Infinity` while nothing passes the gate.
+   */
+  get integratedLufs(): number | undefined {
     return this.native.integratedLufs();
   }
 

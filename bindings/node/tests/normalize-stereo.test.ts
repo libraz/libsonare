@@ -139,18 +139,29 @@ describe('normalizeStereo rms mode', () => {
   });
 });
 
-describe('normalizeStereo silence', () => {
-  it('leaves a silent pair untouched and reports no gain', () => {
-    const result = normalizeStereo({
-      left: new Float32Array(LENGTH),
-      right: new Float32Array(LENGTH),
-      sampleRate: SR,
-    });
+describe('normalize and normalizeStereo silence', () => {
+  // Silence has no level to scale toward, so no gain is a guess; both refuse it
+  // naming the signal the caller passed, in that caller's own spelling.
+  const silence = new Float32Array(LENGTH);
 
-    expect(result.appliedGainDb).toBe(0);
-    expect(peak(result.left)).toBe(0);
-    expect(peak(result.right)).toBe(0);
-    expect(result.left).toHaveLength(LENGTH);
+  it.each(['peak', 'rms'] as const)('refuses a silent take in %s mode', (mode) => {
+    const call = () => normalize({ samples: silence, sampleRate: SR, mode });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^normalize: samples has no measurable level$/);
+  });
+
+  it('refuses a silent pair', () => {
+    const call = () => normalizeStereo({ left: silence, right: silence, sampleRate: SR });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^normalizeStereo: audio has no measurable level$/);
+  });
+
+  it('accepts a quiet but measurable take, so the refusal is about silence', () => {
+    const quiet = square(64, 1e-4);
+    expect(normalize({ samples: quiet, sampleRate: SR })).toHaveLength(LENGTH);
+    expect(
+      normalizeStereo({ left: quiet, right: silence, sampleRate: SR }).appliedGainDb,
+    ).toBeGreaterThan(70);
   });
 });
 

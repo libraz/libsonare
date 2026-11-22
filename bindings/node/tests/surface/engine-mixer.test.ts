@@ -192,9 +192,10 @@ describe('mixer strips', () => {
 
   it('stripMeter takes a tap token and refuses a number', () => {
     withPreset((mixer) => {
-      expect(Number.isFinite(mixer.stripMeter('vocal').peakDbL)).toBe(true);
-      expect(Number.isFinite(mixer.stripMeter('vocal', 'preFader').peakDbL)).toBe(true);
-      expect(Number.isFinite(mixer.stripMeter('vocal', 'postFader').peakDbL)).toBe(true);
+      // Nothing has been processed, so no tap has measured a peak.
+      expect(mixer.stripMeter('vocal').peakDbL).toBeUndefined();
+      expect(mixer.stripMeter('vocal', 'preFader').peakDbL).toBeUndefined();
+      expect(mixer.stripMeter('vocal', 'postFader').peakDbL).toBeUndefined();
       expect(thrown(() => mixer.stripMeter('vocal', 1 as never))).toBeInstanceOf(TypeError);
       expect(thrown(() => mixer.stripMeter('vocal', 'middle' as never))).toBeInstanceOf(RangeError);
     });

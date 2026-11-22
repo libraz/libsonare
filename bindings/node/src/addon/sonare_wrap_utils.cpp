@@ -827,22 +827,22 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* i
 
 Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("peakDbL", snapshot.peak_db_l);
-  out.Set("peakDbR", snapshot.peak_db_r);
-  out.Set("rmsDbL", snapshot.rms_db_l);
-  out.Set("rmsDbR", snapshot.rms_db_r);
-  out.Set("correlation", snapshot.correlation);
-  out.Set("monoCompatWidth", snapshot.mono_compat_width);
+  SetMeasured(out, "peakDbL", snapshot.peak_db_l);
+  SetMeasured(out, "peakDbR", snapshot.peak_db_r);
+  SetMeasured(out, "rmsDbL", snapshot.rms_db_l);
+  SetMeasured(out, "rmsDbR", snapshot.rms_db_r);
+  SetMeasured(out, "correlation", snapshot.correlation);
+  SetMeasured(out, "monoCompatWidth", snapshot.mono_compat_width);
   out.Set("monoCompatPeak", snapshot.mono_compat_peak);
   out.Set("monoCompatSideRms", snapshot.mono_compat_side_rms);
   out.Set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
-  out.Set("momentaryLufs", snapshot.momentary_lufs);
-  out.Set("shortTermLufs", snapshot.short_term_lufs);
-  out.Set("integratedLufs", snapshot.integrated_lufs);
+  SetMeasured(out, "momentaryLufs", snapshot.momentary_lufs);
+  SetMeasured(out, "shortTermLufs", snapshot.short_term_lufs);
+  SetMeasured(out, "integratedLufs", snapshot.integrated_lufs);
   out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  out.Set("truePeakDbtpL", snapshot.true_peak_dbtp_l);
-  out.Set("truePeakDbtpR", snapshot.true_peak_dbtp_r);
-  out.Set("maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
+  SetMeasured(out, "truePeakDbtpL", snapshot.true_peak_dbtp_l);
+  SetMeasured(out, "truePeakDbtpR", snapshot.true_peak_dbtp_r);
+  SetMeasured(out, "maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
 
   // Per-plane surround meters: expose [0, numChannels) as arrays alongside the

@@ -1,12 +1,11 @@
 /**
  * The band grid `detectNoiseFloor` reports its per-band floors on.
  *
- * The case this entry point exists for is the empty band: a geometric edge pair
- * that rounds to the same bin measures nothing, and its floor comes back as the
- * sentinel -- the same value a genuinely silent band would read. Only the grid
- * separates the two, so the first test here drives the detector alongside the
- * grid and checks that the grid actually accounts for every sentinel, after
- * asserting that both kinds of band are present at all.
+ * A band whose geometric edge pair rounds to the same bin measures nothing, so
+ * the detection leaves it out and names the bands it did measure in
+ * `bandFloorBand`. The first test drives the detector alongside the grid and
+ * checks that the grid accounts for that list exactly, after asserting that
+ * both kinds of band are present at all.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -14,9 +13,6 @@ import { masteringRepairDetectNoiseFloor, masteringRepairNoiseBandBins } from '.
 
 /** Bands in the grid; the returned array is one longer. */
 const BAND_COUNT = 32;
-
-/** The level an unmeasured band reports, in dBFS. */
-const FLOOR_SENTINEL = -120;
 
 /** A deterministic pseudo-noise run, so a floor measured here is reproducible. */
 function noise(length: number, amp: number): Float32Array {
@@ -40,15 +36,15 @@ function partition(bins: Int32Array): { empty: number[]; measured: number[] } {
 }
 
 describe('masteringRepairNoiseBandBins', () => {
-  it('accounts for every sentinel band the detector reports', () => {
+  it('names exactly the bands of the grid that hold a bin in bandFloorBand', () => {
     const nFft = 1024;
     const sampleRate = 48000;
     const bins = masteringRepairNoiseBandBins({ nFft, sampleRate });
     const { empty, measured } = partition(bins);
 
     // Without both kinds present the comparison below decides nothing: an
-    // all-measured grid never reaches the sentinel branch, and an all-empty one
-    // never reaches the other.
+    // all-measured grid never leaves a band out, and an all-empty one never
+    // lists one.
     expect(empty.length).toBeGreaterThan(0);
     expect(measured.length).toBeGreaterThan(0);
     expect(empty.length + measured.length).toBe(BAND_COUNT);
@@ -57,16 +53,26 @@ describe('masteringRepairNoiseBandBins', () => {
       samples: noise(8192, 0.05),
       sampleRate,
     });
-    expect(detected.bandFloorDbfs).toHaveLength(BAND_COUNT);
-    for (const k of empty) {
-      expect(detected.bandFloorDbfs[k], `band ${k} covers no bin`).toBe(FLOOR_SENTINEL);
-    }
-    for (const k of measured) {
-      expect(
-        detected.bandFloorDbfs[k],
-        `band ${k} covers bins [${bins[k]}, ${bins[k + 1]})`,
-      ).toBeGreaterThan(FLOOR_SENTINEL);
-    }
+    expect(detected.bandFloorBand).toBeInstanceOf(Int32Array);
+    expect(Array.from(detected.bandFloorBand)).toEqual(measured);
+    expect(detected.bandFloorDbfs).toHaveLength(measured.length);
+    expect(Array.from(detected.bandFloorDbfs).every(Number.isFinite)).toBe(true);
+    expect(Number.isFinite(detected.floorDbfs)).toBe(true);
+  });
+
+  it('reports digital silence as -Infinity in every measured band and in the broadband floor', () => {
+    const sampleRate = 48000;
+    const { measured } = partition(masteringRepairNoiseBandBins({ nFft: 1024, sampleRate }));
+    const detected = masteringRepairDetectNoiseFloor({
+      samples: new Float32Array(8192),
+      sampleRate,
+    });
+    // Silence is a measurement, so the measured bands stay listed rather than dropping out.
+    expect(Array.from(detected.bandFloorBand)).toEqual(measured);
+    expect(Array.from(detected.bandFloorDbfs)).toEqual(
+      measured.map(() => Number.NEGATIVE_INFINITY),
+    );
+    expect(detected.floorDbfs).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('spans the one-sided spectrum, low to high', () => {

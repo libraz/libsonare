@@ -231,14 +231,14 @@ export function meteringSilenceRatio(...args: unknown[]): number {
   });
 }
 
-/** Crest factor (peak over RMS) in dB. */
-export function meteringCrestFactorDb(request: MeteringCrestFactorDbRequest): number;
+/** Crest factor (peak over RMS) in dB; `undefined` for silence, which has neither. */
+export function meteringCrestFactorDb(request: MeteringCrestFactorDbRequest): number | undefined;
 export function meteringCrestFactorDb(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<MeteringCrestFactorDbRequest>,
-): number;
-export function meteringCrestFactorDb(...args: unknown[]): number {
+): number | undefined;
+export function meteringCrestFactorDb(...args: unknown[]): number | undefined {
   return withEntry('meteringCrestFactorDb', () => {
     return monoMeter('meteringCrestFactorDb', args);
   });
@@ -260,10 +260,12 @@ export interface MeteringCrestFactorDbStereoRequest {
  * Takes the peak across both channels and the RMS over both together. An
  * out-of-phase pair cancels in the `0.5 * (left + right)` downmix
  * {@link meteringCrestFactorDb} would need, which understates its RMS and so
- * overstates the crest factor.
+ * overstates the crest factor. `undefined` when both channels are silent.
  */
-export function meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number;
-export function meteringCrestFactorDbStereo(...args: unknown[]): number {
+export function meteringCrestFactorDbStereo(
+  request: MeteringCrestFactorDbStereoRequest,
+): number | undefined;
+export function meteringCrestFactorDbStereo(...args: unknown[]): number | undefined {
   return withEntry('meteringCrestFactorDbStereo', () => {
     const r = requestOnly<MeteringCrestFactorDbStereoRequest>('meteringCrestFactorDbStereo', args);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
@@ -399,8 +401,8 @@ export interface PhaseScopeReport {
   radius: Float32Array;
   /** Angle of each point, `atan2(side, mid)`, in radians. */
   angleRad: Float32Array;
-  /** Stereo correlation over the full-resolution signal. */
-  correlation: number;
+  /** Stereo correlation over the full-resolution signal. Absent when either channel has zero energy. */
+  correlation?: number;
   /** Mean absolute point angle over the full-resolution signal, in radians. */
   averageAbsAngleRad: number;
   /** Largest point radius over the full-resolution signal. */
@@ -529,16 +531,21 @@ export interface WaveformPeaksReport {
 
 type StereoMeterFn = 'meteringStereoCorrelation' | 'meteringStereoWidth';
 
-function stereoMeter(requestName: StereoMeterFn, args: unknown[]): number {
+function stereoMeter(requestName: StereoMeterFn, args: unknown[]): number | undefined {
   const r = requestOnly<MeteringStereoCorrelationRequest>(requestName, args);
   assertAudioInput(r.left, r.sampleRate, r, 'left');
   assertAudioInput(r.right, r.sampleRate, r, 'right');
   return addon[requestName](r.left, r.right, r.sampleRate);
 }
 
-/** Uncentered correlation (cosine similarity) in [-1, 1] between equal-length channels. */
-export function meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number;
-export function meteringStereoCorrelation(...args: unknown[]): number {
+/**
+ * Uncentered correlation (cosine similarity) in [-1, 1] between equal-length channels.
+ * `undefined` when either channel has zero energy.
+ */
+export function meteringStereoCorrelation(
+  request: MeteringStereoCorrelationRequest,
+): number | undefined;
+export function meteringStereoCorrelation(...args: unknown[]): number | undefined {
   return withEntry('meteringStereoCorrelation', () => {
     return stereoMeter('meteringStereoCorrelation', args);
   });
@@ -549,13 +556,14 @@ export function meteringStereoCorrelation(...args: unknown[]): number {
  * side/mid RMS *amplitude* ratio, not the energy ratio. 0 = pure mono, ~1 =
  * wide stereo, larger = increasingly decorrelated / out-of-phase. The value is
  * unbounded and returns `Infinity` when the mid channel is silent (a
- * mono-collapsed / fully out-of-phase signal).
+ * mono-collapsed / fully out-of-phase signal). `undefined` when mid and side are
+ * both zero.
  *
  * Convert to dB with `20 * Math.log10(value)`; `10 * Math.log10` would
  * understate the true energy ratio by half.
  */
-export function meteringStereoWidth(request: MeteringStereoWidthRequest): number;
-export function meteringStereoWidth(...args: unknown[]): number {
+export function meteringStereoWidth(request: MeteringStereoWidthRequest): number | undefined;
+export function meteringStereoWidth(...args: unknown[]): number | undefined {
   return withEntry('meteringStereoWidth', () => {
     return stereoMeter('meteringStereoWidth', args);
   });

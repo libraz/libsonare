@@ -7,6 +7,7 @@ import {
   mixingScenePreset,
   RealtimeEngine,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers';
 
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {
@@ -170,14 +171,15 @@ describe('RealtimeEngine', () => {
       expect(() => engine.clearMidiFx(0)).not.toThrow();
       // A JSON string is no longer a config; the content of an object config is the core's to refuse.
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}' as never)).toThrow(TypeError);
-      expect(() => engine.setMidiFx(0, { transposeSemitones: '12' as never })).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      expectRefusal(
+        () => engine.setMidiFx(0, { transposeSemitones: '12' as never }),
+        TypeError,
+        /^RealtimeEngine\.setMidiFx: config\.transposeSemitones must be a number$/,
       );
-      expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: 'RealtimeEngine.setMidiFx: quantizePpq must be a positive PPQ length in range',
-        }),
+      expectRefusal(
+        () => engine.setMidiFx(0, { quantizePpq: 0 }),
+        RangeError,
+        /^RealtimeEngine\.setMidiFx: config\.quantizePpq must be a positive PPQ length in range$/,
       );
     } finally {
       engine.destroy();

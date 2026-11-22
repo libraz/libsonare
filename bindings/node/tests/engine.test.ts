@@ -787,7 +787,11 @@ describe('RealtimeEngine native binding', () => {
       expect(record.rmsDb).toHaveLength(record.numChannels);
       expect(typeof record.peakDb[0]).toBe('number');
       expect(typeof record.rmsDb[0]).toBe('number');
-      expect(Number.isFinite(record.integratedLufs)).toBe(true);
+      // Absent before the first gating block, -Infinity while nothing passes the gate.
+      if (record.integratedLufs !== undefined) {
+        expect(typeof record.integratedLufs).toBe('number');
+        expect(Number.isNaN(record.integratedLufs)).toBe(false);
+      }
     }
     engine.destroy();
   });

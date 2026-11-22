@@ -38,7 +38,9 @@ describe('engine meter input peaks and constructed insert values', () => {
       engine.resetMasterLoudnessMeter();
       engine.process([tone, tone]);
       const after = master().at(-1);
-      expect(after?.integratedLufs).toBeLessThanOrEqual(-100);
+      // Absent until the first gating block after the reset.
+      expect(after).toBeDefined();
+      expect('integratedLufs' in (after ?? {})).toBe(false);
       expect(after?.momentaryLufs).toBeGreaterThan(-60);
     } finally {
       engine.destroy();
@@ -81,7 +83,10 @@ describe('engine meter input peaks and constructed insert values', () => {
       if (busMeter) {
         expect(busMeter.inputPeakDb).toHaveLength(busMeter.numChannels);
         expect(busMeter.truePeakDbtp).toHaveLength(busMeter.numChannels);
-        expect(busMeter.maxTruePeakDbtp).toBeLessThanOrEqual(0);
+        // Absent when not measured; when present it is a real dBTP value.
+        if ('maxTruePeakDbtp' in busMeter) {
+          expect(busMeter.maxTruePeakDbtp).toBeLessThanOrEqual(0);
+        }
         expect(Math.max(...busMeter.inputPeakDb)).toBeGreaterThan(-60);
       }
     } finally {

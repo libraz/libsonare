@@ -48,8 +48,12 @@ export interface StreamingLoudnessGainStereoRequest {
 
 // Native still names the input true peak `truePeakDb`.
 function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
-  const { truePeakDb, ...rest } = raw as NativeResult & { truePeakDb: number };
-  return { ...rest, truePeakDbtp: truePeakDb } as unknown as StreamingLoudnessGainResult;
+  const { truePeakDb, ...rest } = raw as NativeResult & { truePeakDb?: number };
+  // An absent native peak stays absent.
+  return {
+    ...rest,
+    ...(truePeakDb !== undefined ? { truePeakDbtp: truePeakDb } : {}),
+  } as unknown as StreamingLoudnessGainResult;
 }
 
 /**
@@ -59,7 +63,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  * measures there, so `loudnessStaticGainDb` equals the gain {@link masterAudio}
  * applies (ceiling clamp included) and `truePeakDbtp` is the peak that clamp
  * used. The gain is computed from `config.loudness` whether or not the stage is
- * enabled; a silent or below-gate stage input yields 0 dB.
+ * enabled; a stage input with no measurable loudness leaves it absent.
  *
  * @throws {TypeError} when `sampleRate` is missing
  * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`

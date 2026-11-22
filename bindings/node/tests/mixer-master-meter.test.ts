@@ -136,8 +136,8 @@ describe('Mixer master meter', () => {
     expect(measured.momentaryLufs).toBeGreaterThan(-20);
     expect(measured.maxTruePeakDbtp).toBeGreaterThan(-10);
     const unmeasured = read({ enabled: true, measureLufs: false, measureTruePeak: false });
-    expect(unmeasured.momentaryLufs).toBeLessThan(measured.momentaryLufs - 60);
-    expect(unmeasured.maxTruePeakDbtp).toBeLessThan(measured.maxTruePeakDbtp - 60);
+    expect('momentaryLufs' in unmeasured).toBe(false);
+    expect('maxTruePeakDbtp' in unmeasured).toBe(false);
     expect(unmeasured.peakDbL).toBeCloseTo(measured.peakDbL, 3);
   });
 

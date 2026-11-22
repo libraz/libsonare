@@ -478,11 +478,10 @@ export interface SilenceCommonReport {
    * A frame counts as silent when it sits at least `topDb` under its own
    * signal's peak RMS, so each signal's deepest dip decides whether any
    * threshold can find silence in it, and the union needs all of them quiet at
-   * once — hence the minimum across the signals. `0` for an all-silent signal,
-   * where the peak is 0 and the ratio has no value; `120` is the floor the dB
-   * conversion clamps at, reported for a signal holding a zero-valued frame.
+   * once — hence the minimum across the signals. Absent when any signal's peak
+   * is 0 or it holds an exactly zero frame, where the depth has no finite value.
    */
-  silenceCeilingDb: number;
+  silenceCeilingDb?: number;
   /**
    * How many intervals the most fragmented signal produced alone.
    *
@@ -657,7 +656,11 @@ export interface EqSpectrumSnapshot {
   postRight: Float32Array;
   /** Current gain of each band in dB. */
   bandGainDb: Float32Array;
-  /** Post-EQ level of the 16 geometrically spaced bands from 20 Hz to 20 kHz, in dB relative to full scale. */
+  /**
+   * Post-EQ level of the 16 geometrically spaced bands from 20 Hz to 20 kHz, in dB
+   * relative to full scale. `-Infinity` for a band of zero power; NaN for a band
+   * no bin reaches and before the first transform.
+   */
   profileDb: Float32Array;
   /** Most recent automatic gain in dB. */
   lastAutoGainDb: number;
@@ -667,18 +670,18 @@ export interface EqSpectrumSnapshot {
 
 /** Loudness measurement result (EBU R128 / ITU-R BS.1770). */
 export interface LufsResult {
-  /** Integrated loudness over the whole signal, in LUFS. */
+  /** Integrated loudness over the whole signal, in LUFS. `-Infinity` when nothing passes the gate. */
   integratedLufs: number;
-  /** Final complete 400 ms window, not Max-M. */
-  momentaryLufs: number;
-  /** Final complete 3 s window, not Max-S. */
-  shortTermLufs: number;
-  /** Maximum 400 ms window (EBU R128 Max-M). */
-  maxMomentaryLufs: number;
-  /** Maximum 3 s window (EBU R128 Max-S). */
-  maxShortTermLufs: number;
-  /** Loudness range in LU. */
-  loudnessRangeLu: number;
+  /** Final complete 400 ms window, not Max-M. `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  momentaryLufs?: number;
+  /** Final complete 3 s window, not Max-S. `-Infinity` for zero energy; absent when the signal is shorter than one window (a 1 s signal has no short-term reading). */
+  shortTermLufs?: number;
+  /** Maximum 400 ms window (EBU R128 Max-M). `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  maxMomentaryLufs?: number;
+  /** Maximum 3 s window (EBU R128 Max-S). `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  maxShortTermLufs?: number;
+  /** Loudness range in LU. Absent when not measured. */
+  loudnessRangeLu?: number;
 }
 
 /**

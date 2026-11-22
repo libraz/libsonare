@@ -673,7 +673,7 @@ Napi::Value SonareWrap::MeteringCrestFactorDbStereo(const Napi::CallbackInfo& in
   if (!ReadStereoPair("left", "right", info, &interleaved, &frames, &sample_rate)) {
     return env.Undefined();
   }
-  return Napi::Number::New(
+  return MeasuredNumber(
       env, sonare::metering::crest_factor_db_interleaved(interleaved.data(), frames, 2));
   SONARE_NODE_CATCH(env)
 }

@@ -347,6 +347,9 @@ describe('mastering mixing surface', () => {
         maxBlockSize: 256,
       });
       try {
+        // A strip that has not processed audio has measured no true peak, so feed it a block.
+        const block = () => Float32Array.from({ length: 256 }, (_, i) => 0.5 * Math.sin(i / 8));
+        mixer.processStereo([block(), block(), block()], [block(), block(), block()]);
         const meter = mixer.stripMeter('host') as unknown as Record<string, unknown>;
         expect(meter).toHaveProperty(name);
         expect(meter).not.toHaveProperty(oldName);

@@ -412,7 +412,8 @@ describe('PlaybackLoudnessMeter', () => {
     ).toThrow();
     // The addon must still be usable after the rejected construction.
     using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
-    expect(Number.isFinite(meter.integratedLufs)).toBe(true);
+    // Nothing pushed yet, so there is no integrated reading.
+    expect(meter.integratedLufs).toBeUndefined();
   });
 });
 
@@ -577,7 +578,8 @@ describe('playback scalar reads', () => {
       expect(typeof reads[name], name).toBe('number');
     }
     expect(typeof getter(meter, 'integratedLufs')).toBe('function');
-    expect(typeof meter.integratedLufs).toBe('number');
+    // Unmeasured before the first gating block.
+    expect(meter.integratedLufs).toBeUndefined();
   });
 });
 

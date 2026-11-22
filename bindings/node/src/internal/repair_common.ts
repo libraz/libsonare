@@ -56,11 +56,18 @@ export function humDetection(
   return { ...native, harmonicDbfs: Float32Array.from(native.harmonicDbfs) };
 }
 
-/** A noise detection with the addon's `bandFloorDbfs` array as a `Float32Array`. */
+/** A noise detection with the addon's band arrays as a `Float32Array` and an `Int32Array`. */
 export function noiseDetection(
-  native: Omit<NoiseDetection, 'bandFloorDbfs'> & { bandFloorDbfs: ArrayLike<number> },
+  native: Omit<NoiseDetection, 'bandFloorDbfs' | 'bandFloorBand'> & {
+    bandFloorDbfs: ArrayLike<number>;
+    bandFloorBand: ArrayLike<number>;
+  },
 ): NoiseDetection {
-  return { ...native, bandFloorDbfs: Float32Array.from(native.bandFloorDbfs) };
+  return {
+    ...native,
+    bandFloorDbfs: Float32Array.from(native.bandFloorDbfs),
+    bandFloorBand: Int32Array.from(native.bandFloorBand),
+  };
 }
 
 /** A dehum report with its detection's array typed. */

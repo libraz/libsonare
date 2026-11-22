@@ -471,7 +471,8 @@ describe('repair: mono calls return the audio beside the report', () => {
     const denoised = sonare.masteringRepairDenoiseClassical({ samples: noisy, sampleRate });
     expect(denoised.samples).toHaveLength(noisy.length);
     expectFiniteReport(denoised.report);
-    expect(denoised.report.detected.bandFloorDbfs).toHaveLength(32);
+    expect(denoised.report.detected.bandFloorDbfs).toHaveLength(27);
+    expect(denoised.report.detected.bandFloorBand).toHaveLength(27);
     const dereverbed = sonare.masteringRepairDereverbClassical({ samples: noisy, sampleRate });
     expect(dereverbed.samples).toHaveLength(noisy.length);
     expectFiniteReport(dereverbed.report);

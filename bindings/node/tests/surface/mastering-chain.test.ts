@@ -32,6 +32,18 @@ function tone(hz: number): Float32Array {
 const left = tone(440);
 const right = tone(330);
 
+/** Long enough (6 s) for the loudness range to be measured; shorter signals leave it absent. */
+function longTone(hz: number): Float32Array {
+  const out = new Float32Array(sampleRate * 6);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = 0.3 * Math.sin((2 * Math.PI * hz * i) / sampleRate);
+  }
+  return out;
+}
+
+const longLeft = longTone(440);
+const longRight = longTone(330);
+
 function errorOf(fn: () => unknown): unknown {
   try {
     fn();
@@ -698,8 +710,13 @@ describe('chain config: nested form only, tokens only', () => {
 
 describe('results: unit-named fields and objects', () => {
   it('chain results name the loudness range with its unit', () => {
-    const mono = sonare.masterAudio({ samples: left, sampleRate, preset: 'pop' });
-    const stereo = sonare.masterAudioStereo({ left, right, sampleRate, preset: 'pop' });
+    const mono = sonare.masterAudio({ samples: longLeft, sampleRate, preset: 'pop' });
+    const stereo = sonare.masterAudioStereo({
+      left: longLeft,
+      right: longRight,
+      sampleRate,
+      preset: 'pop',
+    });
     for (const result of [mono, stereo] as unknown as Record<string, unknown>[]) {
       expect(typeof result.outputLoudnessRangeLu).toBe('number');
       expect('outputLra' in result).toBe(false);
@@ -708,7 +725,9 @@ describe('results: unit-named fields and objects', () => {
       expect(typeof report.after.loudnessRangeLu).toBe('number');
       expect('loudnessRange' in report.before).toBe(false);
     }
-    expectTypeOf<MasteringChainResult['outputLoudnessRangeLu']>().toEqualTypeOf<number>();
+    expectTypeOf<MasteringChainResult['outputLoudnessRangeLu']>().toEqualTypeOf<
+      number | undefined
+    >();
   });
 
   it('streamingLoudnessGain reports truePeakDbtp', () => {
@@ -721,7 +740,7 @@ describe('results: unit-named fields and objects', () => {
   });
 
   it('the assistant returns objects, not JSON strings', () => {
-    const result = sonare.masteringAssistantSuggest(left, sampleRate, {
+    const result = sonare.masteringAssistantSuggest(longLeft, sampleRate, {
       targetPlatform: 'podcast',
     });
     expect(typeof result).toBe('object');
@@ -738,7 +757,7 @@ describe('results: unit-named fields and objects', () => {
   });
 
   it('the audio profile is grouped and its defects are absent when detection is off', () => {
-    const profile = sonare.masteringAudioProfile(left, sampleRate);
+    const profile = sonare.masteringAudioProfile(longLeft, sampleRate);
     expect(profile.loudness).toEqual(
       expect.objectContaining({
         integratedLufs: expect.any(Number),
@@ -843,14 +862,19 @@ describe('results: unit-named fields and objects', () => {
 
 describe('masterAudioAsync: a preset or overrides required, every failure a rejection', () => {
   it('resolves with the synchronous result', async () => {
-    const sync = sonare.masterAudio({ samples: left, sampleRate, preset: 'pop' });
-    const request = await sonare.masterAudioAsync({ samples: left, sampleRate, preset: 'pop' });
-    const positional = await sonare.masterAudioAsync(left, sampleRate, { preset: 'pop' });
+    const sync = sonare.masterAudio({ samples: longLeft, sampleRate, preset: 'pop' });
+    const request = await sonare.masterAudioAsync({ samples: longLeft, sampleRate, preset: 'pop' });
+    const positional = await sonare.masterAudioAsync(longLeft, sampleRate, { preset: 'pop' });
     expectClose(request.samples, sync.samples);
     expectClose(positional.samples, sync.samples);
     expect(typeof request.outputLoudnessRangeLu).toBe('number');
     expect('outputLra' in (request as object)).toBe(false);
-    const stereo = await sonare.masterAudioStereoAsync({ left, right, sampleRate, preset: 'pop' });
+    const stereo = await sonare.masterAudioStereoAsync({
+      left: longLeft,
+      right: longRight,
+      sampleRate,
+      preset: 'pop',
+    });
     expect(typeof stereo.outputLoudnessRangeLu).toBe('number');
   });
 

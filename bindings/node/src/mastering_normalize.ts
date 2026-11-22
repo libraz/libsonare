@@ -1,4 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { OptionsOf } from './validation.js';
 import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
@@ -39,11 +40,14 @@ export function normalize(...args: unknown[]): Float32Array {
     const request = sampleOneShot<NormalizeRequest>('normalize', args);
     const resolvedMode = resolveNormalizeMode(request.mode);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return addon.normalize(
-      request.samples,
-      request.sampleRate,
-      request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
-      resolvedMode,
+    // The core names the signal it measures `audio`; the caller wrote `samples`.
+    return withRespelled({ audio: { name: 'samples', scale: 1 } }, () =>
+      addon.normalize(
+        request.samples,
+        request.sampleRate,
+        request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
+        resolvedMode,
+      ),
     );
   });
 }

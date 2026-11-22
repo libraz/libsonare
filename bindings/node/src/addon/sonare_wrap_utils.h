@@ -4,6 +4,7 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
+#include <cmath>
 #include <cstring>
 #include <exception>
 #include <new>
@@ -294,6 +295,17 @@ inline bool RequireMonoArgs(const Napi::CallbackInfo& info) {
     return false;
   }
   return true;
+}
+
+/// @brief Sets @p key to @p value unless it is NaN: a scalar that was not measured is an absent
+///        member, while -Infinity (no measurable level) is set as a number.
+inline void SetMeasured(Napi::Object& out, const char* key, double value) {
+  if (!std::isnan(value)) out.Set(key, Napi::Number::New(out.Env(), value));
+}
+
+/// @brief The single-number counterpart of SetMeasured: NaN (not measured) is undefined.
+inline Napi::Value MeasuredNumber(Napi::Env env, double value) {
+  return std::isnan(value) ? env.Undefined() : Napi::Number::New(env, value);
 }
 
 /// @brief Copies @p n floats from @p data into a fresh Float32Array with one memcpy;

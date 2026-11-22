@@ -58,7 +58,8 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
   });
 
   it('reports output true-peak, LRA, and per-stage gain reductions', () => {
-    const x = sine(4096, 220, 0.3);
+    // Six seconds, so the loudness range is measured; shorter signals leave it absent.
+    const x = sine(SR * 6, 220, 0.3);
     const result = masterAudio(x, SR, {
       overrides: {
         dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },

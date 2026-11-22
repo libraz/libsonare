@@ -204,8 +204,12 @@ describe('renamed result fields', () => {
   it('names the melody and dynamics fields with their units', () => {
     expect(typeof result.melody.meanFrequencyHz).toBe('number');
     expect(typeof result.melody.vibratoRateHz).toBe('number');
-    expect(typeof result.dynamics.loudnessRangeLu).toBe('number');
+    // The range is absent on a signal too short to measure it.
+    expect('loudnessRangeLu' in result.dynamics).toBe(false);
+    const longDynamics = analyzeDynamics(triad(6), sampleRate);
+    expect(typeof longDynamics.loudnessRangeLu).toBe('number');
     expect('loudnessRangeDb' in result.dynamics).toBe(false);
+    expect('loudnessRangeDb' in longDynamics).toBe(false);
     for (const point of result.melody.pitches) {
       expect(typeof point.timeSec).toBe('number');
       expect('time' in point).toBe(false);
@@ -244,7 +248,7 @@ describe('renamed result fields', () => {
     for (const boundary of boundaries.boundaries) {
       expect(typeof boundary.timeSec).toBe('number');
     }
-    expect('loudnessRangeLu' in analyzeDynamics(samples, sampleRate)).toBe(true);
+    expect('loudnessRangeLu' in analyzeDynamics(triad(6), sampleRate)).toBe(true);
     const dynamics = analyzeDynamics(samples, sampleRate);
     expect(dynamics.loudnessTimesSec).toBeInstanceOf(Float32Array);
     expect(dynamics.loudnessTimesSec.length).toBe(dynamics.loudnessRmsDb.length);

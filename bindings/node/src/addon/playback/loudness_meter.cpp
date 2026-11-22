@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdint>
 
 #include "sonare_wrap_options.h"
@@ -85,6 +86,8 @@ Napi::Value PlaybackLoudnessMeterWrap::IntegratedLufs(const Napi::CallbackInfo& 
   float out = 0.0f;
   sonare_node::ThrowIfError(env, sonare_playback_loudness_meter_integrated_lufs(meter_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
+  // NaN (no block yet) is reported as undefined.
+  if (std::isnan(out)) return env.Undefined();
   return Napi::Number::New(env, out);
   SONARE_NODE_CATCH(env)
 }

@@ -387,15 +387,13 @@ export interface MasteringRepairNoiseBandBinsRequest {
  * band count, so the last entry is the one-past-the-end bin of the top band.
  *
  * The geometric band edges are rounded to bins, so a band narrower than the bin
- * spacing comes out EMPTY -- `bins[k] === bins[k + 1]` -- and its
- * `bandFloorDbfs[k]` is the floor sentinel because no bin landed in it, not
- * because that region was quiet. Telling those two apart is what this entry is
- * for; nothing in the detection result distinguishes them. Empty bands are
- * confined to the low end, where the geometric edges are closest together, but
- * they are not a run starting at band 0 -- the lowest edge is clamped to the DC
- * bin, which usually leaves band 0 holding it. Test each band rather than
- * scanning until the first non-empty one. How many there are depends on both
- * `nFft` and `sampleRate`, since the grid's top edge is Nyquist.
+ * spacing comes out EMPTY -- `bins[k] === bins[k + 1]` -- and the detection
+ * leaves it out of `bandFloorBand`, since nothing landed in it to measure.
+ * Empty bands are confined to the low end, where the geometric edges are
+ * closest together, but they are not a run starting at band 0 -- the lowest
+ * edge is clamped to the DC bin, which usually leaves band 0 holding it. How
+ * many there are depends on both `nFft` and `sampleRate`, since the grid's top
+ * edge is Nyquist.
  *
  * Only the analysis geometry decides the grid, so no denoise options are taken
  * and no audio is read.
@@ -404,7 +402,10 @@ export interface MasteringRepairNoiseBandBinsRequest {
  * ```ts
  * const bins = masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 48000 });
  * const detected = masteringRepairDetectNoiseFloor({ samples, sampleRate: 48000 });
- * const measured = detected.bandFloorDbfs.filter((_, k) => bins[k] < bins[k + 1]);
+ * detected.bandFloorBand.forEach((band, i) => {
+ *   const loHz = (bins[band] * 48000) / 1024;
+ *   console.log(loHz, detected.bandFloorDbfs[i]);
+ * });
  * ```
  */
 export function masteringRepairNoiseBandBins(

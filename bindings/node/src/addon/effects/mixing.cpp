@@ -281,7 +281,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
 
   // Per-strip meter snapshots. NOTE: the LUFS fields (momentaryLufs /
   // shortTermLufs / integratedLufs) are integrators whose windows this one-shot
-  // mix does not fill, so they read the -120 dB floor sentinel; use the
+  // mix does not fill, so they are not measured (absent); use the
   // streaming Mixer for meaningful loudness. The true-peak fields are not
   // integrators -- each is a max-hold over the block just processed and is valid
   // immediately. The mixer above was created with a block size equal to the full

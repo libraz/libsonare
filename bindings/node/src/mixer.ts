@@ -333,7 +333,7 @@ export class Mixer {
 
   /**
    * Latest master-output meter reading, the same record {@link busMeter} reads
-   * for a bus. All dB fields are finite and floored at -120.
+   * for a bus. A level with no energy reads `-Infinity`; one not yet measured is absent.
    *
    * @throws SonareError with code `InvalidState` when the meter has never been enabled.
    */

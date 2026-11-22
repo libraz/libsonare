@@ -50,7 +50,7 @@ describe('splitSilenceCommonWithReport', () => {
     expect(report.silenceCeilingDb).toBeLessThan(6);
   });
 
-  it('puts the ceiling at or above topDb for takes that never go quiet together', () => {
+  it('leaves the ceiling absent for takes that never go quiet together', () => {
     // Each take is silent for half its length and the halves do not overlap, so
     // the union covers everything while each take has silence of its own.
     const half = Math.floor(DURATION_SAMPLES / 2);
@@ -62,7 +62,8 @@ describe('splitSilenceCommonWithReport', () => {
     // takes do not share it -- the alignment case. The interval counts do NOT
     // say so: a take that sounds once and stops counts 1, the same as a take
     // with no silence at all, which is why the ceiling carries the verdict.
-    expect(report.silenceCeilingDb).toBeGreaterThanOrEqual(TOP_DB);
+    // A take holding an exactly zero frame has no measurable ceiling, so it is absent.
+    expect('silenceCeilingDb' in report).toBe(false);
     expect(report.maxSignalIntervals).toBe(1);
     expect(report.minSignalIntervals).toBe(1);
   });

@@ -115,9 +115,16 @@ describe('mastering metering surface', () => {
       ['ebur128LoudnessRangeLu', {}],
     ];
     it.each(monoPairs)('%s', (name, options) => {
-      const viaRequest = api[name]({ samples, sampleRate, ...options }) as number;
-      const viaPositional = api[name](samples, sampleRate, options) as number;
-      expect(Math.abs(viaRequest - viaPositional)).toBeLessThan(1e-6);
+      // The loudness range needs a signal longer than the half-second default to be measured.
+      const input = name === 'ebur128LoudnessRangeLu' ? tone(6) : samples;
+      const viaRequest = api[name]({ samples: input, sampleRate, ...options }) as
+        | number
+        | undefined;
+      const viaPositional = api[name](input, sampleRate, options) as number | undefined;
+      expect(viaRequest === undefined).toBe(viaPositional === undefined);
+      if (viaRequest !== undefined && viaPositional !== undefined) {
+        expect(Math.abs(viaRequest - viaPositional)).toBeLessThan(1e-6);
+      }
     });
 
     it('meteringSpectrumFrame takes startSample in the options', () => {
@@ -296,12 +303,15 @@ describe('mastering metering surface', () => {
 
   describe('planar channels', () => {
     it('measures loudness from planar channels like the interleaved native call', () => {
+      // Six seconds, so the loudness range is measured on both paths.
+      const left = tone(6, 0.4, 440);
+      const right = tone(6, 0.3, 660);
       const result = lufsMultichannel({ channels: [left, right], sampleRate });
       const native = (
         addon as unknown as {
           lufsInterleaved: (...args: unknown[]) => {
             integratedLufs: number;
-            loudnessRangeLu: number;
+            loudnessRangeLu?: number;
           };
         }
       ).lufsInterleaved(
@@ -312,7 +322,8 @@ describe('mastering metering surface', () => {
         sampleRate,
       );
       expect(result.integratedLufs).toBeCloseTo(native.integratedLufs, 5);
-      expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRangeLu, 5);
+      expect(native.loudnessRangeLu).toBeDefined();
+      expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRangeLu as number, 5);
     });
 
     it('returns the series under momentaryLufs / shortTermLufs', () => {

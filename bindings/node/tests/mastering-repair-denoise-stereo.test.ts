@@ -76,8 +76,11 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     // range rather than on the report's floor sentinel or at 0.
     expect(result.reports[0].detected.floorDbfs).toBeGreaterThan(-90);
     expect(result.reports[0].detected.floorDbfs).toBeLessThan(-10);
-    expect(result.reports[0].detected.bandFloorDbfs).toHaveLength(32);
-    expect(result.reports[0].detected.bandFloorDbfs.every(Number.isFinite)).toBe(true);
+    // Compact: one entry per band that holds a bin, each named by bandFloorBand.
+    const detected = result.reports[0].detected;
+    expect(detected.bandFloorDbfs).toHaveLength(27);
+    expect(detected.bandFloorBand).toHaveLength(detected.bandFloorDbfs.length);
+    expect(detected.bandFloorDbfs.every(Number.isFinite)).toBe(true);
 
     // A mask that actually attenuated something, bounded by the configured
     // depth: at the default reductionDb of 26 no cell may report more.

@@ -729,9 +729,9 @@ describe('standalone functions', () => {
     }
 
     expect(meteringCrestFactorDbStereo({ left, right, sampleRate })).toBeCloseTo(3.01, 1);
-    // The anti-phase pair cancels to silence in the downmix, which reports the
-    // 0 dB neutral rather than the pair's real 3 dB crest factor.
-    expect(meteringCrestFactorDb(downmix, sampleRate)).toBeCloseTo(0, 5);
+    // The anti-phase pair cancels to silence in the downmix, which has no crest
+    // factor at all rather than the pair's real 3 dB.
+    expect(meteringCrestFactorDb(downmix, sampleRate)).toBeUndefined();
   });
 
   it('rejects a stereo pair whose channel lengths differ', () => {

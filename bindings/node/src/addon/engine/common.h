@@ -136,12 +136,12 @@ inline Napi::Object MeterTelemetryToObject(Napi::Env env,
   out.Set("rmsDb", rms_db);
   out.Set("truePeakDb", true_peak_db);
   out.Set("inputPeakDb", input_peak_db);
-  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_dbtp));
-  out.Set("correlation", Napi::Number::New(env, record.correlation));
-  out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
-  out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));
-  out.Set("shortTermLufs", Napi::Number::New(env, record.short_term_lufs));
-  out.Set("integratedLufs", Napi::Number::New(env, record.integrated_lufs));
+  SetMeasured(out, "maxTruePeakDb", record.max_true_peak_dbtp);
+  SetMeasured(out, "correlation", record.correlation);
+  SetMeasured(out, "monoCompatWidth", record.mono_compat_width);
+  SetMeasured(out, "momentaryLufs", record.momentary_lufs);
+  SetMeasured(out, "shortTermLufs", record.short_term_lufs);
+  SetMeasured(out, "integratedLufs", record.integrated_lufs);
   out.Set("gainReductionDb", Napi::Number::New(env, record.gain_reduction_db));
   out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
   return out;

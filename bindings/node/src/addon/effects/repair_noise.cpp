@@ -1,6 +1,7 @@
 /// @file
 /// @brief Node bindings for the broadband and tonal noise repairs: denoise, dehum.
 
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -71,13 +72,19 @@ SonareDehumConfig DefaultDehumConfig() {
 template <typename T>
 Napi::Object EmitNoiseDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("floorDbfs", Napi::Number::New(env, detection.floor_dbfs));
-  Napi::Array band_floor_dbfs = Napi::Array::New(env, SONARE_REPAIR_NOISE_BAND_COUNT);
+  SetMeasured(out, "floorDbfs", detection.floor_dbfs);
+  // Only bands holding a bin carry a level; a band with none (NaN) is left out with its index.
+  Napi::Array band_floor_dbfs = Napi::Array::New(env);
+  Napi::Array band_floor_band = Napi::Array::New(env);
+  uint32_t measured = 0;
   for (int i = 0; i < SONARE_REPAIR_NOISE_BAND_COUNT; ++i) {
-    band_floor_dbfs.Set(static_cast<uint32_t>(i),
-                        Napi::Number::New(env, detection.band_floor_dbfs[i]));
+    if (std::isnan(detection.band_floor_dbfs[i])) continue;
+    band_floor_dbfs.Set(measured, Napi::Number::New(env, detection.band_floor_dbfs[i]));
+    band_floor_band.Set(measured, Napi::Number::New(env, i));
+    ++measured;
   }
   out.Set("bandFloorDbfs", band_floor_dbfs);
+  out.Set("bandFloorBand", band_floor_band);
   return out;
 }
 
@@ -124,8 +131,9 @@ Napi::Object EmitHumDetection(Napi::Env env, const T& detection) {
   out.Set("fundamentalHz", Napi::Number::New(env, detection.fundamental_hz));
   out.Set("fundamentalProminence", Napi::Number::New(env, detection.fundamental_prominence));
   out.Set("harmonics", Napi::Number::New(env, detection.harmonics));
-  Napi::Array harmonic_dbfs = Napi::Array::New(env, SONARE_DEHUM_MAX_HARMONICS);
-  for (int i = 0; i < SONARE_DEHUM_MAX_HARMONICS; ++i) {
+  // The measured harmonics are a prefix; the unmeasured (NaN) suffix past Nyquist is cut.
+  Napi::Array harmonic_dbfs = Napi::Array::New(env);
+  for (int i = 0; i < SONARE_DEHUM_MAX_HARMONICS && !std::isnan(detection.harmonic_dbfs[i]); ++i) {
     harmonic_dbfs.Set(static_cast<uint32_t>(i), Napi::Number::New(env, detection.harmonic_dbfs[i]));
   }
   out.Set("harmonicDbfs", harmonic_dbfs);

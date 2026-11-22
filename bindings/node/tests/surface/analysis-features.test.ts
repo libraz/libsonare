@@ -346,7 +346,7 @@ describe('sample-taking functions', () => {
     expect(typeof first.endSec).toBe('number');
     expect('startSeconds' in first).toBe(false);
     expect('endSeconds' in first).toBe(false);
-    const loud = sonare.lufs(tinySignal(1), sampleRate) as unknown as Record<string, unknown>;
+    const loud = sonare.lufs(tinySignal(6), sampleRate) as unknown as Record<string, unknown>;
     expect(typeof loud.loudnessRangeLu).toBe('number');
     expect('loudnessRange' in loud).toBe(false);
   });

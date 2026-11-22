@@ -167,17 +167,12 @@ describe('Mixer runtime methods', () => {
     mixer.processStereo(left, right);
 
     const meter = mixer.stripMeter('host');
-    for (const field of [
-      'peakDbL',
-      'peakDbR',
-      'rmsDbL',
-      'rmsDbR',
-      'correlation',
-      'momentaryLufs',
-      'integratedLufs',
-    ] as const) {
+    for (const field of ['peakDbL', 'peakDbR', 'rmsDbL', 'rmsDbR', 'correlation'] as const) {
       expect(Number.isFinite(meter[field])).toBe(true);
     }
+    // One 8-sample block fills no loudness window and passes no gating block.
+    expect('momentaryLufs' in meter).toBe(false);
+    expect('integratedLufs' in meter).toBe(false);
     expect(typeof meter.likelyMonoCompatible).toBe('boolean');
     expect(meter.peakDbL).toBeGreaterThan(-120);
 
@@ -330,8 +325,8 @@ describe('Mixer solo behaviour', () => {
     expect(soloPeak).toBeLessThan(baselinePeak * 0.6);
 
     expect(soloed.stripMeter('host').peakDbL).toBeGreaterThan(-120);
-    expect(soloed.stripMeter('guest').peakDbL).toBeCloseTo(-120, 1);
-    expect(soloed.stripMeter('music-bed').peakDbL).toBeCloseTo(-120, 1);
+    expect(soloed.stripMeter('guest').peakDbL).toBe(Number.NEGATIVE_INFINITY);
+    expect(soloed.stripMeter('music-bed').peakDbL).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('keeps a solo-safe strip audible when another strip is soloed', () => {
@@ -346,7 +341,7 @@ describe('Mixer solo behaviour', () => {
     // non-soloed strip is silenced.
     expect(mixer.stripMeter('host').peakDbL).toBeGreaterThan(-120);
     expect(mixer.stripMeter('guest').peakDbL).toBeGreaterThan(-120);
-    expect(mixer.stripMeter('music-bed').peakDbL).toBeCloseTo(-120, 1);
+    expect(mixer.stripMeter('music-bed').peakDbL).toBe(Number.NEGATIVE_INFINITY);
   });
 });
 

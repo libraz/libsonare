@@ -43,30 +43,36 @@ export interface SurroundPan {
 
 /** Master-output meter reading for a mix. */
 export interface MixMeterSnapshot {
-  /** Left-channel sample peak in dBFS. */
-  peakDbL: number;
-  /** Right-channel sample peak in dBFS. */
-  peakDbR: number;
-  /** Left-channel RMS level in dBFS. */
-  rmsDbL: number;
-  /** Right-channel RMS level in dBFS. */
-  rmsDbR: number;
-  /** Inter-channel correlation in `[-1, 1]`. */
-  correlation: number;
-  /** Stereo width measured by the mono-compatibility check. */
-  monoCompatWidth: number;
+  /** Left-channel sample peak in dBFS. `-Infinity` for silence; absent when not measured. */
+  peakDbL?: number;
+  /** Right-channel sample peak in dBFS. `-Infinity` for silence; absent when not measured. */
+  peakDbR?: number;
+  /** Left-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
+  rmsDbL?: number;
+  /** Right-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
+  rmsDbR?: number;
+  /** Inter-channel correlation in `[-1, 1]`. Absent when not measured. */
+  correlation?: number;
+  /**
+   * Stereo width measured by the mono-compatibility check. Absent when not
+   * measured; `+Infinity` when the mid signal is silent but the side is not.
+   */
+  monoCompatWidth?: number;
   /** Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude. */
   monoCompatPeak: number;
   /** RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude. */
   monoCompatSideRms: number;
   /** True when the mono-compatibility check finds no collapse risk. */
   likelyMonoCompatible: boolean;
-  /** Momentary loudness in LUFS. */
-  momentaryLufs: number;
-  /** Short-term loudness in LUFS. */
-  shortTermLufs: number;
-  /** Integrated loudness in LUFS. */
-  integratedLufs: number;
+  /** Momentary loudness in LUFS. `-Infinity` for silence; absent until the window fills. */
+  momentaryLufs?: number;
+  /** Short-term loudness in LUFS. `-Infinity` for silence; absent until the window fills. */
+  shortTermLufs?: number;
+  /**
+   * Integrated loudness in LUFS. Absent before the first gating block;
+   * `-Infinity` while nothing passes the gate.
+   */
+  integratedLufs?: number;
   /** Gain reduction applied by the dynamics stages, in dB. */
   gainReductionDb: number;
   /**
@@ -75,23 +81,25 @@ export interface MixMeterSnapshot {
    * reconstruction-filter group delay (a few samples) behind the block, so every
    * value has its whole stencil and the reading does not depend on the block
    * size. Use `meteringTruePeakDbtp` over the whole signal for an exact dBTP number.
+   * `-Infinity` for silence; absent when not measured.
    */
-  truePeakDbtpL: number;
-  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
-  truePeakDbtpR: number;
-  /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
-  maxTruePeakDbtp: number;
+  truePeakDbtpL?: number;
+  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. `-Infinity` for silence; absent when not measured. */
+  truePeakDbtpR?: number;
+  /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. `-Infinity` for silence; absent when not measured. */
+  maxTruePeakDbtp?: number;
   /** Sequence counter; increments each time a new snapshot is published. */
   seq: number;
   /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
   numChannels: number;
-  /** Per-plane peak dB, length numChannels; [0]/[1] mirror peakDbL/peakDbR. */
+  /** Per-plane peak dB, length numChannels; [0]/[1] mirror peakDbL/peakDbR. `-Infinity` for silence, NaN in a plane that was not measured. */
   peakDb: number[];
-  /** Per-plane RMS dB, length numChannels; [0]/[1] mirror rmsDbL/rmsDbR. */
+  /** Per-plane RMS dB, length numChannels; [0]/[1] mirror rmsDbL/rmsDbR. `-Infinity` for silence, NaN in a plane that was not measured. */
   rmsDb: number[];
   /**
    * Per-plane true-peak dBTP, length numChannels; [0]/[1] mirror
-   * {@link truePeakDbtpL}/R and carry the same streaming caveat.
+   * {@link truePeakDbtpL}/R and carry the same streaming caveat. `-Infinity` for
+   * silence, NaN in a plane that was not measured.
    */
   truePeakDbtp: number[];
 }

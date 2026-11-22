@@ -388,8 +388,8 @@ export class Audio {
     return meteringDcOffsetFn(this.data, this.sampleRate);
   }
 
-  /** Crest factor (peak over RMS) in dB. */
-  crestFactorDb(): number {
+  /** Crest factor (peak over RMS) in dB; `undefined` for silence. */
+  crestFactorDb(): number | undefined {
     return meteringCrestFactorDbFn(this.data, this.sampleRate);
   }
 
@@ -443,8 +443,8 @@ export class Audio {
     );
   }
 
-  /** EBU R128 loudness range in LU. */
-  ebur128LoudnessRangeLu(): number {
+  /** EBU R128 loudness range in LU; `undefined` when shorter than 3 s or silent. */
+  ebur128LoudnessRangeLu(): number | undefined {
     return ebur128LoudnessRangeLuFn(this.data, this.sampleRate);
   }
 

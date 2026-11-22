@@ -256,7 +256,7 @@ describe('StreamingMasteringChain', () => {
     expect(chain.flushMono()).toHaveLength(0);
   });
 
-  it('accepts denoise by default, refuses its whole-signal estimator and a loudness stage', () => {
+  it('accepts denoise by default and refuses its whole-signal estimator', () => {
     expect(
       () =>
         new StreamingMasteringChain({
@@ -273,14 +273,41 @@ describe('StreamingMasteringChain', () => {
           repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
         }),
     ).toThrow(/quantile/);
-    expect(
-      () =>
-        new StreamingMasteringChain({
-          sampleRate: 48000,
-          numChannels: 1,
-          loudness: { targetLufs: -14 },
-        }),
-    ).toThrow();
+  });
+
+  it('builds a loudness stage without a static gain and applies no gain', () => {
+    // The static gain is measured offline and is absent for a take with no measurable
+    // loudness; a chain built without one applies none, exactly as a 0 dB gain does.
+    const config = {
+      sampleRate: 48000,
+      numChannels: 1,
+      maxBlockSize: 256,
+      loudness: { targetLufs: -14 },
+    };
+    const ungained = new StreamingMasteringChain(config);
+    const unity = new StreamingMasteringChain({ ...config, loudnessStaticGainDb: 0 });
+    try {
+      for (let b = 0; b < 8; b++) {
+        const input = Float32Array.from(
+          { length: 256 },
+          (_, k) => 0.25 * Math.sin((b * 256 + k) * 0.03),
+        );
+        expect(Array.from(ungained.processMono(input))).toEqual(
+          Array.from(unity.processMono(input)),
+        );
+      }
+      // Control: a real gain moves the same input, so the equality above is not vacuous.
+      const gained = new StreamingMasteringChain({ ...config, loudnessStaticGainDb: -12 });
+      const probe = new Float32Array(256).fill(0.25);
+      let a = probe;
+      let c = probe;
+      for (let b = 0; b < 16; b++) {
+        a = ungained.processMono(probe);
+        c = gained.processMono(probe);
+      }
+      expect(Math.abs(c[255])).toBeLessThan(Math.abs(a[255]) * 0.5);
+    } finally {
+    }
   });
 
   it('reports the state a discard blocks when a stage produces a non-finite value', () => {

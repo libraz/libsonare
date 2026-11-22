@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -93,11 +94,11 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
-  result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
-  result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
-  result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
-  result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRangeLu", Napi::Number::New(env, lufs.loudness_range_lu));
+  SetMeasured(result, "momentaryLufs", lufs.momentary_lufs);
+  SetMeasured(result, "shortTermLufs", lufs.short_term_lufs);
+  SetMeasured(result, "maxMomentaryLufs", lufs.max_momentary_lufs);
+  SetMeasured(result, "maxShortTermLufs", lufs.max_short_term_lufs);
+  SetMeasured(result, "loudnessRangeLu", lufs.loudness_range_lu);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -173,11 +174,11 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
-  result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
-  result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
-  result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
-  result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRangeLu", Napi::Number::New(env, lufs.loudness_range_lu));
+  SetMeasured(result, "momentaryLufs", lufs.momentary_lufs);
+  SetMeasured(result, "shortTermLufs", lufs.short_term_lufs);
+  SetMeasured(result, "maxMomentaryLufs", lufs.max_momentary_lufs);
+  SetMeasured(result, "maxShortTermLufs", lufs.max_short_term_lufs);
+  SetMeasured(result, "loudnessRangeLu", lufs.loudness_range_lu);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -238,7 +239,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeLu(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, out_lra);
+  return MeasuredNumber(env, out_lra);
   SONARE_NODE_CATCH(env)
 }
 
@@ -259,7 +260,7 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn) 
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, out_value);
+  return MeasuredNumber(env, out_value);
 }
 
 }  // namespace
@@ -571,7 +572,7 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, out_value);
+  return MeasuredNumber(env, out_value);
 }
 
 }  // namespace
@@ -670,7 +671,7 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   out.Set("side", side);
   out.Set("radius", radius);
   out.Set("angleRad", angle);
-  out.Set("correlation", Napi::Number::New(env, result.correlation));
+  SetMeasured(out, "correlation", result.correlation);
   out.Set("averageAbsAngleRad", Napi::Number::New(env, result.average_abs_angle_rad));
   out.Set("maxRadius", Napi::Number::New(env, result.max_radius));
   return out;
@@ -818,7 +819,7 @@ Napi::Value SonareWrap::CrestFactorDbInstance(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, out_db);
+  return MeasuredNumber(env, out_db);
   SONARE_NODE_CATCH(env)
 }
 
@@ -1035,7 +1036,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeLuInstance(const Napi::CallbackInfo&
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return Napi::Number::New(env, out_lra);
+  return MeasuredNumber(env, out_lra);
   SONARE_NODE_CATCH(env)
 }
 

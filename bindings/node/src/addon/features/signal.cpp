@@ -217,7 +217,7 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
   Napi::Value intervals = IntResult(env, out, out_count);
   if (!with_report) return intervals;
   Napi::Object report_object = Napi::Object::New(env);
-  report_object.Set("silenceCeilingDb", report.silence_ceiling_db);
+  SetMeasured(report_object, "silenceCeilingDb", report.silence_ceiling_db);
   report_object.Set("maxSignalIntervals", report.max_signal_intervals);
   report_object.Set("minSignalIntervals", report.min_signal_intervals);
   Napi::Object result = Napi::Object::New(env);

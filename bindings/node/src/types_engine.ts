@@ -97,35 +97,48 @@ export interface EngineMeterTelemetry {
   seq: number;
   /** Number of valid per-plane meters (1..8). */
   numChannels: number;
-  /** Per-plane peak level in dB (length `numChannels`). */
+  /**
+   * Per-plane peak level in dB (length `numChannels`). `-Infinity` for an all-zero
+   * plane, NaN in a plane that was not written.
+   */
   peakDb: number[];
-  /** Per-plane RMS level in dB (length `numChannels`). */
+  /** Per-plane RMS level in dB (length `numChannels`). `-Infinity` for silence, NaN in a plane that was not measured. */
   rmsDb: number[];
   /**
    * Per-plane inter-sample (true) peak in dB (length `numChannels`), from the
    * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement that
    * runs one reconstruction-filter group delay (a few samples) behind the block,
    * so the reading does not depend on the block size. `meteringTruePeakDbtp`
-   * measures a whole signal at once.
+   * measures a whole signal at once. `-Infinity` for silence, NaN in a plane that was
+   * not measured.
    */
   truePeakDbtp: number[];
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbtp}. */
-  maxTruePeakDbtp: number;
-  /** Stereo correlation in `[-1, 1]` (front pair). */
-  correlation: number;
-  /** Mono-compatibility width metric (front pair). */
-  monoCompatWidth: number;
-  /** Momentary loudness (LUFS). */
-  momentaryLufs: number;
-  /** Short-term loudness (LUFS). */
-  shortTermLufs: number;
-  /** Integrated loudness (LUFS). */
-  integratedLufs: number;
+  /**
+   * Maximum inter-sample peak across channels in dB. See {@link truePeakDbtp}.
+   * `-Infinity` for silence; absent when not measured.
+   */
+  maxTruePeakDbtp?: number;
+  /** Stereo correlation in `[-1, 1]` (front pair). Absent when not measured. */
+  correlation?: number;
+  /**
+   * Mono-compatibility width metric (front pair). Absent when not measured;
+   * `+Infinity` when the mid signal is silent but the side is not.
+   */
+  monoCompatWidth?: number;
+  /** Momentary loudness (LUFS). `-Infinity` for silence; absent until the window fills. */
+  momentaryLufs?: number;
+  /** Short-term loudness (LUFS). `-Infinity` for silence; absent until the window fills. */
+  shortTermLufs?: number;
+  /**
+   * Integrated loudness (LUFS). Absent before the first gating block; `-Infinity`
+   * while nothing passes the gate.
+   */
+  integratedLufs?: number;
   /** Gain reduction in dB. */
   gainReductionDb: number;
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
-  /** Per-plane peak at the engine input tap, in dB. */
+  /** Per-plane peak at the engine input tap, in dB. `-Infinity` for an all-zero plane, NaN in a plane that was not written. */
   inputPeakDb: number[];
 }
 
@@ -144,7 +157,10 @@ export interface EngineScopeTelemetry {
   seq: number;
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
-  /** FFT magnitude spectrum in dBFS, linear-spaced over `[0, Nyquist]`. */
+  /**
+   * FFT magnitude spectrum in dBFS, linear-spaced over `[0, Nyquist]`. `-Infinity`
+   * for a band of zero power; NaN for a band no bin reaches and before the first transform.
+   */
   bands: number[];
   /**
    * Goniometer/vectorscope sample points as `{ left, right }` objects. The
@@ -624,7 +640,11 @@ export interface EngineFreezeOptions {
 
 /** Options of {@link RealtimeEngine.setParameter}. */
 export interface EngineSetParameterOptions {
-  /** Ramp to the value through the engine smoother instead of jumping. Default `false`. */
+  /**
+   * Ramp to the value over the engine smoothing time instead of stepping. Default `false`. A
+   * reserved target (fader, pan, width, insert or instrument parameter) de-zippers every change
+   * over its fixed 5 ms either way, and under a ramp the two cascade.
+   */
   smoothed?: boolean;
 }
 

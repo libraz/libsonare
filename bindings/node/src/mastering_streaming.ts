@@ -58,7 +58,10 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfigInput
    * input ({@link streamingLoudnessGain} returns it). When `loudness.enabled` is
    * set, the streaming chain cannot measure whole-signal integrated LUFS, so it
    * applies this fixed gain per block before the loudness stage's true-peak
-   * limiter. When omitted, an enabled loudness stage throws.
+   * limiter. When omitted, the stage applies no gain and its limiter still
+   * runs, as the offline chain does for input with no measurable loudness
+   * ({@link streamingLoudnessGain} omits the gain for such input). An infinite
+   * value is refused.
    */
   loudnessStaticGainDb?: number;
 
@@ -68,7 +71,8 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfigInput
    * `(loudness.ceilingDbtp - loudnessStaticGainPeakDbtp) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview
    * does not drive the loudness limiter harder than the offline chain. When
-   * omitted, the static gain is applied verbatim.
+   * omitted, or `-Infinity` (the peak of digital silence), the static gain is
+   * applied verbatim. NaN and `+Infinity` are refused.
    */
   loudnessStaticGainPeakDbtp?: number;
 }
@@ -107,8 +111,9 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  * (stereo only), `maximizer.truePeakLimiter`. Constructing with ANY of the five
  * whole-signal repair stages enabled (`repair.declick`, `repair.declip`,
  * `repair.decrackle`, `repair.dehum`, `repair.dereverb`) throws an Error. A
- * `loudness`-enabled config also throws unless
- * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} is supplied.
+ * `loudness`-enabled config applies
+ * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} per block, or no
+ * gain when it is omitted.
  *
  * `repair.denoise` runs here, but only with a noise estimator that is recursive
  * in time. A stream defaults it to `'spp'` (`3`, speech-presence probability),

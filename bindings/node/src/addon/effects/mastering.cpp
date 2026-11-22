@@ -32,10 +32,10 @@ template <typename Summary>
 Napi::Object MasteringLoudnessSummaryToObject(Napi::Env env, const Summary& summary) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("integratedLufs", Napi::Number::New(env, summary.integrated_lufs));
-  out.Set("maxMomentaryLufs", Napi::Number::New(env, summary.max_momentary_lufs));
-  out.Set("maxShortTermLufs", Napi::Number::New(env, summary.max_short_term_lufs));
+  SetMeasured(out, "maxMomentaryLufs", summary.max_momentary_lufs);
+  SetMeasured(out, "maxShortTermLufs", summary.max_short_term_lufs);
   out.Set("truePeakDbtp", Napi::Number::New(env, summary.true_peak_dbtp));
-  out.Set("loudnessRangeLu", Napi::Number::New(env, LoudnessRangeLu(summary)));
+  SetMeasured(out, "loudnessRangeLu", LoudnessRangeLu(summary));
   return out;
 }
 
@@ -48,6 +48,7 @@ void SetMasteringReport(Napi::Env env, Napi::Object out, const Report& report) {
   report_object.Set("maxGainReductionDb", Napi::Number::New(env, report.max_gain_reduction_db));
   report_object.Set("loudnessTargetLimited",
                     Napi::Boolean::New(env, report.loudness_target_limited != 0));
+  SetMeasured(report_object, "loudnessGainDb", report.loudness_gain_db);
   Napi::Float32Array band_energy = Napi::Float32Array::New(env, SONARE_MASTERING_REPORT_BAND_COUNT);
   for (size_t index = 0; index < SONARE_MASTERING_REPORT_BAND_COUNT; ++index) {
     band_energy[index] = report.band_energy_delta_db[index];
@@ -64,7 +65,8 @@ void SetMasteringReport(Napi::Env env, Napi::Object out, const Report& report) {
 template <typename Result>
 void SetChainMetrics(Napi::Env env, Napi::Object out, const Result& metrics) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, metrics.output_true_peak_dbtp));
-  out.Set("outputLoudnessRangeLu", Napi::Number::New(env, metrics.output_loudness_range_lu));
+  SetMeasured(out, "outputLoudnessRangeLu", metrics.output_loudness_range_lu);
+  SetMeasured(out, "loudnessGainDb", metrics.loudness_gain_db);
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, metrics.loudness_target_limited));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, metrics.non_finite_substitution_count));
@@ -441,9 +443,9 @@ namespace {
 Napi::Object StreamingLoudnessGainToObject(
     Napi::Env env, const sonare::mastering::api::StreamingLoudnessGain& gain) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("loudnessStaticGainDb", Napi::Number::New(env, gain.loudness_static_gain_db));
-  out.Set("truePeakDb", Napi::Number::New(env, gain.true_peak_db));
-  out.Set("integratedLufs", Napi::Number::New(env, gain.integrated_lufs));
+  SetMeasured(out, "loudnessStaticGainDb", gain.loudness_static_gain_db);
+  SetMeasured(out, "truePeakDb", gain.true_peak_db);
+  SetMeasured(out, "integratedLufs", gain.integrated_lufs);
   return out;
 }
 

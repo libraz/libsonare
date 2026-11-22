@@ -25,6 +25,7 @@ const capture = (run: () => unknown): unknown => {
 // any tolerance is consulted.
 const source = sine(440, 1.0, 0.1);
 const reference = sine(997, 1.7, 0.5);
+const TAKES = { source, reference } as const;
 
 describe('masteringAbMatchLoudness', () => {
   it('returns the source at the reference loudness', () => {
@@ -62,6 +63,23 @@ describe('masteringAbMatchLoudness', () => {
     // The gain is not clamped, so the reported peak is the only headroom signal.
     expect(matched.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDbtp(matched.samples, SR), 2);
     expect(matched.matchedTruePeakDbtp).toBeGreaterThan(meteringTruePeakDbtp(source, SR));
+  });
+
+  it.each([
+    ['source', 'reference'],
+    ['reference', 'source'],
+  ] as const)('refuses a silent %s, naming it', (silentRole, otherRole) => {
+    const silent = new Float32Array(SR);
+    const request = { [silentRole]: silent, [otherRole]: TAKES[otherRole], sampleRate: SR } as {
+      source: Float32Array;
+      reference: Float32Array;
+      sampleRate: number;
+    };
+    const call = () => masteringAbMatchLoudness(request);
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(
+      new RegExp(`^masteringAbMatchLoudness: ${silentRole} has no measurable loudness$`),
+    );
   });
 
   it('refuses a request that omits sampleRate', () => {
