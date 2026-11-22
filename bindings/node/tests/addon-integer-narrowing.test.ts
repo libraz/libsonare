@@ -159,4 +159,14 @@ describe('the addon refuses a number it cannot hold', () => {
       expect(() => run(-1), scope).toThrow(RangeError);
     }
   });
+
+  it('names the clipping region length by its public name in every refusal', () => {
+    const samples = tone();
+    const clip = (minRegion: unknown) =>
+      native.meteringDetectClipping(samples, SAMPLE_RATE, undefined, minRegion);
+    expect(() => clip('1')).toThrow(TypeError);
+    expect(() => clip('1')).toThrow(/minRegionSamples/);
+    expect(() => clip(-1)).toThrow(RangeError);
+    expect(() => clip(-1)).toThrow(/minRegionSamples/);
+  });
 });

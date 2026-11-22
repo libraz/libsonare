@@ -337,7 +337,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
                          sonare::metering::kClippingThresholdDbDomain, &threshold))
     return env.Undefined();
   int64_t min_region_value{};
-  if (!OptionalInt64Arg(env, info, 3, "minRegionValue", 1, &min_region_value))
+  if (!OptionalInt64Arg(env, info, 3, "minRegionSamples", 1, &min_region_value))
     return env.Undefined();
   if (min_region_value < 0) {
     Napi::RangeError::New(env, "minRegionSamples must be an integer of at least 0")
