@@ -162,6 +162,21 @@ TEST_CASE("the CQT-family entries refuse each member by its C parameter name", "
                      &out) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "gamma must be finite and at least 0");
   }
+  // The inverse reads gamma exactly as the forward transform does: NaN is automatic.
+  const std::vector<float> magnitude(24 * 4, 0.1f);
+  float* audio = nullptr;
+  size_t audio_length = 0;
+  for (const float bad_gamma : {std::numeric_limits<float>::infinity(), -1.0f}) {
+    CHECK(sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 24, 4, 22050, 512, 32.7f, 12,
+                              bad_gamma, 1, &audio,
+                              &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "gamma must be finite and at least 0");
+    CHECK(audio == nullptr);
+  }
+  REQUIRE(sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 24, 4, 22050, 512, 32.7f, 12,
+                              std::numeric_limits<float>::quiet_NaN(), 1, &audio,
+                              &audio_length) == SONARE_OK);
+  sonare_free_floats(audio);
 }
 
 TEST_CASE("the chroma-from-CQT entries restate the derived grid in their own arguments",

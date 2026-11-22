@@ -282,9 +282,9 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
 
 /// @brief Reconstructs mono audio from row-major VQT magnitude with Griffin-Lim.
 /// @details Shape, ownership, and iteration rules match @ref sonare_cqt_to_audio.
-/// @param gamma Bandwidth offset in Hz, resolved exactly as @ref sonare_vqt
-/// resolves it: negative or NaN selects the librosa-compatible ERB-derived
-/// automatic value; zero selects standard CQT.
+/// @param gamma Bandwidth offset in Hz, read exactly as @ref sonare_vqt reads it: finite and
+/// >= 0, NaN (not given) selecting the ERB-derived automatic value and 0 the constant-Q
+/// bandwidth; a negative or infinite value is refused with @c SONARE_ERROR_INVALID_PARAMETER.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
                                 int n_frames, int sample_rate, size_t hop_length, float fmin_hz,

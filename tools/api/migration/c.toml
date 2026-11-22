@@ -435,6 +435,14 @@ test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads v
 
 [[entry]]
 kind = "function"
+old = "sonare_vqt"
+changed = "gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0'"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_core_test.cpp::C VQT reads NaN as automatic gamma and rejects a negative or infinite one"
+
+[[entry]]
+kind = "function"
 old = "sonare_detect_bpm"
 changed = "takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER"
 domain = "analysis"
@@ -3979,7 +3987,7 @@ test = "tests/api/sonare_c_core_test.cpp::C API reconstructs CQT and VQT magnitu
 [[entry]]
 kind = "function"
 old = "sonare_vqt_to_audio"
-changed = "takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_vqt_to_audio_checked is the only behaviour"
+changed = "takes size_t input_length after magnitude, which must equal n_bins * n_frames; the length check of sonare_vqt_to_audio_checked is the only behaviour; gamma is read as sonare_vqt reads it, NaN for the automatic value and otherwise finite and >= 0, so a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER"
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_core_test.cpp::C API reconstructs CQT and VQT magnitude with checked ownership"

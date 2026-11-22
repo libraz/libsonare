@@ -1,3 +1,4 @@
+#include <cmath>
 #include <string>
 
 #include "c_api/features_internal.h"
@@ -78,7 +79,8 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
     check::integer_within(hop_length, sonare::kCqtHopLengthDomain, "hop_length");
     check::greater_than(fmin, 0.0, "fmin_hz");
     check::integer_within(bins_per_octave, sonare::kCqtCountDomain, "bins_per_octave");
-    if (gamma != nullptr) validate_vqt_gamma(*gamma);
+    // NaN is the automatic spelling, as in sonare_vqt; every other value is a bandwidth offset.
+    if (gamma != nullptr && !std::isnan(*gamma)) check::at_least(*gamma, 0.0, "gamma");
     check::integer_within(n_iter, sonare_c_detail::kGriffinLimIterationsDomain, "n_iter");
     check_inverse_input_length(input_length, n_bins, n_frames, "n_bins");
   });

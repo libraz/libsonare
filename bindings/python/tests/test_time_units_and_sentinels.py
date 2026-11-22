@@ -326,6 +326,13 @@ class TestSentinelsAreAbsence:
         for gamma in (-1.0, float("nan")):
             with pytest.raises(SonareValueError, match="gamma"):
                 libsonare.vqt(samples, SR, n_bins=24, gamma=gamma)
+        # The inverse reads gamma the same way; an omitted gamma is not sent as -1.
+        magnitude = np.asarray(constant_q.magnitude)
+        assert libsonare.vqt_to_audio(magnitude, SR, n_iter=1).size > 0
+        assert libsonare.vqt_to_audio(magnitude, SR, gamma=0.0, n_iter=1).size > 0
+        for gamma in (-1.0, float("nan")):
+            with pytest.raises(SonareValueError, match="gamma"):
+                libsonare.vqt_to_audio(magnitude, SR, gamma=gamma, n_iter=1)
 
     def test_metering_percentiles(self) -> None:
         samples = _noise(SR * 4)
