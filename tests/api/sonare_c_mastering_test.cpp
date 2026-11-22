@@ -13,6 +13,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
@@ -1056,8 +1057,10 @@ TEST_CASE("sonare_mastering_amp_preset_catalog reports each rig's resolved confi
     const auto& params = entry["params"];
     REQUIRE(params["drive"].as_number() == static_cast<double>(config.drive));
     REQUIRE(params["bassDb"].as_number() == static_cast<double>(config.bass_db));
-    REQUIRE(params["ampModel"].as_number() == static_cast<int>(config.amp_model));
-    REQUIRE(params["powerTube"].as_number() == static_cast<int>(config.power_tube));
+    REQUIRE(params["ampModel"].as_string() ==
+            sonare::mastering::api::detail::enum_choice_name(config.amp_model));
+    REQUIRE(params["powerTube"].as_string() ==
+            sonare::mastering::api::detail::enum_choice_name(config.power_tube));
     REQUIRE(params["preampStages"].as_number() == static_cast<double>(config.preamp_stages));
     REQUIRE(params["cab"].as_bool() == config.cab);
     REQUIRE(params["micBInvert"].as_bool() == config.mic_b_invert);

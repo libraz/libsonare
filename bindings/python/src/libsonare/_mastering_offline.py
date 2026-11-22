@@ -413,7 +413,7 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     One entry per rig, in ``saturation.ampSim`` ``presetIndex`` order, each
     with ``index``, ``name``, and ``params`` (the rig's resolved starting
     values under the insert's camelCase keys, e.g. ``drive``, ``bassDb``,
-    ``ampModel``, with enum-valued keys as integer ordinals). Raises
+    ``ampModel``, with enum-valued keys as their choice tokens). Raises
     NOT_SUPPORTED when built without mastering.
     """
     lib = _get_lib()

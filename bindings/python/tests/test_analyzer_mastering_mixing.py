@@ -278,7 +278,9 @@ def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
     first = catalog[0]
     assert first.name == "cleanCombo"
     assert "drive" in first.params
-    assert "ampModel" in first.params
+    # An enum-valued key carries its choice token, not an ordinal.
+    assert isinstance(first.params["ampModel"], str)
+    assert isinstance(first.params["powerTube"], str)
 
 
 def test_capability_catalog_aggregates_processors_and_presets() -> None:

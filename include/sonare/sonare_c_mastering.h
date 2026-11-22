@@ -392,7 +392,7 @@ SonareError sonare_mastering_processor_catalog(char** out_json);
 /// @details One entry per rig, in `saturation.ampSim` `presetIndex` order:
 ///   `{"index": int, "name": string, "params": {...}}`. `params` holds the rig's
 ///   resolved starting values under the insert's camelCase keys (`drive`,
-///   `bassDb`, `ampModel`, ...), with enum-valued keys as integer ordinals.
+///   `bassDb`, `ampModel`, ...), with enum-valued keys as their choice tokens.
 ///   Read-only metadata for an editor positioning inherited controls; the DSP
 ///   is still driven by `presetIndex` plus sparse overrides.
 /// @param[out] out_json Receives the document; the caller releases it with

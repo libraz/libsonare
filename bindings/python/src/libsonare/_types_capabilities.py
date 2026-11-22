@@ -393,7 +393,7 @@ class MasteringAmpPresetCatalogEntry:
 
     ``params`` holds the rig's resolved starting values under the insert's
     camelCase parameter keys (``drive``, ``bassDb``, ``ampModel``, ...), with
-    enum-valued keys as integer ordinals. Read-only metadata for an editor
+    enum-valued keys as their choice tokens. Read-only metadata for an editor
     positioning inherited controls -- the DSP is still driven by the rig
     index plus sparse overrides.
     """
@@ -403,7 +403,7 @@ class MasteringAmpPresetCatalogEntry:
     name: str
     """Canonical preset identifier accepted by the amp-sim insert."""
     params: dict[str, float | int | bool]
-    """Resolved starting values under the insert's camelCase keys; enum keys as integer ordinals."""
+    """Resolved starting values under the insert's camelCase keys; enum keys as their tokens."""
 
 
 @dataclass(frozen=True)
