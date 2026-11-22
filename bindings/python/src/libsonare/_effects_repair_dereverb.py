@@ -22,7 +22,7 @@ from ._ffi import (
     SonareReverbDetection,
     SonareRoomEstimate,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _float_data, _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -550,7 +550,8 @@ def mastering_repair_dereverb_config_for_room(
         raise _refuse("estimate must not be None")
     bands, band_count = _to_c_float_array(estimate.rt60_bands, arg_name="estimate.rt60_bands")
     c_estimate = SonareRoomEstimate(
-        volume=float(estimate.volume),
+        # Mirrors RoomEstimate.volume, NaN when unmeasured: read as data, not as an argument.
+        volume=_float_data(estimate.volume, "estimate.volume"),
         rt60_bands=ctypes.cast(bands, ctypes.POINTER(ctypes.c_float)),
         band_count=band_count,
     )

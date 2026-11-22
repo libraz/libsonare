@@ -747,12 +747,24 @@ def test_room_geometry_from_estimate_places_a_small_room_inside_itself() -> None
 def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
     silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
     assert math.isnan(silent.length_m)
-    with pytest.raises(libsonare.SonareValueError):
+    # The estimate's own NaN reaches the library, which names the cause.
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^room_geometry_from_estimate: room estimate has no measurable dimensions",
+    ):
         libsonare.room_geometry_from_estimate(silent)
     with pytest.raises(libsonare.SonareValueError, match="triple"):
         libsonare.room_geometry_from_estimate(
             libsonare.RoomEstimate(100.0, 6.0, 5.0, 3.0, 1.0, 0.5, [], []), source=(1.0, 2.0)
         )
+
+
+@acoustic
+def test_an_unmeasured_estimate_leaves_the_dereverb_delay_as_given() -> None:
+    silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
+    assert math.isnan(silent.volume)
+    config = libsonare.mastering_repair_dereverb_config_for_room(silent, late_delay_ms=33.0)
+    assert config["late_delay_ms"] == pytest.approx(33.0)
 
 
 _STEREO_ROOM = dict(

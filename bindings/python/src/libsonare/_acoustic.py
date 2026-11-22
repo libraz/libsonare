@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _domain_float, _narrow_double
+from ._narrowing import _domain_float, _float_data, _narrow_double
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -418,13 +418,15 @@ def room_geometry_from_estimate(
     bands_ptr, bands_count, _bands_owner = _band_array_args(
         estimate.band_absorption, arg_name="band_absorption"
     )
+    # Each field mirrors the RoomEstimate field of the same name, which reads an
+    # unmeasured value as NaN, so the fields are read as data rather than as arguments.
     c_estimate = SonareRoomEstimate(
-        volume=estimate.volume,
-        length_m=estimate.length_m,
-        width_m=estimate.width_m,
-        height_m=estimate.height_m,
-        drr_db=estimate.drr_db,
-        confidence=estimate.confidence,
+        volume=_float_data(estimate.volume, "estimate.volume"),
+        length_m=_float_data(estimate.length_m, "estimate.length_m"),
+        width_m=_float_data(estimate.width_m, "estimate.width_m"),
+        height_m=_float_data(estimate.height_m, "estimate.height_m"),
+        drr_db=_float_data(estimate.drr_db, "estimate.drr_db"),
+        confidence=_float_data(estimate.confidence, "estimate.confidence"),
         band_absorption=bands_ptr,
         rt60_bands=None,
         band_count=bands_count,

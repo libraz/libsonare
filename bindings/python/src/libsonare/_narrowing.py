@@ -144,6 +144,27 @@ def _domain_float(value: object, name: str) -> ctypes.c_float:
     raise _refuse_type(f"{name} must be a number")
 
 
+def _float_data(value: object, name: str) -> ctypes.c_float:
+    """Carry a float a library result returned back into a C ``float`` field.
+
+    A result field reads an unmeasured value as NaN, so a non-finite value is
+    data here and passes unchanged; only a finite value no float can hold is
+    refused, since it would saturate into an infinity the result never held.
+    """
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            number = float(value)
+        except OverflowError:
+            raise _refuse(_float_narrowing_error(name)) from None
+        except (TypeError, ValueError):
+            pass
+        else:
+            if math.isfinite(number) and abs(number) > _FLOAT32_MAX:
+                raise _refuse(_float_narrowing_error(name))
+            return ctypes.c_float(number)
+    raise _refuse_type(f"{name} must be a number")
+
+
 def _narrow_double(value: object, name: str) -> float:
     """Return ``value`` as a plain ``float``, or refuse what ``c_double`` would change.
 
