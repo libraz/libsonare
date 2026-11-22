@@ -25,6 +25,19 @@ import {
 } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
+import {
+  AUTOMATION_TARGET_KINDS,
+  CHORD_QUALITY_CODES,
+  FADE_CURVES,
+  KEY_MODES,
+  LOOP_MODES,
+  MARKER_KINDS,
+  OVERLAP_POLICIES,
+  SOURCE_KINDS,
+  STEM_LAYOUTS,
+  TRACK_KINDS,
+  WARP_MODES,
+} from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
 import { isNonArrayObject } from './internal/value_guards.js';
@@ -737,36 +750,6 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
     }
   });
 }
-
-const TRACK_KINDS = { audio: 0, midi: 1, aux: 2 } as const;
-const SOURCE_KINDS = { audio: 0, midi: 1 } as const;
-const OVERLAP_POLICIES = { disallow: 0, allow: 1 } as const;
-const FADE_CURVES = { linear: 0, equalPower: 1, exponential: 2, logarithmic: 3 } as const;
-const LOOP_MODES = { off: 0, loop: 1 } as const;
-const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
-const AUTOMATION_TARGET_KINDS = { opaque: 0, trackFaderDb: 1, trackPan: 2 } as const;
-const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
-const STEM_LAYOUTS = { mono: 1, stereo: 2 } as const;
-const KEY_MODES = {
-  unknown: 0,
-  major: 1,
-  minor: 2,
-  dorian: 3,
-  phrygian: 4,
-  lydian: 5,
-  mixolydian: 6,
-  locrian: 7,
-} as const satisfies Record<ProjectKeyMode, number>;
-const CHORD_QUALITY_CODES = {
-  unknown: 0,
-  major: 1,
-  minor: 2,
-  diminished: 3,
-  augmented: 4,
-  dominant: 5,
-  halfDiminished: 6,
-  suspended: 7,
-} as const satisfies Record<ProjectChordQuality, number>;
 
 /**
  * A closed-set token to its native ordinal. A non-string is a `TypeError` (an

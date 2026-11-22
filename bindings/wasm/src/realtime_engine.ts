@@ -35,6 +35,7 @@ import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
+import { MARKER_KINDS, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isNonArrayObject } from './internal/value_guards.js';
@@ -214,8 +215,6 @@ function assertUmpWords(words: UmpWords): UmpWords {
   return words;
 }
 
-const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
-const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
 const DITHERS = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
 /** Longest explicit metronome click, one second at the highest supported rate (`sonare_c_types_engine.h`). */
 const METRONOME_CLICK_SAMPLES_MAX = 384000;
