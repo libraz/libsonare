@@ -268,7 +268,8 @@ describe('tuning is reported in cents', () => {
 
 describe('analysis records', () => {
   it('analyze returns the unified, renamed shapes', () => {
-    const result = analyze(triad(), sampleRate, { tuningCents: 0 });
+    // Long enough for a loudness-range reading (short-term windows are 3 s).
+    const result = analyze(triad(6), sampleRate, { tuningCents: 0 });
     expect(result).not.toHaveProperty('beatTimes');
     expect(result).not.toHaveProperty('downbeatIndices');
     expect(result).not.toHaveProperty('tuning');
@@ -312,9 +313,16 @@ describe('analysis records', () => {
   });
 
   it('analyzeDynamics reports loudness range in LU', () => {
-    const result = analyzeDynamics(triad(), sampleRate);
-    expect(result).toHaveProperty('loudnessRangeLu');
+    const result = analyzeDynamics(triad(6), sampleRate);
+    expect(typeof result.loudnessRangeLu).toBe('number');
+    expect(Number.isFinite(result.loudnessRangeLu)).toBe(true);
     expect(result).not.toHaveProperty('loudnessRangeDb');
+  });
+
+  it('analyzeDynamics leaves the loudness range absent on a half-second signal', () => {
+    const result = analyzeDynamics(triad(), sampleRate);
+    expect('loudnessRangeLu' in result).toBe(false);
+    expect(Number.isFinite(result.peakDb)).toBe(true);
   });
 
   it('analyzeDynamics reports the loudness curve timestamps in seconds', () => {

@@ -106,11 +106,11 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
 
   const auto& dyn = analyzer.dynamics();
   val out = val::object();
-  out.set("dynamicRangeDb", dyn.dynamic_range_db);
-  out.set("peakDb", dyn.peak_db);
-  out.set("rmsDb", dyn.rms_db);
-  out.set("crestFactor", dyn.crest_factor);
-  out.set("loudnessRangeLu", dyn.loudness_range_lu);
+  setMeasured(out, "dynamicRangeDb", dyn.dynamic_range_db);
+  setMeasured(out, "peakDb", dyn.peak_db);
+  setMeasured(out, "rmsDb", dyn.rms_db);
+  setMeasured(out, "crestFactor", dyn.crest_factor);
+  setMeasured(out, "loudnessRangeLu", dyn.loudness_range_lu);
   out.set("isCompressed", dyn.is_compressed);
 
   const auto& curve = analyzer.loudness_curve();

@@ -3,14 +3,32 @@
  */
 
 import type { MasteringAudioProfileDefects } from '../public_types_mastering.js';
+import type { HumDetection, NoiseDetection } from '../public_types_repair.js';
 
-/** Grouped defects as the profile and repair documents carry them, with the detection arrays as `Float32Array`. */
+/** Grouped defects as the profile and repair documents carry them, with the detection arrays typed. */
 export function audioDefectsFromNative(native: unknown): MasteringAudioProfileDefects {
   const d = native as MasteringAudioProfileDefects;
+  return { ...d, noise: noiseDetection(d.noise), hum: humDetection(d.hum) };
+}
+
+/** A document hum detection with its `harmonicDbfs` array as a `Float32Array`. */
+export function humDetection(
+  native: Omit<HumDetection, 'harmonicDbfs'> & { harmonicDbfs: ArrayLike<number> },
+): HumDetection {
+  return { ...native, harmonicDbfs: Float32Array.from(native.harmonicDbfs) };
+}
+
+/** A document noise detection with its band arrays as a `Float32Array` and an `Int32Array`. */
+export function noiseDetection(
+  native: Omit<NoiseDetection, 'bandFloorDbfs' | 'bandFloorBand'> & {
+    bandFloorDbfs: ArrayLike<number>;
+    bandFloorBand: ArrayLike<number>;
+  },
+): NoiseDetection {
   return {
-    ...d,
-    noise: { ...d.noise, bandFloorDbfs: Float32Array.from(d.noise.bandFloorDbfs) },
-    hum: { ...d.hum, harmonicDbfs: Float32Array.from(d.hum.harmonicDbfs) },
+    ...native,
+    bandFloorDbfs: Float32Array.from(native.bandFloorDbfs),
+    bandFloorBand: Int32Array.from(native.bandFloorBand),
   };
 }
 

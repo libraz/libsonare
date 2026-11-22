@@ -4,7 +4,11 @@
  */
 
 import { withEntry } from './internal/entry.js';
-import { interleaveMeterChannels, lufsSeriesFromNative } from './internal/metering_native.js';
+import {
+  interleaveMeterChannels,
+  lufsSeriesFromNative,
+  measured,
+} from './internal/metering_native.js';
 import { getSonareModule } from './module_state.js';
 import type { LufsResult, LufsSeriesResult } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -89,18 +93,19 @@ export function lufsSeriesMultichannel(...args: unknown[]): LufsSeriesResult {
 
 /**
  * Standards-compliant EBU R128 loudness range (LRA) in LU. Pass the buffer's
- * actual `sampleRate`: K-weighting is sample-rate dependent.
+ * actual `sampleRate`: K-weighting is sample-rate dependent. `undefined`
+ * when no short-term window passes the gate: a signal shorter than 3 s, or silence.
  */
-export function ebur128LoudnessRangeLu(request: Ebur128LoudnessRangeLuRequest): number;
+export function ebur128LoudnessRangeLu(request: Ebur128LoudnessRangeLuRequest): number | undefined;
 export function ebur128LoudnessRangeLu(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<Ebur128LoudnessRangeLuRequest>,
-): number;
-export function ebur128LoudnessRangeLu(...args: unknown[]): number {
+): number | undefined;
+export function ebur128LoudnessRangeLu(...args: unknown[]): number | undefined {
   return withEntry('ebur128LoudnessRangeLu', () => {
     const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().ebur128LoudnessRangeLu(r.samples, r.sampleRate);
+    return measured(requireModule().ebur128LoudnessRangeLu(r.samples, r.sampleRate));
   });
 }

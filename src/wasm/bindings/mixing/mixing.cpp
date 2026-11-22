@@ -150,22 +150,22 @@ void MixerWasm::checkStripValueError(SonareError err) {
 
 val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   val out = val::object();
-  out.set("peakDbL", snapshot.peak_db_l);
-  out.set("peakDbR", snapshot.peak_db_r);
-  out.set("rmsDbL", snapshot.rms_db_l);
-  out.set("rmsDbR", snapshot.rms_db_r);
-  out.set("correlation", snapshot.correlation);
-  out.set("monoCompatWidth", snapshot.mono_compat_width);
+  setMeasured(out, "peakDbL", snapshot.peak_db_l);
+  setMeasured(out, "peakDbR", snapshot.peak_db_r);
+  setMeasured(out, "rmsDbL", snapshot.rms_db_l);
+  setMeasured(out, "rmsDbR", snapshot.rms_db_r);
+  setMeasured(out, "correlation", snapshot.correlation);
+  setMeasured(out, "monoCompatWidth", snapshot.mono_compat_width);
   out.set("monoCompatPeak", snapshot.mono_compat_peak);
   out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
   out.set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
-  out.set("momentaryLufs", snapshot.momentary_lufs);
-  out.set("shortTermLufs", snapshot.short_term_lufs);
-  out.set("integratedLufs", snapshot.integrated_lufs);
+  setMeasured(out, "momentaryLufs", snapshot.momentary_lufs);
+  setMeasured(out, "shortTermLufs", snapshot.short_term_lufs);
+  setMeasured(out, "integratedLufs", snapshot.integrated_lufs);
   out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbtpL", snapshot.true_peak_dbtp_l);
-  out.set("truePeakDbtpR", snapshot.true_peak_dbtp_r);
-  out.set("maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
+  setMeasured(out, "truePeakDbtpL", snapshot.true_peak_dbtp_l);
+  setMeasured(out, "truePeakDbtpR", snapshot.true_peak_dbtp_r);
+  setMeasured(out, "maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
   out.set("seq", static_cast<double>(snapshot.seq));
   setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_dbtp,
                     snapshot.num_channels);
@@ -266,22 +266,22 @@ int panModeOrdinalFromVal(val value) {
 // Same: the graph build reports meters through the scene walker instead.
 [[maybe_unused]] val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
   val out = val::object();
-  out.set("peakDbL", snapshot.peak_db[0]);
-  out.set("peakDbR", snapshot.peak_db[1]);
-  out.set("rmsDbL", snapshot.rms_db[0]);
-  out.set("rmsDbR", snapshot.rms_db[1]);
-  out.set("correlation", snapshot.correlation);
-  out.set("monoCompatWidth", snapshot.mono_compat_width);
+  setMeasured(out, "peakDbL", snapshot.peak_db[0]);
+  setMeasured(out, "peakDbR", snapshot.peak_db[1]);
+  setMeasured(out, "rmsDbL", snapshot.rms_db[0]);
+  setMeasured(out, "rmsDbR", snapshot.rms_db[1]);
+  setMeasured(out, "correlation", snapshot.correlation);
+  setMeasured(out, "monoCompatWidth", snapshot.mono_compat_width);
   out.set("monoCompatPeak", snapshot.mono_compat_peak);
   out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
   out.set("likelyMonoCompatible", snapshot.likely_mono_compatible);
-  out.set("momentaryLufs", snapshot.momentary_lufs);
-  out.set("shortTermLufs", snapshot.short_term_lufs);
-  out.set("integratedLufs", snapshot.integrated_lufs);
+  setMeasured(out, "momentaryLufs", snapshot.momentary_lufs);
+  setMeasured(out, "shortTermLufs", snapshot.short_term_lufs);
+  setMeasured(out, "integratedLufs", snapshot.integrated_lufs);
   out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbtpL", snapshot.true_peak_db[0]);
-  out.set("truePeakDbtpR", snapshot.true_peak_db[1]);
-  out.set("maxTruePeakDbtp", snapshot.max_true_peak_db);
+  setMeasured(out, "truePeakDbtpL", snapshot.true_peak_db[0]);
+  setMeasured(out, "truePeakDbtpR", snapshot.true_peak_db[1]);
+  setMeasured(out, "maxTruePeakDbtp", snapshot.max_true_peak_db);
   out.set("seq", static_cast<double>(snapshot.seq));
   setPerPlaneMeters(out, snapshot.peak_db.data(), snapshot.rms_db.data(),
                     snapshot.true_peak_db.data(), snapshot.channel_count);

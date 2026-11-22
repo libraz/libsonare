@@ -5,6 +5,7 @@ import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
+import { withRespelled } from './internal/respell.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { masteringPlatformNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
@@ -835,11 +836,16 @@ export function masteringAbMatchLoudness(
   return withEntry('masteringAbMatchLoudness', () => {
     const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    return requireModule().masteringAbMatchLoudness(
-      r.source,
-      r.reference,
-      r.sampleRate,
-      referenceRate,
+    // The core names the two takes `a` (reference) and `b` (source).
+    return withRespelled(
+      { a: { name: 'reference', scale: 1 }, b: { name: 'source', scale: 1 } },
+      () =>
+        requireModule().masteringAbMatchLoudness(
+          r.source,
+          r.reference,
+          r.sampleRate,
+          referenceRate,
+        ),
     );
   });
 }

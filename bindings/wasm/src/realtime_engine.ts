@@ -577,7 +577,7 @@ function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): EngineMeter
     ...rest,
     numChannels: channelCount,
     truePeakDbtp: truePeakDb,
-    maxTruePeakDbtp: maxTruePeakDb,
+    ...(maxTruePeakDb !== undefined && { maxTruePeakDbtp: maxTruePeakDb }),
   };
 }
 
@@ -800,12 +800,21 @@ export class RealtimeEngine {
   }
 
   /**
-   * Queue a sample-accurate parameter change (engine kSetParam).
+   * Queue a sample-accurate parameter change.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
    * throws a `RangeError`; resolve ids with {@link resolveStripAutomationId},
    * {@link resolveBusAutomationId} and {@link resolveStripInsertAutomationId}.
-   * `{ smoothed: true }` queues the change as a smoothed one (engine
-   * kSetParamSmoothed); a non-boolean `smoothed` or an unknown key is a `TypeError`.
+   * A non-boolean `smoothed` or an unknown key is a `TypeError`.
+   *
+   * @param options - `smoothed: true` ramps to the value over the engine smoothing time
+   *   ({@link setParamSmoothingMs}); the ramp's target (not its in-flight position) becomes the
+   *   base value. Default `false`.
+   *
+   * Without `smoothed` the change is a step; a reserved target — fader, pan, width, insert or
+   * instrument parameter — de-zippers every change over its fixed 5 ms. On a reserved target a
+   * smoothed ramp feeds that 5 ms glide, so the two cascade and the value settles slightly later
+   * than the ramp time alone. When every engine smoother slot is busy, a smoothed change steps
+   * instead and the telemetry reports a `smoothedParameterCapacity` error.
    */
   setParameter(
     paramId: number,
@@ -827,13 +836,11 @@ export class RealtimeEngine {
   }
 
   /**
-   * Set the ramp time (ms) of the engine-level smoother. It governs only
-   * smoothed `setParameter` on parameters bound through the automation engine.
-   * Reserved engine targets — track and bus faders, pan and width, and insert and
-   * instrument parameters — keep their own fixed smoothing whatever this is set
-   * to, and MIDI-CC mappings apply their values directly. The default is 20 ms;
-   * `0` makes the governed changes instant. The time is one time constant: about 63% of the
-   * way at the set time.
+   * Set the ramp time (ms) of `setParameter` with `smoothed: true` on every target, reserved ones
+   * included; it retimes ramps already running. The default is 20 ms, and `0` makes a smoothed
+   * change a step. The time is one time constant: about 63% of the way at the set time. MIDI-CC
+   * mappings apply their values directly. A reserved target — fader, pan, width, insert or
+   * instrument parameter — keeps its fixed 5 ms glide under the ramp whatever this is set to.
    */
   setParamSmoothingMs(smoothingMs: number): void {
     this.native.setParamSmoothingMs(smoothingMs);
@@ -1160,7 +1167,14 @@ export class RealtimeEngine {
     return this.native.legatoFallbackCount(destinationId);
   }
 
-  /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
+  /**
+   * Install/replace a live non-destructive MIDI-FX insert for one destination.
+   *
+   * @param destinationId - Destination to insert on
+   * @param config - Typed MIDI-FX chain configuration
+   * @throws TypeError when `config` is not an object, or a key is unknown or of the wrong type
+   * @throws RangeError when the core refuses a field's value
+   */
   setMidiFx(destinationId: number, config: MidiFxConfig): void {
     this.native.setMidiFx(destinationId, midiFxConfigJson(config));
   }

@@ -579,16 +579,16 @@ export interface MelodyResult {
  * Dynamics characteristics from the unified analysis.
  */
 export interface AnalysisDynamics {
-  /** Dynamic range in dB. */
-  dynamicRangeDb: number;
-  /** Peak level in dB. */
+  /** Dynamic range in dB. Absent when not measured. */
+  dynamicRangeDb?: number;
+  /** Peak level in dB. `-Infinity` for silence. */
   peakDb: number;
-  /** RMS level in dB. */
+  /** RMS level in dB. `-Infinity` for silence. */
   rmsDb: number;
-  /** Loudness range in LU (EBU R128). */
-  loudnessRangeLu: number;
-  /** Peak-to-RMS ratio of the signal. */
-  crestFactor: number;
+  /** Loudness range in LU (EBU R128). Absent when not measured. */
+  loudnessRangeLu?: number;
+  /** Peak-to-RMS ratio of the signal. Absent when not measured. */
+  crestFactor?: number;
   /** True when the signal is flagged as compressed. */
   isCompressed: boolean;
 }
@@ -854,21 +854,21 @@ export interface RhythmResult {
  * pinned to one field list by `tests/conformance/shared_type_shapes.json`.
  */
 export interface DynamicsResult {
-  /** Dynamic range in dB. */
-  dynamicRangeDb: number;
-  /** Peak level in dB. */
+  /** Dynamic range in dB. Absent when not measured. */
+  dynamicRangeDb?: number;
+  /** Peak level in dB. `-Infinity` for silence. */
   peakDb: number;
-  /** RMS level in dB. */
+  /** RMS level in dB. `-Infinity` for silence. */
   rmsDb: number;
-  /** Peak-to-RMS ratio of the signal. */
-  crestFactor: number;
-  /** Loudness range in LU (EBU R128). */
-  loudnessRangeLu: number;
+  /** Peak-to-RMS ratio of the signal. Absent when not measured. */
+  crestFactor?: number;
+  /** Loudness range in LU (EBU R128). Absent when not measured. */
+  loudnessRangeLu?: number;
   /** True when the signal is flagged as compressed. */
   isCompressed: boolean;
   /** Loudness curve timestamps in seconds, parallel to {@link loudnessRmsDb}. */
   loudnessTimesSec: Float32Array;
-  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimesSec}. */
+  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimesSec}. `-Infinity` for an all-zero window. */
   loudnessRmsDb: Float32Array;
 }
 

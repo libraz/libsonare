@@ -134,12 +134,18 @@ describe('SonareWorkletProcessor meter scratch', () => {
           meter.truePeakDbtpL,
           meter.truePeakDbtpR,
         ]).toEqual(calls.valuesPerLatch[index]);
-        // The mixer worklet runs no K-weighting filters, so LUFS and gain
-        // reduction stay declared-unavailable across a reused record.
-        expect(meter.momentaryLufs).toBeNaN();
-        expect(meter.shortTermLufs).toBeNaN();
-        expect(meter.integratedLufs).toBeNaN();
-        expect(meter.gainReductionDb).toBeNaN();
+        // The mixer worklet measures no LUFS, gain reduction or input peak, so
+        // those members stay absent across a reused record.
+        for (const key of [
+          'momentaryLufs',
+          'shortTermLufs',
+          'integratedLufs',
+          'gainReductionDb',
+          'inputPeakDbL',
+          'inputPeakDbR',
+        ]) {
+          expect(key in meter, key).toBe(false);
+        }
       });
       // Reuse must not smear one publish over the next: the rising input makes
       // every block's peak distinct, so identical records would mean the fields

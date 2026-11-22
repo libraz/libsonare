@@ -858,18 +858,18 @@ export interface NoteSegment {
  * Loudness measurement result (EBU R128 / ITU-R BS.1770)
  */
 export interface LufsResult {
-  /** Integrated loudness over the whole signal, in LUFS. */
+  /** Integrated loudness over the whole signal, in LUFS. `-Infinity` when nothing passes the gate. */
   integratedLufs: number;
-  /** Final complete 400 ms window, not Max-M. */
-  momentaryLufs: number;
-  /** Final complete 3 s window, not Max-S. */
-  shortTermLufs: number;
-  /** Maximum 400 ms window (EBU R128 Max-M). */
-  maxMomentaryLufs: number;
-  /** Maximum 3 s window (EBU R128 Max-S). */
-  maxShortTermLufs: number;
-  /** Loudness range in LU. */
-  loudnessRangeLu: number;
+  /** Final complete 400 ms window, not Max-M. `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  momentaryLufs?: number;
+  /** Final complete 3 s window, not Max-S. `-Infinity` for zero energy; absent when the signal is shorter than one window (a 1 s signal has no short-term reading). */
+  shortTermLufs?: number;
+  /** Maximum 400 ms window (EBU R128 Max-M). `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  maxMomentaryLufs?: number;
+  /** Maximum 3 s window (EBU R128 Max-S). `-Infinity` for zero energy; absent when the signal is shorter than one window. */
+  maxShortTermLufs?: number;
+  /** Loudness range in LU. Absent when not measured. */
+  loudnessRangeLu?: number;
 }
 
 /**

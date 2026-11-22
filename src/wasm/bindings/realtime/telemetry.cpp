@@ -190,12 +190,12 @@ val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
     item.set("peakDb", peak);
     item.set("rmsDb", rms);
     item.set("truePeakDb", true_peak);
-    item.set("maxTruePeakDb", meter.max_true_peak_db);
-    item.set("correlation", meter.correlation);
-    item.set("monoCompatWidth", meter.mono_compat_width);
-    item.set("momentaryLufs", meter.momentary_lufs);
-    item.set("shortTermLufs", meter.short_term_lufs);
-    item.set("integratedLufs", meter.integrated_lufs);
+    setMeasured(item, "maxTruePeakDb", meter.max_true_peak_db);
+    setMeasured(item, "correlation", meter.correlation);
+    setMeasured(item, "monoCompatWidth", meter.mono_compat_width);
+    setMeasured(item, "momentaryLufs", meter.momentary_lufs);
+    setMeasured(item, "shortTermLufs", meter.short_term_lufs);
+    setMeasured(item, "integratedLufs", meter.integrated_lufs);
     item.set("gainReductionDb", meter.gain_reduction_db);
     val input_peak = val::array();
     for (int ch = 0; ch < planes; ++ch) {

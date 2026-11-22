@@ -693,14 +693,7 @@ export function lufs(...args: unknown[]): LufsResult {
     const request = sampleOneShot<LufsRequest>('lufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const native = requireModule().lufs(request.samples, request.sampleRate);
-    return {
-      integratedLufs: native.integratedLufs,
-      momentaryLufs: native.momentaryLufs,
-      shortTermLufs: native.shortTermLufs,
-      maxMomentaryLufs: native.maxMomentaryLufs,
-      maxShortTermLufs: native.maxShortTermLufs,
-      loudnessRangeLu: native.loudnessRangeLu,
-    };
+    return { ...native };
   });
 }
 

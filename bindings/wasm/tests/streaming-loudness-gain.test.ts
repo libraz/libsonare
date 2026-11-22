@@ -62,15 +62,19 @@ describe('streamingLoudnessGain (WASM)', () => {
     expect(gain.loudnessStaticGainDb).toBe(offline.appliedGainDb);
   });
 
-  it('yields 0 dB for silence and the numbers construct a streaming chain', () => {
+  it('leaves the gain absent for silence, and the result constructs a chain that applies none', () => {
     const gain = streamingLoudnessGain({
       samples: new Float32Array(SR),
       sampleRate: SR,
       config: STAGED,
     });
-    expect(gain.loudnessStaticGainDb).toBe(0);
-    expect(Number.isFinite(gain.integratedLufs)).toBe(false);
-    const chain = new StreamingMasteringChain({
+    expect('loudnessStaticGainDb' in gain).toBe(false);
+    expect(gain.integratedLufs).toBe(Number.NEGATIVE_INFINITY);
+    expect(gain.truePeakDbtp).toBe(Number.NEGATIVE_INFINITY);
+
+    // The silent result as the chain options, against an explicit 0 dB: both apply no gain.
+    const block = program(0.05).subarray(0, 512);
+    const fromSilence = new StreamingMasteringChain({
       ...STAGED,
       sampleRate: SR,
       numChannels: 1,
@@ -78,10 +82,20 @@ describe('streamingLoudnessGain (WASM)', () => {
       loudnessStaticGainDb: gain.loudnessStaticGainDb,
       loudnessStaticGainPeakDbtp: gain.truePeakDbtp,
     });
+    const unity = new StreamingMasteringChain({
+      ...STAGED,
+      sampleRate: SR,
+      numChannels: 1,
+      maxBlockSize: 512,
+      loudnessStaticGainDb: 0,
+    });
     try {
-      expect(chain.processMono(new Float32Array(512)).length).toBe(512);
+      expect(Array.from(fromSilence.processMono(block))).toEqual(
+        Array.from(unity.processMono(block)),
+      );
     } finally {
-      chain.destroy();
+      fromSilence.destroy();
+      unity.destroy();
     }
   });
 
@@ -89,7 +103,7 @@ describe('streamingLoudnessGain (WASM)', () => {
     ['loudnessStaticGainDb', Number.NaN],
     ['loudnessStaticGainDb', Number.POSITIVE_INFINITY],
     ['loudnessStaticGainPeakDbtp', Number.NaN],
-    ['loudnessStaticGainPeakDbtp', Number.NEGATIVE_INFINITY],
+    ['loudnessStaticGainPeakDbtp', Number.POSITIVE_INFINITY],
   ])('refuses a written non-finite %s (%s) by name', (key, value) => {
     const construct = () =>
       new StreamingMasteringChain({

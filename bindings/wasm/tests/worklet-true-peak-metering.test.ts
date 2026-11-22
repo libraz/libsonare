@@ -20,7 +20,6 @@ import {
 
 const SR = 48000;
 const BLOCK = 128;
-const FLOOR_DB = -120;
 
 beforeAll(async () => {
   await init();
@@ -169,18 +168,19 @@ describe('mixer worklet true-peak metering', () => {
     }
   });
 
-  it('floors every dB field at -120 on silence, matching the engine worklet', () => {
-    // -Infinity is not a usable meter reading: it makes the usual bar geometry
-    // NaN, serializes to null, and poisons min/max aggregation. Both producers
-    // must report the same finite floor so a host can treat their records
-    // interchangeably.
+  it('reads every dB field as -Infinity on silence, matching the engine worklet', () => {
+    // A level with no energy is -Infinity on both producers; fields the mixer
+    // worklet does not measure are absent rather than floored.
     const { meters } = runMixerWorklet(new Float32Array(blocks * BLOCK), blocks);
     const mixerMeter = meters.at(-1);
     if (!mixerMeter) {
       throw new Error('expected the worklet to publish a meter');
     }
     for (const value of dbFields(mixerMeter)) {
-      expect(value).toBe(FLOOR_DB);
+      expect(value).toBe(Number.NEGATIVE_INFINITY);
+    }
+    for (const key of ['momentaryLufs', 'shortTermLufs', 'integratedLufs', 'gainReductionDb']) {
+      expect(key in mixerMeter, key).toBe(false);
     }
 
     const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
@@ -202,7 +202,7 @@ describe('mixer worklet true-peak metering', () => {
         engineMeter.truePeakDbtp[0],
         engineMeter.truePeakDbtp[1],
       ]) {
-        expect(value).toBe(FLOOR_DB);
+        expect(value).toBe(Number.NEGATIVE_INFINITY);
       }
     } finally {
       engine.destroy();

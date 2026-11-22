@@ -24,9 +24,9 @@ import {
   encodeFrameLo,
   magnitudeToDb,
   meterRingFromSharedBuffer,
+  omitNaN,
   type SharedMeterRingWriter,
   type SharedSpectrumRingWriter,
-  SONARE_FLOOR_DB,
   SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
   SONARE_METER_RING_RECORD_FLOATS,
   spectrumRingFromSharedBuffer,
@@ -83,8 +83,8 @@ export class SonareWorkletProcessor {
     shortTermLufs: Number.NaN,
     integratedLufs: Number.NaN,
     gainReductionDb: Number.NaN,
-    inputPeakDbL: SONARE_FLOOR_DB,
-    inputPeakDbR: SONARE_FLOOR_DB,
+    inputPeakDbL: Number.NaN,
+    inputPeakDbR: Number.NaN,
   };
   private spectrumRing?: SharedSpectrumRingWriter;
   private spectrumBands: Float32Array;
@@ -299,21 +299,16 @@ export class SonareWorkletProcessor {
       type: 'meter',
       targetId: 0,
       frame: this.processedFrames,
-      peakDbL: this.mixer.meterScratchValue(0),
-      peakDbR: this.mixer.meterScratchValue(1),
-      rmsDbL: this.mixer.meterScratchValue(2),
-      rmsDbR: this.mixer.meterScratchValue(3),
-      correlation: this.mixer.meterScratchValue(4),
-      truePeakDbtpL: this.mixer.meterScratchValue(5),
-      truePeakDbtpR: this.mixer.meterScratchValue(6),
-      // Declared unavailable rather than floored: the mixer worklet does not run
-      // the K-weighting filters, and a floor value would read as silence.
-      momentaryLufs: Number.NaN,
-      shortTermLufs: Number.NaN,
-      integratedLufs: Number.NaN,
-      gainReductionDb: Number.NaN,
-      inputPeakDbL: SONARE_FLOOR_DB,
-      inputPeakDbR: SONARE_FLOOR_DB,
+      ...omitNaN({
+        peakDbL: this.mixer.meterScratchValue(0),
+        peakDbR: this.mixer.meterScratchValue(1),
+        rmsDbL: this.mixer.meterScratchValue(2),
+        rmsDbR: this.mixer.meterScratchValue(3),
+        correlation: this.mixer.meterScratchValue(4),
+        truePeakDbtpL: this.mixer.meterScratchValue(5),
+        truePeakDbtpR: this.mixer.meterScratchValue(6),
+      }),
+      // LUFS, gain reduction and input peak are absent: the mixer worklet measures none of them.
     };
     // Alternative channels for one record, not a broadcast pair: a transport
     // that supplies both (the engine registration resolves both to
@@ -341,19 +336,20 @@ export class SonareWorkletProcessor {
     const frameLo = encodeFrameLo(frame);
     const frameHi = encodeFrameHi(frame);
     const targetId = +meter.targetId;
-    const peakDbL = +meter.peakDbL;
-    const peakDbR = +meter.peakDbR;
-    const rmsDbL = +meter.rmsDbL;
-    const rmsDbR = +meter.rmsDbR;
-    const correlation = +meter.correlation;
-    const truePeakDbtpL = +meter.truePeakDbtpL;
-    const truePeakDbtpR = +meter.truePeakDbtpR;
-    const momentaryLufs = +meter.momentaryLufs;
-    const shortTermLufs = +meter.shortTermLufs;
-    const integratedLufs = +meter.integratedLufs;
-    const gainReductionDb = +meter.gainReductionDb;
-    const inputPeakDbL = +meter.inputPeakDbL;
-    const inputPeakDbR = +meter.inputPeakDbR;
+    // An absent member travels as NaN, which the ring reader drops again.
+    const peakDbL = meter.peakDbL ?? Number.NaN;
+    const peakDbR = meter.peakDbR ?? Number.NaN;
+    const rmsDbL = meter.rmsDbL ?? Number.NaN;
+    const rmsDbR = meter.rmsDbR ?? Number.NaN;
+    const correlation = meter.correlation ?? Number.NaN;
+    const truePeakDbtpL = meter.truePeakDbtpL ?? Number.NaN;
+    const truePeakDbtpR = meter.truePeakDbtpR ?? Number.NaN;
+    const momentaryLufs = meter.momentaryLufs ?? Number.NaN;
+    const shortTermLufs = meter.shortTermLufs ?? Number.NaN;
+    const integratedLufs = meter.integratedLufs ?? Number.NaN;
+    const gainReductionDb = meter.gainReductionDb ?? Number.NaN;
+    const inputPeakDbL = meter.inputPeakDbL ?? Number.NaN;
+    const inputPeakDbR = meter.inputPeakDbR ?? Number.NaN;
     const channelCount = 2;
     const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
     if (writeIndex === undefined) {
@@ -413,14 +409,14 @@ export class SonareWorkletProcessor {
     // is a single-bin DFT (bin = band + 1) evaluated over the current block of n
     // samples. Bins at or above the block Nyquist (band + 1 > floor(n / 2))
     // alias, so the evaluated band count is clamped to floor(n / 2) and any
-    // higher bands are pinned to the silence floor. Bin resolution is therefore
+    // higher band is NaN, since no bin reaches it. Bin resolution is therefore
     // tied to the render quantum (typically 128 samples); treat the output as a
     // rough spectral tilt, not a precise spectrum.
     const n = Math.max(1, Math.min(left.length, right.length));
     const maxBand = Math.floor(n / 2);
     for (let band = 0; band < this.spectrumBands.length; band++) {
       if (band >= maxBand) {
-        this.spectrumBands[band] = magnitudeToDb(0);
+        this.spectrumBands[band] = Number.NaN;
         continue;
       }
       const bin = band + 1;

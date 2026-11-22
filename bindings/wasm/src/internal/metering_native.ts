@@ -127,3 +127,8 @@ export function clipDetectionFromNative(native: WasmClipDetection): ClipDetectio
 export function declipReportFromNative(native: WasmDeclipReport): DeclipReport {
   return { ...native, detected: clipDetectionFromNative(native.detected) };
 }
+
+/** A single measured number: NaN (not measured) is `undefined`. */
+export function measured(value: number): number | undefined {
+  return Number.isNaN(value) ? undefined : value;
+}

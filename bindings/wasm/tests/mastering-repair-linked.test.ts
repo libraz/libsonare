@@ -129,7 +129,11 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
     // The shape of the set-level detection, and the fields that are fractions
     // and therefore do NOT move with the count.
     expect(three.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-    expect(three.reports[0].detected.bandFloorDbfs.length).toBe(32);
+    const threeBands = three.reports[0].detected.bandFloorBand;
+    expect(threeBands).toBeInstanceOf(Int32Array);
+    expect(threeBands.length).toBe(three.reports[0].detected.bandFloorDbfs.length);
+    expect(threeBands.length).toBeGreaterThan(0);
+    expect(threeBands.length).toBeLessThanOrEqual(32);
     expect(three.reports[0].meanReductionDb).toBeCloseTo(one.reports[0].meanReductionDb, 5);
     expect(three.reports[0].maxReductionDb).toBeCloseTo(one.reports[0].maxReductionDb, 5);
   });

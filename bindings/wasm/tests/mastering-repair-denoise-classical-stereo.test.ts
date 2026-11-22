@@ -75,7 +75,17 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     expect('rightReport' in result).toBe(false);
 
     expect(result.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-    expect(result.reports[0].detected.bandFloorDbfs.length).toBe(32);
+    // Compact: one entry per band holding a bin, named by bandFloorBand.
+    const detectedBands = result.reports[0].detected.bandFloorBand;
+    expect(detectedBands).toBeInstanceOf(Int32Array);
+    expect(detectedBands.length).toBe(result.reports[0].detected.bandFloorDbfs.length);
+    expect(detectedBands.length).toBeGreaterThan(0);
+    expect(detectedBands.length).toBeLessThanOrEqual(32);
+    expect(
+      Array.from(detectedBands).every(
+        (b, i) => b >= 0 && b < 32 && (i === 0 || b > detectedBands[i - 1]),
+      ),
+    ).toBe(true);
     expect(Number.isFinite(result.reports[0].detected.floorDbfs)).toBe(true);
     expect(
       Array.from(result.reports[0].detected.bandFloorDbfs).every((v) => Number.isFinite(v)),

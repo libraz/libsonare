@@ -13210,32 +13210,32 @@ export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckL
 
 /** Loudness group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileLoudness {
-  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
-  integratedLufs?: number;
-  /** EBU Tech 3342 loudness range, in LU. */
-  loudnessRangeLu: number;
-  /** True peak, in dBTP. */
+  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  integratedLufs: number;
+  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  loudnessRangeLu?: number;
+  /** True peak, in dBTP. `-Infinity` for silence. */
   truePeakDbtp: number;
-  /** Crest factor (peak over RMS level) in dB. */
+  /** Crest factor (peak over RMS level) in dB. `-Infinity` for silence. */
   crestFactorDb: number;
 }
 
 /** Spectral group of {@link MasteringAudioProfile}; band levels (`*RmsDb`) are dBFS, mean square: a full-scale sine reads -3.01 dBFS in its band. */
 export interface MasteringAudioProfileSpectral {
-  /** Sub band level in dBFS. */
-  subRmsDb: number;
-  /** Low band level in dBFS. */
-  lowRmsDb: number;
-  /** Low-mid band level in dBFS. */
-  lowMidRmsDb: number;
-  /** Mid band level in dBFS. */
-  midRmsDb: number;
-  /** High-mid band level in dBFS. */
-  highMidRmsDb: number;
-  /** High band level in dBFS. */
-  highRmsDb: number;
-  /** Air band level in dBFS. */
-  airRmsDb: number;
+  /** Sub band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  subRmsDb?: number;
+  /** Low band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  lowRmsDb?: number;
+  /** Low-mid band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  lowMidRmsDb?: number;
+  /** Mid band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  midRmsDb?: number;
+  /** High-mid band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  highMidRmsDb?: number;
+  /** High band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin. */
+  highRmsDb?: number;
+  /** Air band level in dBFS. `-Infinity` for an exactly silent band; absent when the band holds no bin (e.g. at a 22.05 kHz sample rate). */
+  airRmsDb?: number;
   /** Spectral centroid in Hz. */
   centroidHz: number;
   /** Spectral flatness of the input. */
@@ -13290,7 +13290,7 @@ export interface MasteringAudioProfile {
 
 /**
  * The measurements the assistant summarises its suggestion from. Flat, unlike
- * `MasteringAudioProfile`'s nested groups. A non-finite loudness is absent.
+ * `MasteringAudioProfile`'s nested groups.
  */
 export interface MasteringAssistantProfile {
   /** Duration of the input in seconds. */
@@ -13299,8 +13299,8 @@ export interface MasteringAssistantProfile {
   bpm: number;
   /** Confidence of the tempo estimate. */
   bpmConfidence: number;
-  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
-  integratedLufs?: number;
+  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  integratedLufs: number;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
@@ -13331,12 +13331,12 @@ export interface MasteringAssistantResult {
 export interface MasteringStreamingPreviewPlatform {
   /** Platform name, echoed from the requested target. */
   name: string;
-  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
-  integratedLufs?: number;
-  /** True peak of the take, in dBTP. */
+  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  integratedLufs: number;
+  /** True peak of the take, in dBTP. `-Infinity` for silence. */
   truePeakDbtp: number;
-  /** Gain that lands the take on the platform's target; 0 when the loudness is absent. */
-  normalizationGainDb: number;
+  /** Gain that lands the take on the platform's target; absent when the take has no measurable loudness. */
+  normalizationGainDb?: number;
   /** True when that gain would push the true peak above the platform's ceiling. */
   ceilingRisk: boolean;
 }
@@ -13347,13 +13347,13 @@ export interface MasteringStreamingPreviewResult {
   platforms: MasteringStreamingPreviewPlatform[];
 }
 
-/** Result of the `match.referenceLoudness` pair analysis. A loudness a silent take cannot give, and the gain derived from it, is absent. */
+/** Result of the `match.referenceLoudness` pair analysis. */
 export interface MatchReferenceLoudnessResult {
-  /** Integrated loudness of the source in LUFS. */
-  sourceLufs?: number;
-  /** Integrated loudness of the reference in LUFS. */
-  referenceLufs?: number;
-  /** Gain in dB that brings the source to the reference loudness. */
+  /** Integrated loudness of the source in LUFS. `-Infinity` below the gate. */
+  sourceLufs: number;
+  /** Integrated loudness of the reference in LUFS. `-Infinity` below the gate. */
+  referenceLufs: number;
+  /** Gain in dB that brings the source to the reference loudness. Absent when either side has no measurable loudness. */
   gainToMatchDb?: number;
 }
 
@@ -13476,9 +13476,12 @@ export interface MasteringNormalizeLoudnessOptions {
  * `loudnessStaticGainPeakDbtp`.
  */
 export interface StreamingLoudnessGainResult {
-  /** Static gain in dB the offline loudness stage applies. */
-  loudnessStaticGainDb: number;
-  /** True peak in dBTP of the loudness stage's input; -120 for digital silence. */
+  /**
+   * Static gain in dB the offline loudness stage applies. Absent when the stage
+   * input has no measurable loudness (silence, or nothing above the absolute gate).
+   */
+  loudnessStaticGainDb?: number;
+  /** True peak in dBTP of the loudness stage's input; `-Infinity` for digital silence. */
   truePeakDbtp: number;
   /** Integrated loudness in LUFS of the loudness stage's input; `-Infinity` below the absolute gate. */
   integratedLufs: number;
@@ -13510,7 +13513,7 @@ export interface LoudnessMatchResult {
    * The match does not cap the gain, so this can sit above 0 dBTP: clamping to
    * headroom would leave a near-full-scale source at its own loudness, which is
    * the one thing a loudness match must not do. Limit downstream if the peak
-   * matters more than the match.
+   * matters more than the match. `-Infinity` for silence.
    */
   matchedTruePeakDbtp: number;
 }
@@ -13529,7 +13532,7 @@ export interface LoudnessMatchStereoResult {
   sourceLufs: number;
   /** One gain applied to both source channels, in dB. */
   appliedGainDb: number;
-  /** Maximum true peak across the matched left and right channels, in dBTP. */
+  /** Maximum true peak across the matched left and right channels, in dBTP. `-Infinity` for silence. */
   matchedTruePeakDbtp: number;
 }
 
@@ -14047,10 +14050,13 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfigInput
   /** Channel count of the stream: 1 or 2. Required. */
   numChannels: 1 | 2;
   /**
-   * Precomputed static loudness gain in dB. When omitted, an enabled `loudness`
-   * stage still throws. When provided and `loudness.enabled` is set, the chain
-   * applies this fixed gain per block before the loudness stage's true-peak
-   * limiter instead of throwing.
+   * Precomputed static loudness gain in dB, measured at the loudness stage's
+   * input ({@link streamingLoudnessGain} returns it). When `loudness.enabled` is
+   * set, the chain applies this fixed gain per block before the loudness stage's
+   * true-peak limiter. When omitted, the stage applies no gain and its limiter
+   * still runs, as the offline chain does for input with no measurable loudness
+   * ({@link streamingLoudnessGain} omits the gain for such input). An infinite
+   * value is refused.
    */
   loudnessStaticGainDb?: number;
   /**
@@ -14058,8 +14064,9 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfigInput
    * for (`truePeakDbtp` of {@link streamingLoudnessGain}). When provided, the
    * static gain is clamped to `(loudness.ceilingDbtp - loudnessStaticGainPeakDbtp) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview does
-   * not drive the loudness limiter harder than the offline chain. When omitted
-   * the static gain is applied verbatim.
+   * not drive the loudness limiter harder than the offline chain. When omitted,
+   * or `-Infinity` (the peak of digital silence), the static gain is applied
+   * verbatim. NaN and `+Infinity` are refused.
    */
   loudnessStaticGainPeakDbtp?: number;
 }
@@ -14077,16 +14084,16 @@ export interface StageGainReduction {
 
 /** Existing EBU R128 measurements captured before or after mastering. */
 export interface MasteringLoudnessSummary {
-  /** Integrated loudness in LUFS. */
+  /** Integrated loudness in LUFS. `-Infinity` for silence or when nothing passes the gate. */
   integratedLufs: number;
-  /** Maximum momentary loudness in LUFS. */
-  maxMomentaryLufs: number;
-  /** Maximum short-term loudness in LUFS. */
-  maxShortTermLufs: number;
-  /** True peak in dBTP. */
+  /** Maximum momentary loudness in LUFS. `-Infinity` for silence; absent when the signal is shorter than one window. */
+  maxMomentaryLufs?: number;
+  /** Maximum short-term loudness in LUFS. `-Infinity` for silence; absent when the signal is shorter than one window. */
+  maxShortTermLufs?: number;
+  /** True peak in dBTP. `-Infinity` for silence. */
   truePeakDbtp: number;
-  /** EBU Tech 3342 loudness range, in LU. */
-  loudnessRangeLu: number;
+  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  loudnessRangeLu?: number;
 }
 
 /** Compact explanation of how an offline mastering chain changed a program. */
@@ -14101,8 +14108,10 @@ export interface MasteringReport {
   maxGainReductionDb: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
-  /** 32 logarithmically-spaced after-minus-before spectral energy deltas (dB). */
+  /** 32 logarithmically-spaced after-minus-before spectral energy deltas (dB). NaN in a slot where either spectrum has no level. */
   bandEnergyDeltaDb: Float32Array;
+  /** Static gain the loudness stage applied, in dB. Absent when the stage is off or its input has no measurable loudness (silence, or nothing above the absolute gate); the stage then applies no gain. */
+  loudnessGainDb?: number;
 }
 
 /** Result of the offline mastering chain on a mono signal. */
@@ -14129,12 +14138,15 @@ export interface MasteringChainResult {
    * limiter's own oversample factor when loudness is disabled but that stage
    * ran. The two disagree by roughly 0.02 dB between 4x and 8x, so comparing
    * this against an independently measured peak needs the same factor.
+   * `-Infinity` for silence.
    */
   outputTruePeakDbtp: number;
-  /** EBU Tech 3342 Loudness Range of the output (LU). */
-  outputLoudnessRangeLu: number;
+  /** EBU Tech 3342 Loudness Range of the output (LU). Absent when not measured. */
+  outputLoudnessRangeLu?: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /** Static gain the loudness stage applied, in dB. Absent when the stage is off or its input has no measurable loudness (silence, or nothing above the absolute gate); the stage then applies no gain. */
+  loudnessGainDb?: number;
   /**
    * Samples a stage replaced with a finite in-domain one, keeping the
    * output finite and in range.
@@ -14171,12 +14183,14 @@ export interface MasteringChainStereoResult {
   appliedGainDb: number;
   /** Names of the stages that ran, in order. */
   stages: string[];
-  /** See {@link MasteringChainResult} for field semantics. */
+  /** See {@link MasteringChainResult} for field semantics. `-Infinity` for silence. */
   outputTruePeakDbtp: number;
-  /** EBU Tech 3342 loudness range of the output, in LU. */
-  outputLoudnessRangeLu: number;
+  /** EBU Tech 3342 loudness range of the output, in LU. Absent when not measured. */
+  outputLoudnessRangeLu?: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /** Static gain the loudness stage applied, in dB. Absent when the stage is off or its input has no measurable loudness (silence, or nothing above the absolute gate); the stage then applies no gain. */
+  loudnessGainDb?: number;
   /**
    * See {@link MasteringChainResult.nonFiniteSubstitutionCount}. Aggregated
    * over both channels, so it does not identify which channel substituted.

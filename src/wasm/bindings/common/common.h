@@ -158,6 +158,12 @@ val vectorToFloat32Array(const float* data, std::size_t n);
 val vectorToFloat32Array(const std::vector<float>& vec);
 val vectorToInt32Array(const int* data, std::size_t n);
 val vectorToInt32Array(const std::vector<int>& vec);
+
+/// Sets @p key to @p value unless it is NaN: a scalar that was not measured is an absent member,
+/// while -Infinity (no measurable level) is set as a number.
+inline void setMeasured(val& out, const char* key, double value) {
+  if (!std::isnan(value)) out.set(key, value);
+}
 val vectorToUint8Array(const uint8_t* data, std::size_t n);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// @brief An argument the binding layer refused itself, before any library call.

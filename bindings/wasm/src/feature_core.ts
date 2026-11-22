@@ -82,7 +82,7 @@ export interface PowerToDbRequest<T extends Float32Array | Matrix2D = Float32Arr
   ref?: number;
   /** Floor applied before the log. Default 1e-10. */
   amin?: number;
-  /** Dynamic range kept below the peak, in dB. Default 80. */
+  /** Dynamic range kept below the peak, in dB: at least 0, or `Infinity` for no clipping. Default 80. */
   topDb?: number;
 }
 
@@ -94,7 +94,7 @@ export interface AmplitudeToDbRequest<T extends Float32Array | Matrix2D = Float3
   ref?: number;
   /** Floor applied before the log. Default 1e-5. */
   amin?: number;
-  /** Dynamic range kept below the peak, in dB. Default 80. */
+  /** Dynamic range kept below the peak, in dB: at least 0, or `Infinity` for no clipping. Default 80. */
   topDb?: number;
 }
 
@@ -219,11 +219,10 @@ export interface SilenceCommonReport {
    * A frame counts as silent when it sits at least `topDb` under its own signal's
    * peak RMS, so each signal's deepest dip decides whether any threshold can find
    * silence in it, and the union needs all of them quiet at once — hence the
-   * minimum across the signals. 0 for an all-silent signal, where the peak is 0
-   * and the ratio has no value; 120 is the floor the dB conversion clamps at,
-   * reported for a signal holding a zero-valued frame.
+   * minimum across the signals. Absent when any signal's peak is 0 or it holds
+   * an exactly zero frame, where the depth has no finite value. Absent when not measured.
    */
-  silenceCeilingDb: number;
+  silenceCeilingDb?: number;
   /**
    * How many intervals the most fragmented signal produced alone, counted before
    * the union merges anything.

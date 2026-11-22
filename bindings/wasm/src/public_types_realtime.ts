@@ -26,7 +26,7 @@ export interface EqSpectrumSnapshot {
   postRight: Float32Array;
   /** Applied gain per band in dB (24 entries). */
   bandGainDb: Float32Array;
-  /** Post-EQ level in dB across 16 bands from 20 Hz to 20 kHz. */
+  /** Post-EQ level in dB across 16 bands from 20 Hz to 20 kHz. `-Infinity` for a band of zero power, NaN for a band no bin reaches and before the first transform. */
   profileDb: Float32Array;
   /** Latest auto-gain compensation in dB. */
   lastAutoGainDb: number;

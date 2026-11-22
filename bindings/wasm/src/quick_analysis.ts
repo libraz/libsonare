@@ -14,6 +14,7 @@ import {
 import { ErrorCode, SonareError } from './errors.js';
 import { codedError, refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
@@ -877,6 +878,12 @@ export interface EstimateMeterRequest {
   compoundSubdivisionThreshold?: number;
 }
 
+/** The core refuses the beat lists under their own names; the caller wrote them as `beats`. */
+const BEAT_RESPELLED = {
+  beatTimes: { name: 'beats[].timeSec', scale: 1 },
+  beatStrengths: { name: 'beats[].strength', scale: 1 },
+};
+
 /**
  * Estimate meter over a caller-supplied beat series.
  *
@@ -884,6 +891,8 @@ export interface EstimateMeterRequest {
  * @returns The selected signature, its downbeat phase and grouping, and the
  *   scored candidates
  * @throws {TypeError} when `beats` is not an array of `{ timeSec, strength }`
+ * @throws {RangeError} when `beats` is empty, a `timeSec` is negative, not finite or
+ *   decreasing, or a `strength` is not finite
  *
  * @remarks
  * Scores only the per-beat strengths, so no audio and no frame-level onset
@@ -919,7 +928,9 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
       times.push(beat.timeSec);
       strengths.push(beat.strength);
     });
-    return requireModule().estimateMeter(times, strengths, options);
+    return withRespelled(BEAT_RESPELLED, () =>
+      requireModule().estimateMeter(times, strengths, options),
+    );
   });
 }
 
@@ -1259,16 +1270,7 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
       request.hopLength ?? 512,
       request.compressionThresholdDb ?? 6.0,
     );
-    return {
-      dynamicRangeDb: result.dynamicRangeDb,
-      peakDb: result.peakDb,
-      rmsDb: result.rmsDb,
-      crestFactor: result.crestFactor,
-      loudnessRangeLu: result.loudnessRangeLu,
-      isCompressed: result.isCompressed,
-      loudnessTimesSec: result.loudnessTimesSec,
-      loudnessRmsDb: result.loudnessRmsDb,
-    };
+    return { ...result };
   });
 }
 

@@ -1,5 +1,6 @@
 import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
@@ -75,11 +76,14 @@ export function normalize(...args: unknown[]): Float32Array {
     const r = sampleOneShot<NormalizeRequest>('normalize', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const mode = resolveNormalizeMode(r.mode);
-    return requireModule().normalize(
-      r.samples,
-      r.sampleRate,
-      r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
-      mode,
+    // The core names the signal it measures `audio`; the caller wrote `samples`.
+    return withRespelled({ audio: { name: 'samples', scale: 1 } }, () =>
+      requireModule().normalize(
+        r.samples,
+        r.sampleRate,
+        r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
+        mode,
+      ),
     );
   });
 }
@@ -216,7 +220,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  * measures there, so `loudnessStaticGainDb` equals the gain {@link masterAudio}
  * applies (ceiling clamp included) and `truePeakDbtp` is the peak that clamp
  * used. The gain is computed from `config.loudness` whether or not the stage is
- * enabled; a silent or below-gate stage input yields 0 dB.
+ * enabled; a stage input with no measurable loudness leaves it absent.
  *
  * @throws {TypeError} when `sampleRate` is missing
  * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`

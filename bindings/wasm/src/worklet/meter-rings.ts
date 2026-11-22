@@ -31,37 +31,38 @@ export interface WorkletMeterSnapshot {
   targetId: number;
   /** Sample-frame index of the reading. */
   frame: number;
-  /** Left-channel peak in dBFS. */
-  peakDbL: number;
-  /** Right-channel peak in dBFS. */
-  peakDbR: number;
-  /** Left-channel RMS level in dBFS. */
-  rmsDbL: number;
-  /** Right-channel RMS level in dBFS. */
-  rmsDbR: number;
-  /** Inter-channel correlation in `[-1, 1]`. */
-  correlation: number;
+  /** Left-channel peak in dBFS. `-Infinity` for silence; absent when not measured. */
+  peakDbL?: number;
+  /** Right-channel peak in dBFS. `-Infinity` for silence; absent when not measured. */
+  peakDbR?: number;
+  /** Left-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
+  rmsDbL?: number;
+  /** Right-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
+  rmsDbR?: number;
+  /** Inter-channel correlation in `[-1, 1]`. Absent when not measured (a channel has zero energy). */
+  correlation?: number;
   /**
    * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction
    * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
    * behind the block, so every value has its whole stencil and the reading does not depend on the
    * block size. Use `meteringTruePeakDbtp` over the whole signal for an exact dBTP number.
+   * `-Infinity` for silence; absent when not measured.
    */
-  truePeakDbtpL: number;
+  truePeakDbtpL?: number;
   /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
-  truePeakDbtpR: number;
-  /** Momentary loudness in LUFS. */
-  momentaryLufs: number;
-  /** Short-term loudness in LUFS. */
-  shortTermLufs: number;
-  /** Integrated loudness in LUFS. */
-  integratedLufs: number;
-  /** Gain reduction in dB. */
-  gainReductionDb: number;
-  /** Maximum pre-trim input peak for the left channel, in dBFS. */
-  inputPeakDbL: number;
-  /** Maximum pre-trim input peak for the right channel, in dBFS. */
-  inputPeakDbR: number;
+  truePeakDbtpR?: number;
+  /** Momentary loudness in LUFS. `-Infinity` for silence; absent until the window has filled or when not measured. */
+  momentaryLufs?: number;
+  /** Short-term loudness in LUFS. `-Infinity` for silence; absent until the window has filled or when not measured. */
+  shortTermLufs?: number;
+  /** Integrated loudness in LUFS. Absent before the first gating block or when not measured; `-Infinity` while nothing passes the gate. */
+  integratedLufs?: number;
+  /** Gain reduction in dB. Absent when not measured (the mixer worklet runs no dynamics metering). */
+  gainReductionDb?: number;
+  /** Maximum pre-trim input peak for the left channel, in dBFS. `-Infinity` for silence; absent when not measured. */
+  inputPeakDbL?: number;
+  /** Maximum pre-trim input peak for the right channel, in dBFS. `-Infinity` for silence; absent when not measured. */
+  inputPeakDbR?: number;
   /**
    * Per-insert gain reduction in dB (each <= 0) of the target's strip, in combined
    * pre-to-post insert order, folded to the deepest value across the sub-blocks of the
@@ -94,7 +95,7 @@ export interface WorkletSpectrumSnapshot {
   type: 'spectrum';
   /** Sample-frame index of the reading. */
   frame: number;
-  /** Band levels of the spectrum. */
+  /** Band levels of the spectrum, in dB. `-Infinity` for a band of zero power; NaN for a band no bin reaches. */
   bands: Float32Array;
 }
 
@@ -185,12 +186,6 @@ export interface SharedSpectrumRingWriter {
   bands: number;
   recordFloats: number;
 }
-
-/**
- * Shared finite dB floor (`sonare::constants::kFloorDb`). Every level-in-dB
- * field on a worklet snapshot bottoms out here rather than at `-Infinity`.
- */
-export const SONARE_FLOOR_DB = -120;
 
 /** Byte length of a meter ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function meterRingBufferByteLength(options: Required<RingCapacityOptions>): number {
@@ -289,19 +284,21 @@ export function readMeterRingBuffer(ring: MeterRingBuffer, readIndex = 0): Meter
           type: 'meter',
           frame: decodeFrame(records[offset], records[offset + 1]),
           targetId: records[offset + 2],
-          peakDbL: records[offset + 3],
-          peakDbR: records[offset + 4],
-          rmsDbL: records[offset + 5],
-          rmsDbR: records[offset + 6],
-          correlation: records[offset + 7],
-          truePeakDbtpL: records[offset + 8],
-          truePeakDbtpR: records[offset + 9],
-          momentaryLufs: records[offset + 10],
-          shortTermLufs: records[offset + 11],
-          integratedLufs: records[offset + 12],
-          gainReductionDb: records[offset + 13],
-          inputPeakDbL: records[offset + 14],
-          inputPeakDbR: records[offset + 15],
+          ...omitNaN({
+            peakDbL: records[offset + 3],
+            peakDbR: records[offset + 4],
+            rmsDbL: records[offset + 5],
+            rmsDbR: records[offset + 6],
+            correlation: records[offset + 7],
+            truePeakDbtpL: records[offset + 8],
+            truePeakDbtpR: records[offset + 9],
+            momentaryLufs: records[offset + 10],
+            shortTermLufs: records[offset + 11],
+            integratedLufs: records[offset + 12],
+            gainReductionDb: records[offset + 13],
+            inputPeakDbL: records[offset + 14],
+            inputPeakDbR: records[offset + 15],
+          }),
         };
         const channelCount = records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
         if (channelCount > 2) {
@@ -574,25 +571,38 @@ export function spectrumRingFromSharedBuffer(
   };
 }
 
-// A plane the target does not have (the right side of a mono lane) reads as the floor.
+/** Keeps the entries whose value is not NaN: a scalar that was not measured is an absent member. */
+export function omitNaN<K extends string>(fields: Record<K, number>): Partial<Record<K, number>> {
+  const out: Partial<Record<K, number>> = {};
+  for (const key of Object.keys(fields) as K[]) {
+    if (!Number.isNaN(fields[key])) {
+      out[key] = fields[key];
+    }
+  }
+  return out;
+}
+
+// A plane the target does not have (the right side of a mono lane) is absent.
 export function meterFromEngine(meter: EngineMeterTelemetry): WorkletMeterSnapshot {
   const snapshot: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: meter.targetId,
     frame: meter.renderFrame,
-    peakDbL: meter.peakDb[0] ?? SONARE_FLOOR_DB,
-    peakDbR: meter.peakDb[1] ?? SONARE_FLOOR_DB,
-    rmsDbL: meter.rmsDb[0] ?? SONARE_FLOOR_DB,
-    rmsDbR: meter.rmsDb[1] ?? SONARE_FLOOR_DB,
-    correlation: meter.correlation,
-    truePeakDbtpL: meter.truePeakDbtp[0] ?? SONARE_FLOOR_DB,
-    truePeakDbtpR: meter.truePeakDbtp[1] ?? SONARE_FLOOR_DB,
-    momentaryLufs: meter.momentaryLufs,
-    shortTermLufs: meter.shortTermLufs,
-    integratedLufs: meter.integratedLufs,
+    ...omitNaN({
+      peakDbL: meter.peakDb[0] ?? Number.NaN,
+      peakDbR: meter.peakDb[1] ?? Number.NaN,
+      rmsDbL: meter.rmsDb[0] ?? Number.NaN,
+      rmsDbR: meter.rmsDb[1] ?? Number.NaN,
+      truePeakDbtpL: meter.truePeakDbtp[0] ?? Number.NaN,
+      truePeakDbtpR: meter.truePeakDbtp[1] ?? Number.NaN,
+      correlation: meter.correlation ?? Number.NaN,
+      momentaryLufs: meter.momentaryLufs ?? Number.NaN,
+      shortTermLufs: meter.shortTermLufs ?? Number.NaN,
+      integratedLufs: meter.integratedLufs ?? Number.NaN,
+      inputPeakDbL: meter.inputPeakDb[0] ?? Number.NaN,
+      inputPeakDbR: meter.inputPeakDb[1] ?? Number.NaN,
+    }),
     gainReductionDb: meter.gainReductionDb,
-    inputPeakDbL: meter.inputPeakDb[0] ?? SONARE_FLOOR_DB,
-    inputPeakDbR: meter.inputPeakDb[1] ?? SONARE_FLOOR_DB,
   };
   if (meter.numChannels > 2) {
     snapshot.numChannels = meter.numChannels;
@@ -605,5 +615,5 @@ export function meterFromEngine(meter: EngineMeterTelemetry): WorkletMeterSnapsh
 }
 
 export function magnitudeToDb(value: number): number {
-  return value > 1.0e-12 ? 20 * Math.log10(value) : SONARE_FLOOR_DB;
+  return value > 0 ? 20 * Math.log10(value) : Number.NEGATIVE_INFINITY;
 }

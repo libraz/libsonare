@@ -22,11 +22,11 @@ val js_lufs(val samples, const val& sample_rate_val) {
   metering::LufsResult result = metering::lufs(audio);
   val out = val::object();
   out.set("integratedLufs", result.integrated_lufs);
-  out.set("momentaryLufs", result.momentary_lufs);
-  out.set("shortTermLufs", result.short_term_lufs);
-  out.set("maxMomentaryLufs", result.max_momentary_lufs);
-  out.set("maxShortTermLufs", result.max_short_term_lufs);
-  out.set("loudnessRangeLu", result.loudness_range_lu);
+  setMeasured(out, "momentaryLufs", result.momentary_lufs);
+  setMeasured(out, "shortTermLufs", result.short_term_lufs);
+  setMeasured(out, "maxMomentaryLufs", result.max_momentary_lufs);
+  setMeasured(out, "maxShortTermLufs", result.max_short_term_lufs);
+  setMeasured(out, "loudnessRangeLu", result.loudness_range_lu);
   return out;
 }
 
@@ -60,11 +60,11 @@ val js_lufs_interleaved(val samples, const val& channels_val, const val& sample_
       metering::lufs_interleaved(data.data(), frames, channels, sample_rate);
   val out = val::object();
   out.set("integratedLufs", result.integrated_lufs);
-  out.set("momentaryLufs", result.momentary_lufs);
-  out.set("shortTermLufs", result.short_term_lufs);
-  out.set("maxMomentaryLufs", result.max_momentary_lufs);
-  out.set("maxShortTermLufs", result.max_short_term_lufs);
-  out.set("loudnessRangeLu", result.loudness_range_lu);
+  setMeasured(out, "momentaryLufs", result.momentary_lufs);
+  setMeasured(out, "shortTermLufs", result.short_term_lufs);
+  setMeasured(out, "maxMomentaryLufs", result.max_momentary_lufs);
+  setMeasured(out, "maxShortTermLufs", result.max_short_term_lufs);
+  setMeasured(out, "loudnessRangeLu", result.loudness_range_lu);
   return out;
 }
 
@@ -256,7 +256,7 @@ val phaseScopeToVal(const metering::PhaseScopeResult& result) {
   out.set("side", vectorToFloat32Array(side));
   out.set("radius", vectorToFloat32Array(radius));
   out.set("angleRad", vectorToFloat32Array(angle));
-  out.set("correlation", result.correlation);
+  setMeasured(out, "correlation", result.correlation);
   out.set("averageAbsAngleRad", result.average_abs_angle_rad);
   out.set("maxRadius", result.max_radius);
   return out;

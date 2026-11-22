@@ -95,13 +95,12 @@ const STRIP_NUMBER_KEYS = ['inputTrimDb', 'faderDb', 'pan', 'width'] as const;
  *
  * Each returned per-strip meter reflects only this single one-shot block. The
  * LUFS fields (`momentaryLufs`, `shortTermLufs`, `integratedLufs`) are
- * integrators whose windows that block does not fill, so they read the -120 dB
- * floor sentinel; drive a streaming {@link Mixer} block-by-block if you need
- * meaningful loudness.
+ * integrators whose windows that block does not fill, so they are absent; drive
+ * a streaming {@link Mixer} block-by-block if you need meaningful loudness.
  *
  * The true-peak fields are not integrators and need no streaming: each is a
  * max-hold over the block just processed and is valid from the first one,
- * flooring only on silence. This facade mixes the whole input as a single block
+ * `-Infinity` only for silence. This facade mixes the whole input as a single block
  * and flushes the meters after it, so the reading matches `meteringTruePeakDbtp`
  * over the same signal exactly.
  *

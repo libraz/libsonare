@@ -15814,7 +15814,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination i
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setPartRig"
-changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part"
+changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine.test.ts::sets a part rig from one request"
@@ -20878,7 +20878,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.setPartRig"
-changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest"
+changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
@@ -20894,7 +20894,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.bakeMidiFx"
-changed = "the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat"
+changed = "the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0')"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config and leaves its content to the core"
@@ -22114,7 +22114,7 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "Project.previewMidiFxCount"
-changed = "takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat"
+changed = "takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0')"
 domain = "project"
 rule = "typed-results"
 test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config and leaves its content to the core"
@@ -22122,7 +22122,7 @@ test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiFx"
-changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat"
+changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0')"
 domain = "engine"
 rule = "typed-results"
 test = "bindings/wasm/tests/new-apis.test.ts::honors tunable queue capacities"
@@ -24717,7 +24717,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReq
 [[entry]]
 kind = "function"
 old = "ebur128LoudnessRange"
-changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number"
+changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number, or undefined when no short-term window passes the gate (shorter than 3 s, or silence)"
 to = "ebur128LoudnessRangeLu"
 domain = "mastering"
 rule = "one-positional-form"
@@ -24726,7 +24726,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessR
 [[entry]]
 kind = "function"
 old = "ebur128LoudnessRange"
-changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number"
+changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number, or undefined when no short-term window passes the gate (shorter than 3 s, or silence)"
 to = "ebur128LoudnessRangeLu"
 domain = "mastering"
 rule = "one-positional-form"
@@ -24886,7 +24886,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDb"
-changed = "one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number"
+changed = "one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number, or undefined for silence"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDb"
@@ -24894,7 +24894,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFac
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDb"
-changed = "one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number"
+changed = "one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number, or undefined for silence"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -24903,7 +24903,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFac
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDbStereo"
-changed = "request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number"
+changed = "request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number | undefined, undefined for silence"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDbStereo"
@@ -24911,7 +24911,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFac
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDbStereo"
-changed = "request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number"
+changed = "request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number | undefined, undefined for silence"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -25092,7 +25092,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrum
 [[entry]]
 kind = "function"
 old = "meteringStereoCorrelation"
-changed = "request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number"
+changed = "request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number | undefined, undefined when either channel has zero energy"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoCorrelation"
@@ -25100,7 +25100,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoCo
 [[entry]]
 kind = "function"
 old = "meteringStereoCorrelation"
-changed = "request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number"
+changed = "request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number | undefined, undefined when either channel has zero energy"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -25109,7 +25109,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoCo
 [[entry]]
 kind = "function"
 old = "meteringStereoWidth"
-changed = "request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number"
+changed = "request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number | undefined, Infinity for a silent mid under a nonzero side and undefined when both are zero"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoWidth"
@@ -25117,7 +25117,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoWi
 [[entry]]
 kind = "function"
 old = "meteringStereoWidth"
-changed = "request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number"
+changed = "request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number | undefined, Infinity for a silent mid under a nonzero side and undefined when both are zero"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -26136,7 +26136,7 @@ test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getter
 [[entry]]
 kind = "method"
 old = "PlaybackLoudnessMeter.integratedLufs"
-changed = "readonly getter (was a method)"
+changed = "readonly getter (was a method); undefined before the first gating block and -Infinity while nothing passes the gate"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"

@@ -89,7 +89,7 @@ int js_samples_to_frames(const val& samples, const val& hop_length, const val& n
 val js_power_to_db(val values, const val& ref_val, const val& amin_val, const val& top_db_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
   const float amin = checkedFloatFromVal(amin_val, "amin");
-  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
+  const float top_db = domainFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(power_to_db(data, ref, amin, top_db));
@@ -98,7 +98,7 @@ val js_power_to_db(val values, const val& ref_val, const val& amin_val, const va
 val js_amplitude_to_db(val values, const val& ref_val, const val& amin_val, const val& top_db_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
   const float amin = checkedFloatFromVal(amin_val, "amin");
-  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
+  const float top_db = domainFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
   return vectorToFloat32Array(amplitude_to_db(data, ref, amin, top_db));
@@ -219,7 +219,7 @@ val js_split_silence_common(val signals, const val& top_db_val, const val& frame
       splitSilenceCommonImpl(signals, top_db_val, frame_length_val, hop_length_val);
   if (!with_report) return flattenIntervals(result.intervals);
   val report = val::object();
-  report.set("silenceCeilingDb", result.silence_ceiling_db);
+  setMeasured(report, "silenceCeilingDb", result.silence_ceiling_db);
   report.set("maxSignalIntervals", result.max_signal_intervals);
   report.set("minSignalIntervals", result.min_signal_intervals);
   val out = val::object();

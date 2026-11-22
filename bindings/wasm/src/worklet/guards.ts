@@ -419,6 +419,10 @@ export function isClipPageRequestMessage(value: unknown): value is EngineClipPag
   );
 }
 
+// A snapshot level is absent when unmeasured, -Infinity for silence, else finite.
+const isOptionalLevel = (value: unknown): boolean =>
+  value === undefined || Number.isFinite(value) || value === Number.NEGATIVE_INFINITY;
+
 // Each per-plane array must hold exactly one value per metered plane.
 function hasMeterPlanes(value: Record<string, unknown>, numChannels: unknown): boolean {
   return (
@@ -434,13 +438,13 @@ export function isMeterSnapshot(value: unknown): value is WorkletMeterSnapshot {
     isRecord(value) &&
     value.type === 'meter' &&
     typeof value.frame === 'number' &&
-    typeof value.peakDbL === 'number' &&
-    typeof value.peakDbR === 'number' &&
-    typeof value.rmsDbL === 'number' &&
-    typeof value.rmsDbR === 'number' &&
-    typeof value.correlation === 'number' &&
-    Number.isFinite(value.inputPeakDbL) &&
-    Number.isFinite(value.inputPeakDbR) &&
+    isOptionalLevel(value.peakDbL) &&
+    isOptionalLevel(value.peakDbR) &&
+    isOptionalLevel(value.rmsDbL) &&
+    isOptionalLevel(value.rmsDbR) &&
+    (value.correlation === undefined || Number.isFinite(value.correlation)) &&
+    isOptionalLevel(value.inputPeakDbL) &&
+    isOptionalLevel(value.inputPeakDbR) &&
     (value.numChannels === undefined || hasMeterPlanes(value, value.numChannels)) &&
     (typeof value.targetId === 'number' || value.targetId === undefined)
   );

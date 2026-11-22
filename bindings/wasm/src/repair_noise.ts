@@ -375,10 +375,8 @@ export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetect
  * `b * sampleRate / nFft` Hz.
  *
  * The geometric band edges are rounded to bins, so a band narrower than the bin spacing comes
- * out EMPTY — `bins[k] === bins[k + 1]` — and its `bandFloorDbfs[k]` reads as the floor
- * sentinel because no bin landed in it, NOT because that region was quiet. Telling those two
- * apart is what this grid is for, and the rounding cannot be recovered from the band count
- * alone.
+ * out EMPTY — `bins[k] === bins[k + 1]` — and the detection leaves it out of `bandFloorBand`,
+ * since nothing landed in it to measure.
  *
  * Nothing but the analysis geometry decides the grid, so no denoise config is taken: one call
  * describes every floor measured at that `nFft` and `sampleRate`, whatever mode or estimator
@@ -395,9 +393,8 @@ export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetect
  * ```ts
  * const bins = masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 48000 });
  * const floor = masteringRepairDetectNoiseFloor({ samples, sampleRate: 48000, nFft: 1024 });
- * floor.bandFloorDbfs.forEach((level, k) => {
- *   if (bins[k] === bins[k + 1]) return; // empty band: `level` is the sentinel, not a measurement
- *   console.log((bins[k] * 48000) / 1024, level);
+ * floor.bandFloorBand.forEach((band, i) => {
+ *   console.log((bins[band] * 48000) / 1024, floor.bandFloorDbfs[i]);
  * });
  * ```
  */

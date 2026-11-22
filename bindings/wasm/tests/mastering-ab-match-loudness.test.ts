@@ -26,6 +26,7 @@ function sine(freq: number, durationSec: number, amp: number): Float32Array {
 // tone, and roughly 20 dB apart.
 const source = sine(440, 3.0, 0.05);
 const reference = sine(1000, 2.0, 0.5);
+const TAKES = { source, reference } as const;
 
 describe('masteringAbMatchLoudness (WASM)', () => {
   beforeAll(async () => {
@@ -63,13 +64,21 @@ describe('masteringAbMatchLoudness (WASM)', () => {
     expect(result.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDbtp(result.samples, SR), 2);
   });
 
-  it('reports a non-finite loudness and no gain for a silent take', () => {
+  it.each([
+    ['source', 'reference'],
+    ['reference', 'source'],
+  ] as const)('refuses a silent %s, naming it', (silentRole, otherRole) => {
     const silent = new Float32Array(SR);
-    const result = masteringAbMatchLoudness({ source: silent, reference, sampleRate: SR });
-
-    expect(Number.isFinite(result.sourceLufs)).toBe(false);
-    expect(result.appliedGainDb).toBe(0);
-    expect(result.samples.length).toBe(silent.length);
+    const request = { [silentRole]: silent, [otherRole]: TAKES[otherRole], sampleRate: SR } as {
+      source: Float32Array;
+      reference: Float32Array;
+      sampleRate: number;
+    };
+    const call = () => masteringAbMatchLoudness(request);
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(
+      new RegExp(`^masteringAbMatchLoudness: ${silentRole} has no measurable loudness$`),
+    );
   });
 
   it('rejects an empty buffer and a non-finite sample', () => {

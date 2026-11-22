@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <limits>
+
 #include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
@@ -18,7 +20,8 @@ namespace {
 /// Reads the optional numeric fields `loudnessStaticGainDb` and
 /// `loudnessStaticGainPeakDbtp`; absent, `undefined` or `null` leaves both at the NaN that
 /// StreamingMasteringChainOptions spells "not provided" with, and a written NaN or infinity is
-/// refused by name. An enabled loudness stage still refuses a gain it was never given.
+/// refused by name, except a `-Infinity` peak, the measured peak of digital silence. An enabled
+/// loudness stage still refuses a gain it was never given.
 mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val options_val) {
   mastering::api::StreamingMasteringChainOptions options;
   if (options_val.isUndefined() || options_val.isNull()) return options;
@@ -27,8 +30,14 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val optio
   }
   options.loudness_static_gain_db =
       floatProperty(options_val, "loudnessStaticGainDb", options.loudness_static_gain_db);
-  options.loudness_static_gain_peak_dbtp = floatProperty(options_val, "loudnessStaticGainPeakDbtp",
-                                                         options.loudness_static_gain_peak_dbtp);
+  // -Infinity is the measured peak of digital silence and leaves the gain unclamped.
+  const val peak = options_val["loudnessStaticGainPeakDbtp"];
+  const bool silent_peak =
+      peak.isNumber() && peak.as<double>() == -std::numeric_limits<double>::infinity();
+  options.loudness_static_gain_peak_dbtp =
+      silent_peak ? -std::numeric_limits<float>::infinity()
+                  : floatProperty(options_val, "loudnessStaticGainPeakDbtp",
+                                  options.loudness_static_gain_peak_dbtp);
   return options;
 }
 

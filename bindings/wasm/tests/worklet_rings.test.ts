@@ -612,7 +612,8 @@ describe('Sonare worklet ring buffers', () => {
             );
           }
           expect(Number.isFinite(meter.correlation)).toBe(true);
-          expect(Number.isNaN(meter.momentaryLufs)).toBe(true);
+          // The ring carries an unmeasured member as NaN and the reader drops it.
+          expect('momentaryLufs' in meter).toBe(false);
         }
         // First record corresponds to the first published block of frames.
         expect(read.meters[0].frame).toBe(blockSize);

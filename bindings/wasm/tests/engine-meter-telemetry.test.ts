@@ -55,9 +55,9 @@ it.each(['lane', 'bus', 'master'] as const)(
       }
       expect(last).toBeDefined();
       expect(last?.inputPeakDb[0]).toBeGreaterThan(-10);
-      expect(last?.inputPeakDb[1] ?? -120).toBe(-120);
+      expect(last?.inputPeakDb[1] ?? Number.NEGATIVE_INFINITY).toBe(Number.NEGATIVE_INFINITY);
       expect(last?.gainReductionDb).toBeLessThan(-10);
-      expect(last?.peakDb[0]).toBeLessThan((last?.inputPeakDb[0] ?? -120) - 10);
+      expect(last?.peakDb[0]).toBeLessThan((last?.inputPeakDb[0] ?? Number.NEGATIVE_INFINITY) - 10);
     } finally {
       engine.destroy();
     }
@@ -85,7 +85,9 @@ it('resets master integrated loudness while retaining the other meter windows', 
     engine.resetMasterLoudnessMeter();
     engine.process([new Float32Array(blockSize)]);
     const after = engine.drainMeterTelemetry().find((record) => record.targetId === 0);
-    expect(after?.integratedLufs).toBe(-120);
+    // No gating block has completed since the reset: the key is absent.
+    expect(after).toBeDefined();
+    expect('integratedLufs' in (after ?? {})).toBe(false);
     expect(after?.momentaryLufs).toBeGreaterThan(-40);
     expect(after?.shortTermLufs).toBeGreaterThan(-40);
     expect(after?.maxTruePeakDbtp).toBeGreaterThan(-12);

@@ -239,9 +239,12 @@ export interface HumDetection {
   fundamentalProminence: number;
   /** Harmonics found above the floor, not necessarily a contiguous run from the first. */
   harmonics: number;
-  /** Input level at each k*f0, k ascending, length 16. Measured for every k the sample
-   * rate carries, not only the notched ones; a k*f0 at or past Nyquist reads the dB floor
-   * because nothing is there to measure. */
+  /**
+   * Input level at each k*f0, k ascending, at most 16 entries. Measured for
+   * every k the sample rate carries, not only the notched ones, and ending
+   * before the first k*f0 at or past Nyquist, where nothing is there to
+   * measure. A harmonic with no energy reads `-Infinity`.
+   */
   harmonicDbfs: Float32Array;
 }
 
@@ -297,12 +300,25 @@ export interface MasteringRepairDehumResult {
  * floor only against another stereo floor.
  */
 export interface NoiseDetection {
-  /** Broadband estimated noise floor, in dBFS. */
-  floorDbfs: number;
-  /** The floor's shape, low band to high, length 32. A geometric grid from 20 Hz to Nyquist --
-   * the same axis the mastering report's `bandEnergyDeltaDb` uses, so a noise floor and a
-   * tonal-balance change can be read together. */
+  /**
+   * Broadband estimated noise floor, in dBFS; `-Infinity` for digital silence.
+   * Absent when there is nothing to measure from.
+   */
+  floorDbfs?: number;
+  /**
+   * The noise floor's shape, low band to high, on a 32-band geometric grid
+   * from 20 Hz to Nyquist -- the same axis the mastering report's
+   * `bandEnergyDeltaDb` uses, so a noise floor and a tonal-balance change can
+   * be read together. Only bands holding an analysis bin carry a level, so the
+   * array can be shorter than 32; `bandFloorBand` names each entry's band. A
+   * band of zero power reads `-Infinity`.
+   */
   bandFloorDbfs: Float32Array;
+  /**
+   * Band index, in [0, 32), of each `bandFloorDbfs` entry, ascending. A band
+   * narrower than the bin spacing holds no bin and is not listed.
+   */
+  bandFloorBand: Int32Array;
 }
 
 /**

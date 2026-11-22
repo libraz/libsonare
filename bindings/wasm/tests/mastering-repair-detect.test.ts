@@ -17,6 +17,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
+  masteringAudioProfile,
   masteringRepairDetectClicks,
   masteringRepairDetectClipping,
   masteringRepairDetectCrackle,
@@ -241,7 +242,16 @@ describe('repair detection (WASM)', () => {
         sampleRate: TRIM_SR,
       });
       expect(detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-      expect(detected.bandFloorDbfs.length).toBe(32);
+      // Compact: one entry per band holding a bin, named by bandFloorBand.
+      expect(detected.bandFloorBand).toBeInstanceOf(Int32Array);
+      expect(detected.bandFloorBand.length).toBe(detected.bandFloorDbfs.length);
+      expect(detected.bandFloorBand.length).toBeGreaterThan(0);
+      expect(detected.bandFloorBand.length).toBeLessThanOrEqual(32);
+      expect(
+        Array.from(detected.bandFloorBand).every(
+          (b, i) => b >= 0 && b < 32 && (i === 0 || b > detected.bandFloorBand[i - 1]),
+        ),
+      ).toBe(true);
       expect(Number.isFinite(detected.floorDbfs)).toBe(true);
       expect(detected.floorDbfs).toBeLessThan(0);
 
@@ -701,5 +711,42 @@ describe('repair detection (WASM)', () => {
         masteringRepairDetectHum(samples, TRIM_SR, { fundamentalHz: Number.POSITIVE_INFINITY }),
       ).toThrow();
     });
+  });
+});
+
+describe('the profile and the detectors measure one take alike', () => {
+  // The profile's noise and hum groups are the detectors' readings carried in a JSON
+  // document; this pins that the document path loses nothing, including array types.
+  const SR_EQ = 48000;
+  const humTake = (): Float32Array => {
+    let seed = 1;
+    const out = new Float32Array(SR_EQ * 2);
+    for (let i = 0; i < out.length; i++) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      out[i] =
+        0.05 * Math.sin((2 * Math.PI * 60 * i) / SR_EQ) + 0.01 * ((seed / 2147483648) * 2 - 1);
+    }
+    return out;
+  };
+
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('carries the noise floor detection unchanged', () => {
+    const take = humTake();
+    const profile = masteringAudioProfile(take, SR_EQ);
+    expect(profile.defects?.noise).toStrictEqual(masteringRepairDetectNoiseFloor(take, SR_EQ));
+    expect(profile.defects?.noise.bandFloorBand).toBeInstanceOf(Int32Array);
+  });
+
+  it('carries the hum detection unchanged at the mains frequency it settled on', () => {
+    const take = humTake();
+    const profile = masteringAudioProfile(take, SR_EQ);
+    // The profile searches 50 and 60 Hz and keeps the more prominent; this take hums at 60.
+    expect(profile.defects?.hum.fundamentalHz).toBe(60);
+    expect(profile.defects?.hum).toStrictEqual(
+      masteringRepairDetectHum({ samples: take, sampleRate: SR_EQ, fundamentalHz: 60 }),
+    );
   });
 });

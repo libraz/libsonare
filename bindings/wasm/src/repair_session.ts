@@ -3,7 +3,7 @@
  */
 
 import { refuseType, withEntry } from './internal/entry.js';
-import { audioDefectsFromNative } from './internal/repair_common.js';
+import { audioDefectsFromNative, humDetection, noiseDetection } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
 import type { MasteringAudioProfileDefects } from './public_types_mastering.js';
@@ -176,13 +176,14 @@ export interface MasteringRepairApplyRequest {
 /** The JSON form of a stage's reports, before the per-band arrays become Float32Arrays. */
 type StageReportsJson = { stage: string; scope: string; reports: Record<string, unknown>[] };
 
-/** Gives the band and harmonic arrays the Float32Array type. */
+/** Gives the band and harmonic level arrays the Float32Array type and the band indices Int32Array. */
 function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
-  if (entry.stage === 'denoise' || entry.stage === 'dehum') {
-    const key = entry.stage === 'denoise' ? 'bandFloorDbfs' : 'harmonicDbfs';
-    for (const report of entry.reports) {
-      const detected = report.detected as Record<string, unknown>;
-      detected[key] = Float32Array.from(detected[key] as number[]);
+  for (const report of entry.reports) {
+    const detected = report.detected as Record<string, unknown>;
+    if (entry.stage === 'denoise') {
+      report.detected = noiseDetection(detected as unknown as Parameters<typeof noiseDetection>[0]);
+    } else if (entry.stage === 'dehum') {
+      report.detected = humDetection(detected as unknown as Parameters<typeof humDetection>[0]);
     }
   }
   return entry as unknown as MasteringRepairStageReports;

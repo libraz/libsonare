@@ -2,11 +2,10 @@
  * Tests for `masteringRepairNoiseBandBins`, the bin grid `masteringRepairDetectNoiseFloor`
  * reports `bandFloorDbfs` on.
  *
- * The grid exists to separate a band that measured the floor sentinel from a band that got no
- * bin at all, so the central case here is not the grid's own shape but whether it EXPLAINS a
- * measured `bandFloorDbfs`: every band the grid calls empty must read exactly the sentinel, and
- * every band it calls non-empty must read above it. That comparison decides nothing unless both
- * sets are non-empty, so their counts are asserted first.
+ * A band with no bin measures nothing, so the detection leaves it out and names the bands it
+ * did measure in `bandFloorBand`. The central case here is whether the grid EXPLAINS that list:
+ * the bands the grid calls non-empty must be exactly the ones the detection reports. That
+ * comparison decides nothing unless both sets are non-empty, so their counts are asserted first.
  *
  * This surface calls the core directly rather than through the C ABI, so the power-of-two rule
  * on `nFft` — which lives in the C ABI layer, not in the core — is the wrapper's own. The
@@ -21,11 +20,8 @@ const N_FFT = 1024;
 const BAND_COUNT = 32;
 const EDGE_COUNT = BAND_COUNT + 1;
 
-// The level a band with no bin in it reads, and the floor every measured band is clamped to.
-const FLOOR_SENTINEL = -120.0;
-
-// Deterministic LCG noise: broadband enough that every band holding a bin measures above the
-// sentinel, and the same fixture every run.
+// Deterministic LCG noise: broadband enough that every band holding a bin measures a finite
+// level, and the same fixture every run.
 function noise(frames: number, amp: number, seed: number): Float32Array {
   let state = seed >>> 0;
   const out = new Float32Array(frames);
@@ -42,7 +38,7 @@ describe('masteringRepairNoiseBandBins', () => {
     await init();
   });
 
-  it('explains which bands of a measured bandFloorDbfs hold a bin', () => {
+  it('names exactly the bands of the grid that hold a bin in bandFloorBand', () => {
     const bins = masteringRepairNoiseBandBins({ nFft: N_FFT, sampleRate: SR });
     const detected = masteringRepairDetectNoiseFloor({
       samples: noise(SR, 0.2, 1),
@@ -65,12 +61,11 @@ describe('masteringRepairNoiseBandBins', () => {
     expect(empty.length).toBe(6);
     expect(filled.length).toBe(26);
 
-    for (const k of empty) {
-      expect(detected.bandFloorDbfs[k]).toBe(FLOOR_SENTINEL);
-    }
-    for (const k of filled) {
-      expect(detected.bandFloorDbfs[k]).toBeGreaterThan(FLOOR_SENTINEL);
-    }
+    expect(detected.bandFloorBand).toBeInstanceOf(Int32Array);
+    expect(Array.from(detected.bandFloorBand)).toEqual(filled);
+    expect(detected.bandFloorDbfs).toHaveLength(filled.length);
+    expect(Array.from(detected.bandFloorDbfs).every(Number.isFinite)).toBe(true);
+    expect(Number.isFinite(detected.floorDbfs)).toBe(true);
 
     // A band comes out empty only where the geometric edges sit closer together
     // than the bin spacing, which is the low end -- band 0 still holds DC, so the
@@ -80,6 +75,25 @@ describe('masteringRepairNoiseBandBins', () => {
     for (let k = lastEmpty + 1; k < BAND_COUNT; k++) {
       expect(bins[k + 1]).toBeGreaterThan(bins[k] as number);
     }
+  });
+
+  it('reports digital silence as -Infinity in every measured band and in the broadband floor', () => {
+    const bins = masteringRepairNoiseBandBins({ nFft: N_FFT, sampleRate: SR });
+    const filled: number[] = [];
+    for (let k = 0; k < BAND_COUNT; k++) {
+      if (bins[k] !== bins[k + 1]) {
+        filled.push(k);
+      }
+    }
+    const detected = masteringRepairDetectNoiseFloor({
+      samples: new Float32Array(SR),
+      sampleRate: SR,
+      nFft: N_FFT,
+    });
+    // Silence is a measurement, so the measured bands stay listed rather than dropping out.
+    expect(Array.from(detected.bandFloorBand)).toEqual(filled);
+    expect(Array.from(detected.bandFloorDbfs)).toEqual(filled.map(() => Number.NEGATIVE_INFINITY));
+    expect(detected.floorDbfs).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('returns one more index than there are bands, non-decreasing, ending at the spectrum', () => {

@@ -670,9 +670,13 @@ describe('SonareWorkletProcessor', () => {
       expect(spectra).toHaveLength(1);
       const bands = spectra[0].bands;
       expect(bands).toHaveLength(8);
-      // maxBand = floor(8 / 2) = 4: bands 4..7 are above Nyquist and pinned.
+      // maxBand = floor(8 / 2) = 4: bands 4..7 are above Nyquist, no bin reaches
+      // them, so they read NaN; the bands below it were measured.
+      for (let band = 0; band < 4; band++) {
+        expect(Number.isNaN(bands[band]), `band ${band}`).toBe(false);
+      }
       for (let band = 4; band < 8; band++) {
-        expect(bands[band]).toBe(-120);
+        expect(bands[band]).toBeNaN();
       }
     } finally {
       processor.destroy();

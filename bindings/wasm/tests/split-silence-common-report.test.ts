@@ -48,8 +48,10 @@ describe('splitSilenceCommonWithReport', () => {
   });
 
   it('puts the ceiling at or above topDb when takes go quiet but never together', () => {
-    const early = toneWindow(0, 0.5);
-    const late = toneWindow(0.5, 1);
+    // A faint floor keeps every frame off exact zero, so the ceiling is measured.
+    const withFloor = (take: Float32Array): Float32Array => take.map((v) => (v === 0 ? 1e-7 : v));
+    const early = withFloor(toneWindow(0, 0.5));
+    const late = withFloor(toneWindow(0.5, 1));
     const { intervals, report } = splitSilenceCommonWithReport({
       signals: [early, late],
       topDb,
@@ -99,7 +101,19 @@ describe('splitSilenceCommonWithReport', () => {
     expect(tight.report.minSignalIntervals).toBe(2);
   });
 
-  it('returns 0 for an all-silent take, where the peak has no ratio', () => {
+  it('leaves the ceiling absent when a take holds an exactly zero frame', () => {
+    const { report } = splitSilenceCommonWithReport({
+      signals: [toneWindow(0, 0.5), toneWindow(0.5, 1)],
+      topDb,
+      frameLength,
+      hopLength,
+    });
+    expect('silenceCeilingDb' in report).toBe(false);
+    expect(report.maxSignalIntervals).toBe(1);
+    expect(report.minSignalIntervals).toBe(1);
+  });
+
+  it('leaves the ceiling absent for an all-silent take, where the peak has no ratio', () => {
     const { intervals, report } = splitSilenceCommonWithReport({
       signals: [new Float32Array(sampleRate), new Float32Array(sampleRate)],
       topDb,
@@ -107,7 +121,7 @@ describe('splitSilenceCommonWithReport', () => {
       hopLength,
     });
     expect(intervals.length).toBe(0);
-    expect(report.silenceCeilingDb).toBe(0);
+    expect('silenceCeilingDb' in report).toBe(false);
     expect(report.maxSignalIntervals).toBe(0);
     expect(report.minSignalIntervals).toBe(0);
   });

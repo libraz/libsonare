@@ -125,8 +125,20 @@ describe('mastering metering surface', () => {
       ['ebur128LoudnessRangeLu', {}],
     ];
     it.each(monoPairs)('%s', (name, options) => {
-      const viaRequest = api[name]({ samples, sampleRate, ...options }) as number;
-      const viaPositional = api[name](samples, sampleRate, options) as number;
+      const viaRequest = api[name]({ samples, sampleRate, ...options }) as number | undefined;
+      const viaPositional = api[name](samples, sampleRate, options) as number | undefined;
+      // Both forms agree on presence and, when measured, on the value.
+      expect(viaRequest === undefined).toBe(viaPositional === undefined);
+      if (viaRequest !== undefined && viaPositional !== undefined) {
+        expect(Math.abs(viaRequest - viaPositional)).toBeLessThan(1e-6);
+      }
+    });
+
+    it('ebur128LoudnessRangeLu agrees across forms once the signal fills a window', () => {
+      const long = tone(6);
+      const viaRequest = api.ebur128LoudnessRangeLu({ samples: long, sampleRate }) as number;
+      const viaPositional = api.ebur128LoudnessRangeLu(long, sampleRate, {}) as number;
+      expect(Number.isFinite(viaRequest)).toBe(true);
       expect(Math.abs(viaRequest - viaPositional)).toBeLessThan(1e-6);
     });
 
@@ -311,15 +323,19 @@ describe('mastering metering surface', () => {
 
   describe('planar channels', () => {
     it('measures loudness from planar channels like the interleaved native call', () => {
-      const result = lufsMultichannel({ channels: [left, right], sampleRate });
+      // 6 s so the loudness range is measured.
+      const longLeft = tone(6, 0.4, 440);
+      const longRight = tone(6, 0.3, 660);
+      const result = lufsMultichannel({ channels: [longLeft, longRight], sampleRate });
       const native = getSonareModule().lufsInterleaved(
-        Float32Array.from({ length: left.length * 2 }, (_, i) =>
-          i % 2 === 0 ? (left[i / 2] as number) : (right[(i - 1) / 2] as number),
+        Float32Array.from({ length: longLeft.length * 2 }, (_, i) =>
+          i % 2 === 0 ? (longLeft[i / 2] as number) : (longRight[(i - 1) / 2] as number),
         ),
         2,
         sampleRate,
       );
       expect(result.integratedLufs).toBeCloseTo(native.integratedLufs, 5);
+      expect(Number.isFinite(result.loudnessRangeLu)).toBe(true);
       expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRangeLu, 5);
     });
 

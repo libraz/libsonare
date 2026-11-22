@@ -107,9 +107,9 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sa
 
 val streamingLoudnessGainToVal(const mastering::api::StreamingLoudnessGain& gain) {
   val out = val::object();
-  out.set("loudnessStaticGainDb", gain.loudness_static_gain_db);
-  out.set("truePeakDb", gain.true_peak_db);
-  out.set("integratedLufs", gain.integrated_lufs);
+  setMeasured(out, "loudnessStaticGainDb", gain.loudness_static_gain_db);
+  setMeasured(out, "truePeakDb", gain.true_peak_db);
+  setMeasured(out, "integratedLufs", gain.integrated_lufs);
   return out;
 }
 

@@ -197,7 +197,17 @@ describe('playback renderer (WASM)', () => {
         expect(typeof reads[name], name).toBe('number');
       }
       expect(typeof getter(meter, 'integratedLufs')).toBe('function');
+      // Nothing pushed yet: no gating block, so the reading is undefined.
+      expect(meter.integratedLufs).toBeUndefined();
+      const tone = new Float32Array(SR * 2 * 2);
+      for (let i = 0; i < SR * 2; i++) {
+        const v = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / SR);
+        tone[2 * i] = v;
+        tone[2 * i + 1] = v;
+      }
+      meter.pushInterleaved(tone);
       expect(typeof meter.integratedLufs).toBe('number');
+      expect(Number.isFinite(meter.integratedLufs)).toBe(true);
     } finally {
       renderer.destroy();
       meter.destroy();

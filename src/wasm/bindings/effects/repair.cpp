@@ -296,11 +296,17 @@ namespace {
 
 val noiseDetectionToVal(const mastering::repair::NoiseDetection& detected) {
   val out = val::object();
-  out.set("floorDbfs", detected.floor_dbfs);
-  std::vector<float> band_floor_dbfs(
-      detected.band_floor_dbfs,
-      detected.band_floor_dbfs + mastering::repair::kRepairNoiseBandCount);
+  setMeasured(out, "floorDbfs", detected.floor_dbfs);
+  // Only bands holding a bin carry a level; a band with none (NaN) is left out with its index.
+  std::vector<float> band_floor_dbfs;
+  std::vector<int> band_floor_band;
+  for (std::size_t band = 0; band < mastering::repair::kRepairNoiseBandCount; ++band) {
+    if (std::isnan(detected.band_floor_dbfs[band])) continue;
+    band_floor_dbfs.push_back(detected.band_floor_dbfs[band]);
+    band_floor_band.push_back(static_cast<int>(band));
+  }
   out.set("bandFloorDbfs", vectorToFloat32Array(band_floor_dbfs));
+  out.set("bandFloorBand", vectorToInt32Array(band_floor_band));
   return out;
 }
 
@@ -595,9 +601,10 @@ val humDetectionToVal(const mastering::repair::HumDetection& detected) {
   out.set("fundamentalHz", detected.fundamental_hz);
   out.set("fundamentalProminence", detected.fundamental_prominence);
   out.set("harmonics", detected.harmonics);
-  std::vector<float> harmonic_dbfs(detected.harmonic_dbfs,
-                                   detected.harmonic_dbfs + mastering::repair::kDehumMaxHarmonics);
-  out.set("harmonicDbfs", vectorToFloat32Array(harmonic_dbfs));
+  // The measured harmonics are a prefix; the unmeasured suffix past Nyquist is cut.
+  out.set("harmonicDbfs",
+          vectorToFloat32Array(detected.harmonic_dbfs,
+                               static_cast<std::size_t>(detected.measured_harmonics)));
   return out;
 }
 

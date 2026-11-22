@@ -189,12 +189,13 @@ export interface WasmTimbreResult {
   complexity: number;
 }
 
+/** Each scalar level is absent when not measured. */
 export interface WasmDynamicsResult {
-  dynamicRangeDb: number;
+  dynamicRangeDb?: number;
   peakDb: number;
   rmsDb: number;
-  loudnessRangeLu: number;
-  crestFactor: number;
+  loudnessRangeLu?: number;
+  crestFactor?: number;
   isCompressed: boolean;
 }
 
@@ -278,12 +279,13 @@ export interface WasmRhythmAnalysisResult {
   beatIntervals: Float32Array;
 }
 
+/** Each scalar level is absent when not measured. */
 export interface WasmDynamicsAnalysisResult {
-  dynamicRangeDb: number;
+  dynamicRangeDb?: number;
   peakDb: number;
   rmsDb: number;
-  crestFactor: number;
-  loudnessRangeLu: number;
+  crestFactor?: number;
+  loudnessRangeLu?: number;
   isCompressed: boolean;
   loudnessTimesSec: Float32Array;
   loudnessRmsDb: Float32Array;
@@ -517,8 +519,9 @@ export interface WasmDehumStereoResult {
 
 /** What a denoise analysis found, as `masteringRepairDenoiseClassicalStereo` returns it. */
 export interface WasmNoiseDetection {
-  floorDbfs: number;
+  floorDbfs?: number;
   bandFloorDbfs: Float32Array;
+  bandFloorBand: Int32Array;
 }
 
 /** What a stereo denoise pass found and what it removed. */
@@ -821,13 +824,14 @@ export interface WasmCqtResult {
   gamma: number;
 }
 
+/** Each field but `integratedLufs` is absent when not measured. */
 export interface WasmLufsResult {
   integratedLufs: number;
-  momentaryLufs: number;
-  shortTermLufs: number;
-  maxMomentaryLufs: number;
-  maxShortTermLufs: number;
-  loudnessRangeLu: number;
+  momentaryLufs?: number;
+  shortTermLufs?: number;
+  maxMomentaryLufs?: number;
+  maxShortTermLufs?: number;
+  loudnessRangeLu?: number;
 }
 
 /**
@@ -887,12 +891,13 @@ export interface WasmStageGainReduction {
   gainReductionDb: number;
 }
 
+/** Each scalar is absent when not measured. */
 export interface WasmMasteringLoudnessSummary {
   integratedLufs: number;
-  maxMomentaryLufs: number;
-  maxShortTermLufs: number;
+  maxMomentaryLufs?: number;
+  maxShortTermLufs?: number;
   truePeakDbtp: number;
-  loudnessRangeLu: number;
+  loudnessRangeLu?: number;
 }
 
 export interface WasmMasteringReport {
@@ -902,13 +907,15 @@ export interface WasmMasteringReport {
   maxGainReductionDb: number;
   loudnessTargetLimited: boolean;
   bandEnergyDeltaDb: Float32Array;
+  loudnessGainDb?: number;
 }
 
 export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
   outputTruePeakDbtp: number;
-  outputLoudnessRangeLu: number;
+  outputLoudnessRangeLu?: number;
   loudnessTargetLimited: boolean;
+  loudnessGainDb?: number;
   /**
    * Samples a stage replaced with a finite in-domain one, keeping the
    * output finite and in range. A non-finite sample supplied by the caller
@@ -935,8 +942,9 @@ export interface WasmMasteringStereoChainResult {
   appliedGainDb: number;
   stages: string[];
   outputTruePeakDbtp: number;
-  outputLoudnessRangeLu: number;
+  outputLoudnessRangeLu?: number;
   loudnessTargetLimited: boolean;
+  loudnessGainDb?: number;
   /** See {@link WasmMasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
   stageGainReductions: WasmStageGainReduction[];
@@ -1211,13 +1219,18 @@ export interface WasmEngineMeterTelemetry {
    * an exact dBTP number.
    */
   truePeakDb: number[];
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */
-  maxTruePeakDb: number;
-  correlation: number;
-  monoCompatWidth: number;
-  momentaryLufs: number;
-  shortTermLufs: number;
-  integratedLufs: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. Absent when not measured; `-Infinity` for silence. */
+  maxTruePeakDb?: number;
+  /** Absent when not measured. */
+  correlation?: number;
+  /** Absent when not measured; `+Infinity` when the mid signal is silent but the side is not. */
+  monoCompatWidth?: number;
+  /** Absent until the window has filled; `-Infinity` for silence. */
+  momentaryLufs?: number;
+  /** Absent until the window has filled; `-Infinity` for silence. */
+  shortTermLufs?: number;
+  /** Absent before the first gating block; `-Infinity` while nothing passes the gate. */
+  integratedLufs?: number;
   gainReductionDb: number;
   /** Pre-trim input peak for each valid plane, in dBFS. */
   inputPeakDb: number[];
@@ -2195,7 +2208,7 @@ export interface SonareModule {
     side: Float32Array;
     radius: Float32Array;
     angleRad: Float32Array;
-    correlation: number;
+    correlation?: number;
     averageAbsAngleRad: number;
     maxRadius: number;
   };
@@ -3864,7 +3877,6 @@ export interface WasmPlaybackLoudnessMeter {
   delete: () => void;
 }
 
-/** One block's worth of meter readings, all dB fields floored at -120. */
 export interface WasmMixer {
   compile: () => void;
   processStereo: (

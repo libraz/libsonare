@@ -870,7 +870,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
-| `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
 
 #### Each operation has exactly one entry point
 
@@ -1037,7 +1037,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
-| `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
+| `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
 
 #### Each operation has exactly one entry point
 
@@ -3075,7 +3075,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
 | `Mixer` | a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone |
 | `RealtimeEngine.set_midi_fx` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
-| `RealtimeEngine.set_part_rig` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig') |
+| `RealtimeEngine.set_part_rig` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)') |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -3308,8 +3308,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `EngineMarker.id` | optional, default None: set_markers allocates the lowest id above every id the engine has stored or assigned that the list does not carry; a marker read back always carries its id |
-| `EngineMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)) |
+| `EngineMarker.id` | required on EngineMarker, the stored record; pass an EngineMarkerInput with id omitted to have set_markers allocate the lowest id above every id the engine has stored or assigned that the list does not carry |
+| `EngineMarker` | ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)); a marker without an id is an EngineMarkerInput |
 | `Mixer.add_bus(bus_id)` | `Mixer.add_bus(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.add_strip(strip_id)` | `Mixer.add_strip(id)`: renamed id, the name the Node and WASM mixers use |
 | `Mixer.add_vca_group(group_id)` | `Mixer.add_vca_group(id)`: renamed id, the name the Node and WASM mixers use |
@@ -3409,7 +3409,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.set_clip_loop(loop_mode)` | 'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused |
 | `Project.set_clip_warp_mode(mode)` | takes a ProjectWarpMode token ('off', 'repitch', 'tempoSync', 'timeStretch'); 'tempo-sync' and 'time-stretch' raise SonareValueError and a number is TypeError |
 | `Project.set_overlap_policy(policy)` | takes "disallow" or "allow"; an integer raises TypeError |
-| `Project.set_part_rig` | mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig') |
+| `Project.set_part_rig` | mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)') |
 | `Project.set_track_kind(kind)` | takes a ProjectTrackKind token ('audio', 'midi', 'aux'); a number is TypeError |
 | `ProjectClip.loop_mode` | a ProjectLoopMode token ('off', 'loop') instead of an ordinal |
 | `ProjectClip.source_kind` | a ProjectSourceKind token ('audio', 'midi') instead of an ordinal |
@@ -5713,7 +5713,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ScopeOptions` | removed: Set maxPoints in MeteringVectorscopeRequest or MeteringPhaseScopeRequest; an explicit 0 is refused, so omit maxPoints for every point. |
 | `WaveformPeakPyramidOptions` | removed: Set samplesPerBucketLevels in WaveformPeakPyramidRequest beside channels. |
 | `WaveformPeaksOptions` | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
-| `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
+| `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number, or undefined when no short-term window passes the gate (shorter than 3 s, or silence) |
 | `masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
 | `masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
 | `masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
@@ -5752,8 +5752,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `masteringStreamingPreview(platforms)` | removed: pass platforms as a field of MasteringStreamingPreviewRequest |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
 | `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
-| `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
-| `meteringCrestFactorDb` | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number |
+| `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number \| undefined, undefined for silence |
+| `meteringCrestFactorDb` | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number, or undefined for silence |
 | `meteringDcOffset` | one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number |
 | `meteringDetectClipping` | one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport |
 | `meteringDynamicRange` | one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport |
@@ -5772,11 +5772,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `meteringStereoCorrelation(left)` | removed: pass left as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation(right)` | removed: pass right as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
-| `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
+| `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number \| undefined, undefined when either channel has zero energy |
 | `meteringStereoWidth(left)` | removed: pass left as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(right)` | removed: pass right as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
-| `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
+| `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number \| undefined, Infinity for a silent mid under a nonzero side and undefined when both are zero |
 | `meteringTruePeakDb` | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
 | `meteringVectorscope(left)` | removed: pass left as a field of MeteringVectorscopeRequest |
 | `meteringVectorscope(right)` | removed: pass right as a field of MeteringVectorscopeRequest |
@@ -6246,7 +6246,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
 | `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
-| `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
+| `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref. |
 | `RealtimeEngine.setTrackStripJson` | removed: Call setStrip(ref, settings) with a track id and a MixSceneStripInput object; no JSON string. |
@@ -6302,7 +6302,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object |
+| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is a TypeError |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
 
@@ -6321,7 +6321,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Mixer.stripCount` | readonly getter (was a method) |
 | `Mixer.tailSamples` | readonly getter (was a method) |
 | `Mixer.vcaGroupCount` | readonly getter (was a method) |
-| `PlaybackLoudnessMeter.integratedLufs` | readonly getter (was a method) |
+| `PlaybackLoudnessMeter.integratedLufs` | readonly getter (was a method); undefined before the first gating block and -Infinity while nothing passes the gate |
 | `PlaybackRenderer.inputChannels` | `PlaybackRenderer.numInputChannels`: renamed to numInputChannels, a readonly getter (was a method) |
 | `PlaybackRenderer.latencySamples` | readonly getter (was a method) |
 | `PlaybackRenderer.nonFiniteDiscardCount` | readonly getter (was a method) |
@@ -6648,7 +6648,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.exportClipFile` | returns a plain Uint8Array, not a Buffer |
 | `Project.exportSmf` | returns a plain Uint8Array, not a Buffer |
 | `Project.lastBounceCompileResult` | returns { diagnostics } only |
-| `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
+| `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
 | `ProjectMidiFxBakeRequest.configJson` | `ProjectMidiFxBakeRequest.config` |
@@ -6676,7 +6676,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.analyzeTempo` | also takes one request object |
 | `Project.bakeMidiFx(clipId)` | removed: pass clipId as a field of ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx(configJson)` | removed: pass it as config in ProjectMidiFxBakeRequest |
-| `Project.bakeMidiFx` | takes one request object and always returns a result; the positional form is gone; config is a MidiFxConfig object of camelCase keys, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
+| `Project.bakeMidiFx` | takes one request object and always returns a result; the positional form is gone; config is a MidiFxConfig object of camelCase keys, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `Project.clearPartRig(destinationId)` | removed: pass destinationId as a field of PartRigKey |
 | `Project.clearPartRig(part)` | removed: pass part as a field of PartRigKey |
 | `Project.clearPartRig` | takes one key object; the positional form is gone |
@@ -6696,7 +6696,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `Project.setPartRig` | takes one request object; the positional form is gone |
+| `Project.setPartRig` | takes one request object; the positional form is gone; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat |
 
 #### MIDI message packers and GM lookups are module functions
 
@@ -10443,8 +10443,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `WaveformPeakPyramidOptions` | removed: Set samplesPerBucketLevels in WaveformPeakPyramidRequest beside channels. |
 | `WaveformPeaksOptions` (`./analysis`) | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
 | `WaveformPeaksOptions` | removed: Set samplesPerBucket in WaveformPeaksRequest beside channels. |
-| `ebur128LoudnessRange` (`./analysis`) | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
-| `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number |
+| `ebur128LoudnessRange` (`./analysis`) | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number, or undefined when no short-term window passes the gate (shorter than 3 s, or silence) |
+| `ebur128LoudnessRange` | `ebur128LoudnessRangeLu`: renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number, or undefined when no short-term window passes the gate (shorter than 3 s, or silence) |
 | `masterAudio(onProgress)` | removed: pass onProgress as a field of MasterAudioRequest |
 | `masterAudio(overrides)` | removed: pass overrides as a field of MasterAudioRequest |
 | `masterAudio(presetName)` | removed: pass it as preset in MasterAudioRequest |
@@ -10474,10 +10474,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringStreamingPreview(platforms)` | removed: pass platforms as a field of MasteringStreamingPreviewRequest |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
 | `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
-| `meteringCrestFactorDbStereo` (`./analysis`) | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
-| `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number |
-| `meteringCrestFactorDb` (`./analysis`) | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number |
-| `meteringCrestFactorDb` | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number |
+| `meteringCrestFactorDbStereo` (`./analysis`) | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number \| undefined, undefined for silence |
+| `meteringCrestFactorDbStereo` | request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number \| undefined, undefined for silence |
+| `meteringCrestFactorDb` (`./analysis`) | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number, or undefined for silence |
+| `meteringCrestFactorDb` | one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number, or undefined for silence |
 | `meteringDcOffset` (`./analysis`) | one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number |
 | `meteringDcOffset` | one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number |
 | `meteringDetectClipping` (`./analysis`) | one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport |
@@ -10514,16 +10514,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `meteringStereoCorrelation(right)` | removed: pass right as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
 | `meteringStereoCorrelation(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoCorrelationRequest |
-| `meteringStereoCorrelation` (`./analysis`) | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
-| `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number |
+| `meteringStereoCorrelation` (`./analysis`) | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number \| undefined, undefined when either channel has zero energy |
+| `meteringStereoCorrelation` | request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number \| undefined, undefined when either channel has zero energy |
 | `meteringStereoWidth(left)` (`./analysis`) | removed: pass left as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(left)` | removed: pass left as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(right)` (`./analysis`) | removed: pass right as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(right)` | removed: pass right as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
 | `meteringStereoWidth(sampleRate)` | removed: pass sampleRate as a field of MeteringStereoWidthRequest |
-| `meteringStereoWidth` (`./analysis`) | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
-| `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number |
+| `meteringStereoWidth` (`./analysis`) | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number \| undefined, Infinity for a silent mid under a nonzero side and undefined when both are zero |
+| `meteringStereoWidth` | request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number \| undefined, Infinity for a silent mid under a nonzero side and undefined when both are zero |
 | `meteringTruePeakDb` (`./analysis`) | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
 | `meteringTruePeakDb` | `meteringTruePeakDbtp`: renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number |
 | `meteringVectorscope(left)` (`./analysis`) | removed: pass left as a field of MeteringVectorscopeRequest |
@@ -11254,7 +11254,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
 | `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
-| `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
+| `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | `RealtimeEngine.setStripEqBand` |
 | `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip` |
@@ -11323,7 +11323,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `RealtimeEngine.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part |
+| `RealtimeEngine.setPartRig` | request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat |
 | `RealtimeEngine.setTrackLanes` | takes readonly EngineTrackLane[]; the bare-number arm is removed |
 | `RealtimeEngine.setTrackStripInsertParamByName` | `RealtimeEngine.setStripInsertParam`: setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value) |
 | `SonareEngine.addClip(buffer)` (`./worklet`) | removed: pass it as channels or pageProvider in EngineClip |
@@ -11361,7 +11361,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Mixer.stripCount` | readonly getter (was a method) |
 | `Mixer.tailSamples` | readonly getter (was a method) |
 | `Mixer.vcaGroupCount` | readonly getter (was a method) |
-| `PlaybackLoudnessMeter.integratedLufs` | readonly getter (was a method) |
+| `PlaybackLoudnessMeter.integratedLufs` | readonly getter (was a method); undefined before the first gating block and -Infinity while nothing passes the gate |
 | `PlaybackRenderer.inputChannels` | `PlaybackRenderer.numInputChannels`: renamed to numInputChannels, a readonly getter (was a method) |
 | `PlaybackRenderer.latencySamples` | readonly getter (was a method) |
 | `PlaybackRenderer.nonFiniteDiscardCount` | readonly getter (was a method) |
@@ -12007,7 +12007,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `Project.compile` | compile returns { diagnostics } only; each diagnostic has a code token, an error / warning severity and an optional targetId |
 | `Project.lastBounceCompileResult` | lastBounceCompileResult returns the same { diagnostics } shape as compile |
-| `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat |
+| `Project.previewMidiFxCount` | takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `ProjectCompileResult.diagnosticCount` | removed: Read diagnostics.length. |
 | `ProjectCompileResult.hasTimeline` | removed: Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compile({ withTimeline: true }) returns the timeline itself. |
 | `ProjectCompileResult.messages` | removed: Read diagnostics, an array of ProjectDiagnostic, and use each entry's message. |
@@ -12077,7 +12077,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.autoTempo` | autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments |
 | `Project.bakeMidiFx(clipId)` | removed: pass clipId as a field of ProjectMidiFxBakeRequest |
 | `Project.bakeMidiFx(configJson)` | removed: pass it as config in ProjectMidiFxBakeRequest |
-| `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and the core refuses an unknown key (a 1.x snake_case key among them) or a wrong-typed field as InvalidFormat |
+| `Project.bakeMidiFx` | the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult; config is a MidiFxConfig object of camelCase keys: a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `Project.clearPartRig(destinationId)` | removed: pass destinationId as a field of PartRigKey |
 | `Project.clearPartRig(part)` | removed: pass part as a field of PartRigKey |
 | `Project.clearPartRig` | clearPartRig takes one PartRigKey object instead of (destinationId, part) |
@@ -12095,7 +12095,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
 | `Project.setPartRig(part)` | removed: pass part as a field of PartRigRequest |
-| `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest |
+| `Project.setPartRig` | the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat |
 | `VocalEditWorkerReadOptions` | removed: Read the committed state on VocalEditWorkerSession and the draft on the VocalEditWorkerDraft from beginEdit(). |
 | `VocalEditWorkerSession.destinationSampleToSourceSample(options)` | removed: Drop options. Call destinationSampleToSourceSample(noteId, destinationSample) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |
 | `VocalEditWorkerSession.evaluatePitch(options)` | removed: Drop options. Call evaluatePitch(noteId) on the session for the committed state, or on the VocalEditWorkerDraft from beginEdit() for the draft. |

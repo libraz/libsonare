@@ -297,9 +297,10 @@ export class PlaybackLoudnessMeter {
     this.native.pushInterleaved(samples);
   }
 
-  /** Integrated loudness of everything pushed so far, in LUFS. */
-  get integratedLufs(): number {
-    return this.native.integratedLufs();
+  /** Integrated loudness of everything pushed so far, in LUFS. `undefined` before the first 400 ms block is complete; `-Infinity` while nothing is above the gate. */
+  get integratedLufs(): number | undefined {
+    const value = this.native.integratedLufs();
+    return Number.isNaN(value) ? undefined : value;
   }
 
   /** Releases the native handle. Idempotent, as the Node facade is. */

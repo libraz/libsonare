@@ -14,6 +14,18 @@ function thrown(fn: () => unknown): unknown {
   return undefined;
 }
 
+/** Runs a few blocks of a tone through every strip so the meters have something to read. */
+function feedTone(mixer: Mixer): void {
+  for (let block = 0; block < 4; block++) {
+    const tone = new Float32Array(BLOCK);
+    for (let i = 0; i < BLOCK; i++) {
+      tone[i] = 0.3 * Math.sin((2 * Math.PI * 440 * (block * BLOCK + i)) / SR);
+    }
+    const lanes = Array.from({ length: mixer.stripCount }, () => tone);
+    mixer.processStereo(lanes, lanes);
+  }
+}
+
 function withPreset(fn: (mixer: Mixer) => void): void {
   const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
     sampleRate: SR,
@@ -196,6 +208,9 @@ describe('mixer strips', () => {
 
   it('stripMeter takes a tap token and refuses a number', () => {
     withPreset((mixer) => {
+      // A strip that has seen no audio reports no per-side levels.
+      expect('peakDbL' in mixer.stripMeter('vocal')).toBe(false);
+      feedTone(mixer);
       expect(Number.isFinite(mixer.stripMeter('vocal').peakDbL)).toBe(true);
       expect(Number.isFinite(mixer.stripMeter('vocal', 'preFader').peakDbL)).toBe(true);
       expect(Number.isFinite(mixer.stripMeter('vocal', 'postFader').peakDbL)).toBe(true);
@@ -369,6 +384,7 @@ describe('mixer master meter', () => {
   it('meterScratchValue refuses a field outside the map', () => {
     withPreset((mixer) => {
       mixer.configureMeter({ enabled: true });
+      feedTone(mixer);
       expect(mixer.latchMeterSnapshot()).toBe(true);
       for (let field = 0; field <= 6; field++) {
         expect(Number.isFinite(mixer.meterScratchValue(field as never))).toBe(true);

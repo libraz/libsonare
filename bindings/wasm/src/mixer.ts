@@ -493,7 +493,7 @@ export class Mixer {
 
   /**
    * Latest master-output meter reading, describing the most recently metered
-   * block. All dB fields are finite and floored at -120.
+   * block. A level with no energy is `-Infinity`; a field that was not measured is absent.
    *
    * @throws When the meter has never been enabled.
    */
@@ -519,6 +519,7 @@ export class Mixer {
    * Read one field of the snapshot latched by {@link latchMeterSnapshot}.
    *
    * @param field - A {@link MeterScratchField} value (`0` to `6`).
+   * @returns The value; `-Infinity` for no energy, NaN when not measured.
    * @throws TypeError for a non-number; RangeError for a value outside `[0, 6]`.
    */
   meterScratchValue(field: MeterScratchField): number {

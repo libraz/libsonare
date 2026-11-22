@@ -23,23 +23,30 @@ function meterSnapshot(): Record<string, unknown> {
 }
 
 describe('isMeterSnapshot input peak fields', () => {
-  it('rejects snapshots that omit the new input peak fields', () => {
-    expect(isMeterSnapshot(meterSnapshotWithoutInputPeaks())).toBe(false);
+  it('accepts snapshots that omit the input peak fields (not measured)', () => {
+    expect(isMeterSnapshot(meterSnapshotWithoutInputPeaks())).toBe(true);
   });
 
   it('accepts finite input peak fields', () => {
     expect(isMeterSnapshot(meterSnapshot())).toBe(true);
   });
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
-    'rejects non-finite inputPeakDbL values (%p)',
+  it('accepts a silent (-Infinity) input peak', () => {
+    const silent = Number.NEGATIVE_INFINITY;
+    expect(
+      isMeterSnapshot({ ...meterSnapshot(), inputPeakDbL: silent, inputPeakDbR: silent }),
+    ).toBe(true);
+  });
+
+  it.each([null, '-3', true, {}, [-3], Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an inputPeakDbL that is not a level (%p)',
     (inputPeakDbL) => {
       expect(isMeterSnapshot({ ...meterSnapshot(), inputPeakDbL })).toBe(false);
     },
   );
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
-    'rejects non-finite inputPeakDbR values (%p)',
+  it.each([null, '-3', true, {}, [-3], Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an inputPeakDbR that is not a level (%p)',
     (inputPeakDbR) => {
       expect(isMeterSnapshot({ ...meterSnapshot(), inputPeakDbR })).toBe(false);
     },

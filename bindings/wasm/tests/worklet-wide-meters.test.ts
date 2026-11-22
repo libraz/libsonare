@@ -82,10 +82,31 @@ function engineOf(processor: SonareRealtimeEngineWorkletProcessor): RealtimeEngi
   return (processor as unknown as { engine: RealtimeEngine }).engine;
 }
 
+/** A silent level is -Infinity and an unmeasured one NaN; anything else matches within a tolerance. */
+function expectLevel(actual: number | undefined, expected: number): void {
+  if (Number.isNaN(expected)) {
+    expect(actual).toBeNaN();
+  } else if (!Number.isFinite(expected)) {
+    expect(actual).toBe(expected);
+  } else {
+    expect(actual).toBeCloseTo(expected, 4);
+  }
+}
+
+/** A scalar the snapshot carries only when measured: an unmeasured (NaN) reference is absent. */
+function expectScalarLevel(meter: object | undefined, key: string, expected: number): void {
+  const value = (meter as Record<string, number | undefined> | undefined)?.[key];
+  if (Number.isNaN(expected)) {
+    expect(meter && key in meter, key).toBe(false);
+  } else {
+    expectLevel(value, expected);
+  }
+}
+
 function expectPlanes(actual: number[] | undefined, expected: number[]): void {
   expect(actual).toHaveLength(expected.length);
   expected.forEach((value, index) => {
-    expect(actual?.[index]).toBeCloseTo(value, 4);
+    expectLevel(actual?.[index], value);
   });
 }
 
@@ -111,8 +132,8 @@ describe('wide meters on the live worklet engine', () => {
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
-      expect(bus?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
-      expect(bus?.peakDbR).toBeCloseTo(reference.peakDb[1], 4);
+      expectScalarLevel(bus, 'peakDbL', reference.peakDb[0]);
+      expectScalarLevel(bus, 'peakDbR', reference.peakDb[1]);
       // Ls (plane 4) carries the panned lane, above the silent front-left plane.
       expect((bus?.peakDb?.[4] ?? 0) - (bus?.peakDb?.[0] ?? 0)).toBeGreaterThan(10);
     } finally {
@@ -141,7 +162,7 @@ describe('wide meters on the live worklet engine', () => {
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
-      expect(bus?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
+      expectScalarLevel(bus, 'peakDbL', reference.peakDb[0]);
     } finally {
       processor.destroy();
     }
@@ -177,11 +198,11 @@ describe('wide meters on the live worklet engine', () => {
         expect(meter).toBeDefined();
         expect(meter?.numChannels).toBeUndefined();
         expect(meter?.peakDb).toBeUndefined();
-        expect(meter?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
-        expect(meter?.peakDbR).toBeCloseTo(reference.peakDb[1], 4);
-        expect(meter?.rmsDbL).toBeCloseTo(reference.rmsDb[0], 4);
-        expect(meter?.truePeakDbtpR).toBeCloseTo(reference.truePeakDbtp[1], 4);
-        expect(meter?.inputPeakDbL).toBeCloseTo(reference.inputPeakDb[0], 4);
+        expectScalarLevel(meter, 'peakDbL', reference.peakDb[0]);
+        expectScalarLevel(meter, 'peakDbR', reference.peakDb[1]);
+        expectScalarLevel(meter, 'rmsDbL', reference.rmsDb[0]);
+        expectScalarLevel(meter, 'truePeakDbtpR', reference.truePeakDbtp[1]);
+        expectScalarLevel(meter, 'inputPeakDbL', reference.inputPeakDb[0]);
       }
       expect(message?.peakDbL).toBeCloseTo(shared?.peakDbL ?? Number.NaN, 5);
     } finally {

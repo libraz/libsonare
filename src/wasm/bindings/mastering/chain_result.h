@@ -18,10 +18,10 @@ inline emscripten::val masteringLoudnessSummaryToVal(
     const sonare::mastering::api::MasteringLoudnessSummary& summary) {
   emscripten::val out = emscripten::val::object();
   out.set("integratedLufs", summary.integrated_lufs);
-  out.set("maxMomentaryLufs", summary.max_momentary_lufs);
-  out.set("maxShortTermLufs", summary.max_short_term_lufs);
+  setMeasured(out, "maxMomentaryLufs", summary.max_momentary_lufs);
+  setMeasured(out, "maxShortTermLufs", summary.max_short_term_lufs);
   out.set("truePeakDbtp", summary.true_peak_dbtp);
-  out.set("loudnessRangeLu", summary.loudness_range_lu);
+  setMeasured(out, "loudnessRangeLu", summary.loudness_range_lu);
   return out;
 }
 
@@ -32,6 +32,7 @@ inline void setMasteringReport(emscripten::val& out,
   report_out.set("after", masteringLoudnessSummaryToVal(report.after));
   report_out.set("appliedGainDb", report.applied_gain_db);
   report_out.set("maxGainReductionDb", report.max_gain_reduction_db);
+  setMeasured(report_out, "loudnessGainDb", report.loudness_gain_db);
   report_out.set("loudnessTargetLimited", report.loudness_target_limited);
   report_out.set("bandEnergyDeltaDb", vectorToFloat32Array(report.band_energy_delta_db.data(),
                                                            report.band_energy_delta_db.size()));
@@ -46,8 +47,9 @@ inline void setMasteringReport(emscripten::val& out,
 template <typename Result>
 inline void setChainMetrics(emscripten::val& out, const Result& metrics) {
   out.set("outputTruePeakDbtp", metrics.output_true_peak_dbtp);
-  out.set("outputLoudnessRangeLu", metrics.output_loudness_range_lu);
+  setMeasured(out, "outputLoudnessRangeLu", metrics.output_loudness_range_lu);
   out.set("loudnessTargetLimited", metrics.loudness_target_limited);
+  setMeasured(out, "loudnessGainDb", metrics.loudness_gain_db);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(metrics.non_finite_substitution_count));
   emscripten::val reductions = emscripten::val::array();
   for (const auto& reduction : metrics.stage_gain_reductions) {

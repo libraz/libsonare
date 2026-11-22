@@ -89,15 +89,20 @@ describe('normalizeStereo', () => {
     ).toThrow(/^normalizeStereo: mode must be one of peak, rms$/);
   });
 
-  it('leaves a silent pair alone', () => {
+  it.each(['peak', 'rms'] as const)('refuses a silent take in %s mode', (mode) => {
+    // Silence has no level to scale toward; the refusal names the caller's own spelling.
+    const call = () => normalize({ samples: new Float32Array(1024), sampleRate, mode });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^normalize: samples has no measurable level$/);
+  });
+
+  it('refuses a silent pair', () => {
     const silence = new Float32Array(1024);
-    const result = normalizeStereo({ left: silence, right: silence, sampleRate, targetDb: -1 });
+    const call = () => normalizeStereo({ left: silence, right: silence, sampleRate, targetDb: -1 });
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/^normalizeStereo: audio has no measurable level$/);
 
-    expect(result.appliedGainDb).toBe(0);
-    expect(result.left[512]).toBe(0);
-
-    // Control: a quiet-but-not-silent pair does move, so the assertion above is
-    // about the silence short-circuit rather than about a no-op.
+    // Control: a quiet-but-not-silent pair does move, so the refusal is about silence.
     const quiet = sine(0.01);
     expect(
       normalizeStereo({ left: quiet, right: quiet, sampleRate, targetDb: -1 }).appliedGainDb,

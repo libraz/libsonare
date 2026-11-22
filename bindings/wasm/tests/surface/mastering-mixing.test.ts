@@ -357,6 +357,15 @@ describe('mastering mixing surface', () => {
         maxBlockSize: 256,
       });
       try {
+        // A strip that has seen no audio measures nothing, so feed it a tone first.
+        for (let block = 0; block < 4; block++) {
+          const tone = new Float32Array(256);
+          for (let i = 0; i < tone.length; i++) {
+            tone[i] = 0.3 * Math.sin((2 * Math.PI * 440 * (block * 256 + i)) / SR);
+          }
+          const lanes = Array.from({ length: mixer.stripCount }, () => tone);
+          mixer.processStereo(lanes, lanes);
+        }
         const meter = mixer.stripMeter('host') as unknown as Record<string, unknown>;
         expect(meter).toHaveProperty(name);
         expect(meter).not.toHaveProperty(oldName);

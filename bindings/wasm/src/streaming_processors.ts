@@ -116,9 +116,9 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  * over-report the floor for as long as the programme stays intermittent, and on
  * a gated tone they leave the result below the untreated input.
  *
- * An enabled `loudness` stage also throws unless
- * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} supplies a
- * precomputed normalization gain.
+ * An enabled `loudness` stage applies
+ * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} per block, or no
+ * gain when it is omitted.
  *
  * Call {@link destroy} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
@@ -130,9 +130,10 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  *   message handler, never from `AudioWorkletProcessor.process()`.
  * - {@link processMono}/{@link processStereo} return fresh arrays. On the render
  *   thread, reuse the returned reference for the block rather than retaining it.
- * - An enabled `loudness` stage needs `loudnessStaticGainDb` measured offline
- *   ({@link streamingLoudnessGain} returns it), because whole-signal integrated
- *   LUFS cannot be measured block by block. Pass `loudnessStaticGainPeakDbtp` too
+ * - An enabled `loudness` stage takes `loudnessStaticGainDb` measured offline
+ *   ({@link streamingLoudnessGain} returns it, or omits it for input with no
+ *   measurable loudness), because whole-signal integrated LUFS cannot be
+ *   measured block by block. Pass `loudnessStaticGainPeakDbtp` too
  *   and the static gain is clamped exactly as the offline chain clamps it, so
  *   the live preview matches the render.
  * - {@link flush} output starts {@link latencySamples} samples early; discard

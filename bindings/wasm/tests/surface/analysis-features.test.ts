@@ -274,9 +274,11 @@ describe('analysis features: renamed unit fields', () => {
   });
 
   it('names the loudness range in LU', () => {
-    const plane = new Float32Array(sr).map((_, i) => 0.2 * Math.sin(i * 0.05));
+    // 6 s so a loudness-range reading exists (short-term windows are 3 s).
+    const plane = new Float32Array(sr * 6).map((_, i) => 0.2 * Math.sin(i * 0.05));
     const result = lufsMultichannel({ channels: [plane, plane], sampleRate: sr });
     expect(typeof result.loudnessRangeLu).toBe('number');
+    expect(Number.isFinite(result.loudnessRangeLu)).toBe(true);
     expect(result).not.toHaveProperty('loudnessRange');
   });
 });
