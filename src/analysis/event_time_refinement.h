@@ -29,6 +29,13 @@ inline float evidence_half_window_s(int win_length, int n_fft, int sample_rate) 
   return 0.5f * static_cast<float>(window) / static_cast<float>(sample_rate);
 }
 
+/// @brief Loudest short-time RMS of @p audio over the fine windows starting in [start_s, end_s].
+/// @details The window is the refiner's fine window, slid one sample at a time so the read does
+///          not depend on where the event falls against a hop grid. Start positions are rounded to
+///          the nearest sample and clamped to the signal; a signal shorter than one window is read
+///          whole.
+float peak_short_time_rms(const Audio& audio, double start_s, double end_s);
+
 /// @brief Fine energy envelope of one signal, queried per event.
 class EventTimeRefiner {
  public:

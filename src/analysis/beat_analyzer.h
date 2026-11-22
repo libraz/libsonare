@@ -33,6 +33,21 @@ struct Beat {
   float strength;
 };
 
+/// @brief Per-beat accent evidence read from the audio, the meter estimate's input.
+/// @details Every accent is the loudest 5 ms RMS (peak_short_time_rms()) near the event: at a
+///          beat's own refined attack where its evidence window holds one, otherwise around the
+///          reported time widened by half an onset hop. A level read rather than an onset-envelope
+///          frame, so two equal events read alike whatever their phase against the hop grid and
+///          whatever the input level.
+struct BeatAccents {
+  std::vector<float> beat;  ///< One linear accent per beat
+  /// One flag per beat: whether its evidence window holds an attack
+  std::vector<char> beat_has_attack;
+  /// One accent per gap between consecutive beats, read at the midpoint's own attack, or 0 where
+  /// no attack sits there: a sustained level between the beats is not a subdivision
+  std::vector<float> subdivision;
+};
+
 /// @brief Detected time signature.
 struct TimeSignature {
   int numerator;     ///< Beats per measure (e.g., 4 for 4/4)
@@ -110,7 +125,8 @@ class BeatAnalyzer {
   ///          beat whose frame holds a rise coincides with an onset. The offset is the median
   ///          refinement over those beats and applies to every beat and downbeat, so the spacing
   ///          stays the tracker's; it is 0 when fewer than max(4, beats / 4) beats coincide.
-  ///          Frames are untouched. Call it once, before the meter and downbeat passes.
+  ///          Frames are untouched. The per-beat accents (beat_accents()) are read here too,
+  ///          against the moved times. Call it once, before the meter and downbeat passes.
   void refine_beat_times(const Audio& audio, float half_window_s);
 
   /// @brief Refines events at ascending envelope frames against the signal refine_beat_times()
@@ -136,6 +152,11 @@ class BeatAnalyzer {
   /// @details One value per beat, aggregated over a window around the beat
   ///          rather than sampled at a single frame like Beat::strength.
   const std::vector<float>& beat_onset_observations() const { return onset_observations_; }
+
+  /// @brief Returns the per-beat accents the meter estimate scores.
+  /// @details Empty until refine_beat_times() has read them from the audio, as for the
+  ///          onset-envelope constructor; the meter estimate then reads Beat::strength.
+  const BeatAccents& beat_accents() const { return accents_; }
 
   /// @brief Returns beat-local low-frequency energy, the accent evidence that
   ///        survives the log-spectral difference onset strength discards.
@@ -180,6 +201,8 @@ class BeatAnalyzer {
 
  private:
   void track_beats();
+  /// Reads accents_ against the current beat times; @p attacks holds each beat's refined attack.
+  void read_accents(const Audio& audio, const std::vector<std::optional<float>>& attacks);
 
   std::vector<Beat> beats_;
   std::vector<int> downbeat_indices_;
@@ -191,6 +214,7 @@ class BeatAnalyzer {
   std::vector<float> onset_observations_;
   std::vector<float> low_frequency_observations_;
   std::vector<float> chord_change_observations_;
+  BeatAccents accents_;
   float bpm_;
   TimeSignature time_signature_;
   std::vector<TimeSignature> time_signature_candidates_;
@@ -202,22 +226,6 @@ class BeatAnalyzer {
   std::optional<EventTimeRefiner> refiner_;
   float refine_half_window_s_ = 0.0f;
 };
-
-/// @brief Rewrites an onset envelope so each frame carries the energy around it.
-/// @param onset_strength Frame-level onset envelope.
-/// @param sr Sample rate the envelope was computed at.
-/// @param hop_length Hop length the envelope was computed at.
-/// @return An envelope of the same length, or the input unchanged when it is
-///         empty or the rate arguments are not positive.
-/// @details A beat whose position falls between two hops splits its energy over
-///          neighbouring frames, so a single frame reads it as weaker than an
-///          identical beat that lands on a hop boundary. Anything scoring one
-///          frame per beat — meter estimation, accent comparison — would report
-///          that split as an accent difference, so it compares this envelope
-///          instead of the raw one. Where the energy sits, which is what those
-///          consumers actually measure, is unchanged.
-std::vector<float> beat_local_energy(const std::vector<float>& onset_strength, int sr,
-                                     int hop_length);
 
 /// @brief Quick beat detection function.
 /// @param audio Input audio

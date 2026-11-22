@@ -49,7 +49,12 @@ struct MeterConfig {
   float downbeat_weight = 1.0f;
   float measure_weight = 0.5f;
   float subdivision_weight = 0.15f;
-  float compound_subdivision_threshold = 0.85f;
+  /// Mean accent between the beats, as a fraction of the mean accent on them, at and above which a
+  /// six (or a three) is read as compound. Only a midpoint holding an attack contributes: an event
+  /// counts where it rises at least the refiner's evidence margin (kMinRiseDb in
+  /// event_time_refinement.cpp) above the local level, so a subdivision masked by a sustained bed
+  /// does not count.
+  float compound_subdivision_threshold = 0.5f;
 };
 
 /// @brief Result from meter analysis.
@@ -116,23 +121,24 @@ struct MeterResult {
   std::vector<int> unobserved_beats;
 };
 
-/// @brief Estimates meter from beat-aligned onset strengths using a multi-comb score.
+/// @brief Estimates meter from per-beat accents using a multi-comb score.
 class MeterAnalyzer {
  public:
-  /// @param onset_strength Frame-level accent envelope, or empty to read Beat::strength.
   /// @param beats Beat series to score.
   /// @param config Scoring configuration.
+  /// @param accents Accents read from the audio (BeatAnalyzer::beat_accents()), or empty to read
+  ///        Beat::strength. Without them the subdivision between beats is not measurable, so a
+  ///        compound meter is neither promoted nor demoted.
   /// @param beat_energy Per-beat low-frequency energy, the same length as @p beats, or empty.
   ///        Used only to tell a masked beat from a rest (MeterResult::unobserved_beats).
-  MeterAnalyzer(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
-                const MeterConfig& config = MeterConfig(),
-                const std::vector<float>& beat_energy = {});
+  MeterAnalyzer(const std::vector<Beat>& beats, const MeterConfig& config = MeterConfig(),
+                const BeatAccents& accents = {}, const std::vector<float>& beat_energy = {});
 
   const MeterResult& result() const { return result_; }
   TimeSignature time_signature() const { return result_.time_signature; }
 
  private:
-  void analyze(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
+  void analyze(const std::vector<Beat>& beats, const BeatAccents& accents,
                const std::vector<float>& beat_energy);
 
   MeterConfig config_;
@@ -140,8 +146,9 @@ class MeterAnalyzer {
 };
 
 /// @brief Runs MeterAnalyzer over @p beats; the parameters are the constructor's.
-MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
+MeterResult estimate_meter(const std::vector<Beat>& beats,
                            const MeterConfig& config = MeterConfig(),
+                           const BeatAccents& accents = {},
                            const std::vector<float>& beat_energy = {});
 
 /// @brief Validates a meter configuration, throwing on a value the estimator
@@ -170,6 +177,8 @@ void validate_meter_config(const MeterConfig& config);
 /// @details The scoring reads only the per-beat strengths, so no audio or
 ///          frame-level onset envelope is needed and a caller can score an
 ///          arbitrary span of an existing analysis without re-running it.
+///          The audio path scores level accents read from the signal
+///          (BeatAccents) instead, so the two can disagree over the same beats.
 ///          An empty beat series is rejected: there is nothing to score, and
 ///          answering it with the fixed default would read as a detection.
 ///          One to seven beats is accepted but is not a search either — it

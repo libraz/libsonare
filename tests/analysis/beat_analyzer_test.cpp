@@ -8,9 +8,11 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <numeric>
 #include <random>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "quick.h"
@@ -193,7 +195,8 @@ TEST_CASE("BeatAnalyzer time signature 3/4", "[beat_analyzer]") {
   BeatAnalyzer analyzer(audio, config);
 
   TimeSignature ts = analyzer.time_signature();
-  MeterAnalyzer meter(analyzer.onset_strength(), analyzer.beats());
+  MeterAnalyzer meter(analyzer.beats(), MeterConfig(), analyzer.beat_accents(),
+                      analyzer.beat_low_frequency_observations());
   std::vector<float> tracked_strengths;
   for (const auto& beat : analyzer.beats()) {
     tracked_strengths.push_back(beat.strength);
@@ -888,5 +891,209 @@ TEST_CASE("beats and tempo of the same content agree across input sample rates",
     CAPTURE(time_tolerance);
     CHECK(max_time_dev <= time_tolerance);
     CHECK(bpm_dev <= 0.02f);
+  }
+}
+
+namespace {
+
+/// @brief Equal-level events at a steady tempo: a 1 kHz blip with a fast attack, or a 330 Hz swell
+///        whose 80 ms attack holds no rise sharp enough to count as one.
+/// @details @p gain_of gives each event's gain from its index. Every event ends on a 10 ms
+///          raised-cosine release, so the end of an event is never a step the tracker can lock to.
+template <typename Gain>
+Audio make_event_track(int sr, double bpm, double first_s, bool swell, Gain gain_of,
+                       double level = 1.0, double duration_s = 12.0) {
+  std::vector<float> samples(static_cast<size_t>(sr * duration_s), 0.0f);
+  const int length = sr / 8;
+  const int release = sr / 100;
+  int index = 0;
+  for (double t = first_s; t < duration_s - 0.3; t += 60.0 / bpm, ++index) {
+    const size_t start = static_cast<size_t>(std::llround(t * sr));
+    const double gain = level * gain_of(index);
+    for (int i = 0; i < length && start + static_cast<size_t>(i) < samples.size(); ++i) {
+      const double tt = static_cast<double>(i) / sr;
+      double v = swell ? (tt < 0.08 ? 0.5 * (1.0 - std::cos(constants::kPiD * tt / 0.08)) : 1.0) *
+                             std::sin(constants::kTwoPiD * 330.0 * tt)
+                       : std::exp(-tt / 0.0027) * std::sin(constants::kTwoPiD * 1000.0 * tt);
+      if (i >= length - release) {
+        v *= 0.5 * (1.0 + std::cos(constants::kPiD * (i - (length - release)) / release));
+      }
+      samples[start + static_cast<size_t>(i)] += static_cast<float>(gain * v);
+    }
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Relative spread (standard deviation over mean) of the interior beats' accents.
+double interior_accent_spread(const BeatAnalyzer& analyzer) {
+  const std::vector<float>& accents = analyzer.beat_accents().beat;
+  REQUIRE(accents.size() >= 4);
+  double sum = 0.0;
+  double sum_sq = 0.0;
+  for (size_t i = 1; i + 1 < accents.size(); ++i) {
+    sum += accents[i];
+    sum_sq += static_cast<double>(accents[i]) * accents[i];
+  }
+  const double count = static_cast<double>(accents.size() - 2);
+  const double mean = sum / count;
+  return std::sqrt(std::max(0.0, sum_sq / count - mean * mean)) / mean;
+}
+
+/// @brief Median accent of the interior beats.
+float median_interior_accent(const BeatAnalyzer& analyzer) {
+  std::vector<float> accents(analyzer.beat_accents().beat.begin() + 1,
+                             analyzer.beat_accents().beat.end() - 1);
+  std::nth_element(accents.begin(), accents.begin() + accents.size() / 2, accents.end());
+  return accents[accents.size() / 2];
+}
+
+// Equal events read at most 1e-4 apart; the meter's spread floor sits at 10x that.
+constexpr double kEqualAccentTolerance = 1e-3;
+
+}  // namespace
+
+TEST_CASE("equal events read as equal accents at every phase against the hop grid",
+          "[beat_analyzer][meter_analyzer]") {
+  // Sub-hop shifts move every event against the 512-sample onset grid; the accent is a level
+  // read slid one sample at a time, so neither the spread nor the level may follow the shift.
+  const auto equal = [](int) { return 0.5; };
+  for (const bool swell : {false, true}) {
+    float reference = 0.0f;
+    for (const double shift_hops : {0.0, 1.0 / 3.0, 2.0 / 3.0}) {
+      const double first = 0.1 + shift_hops * 512.0 / 22050.0;
+      const BeatAnalyzer analyzer(make_event_track(22050, 120.0, first, swell, equal));
+      const double spread = interior_accent_spread(analyzer);
+      const float median = median_interior_accent(analyzer);
+      if (reference == 0.0f) reference = median;
+      CAPTURE(swell, shift_hops, spread, median, reference, analyzer.beat_accents().beat);
+      CHECK(spread <= kEqualAccentTolerance);
+      CHECK(std::abs(median - reference) <= kEqualAccentTolerance * reference);
+    }
+  }
+}
+
+TEST_CASE("equal events read as equal accents at every input rate",
+          "[analysis_rate][beat_analyzer][meter_analyzer]") {
+  const auto equal = [](int) { return 0.5; };
+  for (const bool swell : {false, true}) {
+    for (int sr : {22050, 44100, 48000}) {
+      const BeatAnalyzer analyzer(
+          analysis_rate_audio(make_event_track(sr, 160.0, 0.1, swell, equal)));
+      const double spread = interior_accent_spread(analyzer);
+      CAPTURE(swell, sr, spread, analyzer.beat_accents().beat);
+      CHECK(spread <= kEqualAccentTolerance);
+    }
+  }
+}
+
+TEST_CASE("accents and meter scores do not depend on the input level",
+          "[beat_analyzer][meter_analyzer]") {
+  const auto accented = [](int i) { return i % 3 == 0 ? 0.35 * 1.1885 : 0.35; };
+  const BeatAnalyzer loud(make_event_track(22050, 120.0, 0.1, false, accented));
+  const BeatAnalyzer quiet(make_event_track(22050, 120.0, 0.1, false, accented, 0.1));
+  REQUIRE(loud.beats().size() == quiet.beats().size());
+  const std::vector<float>& a = loud.beat_accents().beat;
+  const std::vector<float>& b = quiet.beat_accents().beat;
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    CAPTURE(i, a[i], b[i]);
+    CHECK(std::abs(b[i] - 0.1f * a[i]) <= kEqualAccentTolerance * a[i]);
+  }
+  const MeterResult loud_meter = estimate_meter(loud.beats(), MeterConfig(), loud.beat_accents());
+  const MeterResult quiet_meter =
+      estimate_meter(quiet.beats(), MeterConfig(), quiet.beat_accents());
+  REQUIRE(loud_meter.candidate_scores.size() == quiet_meter.candidate_scores.size());
+  for (size_t i = 0; i < loud_meter.candidate_scores.size(); ++i) {
+    CAPTURE(i, loud_meter.candidate_scores, quiet_meter.candidate_scores);
+    CHECK(std::abs(loud_meter.candidate_scores[i] - quiet_meter.candidate_scores[i]) <= 0.02f);
+  }
+  CHECK(loud.time_signature().numerator == 3);
+  CHECK(quiet.time_signature().numerator == 3);
+}
+
+TEST_CASE("a shallow accent sets the numerator at every phase and input rate",
+          "[analysis_rate][beat_analyzer][meter_analyzer]") {
+  // +1.5 dB on every third event and +1 dB on every fourth, on fast and slow attacks.
+  const auto triple = [](int i) { return i % 3 == 0 ? 0.35 * 1.1885 : 0.35; };
+  const auto quadruple = [](int i) { return i % 4 == 0 ? 0.35 * 1.1220 : 0.35; };
+  for (const bool swell : {false, true}) {
+    for (int sr : {22050, 44100, 48000}) {
+      for (const double first : {0.0, 0.13, 0.31}) {
+        const BeatAnalyzer three(
+            analysis_rate_audio(make_event_track(sr, 100.0, first, swell, triple)));
+        const BeatAnalyzer four(
+            analysis_rate_audio(make_event_track(sr, 124.0, first, swell, quadruple)));
+        CAPTURE(swell, sr, first, three.time_signature().numerator,
+                four.time_signature().numerator);
+        CHECK(three.time_signature().numerator == 3);
+        CHECK(four.time_signature().numerator == 4);
+      }
+    }
+  }
+}
+
+TEST_CASE("a sustained bed between the beats is not a subdivision",
+          "[beat_analyzer][meter_analyzer]") {
+  // A pad sounds through every gap, so a level read finds energy at each midpoint; only an attack
+  // there counts as a subdivision. The pad beats at 1.3 Hz, so each phase masks different gaps.
+  constexpr int kSr = 22050;
+  const auto six = [](int i) { return i % 6 == 0 ? 1.0 : i % 6 == 3 ? 0.8 : 0.4; };
+  const auto with_pad = [](Audio audio, double subdivision, double pad_phase) {
+    std::vector<float> samples(audio.data(), audio.data() + audio.size());
+    const double period = 0.5;
+    for (size_t i = 0; i < samples.size(); ++i) {
+      const double t = static_cast<double>(i) / kSr;
+      samples[i] +=
+          static_cast<float>(0.05 * (std::sin(constants::kTwoPiD * 220.0 * t) +
+                                     std::sin(constants::kTwoPiD * 221.3 * t + pad_phase)));
+      if (subdivision > 0.0) {
+        const double into = std::fmod(t - 0.1 - 0.5 * period + period, period);
+        if (t > 0.1 + 0.5 * period && into < 0.125) {
+          samples[i] += static_cast<float>(subdivision * std::exp(-into / 0.0027) *
+                                           std::sin(constants::kTwoPiD * 1000.0 * into));
+        }
+      }
+    }
+    return Audio::from_vector(std::move(samples), kSr);
+  };
+  const auto ratio_of = [](const BeatAccents& accents) {
+    const float subdivision_sum =
+        std::accumulate(accents.subdivision.begin(), accents.subdivision.end(), 0.0f);
+    const float beat_sum = std::accumulate(accents.beat.begin(), accents.beat.end() - 1, 0.0f);
+    return subdivision_sum / beat_sum;
+  };
+  const float threshold = MeterConfig().compound_subdivision_threshold;
+  for (const double pad_phase :
+       {0.0, 0.5 * constants::kPiD, constants::kPiD, 1.5 * constants::kPiD}) {
+    CAPTURE(pad_phase);
+    const BeatAnalyzer bare(
+        with_pad(make_event_track(kSr, 120.0, 0.1, false, six), 0.0, pad_phase));
+    const std::vector<float>& bare_subdivision = bare.beat_accents().subdivision;
+    CAPTURE(bare_subdivision);
+    REQUIRE_FALSE(bare_subdivision.empty());
+    CHECK(std::all_of(bare_subdivision.begin(), bare_subdivision.end(),
+                      [](float accent) { return accent == 0.0f; }));
+    CHECK(bare.time_signature().denominator == 4);
+
+    // Struck well above the pad's peak, quieter than the beats so they stay the beats, the
+    // subdivision is found at every midpoint whatever the pad's phase.
+    const BeatAnalyzer struck(
+        with_pad(make_event_track(kSr, 120.0, 0.1, false, six), 0.40, pad_phase));
+    CAPTURE(struck.beat_accents().subdivision);
+    CHECK(ratio_of(struck.beat_accents()) >= threshold);
+    CHECK(struck.time_signature().numerator == 6);
+    CHECK(struck.time_signature().denominator == 8);
+
+    // Struck at the evidence margin above the pad's peak, the gaps near a pad maximum are masked;
+    // measured 0.49 to 0.55 across these phases, so either reading of the meter is allowed.
+    const BeatAnalyzer marginal(
+        with_pad(make_event_track(kSr, 120.0, 0.1, false, six), 0.35, pad_phase));
+    const float marginal_ratio = ratio_of(marginal.beat_accents());
+    const TimeSignature marginal_meter = marginal.time_signature();
+    CAPTURE(marginal.beat_accents().subdivision, marginal_ratio);
+    CHECK(marginal_ratio > 0.45f);
+    CHECK(marginal_ratio < 0.60f);
+    CHECK(((marginal_meter.numerator == 3 && marginal_meter.denominator == 4) ||
+           (marginal_meter.numerator == 6 && marginal_meter.denominator == 8)));
   }
 }

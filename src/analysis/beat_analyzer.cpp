@@ -19,13 +19,19 @@
 namespace sonare {
 
 using sonare::constants::kEpsilon;
+using sonare::constants::kMsPerSecondD;
 
 namespace {
 
-/// @brief Length of the window an accent is summed over, in seconds.
-/// @details Matches the beat-local window the downbeat pass scores, and stays
-///          well inside one beat at the tempi the tracker admits.
-constexpr double kAccentWindowSeconds = 0.08;
+/// Accent read around an event's own attack, in ms: the attack is the start of the steepest-rise
+/// 5 ms frame, so the read opens half a frame early. A +10 ms tail gives the same metered margins
+/// as +30 ms on synthetic accent patterns and a lower flat-material maximum (0.85 against 1.02).
+constexpr double kAttackAccentLeadMs = 2.5;
+constexpr double kAttackAccentTailMs = 10.0;
+/// Accent read around a beat with no attack in reach, in ms, both sides widened by half an onset
+/// hop for the frame quantization of its reported time. +30 and +60 ms tails scored alike.
+constexpr double kFallbackAccentLeadMs = 5.0;
+constexpr double kFallbackAccentTailMs = 30.0;
 
 /// @brief Converts BPM to period in frames.
 float bpm_to_period(float bpm, int sr, int hop_length) {
@@ -153,31 +159,6 @@ void prepend_missed_initial_beat(std::vector<int>& beat_frames, float period) {
 
 }  // namespace
 
-std::vector<float> beat_local_energy(const std::vector<float>& onset_strength, int sr,
-                                     int hop_length) {
-  if (onset_strength.empty() || sr <= 0 || hop_length <= 0) return onset_strength;
-
-  const int n_frames = static_cast<int>(onset_strength.size());
-  const int half_window =
-      std::max(1, static_cast<int>(std::lround(0.5 * kAccentWindowSeconds * sr / hop_length)));
-
-  std::vector<float> prefix(onset_strength.size() + 1, 0.0f);
-  for (int frame = 0; frame < n_frames; ++frame) {
-    prefix[static_cast<size_t>(frame) + 1] =
-        prefix[static_cast<size_t>(frame)] +
-        std::max(0.0f, onset_strength[static_cast<size_t>(frame)]);
-  }
-
-  std::vector<float> energy(onset_strength.size(), 0.0f);
-  for (int frame = 0; frame < n_frames; ++frame) {
-    const int first = std::max(0, frame - half_window);
-    const int last = std::min(n_frames, frame + half_window + 1);
-    energy[static_cast<size_t>(frame)] =
-        prefix[static_cast<size_t>(last)] - prefix[static_cast<size_t>(first)];
-  }
-  return energy;
-}
-
 BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
     : bpm_(config.start_bpm),
       time_signature_{4, 4, 0.0f},
@@ -235,6 +216,7 @@ BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int
 void BeatAnalyzer::refine_beat_times(const Audio& audio, float half_window_s) {
   refiner_.emplace(audio);
   refine_half_window_s_ = half_window_s;
+  accents_ = {};
   if (beats_.empty()) return;
   std::vector<int> frames;
   frames.reserve(beats_.size());
@@ -247,17 +229,53 @@ void BeatAnalyzer::refine_beat_times(const Audio& audio, float half_window_s) {
     if (refined[i]) shifts.push_back(*refined[i] - beats_[i].time);
   }
   const size_t needed = std::max<size_t>(4, beats_.size() / 4);
-  if (shifts.size() < needed) return;
-
-  std::sort(shifts.begin(), shifts.end());
-  const size_t mid = shifts.size() / 2;
-  const float offset =
-      shifts.size() % 2 == 1 ? shifts[mid] : 0.5f * (shifts[mid - 1] + shifts[mid]);
-  for (Beat& beat : beats_) {
-    beat.time = std::max(0.0f, beat.time + offset);
+  if (shifts.size() >= needed) {
+    std::sort(shifts.begin(), shifts.end());
+    const size_t mid = shifts.size() / 2;
+    const float offset =
+        shifts.size() % 2 == 1 ? shifts[mid] : 0.5f * (shifts[mid - 1] + shifts[mid]);
+    for (Beat& beat : beats_) {
+      beat.time = std::max(0.0f, beat.time + offset);
+    }
+    for (Beat& beat : downbeats_) {
+      beat.time = std::max(0.0f, beat.time + offset);
+    }
   }
-  for (Beat& beat : downbeats_) {
-    beat.time = std::max(0.0f, beat.time + offset);
+  read_accents(audio, refined);
+}
+
+void BeatAnalyzer::read_accents(const Audio& audio,
+                                const std::vector<std::optional<float>>& attacks) {
+  const auto at_attack = [&audio](float attack) {
+    return peak_short_time_rms(audio, attack - kAttackAccentLeadMs / kMsPerSecondD,
+                               attack + kAttackAccentTailMs / kMsPerSecondD);
+  };
+  const double half_hop_s = 0.5 * hop_length_ / sr_;
+  accents_.beat.reserve(beats_.size());
+  accents_.beat_has_attack.reserve(beats_.size());
+  for (size_t i = 0; i < beats_.size(); ++i) {
+    const double t = beats_[i].time;
+    accents_.beat.push_back(
+        attacks[i]
+            ? at_attack(*attacks[i])
+            : peak_short_time_rms(audio, t - kFallbackAccentLeadMs / kMsPerSecondD - half_hop_s,
+                                  t + kFallbackAccentTailMs / kMsPerSecondD + half_hop_s));
+    accents_.beat_has_attack.push_back(attacks[i] ? 1 : 0);
+  }
+
+  if (beats_.size() < 2) return;
+  // Midpoints in time: rounding a half-integer frame sum puts the search up to 1.5 hops late.
+  std::vector<float> midpoints;
+  midpoints.reserve(beats_.size() - 1);
+  for (size_t i = 0; i + 1 < beats_.size(); ++i) {
+    midpoints.push_back(0.5f * (beats_[i].time + beats_[i + 1].time));
+  }
+  const std::vector<std::optional<float>> midpoint_attacks =
+      refiner_ ? refiner_->refine(midpoints, refine_half_window_s_)
+               : std::vector<std::optional<float>>(midpoints.size());
+  accents_.subdivision.reserve(midpoints.size());
+  for (const auto& attack : midpoint_attacks) {
+    accents_.subdivision.push_back(attack ? at_attack(*attack) : 0.0f);
   }
 }
 
@@ -591,15 +609,9 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_energy
     return;
   }
 
-  // The estimator reads simple-vs-compound meter from the subdivision energy
-  // sitting between the beats, and with no envelope to read it reports a
-  // compound beat unit for every six-beat bar — absence of evidence and absence
-  // of an envelope are the same thing to it. Always hand it the envelope, so the
-  // beat unit rests on the audio and this estimate agrees with the one the
-  // rhythm pass runs over the same beats.
-  const std::vector<float> scoring_envelope = beat_local_energy(onset_strength_, sr_, hop_length_);
-
-  MeterResult meter = estimate_meter(scoring_envelope, beats_, meter_config, beat_energy);
+  // The accents read from the audio, when there is audio; the rhythm pass scores the same ones,
+  // so the two estimates over these beats cannot disagree.
+  MeterResult meter = estimate_meter(beats_, meter_config, accents_, beat_energy);
   time_signature_ = meter.time_signature;
   time_signature_candidates_ = std::move(meter.candidates);
   DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);

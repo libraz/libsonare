@@ -36,7 +36,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   BeatAnalyzer beat_analyzer(audio, beat_config);
   beats_ = beat_analyzer.beats();
   bpm_ = beat_analyzer.bpm();
-  onset_strength_ = beat_analyzer.onset_strength();
+  accents_ = beat_analyzer.beat_accents();
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
   downbeat_phase_ = beat_analyzer.downbeat_phase();
 
@@ -51,7 +51,7 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
       sr_(beat_analyzer.sample_rate()),
       hop_length_(beat_analyzer.hop_length()) {
   beats_ = beat_analyzer.beats();
-  onset_strength_ = beat_analyzer.onset_strength();
+  accents_ = beat_analyzer.beat_accents();
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
   downbeat_phase_ = beat_analyzer.downbeat_phase();
 
@@ -154,10 +154,6 @@ float RhythmAnalyzer::calculate_swing_ratio() const {
 }
 
 void RhythmAnalyzer::analyze() {
-  // One accent measure feeds both the meter estimate and the syncopation score,
-  // so the two cannot rest on different readings of the same beats.
-  beat_energy_ = beat_local_energy(onset_strength_, sr_, hop_length_);
-
   // Compute beat intervals
   beat_intervals_.clear();
   if (beats_.size() >= 2) {
@@ -188,13 +184,9 @@ void RhythmAnalyzer::detect_time_signature() {
     return;
   }
 
-  // Pass the beat-local energy envelope (the same one BeatAnalyzer scores) so
-  // estimate_meter resolves simple-vs-compound meter from the audio instead of
-  // being forced into the empty-envelope compound fallback, and so this estimate
-  // and BeatAnalyzer's cannot disagree over the same beats. The bar phase is the
-  // beat analyzer's, not this estimate's.
-  MeterResult meter =
-      estimate_meter(beat_energy_, beats_, meter_config, beat_low_frequency_energy_);
+  // The beat analyzer's own accents, so this estimate and its estimate cannot disagree over the
+  // same beats. The bar phase is the beat analyzer's, not this estimate's.
+  MeterResult meter = estimate_meter(beats_, meter_config, accents_, beat_low_frequency_energy_);
   features_.time_signature = meter.time_signature;
   unobserved_beats_ = std::move(meter.unobserved_beats);
 }
@@ -228,13 +220,16 @@ void RhythmAnalyzer::compute_syncopation() {
   int beats_per_bar = features_.time_signature.numerator;
   if (beats_per_bar <= 0) beats_per_bar = 4;
 
-  // Read each beat's accent from the beat-local energy envelope rather than from
-  // Beat::strength, which is one raw frame and therefore reports the hop jitter
-  // of a beat falling between two hops as an accent difference. This is the same
-  // envelope the meter estimate above scored, so the two rest on one measure.
-  const float accent_max =
-      beat_energy_.empty() ? 0.0f : *std::max_element(beat_energy_.begin(), beat_energy_.end());
-  const int n_frames = static_cast<int>(beat_energy_.size());
+  // The accents the meter estimate above scored, so the two rest on one measure; without audio
+  // both read Beat::strength.
+  const bool has_accents = accents_.beat.size() == beats_.size();
+  const auto accent_of = [&](size_t i) {
+    return has_accents ? accents_.beat[i] : beats_[i].strength;
+  };
+  float accent_max = 0.0f;
+  for (size_t i = 0; i < beats_.size(); ++i) {
+    accent_max = std::max(accent_max, accent_of(i));
+  }
 
   float strong_sum = 0.0f;
   int strong_count = 0;
@@ -258,14 +253,10 @@ void RhythmAnalyzer::compute_syncopation() {
     const bool is_strong_beat =
         bar_position == 0 || is_secondary_strong_position(beats_per_bar, bar_position);
 
-    // Bring the accents onto a common [0, 1] scale before comparing them. They
-    // are sums of log-power differences whose range depends entirely on the
-    // material, so no fixed threshold can tell an accent from an ordinary beat.
-    const float accent =
-        n_frames == 0
-            ? 0.0f
-            : beat_energy_[static_cast<size_t>(std::clamp(beats_[i].frame, 0, n_frames - 1))];
-    const float scaled = accent_max <= kEpsilon ? 0.0f : accent / accent_max;
+    // Bring the accents onto a common [0, 1] scale before comparing them: their
+    // level depends on the material, so no fixed threshold can tell an accent
+    // from an ordinary beat.
+    const float scaled = accent_max <= kEpsilon ? 0.0f : accent_of(i) / accent_max;
     const float normalized = std::clamp(scaled, 0.0f, 1.0f);
 
     if (is_strong_beat) {

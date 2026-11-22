@@ -131,10 +131,9 @@ class RhythmAnalyzer {
   RhythmFeatures features_;
   std::vector<Beat> beats_;
   std::vector<float> beat_intervals_;
-  std::vector<float> onset_strength_;  ///< Onset strength envelope (beat-aligned)
-  /// @brief Onset strength rewritten as beat-local energy (@ref beat_local_energy).
+  /// @brief The beat analyzer's per-beat accents, empty when it had no audio.
   /// @details Scored by both the meter estimate and the syncopation measure.
-  std::vector<float> beat_energy_;
+  BeatAccents accents_;
   /// @brief Per-beat low-frequency energy from the beat analyzer, empty when it had no audio.
   std::vector<float> beat_low_frequency_energy_;
   /// @brief Beats the meter estimate left out as masked; syncopation skips them too.

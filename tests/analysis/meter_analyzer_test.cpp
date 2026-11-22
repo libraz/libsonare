@@ -37,23 +37,21 @@ std::vector<Beat> make_beats(int numerator, int measures) {
   return beats;
 }
 
-/// @brief An onset envelope carrying each beat plus energy between the beats.
-/// @details The compound reading is resolved from how much energy sits at the
-///          beat midpoints relative to the beats themselves, so @p
-///          subdivision_ratio is what that score comes out as. A test that
-///          wants a compound meter resolved has to supply one: without an
-///          envelope there is no subdivision to measure and the estimator
-///          reports the numerator with its grouping instead of promoting it.
-std::vector<float> make_envelope(const std::vector<Beat>& beats, float subdivision_ratio) {
-  std::vector<float> onsets(static_cast<size_t>(beats.back().frame) + 20, 0.0f);
+/// @brief Accents carrying each beat's strength plus a subdivision after every beat.
+/// @details The compound reading is resolved from the mean accent at the beat
+///          midpoints relative to the beats themselves, so @p subdivision_ratio
+///          is what that score comes out as. A test that wants a compound meter
+///          resolved has to supply one: without accents there is no subdivision
+///          to measure and the estimator reports the numerator with its grouping
+///          instead of promoting it. A beat with no strength holds no attack.
+BeatAccents make_accents(const std::vector<Beat>& beats, float subdivision_ratio) {
+  BeatAccents accents;
   for (size_t i = 0; i < beats.size(); ++i) {
-    onsets[static_cast<size_t>(beats[i].frame)] = beats[i].strength;
-    if (i + 1 < beats.size()) {
-      const int midpoint = (beats[i].frame + beats[i + 1].frame) / 2;
-      onsets[static_cast<size_t>(midpoint)] = beats[i].strength * subdivision_ratio;
-    }
+    accents.beat.push_back(beats[i].strength);
+    accents.beat_has_attack.push_back(beats[i].strength > 0.0f ? 1 : 0);
+    if (i + 1 < beats.size()) accents.subdivision.push_back(beats[i].strength * subdivision_ratio);
   }
-  return onsets;
+  return accents;
 }
 
 /// @brief A beat series in the two parallel arrays estimate_meter_from_beats takes.
@@ -104,7 +102,7 @@ BeatSeries make_grouped_series(const std::vector<int>& grouping, int measures) {
 
 TEST_CASE("MeterAnalyzer detects 4/4 from accented beats", "[meter_analyzer]") {
   const auto beats = make_beats(4, 8);
-  MeterAnalyzer analyzer({}, beats);
+  MeterAnalyzer analyzer(beats);
 
   REQUIRE(analyzer.time_signature().numerator == 4);
   REQUIRE(analyzer.time_signature().denominator == 4);
@@ -114,17 +112,16 @@ TEST_CASE("MeterAnalyzer detects 4/4 from accented beats", "[meter_analyzer]") {
   REQUIRE(analyzer.result().candidates.front().denominator == 4);
 }
 
-TEST_CASE("MeterAnalyzer normalizes onset strengths above unity", "[meter_analyzer]") {
+TEST_CASE("MeterAnalyzer normalizes accents above unity", "[meter_analyzer]") {
   const auto beats = make_beats(4, 8);
-  std::vector<float> unit_onsets(400, 0.0f);
-  std::vector<float> scaled_onsets(400, 0.0f);
-  for (const auto& beat : beats) {
-    unit_onsets[static_cast<size_t>(beat.frame)] = beat.strength;
-    scaled_onsets[static_cast<size_t>(beat.frame)] = beat.strength * 20.0f;
+  const BeatAccents unit_accents = make_accents(beats, 0.0f);
+  BeatAccents scaled_accents = unit_accents;
+  for (float& accent : scaled_accents.beat) {
+    accent *= 20.0f;
   }
 
-  MeterAnalyzer unit(unit_onsets, beats);
-  MeterAnalyzer scaled(scaled_onsets, beats);
+  MeterAnalyzer unit(beats, MeterConfig(), unit_accents);
+  MeterAnalyzer scaled(beats, MeterConfig(), scaled_accents);
 
   REQUIRE(scaled.time_signature().numerator == unit.time_signature().numerator);
   REQUIRE(scaled.time_signature().denominator == unit.time_signature().denominator);
@@ -133,7 +130,7 @@ TEST_CASE("MeterAnalyzer normalizes onset strengths above unity", "[meter_analyz
 
 TEST_CASE("MeterAnalyzer detects 3/4 from accented beats", "[meter_analyzer]") {
   const auto beats = make_beats(3, 8);
-  MeterAnalyzer analyzer({}, beats);
+  MeterAnalyzer analyzer(beats);
 
   REQUIRE(analyzer.time_signature().numerator == 3);
   REQUIRE(analyzer.time_signature().denominator == 4);
@@ -142,16 +139,16 @@ TEST_CASE("MeterAnalyzer detects 3/4 from accented beats", "[meter_analyzer]") {
 
 TEST_CASE("MeterAnalyzer detects 6/8-style compound meter", "[meter_analyzer]") {
   // The promotion to eighths is a claim about how a beat divides, so it needs
-  // an envelope carrying that subdivision. The same beats without one report
+  // accents carrying that subdivision. The same beats without one report
   // the six with its 3+3 grouping and the requested unit.
   const auto beats = make_beats(6, 8);
-  MeterAnalyzer analyzer(make_envelope(beats, 1.0f), beats);
+  MeterAnalyzer analyzer(beats, MeterConfig(), make_accents(beats, 1.0f));
 
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
   REQUIRE(analyzer.time_signature().confidence > 0.5f);
 
-  MeterAnalyzer unmeasured({}, beats);
+  MeterAnalyzer unmeasured(beats);
   REQUIRE(unmeasured.time_signature().numerator == 6);
   REQUIRE(unmeasured.time_signature().denominator == 4);
   REQUIRE(unmeasured.result().grouping == std::vector<int>{3, 3});
@@ -160,12 +157,12 @@ TEST_CASE("MeterAnalyzer detects 6/8-style compound meter", "[meter_analyzer]") 
 TEST_CASE("MeterAnalyzer numerator is stable under candidate ordering", "[meter_analyzer]") {
   // make_beats(6, 8) is a strong, unambiguous compound-6 pattern: the primary
   // selection lands on numerator 6 as the unique winner regardless of candidate
-  // ordering. A non-empty onset envelope plus a sky-high compound threshold
+  // ordering. A measured but empty subdivision plus a sky-high compound threshold
   // disables the 6/8 promotion, forcing the 6-vs-(3|4) fallback. That fallback
   // now resolves by value-based score lookup, so the chosen numerator must be
   // identical for any candidate_numerators ordering (ITEM 3 regression guard).
   const auto beats = make_beats(6, 8);
-  const std::vector<float> onset_strength(500, 0.0f);
+  const BeatAccents accents = make_accents(beats, 0.0f);
 
   MeterConfig config_default;
   config_default.candidate_numerators = {3, 4, 6};
@@ -174,24 +171,25 @@ TEST_CASE("MeterAnalyzer numerator is stable under candidate ordering", "[meter_
   MeterConfig config_reordered = config_default;
   config_reordered.candidate_numerators = {6, 4, 3};
 
-  MeterAnalyzer analyzer_default(onset_strength, beats, config_default);
-  MeterAnalyzer analyzer_reordered(onset_strength, beats, config_reordered);
+  MeterAnalyzer analyzer_default(beats, config_default, accents);
+  MeterAnalyzer analyzer_reordered(beats, config_reordered, accents);
 
   REQUIRE(analyzer_default.time_signature().numerator ==
           analyzer_reordered.time_signature().numerator);
 }
 
 TEST_CASE("MeterAnalyzer promotes 3-beat compound subdivisions to 6/8", "[meter_analyzer]") {
+  // Every beat reads alike in level and each one is followed by a subdivision nearly as strong.
   std::vector<Beat> beats;
-  std::vector<float> onset_strength(160, 0.0f);
+  BeatAccents accents;
   for (int i = 0; i < 24; ++i) {
-    const int frame = i * 6;
-    beats.push_back({static_cast<float>(i) * 0.5f, frame, i % 3 == 0 ? 1.0f : 0.6f});
-    onset_strength[static_cast<size_t>(frame)] = 1.0f;
-    onset_strength[static_cast<size_t>(frame + 3)] = 0.95f;
+    beats.push_back({static_cast<float>(i) * 0.5f, i * 6, i % 3 == 0 ? 1.0f : 0.6f});
+    accents.beat.push_back(1.0f);
+    accents.beat_has_attack.push_back(1);
+    if (i + 1 < 24) accents.subdivision.push_back(0.95f);
   }
 
-  MeterAnalyzer analyzer(onset_strength, beats);
+  MeterAnalyzer analyzer(beats, MeterConfig(), accents);
 
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
@@ -200,7 +198,7 @@ TEST_CASE("MeterAnalyzer promotes 3-beat compound subdivisions to 6/8", "[meter_
 
 TEST_CASE("MeterAnalyzer retains its existing candidate signatures", "[meter_analyzer]") {
   const auto beats = make_beats(4, 8);
-  MeterAnalyzer analyzer({}, beats);
+  MeterAnalyzer analyzer(beats);
 
   REQUIRE(analyzer.result().candidates.size() == 3);
   REQUIRE(analyzer.result().candidates.front().numerator == 4);
@@ -213,7 +211,7 @@ TEST_CASE("MeterAnalyzer detects an odd meter only when it is a candidate", "[me
 
     MeterConfig widened;
     widened.candidate_numerators = {3, 4, 5, 6, 7};
-    MeterAnalyzer widened_analyzer({}, beats, widened);
+    MeterAnalyzer widened_analyzer(beats, widened);
 
     CAPTURE(numerator, widened_analyzer.result().candidate_scores);
     REQUIRE(widened_analyzer.time_signature().numerator == numerator);
@@ -224,7 +222,7 @@ TEST_CASE("MeterAnalyzer detects an odd meter only when it is a candidate", "[me
     // The same accented beats with the default candidate set cannot report the
     // odd numerator, so the detection above comes from the config rather than
     // from the pattern alone.
-    MeterAnalyzer default_analyzer({}, beats);
+    MeterAnalyzer default_analyzer(beats);
     const int default_numerator = default_analyzer.time_signature().numerator;
     CAPTURE(default_numerator);
     REQUIRE(default_numerator != numerator);
@@ -239,13 +237,13 @@ TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
 
   MeterConfig eighth;
   eighth.denominator = 8;
-  MeterAnalyzer eighth_analyzer({}, beats, eighth);
+  MeterAnalyzer eighth_analyzer(beats, eighth);
   REQUIRE(eighth_analyzer.time_signature().numerator == 4);
   REQUIRE(eighth_analyzer.time_signature().denominator == 8);
 
   MeterConfig half;
   half.denominator = 2;
-  MeterAnalyzer half_analyzer({}, beats, half);
+  MeterAnalyzer half_analyzer(beats, half);
   REQUIRE(half_analyzer.time_signature().numerator == 4);
   REQUIRE(half_analyzer.time_signature().denominator == 2);
 
@@ -261,7 +259,7 @@ TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
   // subdivision there to measure, takes the eighth -- which is what keeps the
   // loop above from passing vacuously.
   const auto six_beats = make_beats(6, 8);
-  MeterAnalyzer compound_analyzer(make_envelope(six_beats, 1.0f), six_beats, half);
+  MeterAnalyzer compound_analyzer(six_beats, half, make_accents(six_beats, 1.0f));
   const auto& compound_candidates = compound_analyzer.result().candidates;
   const auto six = std::find_if(compound_candidates.begin(), compound_candidates.end(),
                                 [](const TimeSignature& c) { return c.numerator == 6; });
@@ -278,14 +276,14 @@ TEST_CASE("MeterAnalyzer keeps the compound beat unit over the requested one", "
 
   MeterConfig config;
   config.denominator = 2;
-  MeterAnalyzer analyzer(make_envelope(beats, 1.0f), beats, config);
+  MeterAnalyzer analyzer(beats, config, make_accents(beats, 1.0f));
 
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
 
   // Without the subdivision the exception does not apply and the requested
   // unit stands.
-  MeterAnalyzer unmeasured({}, beats, config);
+  MeterAnalyzer unmeasured(beats, config);
   REQUIRE(unmeasured.time_signature().numerator == 6);
   REQUIRE(unmeasured.time_signature().denominator == 2);
 }
@@ -298,7 +296,7 @@ TEST_CASE("MeterAnalyzer reports an odd meter in the requested unit", "[meter_an
   MeterConfig config;
   config.candidate_numerators = {3, 4, 5, 6};
   config.denominator = 8;
-  MeterAnalyzer analyzer({}, beats, config);
+  MeterAnalyzer analyzer(beats, config);
 
   REQUIRE(analyzer.time_signature().numerator == 5);
   REQUIRE(analyzer.time_signature().denominator == 8);
@@ -313,15 +311,17 @@ TEST_CASE("MeterAnalyzer phase stays inside the reported numerator", "[meter_ana
   std::vector<Beat> beats;
   const int total = 36;
   beats.reserve(static_cast<size_t>(total));
-  std::vector<float> onset_strength(static_cast<size_t>(total) * 10, 0.05f);
+  BeatAccents accents;
   for (int i = 0; i < total; ++i) {
     const bool downbeat = ((i - 4) % 6 + 6) % 6 == 0;
     const float strength = downbeat ? 1.0f : 0.3f;
     beats.push_back({static_cast<float>(i) * 0.5f, i * 10, strength});
-    onset_strength[static_cast<size_t>(i * 10)] = strength;
+    accents.beat.push_back(strength);
+    accents.beat_has_attack.push_back(1);
+    if (i + 1 < total) accents.subdivision.push_back(0.05f);
   }
 
-  const MeterResult result = estimate_meter(onset_strength, beats, MeterConfig());
+  const MeterResult result = estimate_meter(beats, MeterConfig(), accents);
 
   // Precondition, not the property under test: the range check below is only
   // meaningful while this fixture still takes the simple-meter fallback. A
@@ -616,9 +616,9 @@ TEST_CASE("estimate_meter_from_beats detects 4/4 from a caller-supplied series",
   REQUIRE(result.candidates.front().denominator == 4);
 
   // This entry point differs from estimate_meter only in how the beats are
-  // packed, and the frame index it synthesizes goes unread while the onset
-  // envelope is empty, so the two results must agree exactly.
-  const MeterResult direct = estimate_meter({}, make_beats(4, 8));
+  // packed, and the frame index it synthesizes goes unread, so the two results
+  // must agree exactly.
+  const MeterResult direct = estimate_meter(make_beats(4, 8));
   REQUIRE(result.time_signature.numerator == direct.time_signature.numerator);
   REQUIRE(result.time_signature.denominator == direct.time_signature.denominator);
   REQUIRE(result.time_signature.confidence == direct.time_signature.confidence);
@@ -957,14 +957,14 @@ TEST_CASE("MeterAnalyzer leaves out a beat whose onset a louder event masked", "
   constexpr int kMasked = 9;
   auto beats = make_beats(3, 8);
   beats[kMasked].strength = 0.0f;
-  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  const BeatAccents accents = make_accents(beats, 0.0f);
   std::vector<float> energy(beats.size(), 1.0f);
   energy[kMasked] = 30.0f;
 
-  for (const bool with_envelope : {true, false}) {
-    const MeterResult result = estimate_meter(with_envelope ? envelope : std::vector<float>{},
-                                              beats, MeterConfig(), energy);
-    CAPTURE(with_envelope, result.time_signature.numerator, result.unobserved_beats);
+  for (const bool with_accents : {true, false}) {
+    const MeterResult result =
+        estimate_meter(beats, MeterConfig(), with_accents ? accents : BeatAccents{}, energy);
+    CAPTURE(with_accents, result.time_signature.numerator, result.unobserved_beats);
     REQUIRE(result.unobserved_beats == std::vector<int>{kMasked});
     REQUIRE(result.time_signature.numerator == 3);
   }
@@ -975,12 +975,12 @@ TEST_CASE("MeterAnalyzer keeps a rest as meter evidence", "[meter_analyzer]") {
   constexpr int kRest = 9;
   auto beats = make_beats(3, 8);
   beats[kRest].strength = 0.0f;
-  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  const BeatAccents accents = make_accents(beats, 0.0f);
   std::vector<float> energy(beats.size(), 1.0f);
   energy[kRest] = 0.0f;
 
-  const MeterResult with_energy = estimate_meter(envelope, beats, MeterConfig(), energy);
-  const MeterResult without_energy = estimate_meter(envelope, beats);
+  const MeterResult with_energy = estimate_meter(beats, MeterConfig(), accents, energy);
+  const MeterResult without_energy = estimate_meter(beats, MeterConfig(), accents);
   REQUIRE(with_energy.unobserved_beats.empty());
   REQUIRE(with_energy.candidate_scores == without_energy.candidate_scores);
   REQUIRE(with_energy.time_signature.numerator == without_energy.time_signature.numerator);
@@ -989,15 +989,15 @@ TEST_CASE("MeterAnalyzer keeps a rest as meter evidence", "[meter_analyzer]") {
 TEST_CASE("MeterAnalyzer without a dominant energy beat scores as without energy",
           "[meter_analyzer]") {
   const auto beats = make_beats(4, 6);
-  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  const BeatAccents measured = make_accents(beats, 0.0f);
   const std::vector<float> flat_energy(beats.size(), 1.0f);
 
-  for (const bool with_envelope : {true, false}) {
-    const std::vector<float> onsets = with_envelope ? envelope : std::vector<float>{};
-    const MeterResult base = estimate_meter(onsets, beats);
-    const MeterResult empty = estimate_meter(onsets, beats, MeterConfig(), {});
-    const MeterResult flat = estimate_meter(onsets, beats, MeterConfig(), flat_energy);
-    CAPTURE(with_envelope);
+  for (const bool with_accents : {true, false}) {
+    const BeatAccents accents = with_accents ? measured : BeatAccents{};
+    const MeterResult base = estimate_meter(beats, MeterConfig(), accents);
+    const MeterResult empty = estimate_meter(beats, MeterConfig(), accents, {});
+    const MeterResult flat = estimate_meter(beats, MeterConfig(), accents, flat_energy);
+    CAPTURE(with_accents);
     REQUIRE(base.unobserved_beats.empty());
     REQUIRE(empty.unobserved_beats.empty());
     REQUIRE(flat.unobserved_beats.empty());

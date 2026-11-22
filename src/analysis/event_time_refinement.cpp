@@ -26,6 +26,27 @@ int samples_from_ms(double ms, int sample_rate) {
 
 }  // namespace
 
+float peak_short_time_rms(const Audio& audio, double start_s, double end_s) {
+  const int sr = audio.sample_rate();
+  const long n = static_cast<long>(audio.size());
+  if (n == 0) return 0.0f;
+  const long win = std::min<long>(samples_from_ms(kFineWindowMs, sr), n);
+  const long first = std::clamp(std::lround(start_s * sr), 0L, n - win);
+  const long last = std::clamp(std::lround(end_s * sr), first, n - win);
+  const float* x = audio.data();
+  double sum = 0.0;
+  for (long k = first; k < first + win; ++k) {
+    sum += static_cast<double>(x[k]) * x[k];
+  }
+  double peak = sum;
+  for (long k = first + 1; k <= last; ++k) {
+    sum += static_cast<double>(x[k + win - 1]) * x[k + win - 1] -
+           static_cast<double>(x[k - 1]) * x[k - 1];
+    peak = std::max(peak, sum);
+  }
+  return static_cast<float>(std::sqrt(std::max(0.0, peak) / static_cast<double>(win)));
+}
+
 EventTimeRefiner::EventTimeRefiner(const Audio& audio) {
   const int sr = audio.sample_rate();
   const int win = samples_from_ms(kFineWindowMs, sr);

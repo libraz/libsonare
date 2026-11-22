@@ -16,25 +16,13 @@
 namespace sonare {
 
 using sonare::constants::kEpsilon;
+
 namespace {
 
-float normalized_strength(const std::vector<float>& onset_strength, int frame, float max_value) {
-  if (onset_strength.empty() || frame < 0 || frame >= static_cast<int>(onset_strength.size())) {
-    return 0.0f;
-  }
-  if (max_value <= constants::kEpsilon) return 0.0f;
-  return onset_strength[static_cast<size_t>(frame)] / max_value;
-}
-
-float local_normalized_strength(const std::vector<float>& onset_strength, int frame, int radius,
-                                float max_value) {
-  if (onset_strength.empty()) return 0.0f;
-  float best = 0.0f;
-  for (int offset = -radius; offset <= radius; ++offset) {
-    best = std::max(best, normalized_strength(onset_strength, frame + offset, max_value));
-  }
-  return best;
-}
+/// Smallest accent spread, as a fraction of the span's mean accent: 10x the read's resolution.
+/// Exactly equal events read at most 1e-4 apart (0.0009 dB, worst over material, tempo, phase
+/// and rate), so the floor is 1e-3 (0.009 dB).
+constexpr float kSpreadFloor = 1e-3f;
 
 float mean_or_zero(float sum, int count) {
   return count > 0 ? sum / static_cast<float>(count) : 0.0f;
@@ -164,38 +152,28 @@ bool is_compound_pair(const std::vector<int>& parts) {
   return parts.size() == 2 && parts[0] == 3 && parts[1] == 3;
 }
 
-float compound_subdivision_score(const std::vector<float>& onset_strength,
-                                 const std::vector<Beat>& beats, float max_value) {
-  if (onset_strength.empty() || beats.size() < 4) return 0.0f;
-
+/// Mean subdivision accent against the mean accent of the beats that open each gap.
+float compound_subdivision_score(const BeatAccents& accents) {
+  if (accents.subdivision.size() < 3) return 0.0f;
   float subdivision_sum = 0.0f;
   float beat_sum = 0.0f;
-  int count = 0;
-  for (size_t i = 0; i + 1 < beats.size(); ++i) {
-    const int midpoint = static_cast<int>(
-        std::lround(0.5f * static_cast<float>(beats[i].frame + beats[i + 1].frame)));
-    subdivision_sum += local_normalized_strength(onset_strength, midpoint, 2, max_value);
-    beat_sum += local_normalized_strength(onset_strength, beats[i].frame, 2, max_value);
-    ++count;
+  for (size_t i = 0; i < accents.subdivision.size(); ++i) {
+    subdivision_sum += accents.subdivision[i];
+    beat_sum += accents.beat[i];
   }
-  if (count == 0) return 0.0f;
-
-  const float subdivision = subdivision_sum / static_cast<float>(count);
-  const float beat = beat_sum / static_cast<float>(count);
-  return beat > 1e-6f ? subdivision / beat : subdivision;
+  return beat_sum > kEpsilon ? subdivision_sum / beat_sum : 0.0f;
 }
 
 }  // namespace
 
-MeterAnalyzer::MeterAnalyzer(const std::vector<float>& onset_strength,
-                             const std::vector<Beat>& beats, const MeterConfig& config,
-                             const std::vector<float>& beat_energy)
+MeterAnalyzer::MeterAnalyzer(const std::vector<Beat>& beats, const MeterConfig& config,
+                             const BeatAccents& accents, const std::vector<float>& beat_energy)
     : config_(config) {
-  analyze(onset_strength, beats, beat_energy);
+  analyze(beats, accents, beat_energy);
 }
 
-void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
-                            const std::vector<Beat>& beats, const std::vector<float>& beat_energy) {
+void MeterAnalyzer::analyze(const std::vector<Beat>& beats, const BeatAccents& accents,
+                            const std::vector<float>& beat_energy) {
   result_ = {};
   result_.time_signature = {4, config_.denominator, 0.0f};
   result_.candidate_scores.assign(config_.candidate_numerators.size(), 0.0f);
@@ -213,37 +191,22 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   }
   result_.searched = true;
 
-  // Compute the global onset-strength maximum once and reuse it for every
-  // normalization rather than rescanning the envelope on each lookup.
-  const float onset_max = onset_strength.empty()
-                              ? 0.0f
-                              : *std::max_element(onset_strength.begin(), onset_strength.end());
-
-  // Without an envelope the per-beat strengths carried on the beats are the only
-  // accent source, and they need the same treatment the envelope gets: division
-  // by the maximum of whatever series is being read. Clamping them instead
-  // saturates every beat above 1 at exactly 1, which erases the accent contrast
-  // the whole score is built on -- and the stream this path documents as its
-  // input, AnalysisResult::beat_observations.onset_strength, is a raw windowed
-  // aggregate in the envelope's own units, so it exceeds 1 on ordinary material.
-  const bool use_envelope = onset_max > constants::kEpsilon;
-  float beat_strength_max = 0.0f;
-  if (!use_envelope) {
-    for (const auto& beat : beats) {
-      beat_strength_max = std::max(beat_strength_max, beat.strength);
-    }
-  }
-
+  // The accents read from the audio when the caller has them, else the strengths the beats
+  // carry. Either series is divided by its own maximum: clamping instead would saturate every
+  // value above 1 and erase the contrast the score is built on, and the documented public input,
+  // AnalysisResult::beat_observations.onset_strength, is in the envelope's own units.
+  const bool has_accents =
+      accents.beat.size() == beats.size() && accents.beat_has_attack.size() == beats.size();
   std::vector<float> beat_strengths;
   beat_strengths.reserve(beats.size());
-  for (const auto& beat : beats) {
-    float strength = beat.strength;
-    if (use_envelope) {
-      strength = normalized_strength(onset_strength, beat.frame, onset_max);
-    } else if (beat_strength_max > constants::kEpsilon) {
-      strength = beat.strength / beat_strength_max;
-    }
-    beat_strengths.push_back(std::clamp(strength, 0.0f, 1.0f));
+  for (size_t i = 0; i < beats.size(); ++i) {
+    beat_strengths.push_back(has_accents ? accents.beat[i] : beats[i].strength);
+  }
+  const float strength_max = beat_strengths.empty()
+                                 ? 0.0f
+                                 : *std::max_element(beat_strengths.begin(), beat_strengths.end());
+  for (float& strength : beat_strengths) {
+    strength = strength_max > kEpsilon ? std::clamp(strength / strength_max, 0.0f, 1.0f) : 0.0f;
   }
 
   // A beat with no onset evidence but among the loudest in energy was masked by a louder event;
@@ -252,11 +215,11 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   if (beat_energy.size() == beats.size()) {
     std::vector<float> raw;
     raw.reserve(beats.size());
-    for (const auto& beat : beats) {
-      const bool in_range = beat.frame >= 0 && beat.frame < static_cast<int>(onset_strength.size());
-      raw.push_back(!use_envelope ? beat.strength
-                    : in_range    ? onset_strength[static_cast<size_t>(beat.frame)]
-                                  : 0.0f);
+    // Onset evidence is the accent of a beat whose window holds an attack, and none otherwise.
+    for (size_t i = 0; i < beats.size(); ++i) {
+      raw.push_back(!has_accents                 ? beats[i].strength
+                    : accents.beat_has_attack[i] ? accents.beat[i]
+                                                 : 0.0f);
     }
     const float onset_reference = max_excluding_top(raw, kReferenceIgnoredTopEvents);
     const float energy_reference = max_excluding_top(beat_energy, kReferenceIgnoredTopEvents);
@@ -285,7 +248,10 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     const float deviation = beat_strengths[i] - overall_mean;
     variance += deviation * deviation;
   }
-  const float spread = std::sqrt(mean_or_zero(variance, observed_count));
+  // Equal events never read exactly alike, so a spread at the read's resolution would turn its
+  // sampling pattern into several deviations of accent.
+  const float spread =
+      std::max(std::sqrt(mean_or_zero(variance, observed_count)), kSpreadFloor * overall_mean);
 
   float best_score = -std::numeric_limits<float>::infinity();
   int best_numerator = 4;
@@ -412,13 +378,11 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   float confidence = std::clamp(0.45f + margin / kConfidenceMarginScale, 0.0f, 1.0f);
 
   int denominator = config_.denominator;
-  const float compound_score = compound_subdivision_score(onset_strength, beats, onset_max);
-  // Whether the question "does a beat divide into three?" can be asked at all.
-  // It is answered from energy between the beats, so without an envelope there
-  // is no evidence either way -- neither for the promotion to a compound
-  // denominator nor for the demotion that the absence of subdivision would
-  // otherwise justify.
-  const bool subdivision_measurable = !onset_strength.empty();
+  // Whether the question "does a beat divide into three?" can be asked at all: it is answered
+  // from accents between the beats, so without them there is no evidence either way -- neither
+  // for the promotion to a compound denominator nor for the demotion its absence would justify.
+  const bool subdivision_measurable = has_accents && accents.subdivision.size() + 1 == beats.size();
+  const float compound_score = subdivision_measurable ? compound_subdivision_score(accents) : 0.0f;
   // A six only reaches the compound question if that is how its own beats
   // divide. Six grouped as 2+2+2 is a simple meter, and used to be forced
   // through this branch and out the other side as a three or a four; it now
@@ -532,9 +496,9 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   }
 }
 
-MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
-                           const MeterConfig& config, const std::vector<float>& beat_energy) {
-  MeterAnalyzer analyzer(onset_strength, beats, config, beat_energy);
+MeterResult estimate_meter(const std::vector<Beat>& beats, const MeterConfig& config,
+                           const BeatAccents& accents, const std::vector<float>& beat_energy) {
+  MeterAnalyzer analyzer(beats, config, accents, beat_energy);
   return analyzer.result();
 }
 
@@ -597,13 +561,12 @@ MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,
                      "estimateMeter: beatTimes must be non-decreasing");
     SONARE_CHECK_MSG(numeric::finite(beat_strengths[i]), ErrorCode::InvalidParameter,
                      "estimateMeter: beatStrengths entries must be finite");
-    // The frame index is unused while the onset envelope is empty, which is the
-    // only mode this entry point runs in; it is filled positionally so a beat
+    // The frame index is never read here; it is filled positionally so a beat
     // still round-trips as an ordered series.
     beats.push_back({beat_times[i], static_cast<int>(i), beat_strengths[i]});
   }
 
-  return estimate_meter({}, beats, config);
+  return estimate_meter(beats, config);
 }
 
 }  // namespace sonare
