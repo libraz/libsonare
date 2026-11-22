@@ -1289,11 +1289,11 @@ describe('the trim detector fields answer the shared corpus on every trim entry'
   }
 });
 
-type RoomMorphSection = { fn: string; room: Record<string, unknown>; cases: PendingCase[] };
+type RoomMorphCase = PendingCase & { room?: Record<string, unknown>; relation?: boolean };
+type RoomMorphSection = { fn: string; room: Record<string, unknown>; cases: RoomMorphCase[] };
 
 describe('the room morph receiver spacing answers the shared corpus', () => {
   const section = (corpus as unknown as { room_morph_stereo: RoomMorphSection }).room_morph_stereo;
-  const room = camelRecord(section.room);
   const impulse = () => {
     const x = new Float32Array(2000);
     x[0] = 1;
@@ -1304,6 +1304,8 @@ describe('the room morph receiver spacing answers the shared corpus', () => {
     const test = pending ? it.fails : it;
     test(`${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
       const key = camelKey(testCase.key);
+      // A case's own room overrides the section's, so one value can fit one room and not another.
+      const room = camelRecord({ ...section.room, ...(testCase.room ?? {}) });
       const call = () =>
         roomMorphStereo({
           left: impulse(),
@@ -1316,6 +1318,13 @@ describe('the room morph receiver spacing answers the shared corpus', () => {
         return;
       }
       const refusal = `${camelKey(section.fn)}: ${key} ${testCase.predicate}`;
+      if (testCase.relation) {
+        // A relation names its other subjects after "for"; only the prefix is shared until they settle.
+        const escaped = refusal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        expect(call).toThrow(new RegExp(`^${escaped} for .+$`));
+        expect(call).toThrow(testCase.refused === 'range' ? RangeError : TypeError);
+        return;
+      }
       expect(call).toThrow(
         testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
       );
