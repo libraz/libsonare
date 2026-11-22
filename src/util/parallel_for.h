@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <future>
 #include <thread>
-#include <utility>
 #include <vector>
 
 namespace sonare {
@@ -29,7 +28,8 @@ void parallel_for(int total, int n_workers, F&& fn) {
     int start = i * chunk;
     int end = std::min(start + chunk, total);
     if (start >= end) break;
-    futures.emplace_back(std::async(std::launch::async, std::forward<F>(fn), start, end));
+    // Each worker takes its own copy; forwarding here would move an rvalue into the first only.
+    futures.emplace_back(std::async(std::launch::async, fn, start, end));
   }
   for (auto& f : futures) f.get();
 }
