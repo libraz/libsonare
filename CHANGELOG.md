@@ -113,6 +113,10 @@ This release gives the public interface one set of conventions on every surface 
 - The Python command line gains `gain`, `fade`, `filter` and `system-info`, with the native command's options, refusals and JSON keys.
 - `repair --stages` takes a comma list over `declip`, `declick`, `decrackle`, `dehum`, `denoise` and `dereverb` and runs exactly those stages at their defaults plus `--params`, on both command lines; an unknown or repeated stage, and `--stages` beside `--preset`, `--detect` or `--explain`, are refused.
 
+#### Packages
+
+- The WASM package ships the upgrade ledger as `@libraz/libsonare/migration.json`: one entry per renamed, removed or reshaped WASM name, with its area, the convention behind the change and its replacement or removal note, for codemods and editor tooling.
+
 #### Errors
 
 - `SONARE_ERROR_STALE_RESULT` (11) reports an operation on a result its source has invalidated (`ErrorCode.STALE_RESULT` in Python, code name `StaleResult` on Node and WASM); both command lines exit 14 for it.
