@@ -22,6 +22,8 @@ Stdlib only; no build needed. Run directly:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
 from pathlib import Path
 
@@ -325,7 +327,10 @@ def test_an_alias_key_naming_no_c_function_is_reported() -> None:
     finally:
         compare._ALIAS_COVERAGE = saved
     assert rep.stale_aliases == ["mastering_apply_ex"], rep.stale_aliases
-    assert check_parity._audit_allowlist(rep, list(SURFACES), Path("allowlist.toml")) == 1
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert check_parity._audit_allowlist(rep, list(SURFACES), Path("allowlist.toml")) == 1
+    assert "name no C function" in err.getvalue() and "  mastering_apply_ex" in err.getvalue()
 
 
 def test_an_alias_table_naming_live_functions_reports_nothing() -> None:
