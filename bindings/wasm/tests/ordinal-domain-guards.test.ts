@@ -334,8 +334,8 @@ describe('the automation curve refuses an ordinal the embind path used to take',
       project.addAutomationLane(track, {
         targetParamId: 7,
         points: [
-          { ppq: 0, value: 0, curve },
-          { ppq: 480, value: 1, curve },
+          { ppq: 0, value: 0, curveToNext: curve },
+          { ppq: 480, value: 1, curveToNext: curve },
         ],
       });
     } finally {
@@ -352,17 +352,15 @@ describe('the automation curve refuses an ordinal the embind path used to take',
     }
   };
 
-  it('accepts all four legal ordinals and the four documented spellings only', () => {
+  it('accepts all four legal ordinals and no spelling', () => {
     // The control. Without it every assertion below would also hold for a
-    // reader that refused every curve it was given.
+    // reader that refused every curve it was given. The tokens are the facade's
+    // to translate; the embind reader takes the ordinal alone.
     for (const ordinal of [0, 1, 2, 3]) {
       expect(refused(ordinal), `ordinal ${ordinal} is a legal curve`).toBe(false);
     }
-    for (const name of ['linear', 'exponential', 'hold', 'sCurve']) {
-      expect(refused(name), `'${name}' is a documented spelling`).toBe(false);
-    }
-    for (const name of ['s-curve', 'scurve']) {
-      expect(refused(name), `'${name}' is not a documented spelling`).toBe(true);
+    for (const name of ['linear', 'sCurve', 's-curve']) {
+      expect(refused(name), `'${name}' is not an ordinal`).toBe(true);
     }
   });
 
