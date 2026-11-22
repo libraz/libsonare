@@ -792,11 +792,9 @@ export interface RoomEstimateOptions {
   /** Length/height ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
   aspectHintLh?: number;
   /**
-   * Mean-absorption prior anchoring the volume scale. Omit for the library
-   * default, 0.15; an explicit 0 is refused. Clamped into `[0.01, 0.99]` rather than refused: a value outside that
-   * range still returns a successful estimate, computed from the clamped prior.
-   * The reported volume scales with the cube of the prior, so the substitution
-   * is worth three orders of magnitude at the low end.
+   * Mean-absorption prior anchoring the volume scale, in `[0.01, 0.99]`. Omit
+   * for the library default, 0.15; a value outside that range, 0 included, is
+   * refused with a `RangeError`. The reported volume scales with the cube of the prior.
    */
   referenceAbsorption?: number;
   /** Use the Eyring statistical late-tail model (default true); false = Sabine. */
