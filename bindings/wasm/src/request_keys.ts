@@ -1551,6 +1551,7 @@ const BindWebMidiRequestKeys = keysOf<BindWebMidiOptions>()([
   'context',
   'scheduleAheadSec',
   'onInputsChanged',
+  'filter',
 ]);
 const WebMidiEventContextTimeRequestKeys = keysOf<WebMidiEventContextTimeOptions>()([
   'scheduleAheadSec',

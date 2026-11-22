@@ -488,6 +488,68 @@ describe('Web MIDI helper', () => {
     expect(engine.messages).toEqual([]);
   });
 
+  it('hands every message it would push to the filter first and drops what the filter refuses', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('keys', 'Keys');
+    access.inputs.set(input.id, input);
+    const engine = new RawUmpEngine();
+    installMidi(access);
+    const seen: Array<{ input: unknown; data: number[]; eventTimeMs: number; kind: string }> = [];
+    const binding = await bindWebMidi(engine as never, {
+      // Learn mode: swallow CC 74 and remember it.
+      filter: (message) => {
+        seen.push({
+          input: message.input,
+          data: Array.from(message.data),
+          eventTimeMs: message.eventTimeMs,
+          kind: message.data instanceof Uint32Array ? 'ump' : 'bytes',
+        });
+        const controller =
+          message.data instanceof Uint32Array
+            ? (message.data[0] >>> 8) & 0x7f
+            : message.data[0] === 0xb2
+              ? message.data[1]
+              : -1;
+        return controller !== 74;
+      },
+    });
+
+    input.emit([0xb2, 74, 10], 1);
+    input.emit([75, 11], 2); // running status: handed over status-resolved
+    input.emit([74, 12], 3);
+    input.emit([0xf8], 4); // never pushed, so never offered
+    input.emit([0xc2, 5], 5);
+    const ccWord = (controller: number) => (0x20b20000 | (controller << 8) | 1) >>> 0;
+    input.emit([ccWord(74), ccWord(75)], 6);
+
+    const port = { id: 'keys', name: 'Keys', manufacturer: 'test', state: 'connected' };
+    expect(seen).toEqual([
+      { input: port, data: [0xb2, 74, 10], eventTimeMs: 1, kind: 'bytes' },
+      { input: port, data: [0xb2, 75, 11], eventTimeMs: 2, kind: 'bytes' },
+      { input: port, data: [0xb2, 74, 12], eventTimeMs: 3, kind: 'bytes' },
+      { input: port, data: [0xc2, 5], eventTimeMs: 5, kind: 'bytes' },
+      { input: port, data: [ccWord(74)], eventTimeMs: 6, kind: 'ump' },
+      { input: port, data: [ccWord(75)], eventTimeMs: 6, kind: 'ump' },
+    ]);
+    expect(engine.messages).toEqual([
+      { kind: 'cc', group: 0, channel: 2, a: 75, b: 11, time: 0 },
+      { kind: 'program', group: 0, channel: 2, program: 5, bank: undefined, time: 0 },
+    ]);
+    // Each UMP packet of one event is offered on its own.
+    expect(engine.rawUmp.map((packet) => Array.from(packet.words))).toEqual([[ccWord(75)]]);
+    binding.destroy();
+  });
+
+  it('refuses a filter that is not a function before requesting MIDI access', async () => {
+    const access = new FakeAccess();
+    const calls: unknown[] = [];
+    installMidi(access, calls);
+    await expect(bindWebMidi(new FakeEngine() as never, { filter: true as never })).rejects.toThrow(
+      /^bindWebMidi: filter must be a function$/,
+    );
+    expect(calls).toEqual([]);
+  });
+
   it('refuses an undeclared option key before requesting MIDI access', async () => {
     const access = new FakeAccess();
     const calls: unknown[] = [];

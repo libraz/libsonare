@@ -1262,6 +1262,7 @@ export type {
   WebMidiEngine,
   WebMidiEventContextTimeOptions,
   WebMidiInputInfo,
+  WebMidiMessage,
 } from './web_midi.js';
 export { bindWebMidi, isWebMidiAvailable, webMidiEventContextTime } from './web_midi.js';
 export type {

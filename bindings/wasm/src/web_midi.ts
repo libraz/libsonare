@@ -216,6 +216,25 @@ export interface BindWebMidiOptions {
   scheduleAheadSec?: number;
   /** Observe hot-plug updates after the helper rebinds matching inputs. */
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
+  /**
+   * Called with each message the binding is about to push, before it reaches the engine;
+   * returning a falsy value drops that message (a MIDI-learn mode, for instance). System messages
+   * the binding never pushes are not offered.
+   */
+  filter?: (message: WebMidiMessage) => boolean;
+}
+
+/** One message {@link BindWebMidiOptions.filter} is offered. */
+export interface WebMidiMessage {
+  /** The input port the message arrived on. */
+  input: WebMidiInputInfo;
+  /**
+   * The message: a complete MIDI 1.0 channel voice message with running status resolved (status
+   * byte first), or one UMP packet.
+   */
+  data: Uint8Array | Uint32Array;
+  /** The event's timestamp on the `performance.now()` clock, in milliseconds. */
+  eventTimeMs: number;
 }
 
 /** Options for {@link webMidiEventContextTime}. */
@@ -269,6 +288,7 @@ export function isWebMidiAvailable(): boolean {
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
  * @throws TypeError when `options` is not an object or holds an undeclared key.
+ * @throws TypeError when `options.filter` is given and is not a function.
  * @throws RangeError when `options.group` is outside 0 to 15.
  * @throws RangeError when `options.inputIds` is an empty array.
  * @throws TypeError when `options.context` is given with `timestampToOffsetInBlockSamples`, lacks
@@ -305,6 +325,10 @@ export async function bindWebMidi(
     }
     const selectedIds = new Set(options.inputIds ?? []);
     const timing = resolveEventTiming(engine, options);
+    const filter = options.filter;
+    if (filter !== undefined && typeof filter !== 'function') {
+      throw refuseType('filter must be a function');
+    }
     // Invoke through the navigator so the browser's native method keeps its
     // required `this` binding (detached calls throw "Illegal invocation").
     const access = await navigatorWithMidi.requestMIDIAccess({
@@ -326,12 +350,7 @@ export async function bindWebMidi(
       input.state !== 'disconnected' && (selectedIds.size === 0 || selectedIds.has(input.id));
 
     const snapshotInputs = (): WebMidiInputInfo[] =>
-      Array.from(iterInputs(access), ([id, input]) => ({
-        id,
-        name: input.name ?? '',
-        manufacturer: input.manufacturer ?? '',
-        state: input.state ?? 'connected',
-      }));
+      Array.from(iterInputs(access), ([id, input]) => inputInfo(input, id));
 
     const notify = () => options.onInputsChanged?.(snapshotInputs());
 
@@ -339,6 +358,9 @@ export async function bindWebMidi(
       if (bound.has(input.id) || !shouldBind(input)) {
         return;
       }
+      const offer: MessageOffer | undefined =
+        filter &&
+        ((data, eventTimeMs) => Boolean(filter({ input: inputInfo(input), data, eventTimeMs })));
       const entry: BoundInput = {
         input,
         listener: (event: MidiMessageEventLike) => {
@@ -348,6 +370,7 @@ export async function bindWebMidi(
             group,
             entry.runningStatus,
             timing,
+            offer,
           );
         },
         runningStatus: 0,
@@ -441,6 +464,19 @@ export async function bindWebMidi(
     return binding;
   });
 }
+
+/** Snapshot of one port; `id` defaults to the port's own. */
+function inputInfo(input: MidiPortLike, id = input.id): WebMidiInputInfo {
+  return {
+    id,
+    name: input.name ?? '',
+    manufacturer: input.manufacturer ?? '',
+    state: input.state ?? 'connected',
+  };
+}
+
+/** Offers one message about to be pushed to the binding's filter; false drops it. */
+type MessageOffer = (data: Uint8Array | Uint32Array, eventTimeMs: number) => boolean;
 
 /** The trailing push arguments placing one event: a block offset, or a context time the engine maps itself. */
 type EventAt = [offsetInBlockSamples?: number, options?: WebMidiEngineInputOptions];
@@ -554,14 +590,16 @@ function dispatchMidiMessage(
   group: number,
   runningStatus: number,
   timing: EventTiming,
+  offer: MessageOffer | undefined,
 ): number {
   const data = event.data;
   if (data.length === 0) {
     return 0;
   }
+  const eventTimeMs = event.receivedTime ?? event.timeStamp ?? 0;
   const first = data[0];
   if (first > 0xff || data instanceof Uint32Array) {
-    dispatchUmpMessages(engine, data, timing(event.receivedTime ?? event.timeStamp ?? 0));
+    dispatchUmpMessages(engine, data, eventTimeMs, timing, offer);
     return 0;
   }
 
@@ -592,7 +630,13 @@ function dispatchMidiMessage(
     return status;
   }
 
-  const at = timing(event.receivedTime ?? event.timeStamp ?? 0);
+  if (
+    offer &&
+    !offer(oneDataByteMessage ? Uint8Array.of(status, a) : Uint8Array.of(status, a, b), eventTimeMs)
+  ) {
+    return status;
+  }
+  const at = timing(eventTimeMs);
 
   if (message === 0x80) {
     engine.pushMidiInputNoteOff(group, channel, a, b, ...at);
@@ -617,7 +661,14 @@ function dispatchMidiMessage(
   return status;
 }
 
-function dispatchUmpMessages(engine: WebMidiEngine, words: ArrayLike<number>, at: EventAt): void {
+function dispatchUmpMessages(
+  engine: WebMidiEngine,
+  words: ArrayLike<number>,
+  eventTimeMs: number,
+  timing: EventTiming,
+  offer: MessageOffer | undefined,
+): void {
+  let at: EventAt | undefined;
   let offset = 0;
   while (offset < words.length) {
     const word0 = words[offset] >>> 0;
@@ -629,7 +680,12 @@ function dispatchUmpMessages(engine: WebMidiEngine, words: ArrayLike<number>, at
     for (let index = 0; index < wordCount; index++) {
       packet[index] = words[offset + index] >>> 0;
     }
-    dispatchUmpMessage(engine, packet, at);
+    // Data packets (MT 0x3/0x5) need the owned SysEx path; raw input refuses them.
+    const messageType = packet[0] >>> 28;
+    if (messageType !== 0x3 && messageType !== 0x5 && (!offer || offer(packet, eventTimeMs))) {
+      at ??= timing(eventTimeMs);
+      dispatchUmpMessage(engine, packet, at);
+    }
     offset += wordCount;
   }
 }
@@ -639,10 +695,6 @@ function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: Event
   const messageType = word0 >>> 28;
   const group = (word0 >>> 24) & 0x0f;
 
-  // Data packets (MT 0x3/0x5) need the owned SysEx path; raw input refuses them.
-  if (messageType === 0x3 || messageType === 0x5) {
-    return;
-  }
   if (engine.pushMidiInputUmp) {
     engine.pushMidiInputUmp(words, ...at);
     return;
