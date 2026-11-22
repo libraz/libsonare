@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <string>
+#include <vector>
 
 #include "util/exception.h"
 
@@ -383,4 +385,27 @@ TEST_CASE("mel filters refuse n_mels by its name", "[mel]") {
   config.n_mels = kMaxMelBands + 1;
   CHECK_THROWS_WITH(create_mel_filterbank(22050, 2048, config),
                     "n_mels must be an integer in [1, 4096]");
+}
+
+TEST_CASE("create_mel_filterbank refuses an empty band by naming fmax and fmin", "[mel]") {
+  MelFilterConfig config;
+  config.fmin = 4000.0f;
+  config.fmax = 2000.0f;
+  try {
+    (void)create_mel_filterbank(22050, 2048, config);
+    FAIL("an fmax below fmin was accepted");
+  } catch (const SonareParameterRefusal& e) {
+    CHECK(std::string(e.what()) == "fmax must be greater than fmin");
+    CHECK(e.subjects() == std::vector<std::string>{"fmax", "fmin"});
+  }
+}
+
+TEST_CASE("mel_frequency_points refuses an empty range by naming fmax and fmin", "[mel]") {
+  try {
+    (void)mel_frequency_points(8, 4000.0f, 4000.0f, false);
+    FAIL("an fmax equal to fmin was accepted");
+  } catch (const SonareParameterRefusal& e) {
+    CHECK(std::string(e.what()) == "fmax must be greater than fmin");
+    CHECK(e.subjects() == std::vector<std::string>{"fmax", "fmin"});
+  }
 }
