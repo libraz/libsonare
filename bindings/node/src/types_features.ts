@@ -616,6 +616,12 @@ export interface EqBandInput {
   sidechainQ?: number;
 }
 
+/** Options for {@link StreamingEqualizer.setAutoGain}. */
+export interface AutoGainOptions {
+  /** `true` enables output auto-gain compensation, `false` disables it. */
+  enabled: boolean;
+}
+
 /** Options for {@link StreamingEqualizer.match}. */
 export interface EqMatchOptions {
   /** Rate of `source`, in Hz. Omitted: the equalizer's own rate. */

@@ -12,6 +12,7 @@ import {
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
+import { expectedRevisionOption } from './internal/vocal_revision.js';
 import { addon } from './native.js';
 import type {
   VocalAnalysis,
@@ -33,6 +34,7 @@ import type {
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
+  VocalRevisionOptions,
   VocalSessionLimits,
   VocalStateToken,
   VocalTransition,
@@ -305,25 +307,25 @@ export class VocalEditSession implements Disposable {
   }
 
   /** Opens a draft; with `expectedRevision` the call is refused if the session has moved on. */
-  beginEdit(options: { expectedRevision?: string } = {}): VocalEditDraft {
+  beginEdit(options: VocalRevisionOptions = {}): VocalEditDraft {
     this.requireAlive();
     return wrapVocalEditDraft(
-      this.native.beginEdit(options.expectedRevision),
+      this.native.beginEdit(expectedRevisionOption(options)),
       this,
       this.sampleRate,
     );
   }
 
   /** Reverts the last committed edit. */
-  undo(options: { expectedRevision?: string } = {}): VocalEditResult {
+  undo(options: VocalRevisionOptions = {}): VocalEditResult {
     this.requireAlive();
-    return this.native.undo(options.expectedRevision);
+    return this.native.undo(expectedRevisionOption(options));
   }
 
   /** Reapplies the last undone edit. */
-  redo(options: { expectedRevision?: string } = {}): VocalEditResult {
+  redo(options: VocalRevisionOptions = {}): VocalEditResult {
     this.requireAlive();
-    return this.native.redo(options.expectedRevision);
+    return this.native.redo(expectedRevisionOption(options));
   }
 
   /** Per-sample pitch curves of one note. */
@@ -415,9 +417,9 @@ export class VocalEditDraft implements Disposable {
   }
 
   /** Commits the draft; the draft is unusable afterwards. */
-  commit(options: { expectedRevision?: string } = {}): VocalEditResult {
+  commit(options: VocalRevisionOptions = {}): VocalEditResult {
     this.requireAlive();
-    const result = this.native.commit(options.expectedRevision);
+    const result = this.native.commit(expectedRevisionOption(options));
     this.disposed = true;
     this.endedAs = 'has been committed';
     return result;

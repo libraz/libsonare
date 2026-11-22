@@ -248,6 +248,42 @@ export interface EngineMarker {
   keyMinor?: boolean;
 }
 
+/** An entry of `setMarkers`: an {@link EngineMarker} whose `id` may be left out. */
+export interface EngineMarkerInput extends Omit<EngineMarker, 'id'> {
+  /** Id of the marker, positive and unique within the list. Omit it to have one assigned that no stored or listed marker carries. */
+  id?: number;
+}
+
+/** Solo/mute state of a track, as taken by `setTrackSoloMute`. */
+export interface TrackSoloMuteState {
+  /** Whether the track is soloed. */
+  solo: boolean;
+  /** Whether the track is muted. */
+  mute: boolean;
+}
+
+/** Insert bypass state, as taken by `setStripInsertBypassed` and `setBusInsertBypassed`. */
+export interface InsertBypassState {
+  /** Whether the insert is bypassed. */
+  bypassed: boolean;
+  /** Whether the insert's internal state is cleared when it is bypassed. Default `false`. */
+  resetOnBypass?: boolean;
+}
+
+/** One insert parameter change, addressed by the processor's JSON-key parameter name. */
+export interface InsertParamValue {
+  /** Parameter name, one of the entries `masteringInsertParamInfo` reports. */
+  name: string;
+  /** New parameter value. */
+  value: number;
+}
+
+/** Capture arm state, as taken by `armCapture`. */
+export interface CaptureArmState {
+  /** `true` arms capture, `false` disarms it. */
+  armed: boolean;
+}
+
 /**
  * Metronome configuration. Give at most one of `clickSamples` and `clickSec`;
  * both absent selects the sample-rate-derived click length. An explicit `0` for

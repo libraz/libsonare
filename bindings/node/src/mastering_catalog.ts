@@ -160,7 +160,7 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
  * realtime automation targets in id order (`id` the integer used by
  * {@link RealtimeEngine.setTrackStripInsertParamByName}, `rtSafe` whether it
  * can be changed live); then, sorted by name, the keys construction reads
- * that are not automation targets (`id` null, `rtSafe` false — they take
+ * that are not automation targets (no `id`, `rtSafe` false — they take
  * effect only when the insert is built). The names are the same set
  * {@link masteringInsertParamNames} returns, plus any automation target
  * construction does not read. Returns an empty array for an unknown name.

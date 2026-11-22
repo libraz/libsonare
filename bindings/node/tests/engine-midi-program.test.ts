@@ -127,7 +127,7 @@ describe('RealtimeEngine live program change', () => {
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, 'yes' as never)).toThrow(TypeError);
       expect(() => engine.pushMidiProgram('x' as unknown as number, 0, 0, 0)).toThrow(TypeError);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, null, -1)).toThrow(RangeError);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, undefined, -1)).toThrow(RangeError);
       expect(() => engine.pushMidiInputProgram(300, 0, 0)).toThrow(/group/);
       expect(() => engine.pushMidiInputProgram(0, 0, 300)).toThrow(/program/);
       expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bank\.lsb/);

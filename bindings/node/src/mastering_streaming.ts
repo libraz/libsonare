@@ -10,6 +10,7 @@ import { isNonArrayObject } from './internal/value_guards.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
+  AutoGainOptions,
   EqBandInput,
   EqMatchOptions,
   EqPhaseMode,
@@ -968,7 +969,7 @@ export class StreamingEqualizer {
    *
    * @throws TypeError when `options` is not an object or `enabled` is not a boolean
    */
-  setAutoGain(options: { enabled: boolean }): void {
+  setAutoGain(options: AutoGainOptions): void {
     if (typeof options !== 'object' || options === null) {
       throw refuseType('options must be an object');
     }

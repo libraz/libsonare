@@ -985,7 +985,7 @@ describe('RealtimeEngine instruments and MIDI', () => {
       engine.setSf2Instrument(3, {});
       expect(() => engine.pushMidiProgram(3, 0, 0, 5)).not.toThrow();
       expect(() => engine.pushMidiProgram(3, 0, 0, 5, { msb: 8, lsb: 1 })).not.toThrow();
-      expect(() => engine.pushMidiProgram(3, 0, 0, 5, null, 0)).not.toThrow();
+      expect(() => engine.pushMidiProgram(3, 0, 0, 5, undefined, 0)).not.toThrow();
       engine.setMidiInputSource(3);
       expect(() => engine.pushMidiInputProgram(0, 0, 5, { msb: 8, lsb: 1 })).not.toThrow();
       expect(caught(() => engine.pushMidiProgram(3, 0, 0, 5, { msb: 8 } as never))).toBeInstanceOf(

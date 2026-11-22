@@ -29,6 +29,7 @@ import type {
   Articulation,
   AutomationCurve,
   BuiltinSynthConfig,
+  CaptureArmState,
   CaptureOptions,
   CapturePunch,
   ControllerBinding,
@@ -43,6 +44,7 @@ import type {
   EngineGraphSpec,
   EngineLoop,
   EngineMarker,
+  EngineMarkerInput,
   EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
@@ -60,6 +62,9 @@ import type {
   EngineTransportState,
   EqBandInput,
   ExternalMidiEvent,
+  InsertBypassState,
+  InsertParamValue,
+  MidiBank,
   MidiFxConfig,
   MixSceneBusInput,
   MixSceneStripInput,
@@ -80,6 +85,7 @@ import type {
   StripRef,
   SurroundPan,
   SynthPatch,
+  TrackSoloMuteState,
   UmpWords,
 } from './types.js';
 import {
@@ -448,7 +454,7 @@ function sceneBusJson(bus: MixSceneBusInput): string {
 
 function bypassState(
   requestName: 'setStripInsertBypassed' | 'setBusInsertBypassed',
-  state: { bypassed: boolean; resetOnBypass?: boolean },
+  state: InsertBypassState,
 ): { bypassed: boolean; resetOnBypass: boolean } {
   const record = requestObject(requestName, state, 'state', true);
   return {
@@ -467,8 +473,8 @@ function insertParam(
     | 'applyBusInsertParamNow'
     | 'restoreStripInsertParam'
     | 'restoreBusInsertParam',
-  param: { name: string; value: number },
-): { name: string; value: number } {
+  param: InsertParamValue,
+): InsertParamValue {
   const record = requestObject(requestName, param, 'param', true);
   if (typeof record.name !== 'string') {
     throw refuseType(`param.name must be a string`);
@@ -652,12 +658,15 @@ function bankByte(value: unknown, argName: string): number {
 /** An optional bank selection as the native `(bankValid, msb, lsb)` triple; absence is "no bank". */
 function bankFields(
   requestName: 'pushMidiProgram' | 'pushMidiInputProgram',
-  bank: { msb: number; lsb: number } | null | undefined,
+  bank: MidiBank | undefined,
 ): { bankValid: boolean; msb: number; lsb: number } {
-  if (isAbsent(bank)) {
+  if (bank === undefined) {
     return { bankValid: false, msb: 0, lsb: 0 };
   }
-  const record = requestObject(requestName, bank, 'bank', true);
+  if (!isNonArrayObject(bank)) {
+    throw refuseType('bank must be a { msb, lsb } object');
+  }
+  const record = requestObject(requestName, bank as MidiBank, 'bank', true);
   return {
     bankValid: true,
     msb: bankByte(record.msb, 'bank.msb'),
@@ -987,7 +996,7 @@ export class RealtimeEngine {
    * does not carry; entries carrying an `id` keep it (positive, unique within
    * the list). Returns the stored markers in the order given.
    */
-  setMarkers(markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {
+  setMarkers(markers: ReadonlyArray<EngineMarkerInput>): EngineMarker[] {
     if (!Array.isArray(markers)) {
       this.native.setMarkers(markers as never);
       return [];
@@ -1314,11 +1323,7 @@ export class RealtimeEngine {
   }
 
   /** Bypasses or engages one strip insert; `resetOnBypass` clears its state when it is bypassed. */
-  setStripInsertBypassed(
-    ref: StripRef,
-    insertIndex: number,
-    state: { bypassed: boolean; resetOnBypass?: boolean },
-  ): void {
+  setStripInsertBypassed(ref: StripRef, insertIndex: number, state: InsertBypassState): void {
     const target = stripTarget(ref);
     const { bypassed, resetOnBypass } = bypassState('setStripInsertBypassed', state);
     if (target.master) {
@@ -1333,11 +1338,7 @@ export class RealtimeEngine {
    * exist via {@link setTrackBuses} and carry a strip configured with
    * {@link setBusStrip}.
    */
-  setBusInsertBypassed(
-    busId: number,
-    insertIndex: number,
-    state: { bypassed: boolean; resetOnBypass?: boolean },
-  ): void {
+  setBusInsertBypassed(busId: number, insertIndex: number, state: InsertBypassState): void {
     const { bypassed, resetOnBypass } = bypassState('setBusInsertBypassed', state);
     this.native.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass);
   }
@@ -1345,16 +1346,12 @@ export class RealtimeEngine {
   /**
    * Changes one strip insert parameter in realtime, addressed by the
    * processor's JSON-key parameter name: an entry in {@link
-   * masteringInsertParamInfo} whose `id` is non-null. Applied at the next
+   * masteringInsertParamInfo} that carries an `id`. Applied at the next
    * block head via the engine command queue; safe during playback. Throws if
    * the track, insert, or name is unknown, the param is not realtime-safe, or
    * the command queue is full.
    */
-  setStripInsertParam(
-    ref: StripRef,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  setStripInsertParam(ref: StripRef, insertIndex: number, param: InsertParamValue): void {
     const target = stripTarget(ref);
     const { name, value } = insertParam('setStripInsertParam', param);
     if (target.master) {
@@ -1368,11 +1365,7 @@ export class RealtimeEngine {
    * Bus counterpart of {@link setStripInsertParam}. The bus must already exist
    * via {@link setTrackBuses} and carry a strip configured with {@link setBusStrip}.
    */
-  setBusInsertParam(
-    busId: number,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  setBusInsertParam(busId: number, insertIndex: number, param: InsertParamValue): void {
     const { name, value } = insertParam('setBusInsertParam', param);
     this.native.setBusStripInsertParamByName(busId, insertIndex, name, value);
   }
@@ -1383,11 +1376,7 @@ export class RealtimeEngine {
    * insert, or name is unknown, or the param is not realtime-safe. Not safe to
    * call concurrently with {@link process}.
    */
-  applyStripInsertParamNow(
-    ref: StripRef,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): boolean {
+  applyStripInsertParamNow(ref: StripRef, insertIndex: number, param: InsertParamValue): boolean {
     const target = stripTarget(ref);
     const { name, value } = insertParam('applyStripInsertParamNow', param);
     return target.master
@@ -1396,11 +1385,7 @@ export class RealtimeEngine {
   }
 
   /** Bus counterpart of {@link applyStripInsertParamNow}. */
-  applyBusInsertParamNow(
-    busId: number,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): boolean {
+  applyBusInsertParamNow(busId: number, insertIndex: number, param: InsertParamValue): boolean {
     const { name, value } = insertParam('applyBusInsertParamNow', param);
     return this.native.applyBusStripInsertParamByNameNow(busId, insertIndex, name, value);
   }
@@ -1410,11 +1395,7 @@ export class RealtimeEngine {
    * replay retained edits after {@link setStrip} replaced the strip. Throws if
    * the track, insert, or name is unknown.
    */
-  restoreStripInsertParam(
-    ref: StripRef,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  restoreStripInsertParam(ref: StripRef, insertIndex: number, param: InsertParamValue): void {
     const target = stripTarget(ref);
     const { name, value } = insertParam('restoreStripInsertParam', param);
     if (target.master) {
@@ -1425,11 +1406,7 @@ export class RealtimeEngine {
   }
 
   /** Bus counterpart of {@link restoreStripInsertParam}. */
-  restoreBusInsertParam(
-    busId: number,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  restoreBusInsertParam(busId: number, insertIndex: number, param: InsertParamValue): void {
     const { name, value } = insertParam('restoreBusInsertParam', param);
     this.native.restoreBusStripInsertParamByName(busId, insertIndex, name, value);
   }
@@ -1865,7 +1842,7 @@ export class RealtimeEngine {
   }
 
   /** Arms or disarms capture. */
-  armCapture(state: { armed: boolean }): void {
+  armCapture(state: CaptureArmState): void {
     const request = requestObject('armCapture', state, 'state', true);
     this.native.armCapture(requireBoolean(request.armed, 'armed'));
   }
@@ -2124,11 +2101,7 @@ export class RealtimeEngine {
    * @param trackId - Track id declared through {@link setTrackLanes}; an unknown id is a `RangeError`
    * @throws SonareError `InvalidState` after a timeline installed the lanes (declare them with {@link setTrackLanes})
    */
-  setTrackSoloMute(
-    trackId: number,
-    state: { solo: boolean; mute: boolean },
-    renderFrame?: number,
-  ): void {
+  setTrackSoloMute(trackId: number, state: TrackSoloMuteState, renderFrame?: number): void {
     const fnName = 'setTrackSoloMute';
     const request = requestObject(fnName, state, 'state', true);
     this.native.setSoloMute(
@@ -2819,8 +2792,8 @@ export class RealtimeEngine {
 
   /**
    * Queue a live MIDI 2.0 Program Change to a MIDI destination. The bank
-   * travels in the same message and is applied only when `bank` is given
-   * (`null` and absent both mean no bank change).
+   * travels in the same message and is applied only when `bank` is given;
+   * omit it for no bank change (`null` is refused).
    * Program, bank MSB and LSB are 7-bit; group and channel 0..15. The message
    * takes the receive path a wire Program Change takes. Which receivers select
    * programs: the SoundFont player (`setSf2Instrument`) selects bank and
@@ -2841,7 +2814,7 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     program: number,
-    bank?: { msb: number; lsb: number } | null,
+    bank?: MidiBank,
     renderFrame?: number,
   ): void {
     const { bankValid, msb, lsb } = bankFields('pushMidiProgram', bank);
@@ -2867,7 +2840,7 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     program: number,
-    bank?: { msb: number; lsb: number } | null,
+    bank?: MidiBank,
     offsetInBlockSamples = 0,
   ): void {
     const { bankValid, msb, lsb } = bankFields('pushMidiInputProgram', bank);
