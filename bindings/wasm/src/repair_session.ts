@@ -3,6 +3,7 @@
  */
 
 import { refuseType, withEntry } from './internal/entry.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative, humDetection, noiseDetection } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
@@ -19,10 +20,6 @@ import type { DereverbClassicalOptions } from './repair_dereverb.js';
 import type { DeclickOptions, DeclipOptions, DecrackleOptions } from './repair_impulsive.js';
 import type { DehumOptions, DenoiseClassicalOptions } from './repair_noise.js';
 import { assertAudioChannels, requestOnly } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /** The repair stages, in the order {@link masteringRepairApply} runs them. */
 export type MasteringRepairStageName =
@@ -79,7 +76,7 @@ export interface MasteringRepairAnalysis {
    * from `recommended` even though flat runs were found.
    */
   declipThresholdSafe: boolean;
-  /** Programme loudness the noise floor is compared against. */
+  /** Programme loudness in LUFS the noise floor is compared against. `-Infinity` for silence. */
   integratedLufs: number;
   /**
    * Stages the measurement supports, in application order, each with every setting. Pass it to
@@ -218,13 +215,14 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
       request.preferStreamingSafe === undefined
         ? {}
         : { preferStreamingSafe: request.preferStreamingSafe };
-    const analysis = JSON.parse(
-      requireModule().masteringRepairAnalyze(
+    const analysis = parseRecordJson<MasteringRepairAnalysis>(
+      getSonareModule().masteringRepairAnalyze(
         request.channels,
         request.sampleRate,
         JSON.stringify(options),
       ),
-    ) as MasteringRepairAnalysis;
+      'repair_analysis',
+    );
     if (analysis.defects !== undefined) {
       analysis.defects = audioDefectsFromNative(analysis.defects);
       analysis.channels = analysis.channels?.map(audioDefectsFromNative);
@@ -262,7 +260,7 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
     if (!Array.isArray(request.stages)) {
       throw refuseType('stages must be an array');
     }
-    const result = requireModule().masteringRepairApply(
+    const result = getSonareModule().masteringRepairApply(
       request.channels,
       request.sampleRate,
       JSON.stringify(request.stages),

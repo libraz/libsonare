@@ -19,10 +19,6 @@ import type {
 } from './public_types_repair.js';
 import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Options for `masteringRepairDeclick`. */
 export interface DeclickOptions {
   /** Click detection threshold as a linear sample magnitude, in (0, 10]. Default `0.8`. */
@@ -78,7 +74,7 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      requireModule().masteringRepairDeclickStereo(
+      getSonareModule().masteringRepairDeclickStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -99,7 +95,11 @@ export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   return withEntry('masteringRepairDeclick', () => {
     const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r));
+    return getSonareModule().masteringRepairDeclick(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
   });
 }
 
@@ -111,8 +111,6 @@ export interface DeclipOptions {
   lpcOrder?: number;
   /** Outer reconstruction rounds, from 1 to 8. Default `2`. */
   iterations?: number;
-  /** Weight of the LPC prediction in the fill, in [0, 1]; the interpolation fallback gets the remainder. Default `0.65`. */
-  lpcBlend?: number;
 }
 
 /** Request form of `masteringRepairDeclip`. */
@@ -170,10 +168,10 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
  * Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC solver.
  * The cap is a fixed sample count: it is not derived from `lpcOrder`, from `sampleRate`, or from
  * any other option, so its duration depends on the rate (~10.7 ms at 48 kHz). A longer run is
- * filled with cubic / linear interpolation instead, which keeps the solver's dense matrices
- * bounded by the cap rather than by the input. Exceeding the cap silently changes the
- * reconstruction method rather than throwing: `lpcOrder`, `iterations` and `lpcBlend` have no
- * effect on the interpolated run.
+ * left clipped, which keeps the solver's dense matrices bounded by the cap rather than by the
+ * input; so is a run with no usable solve, or one whose reconstruction rises more than 20 dB
+ * past the clip level. Neither case throws: each such run is counted in the report's
+ * `unreconstructedRuns`.
  */
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): DeclipResult;
 export function masteringRepairDeclip(
@@ -185,7 +183,7 @@ export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   return withEntry('masteringRepairDeclip', () => {
     const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const native = requireModule().masteringRepairDeclip(
+    const native = getSonareModule().masteringRepairDeclip(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -214,7 +212,7 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const paired = pairedResult(
-      requireModule().masteringRepairDeclipStereo(
+      getSonareModule().masteringRepairDeclipStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -236,7 +234,7 @@ export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   return withEntry('masteringRepairDecrackle', () => {
     const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDecrackle(
+    return getSonareModule().masteringRepairDecrackle(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -265,7 +263,7 @@ export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRep
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      requireModule().masteringRepairDecrackleStereo(
+      getSonareModule().masteringRepairDecrackleStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -329,7 +327,7 @@ export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection 
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectClicks(
+    return getSonareModule().masteringRepairDetectClicks(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -340,13 +338,12 @@ export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection 
 /**
  * Measures clipping without repairing.
  *
- * Counts samples at or past `clipThresholdDb`. No other option reaches the result — `lpcOrder`,
- * `iterations` and `lpcBlend` are validated and then unread, since nothing here is
- * reconstructed. `sampleRate` is validated without being read for the same reason: no field of
+ * Counts samples at or past `clipThresholdDb`. No other option reaches the result — `lpcOrder`
+ * and `iterations` are validated and then unread, since nothing here is reconstructed. `sampleRate` is validated without being read for the same reason: no field of
  * the result is a rate.
  *
  * Compare `longestRunSamples` against the 512-sample LPC cap to tell in advance which runs
- * {@link masteringRepairDeclip} would fill by interpolation rather than with the solver.
+ * {@link masteringRepairDeclip} would leave clipped rather than reconstruct.
  *
  * `flatRunCount`, `longestFlatRunSamples`, `flatSampleCount` and `flatLevel` answer a different
  * question from the four fields above: those are read against `clipThresholdDb`, so they count the
@@ -383,7 +380,7 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     return clipDetectionFromNative(
-      requireModule().masteringRepairDetectClipping(
+      getSonareModule().masteringRepairDetectClipping(
         r.samples,
         r.sampleRate,
         repairNativeOptions(r),
@@ -415,7 +412,7 @@ export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetecti
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectCrackle(
+    return getSonareModule().masteringRepairDetectCrackle(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),

@@ -1,9 +1,9 @@
 import { chainConfigFromDocument } from './internal/chain_config.js';
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { masteringPlatformNames } from './mastering_catalog.js';
 import { addon } from './native.js';
 import type {
@@ -119,7 +119,7 @@ const PLATFORM_KEYS = ['name', 'targetLufs', 'ceilingDbtp'];
 
 /** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
 function previewPlatforms(platforms: unknown): StreamingPlatform[] {
-  if (platforms === undefined || platforms === null) {
+  if (isAbsent(platforms)) {
     return [];
   }
   if (!Array.isArray(platforms)) {
@@ -133,11 +133,7 @@ function previewPlatforms(platforms: unknown): StreamingPlatform[] {
     if (!isNonArrayObject(platform)) {
       throw refuseType(`platforms[${i}] must be an object`);
     }
-    for (const key of Object.keys(platform)) {
-      if (!PLATFORM_KEYS.includes(key)) {
-        throw refuseUnknownKey(`platforms[${i}].${key}`, PLATFORM_KEYS);
-      }
-    }
+    assertDeclaredKeys(platform, PLATFORM_KEYS, `platforms[${i}]`);
     const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
     if (typeof name !== 'string') {
       throw refuseType(`platforms[${i}].name must be a string`);
@@ -165,7 +161,7 @@ export interface MasteringStreamingPreviewStereoRequest {
 }
 
 function assistantResultFromNative(json: string): MasteringAssistantResult {
-  const native = parseRecordJson(json) as {
+  const native = parseRecordJson(json, 'assistant_result') as {
     chainConfig: { params: Record<string, unknown> };
     explanation: string[];
     profile: MasteringAssistantResult['profile'];
@@ -178,12 +174,12 @@ function assistantResultFromNative(json: string): MasteringAssistantResult {
 }
 
 function previewFromNative(json: string): MasteringStreamingPreviewResult {
-  return parseRecordJson(json) as MasteringStreamingPreviewResult;
+  return parseRecordJson(json, 'streaming_preview') as MasteringStreamingPreviewResult;
 }
 
 // `defects` is absent when the detectors did not run.
 function profileFromNative(json: string): MasteringAudioProfile {
-  const profile = parseRecordJson(json) as MasteringAudioProfile;
+  const profile = parseRecordJson(json, 'audio_profile') as MasteringAudioProfile;
   if (profile.defects !== undefined) {
     profile.defects = audioDefectsFromNative(profile.defects);
   }
@@ -200,7 +196,7 @@ function profileParams(
   const params: Record<string, number | boolean> = {};
   for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
     const value = r[key];
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       params[key] = value;
     }
   }
@@ -217,7 +213,7 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
       params[key] = r[key];
     }
   }
-  if (r.speechMonoAmount !== undefined && r.speechMonoAmount !== null) {
+  if (!isAbsent(r.speechMonoAmount)) {
     assertFloatValue(r.speechMonoAmount, 'speechMonoAmount');
     params.speechMonoAmount = r.speechMonoAmount;
   }
@@ -226,11 +222,11 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
       params[key] = r[key] as boolean;
     }
   }
-  if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
+  if (!isAbsent(r.targetPlatform)) {
     assertClosedToken(r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
     params.targetPlatform = r.targetPlatform;
   }
-  if (r.preset !== undefined && r.preset !== null) {
+  if (!isAbsent(r.preset)) {
     assertClosedToken(r.preset, assistantPresetNames(), 'preset');
     params.preset = r.preset;
   }

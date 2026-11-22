@@ -121,8 +121,8 @@ Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
   out.Set("detected", EmitClipDetection(env, report.detected));
   out.Set("lpcReconstructedRuns",
           Napi::Number::New(env, static_cast<double>(report.lpc_reconstructed_runs)));
-  out.Set("interpolatedRuns",
-          Napi::Number::New(env, static_cast<double>(report.interpolated_runs)));
+  out.Set("unreconstructedRuns",
+          Napi::Number::New(env, static_cast<double>(report.unreconstructed_runs)));
   out.Set("repairedSamples", Napi::Number::New(env, static_cast<double>(report.repaired_samples)));
   out.Set("linkedRuns", Napi::Number::New(env, static_cast<double>(report.linked_runs)));
   return out;
@@ -136,7 +136,6 @@ SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDecli
   config.clip_threshold_db = FloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
   config.iterations = IntProperty(options, "iterations", config.iterations);
-  config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
   return config;
 }
 
@@ -288,7 +287,6 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
                                                  sonare::mastering::repair::clip_threshold_from_db);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.iterations = IntProperty(options, "iterations", config.iterations);
-    config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipReport report;

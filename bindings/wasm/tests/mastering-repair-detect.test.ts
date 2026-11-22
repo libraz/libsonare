@@ -342,7 +342,6 @@ describe('repair detection (WASM)', () => {
         clipThresholdDb: CLIP_THRESHOLD_DB,
         lpcOrder: 8,
         iterations: 7,
-        lpcBlend: 0.1,
       });
       expect(base.clippedSamples).toBe(CLIP_LEN);
       expect(reshaped).toEqual(base);

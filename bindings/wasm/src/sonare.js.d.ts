@@ -459,7 +459,7 @@ export interface WasmClipDetection {
 export interface WasmDeclipReport {
   detected: WasmClipDetection;
   lpcReconstructedRuns: number;
-  interpolatedRuns: number;
+  unreconstructedRuns: number;
   repairedSamples: number;
   linkedRuns: number;
 }

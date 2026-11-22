@@ -1,13 +1,10 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
 import { assertClosedToken, requestOnly } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional and falls back to the core
@@ -224,11 +221,11 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
     assertTempo(req.tempoBpm);
     const params: Record<string, number | boolean> = {};
     for (const key of OPTION_KEYS) {
-      if (req[key] !== undefined && req[key] !== null) {
+      if (!isAbsent(req[key])) {
         params[key] = req[key] as number | boolean;
       }
     }
-    const json = requireModule().mixingAssistantSuggest(
+    const json = getSonareModule().mixingAssistantSuggest(
       left,
       right,
       ids,
@@ -237,7 +234,7 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
       req.sampleRate,
       params,
     );
-    return parseRecordJson(json) as unknown as MixAssistantResult;
+    return parseRecordJson(json, 'mix_assistant_result') as unknown as MixAssistantResult;
   });
 }
 
@@ -249,7 +246,7 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
  */
 export function mixingAssistantSourceClassNames(): MixSourceClass[] {
   return withEntry('mixingAssistantSourceClassNames', () => {
-    return Array.from(requireModule().mixingAssistantSourceClassNames()) as MixSourceClass[];
+    return Array.from(getSonareModule().mixingAssistantSourceClassNames()) as MixSourceClass[];
   });
 }
 
@@ -263,6 +260,6 @@ export function mixingAssistantSourceClassNames(): MixSourceClass[] {
 export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
   return withEntry('mixingAssistantSourceClassFromName', () => {
     assertClosedToken(name, mixingAssistantSourceClassNames(), 'name');
-    return requireModule().mixingAssistantSourceClassFromName(name);
+    return getSonareModule().mixingAssistantSourceClassFromName(name);
   });
 }

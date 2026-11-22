@@ -12435,8 +12435,6 @@ export interface MasteringProcessorParamMap {
     clipThresholdDb?: number;
     /** Unit: count. Range: [1, 8]. Default: 2. */
     iterations?: number;
-    /** Range: [0, 1]. Default: 0.65. */
-    lpcBlend?: number;
     /** Unit: count. Range: [0, 2048]. Default: 36. */
     lpcOrder?: number;
   };
@@ -13214,10 +13212,10 @@ export interface MasteringAudioProfileLoudness {
   integratedLufs: number;
   /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
   loudnessRangeLu?: number;
-  /** True peak, in dBTP. `-Infinity` for silence. */
-  truePeakDbtp: number;
-  /** Crest factor (peak over RMS level) in dB. `-Infinity` for silence. */
-  crestFactorDb: number;
+  /** True peak, in dBTP. `-Infinity` for silence; absent for an empty input. */
+  truePeakDbtp?: number;
+  /** Crest factor (peak over RMS level) in dB. Absent for silence, where no RMS level is measured. */
+  crestFactorDb?: number;
 }
 
 /** Spectral group of {@link MasteringAudioProfile}; band levels (`*RmsDb`) are dBFS, mean square: a full-scale sine reads -3.01 dBFS in its band. */
@@ -13301,12 +13299,12 @@ export interface MasteringAssistantProfile {
   bpmConfidence: number;
   /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
   integratedLufs: number;
-  /** EBU Tech 3342 loudness range, in LU. */
-  loudnessRangeLu: number;
-  /** True peak, in dBTP. */
-  truePeakDbtp: number;
-  /** Crest factor (peak over RMS level) in dB. */
-  crestFactorDb: number;
+  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  loudnessRangeLu?: number;
+  /** True peak, in dBTP. `-Infinity` for silence; absent for an empty input. */
+  truePeakDbtp?: number;
+  /** Crest factor (peak over RMS level) in dB. Absent for silence, where no RMS level is measured. */
+  crestFactorDb?: number;
   /** Spectral centroid in Hz. */
   spectralCentroidHz: number;
   /** Spectral flatness of the input. */
@@ -13363,12 +13361,12 @@ export interface MatchTonalBalanceBand {
   lowHz: number;
   /** Upper band edge in Hz. */
   highHz: number;
-  /** Source level in the band, in dB. */
-  sourceDb: number;
-  /** Reference level in the band, in dB. */
-  referenceDb: number;
-  /** Source level minus reference level in dB. */
-  deviationDb: number;
+  /** Source level in the band, in dB. `-Infinity` for a silent band; absent when the band holds no bin. */
+  sourceDb?: number;
+  /** Reference level in the band, in dB. `-Infinity` for a silent band; absent when the band holds no bin. */
+  referenceDb?: number;
+  /** Source level minus reference level in dB. `-Infinity` when only the source band is silent; absent when the reference band is silent or the band holds no bin. */
+  deviationDb?: number;
 }
 
 /** Result of the `match.tonalBalance` pair analysis. */
@@ -13407,9 +13405,9 @@ export interface PairAnalysisResultMap {
 
 /** Result of the `stereo.monoCompatCheck` analysis. `width` is absent for a fully out-of-phase pair. */
 export interface StereoMonoCompatCheckResult {
-  /** Inter-channel correlation (-1 to 1). */
-  correlation: number;
-  /** Stereo width; absent for a fully out-of-phase pair. */
+  /** Inter-channel correlation (-1 to 1). Absent when either channel is silent. */
+  correlation?: number;
+  /** Stereo width; `Infinity` for a fully out-of-phase pair, absent for silence. */
   width?: number;
   /** Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude. */
   monoPeak: number;
@@ -13681,8 +13679,6 @@ export interface MasteringChainConfig {
       lpcOrder?: number;
       /** Outer reconstruction rounds, each re-estimating the model (1 to 8). Default 2. */
       iterations?: number;
-      /** Weight of the predictive reconstruction against the interpolation fallback (0 to 1). Default 0.65. */
-      lpcBlend?: number;
     };
     /** Removal of dense small impulses such as vinyl crackle. */
     decrackle?: {

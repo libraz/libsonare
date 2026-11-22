@@ -2,6 +2,7 @@
 
 import { describe, expectTypeOf, it } from 'vitest';
 import type {
+  AnalysisDynamics,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   DecomposeNotePitchRequest,
@@ -17,8 +18,10 @@ import type {
   MasteringRealtimeCost,
   MasteringStreamingPreviewPlatform,
   MatchReferenceLoudnessResult,
+  MatchTonalBalanceBand,
   MergeNotesRequest,
   MixAssistantTrackProfile,
+  MixMonoRisk,
   NoteSegmentsRequest,
   PitchCorrectOptions,
   PitchCorrectTimevaryingRequest,
@@ -39,6 +42,30 @@ describe('result records type an unmeasured value as an absent field', () => {
       number | undefined
     >();
     expectTypeOf<StereoMonoCompatCheckResult['width']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('a level silence leaves unmeasured, or an empty input never reaches, is absent', () => {
+    expectTypeOf<AnalysisDynamics['peakDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<AnalysisDynamics['rmsDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAssistantProfile['loudnessRangeLu']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAssistantProfile['truePeakDbtp']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAssistantProfile['crestFactorDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MasteringAudioProfileLoudness['truePeakDbtp']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MasteringAudioProfileLoudness['crestFactorDb']>().toEqualTypeOf<
+      number | undefined
+    >();
+    expectTypeOf<MatchTonalBalanceBand['sourceDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MatchTonalBalanceBand['referenceDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MatchTonalBalanceBand['deviationDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixAssistantTrackProfile['truePeakDbtp']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixAssistantTrackProfile['crestFactorDb']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMonoRisk['correlation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<MixMonoRisk['width']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<StereoMonoCompatCheckResult['correlation']>().toEqualTypeOf<number | undefined>();
   });
 
   it('a level that is -Infinity for silence is never absent', () => {

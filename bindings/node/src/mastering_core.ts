@@ -1,8 +1,9 @@
 import { refuse, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
-import { parseRecordJson } from './internal/record_json.js';
+import { parseRecordJson, type ResultFamily } from './internal/record_json.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   LoudnessMatchResult,
@@ -182,17 +183,17 @@ export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = Stereo
 
 // `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
 function nativeLoudnessArgs(r: MasteringNormalizeLoudnessRequest) {
-  if (r.targetLufs !== undefined && r.targetLufs !== null) {
+  if (!isAbsent(r.targetLufs)) {
     assertFloatValue(r.targetLufs, 'targetLufs');
   }
-  if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
+  if (!isAbsent(r.ceilingDbtp)) {
     assertFloatValue(r.ceilingDbtp, 'ceilingDbtp');
   }
   refuseZeroSentinel(r, ['truePeakOversample']);
-  if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
+  if (!isAbsent(r.truePeakOversample)) {
     assertIntegerValue(r.truePeakOversample, 'truePeakOversample');
   }
-  if (r.releaseMs !== undefined && r.releaseMs !== null) {
+  if (!isAbsent(r.releaseMs)) {
     assertPositiveFloatValue(r.releaseMs, 'releaseMs');
   }
   return [
@@ -393,6 +394,14 @@ export function masteringApplyPairProcessorStereo(
   });
 }
 
+/** The result family whose nulls each pair or stereo analysis restores; the others have none. */
+const ANALYSIS_FAMILIES: Readonly<Record<string, ResultFamily>> = {
+  'match.referenceLoudness': 'match_reference_loudness',
+  'match.tonalBalance': 'match_tonal_balance',
+  'match.tonalBalanceLogBands': 'match_tonal_balance',
+  'stereo.monoCompatCheck': 'stereo_mono_compat',
+};
+
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths and rates; a delay estimate is in
@@ -418,6 +427,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
         referenceRate,
         r.params ?? {},
       ),
+      ANALYSIS_FAMILIES[r.analysis],
     ) as PairAnalysisResultMap[A];
   });
 }
@@ -439,6 +449,7 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return parseRecordJson(
       addon.masteringStereoAnalyze(r.analysis, r.left, r.right, r.sampleRate, r.params ?? {}),
+      ANALYSIS_FAMILIES[r.analysis],
     ) as StereoAnalysisResultMap[A];
   });
 }

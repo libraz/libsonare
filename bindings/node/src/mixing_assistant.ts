@@ -1,6 +1,7 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
 import { assertClosedToken, assertPositiveInteger, requestOnly } from './validation.js';
@@ -203,14 +204,14 @@ function normalizeOptions(
   const params: Record<string, number | boolean> = {};
   for (const key of OPTION_KEYS) {
     const value = request[key];
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       params[key] = value;
     }
   }
   // Positivity is the STFT geometry's own rule; the size ceiling stays the core's, which names it.
   for (const key of INTEGER_OPTION_KEYS) {
     const value = request[key];
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       assertPositiveInteger(value, key);
     }
   }
@@ -258,7 +259,7 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
       req.sampleRate,
       params,
     );
-    return parseRecordJson(json) as unknown as MixAssistantResult;
+    return parseRecordJson(json, 'mix_assistant_result') as unknown as MixAssistantResult;
   });
 }
 

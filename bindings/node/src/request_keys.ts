@@ -740,7 +740,6 @@ const MASTERING_REPAIR_DECLIP_REQUEST_KEYS = keySet(
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 );
 const MASTERING_REPAIR_DECLIP_STEREO_REQUEST_KEYS = keySet(
   'left',
@@ -749,7 +748,6 @@ const MASTERING_REPAIR_DECLIP_STEREO_REQUEST_KEYS = keySet(
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 );
 const MASTERING_REPAIR_DECRACKLE_REQUEST_KEYS = keySet(
   'samples',
@@ -781,7 +779,6 @@ const MASTERING_REPAIR_DETECT_CLIPPING_REQUEST_KEYS = keySet(
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 );
 const MASTERING_REPAIR_DETECT_CRACKLE_REQUEST_KEYS = keySet(
   'samples',

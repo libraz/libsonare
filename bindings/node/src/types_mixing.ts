@@ -504,16 +504,16 @@ export interface MixAssistantTrackProfile {
   /** Track duration in seconds. */
   durationSec: number;
   /**
-   * BS.1770 integrated loudness in LUFS; absent for a track with no gated
+   * BS.1770 integrated loudness in LUFS; `-Infinity` for a track with no gated
    * block to measure — a silent stem, or one muted before it was handed over —
-   * rather than a finite value that would read as a real level. Such a track
-   * always carries an `exclusionReason` as well.
+   * and absent for a track that could not be measured at all. Either way the
+   * track carries an `exclusionReason` as well.
    */
   integratedLufs?: number;
-  /** True peak in dBTP. */
-  truePeakDbtp: number;
-  /** Crest factor (peak over RMS) in dB. */
-  crestFactorDb: number;
+  /** True peak in dBTP. `-Infinity` for silence; absent for a track that could not be measured. */
+  truePeakDbtp?: number;
+  /** Crest factor (peak over RMS) in dB. Absent for silence or a track that could not be measured. */
+  crestFactorDb?: number;
   /** Spectral centroid in Hz. */
   spectralCentroidHz: number;
   /** Spectral flatness; near 0 is tonal, near 1 is noise-like. */
@@ -569,10 +569,10 @@ export interface MixCrowdedBand {
 export interface MixMonoRisk {
   /** Id of the strip at risk. */
   stripId: string;
-  /** Inter-channel correlation of the track in `[-1, 1]`. */
-  correlation: number;
-  /** Stereo width of the track. */
-  width: number;
+  /** Inter-channel correlation of the track in `[-1, 1]`. Absent when either channel is silent. */
+  correlation?: number;
+  /** Stereo width of the track; `Infinity` for a fully out-of-phase track, absent for silence. */
+  width?: number;
   /** True when the track carries meaningful low-frequency stereo width. */
   wideLowEnd: boolean;
 }

@@ -1195,7 +1195,6 @@ const MasteringRepairDeclipRequestKeys = keysOf<MasteringRepairDeclipRequest>()(
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 ]);
 const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStereoRequest>()([
   'left',
@@ -1204,7 +1203,6 @@ const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStere
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 ]);
 const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleRequest>()([
   'samples',
@@ -1365,7 +1363,6 @@ const MasteringRepairDetectClippingRequestKeys = keysOf<MasteringRepairDetectCli
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
-  'lpcBlend',
 ]);
 const MasteringRepairDetectCrackleRequestKeys = keysOf<MasteringRepairDetectCrackleRequest>()([
   'samples',

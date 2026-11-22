@@ -1,12 +1,12 @@
 import { chainConfigFromDocument } from './internal/chain_config.js';
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
-import { parseRecordJson } from './internal/record_json.js';
+import { parseRecordJson, type ResultFamily } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { withRespelled } from './internal/respell.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { masteringPlatformNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -69,10 +69,6 @@ export type {
   MasteringProcessorCategory,
   MasteringRealtimeCost,
 };
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /** Request form of {@link masteringNormalizeLoudness}. */
 export interface MasteringNormalizeLoudnessRequest extends MasteringNormalizeLoudnessOptions {
@@ -302,7 +298,7 @@ const PLATFORM_KEYS = ['name', 'targetLufs', 'ceilingDbtp'];
 
 /** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
 function previewPlatforms(platforms: unknown): StreamingPlatform[] {
-  if (platforms === undefined || platforms === null) {
+  if (isAbsent(platforms)) {
     return [];
   }
   if (!Array.isArray(platforms)) {
@@ -316,11 +312,7 @@ function previewPlatforms(platforms: unknown): StreamingPlatform[] {
     if (!isNonArrayObject(platform)) {
       throw refuseType(`platforms[${i}] must be an object`);
     }
-    for (const key of Object.keys(platform)) {
-      if (!PLATFORM_KEYS.includes(key)) {
-        throw refuseUnknownKey(`platforms[${i}].${key}`, PLATFORM_KEYS);
-      }
-    }
+    assertDeclaredKeys(platform, PLATFORM_KEYS, `platforms[${i}]`);
     const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
     if (typeof name !== 'string') {
       throw refuseType(`platforms[${i}].name must be a string`);
@@ -370,17 +362,17 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
 
 // `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
 function nativeLoudnessArgs(r: MasteringNormalizeLoudnessRequest) {
-  if (r.targetLufs !== undefined && r.targetLufs !== null) {
+  if (!isAbsent(r.targetLufs)) {
     assertFloatValue(r.targetLufs, 'targetLufs');
   }
-  if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
+  if (!isAbsent(r.ceilingDbtp)) {
     assertFloatValue(r.ceilingDbtp, 'ceilingDbtp');
   }
   refuseZeroSentinel(r, ['truePeakOversample']);
-  if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
+  if (!isAbsent(r.truePeakOversample)) {
     assertIntegerValue(r.truePeakOversample, 'truePeakOversample');
   }
-  if (r.releaseMs !== undefined && r.releaseMs !== null) {
+  if (!isAbsent(r.releaseMs)) {
     assertPositiveFloatValue(r.releaseMs, 'releaseMs');
   }
   return [
@@ -415,7 +407,7 @@ export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormali
   return withEntry('masteringNormalizeLoudness', () => {
     const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const result = requireModule().mastering(r.samples, r.sampleRate, ...nativeLoudnessArgs(r));
+    const result = getSonareModule().mastering(r.samples, r.sampleRate, ...nativeLoudnessArgs(r));
     return result as MasteringNormalizeLoudnessResult;
   });
 }
@@ -426,7 +418,7 @@ export function masteringProcessorNames(): SoloProcessor[] {
     // embind hands back a vector whose constructor is not this realm's Array, so the
     // result is not structured-cloneable (breaks postMessage to a Worker).
     // Array.from() re-roots it as a plain Array. Same for the sibling *Names() below.
-    return Array.from(requireModule().masteringProcessorNames()) as SoloProcessor[];
+    return Array.from(getSonareModule().masteringProcessorNames()) as SoloProcessor[];
   });
 }
 
@@ -437,7 +429,7 @@ export function masteringProcessorNames(): SoloProcessor[] {
  */
 export function masteringInsertNames(): MasteringInsertName[] {
   return withEntry('masteringInsertNames', () => {
-    return Array.from(requireModule().masteringInsertNames()) as MasteringInsertName[];
+    return Array.from(getSonareModule().masteringInsertNames()) as MasteringInsertName[];
   });
 }
 
@@ -462,7 +454,7 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
       'insert',
     );
     return Array.from(
-      requireModule().masteringInsertParamNames(insert),
+      getSonareModule().masteringInsertParamNames(insert),
     ) as (keyof MasteringProcessorParams<N> & string)[];
   });
 }
@@ -493,8 +485,8 @@ export function masteringInsertParamInfo(
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
     assertString(r.insert, 'insert');
-    const module = requireModule();
-    if (r.sampleRate !== undefined && r.sampleRate !== null) {
+    const module = getSonareModule();
+    if (!isAbsent(r.sampleRate)) {
       assertSampleRate(r.sampleRate);
     }
     const json = module.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
@@ -521,7 +513,7 @@ export interface MasteringAmpPresetCatalogEntry {
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
   return withEntry('masteringAmpPresetCatalog', () => {
-    const json = requireModule().masteringAmpPresetCatalog();
+    const json = getSonareModule().masteringAmpPresetCatalog();
     return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
   });
 }
@@ -553,7 +545,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
     const json = JSON.stringify(
       withEntry('masteringInsertTiming', () => resolveInsertParams(r.insert, r.params ?? {})),
     );
-    return requireModule().masteringInsertTiming(r.insert, json, r.sampleRate);
+    return getSonareModule().masteringInsertTiming(r.insert, json, r.sampleRate);
   });
 }
 
@@ -565,7 +557,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   return withEntry('masteringProcessorCatalog', () => {
-    const json = requireModule().masteringProcessorCatalog();
+    const json = getSonareModule().masteringProcessorCatalog();
     return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
   });
 }
@@ -573,21 +565,21 @@ export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
 /** Names of the pair processors `masteringApplyPairProcessor` accepts. */
 export function masteringPairProcessorNames(): PairProcessor[] {
   return withEntry('masteringPairProcessorNames', () => {
-    return Array.from(requireModule().masteringPairProcessorNames()) as PairProcessor[];
+    return Array.from(getSonareModule().masteringPairProcessorNames()) as PairProcessor[];
   });
 }
 
 /** Names of the pair analyses `masteringAnalyzePair` accepts. */
 export function masteringPairAnalysisNames(): PairAnalysis[] {
   return withEntry('masteringPairAnalysisNames', () => {
-    return Array.from(requireModule().masteringPairAnalysisNames()) as PairAnalysis[];
+    return Array.from(getSonareModule().masteringPairAnalysisNames()) as PairAnalysis[];
   });
 }
 
 /** Names of the stereo analyses `masteringAnalyzeStereo` accepts. */
 export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return withEntry('masteringStereoAnalysisNames', () => {
-    return Array.from(requireModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
+    return Array.from(getSonareModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
   });
 }
 
@@ -613,7 +605,7 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
     const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
     assertString(r.processor, 'processor');
     assertAudioInput(r.samples, r.sampleRate, r);
-    const result = requireModule().masteringProcess(
+    const result = getSonareModule().masteringProcess(
       r.processor,
       r.samples,
       r.sampleRate,
@@ -646,7 +638,7 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
     }
-    return requireModule().masteringProcessStereo(
+    return getSonareModule().masteringProcessStereo(
       r.processor,
       r.left,
       r.right,
@@ -695,7 +687,7 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
     ]);
     assertString(r.processor, 'processor');
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    const result = requireModule().masteringPairProcess(
+    const result = getSonareModule().masteringPairProcess(
       r.processor,
       r.source,
       r.reference,
@@ -736,7 +728,7 @@ export function masteringApplyPairProcessorStereo(
     if (r.referenceLeft.length !== r.referenceRight.length) {
       throw refuse('referenceLeft and referenceRight must have the same length');
     }
-    return requireModule().masteringPairProcessStereo(
+    return getSonareModule().masteringPairProcessStereo(
       r.processor,
       r.sourceLeft,
       r.sourceRight,
@@ -748,6 +740,14 @@ export function masteringApplyPairProcessorStereo(
     );
   });
 }
+
+/** The result family whose nulls each pair or stereo analysis restores; the others have none. */
+const ANALYSIS_FAMILIES: Readonly<Record<string, ResultFamily>> = {
+  'match.referenceLoudness': 'match_reference_loudness',
+  'match.tonalBalance': 'match_tonal_balance',
+  'match.tonalBalanceLogBands': 'match_tonal_balance',
+  'stereo.monoCompatCheck': 'stereo_mono_compat',
+};
 
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
@@ -766,7 +766,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
     assertString(r.analysis, 'analysis');
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
     return parseRecordJson(
-      requireModule().masteringPairAnalyze(
+      getSonareModule().masteringPairAnalyze(
         r.analysis,
         r.source,
         r.reference,
@@ -774,6 +774,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
         referenceRate,
         r.params ?? {},
       ),
+      ANALYSIS_FAMILIES[r.analysis],
     ) as PairAnalysisResultMap[A];
   });
 }
@@ -794,13 +795,14 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return parseRecordJson(
-      requireModule().masteringStereoAnalyze(
+      getSonareModule().masteringStereoAnalyze(
         r.analysis,
         r.left,
         r.right,
         r.sampleRate,
         r.params ?? {},
       ),
+      ANALYSIS_FAMILIES[r.analysis],
     ) as StereoAnalysisResultMap[A];
   });
 }
@@ -840,7 +842,7 @@ export function masteringAbMatchLoudness(
     return withRespelled(
       { a: { name: 'reference', scale: 1 }, b: { name: 'source', scale: 1 } },
       () =>
-        requireModule().masteringAbMatchLoudness(
+        getSonareModule().masteringAbMatchLoudness(
           r.source,
           r.reference,
           r.sampleRate,
@@ -870,7 +872,7 @@ export function masteringAbMatchLoudnessStereo(
     if (r.referenceLeft.length !== r.referenceRight.length) {
       throw refuse('referenceLeft and referenceRight must have the same length');
     }
-    return requireModule().masteringAbMatchLoudnessStereo(
+    return getSonareModule().masteringAbMatchLoudnessStereo(
       r.sourceLeft,
       r.sourceRight,
       r.referenceLeft,
@@ -882,7 +884,7 @@ export function masteringAbMatchLoudnessStereo(
 }
 
 function assistantResultFromNative(json: string): MasteringAssistantResult {
-  const native = parseRecordJson(json) as {
+  const native = parseRecordJson(json, 'assistant_result') as {
     chainConfig: { params: Record<string, unknown> };
     explanation: string[];
     profile: MasteringAssistantResult['profile'];
@@ -895,12 +897,12 @@ function assistantResultFromNative(json: string): MasteringAssistantResult {
 }
 
 function previewFromNative(json: string): MasteringStreamingPreviewResult {
-  return parseRecordJson(json) as MasteringStreamingPreviewResult;
+  return parseRecordJson(json, 'streaming_preview') as MasteringStreamingPreviewResult;
 }
 
 // `defects` is absent when the detectors did not run.
 function profileFromNative(json: string): MasteringAudioProfile {
-  const profile = parseRecordJson(json) as MasteringAudioProfile;
+  const profile = parseRecordJson(json, 'audio_profile') as MasteringAudioProfile;
   if (profile.defects !== undefined) {
     profile.defects = audioDefectsFromNative(profile.defects);
   }
@@ -917,7 +919,7 @@ function profileParams(
   const params: Record<string, number | boolean> = {};
   for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
     const value = r[key];
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       params[key] = value;
     }
   }
@@ -937,25 +939,25 @@ function assistantPresetNames(): MasteringPreset[] {
 function assistantParams(r: MasteringAssistantSettings): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
   for (const key of ['targetLufs', 'ceilingDbtp'] as const) {
-    if (r[key] !== undefined && r[key] !== null) {
+    if (!isAbsent(r[key])) {
       assertFloatValue(r[key], key);
       params[key] = r[key];
     }
   }
-  if (r.speechMonoAmount !== undefined && r.speechMonoAmount !== null) {
+  if (!isAbsent(r.speechMonoAmount)) {
     assertFloatValue(r.speechMonoAmount, 'speechMonoAmount');
     params.speechMonoAmount = r.speechMonoAmount;
   }
   for (const key of ['enableRepair', 'preferStreamingSafe'] as const) {
-    if (r[key] !== undefined && r[key] !== null) {
+    if (!isAbsent(r[key])) {
       params[key] = optionalBoolean(r[key], key, false);
     }
   }
-  if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
+  if (!isAbsent(r.targetPlatform)) {
     assertClosedToken(r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
     params.targetPlatform = r.targetPlatform;
   }
-  if (r.preset !== undefined && r.preset !== null) {
+  if (!isAbsent(r.preset)) {
     assertClosedToken(r.preset, assistantPresetNames(), 'preset');
     params.preset = r.preset;
   }
@@ -984,7 +986,7 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
     const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     return assistantResultFromNative(
-      requireModule().masteringAssistantSuggest(
+      getSonareModule().masteringAssistantSuggest(
         r.samples,
         r.sampleRate,
         withEntry('masteringAssistantSuggest', () => assistantParams(r)),
@@ -1013,7 +1015,7 @@ export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile
     const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     return profileFromNative(
-      requireModule().masteringAudioProfile(r.samples, r.sampleRate, profileParams(r)),
+      getSonareModule().masteringAudioProfile(r.samples, r.sampleRate, profileParams(r)),
     );
   });
 }
@@ -1037,7 +1039,7 @@ export function masteringStreamingPreview(...args: unknown[]): MasteringStreamin
     const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     return previewFromNative(
-      requireModule().masteringStreamingPreview(
+      getSonareModule().masteringStreamingPreview(
         r.samples,
         r.sampleRate,
         previewPlatforms(r.platforms),
@@ -1067,7 +1069,7 @@ export function masteringAssistantSuggestStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return assistantResultFromNative(
-      requireModule().masteringAssistantSuggestStereo(
+      getSonareModule().masteringAssistantSuggestStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -1097,7 +1099,12 @@ export function masteringAudioProfileStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return profileFromNative(
-      requireModule().masteringAudioProfileStereo(r.left, r.right, r.sampleRate, profileParams(r)),
+      getSonareModule().masteringAudioProfileStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        profileParams(r),
+      ),
     );
   });
 }
@@ -1122,7 +1129,7 @@ export function masteringStreamingPreviewStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return previewFromNative(
-      requireModule().masteringStreamingPreviewStereo(
+      getSonareModule().masteringStreamingPreviewStereo(
         r.left,
         r.right,
         r.sampleRate,

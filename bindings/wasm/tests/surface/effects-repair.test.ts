@@ -444,15 +444,16 @@ describe('repair: mono results are {samples, report}', () => {
   });
 
   it('masteringRepairDeclip reports the clipped run it rebuilt', () => {
-    const bed = tone(440, 11025, 0.3);
-    const clipped = bed.slice();
-    clipped.fill(0.95, 5000, 5020);
-    const options = { clipThresholdDb: -0.9151 };
+    // A tone clipped as a converter clips it, so each run is a solvable plateau.
+    const ceiling = 0.28;
+    const clipped = tone(440, 11025, 0.3).map((v) => Math.max(-ceiling, Math.min(ceiling, v)));
+    const options = { clipThresholdDb: 20 * Math.log10(ceiling) - 0.01 };
     const hit = sonare.masteringRepairDeclip({ samples: clipped, sampleRate: rate, ...options });
     expect(hit.samples.length).toBe(clipped.length);
     expect(hit.report.detected.clippedSamples).toBeGreaterThan(0);
-    expect(hit.report.lpcReconstructedRuns + hit.report.interpolatedRuns).toBeGreaterThan(0);
+    expect(hit.report.lpcReconstructedRuns).toBeGreaterThan(0);
     expect(hit.report.repairedSamples).toBeGreaterThan(0);
+    const bed = tone(440, 11025, 0.2);
     const clean = sonare.masteringRepairDeclip({ samples: bed, sampleRate: rate, ...options });
     expect(clean.report.detected.clippedSamples).toBe(0);
     expect(clean.report.repairedSamples).toBe(0);

@@ -4,6 +4,7 @@
 
 import { refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative, dehumReport, denoiseReport } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type { DereverbClassicalOptions } from './repair_dereverb.js';
@@ -76,7 +77,7 @@ export interface MasteringRepairAnalysis {
    * from `recommended` even though flat runs were found.
    */
   declipThresholdSafe: boolean;
-  /** Programme loudness the noise floor is compared against. */
+  /** Programme loudness in LUFS the noise floor is compared against. `-Infinity` for silence. */
   integratedLufs: number;
   /**
    * Stages the measurement supports, in application order, each with every setting. Pass it to
@@ -210,9 +211,10 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
       request.preferStreamingSafe === undefined
         ? {}
         : { preferStreamingSafe: request.preferStreamingSafe };
-    const analysis = JSON.parse(
+    const analysis = parseRecordJson<MasteringRepairAnalysis>(
       addon.masteringRepairAnalyze(request.channels, request.sampleRate, JSON.stringify(options)),
-    ) as MasteringRepairAnalysis;
+      'repair_analysis',
+    );
     if (analysis.defects !== undefined) {
       analysis.defects = audioDefectsFromNative(analysis.defects);
       analysis.channels = analysis.channels?.map(audioDefectsFromNative);

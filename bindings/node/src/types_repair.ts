@@ -115,11 +115,11 @@ export interface DeclipReport {
   /** Runs the LPC solver filled. */
   lpcReconstructedRuns: number;
   /**
-   * Runs past the 512-sample cap, filled by interpolation instead: for these,
-   * `lpcOrder`, `iterations` and `lpcBlend` had no effect.
+   * Runs left clipped: past the 512-sample cap, with no usable solve, or
+   * reconstructed more than 20 dB past the clip level.
    */
-  interpolatedRuns: number;
-  /** Samples overwritten by either fill. */
+  unreconstructedRuns: number;
+  /** Samples overwritten by the reconstructed runs. */
   repairedSamples: number;
   /**
    * Of the repaired runs, those reaching past this channel's own clipped

@@ -12180,7 +12180,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
 to = "MasteringAssistantProfile.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -12242,7 +12242,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfile.loudness"
-changed = "MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb}"
+changed = "MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu?, truePeakDbtp?, crestFactorDb?}: an unmeasured level is absent, silence is -Infinity"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12665,7 +12665,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 kind = "field"
 old = "MixAssistantTrackProfile.truePeakDb"
 to = "MixAssistantTrackProfile.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.truePeakDb"
@@ -15095,42 +15095,42 @@ test = "bindings/node/tests/project-edit-extra.test.ts::addLoopRecordingTakes re
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.integratedLufs"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> number: `-Infinity` for silence or when nothing passes the gate, never null"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level that is -Infinity for silence is never absent"
 
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.integratedLufs"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> number: `-Infinity` for silence or when nothing passes the gate, never null"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level that is -Infinity for silence is never absent"
 
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.integratedLufs"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured"
 domain = "mastering"
-rule = "absent-not-sentinel"
+rule = "silence-is-infinite"
 test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
 
 [[entry]]
 kind = "field"
 old = "MatchReferenceLoudnessResult.sourceLufs"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> number: `-Infinity` below the gate, never null"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level that is -Infinity for silence is never absent"
 
 [[entry]]
 kind = "field"
 old = "MatchReferenceLoudnessResult.referenceLufs"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> number: `-Infinity` below the gate, never null"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level that is -Infinity for silence is never absent"
 
 [[entry]]
 kind = "field"
@@ -15143,9 +15143,9 @@ test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
 [[entry]]
 kind = "field"
 old = "StereoMonoCompatCheckResult.width"
-changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+changed = "T | null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence"
 domain = "mastering"
-rule = "absent-not-sentinel"
+rule = "silence-is-infinite"
 test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
 
 [[entry]]
@@ -18937,3 +18937,132 @@ changed = "the threshold is read on a new scale, the mean accent between the bea
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the core defaults"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.peakDb"
+changed = "optional: `-Infinity` for silence, absent when not measured"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.rmsDb"
+changed = "optional: `-Infinity` for silence, absent when not measured"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.crestFactorDb"
+changed = "optional: absent for silence, where no RMS level is measured; never -Infinity"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.crestFactorDb"
+changed = "optional: absent for silence or a track that could not be measured"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.sourceDb"
+changed = "optional: `-Infinity` for a silent band, absent when the band holds no bin"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.referenceDb"
+changed = "optional: `-Infinity` for a silent band, absent when the band holds no bin"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.deviationDb"
+changed = "optional: `-Infinity` when only the source band is silent, absent when the reference band is silent or the band holds no bin"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatCheckResult.correlation"
+changed = "optional: absent when either channel is silent"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MixMonoRisk.correlation"
+changed = "optional: absent when either channel is silent"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MixMonoRisk.width"
+changed = "optional: `Infinity` for a fully out-of-phase track, absent for silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/result-absence-types.test.ts::a level silence leaves unmeasured"
+
+[[entry]]
+kind = "field"
+old = "DeclipOptions.lpcBlend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipRequest.lpcBlend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoRequest.lpcBlend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectClippingRequest.lpcBlend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip.lpcBlend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "DeclipReport.interpolatedRuns"
+changed = "counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs"
+to = "DeclipReport.unreconstructedRuns"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/mastering-repair-declip-stereo.test.ts::reconstructs the union of both channels runs"

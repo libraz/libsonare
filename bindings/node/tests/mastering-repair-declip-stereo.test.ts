@@ -81,12 +81,13 @@ describe('masteringRepairDeclipStereo', () => {
     // union boundary further out.
     expect(result.reports[0].linkedRuns).toBeGreaterThan(0);
     expect(result.reports[1].linkedRuns).toBeGreaterThan(0);
-    expect(result.reports[0].repairedSamples).toBeGreaterThan(
-      result.reports[0].detected.clippedSamples,
-    );
-    expect(result.reports[1].repairedSamples).toBeGreaterThan(
-      result.reports[1].detected.clippedSamples,
-    );
+    // Every union run holding one of a channel's clipped samples is either
+    // reconstructed or left clipped: left sits in three (its isolated run and
+    // the two shared unions), right in the two shared ones.
+    const accounted = (r: (typeof result.reports)[number]) =>
+      r.lpcReconstructedRuns + r.unreconstructedRuns;
+    expect(accounted(result.reports[0])).toBe(3);
+    expect(accounted(result.reports[1])).toBe(2);
 
     // Not one channel restated.
     expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));

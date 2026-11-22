@@ -24,10 +24,7 @@ namespace {
 // boolean fields go through the typed readers in common.h.
 bool repairEnumOption(const val& options, const char* key, std::string* name) {
   if (!hasProperty(options, key)) return false;
-  const val value = options[key];
-  if (!value.isString()) throw WasmTypeError(std::string(key) + " must be a string");
-  *name = value.as<std::string>();
-  wasmRefuseEmbeddedNul(*name, key);
+  *name = stringFromVal(options[key], key);
   return true;
 }
 
@@ -123,7 +120,6 @@ mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   }
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.iterations = intProperty(options, "iterations", cfg.iterations);
-  cfg.lpc_blend = floatProperty(options, "lpcBlend", cfg.lpc_blend);
   return cfg;
 }
 
@@ -445,7 +441,7 @@ val declipReportToVal(const mastering::repair::DeclipReport& report) {
   val out = val::object();
   out.set("detected", declipDetectionToVal(report.detected));
   out.set("lpcReconstructedRuns", report.lpc_reconstructed_runs);
-  out.set("interpolatedRuns", report.interpolated_runs);
+  out.set("unreconstructedRuns", report.unreconstructed_runs);
   out.set("repairedSamples", report.repaired_samples);
   out.set("linkedRuns", report.linked_runs);
   return out;

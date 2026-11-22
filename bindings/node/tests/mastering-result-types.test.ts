@@ -69,9 +69,10 @@ describe('typed results of the explainable-mastering helpers', () => {
     expect(typeof result.loudness.integratedLufs).toBe('number');
   });
 
-  it('leaves the integrated loudness of a silent take absent', () => {
+  it('states the integrated loudness of a silent take as its infinite end', () => {
     const result = masteringAudioProfile({ samples: new Float32Array(SR), sampleRate: SR });
-    expect(result.loudness).not.toHaveProperty('integratedLufs');
+    expect(result.loudness.integratedLufs).toBe(Number.NEGATIVE_INFINITY);
+    expect(result.loudness.truePeakDbtp).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('keys the pair analysis result on the analysis name literal', () => {

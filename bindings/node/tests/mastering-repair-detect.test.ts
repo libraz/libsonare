@@ -187,7 +187,6 @@ describe('masteringRepairDetectClipping', () => {
         sampleRate: SR,
         lpcOrder: 8,
         iterations: 7,
-        lpcBlend: 0.1,
       }),
     ).toEqual(base);
   });

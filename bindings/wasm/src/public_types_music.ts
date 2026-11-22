@@ -581,10 +581,10 @@ export interface MelodyResult {
 export interface AnalysisDynamics {
   /** Dynamic range in dB. Absent when not measured. */
   dynamicRangeDb?: number;
-  /** Peak level in dB. `-Infinity` for silence. */
-  peakDb: number;
-  /** RMS level in dB. `-Infinity` for silence. */
-  rmsDb: number;
+  /** Peak level in dB. `-Infinity` for silence; absent when not measured. */
+  peakDb?: number;
+  /** RMS level in dB. `-Infinity` for silence; absent when not measured. */
+  rmsDb?: number;
   /** Loudness range in LU (EBU R128). Absent when not measured. */
   loudnessRangeLu?: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */

@@ -1,9 +1,11 @@
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { restoreNullMeans } from './internal/record_json.js';
 import { withRespelled } from './internal/respell.js';
 import { tempoRange } from './internal/tempo_range.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { RequestFn } from './request_keys.js';
 import type {
@@ -93,17 +95,13 @@ function checkedPlacement(
   name: 'source' | 'listener',
   placement: unknown,
 ): RoomPlacement | undefined {
-  if (placement === undefined || placement === null) {
+  if (isAbsent(placement)) {
     return undefined;
   }
   if (typeof placement !== 'object') {
     throw refuseType(`${name} must be an object with x, y and z`);
   }
-  for (const key of Object.keys(placement)) {
-    if (!PLACEMENT_KEYS.includes(key)) {
-      throw refuseUnknownKey(`${name}.${key}`, PLACEMENT_KEYS);
-    }
-  }
+  assertDeclaredKeys(placement, PLACEMENT_KEYS, name);
   const { x, y, z } = placement as Record<string, unknown>;
   assertFloatValue(x, `${name}.x`);
   assertFloatValue(y, `${name}.y`);
@@ -122,7 +120,7 @@ function nativeRoomOptions(options: object): Record<string, unknown> {
   const resolved: Record<string, unknown> = { ...given };
   const read = (field: string): number | undefined => {
     const value = given[field];
-    if (value === undefined || value === null) {
+    if (isAbsent(value)) {
       return undefined;
     }
     if (typeof value !== 'number') {
@@ -165,7 +163,7 @@ type Native = any;
 function compact(object: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(object)) {
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       out[key] = value;
     }
   }
@@ -205,7 +203,7 @@ const SECTION_TYPES: readonly SectionType[] = [
 
 /** The tuning argument the addon reads: cents, `'auto'`, or absent. */
 function nativeTuning(tuningCents: unknown): number | 'auto' | undefined {
-  if (tuningCents === undefined || tuningCents === null) {
+  if (isAbsent(tuningCents)) {
     return undefined;
   }
   if (tuningCents === 'auto') {
@@ -264,7 +262,7 @@ function melodyPointFromNative(raw: Native): MelodyPoint {
 // The analysis document already carries the public key names; only the coded
 // enums (pitch class, chord quality, section type) are decoded here.
 function analysisFromNative(raw: Native): AnalysisResult {
-  const { chords, sections, ...rest } = raw;
+  const { chords, sections, ...rest } = restoreNullMeans(raw, 'analysis_result') as Native;
   return {
     ...rest,
     key: keyFromNative(raw.key),
@@ -643,10 +641,10 @@ function audioCall<R extends { samples: Float32Array; sampleRate: number }>(
 /** The key-detection fields in the addon's spelling. */
 function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown> {
   const { profile, genreHint, modes } = request;
-  if (profile !== undefined && profile !== null) {
+  if (!isAbsent(profile)) {
     assertClosedToken(profile, Object.keys(KEY_PROFILE_NATIVE) as KeyProfile[], 'profile');
   }
-  if (genreHint !== undefined && genreHint !== null) {
+  if (!isAbsent(genreHint)) {
     assertClosedToken(genreHint, GENRE_HINTS, 'genreHint');
   }
   let nativeModes: unknown = modes;
@@ -660,10 +658,10 @@ function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown>
     modes.forEach((mode, i) => {
       assertClosedToken(mode, KEY_MODES, `modes[${i}]`);
     });
-  } else if (modes !== undefined && modes !== null) {
+  } else if (!isAbsent(modes)) {
     assertClosedToken(modes, ['all', 'modal'] as const, 'modes');
   }
-  if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
+  if (!isAbsent(request.chromaHighPassHz)) {
     assertFloatValue(request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
@@ -673,7 +671,7 @@ function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown>
     loudnessWeighted: request.loudnessWeighted,
     chromaHighPassHz: request.chromaHighPassHz,
     modes: nativeModes,
-    profile: profile === undefined || profile === null ? undefined : KEY_PROFILE_NATIVE[profile],
+    profile: isAbsent(profile) ? undefined : KEY_PROFILE_NATIVE[profile],
     genreHint,
     tuningCents: nativeTuning(request.tuningCents),
   });
@@ -681,7 +679,7 @@ function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown>
 
 /** The music-analysis settings in the addon's spelling. */
 function nativeAnalyzeOptions(request: AnalyzeRequest): Record<string, unknown> {
-  if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
+  if (!isAbsent(request.chromaHighPassHz)) {
     assertFloatValue(request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
@@ -795,7 +793,7 @@ export function detectOnsets(...args: unknown[]): Float32Array {
 function assertProgressCallbacks(request: AnalyzeRequest): void {
   for (const field of ['onProgress', 'cancel'] as const) {
     const value = request[field];
-    if (value !== undefined && value !== null && typeof value !== 'function') {
+    if (!isAbsent(value) && typeof value !== 'function') {
       throw refuseType(`${field} must be a function`);
     }
   }

@@ -423,11 +423,11 @@ describe('repair: mono calls return the audio beside the report', () => {
     expect(dirty.report.detected.clippedSamples).toBeGreaterThan(0);
     expect(dirty.report.detected.runCount).toBeGreaterThan(0);
     expect(dirty.report.repairedSamples).toBeGreaterThan(0);
-    expect(dirty.report.lpcReconstructedRuns + dirty.report.interpolatedRuns).toBeGreaterThan(0);
+    expect(dirty.report.lpcReconstructedRuns + dirty.report.unreconstructedRuns).toBeGreaterThan(0);
     const none = sonare.masteringRepairDeclip({ samples: clean, sampleRate, clipThresholdDb: -3 });
     expect(none.report.detected.clippedSamples).toBe(0);
     expect(none.report.repairedSamples).toBe(0);
-    expect(none.report.lpcReconstructedRuns + none.report.interpolatedRuns).toBe(0);
+    expect(none.report.lpcReconstructedRuns + none.report.unreconstructedRuns).toBe(0);
   });
 
   it('decrackle reports the samples it replaced, and none on a clean tone', () => {

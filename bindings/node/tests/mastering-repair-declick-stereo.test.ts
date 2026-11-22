@@ -62,12 +62,14 @@ describe('masteringRepairDeclickStereo', () => {
   it('differs from the mono entry point at the other channels click', () => {
     const { left, right } = fixture();
     const stereo = masteringRepairDeclickStereo({ left, right, sampleRate: SR });
-    const mono = masteringRepairDeclick(left, SR).samples;
+    const { samples: mono, report: monoReport } = masteringRepairDeclick(left, SR);
 
-    // The mono pass never sees the right channel's click, so it leaves the left
-    // channel alone there. Without this the stereo entry could be the mono one
-    // called twice.
-    expect(stereo.channels[0][RIGHT_ONLY_CLICK]).not.toBe(mono[RIGHT_ONLY_CLICK]);
+    // The mono pass never sees the right channel's click, so it repairs only the
+    // left channel's own runs. Without this the stereo entry could be the mono
+    // one called twice. Counted rather than read off the samples: a clean tone
+    // across a one-sample gap is recovered exactly, so the two values can agree.
+    expect(monoReport.repairedRuns).toBe(LEFT_CLICKS.length);
+    expect(stereo.reports[0].repairedRuns).toBe(LEFT_CLICKS.length + 1);
     expect(stereo.channels[0][LEFT_CLICKS[0]]).toBeCloseTo(mono[LEFT_CLICKS[0]], 5);
   });
 

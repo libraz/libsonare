@@ -75,10 +75,13 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
     expect(result.reports[1].detected.runCount).toBe(1);
     expect(result.reports[1].detected.clippedSamples).toBe(LONG_LEN);
 
-    // The union run is right's own extent (LONG_LEN): left reconstructs the
-    // whole of it, reaching past its own SHORT_LEN clip, so only left links.
-    expect(result.reports[0].repairedSamples).toBe(LONG_LEN);
-    expect(result.reports[1].repairedSamples).toBe(LONG_LEN);
+    // The union run is right's own extent (LONG_LEN), and it holds clipped
+    // samples of both channels, so each channel either reconstructs it or
+    // leaves it clipped -- once. Only left reaches past its own clip, so only
+    // left links.
+    for (const report of result.reports) {
+      expect(report.lpcReconstructedRuns + report.unreconstructedRuns).toBe(1);
+    }
     expect(result.reports[0].linkedRuns).toBe(1);
     expect(result.reports[1].linkedRuns).toBe(0);
   });

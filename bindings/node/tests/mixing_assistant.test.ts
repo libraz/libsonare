@@ -147,7 +147,7 @@ describe('mixing assistant native binding', () => {
     expect(result.tracks.find((track) => track.stripId === 'tone')?.usable).toBe(true);
   });
 
-  it('leaves only integratedLufs absent for a silent track, as the types declare', () => {
+  it('states a silent track at the infinite ends of its levels and omits its crest factor', () => {
     const result = mixingAssistantSuggest({
       tracks: [
         { id: 'mono', channels: [new Float32Array(SR)] },
@@ -158,11 +158,10 @@ describe('mixing assistant native binding', () => {
 
     for (const track of result.tracks) {
       expect(track.usable, track.stripId).toBe(false);
-      expect(track, track.stripId).not.toHaveProperty('integratedLufs');
-      // The true peak and crest factor are floored to finite values, so their
-      // plain number types hold even for silence.
-      expect(Number.isFinite(track.truePeakDbtp), track.stripId).toBe(true);
-      expect(Number.isFinite(track.crestFactorDb), track.stripId).toBe(true);
+      expect(track.integratedLufs, track.stripId).toBe(Number.NEGATIVE_INFINITY);
+      expect(track.truePeakDbtp, track.stripId).toBe(Number.NEGATIVE_INFINITY);
+      // A peak over a zero RMS is not measured, so the key is absent rather than null.
+      expect(track, track.stripId).not.toHaveProperty('crestFactorDb');
       const nullFields = Object.entries(track)
         .filter(([, value]) => value === null)
         .map(([key]) => key);

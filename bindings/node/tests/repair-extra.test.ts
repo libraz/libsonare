@@ -47,9 +47,14 @@ describe('masteringRepairDeclip (Node)', () => {
       clipThresholdDb: -1.4,
       lpcOrder: 24,
       iterations: 1,
-      lpcBlend: 0.5,
     });
     expect(out.length).toBe(samples.length);
+  });
+
+  it('refuses lpcBlend, which no longer exists, as an undeclared key', () => {
+    expect(() =>
+      masteringRepairDeclip({ samples: sine(440, 0.2), sampleRate: SR, lpcBlend: 0.5 } as never),
+    ).toThrow(TypeError);
   });
 });
 

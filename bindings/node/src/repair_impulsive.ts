@@ -103,8 +103,6 @@ export interface DeclipOptions {
   lpcOrder?: number;
   /** Outer reconstruction rounds, from 1 to 8. Default `2`. */
   iterations?: number;
-  /** Weight of the LPC prediction in the fill, in [0, 1]; the interpolation fallback gets the remainder. Default `0.65`. */
-  lpcBlend?: number;
 }
 
 /** Request form of `masteringRepairDeclip`. */
@@ -136,10 +134,10 @@ export interface MasteringRepairDecrackleRequest
  * Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC solver.
  * The cap is a fixed sample count: it is not derived from `lpcOrder`, from `sampleRate`, or from
  * any other option, so its duration depends on the rate (~10.7 ms at 48 kHz). A longer run is
- * filled with cubic / linear interpolation instead, which keeps the solver's dense matrices
- * bounded by the cap rather than by the input. Exceeding the cap silently changes the
- * reconstruction method rather than throwing: `lpcOrder`, `iterations` and `lpcBlend` have no
- * effect on the interpolated run.
+ * left clipped, which keeps the solver's dense matrices bounded by the cap rather than by the
+ * input; so is a run with no usable solve, or one whose reconstruction rises more than 20 dB
+ * past the clip level. Neither case throws: each such run is counted in the report's
+ * `unreconstructedRuns`.
  */
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): DeclipResult;
 export function masteringRepairDeclip(
@@ -305,8 +303,8 @@ export interface MasteringRepairDetectClippingRequest
  * Measure clipping without repairing.
  *
  * Counts samples at or past `clipThresholdDb`; no other option reaches the
- * result, so `lpcOrder`, `iterations` and `lpcBlend` are accepted and change
- * nothing -- they describe a reconstruction that does not run here.
+ * result, so `lpcOrder` and `iterations` are accepted and change nothing --
+ * they describe a reconstruction that does not run here.
  * `sampleRate` is validated without being read, since no field of the result
  * is a rate.
  *
