@@ -23,10 +23,12 @@ int frames_to_control_edge(int64_t position, int period) noexcept {
   return period - static_cast<int>(phase);
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT) || defined(SONARE_WITH_MIXING)
 /// out[i] += src[i] over @p frames samples.
 void add_into(float* out, const float* src, int frames) noexcept {
   for (int i = 0; i < frames; ++i) out[i] += src[i];
 }
+#endif
 
 /// Zero-fills @p frames samples.
 void zero_fill(float* dst, int frames) noexcept { std::fill(dst, dst + frames, 0.0f); }
