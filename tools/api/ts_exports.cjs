@@ -7,7 +7,8 @@
 // with name / optional / type text / boolean / string-literal members, return text),
 // class and interface members (well-known symbols spelled `[Symbol.dispose]`) with the members
 // of any inline object type under a property (`nested`, recursively), enum and
-// `as const` object members, and the string-literal members of exported type aliases.
+// `as const` object members, the string-literal members of exported type aliases, and for a type
+// tagged `@mirrors <Interface>` the platform interface and the members it shares with it.
 // Paths are relative to the repository root (two levels above the package directory).
 'use strict';
 const path = require('path');
@@ -163,6 +164,24 @@ const describeMember = (m, isStatic, seen = new Set()) => {
   };
 };
 
+// `@mirrors <Interface>` on a type declares it as the part of a platform interface the library
+// reads; the members the platform interface also declares are its mirrored members.
+const platformMirror = (s, d) => {
+  const tag = s.getJsDocTags(checker).find((g) => g.name === 'mirrors');
+  if (!tag) return null;
+  const name = ts.displayPartsToString(tag.text || []).trim();
+  const target = name && checker.resolveName(name, d, ts.SymbolFlags.Type, false);
+  if (!target) {
+    process.stderr.write(`${s.getName()}: @mirrors names no type in scope: ${name || '(empty)'}\n`);
+    process.exit(2);
+  }
+  const declared = new Set(
+    checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(target)).map((m) => m.getName()),
+  );
+  const own = checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(s)).map((m) => m.getName());
+  return { interface: name, members: own.filter((m) => declared.has(m)).sort() };
+};
+
 const kindOf = (s) => {
   const f = s.flags;
   if (f & ts.SymbolFlags.Class) return 'class';
@@ -202,6 +221,7 @@ for (let i = 0; i < files.length; i++) {
       literals: [],
       type: '',
       ctorPrivate: false,
+      platformMirror: platformMirror(s, d),
     };
     if (kind === 'function') {
       const t = checker.getTypeOfSymbolAtLocation(s, d);

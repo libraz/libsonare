@@ -240,6 +240,9 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
             ctor_private=r.get("ctorPrivate", False),
             bases=r.get("bases", []),
         )
+        mirror = r.get("platformMirror") or {}
+        if mirror:
+            top["platform_mirror"] = mirror["interface"]
         group = [top]
         name = r["name"]
         if kind == "function":
@@ -300,6 +303,8 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
                     sigs=[_sig(s) for s in m["sigs"]],
                 )
             )
+            if m["name"] in mirror.get("members", []):
+                group[-1]["platform_mirror"] = mirror["interface"]
             if mkind == "method" and m["kind"] == "method":
                 _ts_options(surface, qual, m["sigs"], m["file"], m["line"], group)
             _ts_nested(surface, qual, m.get("nested", []), group)

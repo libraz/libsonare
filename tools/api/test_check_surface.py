@@ -619,6 +619,36 @@ class Conventions(CheckerCase):
         self.assertEqual(code, 0, "\n".join(lines))
         self.assertIn("  check getters: checked 12, violations 0, excused 1", lines)
 
+    def test_a_platform_mirror_member_is_exempt_from_naming_and_listed(self):
+        self.add(
+            _rec("wasm", "type", "AudioClock", platform_mirror="AudioContext"),
+            _rec(
+                "wasm",
+                "method",
+                "AudioClock.getOutputTimestamp",
+                owner="AudioClock",
+                member="getOutputTimestamp",
+                sigs=[],
+                platform_mirror="AudioContext",
+            ),
+            _rec(
+                "wasm",
+                "method",
+                "AudioClock.getDriftEstimate",
+                owner="AudioClock",
+                member="getDriftEstimate",
+                sigs=[],
+            ),
+        )
+        code, lines = self.run_check("--check", "getters")
+        self.assertEqual(code, 1)
+        self.assertIn("  wasm AudioClock mirrors AudioContext: 1 members", lines)
+        self.assertIn("  check getters: checked 13, violations 1, platform-mirrored 1", lines)
+        self.assertIn(
+            "    platform mirror: wasm AudioClock.getOutputTimestamp (AudioContext)", lines
+        )
+        self.assertIn("    wasm method AudioClock.getDriftEstimate: drop the get prefix", lines)
+
     def test_librosa_mirror_exempts_python_only(self):
         self.add(
             _rec("wasm", "function", "stft", sigs=[]),

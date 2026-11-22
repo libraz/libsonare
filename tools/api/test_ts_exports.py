@@ -83,3 +83,19 @@ class InlineObjectMembers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(
+    shutil.which("node") and (PKG / "node_modules" / "typescript").is_dir(),
+    "node or the WASM package's typescript is not installed",
+)
+class PlatformMirrors(unittest.TestCase):
+    def test_a_tagged_type_lists_only_the_members_the_platform_interface_declares(self) -> None:
+        rows = {
+            row["name"]: row for row in _extract(HERE / "testdata" / "ts" / "platform_mirror.ts")
+        }
+        self.assertEqual(
+            rows["AudioClockLike"]["platformMirror"],
+            {"interface": "AudioContext", "members": ["outputLatency"]},
+        )
+        self.assertIsNone(rows["PlainRecord"]["platformMirror"])

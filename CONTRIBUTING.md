@@ -119,6 +119,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Type an in-memory count `size_t`, a sample position `int64_t`, a sample rate `int` and a boolean `int32_t`; spell the auto hop as `0`.
 - Spell "not given" as absence on every surface, never a magic value; spell an optional C float that has no default as NaN.
 - Put the unit in a name (`Sec`, `Hz`, `Db`, `Samples`); a bare `peak` or `rms` is a linear amplitude and is listed in `tools/api/dimensionless_names.toml` with class `magnitude`. Spell a bank select as `{ msb, lsb }` on Node and WASM and `bank_msb`/`bank_lsb` in Python.
+- Tag a type that mirrors part of a platform interface with `@mirrors <Interface>` (for example `@mirrors AudioContext`); its members the interface also declares keep the platform's names, and the surface check lists them instead of flagging them.
 - Name the real parameter in a refusal (`options.<member>`, `config.<member>`), and raise it as `TypeError`/`RangeError` (`SonareValueError` in Python) or a coded `SonareError` by cause.
 - Run `make surface-check` and get rc=0 before sending a change that touches a public name, token, default or flag; CI runs it too.
 - Bump the owning ABI counter when a shipped struct, signature, constant or enumerator changes, measured against the last release tag: `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.

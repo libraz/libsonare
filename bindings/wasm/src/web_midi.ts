@@ -102,7 +102,10 @@ export interface WebMidiEngineInputOptions {
   contextTimeSec?: number;
 }
 
-/** The part of an `AudioContext` that {@link bindWebMidi} reads to place events on its clock. */
+/**
+ * The part of an `AudioContext` that {@link bindWebMidi} reads to place events on its clock.
+ * @mirrors AudioContext
+ */
 export interface WebMidiAudioContext {
   /** Context and performance clocks of the sample currently leaving the output. */
   getOutputTimestamp(): { contextTime?: number; performanceTime?: number };

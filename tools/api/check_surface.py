@@ -16,7 +16,9 @@ extractor that stopped feeding it reads exactly like a clean tree. Violations ma
 tools/api/surface_allowlist.toml (categories listed at its head) or, for the Python surface of a
 librosa-named function, by tools/api/librosa_mirrors.toml. A name ``unit-in-name`` would
 flag whose quantity has no unit is listed, with its class and range, in
-tools/api/dimensionless_names.toml. ``--audit-allowlist``
+tools/api/dimensionless_names.toml. A member of a type tagged ``@mirrors <Interface>`` that the
+platform interface also declares keeps the platform's name: the naming checks exempt it and list
+it as platform-mirrored. ``--audit-allowlist``
 fails on any allowlist entry that excused nothing in a full run; ``--audit-only`` (which
 implies it) makes that and the validation problems the only causes of a non-zero exit.
 
@@ -2973,6 +2975,22 @@ class Check:
     fn: object
 
 
+# Checks that judge a name; a member mirroring a platform interface keeps the platform's name.
+NAMING_CHECKS = frozenset(
+    {
+        "seconds-suffix",
+        "unit-in-name",
+        "unit-in-name:wrong-unit",
+        "sample-rate-name",
+        "getters",
+        "high-pass",
+        "num-channels",
+        "pitch-semitones",
+        "frequency-bounds",
+        "frequency-bounds:centre",
+    }
+)
+
 CHECKS: tuple[Check, ...] = (
     Check("seconds-suffix", ALL, chk_seconds_suffix),
     Check("unit-in-name", ALL, chk_unit_in_name),
@@ -3370,6 +3388,17 @@ def run(args) -> tuple[int, list[str], dict]:
     for f in lfail:
         table[(f["domain"], f["surface"])] += 1
     report["checks"] = []
+    mirror_types = sorted(
+        (r["surface"], r["name"], r["platform_mirror"])
+        for r in ctx.records
+        if r.get("platform_mirror") and not r["owner"]
+    )
+    out.append(f"Platform mirrors: {len(mirror_types)}")
+    for surface, name, iface in mirror_types:
+        n_members = sum(
+            1 for r in ctx.by_owner.get((surface, name), []) if r.get("platform_mirror")
+        )
+        out.append(f"  {surface} {name} mirrors {iface}: {n_members} members")
     out.append("Checks:")
     for chk in CHECKS:
         if check_ids and chk.id not in check_ids:
@@ -3383,7 +3412,11 @@ def run(args) -> tuple[int, list[str], dict]:
         n, raw = chk.fn(ctx)
         viol = []
         excused = 0
+        mirrored = []
         for r, msg in raw:
+            if chk.id in NAMING_CHECKS and r.get("platform_mirror"):
+                mirrored.append(f"{r['surface']} {r['name']} ({r['platform_mirror']})")
+                continue
             v = {
                 "surface": r["surface"],
                 "kind": r["kind"],
@@ -3422,7 +3455,9 @@ def run(args) -> tuple[int, list[str], dict]:
         ]
         viol.sort(key=line_of)
         suffix = f", excused {excused}" if excused else ""
+        suffix += f", platform-mirrored {len(mirrored)}" if mirrored else ""
         out.append(f"  check {chk.id}: checked {n}, violations {len(viol)}{suffix}")
+        out += [f"    platform mirror: {m}" for m in sorted(mirrored)]
         if chk.id == "doc-comments":
             out.append(f"    metadata-only doc: {sum(v['message'] == _META_ONLY for v in viol)}")
         if n == 0 and narrowed:
@@ -3450,6 +3485,7 @@ def run(args) -> tuple[int, list[str], dict]:
                 "checked": n,
                 "violations": viol,
                 "excused": excused,
+                "platform_mirrored": sorted(mirrored),
                 "not_compared": sorted(ctx.not_compared.get(chk.id, [])),
             }
         )
