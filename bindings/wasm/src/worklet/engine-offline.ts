@@ -130,7 +130,7 @@ export interface SonareEngineTransportFacade {
   play(renderFrame?: number): void;
   /** Stops playback at `renderFrame`. */
   stop(renderFrame?: number): void;
-  /** Moves the playhead to `ppq` quarter notes at `renderFrame`. */
+  /** Moves the playhead to `ppq` quarter notes, in [0, 1e12], at `renderFrame`. */
   seekPpq(ppq: number, renderFrame?: number): void;
   /** Moves the playhead to `timeSec` seconds (non-negative, rounded to a sample) at `renderFrame`. */
   seekSec(timeSec: number, renderFrame?: number): void;

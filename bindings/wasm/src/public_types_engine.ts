@@ -99,7 +99,7 @@ export interface EngineClip {
   trackId?: number;
   /** Source audio, one plane per channel, all the same length. Exactly one of `channels` and `pageProvider`. */
   channels?: Float32Array[];
-  /** Timeline position of the clip start, in quarter notes. */
+  /** Timeline position of the clip start, in quarter notes, in [0, 1e12]. */
   startPpq: number;
   /** Playback length in frames; must be positive. Omitted: plays to the end of the source (source length minus `clipOffsetSamples`). */
   lengthSamples?: number;
@@ -148,7 +148,7 @@ export interface EngineParameterInfo {
 
 /** One breakpoint of an automation lane. */
 export interface EngineAutomationPoint {
-  /** Position on the transport timeline, in pulses per quarter note. */
+  /** Position on the transport timeline, in pulses per quarter note, in [0, 1e12]. */
   ppq: number;
   /**
    * Parameter value at `ppq`. Required, and must be finite: the lane
@@ -164,7 +164,7 @@ export interface EngineAutomationPoint {
 export interface EngineMarker {
   /** Marker id, unique within the engine. */
   id: number;
-  /** Position on the transport timeline, in pulses per quarter note. */
+  /** Position on the transport timeline, in pulses per quarter note, in [0, 1e12]. */
   ppq: number;
   /** Display name. Omitted: unnamed (read back without the key); an empty string is refused. */
   name?: string;
@@ -342,9 +342,9 @@ export interface EngineCaptureStatus {
 
 /** Loop region of {@link RealtimeEngine.setLoop}. */
 export interface EngineLoop {
-  /** Loop start in quarter notes. */
+  /** Loop start in quarter notes, in [0, 1e12]. */
   startPpq: number;
-  /** Loop end in quarter notes. */
+  /** Loop end in quarter notes, in [0, 1e12]. */
   endPpq: number;
   /** Whether looping is on. Default `true`. */
   enabled?: boolean;
@@ -437,7 +437,7 @@ export interface EngineFreezeOptions {
   numChannels: number;
   /** Id given to the clip created from the render (unsigned 32-bit). Default `1`. */
   clipId?: number;
-  /** Timeline position of the created clip, in quarter notes. Default `0`. */
+  /** Timeline position of the created clip, in quarter notes, in [0, 1e12]. Default `0`. */
   startPpq?: number;
   /** Linear gain applied to the render. Default `1`. */
   gain?: number;
@@ -469,7 +469,7 @@ export interface EngineProcessWithMonitorResult {
 
 /** A tempo-map segment. */
 export interface EngineTempoSegment {
-  /** Segment start in pulses per quarter note. */
+  /** Segment start in pulses per quarter note, in [0, 1e12]. */
   startPpq: number;
   /** Tempo at the segment start, in beats per minute. */
   bpm: number;
@@ -479,7 +479,7 @@ export interface EngineTempoSegment {
 
 /** A time-signature-map segment. */
 export interface EngineTimeSignatureSegment {
-  /** Segment start in pulses per quarter note. */
+  /** Segment start in pulses per quarter note, in [0, 1e12]. */
   startPpq: number;
   /** Beats per bar. */
   numerator: number;
@@ -659,7 +659,7 @@ export interface EngineMidiClipSchedule {
   destinationId?: number;
   /** Start position in timeline samples. */
   startSample?: number;
-  /** Start position in pulses per quarter note. */
+  /** Start position in pulses per quarter note, in [0, 1e12]. */
   startPpq?: number;
   /** Clip length in samples. Omitted: open-ended; `0` and a negative or fractional value are refused. */
   lengthSamples?: number;

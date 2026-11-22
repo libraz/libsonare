@@ -1751,7 +1751,7 @@ export class RealtimeEngine {
     this.native.applyCommandsDueNowPreservingFuture();
   }
 
-  /** Moves the transport to `ppq`, a position in quarter notes. */
+  /** Moves the transport to `ppq`, a position in quarter notes, in [0, 1e12]. */
   seekPpq(ppq: number, renderFrame?: number): void {
     this.native.seekPpq(ppq, resolveRenderFrame(renderFrame));
   }
@@ -1788,7 +1788,7 @@ export class RealtimeEngine {
   /**
    * Converts a quarter-note position to a whole sample position on the engine timeline, through the tempo map.
    *
-   * @param ppq Position in quarter notes (PPQ).
+   * @param ppq Position in quarter notes (PPQ), in [0, 1e12].
    * @returns Sample index.
    */
   sampleAtPpq(ppq: number): number {

@@ -674,7 +674,7 @@ export class SonareRealtimeEngineNode {
   }
 
   /**
-   * Queues a transport seek to `ppq`, a position in quarter notes. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
+   * Queues a transport seek to `ppq`, a position in quarter notes, in [0, 1e12]. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
    *
    * @returns `false` when the command ring is full or `ppq` is not a valid position.
    * @throws RangeError for a negative `renderFrame`.

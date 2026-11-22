@@ -1725,7 +1725,7 @@ export class SonareEngine {
   }
 
   /**
-   * Adds a marker at `ppq` (quarter notes) and returns its id.
+   * Adds a marker at `ppq` (quarter notes, in [0, 1e12]) and returns its id.
    *
    * @param name Marker label (omitted: empty).
    */

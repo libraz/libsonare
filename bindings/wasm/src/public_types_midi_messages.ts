@@ -6,7 +6,7 @@ import type {
 
 /** Request of {@link midiNoteOn}. */
 export interface MidiNoteOnRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -20,7 +20,7 @@ export interface MidiNoteOnRequest {
 
 /** Request of {@link midiNoteOff}. */
 export interface MidiNoteOffRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -34,7 +34,7 @@ export interface MidiNoteOffRequest {
 
 /** Request of {@link midiCc}. */
 export interface MidiCcRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -48,7 +48,7 @@ export interface MidiCcRequest {
 
 /** Request of {@link midiPolyPressure}. */
 export interface MidiPolyPressureRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -62,7 +62,7 @@ export interface MidiPolyPressureRequest {
 
 /** Request of {@link midiProgram}. */
 export interface MidiProgramRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -74,7 +74,7 @@ export interface MidiProgramRequest {
 
 /** Request of {@link midiChannelPressure}. */
 export interface MidiChannelPressureRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -86,7 +86,7 @@ export interface MidiChannelPressureRequest {
 
 /** Request of {@link midiPitchBend}. */
 export interface MidiPitchBendRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -98,7 +98,7 @@ export interface MidiPitchBendRequest {
 
 /** Request of {@link midi2NoteOn}. */
 export interface Midi2NoteOnRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -116,7 +116,7 @@ export interface Midi2NoteOnRequest {
 
 /** Request of {@link midi2NoteOff}. */
 export interface Midi2NoteOffRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -130,7 +130,7 @@ export interface Midi2NoteOffRequest {
 
 /** Request of {@link midi2Cc}. */
 export interface Midi2CcRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -144,7 +144,7 @@ export interface Midi2CcRequest {
 
 /** Request of {@link midi2PolyPressure}. */
 export interface Midi2PolyPressureRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -158,7 +158,7 @@ export interface Midi2PolyPressureRequest {
 
 /** Request of {@link midi2ChannelPressure}. */
 export interface Midi2ChannelPressureRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -170,7 +170,7 @@ export interface Midi2ChannelPressureRequest {
 
 /** Request of {@link midi2PitchBend}. */
 export interface Midi2PitchBendRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -190,7 +190,7 @@ export interface MidiBank {
 
 /** Request of {@link midi2Program}. */
 export interface Midi2ProgramRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -204,7 +204,7 @@ export interface Midi2ProgramRequest {
 
 /** Request of {@link midi2RegisteredController}. */
 export interface Midi2RegisteredControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -220,7 +220,7 @@ export interface Midi2RegisteredControllerRequest {
 
 /** Request of {@link midi2AssignableController}. */
 export interface Midi2AssignableControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -236,7 +236,7 @@ export interface Midi2AssignableControllerRequest {
 
 /** Request of {@link midi2RelativeRegisteredController}. */
 export interface Midi2RelativeRegisteredControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -252,7 +252,7 @@ export interface Midi2RelativeRegisteredControllerRequest {
 
 /** Request of {@link midi2RelativeAssignableController}. */
 export interface Midi2RelativeAssignableControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -268,7 +268,7 @@ export interface Midi2RelativeAssignableControllerRequest {
 
 /** Request of {@link midi2RegisteredPerNoteController}. */
 export interface Midi2RegisteredPerNoteControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -284,7 +284,7 @@ export interface Midi2RegisteredPerNoteControllerRequest {
 
 /** Request of {@link midi2AssignablePerNoteController}. */
 export interface Midi2AssignablePerNoteControllerRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -300,7 +300,7 @@ export interface Midi2AssignablePerNoteControllerRequest {
 
 /** Request of {@link midi2PerNotePitchBend}. */
 export interface Midi2PerNotePitchBendRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -314,7 +314,7 @@ export interface Midi2PerNotePitchBendRequest {
 
 /** Request of {@link midi2PerNoteManagement}. */
 export interface Midi2PerNoteManagementRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -330,7 +330,7 @@ export interface Midi2PerNoteManagementRequest {
 
 /** Request of {@link midiBankProgram}. */
 export interface MidiBankProgramRequest {
-  /** Event position in PPQ ticks (finite, non-negative). */
+  /** Position in quarter notes, in [0, 1e12]. */
   ppq: number;
   /** UMP group, 0..15. */
   group: number;
@@ -352,7 +352,7 @@ export interface MidiParamToCcRequest {
   unitValue: number;
   /** UMP group of the produced event. */
   group: number;
-  /** Event position in PPQ ticks. Default `0`. */
+  /** Position of the produced event in quarter notes, in [0, 1e12]. Default `0`. */
   ppq?: number;
 }
 

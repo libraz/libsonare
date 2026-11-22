@@ -524,22 +524,30 @@ export class Project {
    * `lengthPpq` is outside it. Export and validation close a note still
    * sounding at the clip end with a note-off there, so a note running the full
    * length of the clip is a matched pair.
+   *
+   * @param startPpq Clip start in quarter notes, in [0, 1e12].
+   * @param lengthPpq Clip length in quarter notes, in (0, 1e12].
    */
   addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
     return this.native.addMidiClip(startPpq, lengthPpq);
   }
 
-  /** Split a clip at `splitPpq` and return the new clip id. */
+  /** Split a clip at `splitPpq` (in [0, 1e12]) and return the new clip id. */
   splitClip(clipId: number, splitPpq: number): number {
     return this.native.splitClip(clipId, splitPpq);
   }
 
-  /** Trim a clip's start / length in PPQ. */
+  /**
+   * Trim a clip's start / length in PPQ.
+   *
+   * @param newStartPpq New clip start in quarter notes, in [0, 1e12].
+   * @param newLengthPpq New clip length in quarter notes, in (0, 1e12].
+   */
   trimClip(clipId: number, newStartPpq: number, newLengthPpq: number): void {
     this.native.trimClip(clipId, newStartPpq, newLengthPpq);
   }
 
-  /** Move a clip to `newStartPpq`, and to another track when `options.trackId` is given. */
+  /** Move a clip to `newStartPpq` (in [0, 1e12]), and to another track when `options.trackId` is given. */
   moveClip(clipId: number, newStartPpq: number, options?: ProjectMoveClipOptions): void {
     const trackId = optionalId(
       'trackId',
@@ -910,7 +918,7 @@ export class Project {
     );
   }
 
-  /** Snap to a bar (`division=0`), beat (`1`), or beat subdivision (`2+`). */
+  /** Snap `ppq` (in [0, 1e12]) to a bar (`division=0`), beat (`1`), or beat subdivision (`2+`). */
   snapToGrid(ppq: number, strength = 1.0, division = 1): number {
     return this.native.snapToGrid(ppq, strength, division);
   }
@@ -1252,7 +1260,7 @@ export class Project {
     this.native.setClipSource(clipId, sourceId);
   }
 
-  /** Duplicate a clip at `newStartPpq` (same track); returns the new clip id. */
+  /** Duplicate a clip at `newStartPpq` (in [0, 1e12]; same track); returns the new clip id. */
   duplicateClip(clipId: number, newStartPpq: number): number {
     return this.native.duplicateClip(clipId, newStartPpq);
   }

@@ -119,7 +119,7 @@ export interface ProjectMarker {
 export interface ProjectMarkerInput {
   /** Id of the marker to replace. Omit to allocate a new marker; an explicit `0` is refused. */
   id?: number;
-  /** Marker position in PPQ. */
+  /** Marker position in PPQ, in [0, 1e12]. */
   ppq: number;
   /** Marker label. Omit it for an unnamed marker; an empty string is refused. */
   name?: string;
@@ -206,11 +206,11 @@ export type ProjectFadeCurve = 'linear' | 'equalPower' | 'exponential' | 'logari
 
 /** Input of {@link Project.setClipFade}: both fades in one flat object. Omitted fields keep no fade / `'linear'`. */
 export interface ProjectClipFadeInput {
-  /** Fade-in length in PPQ (>= 0; omit or 0 for no fade). */
+  /** Fade-in length in PPQ (in [0, 1e12]; omit or 0 for no fade). */
   fadeInPpq?: number;
   /** Fade-in curve. Defaults to `'linear'`. */
   fadeInCurve?: ProjectFadeCurve;
-  /** Fade-out length in PPQ (>= 0; omit or 0 for no fade). */
+  /** Fade-out length in PPQ (in [0, 1e12]; omit or 0 for no fade). */
   fadeOutPpq?: number;
   /** Fade-out curve. Defaults to `'linear'`. */
   fadeOutCurve?: ProjectFadeCurve;
@@ -232,10 +232,14 @@ export interface ProjectClipTakesOptions {
 export interface ProjectClipLoopInput {
   /** Loop mode. */
   loopMode: ProjectLoopMode;
-  /** Loop length in PPQ. Omit it to loop the clip's own length; an explicit 0 is refused. */
+  /**
+   * Loop length in PPQ, in (0, 1e12]. Omit it to loop the entire clip (the
+   * effective length is resolved from the clip's own duration); an explicit `0`
+   * is refused.
+   */
   loopLengthPpq?: number;
   /**
-   * Equal-power crossfade at the loop seam in PPQ (finite and >= 0). Omit for a
+   * Equal-power crossfade at the loop seam in PPQ, in [0, 1e12]. Omit for a
    * hard loop; the engine clamps it to the clip's pre-roll and half the loop.
    */
   loopCrossfadePpq?: number;
@@ -277,7 +281,7 @@ export interface ProjectClipTake {
   id: number;
   /** Source id for this take. Omit it to reuse the clip's current source; `0` is refused. */
   sourceId?: number;
-  /** Offset into the take source in PPQ. */
+  /** Offset into the take source in PPQ, in [0, 1e12]. */
   sourceOffsetPpq?: number;
   /** Optional UI/display name. Omit it for an unnamed take; an empty string is refused. */
   name?: string;
@@ -285,13 +289,13 @@ export interface ProjectClipTake {
 
 /** One comp segment for {@link Project.setClipCompSegments}. */
 export interface ProjectClipCompSegment {
-  /** Segment start in PPQ. */
+  /** Segment start in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Segment end in PPQ. */
+  /** Segment end in PPQ, in (0, 1e12]. */
   endPpq: number;
   /** Take id to play in this range. Omit it to fall back to the clip's active take; `0` is refused. */
   takeId?: number;
-  /** Equal-power crossfade from the preceding segment, in PPQ (default 0 = butt join). */
+  /** Equal-power crossfade from the preceding segment, in PPQ, in [0, 1e12] (default 0 = butt join). */
   crossfadePpq?: number;
 }
 
@@ -324,9 +328,9 @@ export type ProjectLoopRecordingDesc = ProjectLoopRecordingCommon &
 export interface ProjectLoopRecordingCommon {
   /** Track the clip is added to. */
   trackId: number;
-  /** Clip start in PPQ. Default `0`. */
+  /** Clip start in PPQ, in [0, 1e12]. Default `0`. */
   startPpq?: number;
-  /** Length of one loop in PPQ; also the length of the added clip. */
+  /** Length of one loop in PPQ; also the length of the added clip, in (0, 1e12]. */
   loopLengthPpq: number;
   /** Sample rate of `audio` in Hz. */
   audioSampleRate: number;
@@ -366,7 +370,7 @@ export type ProjectAutomationCurve = AutomationCurve;
 
 /** One automation breakpoint accepted by the automation-lane edit ops. */
 export interface ProjectAutomationPoint {
-  /** Breakpoint position in PPQ. */
+  /** Breakpoint position in PPQ, in [0, 1e12]. */
   ppq: number;
   /** Breakpoint value. */
   value: number;
@@ -395,7 +399,7 @@ export interface ProjectAutomationLaneDesc {
 
 /** One tempo segment for {@link Project.setTempoSegments}. */
 export interface ProjectTempoSegment {
-  /** Segment start in PPQ. */
+  /** Segment start in PPQ, in [0, 1e12]. */
   startPpq: number;
   /** Tempo in beats per minute at the segment start. */
   bpm: number;
@@ -405,7 +409,7 @@ export interface ProjectTempoSegment {
 
 /** One time-signature segment for {@link Project.setTimeSignatures}. */
 export interface ProjectTimeSignatureSegment {
-  /** Segment start in PPQ. */
+  /** Segment start in PPQ, in [0, 1e12]. */
   startPpq: number;
   /** Beats per bar (time-signature numerator). */
   numerator: number;
@@ -501,9 +505,9 @@ export type ProjectChordQuality =
 
 /** Key segment for {@link Project.annotateKeys}. */
 export interface ProjectKeySegment {
-  /** Segment start in PPQ. */
+  /** Segment start in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Segment end in PPQ. */
+  /** Segment end in PPQ, in [0, 1e12]. */
   endPpq: number;
   /** Tonic pitch class 0..11 (C=0). Omit when the tonic is unknown. */
   tonicPc?: number;
@@ -513,9 +517,9 @@ export interface ProjectKeySegment {
 
 /** Chord symbol for {@link Project.annotateChords}. */
 export interface ProjectChordSymbol {
-  /** Chord start in PPQ. */
+  /** Chord start in PPQ, in [0, 1e12]. */
   startPpq: number;
-  /** Chord end in PPQ. */
+  /** Chord end in PPQ, in [0, 1e12]. */
   endPpq: number;
   /** Root pitch class 0..11 (C=0). Omit when the root is unknown. */
   rootPc?: number;
@@ -539,9 +543,9 @@ export interface ProjectAssistSidecarInput {
   schemaVersion?: number;
   /** Target track id (`0` = project scope). Defaults to `0`. */
   targetTrackId?: number;
-  /** Region start in PPQ. Defaults to `0`. */
+  /** Region start in PPQ, in [0, 1e12]. Defaults to `0`. */
   regionStartPpq?: number;
-  /** Region end in PPQ. Defaults to `0`. */
+  /** Region end in PPQ, in [0, 1e12]. Defaults to `0`. */
   regionEndPpq?: number;
   /** Opaque module-owned payload bytes. Defaults to an empty payload. */
   payload?: Uint8Array;
@@ -684,11 +688,11 @@ export interface ProjectClipDesc {
   trackId: number;
   /** Whether the clip is a MIDI clip. Defaults to `false`. */
   isMidi?: boolean;
-  /** Clip start in PPQ. Defaults to `0`. */
+  /** Clip start in PPQ, in [0, 1e12]. Defaults to `0`. */
   startPpq?: number;
-  /** Clip length in PPQ. */
+  /** Clip length in PPQ, in (0, 1e12]. */
   lengthPpq: number;
-  /** Offset into the source in PPQ. Defaults to `0`. */
+  /** Offset into the source in PPQ, in [0, 1e12]. Defaults to `0`. */
   sourceOffsetPpq?: number;
   /** Linear playback gain. Defaults to `1`. */
   gain?: number;
@@ -719,7 +723,7 @@ export interface ProjectMidiClipResult {
  * serialization, and are destroyed by {@link Project.setMidiEvents}.
  */
 export interface ProjectMidiEvent {
-  /** Event position in PPQ. */
+  /** Event position in PPQ, in [0, 1e12]. */
   ppq: number;
   /** First UMP word of the message. */
   word0: number;
