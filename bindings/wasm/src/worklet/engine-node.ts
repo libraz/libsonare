@@ -244,7 +244,7 @@ export class SonareRealtimeEngineNode {
   private rejectReady!: (reason?: unknown) => void;
   private readonly epoch = new OwnerEpoch('SonareRealtimeEngineNode');
   private destroying: Promise<void> | undefined;
-  /** Sequence number of the last sync posted; SAB ring commands carry it. */
+  /** Sequence number of the last ordered port message (sync or request); SAB ring commands carry it. */
   private syncSequence = 0;
 
   private constructor(
@@ -698,7 +698,7 @@ export class SonareRealtimeEngineNode {
       return false;
     }
     if (this.commandRing) {
-      // The ring and the port are unordered, so the record names the last sync it follows.
+      // The ring and the port are separate channels, so the record names the last port message it follows.
       return pushSonareEngineCommandRingBuffer(this.commandRing, {
         ...command,
         syncSequence: this.syncSequence,
@@ -709,23 +709,26 @@ export class SonareRealtimeEngineNode {
   }
 
   /**
-   * Posts a control-plane sync to the worklet. On the SAB ring a later command
-   * is held on the audio thread until this sync has been applied, so it always
-   * observes it; over the port, message order already guarantees that.
+   * Posts a control-plane sync to the worklet, in call order with the commands around it.
    * @throws SonareError `InvalidState` once the node is destroyed.
    *
    * @internal
    */
   postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
     this.assertOpen();
-    const syncSequence = (this.syncSequence + 1) >>> 0;
     // The entry that posted the sync names a refusal the worklet reports back for it.
     const entry = activeEntry();
-    const posted = {
-      ...message,
-      ...(this.commandRing ? { syncSequence } : {}),
-      ...(entry === undefined ? {} : { entry }),
-    };
+    this.postOrdered({ ...message, ...(entry === undefined ? {} : { entry }) }, transfer);
+  }
+
+  /**
+   * Posts a port message in call order with the commands around it. The worklet applies every
+   * command sent before it first; on the SAB ring a command sent after it is held until it has
+   * been handled, and over the port message order already guarantees both.
+   */
+  private postOrdered(message: object, transfer?: Transferable[]): void {
+    const syncSequence = (this.syncSequence + 1) >>> 0;
+    const posted = this.commandRing ? { ...message, syncSequence } : message;
     if (transfer && transfer.length > 0) {
       this.node.port.postMessage(posted, transfer);
     } else {
@@ -1094,7 +1097,7 @@ export class SonareRealtimeEngineNode {
       this.insertGainReductionRequests.set(requestId, { resolve, reject });
     });
     try {
-      this.node.port.postMessage({ type: 'insertGainReductionRequest', requestId, targetId });
+      this.postOrdered({ type: 'insertGainReductionRequest', requestId, targetId });
     } catch (error) {
       this.insertGainReductionRequests.delete(requestId);
       rejectRequest(error);
@@ -1121,7 +1124,7 @@ export class SonareRealtimeEngineNode {
       this.captureRequests.set(requestId, { op, resolve, reject });
     });
     try {
-      this.node.port.postMessage({ type: 'captureRequest', requestId, op });
+      this.postOrdered({ type: 'captureRequest', requestId, op });
     } catch (error) {
       this.captureRequests.delete(requestId);
       rejectRequest(error);
@@ -1138,7 +1141,7 @@ export class SonareRealtimeEngineNode {
       this.transportRequests.set(requestId, { resolve, reject });
     });
     try {
-      this.node.port.postMessage({ type: 'transportRequest', requestId, op: 'state' });
+      this.postOrdered({ type: 'transportRequest', requestId, op: 'state' });
     } catch (error) {
       // Keep a reentrant response as the winner if the port both delivers it
       // and reports a late dispatch failure. A failed initial send is exposed

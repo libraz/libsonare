@@ -134,6 +134,8 @@ function transferableAudioBuffers(channels: readonly Float32Array[]): Transferab
  * ({@link transportState}, {@link captureStatus}, {@link capturedAudio},
  * {@link resetCapture}, {@link pollInsertGainReduction}); every other read is
  * answered synchronously from the offline mirror, which holds the same state.
+ * The worklet sees every call in the order it was made, so `armCapture({ armed: false })`
+ * followed by `configureCapture` or `captureStatus` needs no wait in between.
  * Argument refusals are `TypeError` / `RangeError`, as on {@link RealtimeEngine}.
  */
 @entryClass('SonareEngine', [

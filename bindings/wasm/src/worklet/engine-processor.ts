@@ -398,24 +398,49 @@ export class SonareRealtimeEngineWorkletProcessor {
   // small pages before the final lightweight clip schedule is committed.
   /** @internal */
   receiveSync(message: SonareEngineSyncMessage): void {
+    this.receiveOrdered(message, () => {
+      try {
+        this.settleCommands();
+        this.applySync(message);
+      } catch (error) {
+        const entry = (message as { entry?: unknown }).entry;
+        this.transport?.postMessage?.({
+          type: 'syncError',
+          syncType: message.type,
+          message: errorText(error),
+          failure: failurePayload(error),
+          ...(typeof entry === 'string' ? { entry } : {}),
+        });
+      }
+    });
+  }
+
+  /**
+   * Handles one port message in order with the SAB command ring. Its sequence number is noted
+   * even when @p handle throws, so a command published after it is never held forever.
+   */
+  private receiveOrdered(message: object, handle: () => void): void {
     if (this.closed) {
       return;
     }
     try {
-      this.applySync(message);
-    } catch (error) {
-      const entry = (message as { entry?: unknown }).entry;
-      this.transport?.postMessage?.({
-        type: 'syncError',
-        syncType: message.type,
-        message: errorText(error),
-        failure: failurePayload(error),
-        ...(typeof entry === 'string' ? { entry } : {}),
-      });
+      handle();
     } finally {
-      // A refused sync still counts: the commands posted after it must not wait forever.
       this.noteSyncSequence((message as { syncSequence?: unknown }).syncSequence);
     }
+  }
+
+  /**
+   * Applies every command published before the message being handled: the whole ring snapshot,
+   * past the per-quantum budget, then the immediate ones. Scheduled commands keep their frame.
+   */
+  private settleCommands(): void {
+    if (this.commandRing) {
+      this.drainCommands(
+        pendingSonareEngineCommandCount(this.commandRing) + (this.heldCommand ? 1 : 0),
+      );
+    }
+    this.engine.applyCommandsDueNowPreservingFuture();
   }
 
   /** Records the sequence number a posted sync carried; a sync without one changes nothing. */
@@ -610,18 +635,6 @@ export class SonareRealtimeEngineWorkletProcessor {
           }
           break;
         }
-        // SAB commands are published before the control thread posts this
-        // structural sync. Drain the whole snapshot so a future command past
-        // the normal 64-per-render budget cannot enter native after the strip
-        // replacement has invalidated its target.
-        if (this.commandRing) {
-          this.drainCommands(
-            pendingSonareEngineCommandCount(this.commandRing) + (this.heldCommand ? 1 : 0),
-          );
-        }
-        // Complete earlier immediate edits in message order. Scheduled
-        // commands remain queued for their render frame.
-        this.engine.applyCommandsDueNowPreservingFuture();
         if (message.buses) {
           this.engine.setTrackBuses(message.buses);
         }
@@ -743,7 +756,6 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case 'syncTrackStripInsertParamByName':
-        this.engine.applyCommandsDueNowPreservingFuture();
         if (
           !this.native.applyTrackStripInsertParamByNameNow(
             message.trackId,
@@ -763,7 +775,6 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       case 'syncMasterStripInsertParamByName':
-        this.engine.applyCommandsDueNowPreservingFuture();
         if (
           !this.native.applyMasterStripInsertParamByNameNow(
             message.insertIndex,
@@ -779,7 +790,6 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       case 'syncBusStripInsertParamByName':
-        this.engine.applyCommandsDueNowPreservingFuture();
         if (
           !this.native.applyBusStripInsertParamByNameNow(
             message.busId,
@@ -1005,105 +1015,105 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   /** @internal */
   receiveCaptureRequest(message: SonareEngineCaptureRequestMessage): void {
-    if (this.closed) {
-      return;
-    }
-    try {
-      if (message.op === 'status') {
-        const status = this.engine.captureStatus();
+    this.receiveOrdered(message, () => {
+      try {
+        this.settleCommands();
+        if (message.op === 'status') {
+          const status = this.engine.captureStatus();
+          this.transport?.postMessage?.({
+            type: 'captureResponse',
+            requestId: message.requestId,
+            ok: true,
+            status: {
+              capturedFrames: status.capturedFrames,
+              overflowCount: status.overflowCount,
+              armed: status.armed,
+              punchEnabled: status.punchEnabled,
+              source: status.source,
+              recordOffsetSamples: status.recordOffsetSamples,
+            },
+          } satisfies SonareEngineCaptureResponseMessageInternal);
+          return;
+        }
+        if (message.op === 'read') {
+          // Embind's outer val::array is array-like but not structured-cloneable
+          // in every host. Copy only that tiny container; keep each native
+          // Float32Array intact so the channel payload remains transferable.
+          const channels = Array.from(this.engine.capturedAudio());
+          const transfer = captureTransferList(channels);
+          this.transport?.postMessage?.(
+            {
+              type: 'captureResponse',
+              requestId: message.requestId,
+              ok: true,
+              channels,
+            } satisfies SonareEngineCaptureResponseMessageInternal,
+            transfer,
+          );
+          return;
+        }
+        this.engine.resetCapture();
         this.transport?.postMessage?.({
           type: 'captureResponse',
           requestId: message.requestId,
           ok: true,
-          status: {
-            capturedFrames: status.capturedFrames,
-            overflowCount: status.overflowCount,
-            armed: status.armed,
-            punchEnabled: status.punchEnabled,
-            source: status.source,
-            recordOffsetSamples: status.recordOffsetSamples,
-          },
         } satisfies SonareEngineCaptureResponseMessageInternal);
-        return;
+      } catch (error) {
+        this.transport?.postMessage?.({
+          type: 'captureResponse',
+          requestId: message.requestId,
+          ok: false,
+          error: errorText(error),
+          failure: failurePayload(error),
+        } satisfies SonareEngineCaptureResponseMessageInternal);
       }
-      if (message.op === 'read') {
-        // Embind's outer val::array is array-like but not structured-cloneable
-        // in every host. Copy only that tiny container; keep each native
-        // Float32Array intact so the channel payload remains transferable.
-        const channels = Array.from(this.engine.capturedAudio());
-        const transfer = captureTransferList(channels);
-        this.transport?.postMessage?.(
-          {
-            type: 'captureResponse',
-            requestId: message.requestId,
-            ok: true,
-            channels,
-          } satisfies SonareEngineCaptureResponseMessageInternal,
-          transfer,
-        );
-        return;
-      }
-      this.engine.resetCapture();
-      this.transport?.postMessage?.({
-        type: 'captureResponse',
-        requestId: message.requestId,
-        ok: true,
-      } satisfies SonareEngineCaptureResponseMessageInternal);
-    } catch (error) {
-      this.transport?.postMessage?.({
-        type: 'captureResponse',
-        requestId: message.requestId,
-        ok: false,
-        error: errorText(error),
-        failure: failurePayload(error),
-      } satisfies SonareEngineCaptureResponseMessageInternal);
-    }
+    });
   }
 
   /** @internal */
   receiveTransportRequest(message: SonareEngineTransportRequestMessage): void {
-    if (this.closed) {
-      return;
-    }
-    try {
-      this.transport?.postMessage?.({
-        type: 'transportResponse',
-        requestId: message.requestId,
-        ok: true,
-        state: this.engine.transportState(),
-      } satisfies SonareEngineTransportResponseMessage);
-    } catch (error) {
-      this.transport?.postMessage?.({
-        type: 'transportResponse',
-        requestId: message.requestId,
-        ok: false,
-        error: errorText(error),
-        failure: failurePayload(error),
-      } satisfies SonareEngineTransportResponseMessage);
-    }
+    this.receiveOrdered(message, () => {
+      try {
+        this.settleCommands();
+        this.transport?.postMessage?.({
+          type: 'transportResponse',
+          requestId: message.requestId,
+          ok: true,
+          state: this.engine.transportState(),
+        } satisfies SonareEngineTransportResponseMessage);
+      } catch (error) {
+        this.transport?.postMessage?.({
+          type: 'transportResponse',
+          requestId: message.requestId,
+          ok: false,
+          error: errorText(error),
+          failure: failurePayload(error),
+        } satisfies SonareEngineTransportResponseMessage);
+      }
+    });
   }
 
   /** @internal */
   receiveInsertGainReductionRequest(message: SonareEngineInsertGainReductionRequestMessage): void {
-    if (this.closed) {
-      return;
-    }
-    try {
-      this.transport?.postMessage?.({
-        type: 'insertGainReductionResponse',
-        requestId: message.requestId,
-        ok: true,
-        values: this.engine.meterTargetInsertGainReduction(message.targetId),
-      } satisfies SonareEngineInsertGainReductionResponseMessage);
-    } catch (error) {
-      this.transport?.postMessage?.({
-        type: 'insertGainReductionResponse',
-        requestId: message.requestId,
-        ok: false,
-        error: errorText(error),
-        failure: failurePayload(error),
-      } satisfies SonareEngineInsertGainReductionResponseMessage);
-    }
+    this.receiveOrdered(message, () => {
+      try {
+        this.settleCommands();
+        this.transport?.postMessage?.({
+          type: 'insertGainReductionResponse',
+          requestId: message.requestId,
+          ok: true,
+          values: this.engine.meterTargetInsertGainReduction(message.targetId),
+        } satisfies SonareEngineInsertGainReductionResponseMessage);
+      } catch (error) {
+        this.transport?.postMessage?.({
+          type: 'insertGainReductionResponse',
+          requestId: message.requestId,
+          ok: false,
+          error: errorText(error),
+          failure: failurePayload(error),
+        } satisfies SonareEngineInsertGainReductionResponseMessage);
+      }
+    });
   }
 
   /** Releases the engine and its paged clip providers; later `process()` calls return `false`. Safe to call twice. */
