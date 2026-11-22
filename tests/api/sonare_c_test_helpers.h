@@ -32,7 +32,6 @@ namespace {
   return samples;
 }
 
-#ifdef SONARE_WITH_MASTERING
 [[maybe_unused]] float max_abs(const float* samples, size_t length) {
   float peak = 0.0f;
   for (size_t i = 0; i < length; ++i) {
@@ -45,6 +44,7 @@ namespace {
   return reinterpret_cast<float*>(static_cast<std::uintptr_t>(0x1));
 }
 
+#ifdef SONARE_WITH_MASTERING
 [[maybe_unused]] std::vector<std::string> split_lines(const char* text) {
   std::vector<std::string> lines;
   std::stringstream stream(text ? text : "");

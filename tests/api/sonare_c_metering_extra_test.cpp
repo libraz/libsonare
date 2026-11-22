@@ -21,22 +21,12 @@
 
 #include "core/audio.h"
 #include "metering/spectrum.h"
+#include "sonare_c_test_helpers.h"
 #include "util/constants.h"
 
 using namespace sonare;
 
 namespace {
-
-// Generate a mono sine wave buffer.
-std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
-  size_t n_samples = static_cast<size_t>(sample_rate * duration);
-  std::vector<float> samples(n_samples);
-  for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] =
-        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
-  }
-  return samples;
-}
 
 // Interleave two equal-length mono channels into a stereo buffer.
 std::vector<float> interleave_stereo(const std::vector<float>& left,

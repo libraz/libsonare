@@ -15,25 +15,10 @@
 #if defined(SONARE_WITH_MIXING)
 #include "support/alloc_guard.h"
 #endif
+#include "sonare_c_test_helpers.h"
 #include "util/constants.h"
 
 namespace {
-
-std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
-  size_t n_samples = static_cast<size_t>(sample_rate * duration);
-  std::vector<float> samples(n_samples);
-  for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] =
-        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
-  }
-  return samples;
-}
-
-float peak_of(const float* data, size_t n) {
-  float peak = 0.0f;
-  for (size_t i = 0; i < n; ++i) peak = std::max(peak, std::abs(data[i]));
-  return peak;
-}
 
 double rms_of(const float* data, size_t n) {
   double sum_sq = 0.0;
@@ -50,10 +35,6 @@ std::vector<float> generate_spectrogram(int n_features, int n_frames) {
     }
   }
   return s;
-}
-
-float* non_null_sentinel_float_ptr() {
-  return reinterpret_cast<float*>(static_cast<std::uintptr_t>(0x1));
 }
 
 float max_abs_difference(const float* lhs, const float* rhs, size_t length) {
@@ -1590,8 +1571,8 @@ TEST_CASE("sonare_normalize_stereo shares one gain between the channels", "[c_ap
                                   &out_left, &out_right, &out_length) == SONARE_OK);
   REQUIRE(out_length == left.size());
 
-  const float loud_peak = peak_of(out_left, out_length);
-  const float quiet_peak = peak_of(out_right, out_length);
+  const float loud_peak = max_abs(out_left, out_length);
+  const float quiet_peak = max_abs(out_right, out_length);
   REQUIRE(std::abs(20.0f * std::log10(loud_peak) - (-1.0f)) < 0.05f);
   REQUIRE(std::abs(20.0f * std::log10(loud_peak / quiet_peak) - 12.0f) < 0.05f);
 
@@ -1602,8 +1583,8 @@ TEST_CASE("sonare_normalize_stereo shares one gain between the channels", "[c_ap
   size_t alone_length = 0;
   REQUIRE(sonare_normalize(right.data(), right.size(), sample_rate, -1.0f, &alone, &alone_length) ==
           SONARE_OK);
-  REQUIRE(std::abs(20.0f * std::log10(peak_of(alone, alone_length)) - (-1.0f)) < 0.05f);
-  REQUIRE(quiet_peak < peak_of(alone, alone_length) * 0.5f);
+  REQUIRE(std::abs(20.0f * std::log10(max_abs(alone, alone_length)) - (-1.0f)) < 0.05f);
+  REQUIRE(quiet_peak < max_abs(alone, alone_length) * 0.5f);
   sonare_free_floats(alone);
 
   sonare_free_floats(out_left);
