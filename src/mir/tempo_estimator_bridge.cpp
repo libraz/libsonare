@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/tempo_curve.h"
 #include "util/constants.h"
 #include "util/insertion_sort.h"
@@ -300,6 +301,13 @@ BeatAnalysisInput make_input_from_analyzer(const BeatAnalyzer& analyzer) {
   in.sample_rate = analyzer.sample_rate();
   in.hop_length = analyzer.hop_length();
   return in;
+}
+
+std::vector<TempoEstimate> estimate_tempo_from_audio(const Audio& audio,
+                                                     const BeatConfig& beat_config,
+                                                     const TempoEstimatorConfig& config) {
+  const BeatAnalyzer analyzer(analysis_rate_audio(audio), beat_config);
+  return estimate_tempo(make_input_from_analyzer(analyzer), config);
 }
 
 std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,

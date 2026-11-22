@@ -905,6 +905,7 @@ if(BUILD_ARRANGEMENT)
     mir/grid_snap_bar_length_test.cpp
     mir/tempo_ramp_boundaries_test.cpp
     mir/mir_tempo_grid_test.cpp
+    mir/tempo_from_audio_test.cpp
     mir/tempo_octave_evidence_outlier_test.cpp
     mir/mir_warp_test.cpp
     mir/mir_key_chord_onset_test.cpp

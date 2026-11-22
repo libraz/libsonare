@@ -107,4 +107,12 @@ std::vector<TempoEstimate> estimate_tempo(
 /// @brief Convenience: build a BeatAnalysisInput from a populated BeatAnalyzer.
 BeatAnalysisInput make_input_from_analyzer(const BeatAnalyzer& analyzer);
 
+/// @brief Estimates tempo candidates from audio in the geometry the full music analysis uses.
+/// @details Runs BeatAnalyzer on @p audio at the analysis rate (resampled to 22050 Hz when above
+///          it), so the beats, meter and downbeats behind the candidates are the ones the full
+///          analysis reports for the same buffer at any input rate.
+std::vector<TempoEstimate> estimate_tempo_from_audio(
+    const Audio& audio, const BeatConfig& beat_config = BeatConfig(),
+    const TempoEstimatorConfig& config = TempoEstimatorConfig());
+
 }  // namespace sonare::mir
