@@ -19,6 +19,23 @@ namespace {
 
 constexpr int kFrameRateReference = 48000;
 constexpr float kUnityTolerance = 1.0e-6f;
+
+bool is_unity(float factor) noexcept { return std::abs(factor - 1.0f) < kUnityTolerance; }
+
+/// Overlap-adds `src * window` and the window power into the ring accumulators from `slot`.
+void overlap_add(std::vector<float>& acc, std::vector<float>& norm, const std::vector<float>& hann,
+                 const std::vector<float>& src, size_t slot, std::int64_t first_idx,
+                 int frame_size) noexcept {
+  const size_t slots = acc.size();
+  for (int i = 0; i < frame_size; ++i) {
+    if (first_idx + i >= 0) {
+      const float win = hann[static_cast<size_t>(i)];
+      acc[slot] += src[static_cast<size_t>(i)] * win;
+      norm[slot] += win * win;
+    }
+    if (++slot == slots) slot = 0;
+  }
+}
 /// Mean-square frame level below which a frame counts as silent.
 constexpr double kSilentFrameEnergy = 1.0e-20;
 /// Prediction error, relative to the frame energy, below which a frame is a few pure tones with
@@ -76,7 +93,7 @@ void FormantWarpStream::prepare(int frame_size, int lpc_order) {
   warped_.assign(n_bins, 0.0f);
   spectrum_.assign(n_bins, {});
   predictor_spectrum_.assign(n_bins, {});
-  bypass_target_ = std::abs(factor_ - 1.0f) < kUnityTolerance ? 1.0f : 0.0f;
+  bypass_target_ = is_unity(factor_) ? 1.0f : 0.0f;
   reset();
 }
 
@@ -94,7 +111,7 @@ void FormantWarpStream::reset() noexcept {
 
 void FormantWarpStream::set_factor(float factor) noexcept {
   factor_ = std::isfinite(factor) ? std::clamp(factor, kFormantFactorMin, kFormantFactorMax) : 1.0f;
-  bypass_target_ = std::abs(factor_ - 1.0f) < kUnityTolerance ? 1.0f : 0.0f;
+  bypass_target_ = is_unity(factor_) ? 1.0f : 0.0f;
 }
 
 // Accumulator slot of the oldest sample of the frame just gathered; negative positions wrap.
@@ -106,17 +123,8 @@ size_t FormantWarpStream::frame_start_slot() const noexcept {
 // Adds windowed * window, the power the warped path carries, so an unwarped frame does not step the
 // level.
 void FormantWarpStream::accumulate_unwarped() noexcept {
-  const size_t slots = acc_.size();
-  size_t slot = frame_start_slot();
-  for (int i = 0; i < frame_size_; ++i) {
-    const std::int64_t idx = pushed_ - frame_size_ + i;
-    if (idx >= 0) {
-      const float win = hann_[static_cast<size_t>(i)];
-      acc_[slot] += windowed_[static_cast<size_t>(i)] * win;
-      norm_[slot] += win * win;
-    }
-    if (++slot == slots) slot = 0;
-  }
+  overlap_add(acc_, norm_, hann_, windowed_, frame_start_slot(), pushed_ - frame_size_,
+              frame_size_);
 }
 
 void FormantWarpStream::process_frame() noexcept {
@@ -133,7 +141,7 @@ void FormantWarpStream::process_frame() noexcept {
     if (++read == ring_.size()) read = 0;
   }
 
-  if (std::abs(factor_ - 1.0f) < kUnityTolerance) {
+  if (is_unity(factor_)) {
     accumulate_unwarped();
     return;
   }
@@ -218,17 +226,8 @@ void FormantWarpStream::process_frame() noexcept {
   fft_->inverse(spectrum_.data(), time_frame_.data());
 
   // Synthesis window + overlap-add.
-  const size_t slots = acc_.size();
-  size_t slot = frame_start_slot();
-  for (int i = 0; i < frame_size_; ++i) {
-    const std::int64_t idx = pushed_ - frame_size_ + i;
-    if (idx >= 0) {
-      const float win = hann_[static_cast<size_t>(i)];
-      acc_[slot] += time_frame_[static_cast<size_t>(i)] * win;
-      norm_[slot] += win * win;
-    }
-    if (++slot == slots) slot = 0;
-  }
+  overlap_add(acc_, norm_, hann_, time_frame_, frame_start_slot(), pushed_ - frame_size_,
+              frame_size_);
 }
 
 void FormantWarpStream::process(const float* input, float* output, int num_samples) noexcept {
@@ -287,7 +286,7 @@ Audio FormantWarp::process(const Audio& audio) const {
   const float effective_factor = effective_formant_factor(config_.factor, config_.amount);
   // LPC analysis/re-synthesis is not identity even when its envelope is not
   // shifted. Bypass it at unity so pitch-only voice changes preserve samples.
-  if (std::abs(effective_factor - 1.0f) < kUnityTolerance) return audio;
+  if (is_unity(effective_factor)) return audio;
 
   // Explicit order, else the rate-scaled one.
   const int order = config_.lpc_order > 0 ? config_.lpc_order : formant_warp_lpc_order(sr);

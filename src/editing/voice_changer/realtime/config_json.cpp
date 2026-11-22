@@ -146,14 +146,26 @@ Enum object_enum(const sonare::util::json::Value& object, const char* section, c
 
 constexpr const char* kFormantModePredicate = "must be 'relative' or 'absolute'";
 
+bool formant_mode_from_spelling(std::string_view name, FormantMode* out) noexcept {
+  if (name == "relative") {
+    *out = FormantMode::Relative;
+    return true;
+  }
+  if (name == "absolute") {
+    *out = FormantMode::Absolute;
+    return true;
+  }
+  return false;
+}
+
 FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* section,
                                 const char* key, FormantMode fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
   const std::string path = schema::child_path(section, key);
   if (!value->is_string()) refuse(schema::must_be(path, Kind::String));
-  if (value->as_string() == "relative") return FormantMode::Relative;
-  if (value->as_string() == "absolute") return FormantMode::Absolute;
+  FormantMode mode;
+  if (formant_mode_from_spelling(value->as_string(), &mode)) return mode;
   refuse(schema::refusal(path, kFormantModePredicate));
 }
 
@@ -427,7 +439,8 @@ bool accept_any(const sonare::util::json::Value&, const char*, const char*, std:
 bool require_formant_mode(const sonare::util::json::Value& object, const char* key,
                           const char* path, std::string* error) {
   const auto* mode = object.find(key);
-  if (!mode->is_string() || (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
+  FormantMode parsed;
+  if (!mode->is_string() || !formant_mode_from_spelling(mode->as_string(), &parsed)) {
     if (error) *error = schema::refusal(schema::child_path(path, key), kFormantModePredicate);
     return false;
   }
@@ -1018,20 +1031,23 @@ bool read_preset_document(const sonare::util::json::Value& root, RealtimeVoiceCh
   }
   if (!require_string(root, "category", 1, 16, "", error)) return false;
   {
-    static constexpr std::array<std::string_view, 11> kCategories = {
-        "monitor", "bright",  "soft",    "deep",      "robot", "dark",
-        "tune",    "harmony", "vocoder", "character", "custom"};
+    static constexpr std::array<EnumName, 11> kCategories = {{{0, "monitor"},
+                                                              {0, "bright"},
+                                                              {0, "soft"},
+                                                              {0, "deep"},
+                                                              {0, "robot"},
+                                                              {0, "dark"},
+                                                              {0, "tune"},
+                                                              {0, "harmony"},
+                                                              {0, "vocoder"},
+                                                              {0, "character"},
+                                                              {0, "custom"}}};
     const auto& category = root.find("category")->as_string();
-    if (std::find(kCategories.begin(), kCategories.end(), category) == kCategories.end()) {
+    int unused = 0;
+    if (!enum_value_from_spelling(kCategories.data(), kCategories.size(), category, &unused)) {
       if (error) {
-        std::string list;
-        for (std::size_t i = 0; i < kCategories.size(); ++i) {
-          if (i > 0) list += i + 1 == kCategories.size() ? " or " : ", ";
-          list += '\'';
-          list += kCategories[i];
-          list += '\'';
-        }
-        *error = schema::refusal("category", "must be " + list);
+        *error = schema::refusal(
+            "category", "must be " + enum_spelling_list(kCategories.data(), kCategories.size()));
       }
       return false;
     }

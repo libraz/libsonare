@@ -110,7 +110,8 @@ constexpr Range kUnit{0.0, 1.0};
 constexpr Range kBipolar{-1.0, 1.0};
 constexpr Range kInputGainDb{-24.0, 24.0};
 constexpr Range kOutputGainDb{-36.0, 12.0};
-constexpr Range kSemitones{-24.0, 24.0};
+constexpr Range kSemitones{-static_cast<double>(kMaxRetuneSemitones),
+                           static_cast<double>(kMaxRetuneSemitones)};
 // A document spells the automatic grain by omitting the key, so a written size starts at one step.
 constexpr Range kGrainSize{static_cast<double>(kRetuneGrainStep),
                            static_cast<double>(kMaxRetuneGrainSize)};

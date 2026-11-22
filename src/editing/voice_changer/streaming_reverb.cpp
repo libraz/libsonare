@@ -11,6 +11,18 @@
 
 namespace sonare::editing::voice_changer {
 
+namespace {
+
+/// Per-channel seed: the config seed XORed with a golden-ratio salt scaled by the channel index,
+/// so stereo channels do not share comb delays, feedbacks and allpass sign (a mono tail).
+std::uint32_t channel_seed(const StreamingReverbConfig& config, int channel_index) {
+  constexpr std::uint32_t kChannelSeedSalt = 0x9E3779B9u;
+  return static_cast<std::uint32_t>(config.seed) ^
+         (kChannelSeedSalt * static_cast<std::uint32_t>(channel_index));
+}
+
+}  // namespace
+
 void StreamingReverb::prepare(double sample_rate, int max_block_size) {
   (void)max_block_size;  // Reverb is per-sample; the block size only constrains
                          // the higher-level chain, not the reverb's footprint.
@@ -64,13 +76,7 @@ std::array<StreamingReverb::CombTap, StreamingReverb::kNumCombs> StreamingReverb
     int channel_index) {
   const double time_sec = std::max(0.04, static_cast<double>(config.time_ms) / 1000.0);
 
-  // Derive a per-channel seed by XORing with a 32-bit golden-ratio constant
-  // scaled by the channel index. Without this, stereo channels would share
-  // the exact same comb delays / feedbacks / allpass coefficient, producing a
-  // fully mono (L=R) reverb tail from any non-pan-spread source.
-  static constexpr std::uint32_t kChannelSeedSalt = 0x9E3779B9u;
-  const std::uint32_t useed = static_cast<std::uint32_t>(config.seed) ^
-                              (kChannelSeedSalt * static_cast<std::uint32_t>(channel_index));
+  const std::uint32_t useed = channel_seed(config, channel_index);
 
   // Map seed to a small jitter in [-0.05, +0.05] of the base ratios.
   const float jitter_a = static_cast<float>(((useed * 2654435761u) >> 24) & 0xFFu) / 255.0f - 0.5f;
@@ -100,9 +106,7 @@ float StreamingReverb::damping_cutoff_hz(const StreamingReverbConfig& config) {
 }
 
 float StreamingReverb::allpass_gain(const StreamingReverbConfig& config, int channel_index) {
-  static constexpr std::uint32_t kChannelSeedSalt = 0x9E3779B9u;
-  const std::uint32_t useed = static_cast<std::uint32_t>(config.seed) ^
-                              (kChannelSeedSalt * static_cast<std::uint32_t>(channel_index));
+  const std::uint32_t useed = channel_seed(config, channel_index);
   // Allpass gain sign is seed-bit-dependent so different seeds yield distinct
   // phase responses on otherwise identical settings.
   return (useed & 0x1u) ? 0.7f : -0.7f;

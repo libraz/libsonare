@@ -68,6 +68,29 @@ constexpr float kDriveMaxDb = 36.0f;
 constexpr float kVowelMax = static_cast<float>(kVowelCount - 1);
 constexpr float kMaxAccelMs = 1.0e6f;
 
+struct FieldDomain {
+  unsigned int id;
+  const char* name;
+  float VowelFilterConfig::*member;
+  float lo;
+  float hi;
+};
+
+// The domain of every ranged field, in validation order.
+constexpr FieldDomain kFieldDomains[] = {
+    {0, "vowel", &VowelFilterConfig::vowel, 0.0f, kVowelMax},
+    {1, "accel_ms", &VowelFilterConfig::accel_ms, 0.0f, kMaxAccelMs},
+    {2, "drive", &VowelFilterConfig::drive, 0.0f, 1.0f},
+    {4, "dry_wet", &VowelFilterConfig::dry_wet, 0.0f, 1.0f},
+};
+
+const FieldDomain* find_domain(unsigned int param_id) noexcept {
+  for (const FieldDomain& domain : kFieldDomains) {
+    if (domain.id == param_id) return &domain;
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 float vowel_table_hz(int vowel, int band) noexcept {
@@ -75,10 +98,9 @@ float vowel_table_hz(int vowel, int band) noexcept {
 }
 
 void VowelFilter::validate_config(const VowelFilterConfig& config) {
-  common::require_in_domain("vowel", config.vowel, 0.0f, kVowelMax);
-  common::require_in_domain("accel_ms", config.accel_ms, 0.0f, kMaxAccelMs);
-  common::require_in_domain("drive", config.drive, 0.0f, 1.0f);
-  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
+  for (const FieldDomain& domain : kFieldDomains) {
+    common::require_in_domain(domain.name, config.*domain.member, domain.lo, domain.hi);
+  }
 }
 
 VowelFilter::VowelFilter(VowelFilterConfig config) : config_((validate_config(config), config)) {
@@ -231,32 +253,20 @@ void VowelFilter::process(float* const* channels, int num_channels, int num_samp
 }
 
 bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
-  switch (param_id) {
-    case 0:
-      if (!common::in_domain(value, 0.0f, kVowelMax)) return false;
-      config_.vowel = value;
-      return true;
-    case 1:
-      if (!common::in_domain(value, 0.0f, kMaxAccelMs)) return false;
-      config_.accel_ms = value;
-      update_glide_coefficient();
-      return true;
-    case 2:
-      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
-      config_.drive = value;
-      drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
-      return true;
-    case 3:
-      if (!mastering::common::valid_switch_value(value)) return false;
-      config_.drive_on = value == 1.0f;
-      return true;
-    case 4:
-      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
-      config_.dry_wet = value;
-      return true;
-    default:
-      return false;
+  if (param_id == 3) {
+    if (!mastering::common::valid_switch_value(value)) return false;
+    config_.drive_on = value == 1.0f;
+    return true;
   }
+  const FieldDomain* domain = find_domain(param_id);
+  if (domain == nullptr || !common::in_domain(value, domain->lo, domain->hi)) return false;
+  config_.*(domain->member) = value;
+  if (param_id == 1) {
+    update_glide_coefficient();
+  } else if (param_id == 2) {
+    drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
+  }
+  return true;
 }
 
 std::vector<rt::ParamDescriptor> VowelFilter::parameter_descriptors() const {

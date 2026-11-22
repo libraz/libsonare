@@ -52,6 +52,13 @@ rt::BiquadCoeffs air_shelf(double sample_rate, float gain_db) {
   return rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate), 0.75f, gain_db);
 }
 
+// The colour stage with the formant factor and amount left neutral.
+StreamingFormantConfig neutral_colour(StreamingFormantConfig colour) {
+  colour.factor = 1.0f;
+  colour.amount = 1.0f;
+  return colour;
+}
+
 // Returns @p config when it is valid; the failure text is built only on the refusing path.
 const RealtimeVoiceChangerConfig& checked_config(
     const RealtimeVoiceChangerConfig& config,
@@ -287,10 +294,7 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
   state.retune.set_config(config.retune);
   if (prepared_engine_ == PitchEngine::Psola) {
     // The grain resampling carries the formant factor, so the colour stage keeps only its tones.
-    StreamingFormantConfig colour = config.formant;
-    colour.factor = 1.0f;
-    colour.amount = 1.0f;
-    state.formant.set_config(colour);
+    state.formant.set_config(neutral_colour(config.formant));
     const float factor =
         config.formant_mode == FormantMode::Absolute
             ? config.formant.factor
@@ -304,13 +308,11 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
     for (auto& smoother : state.harmony_delay_samples) smoother.set_target(delay);
   } else if (prepared_formant_mode_ == FormantMode::Absolute) {
     // The warp carries the factor, so the colour stage stays neutral; amount does not apply.
-    StreamingFormantConfig colour = config.formant;
-    colour.factor = 1.0f;
-    colour.amount = 1.0f;
-    state.formant.set_config(colour);
+    state.formant.set_config(neutral_colour(config.formant));
     // The retune shifts only its wet share, so the warp undoes pitch_ratio^mix.
-    const double pitch_ratio = std::exp2(static_cast<double>(config.retune.semitones) *
-                                         static_cast<double>(config.retune.mix) / 12.0);
+    const double pitch_ratio = std::exp2(
+        static_cast<double>(config.retune.semitones) * static_cast<double>(config.retune.mix) /
+        static_cast<double>(sonare::constants::kSemitonesPerOctave));
     state.warp.set_factor(
         static_cast<float>(static_cast<double>(config.formant.factor) / pitch_ratio));
   } else {

@@ -226,10 +226,7 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   std::vector<float> h_num(static_cast<size_t>(n_frames), 0.0f);
   std::vector<float> h_den(static_cast<size_t>(n_frames), 0.0f);
 
-  for (int it = 0; it < n_iter; ++it) {
-    multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
-
-    // Build feature-space numerator/denominator factors.
+  const auto build_feature_factors = [&]() {
     for (size_t i = 0; i < WH.size(); ++i) {
       const float wh = WH[i] + kEps;
       const float pow_num = (exp_num == 0.0f) ? 1.0f : finite_pow(wh, exp_num);
@@ -237,6 +234,13 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
       num_feat[i] = S[i] * pow_num;
       den_feat[i] = pow_den;
     }
+  };
+
+  for (int it = 0; it < n_iter; ++it) {
+    multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
+
+    // Build feature-space numerator/denominator factors.
+    build_feature_factors();
 
     // H <- H * (W^T num_feat) / (W^T den_feat)
     // Feature-major with per-frame accumulators: num_feat/den_feat are row-major
@@ -262,13 +266,7 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 
     // Rebuild WH and feature-space factors with the updated H.
     multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
-    for (size_t i = 0; i < WH.size(); ++i) {
-      const float wh = WH[i] + kEps;
-      const float pow_num = (exp_num == 0.0f) ? 1.0f : finite_pow(wh, exp_num);
-      const float pow_den = (exp_den == 0.0f) ? 1.0f : finite_pow(wh, exp_den);
-      num_feat[i] = S[i] * pow_num;
-      den_feat[i] = pow_den;
-    }
+    build_feature_factors();
 
     // W <- W * (num_feat H^T) / (den_feat H^T)
     for (int f = 0; f < n_features; ++f) {
@@ -524,18 +522,21 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
   out.components.assign(static_cast<std::size_t>(k),
                         std::vector<std::vector<float>>(channel_count));
   std::vector<std::complex<float>> masked(cells);
+  std::vector<float> cell_mask(cells);
   for (int component = 0; component < k; ++component) {
     const float* plane = model.data() + static_cast<std::size_t>(component) * cells;
+    // A cell the model gives no energy to is dropped from every component
+    // rather than split evenly, so the masks never manufacture signal
+    // where the factorisation has none. One mask per cell, applied
+    // unchanged to every channel's own spectrum.
+    for (std::size_t cell = 0; cell < cells; ++cell) {
+      const float total = denominator[cell];
+      cell_mask[cell] = total > 0.0f ? plane[cell] / total : 0.0f;
+    }
     for (std::size_t c = 0; c < channel_count; ++c) {
       const std::complex<float>* source = spectra[c].complex_data();
       for (std::size_t cell = 0; cell < cells; ++cell) {
-        // A cell the model gives no energy to is dropped from every component
-        // rather than split evenly, so the masks never manufacture signal
-        // where the factorisation has none. One mask per cell, applied
-        // unchanged to every channel's own spectrum.
-        const float total = denominator[cell];
-        const float mask = total > 0.0f ? plane[cell] / total : 0.0f;
-        masked[cell] = source[cell] * mask;
+        masked[cell] = source[cell] * cell_mask[cell];
       }
       const Spectrogram component_spectrum =
           Spectrogram::from_complex(masked.data(), n_bins, n_frames, checked.n_fft,

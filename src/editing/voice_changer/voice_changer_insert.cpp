@@ -161,7 +161,6 @@ void VoiceChangerInsert::prepare(double sample_rate, int max_block_size, int max
   max_block_size_ = std::max(1, max_block_size);
   changer_.prepare(sample_rate, max_block_size_, channels);
   prepared_channels_ = channels;
-  sample_rate_ = sample_rate;
   reported_discards_ = 0;
 }
 

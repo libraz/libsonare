@@ -56,7 +56,6 @@ class StreamingFormant {
   ///        @ref update_filters to compute biquads for the wrong sample rate if
   ///        the host used set_config() before prepare().
   double sample_rate_ = 0.0;
-  int max_block_size_ = 0;
   std::array<rt::BiquadState, 4> filters_{};
   float smoothed_factor_ = 1.0f;
   float filter_factor_ = 1.0f;

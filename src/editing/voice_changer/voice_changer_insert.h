@@ -70,7 +70,6 @@ class VoiceChangerInsert : public rt::ProcessorBase {
  private:
   RealtimeVoiceChanger changer_;
   RealtimeVoiceChangerConfig config_;
-  double sample_rate_ = 0.0;
   int prepared_channels_ = 0;
   int max_block_size_ = 0;
   std::uint32_t reported_discards_ = 0;

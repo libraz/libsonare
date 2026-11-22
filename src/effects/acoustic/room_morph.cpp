@@ -59,6 +59,18 @@ const common::RoomMemberPaths kMorphPaths{"target.dims", "placement.source", "pl
 
 // The suppressor runs on at most the two channels the convolver processes.
 constexpr int kMaxSuppressedChannels = 2;
+// Block size of the offline renders.
+constexpr int kBlock = 256;
+
+// Runs @p channels (each @p total samples, in place) through @p processor block by block.
+void process_blocks(RoomMorphProcessor& processor, float* const* channels, int num_channels,
+                    size_t total) {
+  for (size_t off = 0; off < total; off += static_cast<size_t>(kBlock)) {
+    const int nn = static_cast<int>(std::min<size_t>(static_cast<size_t>(kBlock), total - off));
+    float* blk[2] = {channels[0] + off, num_channels > 1 ? channels[1] + off : nullptr};
+    processor.process(blk, num_channels, nn);
+  }
+}
 }  // namespace
 
 void validate_room_morph_config(const RoomMorphConfig& config,
@@ -75,9 +87,10 @@ void validate_room_morph_config(const RoomMorphConfig& config,
   // Everything synthesize_rir would refuse, refused here instead: a refused
   // synthesis returns an empty target RIR, which the convolution path renders as
   // dry passthrough rather than as an error.
-  common::check_rir_synth_config(rir_config_from(config));
+  const auto rir_config = rir_config_from(config);
+  common::check_rir_synth_config(rir_config);
   const std::vector<Diagnostic> synthesis =
-      sonare::acoustic::validate_rir_synth_config(rir_config_from(config), rir_names);
+      sonare::acoustic::validate_rir_synth_config(rir_config, rir_names);
   SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
                    sonare::acoustic::first_error_text(synthesis));
 }
@@ -247,7 +260,6 @@ RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config
   const int sr = recording.sample_rate();
 
   RoomMorphProcessor processor(config, sonare::acoustic::ReceiverLayout::Mono);
-  constexpr int kBlock = 256;
   processor.prepare(static_cast<double>(sr), kBlock);
 
   const int tail = processor.tail_samples();
@@ -260,11 +272,8 @@ RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config
   std::vector<float> buf(total, 0.0f);
   for (size_t i = 0; i < recording.size(); ++i) buf[i] = recording[i];
 
-  for (size_t off = 0; off < total; off += static_cast<size_t>(kBlock)) {
-    const int nn = static_cast<int>(std::min<size_t>(static_cast<size_t>(kBlock), total - off));
-    float* blk = buf.data() + off;
-    processor.process(&blk, 1, nn);
-  }
+  float* mono[1] = {buf.data()};
+  process_blocks(processor, mono, 1, total);
 
   // Drop the leading convolution latency so the offline render is time-aligned.
   std::vector<float> out(out_len, 0.0f);
@@ -287,7 +296,6 @@ RoomMorphStereoResult room_morph_stereo(const Audio& left, const Audio& right,
   }
   const int sr = left.sample_rate();
 
-  constexpr int kBlock = 256;
   processor.prepare(static_cast<double>(sr), kBlock);
 
   const int tail = processor.tail_samples();
@@ -301,11 +309,8 @@ RoomMorphStereoResult room_morph_stereo(const Audio& left, const Audio& right,
   std::copy(left.begin(), left.end(), buf_l.begin());
   std::copy(right.begin(), right.end(), buf_r.begin());
 
-  for (size_t off = 0; off < total; off += static_cast<size_t>(kBlock)) {
-    const int nn = static_cast<int>(std::min<size_t>(static_cast<size_t>(kBlock), total - off));
-    float* blk[2] = {buf_l.data() + off, buf_r.data() + off};
-    processor.process(blk, 2, nn);
-  }
+  float* pair[2] = {buf_l.data(), buf_r.data()};
+  process_blocks(processor, pair, 2, total);
 
   const auto aligned = [&](const std::vector<float>& buf) {
     return Audio::from_vector(

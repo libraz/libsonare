@@ -61,7 +61,6 @@ void StreamingFormant::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
   factor_alpha_ = rt::one_pole_lowpass_alpha_matched(60.0f, sample_rate_);
   smoothed_factor_ = effective_factor(config_);
   filter_factor_ = smoothed_factor_;

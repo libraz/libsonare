@@ -279,7 +279,9 @@ void StreamingRetune::emit_grain() noexcept {
     const double read_pos = start + static_cast<double>(n) * pitch_ratio_;
     const float w = window_[static_cast<std::size_t>(n)];
     const float sample = read_ring_linear(read_pos) * w;
-    const std::size_t idx = (synth_pos_ + static_cast<std::size_t>(n)) % accum_cap_;
+    // synth_pos_ < accum_cap_ and n < grain_size_ <= accum_cap_, so one subtraction wraps.
+    std::size_t idx = synth_pos_ + static_cast<std::size_t>(n);
+    if (idx >= accum_cap_) idx -= accum_cap_;
     synth_acc_[idx] += sample;
     // The window is applied once (analysis only), so the drain divides by the
     // sum of the window values that actually contributed, not their squares:
@@ -290,7 +292,8 @@ void StreamingRetune::emit_grain() noexcept {
     norm_acc_[idx] += w;
   }
 
-  synth_pos_ = (synth_pos_ + static_cast<std::size_t>(hop_a_)) % accum_cap_;
+  synth_pos_ += static_cast<std::size_t>(hop_a_);
+  if (synth_pos_ >= accum_cap_) synth_pos_ -= accum_cap_;
 }
 
 void StreamingRetune::process_block(const float* input, float* output, int num_samples) noexcept {
@@ -334,7 +337,7 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
     const float out_sample = synth_acc_[drain_pos_] / norm;
     synth_acc_[drain_pos_] = 0.0f;
     norm_acc_[drain_pos_] = 0.0f;
-    drain_pos_ = (drain_pos_ + 1) % accum_cap_;
+    if (++drain_pos_ == accum_cap_) drain_pos_ = 0;
 
     // The OLA output trails the input by one grain. Delay the dry path by that
     // same fixed amount before blending so intermediate mix values are an
@@ -343,7 +346,7 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
     if (!dry_delay_.empty()) {
       delayed_dry = dry_delay_[dry_delay_pos_];
       dry_delay_[dry_delay_pos_] = input[i];
-      dry_delay_pos_ = (dry_delay_pos_ + 1) % dry_delay_.size();
+      if (++dry_delay_pos_ == dry_delay_.size()) dry_delay_pos_ = 0;
     }
     output[i] = delayed_dry * (1.0f - mix) + out_sample * mix;
   }

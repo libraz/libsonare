@@ -5,6 +5,7 @@
 #include <string>
 
 #include "effects/pitch_shift.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
 
@@ -14,7 +15,12 @@ namespace check = sonare::util::check;
 
 namespace {
 
-double pitch_ratio(float semitones) { return std::exp2(static_cast<double>(semitones) / 12.0); }
+double pitch_ratio(float semitones) {
+  return std::exp2(static_cast<double>(semitones) /
+                   static_cast<double>(sonare::constants::kSemitonesPerOctave));
+}
+
+bool is_unity_factor(float factor) { return std::abs(factor - 1.0f) < 1.0e-6f; }
 
 }  // namespace
 
@@ -77,13 +83,13 @@ Audio VoiceChanger::process(const Audio& audio) const {
     // The envelope is estimated on the unshifted voice and the pitch shift then carries it to
     // the requested factor.
     const Audio warped =
-        std::abs(warp_factor - 1.0f) < 1.0e-6f ? audio : FormantWarp(formant_config).process(audio);
+        is_unity_factor(warp_factor) ? audio : FormantWarp(formant_config).process(audio);
     return shifts ? pitch_shift(warped, config_.pitch_semitones, pitch_config) : warped;
   }
 
   Audio shifted = shifts ? pitch_shift(audio, config_.pitch_semitones, pitch_config) : audio;
 
-  if (std::abs(warp_factor - 1.0f) < 1.0e-6f) return shifted;
+  if (is_unity_factor(warp_factor)) return shifted;
 
   FormantWarp warp(formant_config);
   return warp.process(shifted);

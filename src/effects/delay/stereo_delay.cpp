@@ -88,7 +88,8 @@ StereoDelay::StereoDelay(StereoDelayConfig config) : config_((validate_config(co
 
 void StereoDelay::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  const int max_delay = static_cast<int>(sample_rate_ * 4.0);
+  const int max_delay =
+      static_cast<int>(sample_rate_ * (static_cast<double>(kMaxDelayMs) / 1000.0));
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
   }
@@ -277,11 +278,14 @@ int StereoDelay::tail_samples() const noexcept {
   const double current_tap = std::max(tap_samples_[0], tap_samples_[1]);
   const double target_tap =
       config_delay_samples(std::max(config_.tap3_ms, config_.tap4_ms), sample_rate_);
-  const double line =
-      std::clamp(std::max(current_delay, target_delay) / to_samples + config_.mod_depth_ms, 0.0,
-                 static_cast<double>(kMaxDelayMs)) *
-          to_samples +
-      modulation::kDelayReadStencilSamples;
+  // Samples a line holding @p samples of delay must read, with the modulation depth and stencil.
+  const auto line_reach = [&](double samples) {
+    return std::clamp(samples / to_samples + config_.mod_depth_ms, 0.0,
+                      static_cast<double>(kMaxDelayMs)) *
+               to_samples +
+           modulation::kDelayReadStencilSamples;
+  };
+  const double line = line_reach(std::max(current_delay, target_delay));
   // Each pass reads the longer line, then the one-sample feedback cell and the damping ring.
   rt::TailBudget damping;
   if (damping_gain_ > 0.0f) damping.decay(1.0 - damping_gain_);
@@ -300,10 +304,7 @@ int StereoDelay::tail_samples() const noexcept {
   loop.delay(line).recirculation(line + 1.0 + damping.samples(), feedback, heard_scale);
   // The feed-forward taps ring once, at their own time.
   rt::TailBudget taps;
-  taps.delay(std::clamp(std::max(current_tap, target_tap) / to_samples + config_.mod_depth_ms, 0.0,
-                        static_cast<double>(kMaxDelayMs)) *
-                 to_samples +
-             modulation::kDelayReadStencilSamples);
+  taps.delay(line_reach(std::max(current_tap, target_tap)));
   return loop.alongside(taps).samples();
 }
 

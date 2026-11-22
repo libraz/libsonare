@@ -147,6 +147,15 @@ void median_filter_line(const float* in, float* out, int n, int kernel_size, Sli
   }
 }
 
+/// Rejects a null spectrogram, an even or non-positive kernel, and one above the maximum.
+void check_median_kernel(const char* fn_name, const float* magnitude, int kernel_size) {
+  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
+                   std::string(fn_name) + ": kernel_size " + std::to_string(kernel_size) +
+                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
+}
+
 }  // namespace
 
 int median_filter_worker_count(int total, int kernel_size, int staged_column_length,
@@ -175,14 +184,10 @@ int median_filter_workers_for_work(int workers, int total, int line_length) {
 
 std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, int n_frames,
                                             int kernel_size) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
   // Bound before the per-thread allocations below, not after. This bounds one
   // factor only -- the product is held by the worker count at the parallel_for
   // below, since each worker builds its own kernel-wide pair.
-  SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
-                   "median_filter_horizontal: kernel_size " + std::to_string(kernel_size) +
-                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
+  check_median_kernel("median_filter_horizontal", magnitude, kernel_size);
 
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
@@ -215,14 +220,10 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
 
 std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, int n_frames,
                                           int kernel_size) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
   // Bound before the per-thread allocations below, not after. This bounds one
   // factor only -- the product, kernel pair plus n_bins staging pair per worker,
   // is held by the worker count at the parallel_for below.
-  SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
-                   "median_filter_vertical: kernel_size " + std::to_string(kernel_size) +
-                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
+  check_median_kernel("median_filter_vertical", magnitude, kernel_size);
 
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
@@ -278,6 +279,40 @@ void validate_mask_config(const HpssConfig& config) {
                    ErrorCode::InvalidParameter, "HPSS margins must be finite and non-negative");
 }
 
+/// @brief Median-filters a spectrogram's magnitude along time (harmonic) and frequency
+/// (percussive).
+void median_filter_magnitudes(const Spectrogram& spec, const HpssConfig& config,
+                              std::vector<float>& harmonic_enhanced,
+                              std::vector<float>& percussive_enhanced) {
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+  const std::vector<float>& magnitude = spec.magnitude();
+  harmonic_enhanced =
+      median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
+  percussive_enhanced =
+      median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
+}
+
+/// @brief Soft masks matching librosa; a null output skips that mask.
+/// @details The margin is applied to the *opposing* component before the power, i.e.
+///          mask_harm = H^p / (H^p + (margin_h * P)^p) and mask_perc = P^p / (P^p + (margin_p *
+///          H)^p), so the margin contributes margin^power, not margin^1.
+void fill_soft_masks(const std::vector<float>& h, const std::vector<float>& p,
+                     const HpssConfig& config, int total_size, float* harmonic_mask,
+                     float* percussive_mask) {
+  const double mh = config.margin_harmonic;
+  const double mp = config.margin_percussive;
+  for (int i = 0; i < total_size; ++i) {
+    const size_t cell = static_cast<size_t>(i);
+    if (harmonic_mask != nullptr) {
+      harmonic_mask[cell] = soft_mask(h[cell], mh * p[cell], config.power);
+    }
+    if (percussive_mask != nullptr) {
+      percussive_mask[cell] = soft_mask(p[cell], mp * h[cell], config.power);
+    }
+  }
+}
+
 /// @brief Fills the requested separation masks from a spectrogram's magnitude.
 /// @param spec Analysis spectrogram
 /// @param config HPSS configuration
@@ -292,40 +327,19 @@ void validate_mask_config(const HpssConfig& config) {
 void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int total_size,
                      std::vector<float>* harmonic_mask, std::vector<float>* percussive_mask) {
   validate_mask_config(config);
-  const int n_bins = spec.n_bins();
-  const int n_frames = spec.n_frames();
-
-  /// Get magnitude spectrum
-  const std::vector<float>& magnitude = spec.magnitude();
 
   /// Apply median filters
-  std::vector<float> harmonic_enhanced =
-      median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
-  std::vector<float> percussive_enhanced =
-      median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
+  std::vector<float> harmonic_enhanced;
+  std::vector<float> percussive_enhanced;
+  median_filter_magnitudes(spec, config, harmonic_enhanced, percussive_enhanced);
 
   Eigen::Map<Eigen::ArrayXf> h_mag(harmonic_enhanced.data(), total_size);
   Eigen::Map<Eigen::ArrayXf> p_mag(percussive_enhanced.data(), total_size);
 
   if (config.use_soft_mask) {
-    /// Soft masks matching librosa: the margin is applied to the *opposing*
-    /// component before the power, i.e.
-    ///   mask_harm = H^p / (H^p + (margin_h * P)^p)
-    ///   mask_perc = P^p / (P^p + (margin_p * H)^p)
-    /// so the margin contributes margin^power, not margin^1.
-    const auto& h = harmonic_enhanced;
-    const auto& p = percussive_enhanced;
-    const double mh = config.margin_harmonic;
-    const double mp = config.margin_percussive;
-    for (int i = 0; i < total_size; ++i) {
-      const size_t cell = static_cast<size_t>(i);
-      if (harmonic_mask != nullptr) {
-        (*harmonic_mask)[cell] = soft_mask(h[cell], mh * p[cell], config.power);
-      }
-      if (percussive_mask != nullptr) {
-        (*percussive_mask)[cell] = soft_mask(p[cell], mp * h[cell], config.power);
-      }
-    }
+    fill_soft_masks(harmonic_enhanced, percussive_enhanced, config, total_size,
+                    harmonic_mask != nullptr ? harmonic_mask->data() : nullptr,
+                    percussive_mask != nullptr ? percussive_mask->data() : nullptr);
   } else {
     /// Hard mask: h >= p -> harmonic=1, else percussive=1. A positive power
     /// preserves the order, so the magnitudes are compared unpowered.
@@ -402,6 +416,16 @@ StftConfig resynthesis_framing(StftConfig config) {
   return config;
 }
 
+/// Audio-level single-component separation.
+Audio hpss_component_audio(const Audio& audio, const HpssConfig& config,
+                           const StftConfig& requested, HpssComponent component) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  const StftConfig stft_config = resynthesis_framing(requested);
+
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  return hpss_component(spec, config, component).to_audio(static_cast<int>(audio.size()));
+}
+
 }  // namespace
 
 HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
@@ -451,21 +475,11 @@ Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config) {
 }
 
 Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  const StftConfig stft_config = resynthesis_framing(requested);
-
-  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
-  return hpss_component(spec, config, HpssComponent::kHarmonic)
-      .to_audio(static_cast<int>(audio.size()));
+  return hpss_component_audio(audio, config, requested, HpssComponent::kHarmonic);
 }
 
 Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  const StftConfig stft_config = resynthesis_framing(requested);
-
-  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
-  return hpss_component(spec, config, HpssComponent::kPercussive)
-      .to_audio(static_cast<int>(audio.size()));
+  return hpss_component_audio(audio, config, requested, HpssComponent::kPercussive);
 }
 
 HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
@@ -485,11 +499,9 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   /// The filter scratch lives only while the masks are formed, so none of it
   /// overlaps the three output spectra built below.
   {
-    const std::vector<float>& magnitude = spec.magnitude();
-    std::vector<float> harmonic_enhanced =
-        median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
-    std::vector<float> percussive_enhanced =
-        median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
+    std::vector<float> harmonic_enhanced;
+    std::vector<float> percussive_enhanced;
+    median_filter_magnitudes(spec, config, harmonic_enhanced, percussive_enhanced);
 
     Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
     Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
@@ -499,13 +511,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 
     if (config.use_soft_mask) {
       /// The same soft masks as fill_hpss_masks.
-      const double mh = config.margin_harmonic;
-      const double mp = config.margin_percussive;
-      for (int i = 0; i < total_size; ++i) {
-        const size_t cell = static_cast<size_t>(i);
-        h_mask[i] = soft_mask(h[cell], mh * p[cell], config.power);
-        p_mask[i] = soft_mask(p[cell], mp * h[cell], config.power);
-      }
+      fill_soft_masks(h, p, config, total_size, harmonic_mask.data(), percussive_mask.data());
 
       /// Residual is 1 - sum when margins push both masks below their full share
       Eigen::ArrayXf mask_sum = h_mask + p_mask;
