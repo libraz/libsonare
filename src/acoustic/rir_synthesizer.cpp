@@ -579,6 +579,29 @@ std::string receiver_outside_refusal(const ShoeboxRoom& room, const SourceListen
 
 }  // namespace
 
+ResolvedRoomPlacement resolve_room_placement(const RoomDimensions& dims,
+                                             const RoomPlacementRequest& request) {
+  const SourceListener fallback = scaled_default_placement(dims.length, dims.width, dims.height);
+  ResolvedRoomPlacement resolved;
+  const auto resolve = [](const std::array<std::optional<float>, 3>& given, const Vec3& otherwise,
+                          Vec3& point, std::array<bool, 3>& supplied) {
+    const float defaults[3] = {otherwise.x, otherwise.y, otherwise.z};
+    float* axes[3] = {&point.x, &point.y, &point.z};
+    for (size_t i = 0; i < 3; ++i) {
+      supplied[i] = given[i].has_value();
+      *axes[i] = given[i].value_or(defaults[i]);
+    }
+  };
+  resolve(request.source, fallback.source, resolved.placement.source, resolved.supplied.source);
+  resolve(request.listener, fallback.listener, resolved.placement.listener,
+          resolved.supplied.listener);
+  resolved.supplied.receiver_spacing = request.receiver_spacing_m.has_value();
+  resolved.receiver_spacing_m = request.receiver_spacing_m
+                                    ? *request.receiver_spacing_m
+                                    : default_receiver_spacing(dims, resolved.placement);
+  return resolved;
+}
+
 int pair_blocking_wall_axis(const RoomDimensions& dims, const SourceListener& placement) noexcept {
   const Vec3 axis = receiver_pair(placement, 2.0f).left - placement.listener;
   const bool on_x_wall =

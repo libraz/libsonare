@@ -10,6 +10,8 @@
 /// (per-band Sabine/Eyring decay) afterward — producing one mono RIR that the
 /// convolution reverb path can apply. Offline / control-thread only.
 
+#include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -146,6 +148,27 @@ ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noe
 ///          sits on a side wall the pair axis crosses, which leaves no spacing to accept.
 float default_receiver_spacing(const RoomDimensions& dims,
                                const SourceListener& placement) noexcept;
+
+/// @brief The source and listener coordinates (x, y, z) and the receiver spacing a caller gave;
+///        an absent one is left to the room.
+struct RoomPlacementRequest {
+  std::array<std::optional<float>, 3> source{};
+  std::array<std::optional<float>, 3> listener{};
+  std::optional<float> receiver_spacing_m{};
+};
+
+/// @brief A placement request resolved against a room, with the record of what was given.
+struct ResolvedRoomPlacement {
+  SourceListener placement;
+  float receiver_spacing_m = kDefaultReceiverSpacingM;
+  SuppliedPlacement supplied;
+};
+
+/// @brief Resolves @p request in a room of @p dims: an absent coordinate takes
+///        `scaled_default_placement`, an absent spacing `default_receiver_spacing` of the resolved
+///        placement. The one place an omission is read, so its SuppliedPlacement cannot be missed.
+ResolvedRoomPlacement resolve_room_placement(const RoomDimensions& dims,
+                                             const RoomPlacementRequest& request);
 
 /// @brief The plan axis (0 = x, 1 = y) of the side wall the listener sits on when no receiver
 ///        spacing fits the room, the wall the pair axis crosses.

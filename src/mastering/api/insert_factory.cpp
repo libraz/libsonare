@@ -701,28 +701,50 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   }
   return make_uniform_room(dims, request);
 }
-// Reads <prefix>X/Y/Z in that order, each defaulting to the matching field of @p defaults.
-template <typename V>
-V read_vec3(const ParamMap& params, const std::string& prefix, const V& defaults) {
-  return {f(params, (prefix + "X").c_str(), defaults.x, kMeters),
-          f(params, (prefix + "Y").c_str(), defaults.y, kMeters),
-          f(params, (prefix + "Z").c_str(), defaults.z, kMeters)};
+// Reads @p key, declaring @p fallback as its default; absent when the caller did not give it.
+std::optional<float> given_f(const ParamMap& params, const std::string& key, float fallback,
+                             detail::ParamMeta meta) {
+  const float value = f(params, key.c_str(), fallback, meta);
+  return params.has(key) ? std::optional<float>(value) : std::nullopt;
 }
 
-// Which of a point's three keys the caller gave.
-std::array<bool, 3> supplied_point(const ParamMap& params, const std::string& prefix) {
-  return {{params.has(prefix + "X"), params.has(prefix + "Y"), params.has(prefix + "Z")}};
+// Reads <prefix>X/Y/Z, each declaring the matching coordinate of @p fallback as its default.
+std::array<std::optional<float>, 3> given_point(const ParamMap& params, const std::string& prefix,
+                                                const sonare::acoustic::Vec3& fallback) {
+  return {given_f(params, prefix + "X", fallback.x, kMeters),
+          given_f(params, prefix + "Y", fallback.y, kMeters),
+          given_f(params, prefix + "Z", fallback.z, kMeters)};
 }
 
-// Climate pair and receiver spacing; an absent key keeps the config's value. A given 0 is the
-// real value (0 degC, 0 % humidity); a 0 receiver spacing is refused by the room's own check.
+// The source and listener keys of a room in @p dims, declaring the scaled placement as defaults.
+sonare::acoustic::RoomPlacementRequest read_room_points(const ParamMap& params,
+                                                        const sonare::RoomDimensions& dims) {
+  const sonare::acoustic::SourceListener scaled =
+      sonare::acoustic::resolve_room_placement(dims, {}).placement;
+  sonare::acoustic::RoomPlacementRequest request;
+  request.source = given_point(params, "source", scaled.source);
+  request.listener = given_point(params, "listener", scaled.listener);
+  return request;
+}
+
+// Climate pair; an absent key keeps the config's value. A given 0 is the real value (0 degC,
+// 0 % humidity).
 template <typename Config>
-void read_air_and_spacing(const ParamMap& params, Config& config) {
+void read_air(const ParamMap& params, Config& config) {
   config.air.temperature_c =
       f(params, "airTemperatureC", config.air.temperature_c, kDegreesCelsius);
   config.air.humidity_percent =
       f(params, "airHumidityPercent", config.air.humidity_percent, kPercent);
-  config.receiver_spacing_m = f(params, "receiverSpacingM", config.receiver_spacing_m, kMeters);
+}
+
+// Adds the receiver spacing to @p request, declaring the spacing fitted to its placement as the
+// default, and resolves it; a 0 spacing is refused by the room's own check.
+sonare::acoustic::ResolvedRoomPlacement read_room_placement(
+    const ParamMap& params, const sonare::RoomDimensions& dims,
+    sonare::acoustic::RoomPlacementRequest request) {
+  const float fitted = sonare::acoustic::resolve_room_placement(dims, request).receiver_spacing_m;
+  request.receiver_spacing_m = given_f(params, "receiverSpacingM", fitted, kMeters);
+  return sonare::acoustic::resolve_room_placement(dims, request);
 }
 
 // The room validators refuse config member paths; these are the flat keys each one is read from.
@@ -924,11 +946,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dims = {f(params, "lengthM", config.dims.length, kMeters),
                    f(params, "widthM", config.dims.width, kMeters),
                    f(params, "heightM", config.dims.height, kMeters)};
-    const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
-        config.dims.length, config.dims.width, config.dims.height);
-    config.source = read_vec3(params, "source", placement.source);
-    config.listener = read_vec3(params, "listener", placement.listener);
-    config.supplied = {supplied_point(params, "source"), supplied_point(params, "listener")};
+    const sonare::acoustic::RoomPlacementRequest points = read_room_points(params, config.dims);
     note_room_members(params, "dims", "source", "listener");
     note_room_containment(params);
     note_room_coupling(params);
@@ -944,10 +962,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
-    config.receiver_spacing_m =
-        sonare::acoustic::default_receiver_spacing(config.dims, {config.source, config.listener});
-    read_air_and_spacing(params, config);
-    config.supplied.receiver_spacing = params.has("receiverSpacingM");
+    read_air(params, config);
+    const sonare::acoustic::ResolvedRoomPlacement placement =
+        read_room_placement(params, config.dims, points);
+    config.source = placement.placement.source;
+    config.listener = placement.placement.listener;
+    config.receiver_spacing_m = placement.receiver_spacing_m;
+    config.supplied = placement.supplied;
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
   if (name == "effects.acoustic.roomMorph") {
@@ -960,11 +981,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::note_side_channel_key(params, "bandAbsorption", ParamKind::Array);
     detail::note_side_channel_key(params, "bandScattering", ParamKind::Array);
     config.target = acoustic_room_from_json(params, json_root);
-    const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
-        config.target.dims.length, config.target.dims.width, config.target.dims.height);
-    config.placement.source = read_vec3(params, "source", placement.source);
-    config.placement.listener = read_vec3(params, "listener", placement.listener);
-    config.supplied = {supplied_point(params, "source"), supplied_point(params, "listener")};
+    const sonare::acoustic::RoomPlacementRequest points =
+        read_room_points(params, config.target.dims);
     note_room_members(params, "target.dims", "placement.source", "placement.listener");
     note_room_containment(params);
     note_room_coupling(params);
@@ -982,11 +1000,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.crossfade_ms = f(params, "crossfadeMs", config.crossfade_ms, kMs);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
-    // Same climate convention as effects.reverb.room above.
-    config.receiver_spacing_m =
-        sonare::acoustic::default_receiver_spacing(config.target.dims, config.placement);
-    read_air_and_spacing(params, config);
-    config.supplied.receiver_spacing = params.has("receiverSpacingM");
+    // Same climate and placement convention as effects.reverb.room above.
+    read_air(params, config);
+    const sonare::acoustic::ResolvedRoomPlacement placement =
+        read_room_placement(params, config.target.dims, points);
+    config.placement = placement.placement;
+    config.receiver_spacing_m = placement.receiver_spacing_m;
+    config.supplied = placement.supplied;
     return make<effects::acoustic::RoomMorphProcessor>(
         config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
