@@ -3,11 +3,12 @@
 /// @file vqt.h
 /// @brief Variable-Q Transform (VQT) for music signal analysis.
 /// @details VQT extends CQT with variable Q factor controlled by gamma parameter.
-/// When gamma=0, VQT is equivalent to CQT. A negative or NaN gamma selects
-/// librosa's ERB-derived automatic gamma.
+/// When gamma=0, VQT is equivalent to CQT. A NaN gamma, the default, selects
+/// librosa's ERB-derived automatic gamma; a negative one is refused.
 
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -22,13 +23,14 @@ using VqtProgressCallback = std::function<void(float progress)>;
 
 /// @brief VQT configuration.
 struct VqtConfig {
-  int hop_length = 512;                  ///< Hop length in samples
-  float fmin = constants::kC1Hz;         ///< Minimum frequency in Hz (C1)
-  int n_bins = 84;                       ///< Number of frequency bins
-  int bins_per_octave = 12;              ///< Bins per octave
-  float gamma = -1.0f;                   ///< Bandwidth offset (<0 = automatic, 0 = CQT)
-  float filter_scale = 1.0f;             ///< Filter length scale factor
-  WindowType window = WindowType::Hann;  ///< Window function for filters
+  int hop_length = 512;                                   ///< Hop length in samples
+  float fmin = constants::kC1Hz;                          ///< Minimum frequency in Hz (C1)
+  int n_bins = 84;                                        ///< Number of frequency bins
+  int bins_per_octave = 12;                               ///< Bins per octave
+  float gamma = std::numeric_limits<float>::quiet_NaN();  ///< Bandwidth offset in Hz (NaN =
+                                                          ///< automatic, 0 = CQT)
+  float filter_scale = 1.0f;                              ///< Filter length scale factor
+  WindowType window = WindowType::Hann;                   ///< Window function for filters
 
   /// @brief Converts to CQT config (for gamma=0 case).
   CqtConfig to_cqt_config() const;
@@ -38,23 +40,15 @@ struct VqtConfig {
 inline constexpr util::check::NumericDomain kVqtGammaDomain =
     util::check::real_domain_above(0.0, true);
 
-/// @brief Refuses an infinite gamma, which the automatic sentinel would otherwise absorb.
-/// @details A NaN or negative gamma stays the automatic spelling; -inf is not one of them.
-/// @throws SonareParameterRefusal(InvalidParameter) when @p gamma is infinite.
-inline void validate_vqt_gamma(float gamma) {
-  if (std::isinf(gamma)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "gamma",
-                                            "must not be infinite");
-  }
-}
-
 /// @brief VQT result (same structure as CQT).
 using VqtResult = CqtResult;
 
 /// @brief Concrete gamma the transform runs with, resolving the automatic sentinel.
-/// @details A negative or NaN @ref VqtConfig::gamma selects the ERB-derived value,
-///          which depends on @ref VqtConfig::bins_per_octave. Published so a caller
-///          that reports the gamma reports the one the bandwidths were built from.
+/// @details A NaN @ref VqtConfig::gamma selects the ERB-derived value, which depends on
+///          @ref VqtConfig::bins_per_octave. Published so a caller that reports the gamma
+///          reports the one the bandwidths were built from.
+/// @throws SonareParameterRefusal(InvalidParameter) when a given gamma is outside
+///         kVqtGammaDomain.
 float resolve_vqt_gamma(const VqtConfig& config);
 
 /// @brief VQT kernel for efficient computation.

@@ -189,13 +189,12 @@ TEST_CASE("vqt_bandwidths with gamma>0", "[vqt]") {
   REQUIRE_THAT(bw[1], WithinRel(alpha[1] * 200.0f + gamma, 0.001f));
 }
 
-TEST_CASE("vqt negative gamma selects librosa automatic bandwidth", "[vqt]") {
+TEST_CASE("vqt left at its default gamma selects librosa automatic bandwidth", "[vqt]") {
   const int sr = 22050;
   Audio audio = generate_sine(440.0f, 0.25f, sr);
 
   VqtConfig automatic;
   automatic.n_bins = 24;
-  automatic.gamma = -1.0f;
 
   VqtConfig explicit_gamma = automatic;
   const float step = std::pow(2.0f, 2.0f / static_cast<float>(automatic.bins_per_octave));
@@ -1419,4 +1418,17 @@ TEST_CASE("VQT filter_scale moves the magnitudes and the bandwidth", "[vqt]") {
     return (at(kToneBin - 1) + at(kToneBin + 1)) / at(kToneBin);
   };
   CHECK(leakage(b) > leakage(a));
+}
+
+TEST_CASE("vqt refuses a negative gamma rather than reading it as automatic", "[vqt][validation]") {
+  Audio audio = generate_sine(440.0f, 0.05f);
+  VqtConfig config;
+  config.n_bins = 12;
+  for (float gamma : {-1.0f, -0.5f, -std::numeric_limits<float>::infinity()}) {
+    CAPTURE(gamma);
+    config.gamma = gamma;
+    REQUIRE_THROWS_AS(vqt(audio, config), sonare::SonareException);
+    REQUIRE_THROWS_AS(resolve_vqt_gamma(config), sonare::SonareException);
+    REQUIRE_THROWS_WITH(resolve_vqt_gamma(config), "gamma must be finite and at least 0");
+  }
 }

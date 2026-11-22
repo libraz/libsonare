@@ -84,11 +84,12 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
 }  // namespace
 
 float resolve_vqt_gamma(const VqtConfig& config) {
-  if (config.gamma < 0.0f || std::isnan(config.gamma)) {
+  if (std::isnan(config.gamma)) {
     const float step = std::pow(2.0f, 2.0f / static_cast<float>(config.bins_per_octave));
     const float alpha = (step - 1.0f) / (step + 1.0f);
     return 24.7f * alpha / 0.108f;
   }
+  util::check::within(config.gamma, kVqtGammaDomain, "gamma");
   return config.gamma;
 }
 
