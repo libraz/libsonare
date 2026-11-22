@@ -229,20 +229,6 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
   }
 }
 
-StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
-    : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
-  validate_mastering_chain_config(config_);
-  reject_non_streaming_repair(config_);
-  if (config_.loudness.enabled) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "StreamingMasteringChain does not support loudness without a precomputed static gain "
-        "(whole-signal LUFS required); construct with StreamingMasteringChainOptions and supply "
-        "loudness_static_gain_db and loudness_static_gain_peak_dbtp as measured at the loudness "
-        "stage's input (the streaming loudness gain helper returns both)");
-  }
-}
-
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
                                                  StreamingMasteringChainOptions options)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {

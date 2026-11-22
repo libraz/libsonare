@@ -333,11 +333,11 @@ class MasteringChain {
 // stages: repair.denoise, eq.tilt, dynamics.deesser, dynamics.transientShaper,
 // dynamics.compressor, dynamics.multibandComp, saturation.tape,
 // saturation.exciter, spectral.airBand, stereo.imager (stereo only),
-// stereo.monoMaker (stereo only), maximizer.truePeakLimiter.
+// stereo.monoMaker (stereo only), maximizer.truePeakLimiter, loudness.
 // The constructor throws InvalidParameter if the config enables any of the five
 // whole-signal repair stages (repair.declick, repair.declip, repair.decrackle,
-// repair.dehum, repair.dereverb), and for loudness unless a precomputed static
-// gain is supplied (see StreamingMasteringChainOptions).
+// repair.dehum, repair.dereverb). loudness runs as loudness.optimize with the static gain
+// StreamingMasteringChainOptions supplies, or none when it is NaN (the default).
 // repair.denoise runs here, but only with a noise estimator that is recursive in
 // time. A config parsed with parse_streaming_chain_config_params() defaults to spp;
 // quantile, which ranks every frame of the whole signal by energy, is refused by
@@ -364,8 +364,8 @@ class MasteringChain {
 /// the loudness stage's input (after every earlier stage) like the offline
 /// chain, not on the source. When
 /// provided and `config.loudness.enabled` is set, the chain applies that fixed
-/// gain per block before the loudness stage's true-peak limiter instead of
-/// throwing. The true-peak ceiling is still enforced live by the loudness
+/// gain per block before the loudness stage's true-peak limiter; without one the stage applies
+/// no gain and its limiter still runs. The true-peak ceiling is still enforced live by the loudness
 /// stage's own true-peak limiter, built at `prepare()` from
 /// `loudness.ceiling_dbtp` / `true_peak_oversample` / `release_ms`; the
 /// standalone `maximizer.truePeakLimiter` stage stays off, since limiting on
@@ -394,15 +394,12 @@ inline constexpr util::check::NumericDomain kStreamingChainChannelCountDomain =
 
 class StreamingMasteringChain {
  public:
-  /// @brief Construct with a configuration. Throws SonareException if the
-  /// configuration enables non-streaming stages (repair.*, loudness).
-  explicit StreamingMasteringChain(MasteringChainConfig config);
-
   /// @brief Construct with a configuration and streaming options. When the
   /// configuration enables loudness, the chain applies @p options.loudness_static_gain_db per
-  /// block, or no gain when it is NaN (see @ref StreamingMasteringChainOptions). Repair stages
-  /// are still rejected.
-  StreamingMasteringChain(MasteringChainConfig config, StreamingMasteringChainOptions options);
+  /// block, or no gain when it is NaN, the default (see @ref StreamingMasteringChainOptions).
+  /// Throws SonareException if the configuration enables a non-streaming repair stage.
+  explicit StreamingMasteringChain(MasteringChainConfig config,
+                                   StreamingMasteringChainOptions options = {});
   ~StreamingMasteringChain();
 
   StreamingMasteringChain(const StreamingMasteringChain&) = delete;

@@ -1373,25 +1373,27 @@ TEST_CASE("StreamingMasteringChain supported and rejected stages match the imple
       // Enabling exactly one stage must instantiate exactly that stage: this is
       // what makes the list prepare()'s instantiation set rather than "the
       // constructor tolerated the config".
-      REQUIRE(chain.stage_names() == std::vector<std::string>{stage});
+      // loudness is realized as loudness.optimize, the only stage named apart from its key.
+      const std::string realized = stage == "loudness" ? "loudness.optimize" : stage;
+      REQUIRE(chain.stage_names() == std::vector<std::string>{realized});
       supported.push_back(stage);
     } catch (const sonare::SonareException&) {
       rejected.push_back(stage);
     }
   }
 
-  // Five repair stages need the whole signal, and so does loudness without a
-  // precomputed static gain. repair.denoise is in this list only because the
+  // Five repair stages need the whole signal. repair.denoise is in this list only because the
   // sweep enables each stage at its defaults, and the default noise estimator is
   // the whole-signal one; the case below drives the other side of that.
-  const std::vector<std::string> kRejected = {
-      "loudness",     "repair.declick", "repair.declip",  "repair.decrackle",
-      "repair.dehum", "repair.denoise", "repair.dereverb"};
+  const std::vector<std::string> kRejected = {"repair.declick",   "repair.declip",
+                                              "repair.decrackle", "repair.dehum",
+                                              "repair.denoise",   "repair.dereverb"};
   const std::vector<std::string> kSupported = {"dynamics.compressor",
                                                "dynamics.deesser",
                                                "dynamics.multibandComp",
                                                "dynamics.transientShaper",
                                                "eq.tilt",
+                                               "loudness",
                                                "maximizer.truePeakLimiter",
                                                "saturation.exciter",
                                                "saturation.tape",
@@ -1508,18 +1510,13 @@ TEST_CASE("a chain config document takes an enum-valued key by its name", "[mast
                   sonare::SonareException);
 }
 
-TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][chain][streaming]") {
-  MasteringChainConfig config;
-  config.loudness.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
-}
-
-TEST_CASE("StreamingMasteringChain options constructor reads a NaN gain as not measured",
+TEST_CASE("StreamingMasteringChain reads a NaN gain as not measured",
           "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.loudness.enabled = true;
-  // NaN is the not-measured gain the streaming loudness gain helper returns for silence: the
-  // stage applies none. Only an infinite gain is refused.
+  // NaN is the not-measured gain the streaming loudness gain helper returns for silence, and the
+  // default: the stage applies none. Only an infinite gain is refused.
+  REQUIRE_NOTHROW(StreamingMasteringChain(config));
   REQUIRE_NOTHROW(StreamingMasteringChain(config, StreamingMasteringChainOptions{}));
   StreamingMasteringChainOptions infinite;
   infinite.loudness_static_gain_db = std::numeric_limits<float>::infinity();
