@@ -1258,8 +1258,10 @@ export {
 } from './vocal_edit_worker_client.js';
 export type {
   BindWebMidiOptions,
+  WebMidiAudioContext,
   WebMidiBinding,
   WebMidiEngine,
+  WebMidiEngineInputOptions,
   WebMidiEventContextTimeOptions,
   WebMidiInputInfo,
   WebMidiMessage,
