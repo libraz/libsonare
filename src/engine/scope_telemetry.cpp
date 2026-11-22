@@ -32,10 +32,7 @@ void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t t
   frame_accum_ = 0;
   seq_ = 0;
   dropped_records_ = 0;
-  staged_count_ = 0;
-  master_frames_ = 0;
-  master_render_frame_ = 0;
-  master_accumulator_overflowed_ = false;
+  reset_block_state();
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 1)));
   goniometer_.reset();
 }
@@ -44,18 +41,19 @@ void ScopeTelemetryTap::reset() noexcept {
   capture_due_ = false;
   frame_accum_ = 0;
   dropped_records_ = 0;
-  staged_count_ = 0;
-  master_frames_ = 0;
-  master_render_frame_ = 0;
-  master_accumulator_overflowed_ = false;
+  reset_block_state();
   goniometer_.reset();
 }
 
-bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcept {
+void ScopeTelemetryTap::reset_block_state() noexcept {
   staged_count_ = 0;
   master_frames_ = 0;
   master_render_frame_ = 0;
   master_accumulator_overflowed_ = false;
+}
+
+bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcept {
+  reset_block_state();
   if (interval_frames <= 0 || num_frames <= 0) {
     capture_due_ = false;
     return false;
@@ -80,10 +78,7 @@ void ScopeTelemetryTap::end_block() noexcept {
   for (size_t i = 0; i < staged_count_; ++i) {
     publish(staged_records_[i]);
   }
-  staged_count_ = 0;
-  master_frames_ = 0;
-  master_render_frame_ = 0;
-  master_accumulator_overflowed_ = false;
+  reset_block_state();
 }
 
 void ScopeTelemetryTap::process(float* const* channels, int num_channels, int num_frames,
@@ -97,7 +92,8 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
   // window is applied over the actual sample count so a short block is a valid
   // windowed segment (zero-padding only interpolates the spectrum).
   const int m = std::min(num_frames, n_fft_);
-  const float inv_channels = 1.0f / static_cast<float>(std::min(num_channels, 2));
+  const int planes = std::min(num_channels, 2);
+  const float inv_channels = 1.0f / static_cast<float>(planes);
   // Accumulate the coherent gain (sum) of the window actually applied. The frame
   // is a Hann window over m samples then zero-padded to n_fft_, so the window
   // sum depends on m, not n_fft_. Normalizing by this sum (rather than the fixed
@@ -107,7 +103,7 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
   double window_sum = 0.0;
   for (int i = 0; i < m; ++i) {
     float mono = 0.0f;
-    for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
+    for (int ch = 0; ch < planes; ++ch) {
       if (channels[ch]) mono += channels[ch][i];
     }
     const float w = hann_value(i, m, true);
@@ -186,7 +182,7 @@ void ScopeTelemetryTap::append_master_pre_metronome(float* const* channels, int 
   const int planes = std::min(num_channels, 2);
   for (int ch = 0; ch < 2; ++ch) {
     float* dst = master_accumulator_.data() + static_cast<size_t>(ch) * n_fft_ + offset;
-    const float* src = (channels != nullptr && ch < planes) ? channels[ch] : nullptr;
+    const float* src = ch < planes ? channels[ch] : nullptr;
     if (src != nullptr) {
       std::copy(src, src + num_frames, dst);
     } else {

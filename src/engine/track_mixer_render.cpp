@@ -32,6 +32,23 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
   return true;
 }
 
+void TrackMixerRuntime::clear_block(size_t lane_count, int num_channels, int num_samples,
+                                    bool lanes_active) noexcept {
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  for (size_t lane_index = 0; lane_index < lane_count; ++lane_index) {
+    clear_lane(lane_index, render_channels, num_samples);
+    source_mix_lane_active_[lane_index] = lanes_active;
+  }
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  for (int ch = 0; ch < master_channels; ++ch) {
+    float* direct = direct_channel(ch);
+    std::fill(direct, direct + num_samples, 0.0f);
+  }
+  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
+  }
+}
+
 bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept {
   acquire_lanes();
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
@@ -46,21 +63,9 @@ bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept 
   // the same cadence as the lane fader smoother (no double advance: every lane
   // and bus chain of this block runs inside the matching finish_block()).
   advance_insert_automations(num_samples);
-  const int render_channels = std::min(num_channels, kMaxLaneChannels);
-  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
-    clear_lane(lane_index, render_channels, num_samples);
-    // An opened block processes every configured lane, including silent ones,
-    // so stateful strip/bus tails advance over zero input.
-    source_mix_lane_active_[lane_index] = true;
-  }
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
-  for (int ch = 0; ch < master_channels; ++ch) {
-    float* direct = direct_channel(ch);
-    std::fill(direct, direct + num_samples, 0.0f);
-  }
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
-  }
+  // An opened block processes every configured lane, including silent ones,
+  // so stateful strip/bus tails advance over zero input.
+  clear_block(lanes->size(), num_channels, num_samples, /*lanes_active=*/true);
   return true;
 }
 
@@ -152,19 +157,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   // one source.
   if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
-  const int render_channels = std::min(num_channels, kMaxLaneChannels);
-  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
-    clear_lane(lane_index, render_channels, num_samples);
-    source_mix_lane_active_[lane_index] = false;
-  }
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
-  for (int ch = 0; ch < master_channels; ++ch) {
-    float* direct = direct_channel(ch);
-    std::fill(direct, direct + num_samples, 0.0f);
-  }
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
-  }
+  clear_block(lanes->size(), num_channels, num_samples, /*lanes_active=*/false);
   bool routed_through_lane = false;
   mix_source_into_lane(track_id, source, channels, num_channels, num_samples, routed_through_lane,
                        meter_tap, render_frame, scope_tap);

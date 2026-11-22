@@ -229,7 +229,6 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   std::array<bool, kMaxTrackLanes> pdc_reset{};
   for (size_t index = 0; index < kMaxTrackLanes; ++index) {
     pdc_sources[index] = static_cast<int>(index);
-    pdc_reset[index] = false;
   }
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, pdc_sources, pdc_reset, &prepared_pdc, &bank_sources)) {

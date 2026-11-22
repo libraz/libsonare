@@ -85,6 +85,7 @@ class ScopeTelemetryTap {
   uint32_t dropped_count() const noexcept { return dropped_records_; }
 
  private:
+  void reset_block_state() noexcept;
   void publish(ScopeTelemetryRecord record) noexcept;
   void stage(ScopeTelemetryRecord record) noexcept;
 
@@ -98,7 +99,6 @@ class ScopeTelemetryTap {
   size_t staged_count_ = 0;
   std::array<ScopeTelemetryRecord, kMaxTargetsPerBlock> staged_records_{};
 
-  std::vector<float> window_;                  // Hann window, length n_fft_
   std::vector<float> fft_input_;               // windowed + zero-padded mono frame
   std::vector<std::complex<float>> spectrum_;  // n_fft_/2 + 1 bins
   std::vector<float> master_accumulator_;      // [left n_fft][right n_fft]

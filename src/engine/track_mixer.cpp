@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <iterator>
 #include <memory>
 #include <new>
 #include <stdexcept>
@@ -11,7 +9,6 @@
 
 #include "engine/track_mixer_internal.h"
 #include "util/constants.h"
-#include "util/db.h"
 
 namespace sonare::engine {
 

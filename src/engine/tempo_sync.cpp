@@ -119,6 +119,7 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   std::vector<std::complex<float>> synth_bins(static_cast<size_t>(n_bins));
   std::vector<std::complex<float>> ref0(static_cast<size_t>(n_bins));
   std::vector<std::complex<float>> ref1(static_cast<size_t>(n_bins));
+  std::vector<double> rotation(static_cast<size_t>(n_bins));
   std::vector<std::vector<float>> channel_mag(static_cast<size_t>(channels),
                                               std::vector<float>(static_cast<size_t>(n_bins)));
   std::vector<std::vector<float>> channel_phase(static_cast<size_t>(channels),
@@ -169,19 +170,21 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
     synth.next_frame(ref0.data(), ref1.data(), frac);
 
     const size_t start = static_cast<size_t>(t_out) * static_cast<size_t>(hop);
+    /// Every bin carries the reference-domain rotation (accumulated synthesis phase
+    /// minus reference analysis phase). Applying the same rotation to each channel's
+    /// own analysis phase preserves the inter-channel phase relationship exactly,
+    /// giving all channels a coherent time-stretch. For a single reference channel
+    /// this reduces to the mono synthesis phase, so identical channels bake
+    /// bit-identically to the mono path.
+    for (int k = 0; k < n_bins; ++k) {
+      rotation[static_cast<size_t>(k)] =
+          synth.synthesis_phase()[k] - static_cast<double>(synth.analysis_phase()[k]);
+    }
     for (int ch = 0; ch < channels; ++ch) {
       for (int k = 0; k < n_bins; ++k) {
-        /// Every bin carries the reference-domain rotation (accumulated synthesis phase
-        /// minus reference analysis phase). Applying the same rotation to each channel's
-        /// own analysis phase preserves the inter-channel phase relationship exactly,
-        /// giving all channels a coherent time-stretch. For a single reference channel
-        /// this reduces to the mono synthesis phase, so identical channels bake
-        /// bit-identically to the mono path.
-        const double rotation =
-            synth.synthesis_phase()[k] - static_cast<double>(synth.analysis_phase()[k]);
         const float synth_phase = static_cast<float>(phase::wrap(
             static_cast<double>(channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)]) +
-            rotation));
+            rotation[static_cast<size_t>(k)]));
         synth_bins[static_cast<size_t>(k)] =
             std::polar(channel_mag[static_cast<size_t>(ch)][static_cast<size_t>(k)], synth_phase);
       }
@@ -231,6 +234,21 @@ void smooth_segment_joins(std::vector<float>* audio, const std::vector<size_t>& 
   }
 }
 
+/// Sum of the segments' target lengths, refusing a segment that is empty or leaves the source.
+size_t validated_target_total(const std::vector<TempoSyncWarpSegment>& segments,
+                              size_t source_samples) {
+  size_t total_target_samples = 0;
+  for (const TempoSyncWarpSegment& segment : segments) {
+    SONARE_CHECK(segment.source_samples > 0 && segment.target_samples > 0,
+                 ErrorCode::InvalidParameter);
+    SONARE_CHECK(segment.source_offset <= source_samples &&
+                     segment.source_samples <= source_samples - segment.source_offset,
+                 ErrorCode::InvalidParameter);
+    total_target_samples += segment.target_samples;
+  }
+  return total_target_samples;
+}
+
 }  // namespace
 
 double tempo_sync_ppq(TempoSyncValue value) noexcept {
@@ -250,20 +268,12 @@ std::vector<float> bake_tempo_sync_warp_channel(const float* source, size_t sour
   SONARE_CHECK(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(!segments.empty(), ErrorCode::InvalidParameter);
 
-  size_t total_target_samples = 0;
-  for (const TempoSyncWarpSegment& segment : segments) {
-    SONARE_CHECK(segment.source_samples > 0 && segment.target_samples > 0,
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(segment.source_offset <= source_samples &&
-                     segment.source_samples <= source_samples - segment.source_offset,
-                 ErrorCode::InvalidParameter);
-    total_target_samples += segment.target_samples;
-  }
+  const size_t total_target_samples = validated_target_total(segments, source_samples);
 
   std::vector<float> output;
   output.reserve(total_target_samples);
   std::vector<size_t> boundaries;
-  boundaries.reserve(segments.size() > 0 ? segments.size() - 1 : 0);
+  boundaries.reserve(segments.size() - 1);
 
   for (const TempoSyncWarpSegment& segment : segments) {
     if (!output.empty()) boundaries.push_back(output.size());
@@ -294,15 +304,7 @@ std::vector<std::vector<float>> bake_tempo_sync_warp_channels(
                ErrorCode::InvalidParameter);
   SONARE_CHECK(!segments.empty(), ErrorCode::InvalidParameter);
 
-  size_t total_target_samples = 0;
-  for (const TempoSyncWarpSegment& segment : segments) {
-    SONARE_CHECK(segment.source_samples > 0 && segment.target_samples > 0,
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(segment.source_offset <= source_samples &&
-                     segment.source_samples <= source_samples - segment.source_offset,
-                 ErrorCode::InvalidParameter);
-    total_target_samples += segment.target_samples;
-  }
+  const size_t total_target_samples = validated_target_total(segments, source_samples);
 
   if (sources.size() == 1) {
     return {{bake_tempo_sync_warp_channel(sources[0], source_samples, segments, config)}};
@@ -313,10 +315,10 @@ std::vector<std::vector<float>> bake_tempo_sync_warp_channels(
     channel.reserve(total_target_samples);
   }
   std::vector<size_t> boundaries;
-  boundaries.reserve(segments.size() > 0 ? segments.size() - 1 : 0);
+  boundaries.reserve(segments.size() - 1);
 
   for (const TempoSyncWarpSegment& segment : segments) {
-    if (!output.empty() && !output[0].empty()) boundaries.push_back(output[0].size());
+    if (!output[0].empty()) boundaries.push_back(output[0].size());
     std::vector<const float*> segment_sources;
     segment_sources.reserve(sources.size());
     for (const float* source : sources) {

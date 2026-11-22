@@ -847,22 +847,18 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
     // Retained manual bases must not pull a live settled target back to an older edit.
     baseline = settled_match->smoother.current();
     float last_applied = baseline;
-    if (owned_master_strip_ != nullptr &&
-        owned_master_strip_->last_applied_insert_parameter_value(insert_index, param_id,
+    if (owned_master_strip_->last_applied_insert_parameter_value(insert_index, param_id,
                                                                  &last_applied) &&
         std::isfinite(last_applied)) {
       baseline = last_applied;
     }
   } else {
     // The command handler records this call's manual base only afterwards.
-    baseline = value;
     if (base_id == 0 || !parameter_base_lookup(base_id, &baseline) || !std::isfinite(baseline)) {
-      const bool have_last_applied = owned_master_strip_ != nullptr &&
-                                     owned_master_strip_->last_applied_insert_parameter_value(
-                                         insert_index, param_id, &baseline);
+      const bool have_last_applied = owned_master_strip_->last_applied_insert_parameter_value(
+          insert_index, param_id, &baseline);
       if (!have_last_applied || !std::isfinite(baseline)) {
-        if (owned_master_strip_ == nullptr ||
-            !owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
+        if (!owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
                                                                      &baseline) ||
             !std::isfinite(baseline)) {
           baseline = value;

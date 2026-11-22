@@ -1084,6 +1084,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // master width.
   int bus_render_channels(size_t bus_index, int master_channels) const noexcept;
   void clear_lane(size_t lane_index, int num_channels, int num_samples) noexcept;
+  /// Clears every lane, the direct output and every bus, and sets each lane's source-mix flag.
+  void clear_block(size_t lane_count, int num_channels, int num_samples,
+                   bool lanes_active) noexcept;
   void clear_bus(size_t bus_index, int num_channels, int num_samples) noexcept;
   void add_source_to_mix(float* const* source, float* const* channels, int num_channels,
                          int num_samples) noexcept;

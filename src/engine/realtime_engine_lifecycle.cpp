@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstddef>
 #include <memory>
-#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -323,7 +322,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     slot.assigned = false;
     slot.insert_index = 0;
     slot.param_id = 0;
-    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.prepare(sample_rate_, kMixerSmoothingMs);
     slot.smoother.reset(0.0f);
   }
   master_insert_automation_overflow_count_ = 0;
@@ -334,7 +333,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     slot.assigned = false;
     slot.destination_id = 0;
     slot.param_id = 0;
-    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.prepare(sample_rate_, kMixerSmoothingMs);
     slot.smoother.reset(0.0f);
   }
   instrument_automation_overflow_count_.reset();
