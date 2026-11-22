@@ -241,7 +241,7 @@ export interface SonareRealtimeVoiceChangerNodeOptions
 }
 
 /** What {@link SonareRealtimeVoiceChangerNode.status} reads from the worklet's changer. */
-export interface SonareRealtimeVoiceChangerStatus {
+export interface SonareRealtimeVoiceChangerNodeStatus {
   /** Latency of the chain in samples, as `RealtimeVoiceChanger.latencySamples` reports it. */
   latencySamples: number;
   /** Blocks in which the chain discarded its state over a non-finite value; see `RealtimeVoiceChanger.nonFiniteDiscardCount`. */

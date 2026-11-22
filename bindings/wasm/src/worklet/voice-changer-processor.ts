@@ -9,7 +9,7 @@ import type {
 } from '../internal/voice_changer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type {
-  SonareRealtimeVoiceChangerStatus,
+  SonareRealtimeVoiceChangerNodeStatus,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
 } from '../public_types_worklet.js';
 import type {
@@ -109,7 +109,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   }
 
   /** The changer's latency, discard counter and applied configuration. */
-  status(): SonareRealtimeVoiceChangerStatus {
+  status(): SonareRealtimeVoiceChangerNodeStatus {
     return {
       latencySamples: this.changer.latencySamples,
       nonFiniteDiscardCount: this.changer.nonFiniteDiscardCount,

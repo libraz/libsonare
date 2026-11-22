@@ -53,7 +53,7 @@ export type {
   SonareRealtimeEngineWorkletProcessorConstructorOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
   SonareRealtimeVoiceChangerNodeOptions,
-  SonareRealtimeVoiceChangerStatus,
+  SonareRealtimeVoiceChangerNodeStatus,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorConstructorOptions,

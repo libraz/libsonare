@@ -11,7 +11,7 @@ import type {
 import type { RealtimeVoiceChangerConfig } from '../public_types.js';
 import type {
   SonareRealtimeVoiceChangerNodeOptions,
-  SonareRealtimeVoiceChangerStatus,
+  SonareRealtimeVoiceChangerNodeStatus,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
 } from '../public_types_worklet.js';
 import { assertKnownProcessorOptions, resolveContextSampleRate } from './guards.js';
@@ -46,7 +46,7 @@ export class SonareRealtimeVoiceChangerNode {
   readonly ready: Promise<void>;
   private readonly errorListeners = new Set<(error: Error) => void>();
   private readonly pendingStatus: {
-    resolve: (status: SonareRealtimeVoiceChangerStatus) => void;
+    resolve: (status: SonareRealtimeVoiceChangerNodeStatus) => void;
     reject: (reason: unknown) => void;
   }[] = [];
   private resolveReady!: () => void;
@@ -193,7 +193,7 @@ export class SonareRealtimeVoiceChangerNode {
    * configuration from the worklet. Rejects with `InvalidState` once the node is
    * destroyed.
    */
-  status(): Promise<SonareRealtimeVoiceChangerStatus> {
+  status(): Promise<SonareRealtimeVoiceChangerNodeStatus> {
     return new Promise((resolve, reject) => {
       this.post({ type: 'status' });
       this.pendingStatus.push({ resolve, reject });
