@@ -7,7 +7,7 @@ import {
   mixingScenePreset,
   RealtimeEngine,
 } from '../src/index.js';
-import { expectRefusal } from './_helpers';
+import { expectRefusal } from './_helpers.js';
 
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {

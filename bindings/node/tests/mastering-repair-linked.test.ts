@@ -7,6 +7,7 @@ import {
   masteringRepairDereverbClassicalLinked,
   masteringRepairDereverbClassicalStereo,
 } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 const LENGTH = Math.floor(SR * 0.5);
@@ -116,8 +117,14 @@ describe('masteringRepairDenoiseClassicalLinked', () => {
 
     expect(one.detected.floorDbfs).toBeGreaterThan(-90);
     expect(one.detected.floorDbfs).toBeLessThan(-10);
-    expect(two.detected.floorDbfs - one.detected.floorDbfs).toBeCloseTo(10 * Math.log10(2), 3);
-    expect(three.detected.floorDbfs - one.detected.floorDbfs).toBeCloseTo(10 * Math.log10(3), 3);
+    expect(present(two.detected.floorDbfs) - present(one.detected.floorDbfs)).toBeCloseTo(
+      10 * Math.log10(2),
+      3,
+    );
+    expect(present(three.detected.floorDbfs) - present(one.detected.floorDbfs)).toBeCloseTo(
+      10 * Math.log10(3),
+      3,
+    );
 
     // A mask that genuinely attenuated something, so the equalities below are
     // three copies of a measurement rather than three copies of zero.

@@ -26,6 +26,7 @@ import {
 } from '../src/index.js';
 import { clipDetectionFromNative } from '../src/internal/metering_native.js';
 import { addon } from '../src/native.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 const LENGTH = 4410;
@@ -140,7 +141,7 @@ describe('masteringRepairDetectNoiseFloor', () => {
     expect(quiet.bandFloorBand).toHaveLength(quiet.bandFloorDbfs.length);
     // Ten times the amplitude is 20 dB, so the pair measures the input rather
     // than reporting a constant.
-    expect(loud.floorDbfs - quiet.floorDbfs).toBeCloseTo(20, 0);
+    expect(present(loud.floorDbfs) - present(quiet.floorDbfs)).toBeCloseTo(20, 0);
   });
 
   it('pads a buffer shorter than nFft, as detectReverb pads the same one', () => {

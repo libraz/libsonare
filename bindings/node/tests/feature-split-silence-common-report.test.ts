@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SilenceCommonReport } from '../src/index.js';
 import { splitSilenceCommon, splitSilenceCommonWithReport } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 const DURATION_SAMPLES = SR; // one second
@@ -88,7 +89,10 @@ describe('splitSilenceCommonWithReport', () => {
 
     // The figure is actionable, not merely different: a threshold below it cuts
     // the very same input.
-    const tight = reportOf([take, other], loose.report.silenceCeilingDb - 5);
+    const tight = reportOf(
+      [take, other],
+      present(loose.report.silenceCeilingDb, 'silence ceiling') - 5,
+    );
     expect(tight.intervals).toBe(2);
     expect(tight.report.minSignalIntervals).toBe(2);
   });

@@ -26,7 +26,7 @@ import {
   meteringSpectrumFrame,
   meteringTruePeakDbtp,
 } from '../src/index.js';
-import { expectRefusal, sine } from './_helpers.js';
+import { expectRefusal, present, sine } from './_helpers.js';
 
 const SR = 22050;
 
@@ -47,7 +47,7 @@ describe('Audio handle-form metering', () => {
       // pass any implementation. This sine is neither.
       expect(peak).toBeGreaterThan(-20);
       expect(rms).toBeGreaterThan(-20);
-      expect(Math.abs(crest)).toBeGreaterThan(0.1);
+      expect(Math.abs(present(crest, 'crest'))).toBeGreaterThan(0.1);
       expect(peak).toBe(meteringPeakDb(samples, SR));
       expect(rms).toBe(meteringRmsDb(samples, SR));
       expect(dc).toBe(meteringDcOffset(samples, SR));

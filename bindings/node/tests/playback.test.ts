@@ -8,7 +8,7 @@ import {
   renderPlayback,
 } from '../src/index.js';
 import type { PlaybackRendererConfig } from '../src/types_playback.js';
-import { sine, unknownKeyError } from './_helpers.js';
+import { present, sine, unknownKeyError } from './_helpers.js';
 
 function stereoBlock(frames: number): [Float32Array, Float32Array] {
   const tone = sine(440, frames / 48000, { sampleRate: 48000, amp: 0.2 });
@@ -394,7 +394,10 @@ describe('PlaybackLoudnessMeter', () => {
     fromView.pushInterleaved(view);
     using fromCopy = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     fromCopy.pushInterleaved(view.slice());
-    expect(fromView.integratedLufs).toBeCloseTo(fromCopy.integratedLufs, 6);
+    expect(fromView.integratedLufs).toBeCloseTo(
+      present(fromCopy.integratedLufs, 'integratedLufs'),
+      6,
+    );
   });
 
   it('refuses an interleaved array that is not a whole number of frames', () => {

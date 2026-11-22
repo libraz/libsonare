@@ -383,10 +383,12 @@ describe('newly exposed Node functions', () => {
     expect(() => lufsSeriesMultichannel({ channels: [], sampleRate: SR })).toThrow(RangeError);
   });
 
-  it('ebur128LoudnessRangeLu is finite and non-negative', () => {
-    const lra = ebur128LoudnessRangeLu(sine(1, 440), SR);
+  it('ebur128LoudnessRangeLu is finite and non-negative, and absent under 3 s', () => {
+    const lra = ebur128LoudnessRangeLu(sine(4, 440), SR);
     expect(Number.isFinite(lra)).toBe(true);
     expect(lra).toBeGreaterThanOrEqual(0);
+    // No short-term window passes the gate in a signal shorter than one 3 s window.
+    expect(ebur128LoudnessRangeLu(sine(1, 440), SR)).toBeUndefined();
   });
 
   it('pitchYin returns librosa-style estimates for unvoiced frames', () => {

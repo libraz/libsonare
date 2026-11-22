@@ -882,7 +882,7 @@ describe('type shapes', () => {
     expectTypeOf<sonare.CqtResult['magnitude']>().toEqualTypeOf<Matrix2D>();
     expectTypeOf<sonare.PiptrackResult['pitches']>().toEqualTypeOf<Matrix2D>();
     expectTypeOf<sonare.ReassignedSpectrogramResult['times']>().toEqualTypeOf<Matrix2D>();
-    expectTypeOf<sonare.LufsResult['loudnessRangeLu']>().toEqualTypeOf<number>();
+    expectTypeOf<sonare.LufsResult['loudnessRangeLu']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<
       sonare.SplitSilenceCommonWithReportResult['intervals']
     >().toEqualTypeOf<Int32Array>();

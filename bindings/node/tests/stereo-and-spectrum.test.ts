@@ -15,6 +15,7 @@ import {
   meteringStereoWidth,
   meteringVectorscope,
 } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 
@@ -48,7 +49,7 @@ describe('Stereo meter wrappers (Node)', () => {
 
   it('stereo_width is ~0 for mono and > 0 when polarity flips', () => {
     const left = sine(440, 0.5);
-    const width_mono = meteringStereoWidth({ left, right: left, sampleRate: SR });
+    const width_mono = present(meteringStereoWidth({ left, right: left, sampleRate: SR }), 'width');
     const width_inv = meteringStereoWidth({ left, right: inverted(left), sampleRate: SR });
     expect(Math.abs(width_mono)).toBeLessThan(1e-3);
     expect(width_inv).toBeGreaterThan(width_mono);

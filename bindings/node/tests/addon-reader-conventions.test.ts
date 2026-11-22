@@ -157,6 +157,10 @@ const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'Presence probe used to decide whether a patch field was supplied at all (distinct from reading it with a default); shared by the synth patch TUs from the same header.',
   ],
   [
+    'sonare_wrap_utils.h:SetMeasured',
+    'A writer, not a reader: it sets a measured scalar on an output object and omits a NaN one, so it takes (object, key, value) without reading the key.',
+  ],
+  [
     'sonare_wrap_utils.h:ReadMeterCandidateNumerators',
     'Reads a fixed-capacity list into a C array and reports the count, with its own overflow and non-numeric rejection. Shared from the other addon-wide header, not a per-file copy.',
   ],

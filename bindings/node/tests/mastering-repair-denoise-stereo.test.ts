@@ -4,6 +4,7 @@ import {
   masteringRepairDenoiseClassicalStereo,
   masteringRepairDereverbClassicalStereo,
 } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const SR = 22050;
 const SECONDS = 0.5;
@@ -133,16 +134,14 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
 
     // Twice the summed power is 3.01 dB, so carrying the same material in both
     // channels reads that much above carrying it in one.
-    expect(both.reports[0].detected.floorDbfs - oneSided.reports[0].detected.floorDbfs).toBeCloseTo(
-      3.01,
-      1,
-    );
+    expect(
+      present(both.reports[0].detected.floorDbfs) - present(oneSided.reports[0].detected.floorDbfs),
+    ).toBeCloseTo(3.01, 1);
     // Half the amplitude is a quarter of the power: an absolute level follows
     // it, a ratio would not move at all.
-    expect(both.reports[0].detected.floorDbfs - halved.reports[0].detected.floorDbfs).toBeCloseTo(
-      6.02,
-      1,
-    );
+    expect(
+      present(both.reports[0].detected.floorDbfs) - present(halved.reports[0].detected.floorDbfs),
+    ).toBeCloseTo(6.02, 1);
   });
 
   it('reports no floor-limited fraction in spectralSubtraction mode, which is the mode and not a measurement', () => {

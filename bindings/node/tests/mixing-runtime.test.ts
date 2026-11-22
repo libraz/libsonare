@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Mixer, mixingScenePreset } from '../src/index.js';
-import { expectRefusal, unknownKeyError } from './_helpers.js';
+import { expectRefusal, present, unknownKeyError } from './_helpers.js';
 
 const BLOCK_SIZE = 8;
 const SAMPLE_RATE = 48000;
@@ -199,9 +199,10 @@ describe('Mixer runtime methods', () => {
       expect(m.peakDbL).toBeGreaterThan(-120);
     }
     // The no-tap default matches the explicit post-fader tap.
-    expect(post.peakDbL).toBeCloseTo(postTap.peakDbL, 5);
+    const postTapPeak = present(postTap.peakDbL, 'post-fader tap peakDbL');
+    expect(post.peakDbL).toBeCloseTo(postTapPeak, 5);
     // Pre-fader on host (before its fader trim) should be >= post-fader.
-    expect(preTap.peakDbL).toBeGreaterThanOrEqual(postTap.peakDbL - 1e-3);
+    expect(preTap.peakDbL).toBeGreaterThanOrEqual(postTapPeak - 1e-3);
   });
 
   it('refuses an out-of-domain pan or width with a RangeError', () => {

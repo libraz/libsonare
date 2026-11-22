@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PART_RIG_ALL_PARTS, PART_RIG_MODES, Project, RealtimeEngine } from '../src/index.js';
-import { expectRefusal } from './_helpers';
+import { expectRefusal } from './_helpers.js';
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, PlaybackRenderer, Project } from '../src/index.js';
-import { expectRefusal } from './_helpers';
+import { expectRefusal } from './_helpers.js';
 
 // A MIDI-FX config's wrong-typed field is a plain TypeError from the core; the facade only
 // serializes it, so a value of the wrong kind must arrive and be refused there.

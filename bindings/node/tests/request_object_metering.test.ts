@@ -16,6 +16,7 @@ import {
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index.js';
+import { present } from './_helpers.js';
 
 const sampleRate = 22050;
 const samples = Float32Array.from(
@@ -74,7 +75,7 @@ describe('metering request-object compatibility', () => {
     const phase = meteringPhaseScope({ left, right, sampleRate, maxPoints: 128 });
     expect(phase.mid.length).toBeLessThanOrEqual(128);
     expect(phase.correlation).toBeCloseTo(
-      meteringPhaseScope({ left, right, sampleRate }).correlation,
+      present(meteringPhaseScope({ left, right, sampleRate }).correlation, 'correlation'),
       6,
     );
   });

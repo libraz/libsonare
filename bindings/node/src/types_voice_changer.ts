@@ -144,8 +144,9 @@ export interface RealtimeVoiceChangerConfig {
    * How `formantFactor` acts. `'relative'` leaves it to the colour stage
    * after the retune. `'absolute'` warps the formants to `formantFactor` times the input's ahead
    * of the retune, adds one analysis frame of latency and ignores `formantAmount`; it needs
-   * `formantFactor / 2^(retunePitchSemitones / 12)` within [0.55, 1.65], else the call throws a
-   * `RangeError` naming the reachable `formantFactor` range. Fixed when the changer is prepared:
+   * `formantFactor` and the warp `formantFactor / 2^(retunePitchSemitones * retuneMix / 12)` both
+   * within [0.55, 1.65], else the call throws a `RangeError` naming the reachable `formantFactor`
+   * range, so a dry retune (`retuneMix` 0) refuses no factor in range. Fixed when the changer is prepared:
    * a config carrying a different mode is refused. Required, like every POD field.
    */
   formantMode: FormantMode;

@@ -134,12 +134,25 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       ...realtimeVoiceChangerPresetConfig('neutralMonitor'),
       voiceEngine: 'grain' as const,
     };
-    const unreachable = { ...pod, formantMode: 'absolute' as const, retunePitchSemitones: -9 };
+    const unreachable = {
+      ...pod,
+      formantMode: 'absolute' as const,
+      retunePitchSemitones: -9,
+      retuneMix: 1,
+    };
+    // A dry retune moves no pitch, so the same factor and shift need no warp outside the range.
+    expect(() =>
+      new RealtimeVoiceChanger({
+        sampleRate: 48000,
+        numChannels: 1,
+        config: { ...unreachable, retuneMix: 0 },
+      }).destroy(),
+    ).not.toThrow();
     expect(
       () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: unreachable }),
     ).toThrow(
       new RangeError(
-        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] in absolute formant mode at retunePitchSemitones -9 (the warp reaches [0.3271, 0.981] there)',
+        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] when formantMode is absolute at retunePitchSemitones -9 and retuneMix 1 (the warp it needs must lie in [0.55, 1.65])',
       ),
     );
     expect(

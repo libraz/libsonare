@@ -34,22 +34,19 @@ import type {
 
 describe('result records type an unmeasured value as an absent field', () => {
   it('the loudness family', () => {
-    expectTypeOf<MasteringAudioProfileLoudness['integratedLufs']>().toEqualTypeOf<
-      number | undefined
-    >();
-    expectTypeOf<MasteringAssistantProfile['integratedLufs']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<MasteringStreamingPreviewPlatform['integratedLufs']>().toEqualTypeOf<
-      number | undefined
-    >();
     expectTypeOf<MixAssistantTrackProfile['integratedLufs']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<MatchReferenceLoudnessResult['sourceLufs']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<MatchReferenceLoudnessResult['referenceLufs']>().toEqualTypeOf<
-      number | undefined
-    >();
     expectTypeOf<MatchReferenceLoudnessResult['gainToMatchDb']>().toEqualTypeOf<
       number | undefined
     >();
     expectTypeOf<StereoMonoCompatCheckResult['width']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('a level that is -Infinity for silence is never absent', () => {
+    expectTypeOf<MasteringAudioProfileLoudness['integratedLufs']>().toEqualTypeOf<number>();
+    expectTypeOf<MasteringAssistantProfile['integratedLufs']>().toEqualTypeOf<number>();
+    expectTypeOf<MasteringStreamingPreviewPlatform['integratedLufs']>().toEqualTypeOf<number>();
+    expectTypeOf<MatchReferenceLoudnessResult['sourceLufs']>().toEqualTypeOf<number>();
+    expectTypeOf<MatchReferenceLoudnessResult['referenceLufs']>().toEqualTypeOf<number>();
   });
 
   it('the capability catalog', () => {

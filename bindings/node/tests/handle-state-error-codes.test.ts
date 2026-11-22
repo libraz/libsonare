@@ -254,18 +254,6 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
     }
   });
 
-  it('StreamingMasteringChain refuses a loudness stage with no static gain as a RangeError', () => {
-    const error = capture(
-      () =>
-        new addon.StreamingMasteringChain(
-          JSON.stringify({ params: { loudness: { enabled: true } } }),
-        ),
-    );
-    expect(error).toBeInstanceOf(RangeError);
-    expect(codeOf(error)).toBeUndefined();
-    expect((error as Error).message).toMatch(/loudness_static_gain_db is not finite/);
-  });
-
   it('StreamingEqualizer refuses a maxBlockSize it cannot take exactly, naming the field', () => {
     for (const maxBlockSize of [1.5, Number.NaN, 1e40]) {
       const error = capture(() => new addon.StreamingEqualizer({ maxBlockSize }));
