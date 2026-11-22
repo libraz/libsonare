@@ -1353,7 +1353,7 @@ describe('v1.2 feature additions (WASM)', () => {
           () => engine.setMarkers([{ id: 0, ppq: 3, name: 'invalid id' }]),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setMarkers: marker id must be an integer of at least 1');
+      ).toBe('RealtimeEngine.setMarkers: markers[0].id must be an integer in [1, 4294967295]');
       expect(
         expectRefusalOf(
           () =>

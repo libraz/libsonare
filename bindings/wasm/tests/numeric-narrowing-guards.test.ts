@@ -608,7 +608,7 @@ describe('the double reader refuses a non-finite number at the read', () => {
     const error = withEngine((engine) =>
       refusalFor(() => engine.setMarkers([{ ppq: 0, id: Number.NaN }])),
     );
-    expect(error.message).toContain('id must be a finite number');
+    expect(error.message).toContain('markers[0].id must be an integer in [1, 4294967295]');
   });
 });
 

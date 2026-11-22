@@ -199,12 +199,9 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
     sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
                                   ("markers[" + std::to_string(i) + "].ppq").c_str());
-    // The narrowing is uintProperty's; zero stays this field's own rule, which
-    // sonare_engine_set_markers enforces on the C side.
-    const uint32_t id = uintProperty(marker, "id", static_cast<uint32_t>(i + 1));
-    if (id == 0) {
-      throw WasmRangeError("marker id must be an integer of at least 1");
-    }
+    const std::string id_key = "markers[" + std::to_string(i) + "].id";
+    const uint32_t id = domainNumberFromVal<uint32_t>(objectProperty(marker, "id"), id_key.c_str(),
+                                                      sonare_c_detail::kEngineMarkerIdDomain);
     if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
       throw WasmRangeError("marker ids must be unique");
     }

@@ -166,3 +166,21 @@ describe('an instrument config that repeats the destination id', () => {
     }
   });
 });
+
+describe('setMarkers refuses a marker id outside the uint32 ids from 1', () => {
+  const range = 'RealtimeEngine.setMarkers: markers[0].id must be an integer in [1, 4294967295]';
+
+  it.each([0, -1, 1.5, 2 ** 32, Number.NaN, Number.POSITIVE_INFINITY])('id %s', (id) => {
+    withEngine((engine) => {
+      expect(() => engine.setMarkers([{ id, ppq: 0 }])).toThrow(new RangeError(range));
+    });
+  });
+
+  it('refuses a non-number id as a TypeError', () => {
+    withEngine((engine) => {
+      expect(() => engine.setMarkers([{ id: '1' as never, ppq: 0 }])).toThrow(
+        new TypeError('RealtimeEngine.setMarkers: markers[0].id must be an integer'),
+      );
+    });
+  });
+});

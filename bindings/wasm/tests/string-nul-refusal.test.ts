@@ -585,6 +585,12 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'refusal name built from a literal list name, a marker index and a literal key',
     },
     {
+      file: 'realtime/transport.cpp',
+      text: 'id_key.c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal list name, a marker index and a literal key',
+    },
+    {
       file: 'realtime/processing.cpp',
       text: 'channel_name.c_str()',
       count: 1,

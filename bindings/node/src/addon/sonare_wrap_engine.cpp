@@ -21,27 +21,6 @@
 
 using namespace sonare_node::engine;
 
-namespace {
-
-bool ReadPositiveUint32(Napi::Env env, const Napi::Value& value, const char* label, uint32_t* out) {
-  if (out == nullptr || !value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(label) + " must be a number")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  const double number = value.As<Napi::Number>().DoubleValue();
-  if (!std::isfinite(number) || number <= 0.0 || std::floor(number) != number ||
-      number > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
-    Napi::RangeError::New(env, std::string(label) + " must be an integer in [1, 4294967295]")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = static_cast<uint32_t>(number);
-  return true;
-}
-
-}  // namespace
-
 Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "RealtimeEngine",
@@ -530,7 +509,9 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     }
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineMarker marker{};
-    if (!ReadPositiveUint32(env, obj.Get("id"), "marker id", &marker.id)) {
+    const std::string id_key = "markers[" + std::to_string(i) + "].id";
+    if (!sonare_node::RequiredDomainValue(env, obj.Get("id"), id_key.c_str(),
+                                          sonare_c_detail::kEngineMarkerIdDomain, &marker.id)) {
       return env.Undefined();
     }
     marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
