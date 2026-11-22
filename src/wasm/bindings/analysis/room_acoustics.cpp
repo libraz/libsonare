@@ -107,12 +107,12 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
-// Reads `{ x, y, z }` under @p key: an absent key takes @p fallback, anything else must be an
-// object whose three components are finite numbers, each refused by name.
+// Reads `{ x, y, z }` under @p key: absent (undefined or null) takes @p fallback, anything else
+// must be an object whose three components are finite numbers, each refused by name.
 sonare::acoustic::Vec3 positionFromVal(val opts, const char* key,
                                        const sonare::acoustic::Vec3& fallback) {
   val position = objectProperty(opts, key);
-  if (position.isUndefined()) return fallback;
+  if (position.isUndefined() || position.isNull()) return fallback;
   if (position.typeOf().as<std::string>() != "object" || position.isArray()) {
     throw WasmTypeError(std::string(key) + " must be an object with x, y and z");
   }
@@ -124,9 +124,13 @@ sonare::acoustic::Vec3 positionFromVal(val opts, const char* key,
   return {component("x"), component("y"), component("z")};
 }
 
-sonare::acoustic::SourceListener placementFromVal(val opts) {
-  return {positionFromVal(opts, "source", sonare::acoustic::kDefaultPlacement.source),
-          positionFromVal(opts, "listener", sonare::acoustic::kDefaultPlacement.listener)};
+// The source and listener asked for, an omitted one taking the default placement scaled to @p room.
+sonare::acoustic::SourceListener placementFromVal(val opts,
+                                                  const sonare::acoustic::ShoeboxRoom& room) {
+  const sonare::acoustic::SourceListener fallback = sonare::acoustic::scaled_default_placement(
+      room.dims.length, room.dims.width, room.dims.height);
+  return {positionFromVal(opts, "source", fallback.source),
+          positionFromVal(opts, "listener", fallback.listener)};
 }
 
 // Acoustic sample-rate bounds, sourced from the shared core limits
@@ -216,8 +220,8 @@ val js_synthesize_rir(val opts) {
   config.air.humidity_percent =
       floatProperty(opts, "airHumidityPercent", config.air.humidity_percent);
 
-  const auto placement = placementFromVal(opts);
   const auto room = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
+  const auto placement = placementFromVal(opts, room);
   requireRirRequest(room, placement, config);
   const auto result = sonare::acoustic::synthesize_rir(room, placement, sample_rate, config);
   if (sonare::has_error(result.diagnostics)) {
@@ -294,7 +298,7 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
 static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opts) {
   sonare::effects::acoustic::RoomMorphConfig config;
   config.target = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
-  config.placement = placementFromVal(opts);
+  config.placement = placementFromVal(opts, config.target);
   config.source_tail_suppression =
       domainFloatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = domainFloatProperty(opts, "wet", config.wet);

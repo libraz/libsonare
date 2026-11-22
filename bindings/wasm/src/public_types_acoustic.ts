@@ -97,9 +97,9 @@ export interface RoomGeometry {
    * number a `TypeError`, both listing the valid names.
    */
   materialPreset?: MaterialPresetName;
-  /** Source position in metres. Default: the 7 x 5 x 3 room's default placement scaled into the room. */
+  /** Source position in metres, with finite `x`, `y` and `z`. Omitted: the default placement scaled to the room. */
   source?: RoomPlacement;
-  /** Listener position in metres. Default: the default placement scaled into the room. */
+  /** Listener position in metres, with finite `x`, `y` and `z`. Omitted: the default placement scaled to the room. */
   listener?: RoomPlacement;
   /** Image-source reflection order; clamped to the safe maximum. */
   ismOrder?: number;
