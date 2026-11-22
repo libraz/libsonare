@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint check-js-types wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check scene-token-cases processor-types processor-types-check ci-local \
@@ -247,9 +247,11 @@ format:
 	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check --fix
 	$(MAKE) lint
 
-# `test:types` type-checks the Node binding's tests against src (biome does not
-# type-check, and the build tsconfig excludes tests). It reads sources only —
-# no built addon or dist/ needed — so it belongs with the other static gates.
+# `check-js-types` runs both bindings' `test:types` (biome does not type-check,
+# and the build tsconfigs exclude tests). Node reads sources only; WASM checks
+# against the declarations in dist/, so the bundle attestation runs first and a
+# missing or stale bundle fails here. Native drift is accepted: the types do not
+# come from the module, and a core edit must not turn lint red.
 #
 # Ruff lints the repo rather than a path list. Python lives in ten trees here —
 # the binding, `tools/`, `benchmarks/`, `examples/python/` and four under
@@ -414,10 +416,15 @@ print(f"GS EFX coverage line: current with coverage.py, in {len(DOCS)} documents
 endef
 export GS_EFX_COVERAGE_LINE_LINT_PY
 
+check-js-types:
+	cd bindings/node && yarn test:types
+	cd bindings/wasm && SONARE_ALLOW_STALE_DIST=1 yarn check:dist-freshness
+	cd bindings/wasm && yarn test:types
+
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
-	cd bindings/node && yarn test:types
+	$(MAKE) check-js-types
 	cd tools/audition/web && yarn lint
 	cd tools/audition/web && yarn typecheck
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) sync --locked --project bindings/python
@@ -576,12 +583,9 @@ test-python-slow: build-shared
 test-node: build-node
 	cd bindings/node && yarn test
 
-# The WASM tests type-check against dist/, so unlike the Node one this gate
-# cannot live in `lint` — it needs the build prerequisite this target already
-# carries. Left unwired it would decay into a script nobody runs.
 test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
-	cd bindings/wasm && yarn test:types
+	$(MAKE) check-js-types
 
 # The four headless-Chrome smokes (AudioWorklet from the packed tarball, offline
 # worker, boundary recovery, vocal-edit worker) against the dist/ already built.

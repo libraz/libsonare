@@ -340,7 +340,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       process.exit(1);
     }
   } else {
-    const { problems, provenance } = await verifyAll();
+    // The same opt-out the test setup reads: native drift may be accepted, the bundle never is.
+    const { problems, provenance } = await verifyAll({
+      allowStale: process.env[ALLOW_STALE_ENV] === '1',
+    });
     for (const line of provenance) console.log(line);
     if (problems.length > 0) {
       console.error(problems.join('\n\n'));
