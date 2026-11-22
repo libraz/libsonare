@@ -384,7 +384,7 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
 // the whole 32-bit range is legal per element.
 namespace {
 size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4]) {
-  const size_t count = wasmArrayLikeLength(words_val, "words");
+  const size_t count = wasmArrayLength(words_val, "words");
   if (count < 1 || count > 4) {
     throw WasmRangeError("words must contain 1..4 UMP words");
   }

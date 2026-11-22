@@ -193,7 +193,7 @@ inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
     throw WasmTypeError("synth patch engineParams must be an object of key -> number");
   }
   val names = val::global("Object").call<val>("keys", map);
-  const size_t count = wasmArrayLikeLength(names, "engineParams");
+  const size_t count = wasmArrayLength(names, "engineParams");
   storage->keys.reserve(count);
   storage->params.reserve(count);
   for (size_t i = 0; i < count; ++i) {
@@ -316,7 +316,7 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   if (hasProperty(desc, "modRoutings")) {
     emscripten::val routings = desc["modRoutings"];
     if (emscripten::val::global("Array").call<bool>("isArray", routings)) {
-      const size_t count = wasmArrayLikeLength(routings, "modRoutings");
+      const size_t count = wasmArrayLength(routings, "modRoutings");
       if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
         throw WasmRangeError("a synth patch supports at most 8 mod routings");
       }

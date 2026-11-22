@@ -74,7 +74,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(const val& destination_id_val, val
 
 void RealtimeEngineWasm::setMidiClips(val clips_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  const uint32_t count = static_cast<uint32_t>(wasmArrayLikeLength(clips_val, "clips"));
+  const uint32_t count = static_cast<uint32_t>(wasmArrayLength(clips_val, "clips"));
   std::vector<sonare::midi::MidiClipSchedule> clips;
   clips.reserve(count);
   for (uint32_t i = 0; i < count; ++i) {
@@ -132,7 +132,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     }
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];
-    const uint32_t event_count = static_cast<uint32_t>(wasmArrayLikeLength(events_val, "events"));
+    const uint32_t event_count = static_cast<uint32_t>(wasmArrayLength(events_val, "events"));
     clip.events.reserve(event_count);
     for (uint32_t j = 0; j < event_count; ++j) {
       val event_val = events_val[j];

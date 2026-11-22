@@ -315,16 +315,21 @@ std::size_t wasmCountArg(double value, const char* subject);
 /// @throws WasmArgumentError for everything wasmCountArg
 ///   refuses, and for a value the build cannot address.
 std::size_t wasmIndexArg(double value, const char* subject);
-/// Reads an array-like object's element count after rejecting null, undefined,
-/// non-numeric, fractional, unsafe, and over-budget values. Use this before
-/// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.
-/// @p length_key names the count property ("length" for arrays and Int32Array,
-/// "byteLength" for a Uint8Array byte blob).
-std::size_t wasmArrayLikeLength(const val& arr, const char* subject,
-                                const char* length_key = "length");
-/// Reads and validates an array-like object's JS `.length` without narrowing a
-/// non-finite, fractional, or unsafe Number to wasm32 size_t.
+/// Reads the element count of a JS array or typed array, refusing anything else
+/// (an object with a `length`, a string, a DataView) as "<subject> must be an array".
+/// @p length_key names the count property ("length", or "byteLength" for a Uint8Array blob).
+std::size_t wasmArrayLength(const val& arr, const char* subject, const char* length_key = "length");
+/// Reads the count of a list of audio planes, refusing a non-array as
+/// "<subject> must be an array of Float32Array"; each plane is read with
+/// wasmFloat32ArrayLength under "<subject>[i]".
+std::size_t wasmPlaneListLength(const val& list, const char* subject);
+/// Reads the length of an input sample buffer: a Float32Array or a plain array.
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject);
+/// Reads the length of an output buffer the binding writes into with `set`, so
+/// only a Float32Array is taken.
+std::size_t wasmFloat32OutputLength(const val& arr, const char* subject);
+/// One of the length readers above, for helpers that compare two arguments.
+using WasmLengthReader = std::size_t (*)(const val&, const char*);
 /// Checks a cumulative caller-controlled Float32 element count before any
 /// associated vectors are allocated.
 void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts);
@@ -622,7 +627,7 @@ bool cancelCallbackRequested(const val& callback);
 /// @brief True when @p callback is a JS function; false for `undefined` or `null`.
 /// @throws WasmTypeError naming @p key when it is present and not a function.
 bool callbackGiven(const val& callback, const char* key);
-/// @brief Reads the JS `.length` of @p first and @p second and requires they match.
+/// @brief Reads @p first and @p second with @p read_length and requires they match.
 /// @p first_subject and @p second_subject name each argument (e.g. "leftChannels"), so a
 /// refusal of one names that one. When @p require_non_zero is true (the default — this is
 /// the historically documented contract), an empty pair is also rejected;
@@ -633,7 +638,8 @@ bool callbackGiven(const val& callback, const char* key);
 /// @throws WasmArgumentError on mismatch, or (when required)
 /// zero length.
 int requireMatchedLength(const val& first, const char* first_subject, const val& second,
-                         const char* second_subject, bool require_non_zero = true);
+                         const char* second_subject, WasmLengthReader read_length,
+                         bool require_non_zero = true);
 /// @brief Rejects an out-of-range enum ordinal instead of letting a switch or
 /// ternary's default/else arm silently substitute whichever member it
 /// happens to return. @p subject names the field in the error message.

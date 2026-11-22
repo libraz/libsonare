@@ -15,7 +15,7 @@
 
 void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const size_t count = wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
@@ -383,7 +383,7 @@ val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
 }
 
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
-  const size_t count = wasmArrayLikeLength(bindings, "bindings");
+  const size_t count = wasmArrayLength(bindings, "bindings");
   std::vector<SonareMidiCcBinding> out(count);
   for (size_t i = 0; i < count; ++i) {
     out[i] = js_cc_binding_from_val(bindings[i]);
@@ -399,7 +399,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   const uint8_t min_movement = domainNumberFromVal<uint8_t>(min_movement_val, "minMovement",
                                                             sonare_c_detail::kMidiDataByteDomain);
-  const size_t count = wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     pods[i] = js_midi_event_from_val(events[i]);
@@ -458,7 +458,7 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, c
 }
 
 val js_midi_route_events(val events, val config) {
-  const size_t count = wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> input(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];

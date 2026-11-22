@@ -24,7 +24,7 @@ val ProjectWasm::importExternalStems(val request) {
     throw WasmTypeError("external stem import requires a request with stems array");
   }
   const val stem_values = request["stems"];
-  const size_t count = wasmArrayLikeLength(stem_values, "stems");
+  const size_t count = wasmArrayLength(stem_values, "stems");
   std::vector<SonareExternalStemDesc> descriptors;
   std::vector<std::string> names;
   std::vector<std::string> roles;
@@ -46,7 +46,7 @@ val ProjectWasm::importExternalStems(val request) {
     const uint32_t layout = checkedUintFromVal(stem["layout"], "layout");
     const size_t channels = channel_count(layout);
     const val source_planes = stem["planarSamples"];
-    if (channels == 0 || wasmArrayLikeLength(source_planes, "planarSamples") != channels) {
+    if (channels == 0 || wasmArrayLength(source_planes, "planarSamples") != channels) {
       throw WasmRangeError("planarSamples must match mono or stereo layout");
     }
     names.push_back(stem["name"].as<std::string>());

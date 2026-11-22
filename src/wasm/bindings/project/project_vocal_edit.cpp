@@ -122,9 +122,9 @@ std::vector<float> copyMono(const val& value, const char* field) {
 }
 
 std::vector<uint8_t> copySVE1(const val& value) {
-  const size_t count = wasmArrayLikeLength(value, "sve1", "byteLength");
-  if (count == 0) invalid("sve1 must not be empty");
-  return uint8ArrayToVector(value, "sve1");
+  std::vector<uint8_t> bytes = uint8ArrayToVector(value, "sve1");
+  if (bytes.empty()) invalid("sve1 must not be empty");
+  return bytes;
 }
 
 struct TokenStorage {
@@ -298,7 +298,7 @@ OriginalStorage originalsFromVal(const val& originals) {
   if (!val::global("Array").call<bool>("isArray", originals)) {
     invalidType("originals must be an array");
   }
-  const size_t count = wasmArrayLikeLength(originals, "originals");
+  const size_t count = wasmArrayLength(originals, "originals");
   OriginalStorage storage;
   storage.rows.resize(count);
   storage.buffers.reserve(count);

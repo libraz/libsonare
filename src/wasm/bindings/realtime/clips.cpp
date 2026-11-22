@@ -57,14 +57,15 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
       throw WasmRangeError("invalid page index");
     }
-    const std::size_t channel_count = wasmArrayLikeLength(channels_val, "channels");
+    const std::size_t channel_count = wasmPlaneListLength(channels_val, "channels");
     if (channel_count != static_cast<std::size_t>(channels_)) {
       throw WasmRangeError("clip page channel count mismatch");
     }
     auto page = std::make_unique<Page>();
     page->channels.reserve(static_cast<size_t>(channels_));
     for (int ch = 0; ch < channels_; ++ch) {
-      std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
+      const std::string channel_name = "channels[" + std::to_string(ch) + "]";
+      std::vector<float> channel = float32ArrayToVector(channels_val[ch], channel_name.c_str());
       if (ch == 0) {
         page->frames = static_cast<int64_t>(channel.size());
         const int64_t page_start = page_index * page_frames_;
@@ -164,7 +165,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
                                  !objectProperty(clip_val, "pageProvider").isUndefined();
   val channels_val = has_page_provider ? val::array() : clip_val["channels"];
   const int channel_count =
-      has_page_provider ? 0 : static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
+      has_page_provider ? 0 : static_cast<int>(wasmPlaneListLength(channels_val, "channels"));
   if (!has_page_provider && channel_count <= 0) {
     throw WasmRangeError("clip channels must not be empty");
   }
@@ -175,7 +176,8 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   }
   int64_t num_samples = 0;
   for (int ch = 0; ch < channel_count; ++ch) {
-    std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
+    const std::string channel_name = "channels[" + std::to_string(ch) + "]";
+    std::vector<float> channel = float32ArrayToVector(channels_val[ch], channel_name.c_str());
     if (ch == 0) {
       num_samples = static_cast<int64_t>(channel.size());
       if (num_samples <= 0) {
@@ -248,7 +250,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   }
   if (hasProperty(clip_val, "warpAnchors")) {
     val anchors_val = objectProperty(clip_val, "warpAnchors");
-    const int anchor_count = static_cast<int>(wasmArrayLikeLength(anchors_val, "warpAnchors"));
+    const int anchor_count = static_cast<int>(wasmArrayLength(anchors_val, "warpAnchors"));
     if (anchor_count > 0) {
       auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>();
       anchors->reserve(static_cast<size_t>(anchor_count));
@@ -369,7 +371,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
 }
 
 void RealtimeEngineWasm::setClips(val clips) {
-  const int count = static_cast<int>(wasmArrayLikeLength(clips, "clips"));
+  const int count = static_cast<int>(wasmArrayLength(clips, "clips"));
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
   new_storage.reserve(static_cast<size_t>(count));
   std::vector<sonare::engine::ClipSchedule> schedules;

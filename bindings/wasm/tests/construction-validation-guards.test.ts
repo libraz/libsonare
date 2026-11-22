@@ -6,7 +6,7 @@
  * and drifted whenever only one side was updated. The rules now live where the
  * value is constructed — `validate_config` for the analysis / STFT / stem
  * configs, `RealtimeEngine::render_offline` for the prepared-channel
- * precondition, and the shared `wasmArrayLikeLength` guard for caller-supplied
+ * precondition, and the shared `wasmArrayLength` guard for caller-supplied
  * JS lengths — so these assert that the WASM facade reports them, not that it
  * re-implements them.
  */
@@ -294,9 +294,9 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
 
   const rejectedPoints: Array<[string, unknown, typeof RangeError | typeof TypeError]> = [
     ['undefined', undefined, TypeError],
-    ['an over-budget length', { length: 2e9 }, RangeError],
-    ['a negative length', { length: -1 }, RangeError],
-    ['a fractional length', { length: 1.5 }, RangeError],
+    ['an over-budget length', { length: 2e9 }, TypeError],
+    ['a negative length', { length: -1 }, TypeError],
+    ['a fractional length', { length: 1.5 }, TypeError],
   ];
 
   for (const [label, points, refusal] of rejectedPoints) {
@@ -331,7 +331,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     // does not back would otherwise pre-reserve that many SpectralRegionOps.
     const samples = new Float32Array(2048);
     for (const length of [2e9, -1, 1.5]) {
-      expectRangeRefusal(() =>
+      expectTypeRefusal(() =>
         spectralEdit(samples, SR, { ops: { length } as unknown as SpectralRegionOp[] }),
       );
     }
@@ -371,7 +371,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     expect(vc.processMono(new Float32Array(4)).length).toBe(4);
     expect(vc.processMono(new Float32Array(8)).length).toBe(8);
     for (const length of [-1, 1.5, 2e9]) {
-      expectRangeRefusal(() => vc.processMono({ length } as unknown as Float32Array));
+      expectTypeRefusal(() => vc.processMono({ length } as unknown as Float32Array));
     }
   });
 
@@ -382,7 +382,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     expect(() => vc.processMonoInto(input, new Float32Array(4))).not.toThrow();
     expect(() => vc.processMonoInto(input, new Float32Array(3))).toThrow();
     for (const length of [-1, 1.5, 2e9]) {
-      expectRangeRefusal(() => vc.processMonoInto(input, { length } as unknown as Float32Array));
+      expectTypeRefusal(() => vc.processMonoInto(input, { length } as unknown as Float32Array));
     }
   });
 
@@ -396,7 +396,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         engine.setTrackBuses([{ busId: 1 }, { busId: 2, channelLayout: 99 as never }]),
       ).toThrow(TypeError);
       for (const length of [-1, 1.5, 2e9]) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           engine.setTrackBuses({ length } as unknown as Parameters<typeof engine.setTrackBuses>[0]),
         );
       }
@@ -483,7 +483,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       expect(() => engine.setClips([{ id: 1, channels: [chA, chB], startPpq: 0 }])).toThrow();
       type Clip = Parameters<typeof engine.setClips>[0][number];
       for (const length of [-1, 1.5, 2e9]) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           engine.setClips([
             { id: 1, channels: { length } as unknown as Clip['channels'], startPpq: 0 } as Clip,
           ]),
@@ -516,7 +516,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         ]),
       ).toThrow();
       for (const length of [-1, 1.5, 2e9]) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           engine.setClips([
             {
               id: 2,
@@ -544,7 +544,8 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
  * matters is that a saved project reloads with the count it was given.
  *
  * A caller-supplied object like `{ length: -1 }` reaches most of these
- * directly: the facade forwards its argument without transforming it. A few
+ * directly: the facade forwards its argument without transforming it, and the
+ * native reader refuses it as not being an array before reading its length. A few
  * entry points require `Array.isArray(...)` to be true before the length is
  * even read, or call `.map()` on the argument in TypeScript before forwarding
  * it -- `Array.prototype.map` reads `.length` itself and refuses to allocate
@@ -595,7 +596,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       mixer.addVcaGroup('vg2', 0, ['a', 'b']);
       expect(membersOf('vg2')).toEqual(['a', 'b']);
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() => mixer.addVcaGroup('bad', 0, { length } as unknown as string[]));
+        expectTypeRefusal(() => mixer.addVcaGroup('bad', 0, { length } as unknown as string[]));
       }
 
       mixer.addVcaGroup('vg3', 0, []);
@@ -604,9 +605,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       mixer.setVcaGroupMembers('vg3', ['a', 'b']);
       expect(membersOf('vg3')).toEqual(['a', 'b']);
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
-          mixer.setVcaGroupMembers('vg3', { length } as unknown as string[]),
-        );
+        expectTypeRefusal(() => mixer.setVcaGroupMembers('vg3', { length } as unknown as string[]));
       }
     } finally {
       mixer.destroy();
@@ -626,7 +625,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setWarpMap({ id: 1, anchors: [anchor(0), anchor(1), anchor(2)] });
       expect(anchorsOf().length).toBe(3);
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           project.setWarpMap({
             id: 1,
             anchors: { length } as unknown as Parameters<typeof project.setWarpMap>[0]['anchors'],
@@ -657,7 +656,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       // The facade maps the list, so the array-like reaches the embind reader through the native handle.
       const native = nativeOf(project) as unknown as Record<string, (list: unknown) => void>;
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() => native.annotateKeys({ length }));
+        expectTypeRefusal(() => native.annotateKeys({ length }));
       }
     } finally {
       project.destroy();
@@ -683,7 +682,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       // The facade maps the list, so the array-like reaches the embind reader through the native handle.
       const native = nativeOf(project) as unknown as Record<string, (list: unknown) => void>;
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() => native.annotateChords({ length }));
+        expectTypeRefusal(() => native.annotateChords({ length }));
       }
     } finally {
       project.destroy();
@@ -725,7 +724,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ]);
       expect(project.tempoSegments().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           project.setTempoSegments({ length } as unknown as Parameters<
             typeof project.setTempoSegments
           >[0]),
@@ -749,7 +748,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ]);
       expect(project.timeSignatures().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           project.setTimeSignatures({ length } as unknown as Parameters<
             typeof project.setTimeSignatures
           >[0]),
@@ -967,7 +966,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 2048 });
       try {
         engine.setBuiltinInstrument(0, { gain: 0.5 });
-        expectRangeRefusal(() =>
+        expectTypeRefusal(() =>
           engine.setMidiClips([
             {
               id: 1,

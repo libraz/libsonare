@@ -180,7 +180,7 @@ void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
 void ProjectWasm::setWarpMap(val desc) {
   std::vector<SonareProjectWarpAnchor> anchors;
   const size_t count =
-      hasProperty(desc, "anchors") ? wasmArrayLikeLength(desc["anchors"], "anchors") : 0;
+      hasProperty(desc, "anchors") ? wasmArrayLength(desc["anchors"], "anchors") : 0;
   anchors.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     val anchor = desc["anchors"][static_cast<unsigned>(i)];

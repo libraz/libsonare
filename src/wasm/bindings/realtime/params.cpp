@@ -118,7 +118,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id_number, val points) {
   // the shared safe-integer + budget guard, and cap the pre-reserve so a
   // fabricated length cannot allocate storage the array does not back. A longer
   // genuine array still works — the vector grows as points are validated.
-  const size_t count = wasmArrayLikeLength(points, "points");
+  const size_t count = wasmArrayLength(points, "points");
   breakpoints.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];

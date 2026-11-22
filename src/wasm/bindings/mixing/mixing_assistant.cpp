@@ -89,24 +89,22 @@ std::string optionalTrackName(const val& names, std::size_t index) {
 AssistantInput buildAssistantInput(val left_channels, val right_channels, val track_ids,
                                    val track_names, val track_sample_rates,
                                    const val& sample_rate_value) {
-  requireJsArray(left_channels, "leftChannels");
+  const std::size_t count = wasmPlaneListLength(left_channels, "leftChannels");
   requireJsArray(track_ids, "trackIds");
-  if (!isAbsent(right_channels)) requireJsArray(right_channels, "rightChannels");
   if (!isAbsent(track_names)) requireJsArray(track_names, "trackNames");
   if (!isAbsent(track_sample_rates)) requireJsArray(track_sample_rates, "trackSampleRates");
 
-  const std::size_t count = wasmArrayLikeLength(left_channels, "leftChannels");
-  if (wasmArrayLikeLength(track_ids, "trackIds") != count) {
+  if (wasmArrayLength(track_ids, "trackIds") != count) {
     throw WasmRangeError("trackIds must have one entry per track");
   }
-  if (!isAbsent(right_channels) && wasmArrayLikeLength(right_channels, "rightChannels") != count) {
+  if (!isAbsent(right_channels) && wasmPlaneListLength(right_channels, "rightChannels") != count) {
     throw WasmRangeError("rightChannels must have one entry per track");
   }
-  if (!isAbsent(track_names) && wasmArrayLikeLength(track_names, "trackNames") != count) {
+  if (!isAbsent(track_names) && wasmArrayLength(track_names, "trackNames") != count) {
     throw WasmRangeError("trackNames must have one entry per track");
   }
   if (!isAbsent(track_sample_rates) &&
-      wasmArrayLikeLength(track_sample_rates, "trackSampleRates") != count) {
+      wasmArrayLength(track_sample_rates, "trackSampleRates") != count) {
     throw WasmRangeError("trackSampleRates must have one entry per track");
   }
 
@@ -131,24 +129,25 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
     ids[index] = requireTrackId(track_ids, index);
     names[index] = optionalTrackName(track_names, index);
 
+    const std::string at = "[" + std::to_string(index) + "]";
+    const std::string left_subject = "leftChannels" + at;
+    const std::string right_subject = "rightChannels" + at;
     const val left = left_channels[index];
-    if (isAbsent(left)) {
-      throw WasmTypeError("leftChannels[" + std::to_string(index) + "] must be a Float32Array");
-    }
-    const std::size_t frames = accumulateWasmFloat32ArrayLength(left, "leftChannels", &budget);
-    input.left[index] = float32ArrayToVector(left, "leftChannels");
+    const std::size_t frames =
+        accumulateWasmFloat32ArrayLength(left, left_subject.c_str(), &budget);
+    input.left[index] = float32ArrayToVector(left, left_subject.c_str());
 
     const val right = isAbsent(right_channels) ? val::undefined() : right_channels[index];
     if (!isAbsent(right)) {
       // The core carries one frame count per track and reads both planes with
       // it, so a shorter right plane would be read past its end.
       const std::size_t right_frames =
-          accumulateWasmFloat32ArrayLength(right, "rightChannels", &budget);
+          accumulateWasmFloat32ArrayLength(right, right_subject.c_str(), &budget);
       if (right_frames != frames) {
-        const std::string at = "tracks[" + std::to_string(index) + "]";
-        throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
+        const std::string track = "tracks" + at;
+        throw WasmRangeError(track + ".left and " + track + ".right must have the same length");
       }
-      input.right[index] = float32ArrayToVector(right, "rightChannels");
+      input.right[index] = float32ArrayToVector(right, right_subject.c_str());
     }
 
     if (!isAbsent(track_sample_rates)) {

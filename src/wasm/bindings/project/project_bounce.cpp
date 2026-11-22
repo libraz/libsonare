@@ -435,7 +435,7 @@ std::vector<SonareBuiltinInstrumentBinding> ProjectWasm::builtinBindingsFromVal(
     return out;
   }
   if (val::global("Array").call<bool>("isArray", bindings)) {
-    const size_t count = wasmArrayLikeLength(bindings, "bindings");
+    const size_t count = wasmArrayLength(bindings, "bindings");
     out.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       out.push_back(builtinBindingFromVal(bindings[i]));
@@ -458,7 +458,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   std::vector<SonareInstrumentBinding> instruments;
   if (!instrument_bindings.isUndefined() && !instrument_bindings.isNull()) {
     const bool isList = val::global("Array").call<bool>("isArray", instrument_bindings);
-    const size_t count = isList ? wasmArrayLikeLength(instrument_bindings, "bindings") : 1;
+    const size_t count = isList ? wasmArrayLength(instrument_bindings, "bindings") : 1;
     slots.reserve(count);
     instruments.reserve(count);
     for (size_t i = 0; i < count; ++i) {
@@ -490,7 +490,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
       return binding;
     };
     if (val::global("Array").call<bool>("isArray", synth_bindings)) {
-      const size_t count = wasmArrayLikeLength(synth_bindings, "bindings");
+      const size_t count = wasmArrayLength(synth_bindings, "bindings");
       synths.reserve(count);
       for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(synth_bindings[i]));
     } else {
@@ -501,7 +501,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   std::vector<SonareSf2InstrumentBinding> players;
   if (!sf2_bindings.isUndefined() && !sf2_bindings.isNull()) {
     if (val::global("Array").call<bool>("isArray", sf2_bindings)) {
-      const size_t count = wasmArrayLikeLength(sf2_bindings, "bindings");
+      const size_t count = wasmArrayLength(sf2_bindings, "bindings");
       players.reserve(count);
       for (size_t i = 0; i < count; ++i) {
         players.push_back(sf2BindingFromVal(sf2_bindings[i]));

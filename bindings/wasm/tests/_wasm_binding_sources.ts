@@ -96,7 +96,7 @@ export function wasmBindingSources(): WasmBindingSource[] {
 /**
  * Field names excluded from the scan: `.length` / `.byteLength` reads belong
  * to the separate array-length-validation family
- * (`wasmArrayLikeLength`/`wasmFloat32ArrayLength`/`requireMatchedLength`),
+ * (`wasmArrayLength`/`wasmFloat32ArrayLength`/`requireMatchedLength`),
  * not the "named config field" hazard this scanner hunts. common.h/common.cpp
  * are the helpers' own home and are excluded entirely (see below), not just
  * by key name.
@@ -191,7 +191,7 @@ export function wasmSourceFiles(): WasmBindingSource[] {
 /**
  * Every literal `.length` / `.byteLength` index under `src/wasm/`. A caller-supplied
  * length read this way narrows a non-integer, negative or fabricated JS number with no
- * refusal, so such a read belongs in `wasmArrayLikeLength`, which takes the key as an
+ * refusal, so such a read belongs in `wasmArrayLength`, which takes the key as an
  * argument and therefore never appears here.
  */
 export function bareArrayLengthReadSites(

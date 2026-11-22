@@ -43,10 +43,10 @@ export type StripRef = number | string;
 /** Refuses input lists that are not arrays, by name, before comparing their lengths. */
 function assertInputLists(leftInputs: unknown, rightInputs: unknown): void {
   if (!Array.isArray(leftInputs)) {
-    throw refuseType('leftInputs must be an array');
+    throw refuseType('leftInputs must be an array of Float32Array');
   }
   if (!Array.isArray(rightInputs)) {
-    throw refuseType('rightInputs must be an array');
+    throw refuseType('rightInputs must be an array of Float32Array');
   }
   if (leftInputs.length !== rightInputs.length) {
     throw refuse('leftInputs and rightInputs must have the same length.');

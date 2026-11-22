@@ -123,7 +123,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
   std::vector<sonare::transport::TempoSegment> parsed;
   // Bounded before reserving, as the C-ABI setter is, so a crafted length cannot
   // drive an unbounded allocation.
-  const std::size_t count = wasmArrayLikeLength(segments, "segments");
+  const std::size_t count = wasmArrayLength(segments, "segments");
   parsed.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
     val entry = segments[i];
@@ -155,7 +155,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   std::vector<sonare::transport::TimeSignatureSegment> parsed;
   // Bounded before reserving, as the C-ABI setter is, so a crafted length cannot
   // drive an unbounded allocation.
-  const std::size_t count = wasmArrayLikeLength(segments, "segments");
+  const std::size_t count = wasmArrayLength(segments, "segments");
   parsed.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
     val entry = segments[i];
@@ -188,7 +188,7 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   static_assert(noexcept(marker_strings_.swap(staged_strings)),
                 "marker backing-store commit must not throw");
   std::vector<sonare::transport::Marker> prepared;
-  const int count = static_cast<int>(wasmArrayLikeLength(markers, "markers"));
+  const int count = static_cast<int>(wasmArrayLength(markers, "markers"));
   // Bound the list before reserving, matching the shared kMaxBufferSize cap the
   // C-ABI segment setters enforce, so a crafted length cannot drive an unbounded
   // allocation.

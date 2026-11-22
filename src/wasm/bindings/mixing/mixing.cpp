@@ -307,15 +307,15 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   }
   // require_non_zero defaults to true: mixStereo has no meaning over zero
   // input channels, so requireMatchedLength rejects that itself now.
-  const int count =
-      requireMatchedLength(left_channels, "leftChannels", right_channels, "rightChannels");
+  const int count = requireMatchedLength(left_channels, "leftChannels", right_channels,
+                                         "rightChannels", wasmPlaneListLength);
   // A per-strip array may be shorter than the strip list (the rest keep their
   // defaults) but never longer: the surplus entries would belong to no strip.
   for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
     if (!hasProperty(options, key)) continue;
     const val value = options[key];
     if (val::global("Array").call<bool>("isArray", value) &&
-        wasmArrayLikeLength(value, key) > static_cast<std::size_t>(count)) {
+        wasmArrayLength(value, key) > static_cast<std::size_t>(count)) {
       throw WasmRangeError(std::string("'") + key + "' has more entries than strips (" +
                            std::to_string(count) + ")");
     }
@@ -329,11 +329,15 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   size_t length = 0;
   size_t total_input_elements = 0;
   for (int index = 0; index < count; ++index) {
-    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "leftChannels");
-    const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "rightChannels");
+    const std::string at = "[" + std::to_string(index) + "]";
+    const std::string left_subject = "leftChannels" + at;
+    const std::string right_subject = "rightChannels" + at;
+    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], left_subject.c_str());
+    const size_t right_length =
+        wasmFloat32ArrayLength(right_channels[index], right_subject.c_str());
     if (left_length != right_length) {
-      const std::string at = "strips[" + std::to_string(index) + "]";
-      throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
+      const std::string strip = "strips" + at;
+      throw WasmRangeError(strip + ".left and " + strip + ".right must have the same length");
     }
     if (index == 0) {
       length = left_length;

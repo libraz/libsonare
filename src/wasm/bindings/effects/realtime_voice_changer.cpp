@@ -109,7 +109,7 @@ void vcReadHarmonySteps(const val& pod, int (&steps)[editing::voice_changer::kMa
     throw WasmTypeError(path + " must be an array");
   }
   const int count = editing::voice_changer::kMaxHarmonyVoices;
-  if (wasmArrayLikeLength(value, kPath) != static_cast<std::size_t>(count)) {
+  if (wasmArrayLength(value, kPath) != static_cast<std::size_t>(count)) {
     throw WasmRangeError(path + " must have exactly " + std::to_string(count) + " entries");
   }
   for (int i = 0; i < count; ++i) {
@@ -466,7 +466,7 @@ class RealtimeVoiceChangerWrapper {
   /// Copies a JS carrier into the scratch and returns it; undefined/null means none.
   const float* load_carrier(const val& carrier, int length) {
     if (carrier.isUndefined() || carrier.isNull()) return nullptr;
-    if (static_cast<int>(wasmArrayLikeLength(carrier, "carrier")) != length) {
+    if (static_cast<int>(wasmFloat32ArrayLength(carrier, "carrier")) != length) {
       throw WasmRangeError("carrier length must equal the input length");
     }
     ensure_mono_capacity(static_cast<size_t>(length));
@@ -476,7 +476,7 @@ class RealtimeVoiceChangerWrapper {
 
   val process_mono(val samples, const val& carrier) {
     require_prepared();
-    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
+    const int length = static_cast<int>(wasmFloat32ArrayLength(samples, "samples"));
     require_block_within_max(length);
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_.data(), static_cast<size_t>(length));
@@ -488,9 +488,9 @@ class RealtimeVoiceChangerWrapper {
 
   void process_mono_into(val samples, const val& carrier, val output) {
     require_prepared();
-    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
+    const int length = static_cast<int>(wasmFloat32ArrayLength(samples, "samples"));
     require_block_within_max(length);
-    if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
+    if (static_cast<int>(wasmFloat32OutputLength(output, "output")) < length) {
       throw WasmRangeError("output buffer is too small");
     }
     ensure_mono_capacity(static_cast<size_t>(length));
@@ -504,7 +504,7 @@ class RealtimeVoiceChangerWrapper {
 
   val process_interleaved(val samples, const val& carrier, const val& channels_val) {
     require_prepared();
-    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
+    const int length = static_cast<int>(wasmFloat32ArrayLength(samples, "samples"));
     val output = val::global("Float32Array").new_(length);
     // Forwarded unnarrowed: process_interleaved_into narrows it under the same key.
     process_interleaved_into(samples, carrier, channels_val, output);
@@ -515,12 +515,12 @@ class RealtimeVoiceChangerWrapper {
                                 val output) {
     const int channels = checkedIntFromVal(channels_val, "channels");
     require_prepared();
-    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
+    const int length = static_cast<int>(wasmFloat32ArrayLength(samples, "samples"));
     if (channels <= 0 || length % channels != 0) {
       throw WasmRangeError("invalid interleaved channel count");
     }
     require_prepared_channels(channels);
-    if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
+    if (static_cast<int>(wasmFloat32OutputLength(output, "output")) < length) {
       throw WasmRangeError("output buffer is too small");
     }
     const size_t frames = static_cast<size_t>(length / channels);

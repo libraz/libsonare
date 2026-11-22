@@ -129,15 +129,22 @@ std::size_t wasmIndexArg(double value, const char* subject) {
   return wasmCountArg(value, subject);
 }
 
-std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char* length_key) {
-  if (arr.isNull() || arr.isUndefined()) {
-    throw WasmTypeError(std::string(subject) + " must be an array-like object");
-  }
+static bool isPlainArray(const val& value) {
+  return val::global("Array").call<bool>("isArray", value);
+}
+
+// Every typed array (an instance of %TypedArray%), and no DataView.
+static bool isTypedArray(const val& value) {
+  const val typed_array =
+      val::global("Object").call<val>("getPrototypeOf", val::global("Int8Array"));
+  return value.instanceof (typed_array);
+}
+
+// A Proxy over an array passes the type checks and can report any `length`, so
+// the count is still checked as a safe integer before the budget.
+static std::size_t budgetedLength(const val& arr, const char* subject, const char* length_key) {
   const val length_value = arr[length_key];
-  if (!length_value.isNumber()) {
-    throw WasmTypeError(std::string(subject) + " length must be a number");
-  }
-  const double length = length_value.as<double>();
+  const double length = length_value.isNumber() ? length_value.as<double>() : -1.0;
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(length) || length < 0.0 || std::floor(length) != length ||
       length > kMaxSafeInteger) {
@@ -150,13 +157,33 @@ std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char*
   return static_cast<std::size_t>(length);
 }
 
+std::size_t wasmArrayLength(const val& arr, const char* subject, const char* length_key) {
+  if (!isPlainArray(arr) && !isTypedArray(arr)) {
+    throw WasmTypeError(std::string(subject) + " must be an array");
+  }
+  return budgetedLength(arr, subject, length_key);
+}
+
+std::size_t wasmPlaneListLength(const val& list, const char* subject) {
+  if (!isPlainArray(list)) {
+    throw WasmTypeError(std::string(subject) + " must be an array of Float32Array");
+  }
+  return budgetedLength(list, subject, "length");
+}
+
+std::size_t wasmFloat32OutputLength(const val& arr, const char* subject) {
+  if (arr.isNull() || arr.isUndefined() || !arr.instanceof (val::global("Float32Array"))) {
+    throw WasmTypeError(std::string(subject) + " must be a Float32Array");
+  }
+  return budgetedLength(arr, subject, "length");
+}
+
 // A typed buffer argument is its own typed array or a plain JS array; a string,
 // another typed array or any other array-like is refused as the wrong type.
 static void requireTypedOrPlainArray(const val& arr, const char* subject, const char* type_name,
                                      const char* article) {
   if (!arr.isNull() && !arr.isUndefined() &&
-      (arr.instanceof
-       (val::global(type_name)) || val::global("Array").call<bool>("isArray", arr))) {
+      (arr.instanceof (val::global(type_name)) || isPlainArray(arr))) {
     return;
   }
   throw WasmTypeError(std::string(subject) + " must be " + article + " " + type_name);
@@ -164,7 +191,7 @@ static void requireTypedOrPlainArray(const val& arr, const char* subject, const 
 
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
   requireTypedOrPlainArray(arr, subject, "Float32Array", "a");
-  return wasmArrayLikeLength(arr, subject);
+  return budgetedLength(arr, subject, "length");
 }
 
 void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts) {
@@ -234,10 +261,7 @@ std::vector<Audio> loadValidatedChannelSet(const char* name, const val& channels
 std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sample_rate,
                                   ChannelSetValidation validation) {
   const std::string set_name(name);
-  if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError(set_name + " must be an array of Float32Array");
-  }
-  const std::size_t count = wasmArrayLikeLength(channels, name);
+  const std::size_t count = wasmPlaneListLength(channels, name);
   if (count == 0) {
     throw WasmRangeError(set_name + " must hold at least one channel");
   }
@@ -248,9 +272,6 @@ std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sam
   for (std::size_t index = 0; index < count; ++index) {
     const val channel = channels[index];
     const std::string channel_name = set_name + "[" + std::to_string(index) + "]";
-    if (channel.isUndefined() || channel.isNull()) {
-      throw WasmTypeError(channel_name + " must be a Float32Array");
-    }
     const std::size_t frames =
         accumulateWasmFloat32ArrayLength(channel, channel_name.c_str(), &cumulative);
     if (index == 0) {
@@ -333,7 +354,7 @@ std::vector<float> loadValidatedInterleaved(const char* name, val samples, int c
 // single boundary crossing (view.set(arr)) copies the raw 32-bit integers.
 std::vector<int32_t> int32ArrayToVector(val arr, const char* subject) {
   requireTypedOrPlainArray(arr, subject, "Int32Array", "an");
-  const size_t n = wasmArrayLikeLength(arr, subject);
+  const size_t n = budgetedLength(arr, subject, "length");
   std::vector<int32_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
@@ -344,8 +365,7 @@ std::vector<int32_t> int32ArrayToVector(val arr, const char* subject) {
 std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject) {
   requireTypedOrPlainArray(arr, subject, "Uint8Array", "a");
   // A plain array has no byteLength; its length is its byte count.
-  const bool plain = val::global("Array").call<bool>("isArray", arr);
-  const size_t n = wasmArrayLikeLength(arr, subject, plain ? "length" : "byteLength");
+  const size_t n = budgetedLength(arr, subject, isPlainArray(arr) ? "length" : "byteLength");
   std::vector<uint8_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
@@ -787,9 +807,10 @@ bool cancelCallbackRequested(const val& callback) {
 }
 
 int requireMatchedLength(const val& first, const char* first_subject, const val& second,
-                         const char* second_subject, bool require_non_zero) {
-  const std::size_t first_length = wasmArrayLikeLength(first, first_subject);
-  const std::size_t second_length = wasmArrayLikeLength(second, second_subject);
+                         const char* second_subject, WasmLengthReader read_length,
+                         bool require_non_zero) {
+  const std::size_t first_length = read_length(first, first_subject);
+  const std::size_t second_length = read_length(second, second_subject);
   const std::string pair = std::string(first_subject) + " and " + second_subject;
   if (first_length != second_length) {
     throw WasmRangeError(pair + " must have the same length");

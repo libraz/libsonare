@@ -116,7 +116,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
   if (!val::global("Array").call<bool>("isArray", takes_val)) {
     throw WasmTypeError("clip takes must be an array");
   }
-  const size_t count = wasmArrayLikeLength(takes_val, "takes");
+  const size_t count = wasmArrayLength(takes_val, "takes");
   std::vector<SonareProjectClipTake> takes;
   std::vector<std::string> name_storage;
   takes.reserve(count);
@@ -145,7 +145,7 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
   if (!val::global("Array").call<bool>("isArray", segments_val)) {
     throw WasmTypeError("clip comp segments must be an array");
   }
-  const size_t count = wasmArrayLikeLength(segments_val, "segments");
+  const size_t count = wasmArrayLength(segments_val, "segments");
   std::vector<SonareProjectClipCompSegment> segments;
   segments.reserve(count);
   for (size_t i = 0; i < count; ++i) {
@@ -231,7 +231,7 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
   // The point count comes from an untrusted JS `.length`: validate it through
   // the shared safe-integer + budget guard, and cap the pre-reserve so a
   // fabricated length cannot allocate storage the array does not back.
-  const size_t count = wasmArrayLikeLength(points, "points");
+  const size_t count = wasmArrayLength(points, "points");
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];

@@ -286,8 +286,7 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
   parts.code = static_cast<sonare::ErrorCode>(checkedIntFromVal(object["code"], "refusal.code"));
   parts.form = string_field(object, "form");
   const val subjects = object["subjects"];
-  const std::size_t count =
-      subjects.isArray() ? wasmArrayLikeLength(subjects, "refusal.subjects") : 0;
+  const std::size_t count = subjects.isArray() ? wasmArrayLength(subjects, "refusal.subjects") : 0;
   for (std::size_t i = 0; i < count; ++i) parts.subjects.push_back(subjects[i].as<std::string>());
   parts.predicate = string_field(object, "predicate");
   parts.renamed_to = string_field(object, "renamedTo");
@@ -309,13 +308,13 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
 val js_render_refusal(const val& refusal, const val& names, const val& scales) {
   const sonare::SonareParameterRefusal parsed = refusal_from_object(refusal);
   std::vector<std::string> subjects;
-  const std::size_t count = wasmArrayLikeLength(names, "subjects");
+  const std::size_t count = wasmArrayLength(names, "subjects");
   for (std::size_t i = 0; i < count; ++i) subjects.push_back(names[i].as<std::string>());
   std::vector<const char*> pointers;
   for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
   std::vector<double> factors;
   if (scales.isArray()) {
-    const std::size_t scale_count = wasmArrayLikeLength(scales, "scales");
+    const std::size_t scale_count = wasmArrayLength(scales, "scales");
     for (std::size_t i = 0; i < scale_count; ++i) factors.push_back(scales[i].as<double>());
   }
   const sonare::SonareParameterRefusal rendered = sonare_c_detail::respelled_refusal(
@@ -550,10 +549,7 @@ val js_decode_channels(val bytes) {
 
 val js_downmix(val channels, val target_layout_value, val options) {
   const int target_layout = checkedIntFromVal(target_layout_value, "targetLayout");
-  if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError("channels must be an array of Float32Array");
-  }
-  const size_t count = wasmArrayLikeLength(channels, "channels");
+  const size_t count = wasmPlaneListLength(channels, "channels");
   if (count == 0) {
     throw WasmRangeError("channels must hold at least one channel");
   }
@@ -561,7 +557,8 @@ val js_downmix(val channels, val target_layout_value, val options) {
   std::vector<float> packed;
   size_t frames = 0;
   for (size_t index = 0; index < count; ++index) {
-    const std::vector<float> plane = float32ArrayToVector(channels[index], "channels");
+    const std::string channel_name = "channels[" + std::to_string(index) + "]";
+    const std::vector<float> plane = float32ArrayToVector(channels[index], channel_name.c_str());
     if (index == 0) {
       frames = plane.size();
       packed.reserve(frames * count);

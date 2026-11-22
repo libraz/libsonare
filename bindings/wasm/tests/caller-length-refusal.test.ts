@@ -1,6 +1,6 @@
 /**
- * A length the caller supplies is read through the shared array-like reader, so a
- * value that is not an array is refused by name instead of reading as zero items.
+ * A length the caller supplies is read only from an array, so a value that is not one is
+ * refused by name instead of reading as zero items or as whatever its `length` says.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -28,7 +28,7 @@ describe('Mixer.processStereoInto', () => {
     expect(
       expectRefusalOf(() => mixer().processStereoInto(notAList, notAList, outL, outR), TypeError)
         .message,
-    ).toBe('Mixer.processStereoInto: leftInputs must be an array');
+    ).toBe('Mixer.processStereoInto: leftInputs must be an array of Float32Array');
   });
 
   it('names the right input list when only it is not an array', () => {
@@ -37,10 +37,10 @@ describe('Mixer.processStereoInto', () => {
     const notAList = {} as unknown as Float32Array[];
     expect(
       expectRefusalOf(() => mixer().processStereoInto([], notAList, outL, outR), TypeError).message,
-    ).toBe('Mixer.processStereoInto: rightInputs must be an array');
+    ).toBe('Mixer.processStereoInto: rightInputs must be an array of Float32Array');
   });
 
-  it('refuses an input channel that is not an array by name', () => {
+  it('refuses an input channel that is not a Float32Array by name', () => {
     const outL = new Float32Array(BLOCK);
     const outR = new Float32Array(BLOCK);
     const notAChannel = [{}] as unknown as Float32Array[];
@@ -49,7 +49,7 @@ describe('Mixer.processStereoInto', () => {
         () => mixer().processStereoInto(notAChannel, [new Float32Array(BLOCK)], outL, outR),
         TypeError,
       ).message,
-    ).toBe('Mixer.processStereoInto: leftInputs[0] length must be a number');
+    ).toBe('Mixer.processStereoInto: leftInputs[0] must be a Float32Array');
   });
 });
 
@@ -58,6 +58,6 @@ describe('ClipPageProvider.supply', () => {
     const provider = new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4 });
     expect(
       expectRefusalOf(() => provider.supply(0, {} as unknown as Float32Array[]), TypeError).message,
-    ).toBe('ClipPageProvider.supply: channels length must be a number');
+    ).toBe('ClipPageProvider.supply: channels must be an array of Float32Array');
   });
 });

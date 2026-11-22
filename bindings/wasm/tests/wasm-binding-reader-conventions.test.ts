@@ -119,12 +119,12 @@ describe('WASM binding sources budget every caller-supplied array length', () =>
     expect(files).toEqual(expect.arrayContaining(['bindings.cpp', 'bindings/common/common.cpp']));
   });
 
-  it('reads every caller-supplied length through wasmArrayLikeLength', () => {
+  it('reads every caller-supplied length through wasmArrayLength', () => {
     const raw = bareArrayLengthReadSites().filter((site) => !SELF_BUILT_LENGTH_READS.has(site.id));
     expect(
       raw.map((site) => `${site.file}:${site.line} ${site.receiver}`),
       'A length the caller supplied decides an allocation and a loop bound; read it with ' +
-        'wasmArrayLikeLength, which refuses a non-integer, negative or over-budget length by ' +
+        'wasmArrayLength, which refuses a value that is not an array and an over-budget length by ' +
         'name. A read of an array the same function built goes in SELF_BUILT_LENGTH_READS ' +
         'with the reason.',
     ).toEqual([]);

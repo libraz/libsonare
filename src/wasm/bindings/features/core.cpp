@@ -177,7 +177,7 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
 
-  const std::size_t signal_count = wasmArrayLikeLength(signals, "signals");
+  const std::size_t signal_count = wasmPlaneListLength(signals, "signals");
   if (signal_count == 0) {
     throw WasmRangeError("signals must not be empty");
   }
@@ -188,12 +188,10 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
   std::size_t budget = 0;
   for (std::size_t index = 0; index < signal_count; ++index) {
     const val signal = signals[index];
-    if (signal.isUndefined() || signal.isNull()) {
-      throw WasmTypeError("signals[" + std::to_string(index) + "] must be a Float32Array");
-    }
-    accumulateWasmFloat32ArrayLength(signal, "signals", &budget);
-    buffers[index] = float32ArrayToVector(signal, "signals");
-    validateFiniteVector(buffers[index], "signals[" + std::to_string(index) + "]", "sample");
+    const std::string channel_name = "signals[" + std::to_string(index) + "]";
+    accumulateWasmFloat32ArrayLength(signal, channel_name.c_str(), &budget);
+    buffers[index] = float32ArrayToVector(signal, channel_name.c_str());
+    validateFiniteVector(buffers[index], channel_name, "sample");
     pointers[index] = buffers[index].data();
     lengths[index] = buffers[index].size();
   }
@@ -304,7 +302,7 @@ val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
 std::vector<int> intArrayToVector(val arr, const char* subject) {
   // The caller-supplied `.length` decides the allocation, so it goes through the
   // shared safe-integer + budget guard rather than a raw as<int>() narrowing.
-  const size_t length = wasmArrayLikeLength(arr, subject);
+  const size_t length = wasmArrayLength(arr, subject);
   std::vector<int> out(length);
   for (size_t index = 0; index < length; ++index) {
     // Each element goes through the same 32-bit-integer guard as any other

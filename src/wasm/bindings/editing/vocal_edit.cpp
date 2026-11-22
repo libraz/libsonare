@@ -116,7 +116,7 @@ uint32_t nonZeroId(uint32_t id, const char* key) {
 }
 
 std::vector<float> floatArray(const val& value, const char* field, bool non_negative = false) {
-  const std::size_t count = wasmArrayLikeLength(value, field);
+  const std::size_t count = wasmArrayLength(value, field);
   std::vector<float> result(count);
   for (std::size_t i = 0; i < count; ++i) {
     const val item = value[static_cast<unsigned>(i)];
@@ -135,7 +135,7 @@ std::vector<float> floatArray(const val& value, const char* field, bool non_nega
 }
 
 std::vector<uint8_t> byteArray(const val& value, const char* field) {
-  const std::size_t count = wasmArrayLikeLength(value, field);
+  const std::size_t count = wasmArrayLength(value, field);
   std::vector<uint8_t> result(count);
   for (std::size_t i = 0; i < count; ++i) {
     const val item = value[static_cast<unsigned>(i)];
@@ -152,7 +152,7 @@ std::vector<uint8_t> byteArray(const val& value, const char* field) {
 }
 
 std::vector<uint32_t> idArray(const val& value, const char* field) {
-  const std::size_t count = wasmArrayLikeLength(value, field);
+  const std::size_t count = wasmArrayLength(value, field);
   std::vector<uint32_t> result(count);
   for (std::size_t i = 0; i < count; ++i) {
     const val item = value[static_cast<unsigned>(i)];
@@ -193,7 +193,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   } else if (targetMode == "curve") {
     result.target_mode = SONARE_VOCAL_TARGET_CURVE;
     const val points = property(target, "points");
-    const std::size_t count = wasmArrayLikeLength(points, "target.points");
+    const std::size_t count = wasmArrayLength(points, "target.points");
     if (count < 2) {
       throw WasmRangeError("target.points must contain two points");
     }
@@ -774,7 +774,7 @@ val js_vocal_edit_session_begin_edit(double handle, const val& revision_value) {
 }
 
 val js_vocal_edit_draft_apply(double handle, const val& generation_value, val operations) {
-  const std::size_t count = wasmArrayLikeLength(operations, "operations");
+  const std::size_t count = wasmArrayLength(operations, "operations");
   std::vector<SonareVocalOperation> parsed(count);
   std::vector<OperationStorage> storage(count);
   for (std::size_t i = 0; i < count; ++i)

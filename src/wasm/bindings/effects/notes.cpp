@@ -212,7 +212,7 @@ struct NoteSetEntry {
 std::vector<NoteSetEntry> noteSetFromVal(const val& notes, std::size_t* cumulative_count) {
   const std::string subject = "note";
   const std::string list_subject = subject + "s";
-  const std::size_t count = wasmArrayLikeLength(notes, list_subject.c_str());
+  const std::size_t count = wasmArrayLength(notes, list_subject.c_str());
   std::vector<NoteSetEntry> out;
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
@@ -304,7 +304,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
     f0 = normalizedF0FromVal(f0_hz, voiced, &cumulative_count);
   }
 
-  const std::size_t count = wasmArrayLikeLength(notes, "notes");
+  const std::size_t count = wasmArrayLength(notes, "notes");
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
@@ -446,7 +446,7 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
 std::vector<NoteTarget> noteTargetsFromVal(const val& targets) {
   const std::string subject = "target";
   const std::string list_subject = subject + "s";
-  const std::size_t count = wasmArrayLikeLength(targets, list_subject.c_str());
+  const std::size_t count = wasmArrayLength(targets, list_subject.c_str());
   std::vector<NoteTarget> out;
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
@@ -517,7 +517,7 @@ val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, v
   const NoteTargetAssignConfig config = noteTargetAssignConfigFromVal(request);
   const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets);
 
-  const std::size_t count = wasmArrayLikeLength(notes, "notes");
+  const std::size_t count = wasmArrayLength(notes, "notes");
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {

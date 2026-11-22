@@ -76,7 +76,7 @@ void requireMasterStrip(const sonare::engine::RealtimeEngine& engine) {
 // defaults to post-fader.
 std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
   std::vector<sonare::engine::TrackLaneConfig::Send> out;
-  const int send_count = static_cast<int>(wasmArrayLikeLength(sends, "sends"));
+  const int send_count = static_cast<int>(wasmArrayLength(sends, "sends"));
   out.reserve(static_cast<size_t>(send_count));
   for (int send_index = 0; send_index < send_count; ++send_index) {
     val send = sends[send_index];
@@ -137,7 +137,7 @@ sonare::engine::SidechainSourceKind sidechainSourceKindForQuery(int source_kind)
 
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
 #if defined(SONARE_WITH_MIXING)
-  const int count = static_cast<int>(wasmArrayLikeLength(lanes, "lanes"));
+  const int count = static_cast<int>(wasmArrayLength(lanes, "lanes"));
   sonare::util::check::integer_in_range(
       count, 0, static_cast<long long>(sonare::engine::TrackMixerRuntime::kMaxTrackLanes),
       "lane_count");
@@ -263,7 +263,7 @@ int RealtimeEngineWasm::canSetLaneSidechain(const val& track_id_val, const val& 
 
 void RealtimeEngineWasm::setTrackBuses(val buses) {
 #if defined(SONARE_WITH_MIXING)
-  const int count = static_cast<int>(wasmArrayLikeLength(buses, "buses"));
+  const int count = static_cast<int>(wasmArrayLength(buses, "buses"));
   std::vector<sonare::engine::TrackBusConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {

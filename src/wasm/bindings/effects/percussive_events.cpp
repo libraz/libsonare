@@ -116,7 +116,7 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   config.fade_ms = floatProperty(options, "fadeMs", config.fade_ms);
   sonare::util::check::greater_than(config.fade_ms, 0.0, "fadeMs");
 
-  const std::size_t count = wasmArrayLikeLength(events, "events");
+  const std::size_t count = wasmArrayLength(events, "events");
   std::vector<PercussiveEvent> core_events;
   core_events.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {

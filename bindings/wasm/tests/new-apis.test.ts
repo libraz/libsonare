@@ -1443,11 +1443,11 @@ describe('v1.2 feature additions (WASM)', () => {
       for (const missing of [undefined, null]) {
         expect(
           expectRefusalOf(() => engine.setTempoSegments(missing as never), TypeError).message,
-        ).toBe('RealtimeEngine.setTempoSegments: segments must be an array-like object');
+        ).toBe('RealtimeEngine.setTempoSegments: segments must be an array');
         expect(
           expectRefusalOf(() => engine.setTimeSignatureSegments(missing as never), TypeError)
             .message,
-        ).toBe('RealtimeEngine.setTimeSignatureSegments: segments must be an array-like object');
+        ).toBe('RealtimeEngine.setTimeSignatureSegments: segments must be an array');
       }
       // The 90 BPM map is still in force: one beat at 48 kHz is 32000 samples.
       expect(engine.sampleAtPpq(1)).toBe(32000);
@@ -1457,9 +1457,10 @@ describe('v1.2 feature additions (WASM)', () => {
     it('rejects an oversized segment/marker list before allocating', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // A crafted length past the shared buffer cap (500e6) must be rejected up
-      // front, matching the C ABI, instead of driving an unbounded reserve. Use a
-      // fake array-like so no real 500M-element allocation is attempted.
-      const oversized = { length: 500_000_001 } as unknown as [];
+      // front, matching the C ABI, instead of driving an unbounded reserve. A sparse
+      // array carries the length without a real 500M-element allocation.
+      const oversized: [] = [];
+      (oversized as unknown[]).length = 500_000_001;
       expect(expectRefusalOf(() => engine.setTempoSegments(oversized), RangeError).message).toBe(
         'RealtimeEngine.setTempoSegments: segments exceeds the WASM Float32 input budget',
       );

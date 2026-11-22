@@ -464,7 +464,7 @@ val js_waveform_peak_pyramid(val samples, const val& channels_val, val js_levels
   std::vector<size_t> levels;
   // The level count is caller-controlled and drives the reserve, so it goes
   // through the shared safe-integer + budget guard instead of a raw narrowing.
-  const size_t n = wasmArrayLikeLength(js_levels, "levels");
+  const size_t n = wasmArrayLength(js_levels, "samplesPerBucketLevels");
   levels.reserve(n);
   for (size_t i = 0; i < n; ++i) {
     const std::string subject = "samplesPerBucketLevels[" + std::to_string(i) + "]";

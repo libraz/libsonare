@@ -647,7 +647,7 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
   if (!val::global("Array").call<bool>("isArray", platforms)) {
     throw WasmTypeError("platforms must be an array");
   }
-  const int length = static_cast<int>(wasmArrayLikeLength(platforms, "platforms"));
+  const int length = static_cast<int>(wasmArrayLength(platforms, "platforms"));
   out.reserve(static_cast<size_t>(length));
   for (int index = 0; index < length; ++index) {
     // Every field is required: a missing one is refused by name, never filled with a default.

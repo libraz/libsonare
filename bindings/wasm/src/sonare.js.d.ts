@@ -1945,7 +1945,7 @@ export interface SonareModule {
     tuningCents: number | 'auto',
   ) => WasmChordAnalysisResult & { roman: string[]; functions: string[] };
   chordFunctions: (
-    chords: ArrayLike<{ root: number; quality: number }>,
+    chords: readonly { root: number; quality: number }[],
     keyRoot: number,
     keyMode: number,
   ) => { roman: string[]; functions: string[] };
@@ -1958,8 +1958,8 @@ export interface SonareModule {
     cancelCallback?: (() => boolean) | null,
   ) => WasmAnalysisResult;
   estimateMeter: (
-    beatTimes: ArrayLike<number>,
-    beatStrengths: ArrayLike<number>,
+    beatTimes: readonly number[],
+    beatStrengths: readonly number[],
     options: object,
   ) => WasmMeterEstimateResult;
   _synthEnumTables: () => WasmSynthEnumTables;

@@ -41,7 +41,7 @@ std::vector<Mode> modesFromVal(val modes) {
   if (modes.isUndefined() || modes.isNull()) {
     return out;
   }
-  const int length = static_cast<int>(wasmArrayLikeLength(modes, "modes"));
+  const int length = static_cast<int>(wasmArrayLength(modes, "modes"));
   out.reserve(static_cast<size_t>(length));
   for (int i = 0; i < length; ++i) {
     const int mode = checkedIntFromVal(modes[i], "modes");
@@ -656,7 +656,7 @@ void setNumberOption(const val& options, const char* key, Field* field) {
 // non-empty rule and the [2, 32] per-entry range stay with the core validators.
 // @p subject names the field, e.g. "meterCandidateNumerators".
 std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const char* subject) {
-  const std::size_t length = wasmArrayLikeLength(numerators, subject);
+  const std::size_t length = wasmArrayLength(numerators, subject);
   if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
     throw WasmRangeError(std::string(subject) + " must hold at most " +
                          std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
@@ -858,7 +858,7 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
   const int key_root = checkedIntFromVal(key_root_val, "key.root");
   const int key_mode = checkedIntFromVal(key_mode_val, "key.mode");
   validateKey(key_root, key_mode);
-  const std::size_t count = wasmArrayLikeLength(chords, "chords");
+  const std::size_t count = wasmArrayLength(chords, "chords");
   val roman = val::array();
   val functions = val::array();
   for (std::size_t i = 0; i < count; ++i) {
