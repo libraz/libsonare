@@ -705,7 +705,7 @@ def room_morph_stereo(
     )
     # The C struct reads NaN as not given; a given NaN is refused as the infinity it also is not.
     if spacing is not None and math.isnan(spacing.value):
-        spacing = ctypes.c_float(math.inf)
+        spacing = _domain_float(math.inf, "receiver_spacing_m")
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:
