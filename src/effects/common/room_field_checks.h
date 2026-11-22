@@ -21,6 +21,27 @@ namespace sonare::effects::common {
 /// @brief What RirSynthConfig::ism_order accepts.
 inline constexpr util::check::NumericDomain kRirIsmOrderDomain =
     util::check::integer_domain(0, std::numeric_limits<int>::max());
+/// @brief What each RoomDimensions extent accepts.
+inline constexpr util::check::NumericDomain kRoomDimensionDomain =
+    util::check::real_domain(0.0, false, ::sonare::acoustic::kMaxRoomDimensionM, true);
+/// @brief What RirSynthConfig::max_seconds accepts.
+inline constexpr util::check::NumericDomain kRirMaxSecondsDomain =
+    util::check::real_domain(0.0, ::sonare::acoustic::kMaxRirSeconds);
+/// @brief What RirSynthConfig::mixing_time_ms accepts.
+inline constexpr util::check::NumericDomain kRirMixingTimeMsDomain =
+    util::check::real_domain(0.0, ::sonare::acoustic::kMaxRirMixingTimeMs);
+/// @brief What RirSynthConfig::crossfade_ms accepts.
+inline constexpr util::check::NumericDomain kRirCrossfadeMsDomain =
+    util::check::real_domain(0.0, ::sonare::acoustic::kMaxRirCrossfadeMs);
+/// @brief What AirAbsorption::temperature_c accepts: above absolute zero.
+inline constexpr util::check::NumericDomain kAirTemperatureCDomain =
+    util::check::real_domain_above(::sonare::acoustic::kAbsoluteZeroCelsius, false);
+/// @brief What AirAbsorption::humidity_percent accepts.
+inline constexpr util::check::NumericDomain kAirHumidityPercentDomain =
+    util::check::real_domain(0.0, 100.0);
+/// @brief What a receiver spacing accepts.
+inline constexpr util::check::NumericDomain kReceiverSpacingDomain =
+    util::check::real_domain(0.0, false, ::sonare::acoustic::kMaxReceiverSpacingM, true);
 
 /// Config member paths of the three geometry members a room config holds.
 struct RoomMemberPaths {
@@ -40,8 +61,7 @@ inline void check_room_geometry(const RoomDimensions& dims, const ::sonare::acou
     float extent;
   } extents[3] = {{"length", dims.length}, {"width", dims.width}, {"height", dims.height}};
   for (const auto& e : extents) {
-    check::in_interval(e.extent, 0.0, false, ::sonare::acoustic::kMaxRoomDimensionM, true,
-                       (paths.dims + "." + e.axis).c_str());
+    check::within(e.extent, kRoomDimensionDomain, (paths.dims + "." + e.axis).c_str());
   }
   const struct {
     const std::string* path;
@@ -61,14 +81,12 @@ inline void check_room_geometry(const RoomDimensions& dims, const ::sonare::acou
 inline void check_rir_synth_config(const ::sonare::acoustic::RirSynthConfig& config) {
   namespace check = ::sonare::util::check;
   check::integer_within(config.ism_order, kRirIsmOrderDomain, "ism_order");
-  check::in_range(config.max_seconds, 0.0, ::sonare::acoustic::kMaxRirSeconds, "max_seconds");
-  check::in_range(config.mixing_time_ms, 0.0, ::sonare::acoustic::kMaxRirMixingTimeMs,
-                  "mixing_time_ms");
-  check::in_range(config.crossfade_ms, 0.0, ::sonare::acoustic::kMaxRirCrossfadeMs, "crossfade_ms");
+  check::within(config.max_seconds, kRirMaxSecondsDomain, "max_seconds");
+  check::within(config.mixing_time_ms, kRirMixingTimeMsDomain, "mixing_time_ms");
+  check::within(config.crossfade_ms, kRirCrossfadeMsDomain, "crossfade_ms");
   if (config.air_absorption_enabled) {
-    check::greater_than(config.air.temperature_c, ::sonare::acoustic::kAbsoluteZeroCelsius,
-                        "air.temperature_c");
-    check::in_range(config.air.humidity_percent, 0.0, 100.0, "air.humidity_percent");
+    check::within(config.air.temperature_c, kAirTemperatureCDomain, "air.temperature_c");
+    check::within(config.air.humidity_percent, kAirHumidityPercentDomain, "air.humidity_percent");
   }
 }
 
@@ -86,8 +104,7 @@ inline void check_receiver_pair(const ::sonare::acoustic::ShoeboxRoom& room,
                        x ? room.dims.length : room.dims.width, false,
                        (paths.listener + (x ? ".x" : ".y")).c_str());
   }
-  check::in_interval(spacing_m, 0.0, false, ::sonare::acoustic::kMaxReceiverSpacingM, true,
-                     "receiver_spacing_m");
+  check::within(spacing_m, kReceiverSpacingDomain, "receiver_spacing_m");
   const ::sonare::acoustic::ReceiverPair pair =
       ::sonare::acoustic::receiver_pair(placement, spacing_m);
   if (!::sonare::acoustic::point_inside_shoebox(room, pair.left) ||
