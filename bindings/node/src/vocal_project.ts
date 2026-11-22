@@ -1,4 +1,5 @@
 import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import type { VocalReason, VocalStateToken } from './types_vocal_edit.js';
 import type {
@@ -378,6 +379,7 @@ export function projectRehydrateVocalEdits(
   if (!Array.isArray(originals)) {
     throw refuseType('originals must be an array');
   }
+  requireListBudget(originals, 'originals');
   const opts = objectValue(options, 'options');
   for (const key of Object.keys(opts)) {
     if (key !== 'cancel') {

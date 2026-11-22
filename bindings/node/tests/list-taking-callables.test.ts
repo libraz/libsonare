@@ -16,14 +16,8 @@ const EXEMPT: Record<string, string> = {
     'inherited unchanged from ClipPageProvider.supply, whose row exercises the shared body',
 };
 
-const UNGUARDED = 'facade walks the list unguarded; fix pending';
-
 /** Callables that walk a caller list in the facade with no budget check, by the walking site. */
-const KNOWN_UNGUARDED: Record<string, string> = {
-  splitNote: `${UNGUARDED} (effects_note_ops.ts assertNoteSetEntries and resolveEntryTimes over notes)`,
-  mergeNotes: `${UNGUARDED} (effects_note_ops.ts assertNoteSetEntries and resolveEntryTimes over notes)`,
-  'Project.rehydrateVocalEdits': `${UNGUARDED} (vocal_project.ts projectRehydrateVocalEdits index loop over originals)`,
-};
+const KNOWN_UNGUARDED: Record<string, string> = {};
 
 const MIN_LIST_TAKING = 88;
 const MIN_CALLABLES = 636;

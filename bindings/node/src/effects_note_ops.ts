@@ -216,6 +216,9 @@ export interface AssignNoteTargetsRequest {
  * two apart.
  */
 function assertNoteSetEntries(notes: readonly NoteSetEntry[]): void {
+  if (Array.isArray(notes)) {
+    requireListBudget(notes, 'notes');
+  }
   for (let index = 0; index < notes.length; index += 1) {
     const note = notes[index];
     assertIntegerValue(note?.frameStart, `notes[${index}].frameStart`);

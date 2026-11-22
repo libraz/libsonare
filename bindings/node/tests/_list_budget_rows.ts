@@ -61,6 +61,7 @@ export const PROJECT_ROWS: ReadonlyArray<Row<Project>> = [
   ],
   ['setTempoSegments', 'segments', (p, l) => p.setTempoSegments(l)],
   ['setTimeSignatures', 'segments', (p, l) => p.setTimeSignatures(l)],
+  ['rehydrateVocalEdits', 'originals', (p, l) => p.rehydrateVocalEdits(l)],
   ['setWarpMap', 'anchors', (p, l) => p.setWarpMap({ id: 1, anchors: l })],
   [
     'addClip channels',
@@ -268,6 +269,12 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   ),
   row('mergeNotes', 'voiced', (api, l) =>
     api.mergeNotes({ ...noteTrack, voiced: l, notes: [], first: 0, last: 1 } as never),
+  ),
+  row('splitNote', 'notes', (api, l) =>
+    api.splitNote({ ...noteTrack, voicedProb: F0, notes: l, index: 0, frame: 1 } as never),
+  ),
+  row('mergeNotes', 'notes', (api, l) =>
+    api.mergeNotes({ ...noteTrack, voicedProb: F0, notes: l, first: 0, last: 1 } as never),
   ),
   row('pitchCorrectTimevarying', 'voiced', (api, l) =>
     api.pitchCorrectTimevarying({ samples: X, sampleRate: SR, f0Hz: F0, voiced: l } as never),
