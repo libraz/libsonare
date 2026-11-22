@@ -1,4 +1,5 @@
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
+import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { assertStripMetering } from './internal/mix_scene.js';
 import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
@@ -217,7 +218,7 @@ export class Mixer {
       if (!isAbsent(bag.scene) && !isPlainRecord(bag.scene)) {
         throw refuseType('scene must be an object');
       }
-      sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
+      sceneJson = stringifyWithinBudget(bag.scene ?? { strips: [], buses: [] }, 'scene');
     }
     this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
   }
@@ -488,6 +489,9 @@ export class Mixer {
    * @param members - Strip ids that belong to the group
    */
   addVcaGroup(id: string, gainDb = 0.0, members: string[] = []): void {
+    if (Array.isArray(members)) {
+      requireListBudget(members, 'members');
+    }
     this.native.addVcaGroup(id, gainDb, members);
   }
 
@@ -498,6 +502,9 @@ export class Mixer {
 
   /** Replace an existing VCA group's strip membership. */
   setVcaGroupMembers(id: string, members: string[]): void {
+    if (Array.isArray(members)) {
+      requireListBudget(members, 'members');
+    }
     this.native.setVcaGroupMembers(id, members);
   }
 

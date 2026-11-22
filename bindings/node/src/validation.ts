@@ -1,4 +1,5 @@
 import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { isPlainRecord } from './internal/value_guards.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
@@ -250,6 +251,7 @@ export function assertAudioChannels(
   if (!Array.isArray(channels)) {
     throw refuseType(`${argName} must be an array of Float32Array`);
   }
+  requireListBudget(channels, argName);
   if (channels.length === 0) {
     throw refuse(`${argName} must not be empty`);
   }
@@ -516,6 +518,7 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
   if (!Array.isArray(events)) {
     throw refuseType(`events must be an array`);
   }
+  requireListBudget(events, 'events');
   events.forEach((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
@@ -737,10 +740,13 @@ export function assertKnownRequestKeys(
   for (const [field, set] of Object.entries(nested)) {
     const options = value[field];
     // A nested field is one object, or an array whose elements each carry the declared keys.
-    const items: [string, unknown][] = Array.isArray(options)
-      ? options.map((item, i) => [`${field}[${i}]`, item])
-      : [[field, options]];
-    for (const [path, item] of items) {
+    const list: readonly unknown[] = Array.isArray(options) ? options : [options];
+    if (Array.isArray(options)) {
+      requireListBudget(options, field);
+    }
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const path = Array.isArray(options) ? `${field}[${i}]` : field;
       if (!isPlainRecord(item)) {
         continue;
       }

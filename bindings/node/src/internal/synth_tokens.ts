@@ -1,4 +1,5 @@
 import { refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 
 /** SynthPatch fields that hold a closed-set name. */
 const PATCH_TOKEN_FIELDS = [
@@ -36,6 +37,7 @@ export function refuseSynthPatchOrdinals(patch: unknown): void {
   if (!Array.isArray(routings)) {
     return;
   }
+  requireListBudget(routings, 'modRoutings');
   routings.forEach((routing, index) => {
     if (typeof routing === 'object' && routing !== null) {
       const entry = routing as Record<string, unknown>;

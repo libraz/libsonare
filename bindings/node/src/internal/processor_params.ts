@@ -1,6 +1,7 @@
 import { addon } from '../native.js';
 import { assertFiniteScalar } from '../validation.js';
 import { refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 
 /** Params as the caller wrote them: values are checked against the processor's declared types here. */
 type LooseParams = Record<string, number | boolean | string | readonly number[]>;
@@ -59,6 +60,9 @@ export function resolveInsertParams(
       }
       out[key] = value;
     } else if (kind === 'array') {
+      if (Array.isArray(value)) {
+        requireListBudget(value, `params.${key}`);
+      }
       if (!Array.isArray(value) || value.some((item) => typeof item !== 'number')) {
         throw refuseType(`params.${key} must be an array of numbers`);
       }

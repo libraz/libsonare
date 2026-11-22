@@ -1,5 +1,6 @@
 import type { MidiFxConfig } from '../types_engine.js';
 import { refuseType } from './entry.js';
+import { stringifyWithinBudget } from './list_budget.js';
 import { isNonArrayObject } from './value_guards.js';
 
 /**
@@ -13,5 +14,5 @@ export function midiFxConfigJson(config: MidiFxConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
-  return JSON.stringify(config);
+  return stringifyWithinBudget(config, 'config');
 }

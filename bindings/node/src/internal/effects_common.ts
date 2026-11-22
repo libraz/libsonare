@@ -5,6 +5,7 @@
 import type { VoicedFlags } from '../types.js';
 import { assertInt64, resolveSampleBound } from '../validation.js';
 import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { isNonArrayObject } from './value_guards.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
@@ -24,6 +25,9 @@ export function toVoicedInt32(voiced: VoicedFlags): Int32Array {
     throw refuseType(
       `voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]`,
     );
+  }
+  if (Array.isArray(voiced)) {
+    requireListBudget(voiced, 'voiced');
   }
   const out = new Int32Array(voiced.length);
   const isArray = Array.isArray(voiced);
@@ -70,6 +74,9 @@ export function resolveEntryTimes<T extends TimedEntry>(
   sampleRate: number,
   spans: boolean,
 ): ResolvedEntries<T> {
+  if (Array.isArray(entries)) {
+    requireListBudget(entries, arrayName);
+  }
   const respellings: Respelled[] = [];
   const resolvedEntries = entries.map((entry, index) => {
     if (entry === null || typeof entry !== 'object') {
@@ -130,7 +137,13 @@ export interface EffectSamplesRequest {
  * plain number array is converted here rather than at the N-API boundary.
  */
 export function toSamples(samples: Float32Array | readonly number[]): Float32Array {
-  return samples instanceof Float32Array ? samples : Float32Array.from(samples);
+  if (samples instanceof Float32Array) {
+    return samples;
+  }
+  if (Array.isArray(samples)) {
+    requireListBudget(samples, 'samples');
+  }
+  return Float32Array.from(samples);
 }
 
 export function assertPitchTrackLengths(

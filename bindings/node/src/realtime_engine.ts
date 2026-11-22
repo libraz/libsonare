@@ -12,6 +12,7 @@ import {
   refuse,
   refuseType,
 } from './internal/entry.js';
+import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
@@ -296,6 +297,7 @@ function toNativeClip(clip: EngineClip, label: string): unknown {
 
 /** Resolves each send's `sendTiming` spelling to its C ABI ordinal. */
 function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSend[] {
+  requireListBudget(sends, where);
   return sends.map((send, i) =>
     isAbsent(send.sendTiming)
       ? send
@@ -433,15 +435,15 @@ function eqBandJsonOf(band: EqBandInput): string {
   if (!isNonArrayObject(band)) {
     throw refuseType(`band must be an object`);
   }
-  return JSON.stringify(band);
+  return stringifyWithinBudget(band, 'band');
 }
 
 function sceneStripJson(strip: MixSceneStripInput): string {
-  return JSON.stringify({ strips: [mixSceneStripToNative(strip)] });
+  return stringifyWithinBudget({ strips: [mixSceneStripToNative(strip)] }, 'strip');
 }
 
 function sceneBusJson(bus: MixSceneBusInput): string {
-  return JSON.stringify({ buses: [mixSceneBusToNative(bus)] });
+  return stringifyWithinBudget({ buses: [mixSceneBusToNative(bus)] }, 'bus');
 }
 
 function bypassState(
@@ -890,6 +892,9 @@ export class RealtimeEngine {
    * Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
+    if (Array.isArray(segments)) {
+      requireListBudget(segments, 'segments');
+    }
     this.native.setTempoSegments(segments);
   }
 
@@ -899,6 +904,9 @@ export class RealtimeEngine {
    * Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
+    if (Array.isArray(segments)) {
+      requireListBudget(segments, 'segments');
+    }
     this.native.setTimeSignatureSegments(segments);
   }
 
@@ -959,6 +967,9 @@ export class RealtimeEngine {
    * methods (`resolveStripAutomationId` for the master fader, pan and width).
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
+    if (Array.isArray(points)) {
+      requireListBudget(points, 'points');
+    }
     this.native.setAutomationLane(
       paramId,
       Array.isArray(points) ? points.map(automationPointToNative) : points,
@@ -981,6 +992,7 @@ export class RealtimeEngine {
       this.native.setMarkers(markers as never);
       return [];
     }
+    requireListBudget(markers, 'markers');
     let floor = this.nextMarkerId;
     for (const stored of this.markers()) {
       floor = Math.max(floor, stored.id + 1);
@@ -1069,6 +1081,9 @@ export class RealtimeEngine {
    * leaves the previous set unchanged. Control thread only.
    */
   setClips(clips: EngineClip[]): void {
+    if (Array.isArray(clips)) {
+      requireListBudget(clips, 'clips');
+    }
     this.native.setClips(clips.map((clip, i) => toNativeClip(clip, `clips[${i}]`)));
   }
 
@@ -1109,6 +1124,7 @@ export class RealtimeEngine {
     if (!Array.isArray(lanes)) {
       throw refuseType('lanes must be an array');
     }
+    requireListBudget(lanes, 'lanes');
     this.native.setTrackLanes(
       lanes.map((lane, index) => laneToNative('setTrackLanes', lane, index)),
     );
@@ -1161,6 +1177,7 @@ export class RealtimeEngine {
     if (!Array.isArray(buses)) {
       throw refuseType('buses must be an array');
     }
+    requireListBudget(buses, 'buses');
     this.native.setTrackBuses(buses.map((bus, index) => busToNative('setTrackBuses', bus, index)));
   }
 
@@ -1936,6 +1953,7 @@ export class RealtimeEngine {
     const fnName = 'renderOffline';
     const record = requestObject(fnName, request, 'request', true);
     if (Array.isArray(record.channels)) {
+      requireListBudget(record.channels, 'channels');
       record.channels.forEach((plane, index) => {
         if (plane instanceof Float32Array) {
           assertFiniteSamples(plane, true, `channels[${index}]`);
@@ -2165,6 +2183,9 @@ export class RealtimeEngine {
    * UMP events compiled for the engine timeline.
    */
   setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
+    if (Array.isArray(clips)) {
+      requireListBudget(clips, 'clips');
+    }
     this.native.setMidiClips(clips);
   }
 
@@ -2790,6 +2811,9 @@ export class RealtimeEngine {
    * apply (omit for immediate).
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
+    if (Array.isArray(words)) {
+      requireListBudget(words, 'words');
+    }
     this.native.pushMidiUmp(destinationId, words, resolveRenderFrame(renderFrame));
   }
 
@@ -2865,6 +2889,9 @@ export class RealtimeEngine {
    * an absolute clock position; exact here, because the caller drives the block.
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
+    if (Array.isArray(words)) {
+      requireListBudget(words, 'words');
+    }
     this.native.pushMidiInputUmp(words, offsetInBlockSamples);
   }
 

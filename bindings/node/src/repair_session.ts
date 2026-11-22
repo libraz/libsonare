@@ -3,6 +3,7 @@
  */
 
 import { refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { audioDefectsFromNative, dehumReport, denoiseReport } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type { DereverbClassicalOptions } from './repair_dereverb.js';
@@ -249,6 +250,7 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
     if (!Array.isArray(request.stages)) {
       throw refuseType('stages must be an array');
     }
+    requireListBudget(request.stages, 'stages');
     const result = addon.masteringRepairApply(
       request.channels,
       request.sampleRate,

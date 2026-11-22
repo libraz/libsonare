@@ -1,4 +1,5 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
+import { stringifyWithinBudget } from './internal/list_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -25,7 +26,7 @@ function configJsonText(config: PlaybackRendererConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
-  return JSON.stringify(config);
+  return stringifyWithinBudget(config, 'config');
 }
 
 /**

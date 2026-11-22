@@ -5,6 +5,7 @@
 
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
@@ -16,6 +17,9 @@ function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
 >(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
   const first = args[0];
+  if (Array.isArray(first)) {
+    requireListBudget(first, 'samples');
+  }
   const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
   return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
 }

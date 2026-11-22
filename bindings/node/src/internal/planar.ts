@@ -1,4 +1,5 @@
 import { refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 /** Planar channel arrays and the interleaved layout the native project calls read and write. */
 
 /** One interleaved buffer and the geometry it was built from. */
@@ -15,6 +16,7 @@ export function interleavePlanar(channels: unknown, argName = 'channels'): Inter
   if (!Array.isArray(channels)) {
     throw refuseType(`${argName} must be an array of Float32Array`);
   }
+  requireListBudget(channels, argName);
   if (channels.length === 0) {
     throw refuse(`${argName} must not be empty`);
   }

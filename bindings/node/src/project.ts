@@ -6,6 +6,7 @@ import {
   refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
@@ -216,6 +217,7 @@ function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
     throw refuseType(`takes must be an array`);
   }
+  requireListBudget(takes, 'takes');
   return takes.map((entry: unknown, index) => {
     const where = `takes[${index}]`;
     if (!isNonArrayObject(entry)) {
@@ -244,6 +246,7 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
   if (!Array.isArray(segments)) {
     throw refuseType(`segments must be an array`);
   }
+  requireListBudget(segments, 'segments');
   return segments.map((entry: unknown, index) => {
     if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
@@ -290,6 +293,7 @@ function bindInstruments<T extends object>(
   if (!Array.isArray(value)) {
     throw refuseType(`${list} must be an array of { destinationId?, instrument } pairs`);
   }
+  requireListBudget(value, list);
   return value.map((pair: unknown, index: number) => {
     const label = `${list}[${index}]`;
     const binding = instrumentBinding(pair, label);
@@ -756,11 +760,17 @@ export class Project {
 
   /** Replace the project's tempo segment list. */
   setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
+    if (Array.isArray(segments)) {
+      requireListBudget(segments, 'segments');
+    }
     this.native.setTempoSegments(segments);
   }
 
   /** Replace the project's time-signature segment list. */
   setTimeSignatures(segments: ReadonlyArray<ProjectTimeSignatureSegment>): void {
+    if (Array.isArray(segments)) {
+      requireListBudget(segments, 'segments');
+    }
     this.native.setTimeSignatures(segments);
   }
 
@@ -870,6 +880,7 @@ export class Project {
     if (!Array.isArray(record.stems)) {
       throw refuseType(`stems must be an array`);
     }
+    requireListBudget(record.stems, 'stems');
     return this.native.importExternalStems({
       ...record,
       stems: record.stems.map((entry) => {
@@ -945,6 +956,9 @@ export class Project {
   setWarpMap(map: import('./types.js').ProjectWarpMapDesc): void {
     if (!isNonArrayObject(map)) {
       throw refuseType('map must be an object');
+    }
+    if (Array.isArray(map.anchors)) {
+      requireListBudget(map.anchors, 'anchors');
     }
     const { name, ...rest } = map;
     const label = optionalName('name', name, 'for no name');
@@ -1426,6 +1440,9 @@ export class Project {
    * chord / section / onset annotations are preserved).
    */
   annotateKeys(keys: ProjectKeySegment[]): void {
+    if (Array.isArray(keys)) {
+      requireListBudget(keys, 'keys');
+    }
     this.native.annotateKeys(
       keys.map((key) => ({
         ...key,
@@ -1436,6 +1453,9 @@ export class Project {
 
   /** Replace the project's chord-symbol annotation stream via an undoable edit. */
   annotateChords(chords: ProjectChordSymbol[]): void {
+    if (Array.isArray(chords)) {
+      requireListBudget(chords, 'chords');
+    }
     this.native.annotateChords(
       chords.map((chord) => ({
         ...chord,

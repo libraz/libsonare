@@ -4,6 +4,7 @@
  */
 
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
@@ -102,6 +103,9 @@ export function spectralEdit(...args: unknown[]): Float32Array {
       if (value !== undefined) {
         assertInt32(value, field);
       }
+    }
+    if (Array.isArray(ops)) {
+      requireListBudget(ops, 'ops');
     }
     const respellings: Respelled[] = [];
     const nativeOps = Array.isArray(ops)

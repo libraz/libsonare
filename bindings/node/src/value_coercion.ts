@@ -1,4 +1,5 @@
 import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
+import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { isNonArrayObject } from './internal/value_guards.js';
@@ -116,6 +117,9 @@ export function projectAutomationLaneValue(
   if (desc.targetParamId === 0) {
     throw refuse('project automation lane targetParamId must be non-zero');
   }
+  if (Array.isArray(desc.points)) {
+    requireListBudget(desc.points, 'points');
+  }
   return {
     ...desc,
     points: desc.points.map((point, index) => projectAutomationPointValue(point, index)),
@@ -202,7 +206,8 @@ export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string
   if (!Array.isArray(inserts)) {
     throw refuseType('inserts must be an array');
   }
-  return JSON.stringify(
+  requireListBudget(inserts, 'inserts');
+  return stringifyWithinBudget(
     inserts.map((insert, index) => {
       if (typeof insert !== 'object' || insert === null) {
         throw refuseType(`inserts[${index}] must be an object`);
@@ -219,6 +224,7 @@ export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string
       }
       return { processor: insert.processor, params };
     }),
+    'inserts',
   );
 }
 

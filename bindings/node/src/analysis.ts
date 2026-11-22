@@ -1,6 +1,7 @@
 import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { tempoRange } from './internal/tempo_range.js';
 import { addon } from './native.js';
 import type { RequestFn } from './request_keys.js';
@@ -654,6 +655,7 @@ function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown>
     if (modes.length === 0) {
       throw refuse(`modes must not be empty; omit it for the default mode set`);
     }
+    requireListBudget(modes, 'modes');
     modes.forEach((mode, i) => {
       assertClosedToken(mode, KEY_MODES, `modes[${i}]`);
     });
@@ -846,6 +848,7 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
     if (!Array.isArray(beats)) {
       throw refuseType('beats must be an array of beats');
     }
+    requireListBudget(beats, 'beats');
     const times: number[] = [];
     const strengths: number[] = [];
     beats.forEach((beat: Beat, i: number) => {
@@ -1447,6 +1450,7 @@ export function chordFunctions<T extends ChordFunctionsInput = Chord>(
     if (!Array.isArray(entries)) {
       throw refuseType('chords must be an array');
     }
+    requireListBudget(entries, 'chords');
     entries.forEach((chord, i) => {
       if (typeof chord !== 'object' || chord === null) {
         throw refuseType(`chords[${i}] must be an object`);

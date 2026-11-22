@@ -7,6 +7,7 @@ import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../types_repair.js';
 import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
 import { refuse } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { interleavePlanar } from './planar.js';
 
 /**
@@ -46,6 +47,7 @@ export function interleaveMeterChannels(
   if (sampleRate !== undefined) {
     assertAudioChannels(channels, sampleRate, options);
   } else if (Array.isArray(channels)) {
+    requireListBudget(channels, 'channels');
     channels.forEach((plane, i) => {
       assertAudioSamples(plane, options, `channels[${i}]`);
     });

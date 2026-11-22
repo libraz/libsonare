@@ -10,6 +10,7 @@ import {
   withEntry,
 } from './internal/entry.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type {
@@ -746,6 +747,7 @@ function resolveVocalOperationTimes(
   if (!Array.isArray(operations)) {
     return { operations, respelled: {} };
   }
+  requireListBudget(operations, 'operations');
   const respellings: Respelled[] = [];
   const resolved = operations.map((operation, index) => {
     const at = `operations[${index}]`;

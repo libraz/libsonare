@@ -1,5 +1,6 @@
 import type { MasteringChainConfig } from '../types.js';
 import { refuseType } from './entry.js';
+import { stringifyWithinBudget } from './list_budget.js';
 
 /**
  * Serialize a chain config to the document the native chain reader takes. The
@@ -15,7 +16,7 @@ export function chainConfigJson(field: string, config: unknown): string | null {
   if (typeof config !== 'object' || Array.isArray(config)) {
     throw refuseType(`${field} must be an object`);
   }
-  return JSON.stringify({ params: config });
+  return stringifyWithinBudget({ params: config }, field);
 }
 
 /** Read a chain config document the native layer wrote, as text. */

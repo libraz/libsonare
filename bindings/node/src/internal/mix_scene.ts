@@ -5,6 +5,7 @@ import type {
   SendTiming,
 } from '../types_mixing.js';
 import { refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 
 // The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
 // refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
@@ -61,6 +62,7 @@ function listOf(value: unknown, path: string): unknown[] | undefined {
   if (!Array.isArray(value)) {
     throw refuseType(`${path} must be an array`);
   }
+  requireListBudget(value, path);
   return value;
 }
 

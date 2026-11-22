@@ -6,6 +6,7 @@ import {
   refuseUnknownKey,
   withEntry,
 } from './internal/entry.js';
+import { stringifyWithinBudget } from './internal/list_budget.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
@@ -473,7 +474,7 @@ export function realtimeVoiceChangerRender(
     const out = addon.realtimeVoiceChangerRender(
       interleavePlanar(planes).data,
       req.sampleRate,
-      typeof native === 'string' ? native : JSON.stringify(native),
+      typeof native === 'string' ? native : stringifyWithinBudget(native, 'config'),
       planes.length,
     );
     return deinterleave(out, planes.length);

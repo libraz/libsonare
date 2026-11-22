@@ -9,6 +9,7 @@ import {
   toVoicedInt32,
 } from './internal/effects_common.js';
 import { mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
@@ -830,6 +831,8 @@ export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNote
     if (!Array.isArray(targets)) {
       throw refuseType('targets must be an array');
     }
+    requireListBudget(notes, 'notes');
+    requireListBudget(targets, 'targets');
     const assigned = addon.assignNoteTargets(notes, sampleRate, targets, options) as {
       edits: ReadonlyArray<{ pitchSemitones: number; muted: boolean }>;
       assignedCount: number;

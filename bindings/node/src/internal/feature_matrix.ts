@@ -1,6 +1,7 @@
 import type { Matrix2D } from '../types_analysis.js';
 import { assertFiniteValues, assertPositiveInteger } from '../validation.js';
 import { refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 
 /**
  * Matrix helpers shared by the `feature_*` modules.
@@ -56,5 +57,6 @@ export function toNativeIndexList(
   if (typeof values !== 'object' || values === null || typeof values.length !== 'number') {
     throw refuseType(`${argName} must be an Int32Array or an array of numbers`);
   }
+  requireListBudget(values, argName);
   return Array.from(values);
 }

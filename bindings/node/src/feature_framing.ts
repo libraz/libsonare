@@ -1,5 +1,6 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { addon } from './native.js';
 import type {
   Matrix2D,
@@ -56,6 +57,7 @@ export type SplitSilenceCommonWithReportRequest = SplitSilenceCommonRequest;
 /** An empty or non-array `signals` is the addon's own `TypeError`; only each element's content is checked here. */
 function assertSilenceSignals(request: SplitSilenceCommonRequest): void {
   if (Array.isArray(request.signals)) {
+    requireListBudget(request.signals, 'signals');
     request.signals.forEach((signal, i) => {
       assertAudioSamples(signal, request, `signals[${i}]`);
     });

@@ -1,5 +1,6 @@
 import { chainConfigFromJson } from './internal/chain_config.js';
 import { withEntry } from './internal/entry.js';
+import { stringifyWithinBudget } from './internal/list_budget.js';
 import { resolveInsertParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
@@ -213,7 +214,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
     );
     return addon.masteringInsertTiming(
       r.insert,
-      JSON.stringify(resolved),
+      stringifyWithinBudget(resolved, 'params'),
       r.sampleRate,
     ) as MasteringInsertTiming;
   });

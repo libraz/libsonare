@@ -1,4 +1,5 @@
 import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -109,6 +110,7 @@ export function mixStereo(...args: unknown[]): MixResult {
     if (!Array.isArray(req.strips)) {
       throw refuseType(`strips must be an array`);
     }
+    requireListBudget(req.strips, 'strips');
     if (req.strips.length === 0) {
       throw refuse(`strips must not be empty`);
     }
