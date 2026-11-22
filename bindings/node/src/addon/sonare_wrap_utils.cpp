@@ -735,12 +735,11 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
     Napi::Value mode = key_obj.Get("mode");
     Napi::Value confidence = key_obj.Get("confidence");
     if (root.IsNumber() && mode.IsNumber()) {
-      result.Set("key",
-                 KeyToObject(env, static_cast<SonarePitchClass>(node_narrow_int(env, root, "root")),
-                             static_cast<SonareMode>(node_narrow_int(env, mode, "mode")),
-                             confidence.IsNumber()
-                                 ? static_cast<float>(confidence.As<Napi::Number>().DoubleValue())
-                                 : 0.0f));
+      result.Set("key", KeyToObject(
+                            env, static_cast<SonarePitchClass>(node_narrow_int(env, root, "root")),
+                            static_cast<SonareMode>(node_narrow_int(env, mode, "mode")),
+                            confidence.IsNumber() ? node_narrow_float(env, confidence, "confidence")
+                                                  : 0.0f));
     }
   }
 

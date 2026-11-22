@@ -35,13 +35,12 @@ sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
   Napi::Object object = value.As<Napi::Object>();
   // Plain quantities, none documented as reading a wrong-typed value as
   // "unspecified" (types_features.ts's StreamQuantizeConfig only documents
-  // omission, not type), so DoubleProperty, which refuses a wrong type by name.
-  qconfig.mel_db_min = static_cast<float>(DoubleProperty(object, "melDbMin", qconfig.mel_db_min));
-  qconfig.mel_db_max = static_cast<float>(DoubleProperty(object, "melDbMax", qconfig.mel_db_max));
-  qconfig.onset_max = static_cast<float>(DoubleProperty(object, "onsetMax", qconfig.onset_max));
-  qconfig.rms_max = static_cast<float>(DoubleProperty(object, "rmsMax", qconfig.rms_max));
-  qconfig.centroid_max =
-      static_cast<float>(DoubleProperty(object, "centroidMax", qconfig.centroid_max));
+  // omission, not type), so FloatProperty, which refuses a wrong type by name.
+  qconfig.mel_db_min = FloatProperty(object, "melDbMin", qconfig.mel_db_min);
+  qconfig.mel_db_max = FloatProperty(object, "melDbMax", qconfig.mel_db_max);
+  qconfig.onset_max = FloatProperty(object, "onsetMax", qconfig.onset_max);
+  qconfig.rms_max = FloatProperty(object, "rmsMax", qconfig.rms_max);
+  qconfig.centroid_max = FloatProperty(object, "centroidMax", qconfig.centroid_max);
   return qconfig;
 }
 
@@ -206,10 +205,9 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       // DoubleProperty/BoolProperty give by refusing a wrong TYPE by name before
       // CheckedConfigInt sees it.
       config.n_mels = CheckedConfigInt(DoubleProperty(opts, "nMels", config.n_mels), "nMels");
-      config.fmin = static_cast<float>(DoubleProperty(opts, "fmin", config.fmin));
-      config.fmax = static_cast<float>(DoubleProperty(opts, "fmax", config.fmax));
-      config.tuning_ref_hz =
-          static_cast<float>(DoubleProperty(opts, "referenceHz", config.tuning_ref_hz));
+      config.fmin = FloatProperty(opts, "fmin", config.fmin);
+      config.fmax = FloatProperty(opts, "fmax", config.fmax);
+      config.tuning_ref_hz = FloatProperty(opts, "referenceHz", config.tuning_ref_hz);
       config.compute_magnitude = BoolProperty(opts, "computeMagnitude", config.compute_magnitude);
       config.compute_mel = BoolProperty(opts, "computeMel", config.compute_mel);
       config.compute_chroma = BoolProperty(opts, "computeChroma", config.compute_chroma);
@@ -223,10 +221,10 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.max_progression_entries =
           DomainProperty<size_t>(opts, "maxProgressionEntries", config.max_progression_entries,
                                  sonare::kStreamConfigMaxProgressionEntriesDomain);
-      config.key_update_interval_sec = static_cast<float>(
-          DoubleProperty(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
-      config.bpm_update_interval_sec = static_cast<float>(
-          DoubleProperty(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
+      config.key_update_interval_sec =
+          FloatProperty(opts, "keyUpdateIntervalSec", config.key_update_interval_sec);
+      config.bpm_update_interval_sec =
+          FloatProperty(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec);
       if (!ParseWindowOption(opts, env, &config.window)) return;
       const Napi::Value output_format_value = opts.Get("outputFormat");
       const double output_format_number = output_format_value.IsNumber()

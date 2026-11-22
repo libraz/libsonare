@@ -1583,3 +1583,157 @@ describe('the default pyin track maps through hzToNote once its unvoiced frames 
     }
   });
 });
+
+/** The option keys read as a float off an object, each refused past the float range by name. */
+const ANALYZER_CONFIG_KEYS = [
+  'fmin',
+  'fmax',
+  'referenceHz',
+  'keyUpdateIntervalSec',
+  'bpmUpdateIntervalSec',
+];
+const QUANTIZE_KEYS = ['melDbMin', 'melDbMax', 'onsetMax', 'rmsMax', 'centroidMax'];
+const EQ_BAND_KEYS = [
+  'frequencyHz',
+  'gainDb',
+  'q',
+  'proportionalQStrength',
+  'thresholdDb',
+  'ratio',
+  'rangeDb',
+  'attackMs',
+  'releaseMs',
+  'detectorDelayMs',
+  'sidechainFreqHz',
+  'sidechainQ',
+];
+/** An in-range value for the keys whose domain excludes the 100 the others accept. */
+const IN_RANGE: Record<string, number> = { referenceHz: 440, melDbMin: -60 };
+const CHAIN_OPTION_KEYS = ['loudnessStaticGainDb', 'loudnessStaticGainPeakDbtp'];
+
+describe('a streaming option key is refused past the float range rather than saturated', () => {
+  const analyzerConfig = { sampleRate: SAMPLE_RATE, nFft: 512, hopLength: 256, nMels: 8 };
+
+  function analyzerMel(config: Record<string, unknown>): string {
+    const analyzer = new native.StreamAnalyzer({ ...analyzerConfig, ...config });
+    try {
+      analyzer.process(SHORT);
+      return JSON.stringify(Array.from(analyzer.readFramesSoa(8).mel ?? []));
+    } finally {
+      analyzer.destroy();
+    }
+  }
+
+  it.each(ANALYZER_CONFIG_KEYS)('StreamAnalyzer config %s', (key) => {
+    expect(() =>
+      new native.StreamAnalyzer({ ...analyzerConfig, [key]: IN_RANGE[key] ?? 100 }).destroy(),
+    ).not.toThrow();
+    for (const value of PAST_FLOAT_RANGE) {
+      expect(
+        () => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value }),
+        `${value}`,
+      ).toThrow(RangeError);
+      expect(() => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value })).toThrow(
+        new RegExp(key),
+      );
+    }
+  });
+
+  it('StreamAnalyzer config fmin and fmax reach the mel bands', () => {
+    expect(analyzerMel({ fmin: 0 })).not.toBe(analyzerMel({ fmin: 2000 }));
+    expect(analyzerMel({ fmax: 4000 })).not.toBe(analyzerMel({ fmax: 8000 }));
+  });
+
+  it.each(QUANTIZE_KEYS)('StreamAnalyzer readFramesU8 and readFramesI16 %s', (key) => {
+    const analyzer = new native.StreamAnalyzer({ ...analyzerConfig });
+    try {
+      analyzer.process(SHORT);
+      expect(() => analyzer.readFramesU8(1, { [key]: IN_RANGE[key] ?? 100 })).not.toThrow();
+      for (const value of PAST_FLOAT_RANGE) {
+        expect(() => analyzer.readFramesU8(1, { [key]: value }), `${value}`).toThrow(RangeError);
+        expect(() => analyzer.readFramesI16(1, { [key]: value }), `${value}`).toThrow(RangeError);
+        expect(() => analyzer.readFramesU8(1, { [key]: value })).toThrow(new RegExp(key));
+      }
+    } finally {
+      analyzer.destroy();
+    }
+  });
+
+  function eqOutput(band: Record<string, unknown>): string {
+    const eq = new native.StreamingEqualizer({ sampleRate: SAMPLE_RATE, maxBlockSize: 512 });
+    try {
+      eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 6, q: 1, enabled: true, ...band });
+      const tone = new Float32Array(512);
+      for (let i = 0; i < tone.length; i++)
+        tone[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / SAMPLE_RATE);
+      const { left } = eq.processStereo(tone, tone.slice());
+      return JSON.stringify(Array.from(left as Float32Array));
+    } finally {
+      eq.destroy();
+    }
+  }
+
+  it.each(EQ_BAND_KEYS)('StreamingEqualizer setBand %s', (key) => {
+    const eq = new native.StreamingEqualizer({ sampleRate: SAMPLE_RATE, maxBlockSize: 512 });
+    try {
+      for (const value of PAST_FLOAT_RANGE) {
+        expect(() => eq.setBand(0, { type: 'peak', [key]: value }), `${value}`).toThrow(RangeError);
+        expect(() => eq.setBand(0, { type: 'peak', [key]: value })).toThrow(new RegExp(key));
+      }
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it('StreamingEqualizer setBand frequencyHz, gainDb and q reach the response', () => {
+    expect(eqOutput({ frequencyHz: 500 })).not.toBe(eqOutput({ frequencyHz: 4000 }));
+    expect(eqOutput({ gainDb: 3 })).not.toBe(eqOutput({ gainDb: 9 }));
+    expect(eqOutput({ q: 0.5 })).not.toBe(eqOutput({ q: 4 }));
+  });
+
+  // Neither key is observable without a measured program through a configured chain.
+  it.each(CHAIN_OPTION_KEYS)('StreamingMasteringChain option %s', (key) => {
+    for (const value of PAST_FLOAT_RANGE) {
+      expect(() => new native.StreamingMasteringChain(null, { [key]: value }), `${value}`).toThrow(
+        RangeError,
+      );
+      expect(() => new native.StreamingMasteringChain(null, { [key]: value })).toThrow(
+        new RegExp(key),
+      );
+    }
+  });
+});
+
+describe('the addon never casts a reader result straight to float', () => {
+  /** Block and line comments removed, newlines kept so line numbers hold. */
+  function stripComments(text: string): string {
+    return text
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/\/\/[^\n]*/g, '');
+  }
+
+  const DIRECT_CAST =
+    /static_cast<float>\(\s*(?:Optional\w*|Required\w*|DoubleProperty|\w+Property|(?:[\w.\->]|\[\w*\]|<[\w:]+>|\(\))*\.DoubleValue\(\))/g;
+
+  it('finds no static_cast<float> over a reader result', () => {
+    const sources = addonSources();
+    expect(sources.length).toBeGreaterThan(0);
+    const hits: string[] = [];
+    for (const { file, text } of sources) {
+      const stripped = stripComments(text);
+      for (const match of stripped.matchAll(DIRECT_CAST)) {
+        const line = stripped.slice(0, match.index).split('\n').length;
+        hits.push(`${file}:${line}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('matches the shape it is meant to forbid', () => {
+    expect('x = static_cast<float>(DoubleProperty(o, "k", 1));'.match(DIRECT_CAST)).not.toBeNull();
+    expect(
+      'x = static_cast<float>(v.As<Napi::Number>().DoubleValue());'.match(DIRECT_CAST),
+    ).not.toBeNull();
+    expect('x = FloatProperty(o, "k", 1);'.match(DIRECT_CAST)).toBeNull();
+  });
+});

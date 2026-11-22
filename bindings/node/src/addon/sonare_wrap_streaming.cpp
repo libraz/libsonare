@@ -78,9 +78,9 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
       StringProperty(object, "type", sonare::mastering::eq::band_type_to_string(band.type)));
   band.coeff_mode = ParseCoeffMode(StringProperty(
       object, "coeffMode", sonare::mastering::eq::coeff_mode_to_string(band.coeff_mode)));
-  band.frequency_hz = static_cast<float>(DoubleProperty(object, "frequencyHz", band.frequency_hz));
-  band.gain_db = static_cast<float>(DoubleProperty(object, "gainDb", band.gain_db));
-  band.q = static_cast<float>(DoubleProperty(object, "q", band.q));
+  band.frequency_hz = FloatProperty(object, "frequencyHz", band.frequency_hz);
+  band.gain_db = FloatProperty(object, "gainDb", band.gain_db);
+  band.q = FloatProperty(object, "q", band.q);
   band.enabled = BoolProperty(object, "enabled", band.enabled);
   band.slope_db_oct = IntProperty(object, "slopeDbOct", band.slope_db_oct);
   band.placement = ParsePlacement(StringProperty(
@@ -90,25 +90,20 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.soloed = BoolProperty(object, "soloed", band.soloed);
   band.bypassed = BoolProperty(object, "bypassed", band.bypassed);
   band.proportional_q = BoolProperty(object, "proportionalQ", band.proportional_q);
-  band.proportional_q_strength = static_cast<float>(
-      DoubleProperty(object, "proportionalQStrength", band.proportional_q_strength));
+  band.proportional_q_strength =
+      FloatProperty(object, "proportionalQStrength", band.proportional_q_strength);
   band.dyn.enabled = BoolProperty(object, "dynamic", band.dyn.enabled);
-  band.dyn.threshold_db =
-      static_cast<float>(DoubleProperty(object, "thresholdDb", band.dyn.threshold_db));
+  band.dyn.threshold_db = FloatProperty(object, "thresholdDb", band.dyn.threshold_db);
   band.dyn.auto_threshold = BoolProperty(object, "autoThreshold", band.dyn.auto_threshold);
-  band.dyn.ratio = static_cast<float>(DoubleProperty(object, "ratio", band.dyn.ratio));
-  band.dyn.range_db = static_cast<float>(DoubleProperty(object, "rangeDb", band.dyn.range_db));
-  band.dyn.attack_ms = static_cast<float>(DoubleProperty(object, "attackMs", band.dyn.attack_ms));
-  band.dyn.release_ms =
-      static_cast<float>(DoubleProperty(object, "releaseMs", band.dyn.release_ms));
-  band.dyn.detector_delay_ms =
-      static_cast<float>(DoubleProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms));
+  band.dyn.ratio = FloatProperty(object, "ratio", band.dyn.ratio);
+  band.dyn.range_db = FloatProperty(object, "rangeDb", band.dyn.range_db);
+  band.dyn.attack_ms = FloatProperty(object, "attackMs", band.dyn.attack_ms);
+  band.dyn.release_ms = FloatProperty(object, "releaseMs", band.dyn.release_ms);
+  band.dyn.detector_delay_ms = FloatProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms);
   band.dyn.external_sidechain =
       BoolProperty(object, "externalSidechain", band.dyn.external_sidechain);
-  band.dyn.sidechain_freq_hz =
-      static_cast<float>(DoubleProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz));
-  band.dyn.sidechain_q =
-      static_cast<float>(DoubleProperty(object, "sidechainQ", band.dyn.sidechain_q));
+  band.dyn.sidechain_freq_hz = FloatProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz);
+  band.dyn.sidechain_q = FloatProperty(object, "sidechainQ", band.dyn.sidechain_q);
   return band;
 }
 
@@ -163,10 +158,10 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
   sonare::mastering::api::StreamingMasteringChainOptions options;
   if (has_options) {
     Napi::Object options_object = info[1].As<Napi::Object>();
-    options.loudness_static_gain_db = static_cast<float>(
-        DoubleProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
-    options.loudness_static_gain_peak_dbtp = static_cast<float>(DoubleProperty(
-        options_object, "loudnessStaticGainPeakDbtp", options.loudness_static_gain_peak_dbtp));
+    options.loudness_static_gain_db =
+        FloatProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db);
+    options.loudness_static_gain_peak_dbtp = FloatProperty(
+        options_object, "loudnessStaticGainPeakDbtp", options.loudness_static_gain_peak_dbtp);
   }
 
   auto config = sonare::mastering::api::streaming_chain_config_from_json(
