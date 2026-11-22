@@ -66,7 +66,11 @@ KINDS = (
     "flag",
     "extra",
 )
-WASM_ENTRIES = (".", "./analysis", "./worklet", "./worker", "./vocal-edit-worker")
+# The package's code entry points: every exports key that ships declarations.
+_WASM_EXPORTS = json.loads((ROOT / "bindings/wasm/package.json").read_text())["exports"]
+WASM_ENTRIES = tuple(
+    key for key, target in _WASM_EXPORTS.items() if isinstance(target, dict) and "types" in target
+)
 RULE_SLUGS = (
     "sample-rate-required",
     "sample-rate-name",
