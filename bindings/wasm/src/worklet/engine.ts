@@ -1059,6 +1059,7 @@ export class SonareEngine {
    * fade out over 10 ms. The incoming instrument starts from its default
    * channel state (program, bank, controllers), so a host that needs the
    * current position's state resends it with {@link pushMidiUmp} afterwards.
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setBuiltinInstrument(
     trackId: string | number,

@@ -885,7 +885,10 @@ export class RealtimeEngine {
     this.native.setMidiClips(midiClipsToNative(clips) as never);
   }
 
-  /** Bind the built-in synth to a MIDI destination; `config` defaults to a sine patch. */
+  /**
+   * Bind the built-in synth to a MIDI destination; `config` defaults to a sine patch.
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
+   */
   setBuiltinInstrument(
     destinationId?: number | null,
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
@@ -912,6 +915,7 @@ export class RealtimeEngine {
    * sounding notes fade out over 10 ms. The incoming instrument starts from its
    * default channel state (program, bank, controllers); a host that needs the
    * current position's state resends it with {@link pushMidiUmp} after this call.
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setSynthInstrument(destinationId?: number | null, patch: SynthPatch = {}): void {
     this.native.setSynthInstrument(
@@ -944,6 +948,7 @@ export class RealtimeEngine {
    * sounding notes fade out over 10 ms. The incoming instrument starts from its
    * default channel state (program, bank, controllers); a host that needs the
    * current position's state resends it with {@link pushMidiUmp} after this call.
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setSf2Instrument(
     destinationId?: number | null,

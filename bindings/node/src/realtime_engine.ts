@@ -2173,6 +2173,7 @@ export class RealtimeEngine {
   /**
    * Bind a built-in synth to a realtime MIDI destination. Live note/CC commands
    * and scheduled MIDI clips routed to that destination render through it.
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setBuiltinInstrument(
     destinationId?: number | null,
@@ -2197,6 +2198,8 @@ export class RealtimeEngine {
    * `useGmPrograms` follows incoming GM bank/program changes and routes
    * channel 10 through the GM drum map, exactly like the same-named bounce
    * binding key; the patch stays the fallback for any unsupported mapping.
+   *
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setSynthInstrument(
     destinationId?: number | null,
@@ -2226,6 +2229,8 @@ export class RealtimeEngine {
    * edits, GS/GM SysEx resets). Without a loaded SoundFont — or for programs
    * the SoundFont does not cover — notes play through the built-in
    * synthesizer GM fallback bank (the data-free floor).
+   *
+   * A binding is applied at a block boundary; for a frame-exact switch, bind both instruments ahead of time and switch with timed MIDI, or use a timed program change.
    */
   setSf2Instrument(
     destinationId?: number | null,
