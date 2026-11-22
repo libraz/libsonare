@@ -442,6 +442,8 @@ const NOT_AUDIO: string[] = [
     'synthesizeRir',
     'hzToMel',
     'melToHz',
+    'melFrequencies',
+    'melFilterbank',
     'hzToMidi',
     'midiToHz',
     'hzToNote',
@@ -524,6 +526,7 @@ const NOT_AUDIO: string[] = [
     'bindMicrophoneInput',
     'bindWebMidi',
     'isWebMidiAvailable',
+    'webMidiEventContextTime',
   ],
 ];
 
