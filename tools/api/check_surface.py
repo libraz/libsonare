@@ -311,11 +311,14 @@ def load_mirrors(path: Path, problems: list[str]) -> dict[str, str]:
     return out
 
 
-def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> set[str]:
-    """Surface-neutral names whose unit-less quantity is declared; a name matching no candidate is stale."""
+def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> dict[str, str]:
+    """Surface-neutral names whose unit-less quantity is declared, each with its class.
+
+    A name matching no candidate is stale.
+    """
     data = load_toml(path, problems, "dimensionless_names.toml")
     if data is None:
-        return set()
+        return {}
     for k in sorted(set(data) - {"name"}):
         problems.append(f"dimensionless_names.toml: unknown top-level key {k!r}")
     flagged = {
@@ -325,7 +328,7 @@ def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> 
         and (hit := _unit_hit(r)) is not None
         and hit[1] is None
     }
-    out: set[str] = set()
+    out: dict[str, str] = {}
     for i, n in enumerate(data.get("name", []), 1):
         names = n.get("names")
         label = f"dimensionless_names.toml name {i}"
@@ -353,7 +356,7 @@ def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> 
                 problems.append(f"{label}: {name} listed twice")
             elif key not in flagged:
                 problems.append(f"{label}: {name} names nothing unit-in-name would flag")
-            out.add(key)
+            out[key] = n.get("class")
     return out
 
 
@@ -861,7 +864,7 @@ class Ctx:
     cli_only: dict[str, list[str]]
     by_owner: dict = field(default_factory=dict)
     all_records: list[dict] = field(default_factory=list)
-    dimensionless: set = field(default_factory=set)
+    dimensionless: dict = field(default_factory=dict)
     catalog: dict = field(default_factory=dict)
     documents: set = field(default_factory=set)
     # check id -> what it could not compare, one line each
@@ -939,7 +942,12 @@ _STEMS = (
     "frequency",
     "freq",
     "ceiling",
+    *("peak", "rms", "level"),
 )
+# A bare peak or RMS is an amplitude, so its row has to say it is one (class magnitude).
+_AMPLITUDE_STEMS = ("peak", "rms")
+# Stems a leading switch verb turns into an on/off control (measure_true_peak).
+_LEVEL_STEMS = (*_AMPLITUDE_STEMS, "level")
 _UNITS = (
     "sec",
     "ms",
@@ -970,6 +978,8 @@ def _unit_split(name: str):
     s = snake(name)
     words = s.split("_")
     for stem in _STEMS:
+        if stem in _LEVEL_STEMS and words[0] in _SWITCH_VERBS:
+            continue
         for unit in _QUANTITY_WORDS:
             if s == f"{stem}_{unit}" or s.endswith(f"_{stem}_{unit}"):
                 return stem, unit
@@ -1076,9 +1086,10 @@ def _js_declaration(r: dict):
 def chk_unit_in_name(ctx):
     cands, bad = 0, []
     listed = {
-        d
+        d: cls
         for r in ctx.all_records
-        if dimensionless_key(r["name"]) in ctx.dimensionless and (d := _js_declaration(r))
+        if (cls := ctx.dimensionless.get(dimensionless_key(r["name"])))
+        and (d := _js_declaration(r))
     }
     for r in recs(ctx, ALL, ("option", "field", "flag")):
         if ctx.mirror(r):
@@ -1087,10 +1098,15 @@ def chk_unit_in_name(ctx):
         if hit is None:
             continue
         cands += 1
-        if hit[1] is None and dimensionless_key(r["name"]) not in ctx.dimensionless:
-            if _js_declaration(r) in listed:
-                continue
+        if hit[1] is not None:
+            continue
+        cls = ctx.dimensionless.get(dimensionless_key(r["name"])) or listed.get(_js_declaration(r))
+        if cls is None:
             bad.append((r, f"'{hit[0]}' names a physical quantity; add its unit suffix"))
+        elif hit[0] in _AMPLITUDE_STEMS and cls != "magnitude":
+            bad.append(
+                (r, f"a bare '{hit[0]}' is a linear amplitude; its row's class is magnitude")
+            )
     return cands, bad
 
 

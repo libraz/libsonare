@@ -287,3 +287,101 @@ names = [
 class = "index"
 range = [0, inf]
 evidence = "include/sonare/sonare_c_effects.h:325: index of the note's first RMS value in the owning result's amplitude array"
+
+[[name]]
+names = [
+  "SonareClippingRegion.peak",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_metering.h:57: largest absolute linear amplitude inside the run"
+
+[[name]]
+names = [
+  "SonareClippingResult.max_clipped_peak",
+  "ClippingReport.max_clipped_peak",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_metering.h:65: largest absolute linear amplitude among clipped samples"
+
+[[name]]
+names = [
+  "SonareMixMeterSnapshot.mono_compat_peak",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_mixing.h:73: peak of the mono sum 0.5 * (L + R), linear"
+
+[[name]]
+names = [
+  "SonareMixMeterSnapshot.mono_compat_side_rms",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_mixing.h:74: RMS of the side signal 0.5 * (L - R), linear"
+
+[[name]]
+names = [
+  "StereoMonoCompatCheckResult.mono_peak",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "src/mastering/stereo/mono_compat_check.cpp:84-86: largest |0.5 * (L + R)| over the input, linear"
+
+[[name]]
+names = [
+  "StereoMonoCompatCheckResult.side_rms",
+  "StereoMonoCompatBand.side_rms",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "src/mastering/stereo/mono_compat_check.cpp:85-89: RMS of 0.5 * (L - R), linear; a band takes its spectral share of it (:214)"
+
+[[name]]
+names = [
+  "SonareClipDetection.flat_level",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_mastering.h:1503: sample magnitude the counted flat-top runs sit at"
+
+[[name]]
+names = [
+  "SonareBoundaryResult.novelty_peak",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_types_analysis.h:362-368: the raw novelty response's maximum, which scales the normalized curve back"
+
+[[name]]
+names = [
+  "SonareSection.energy_level",
+]
+class = "ratio"
+range = [0, 1]
+evidence = "include/sonare/sonare_c_types_analysis.h:309: median frame RMS in the section over the loudest section's"
+
+[[name]]
+names = [
+  "SonareRealtimeVoiceChangerConfig.harmony_level",
+  "SonareRealtimeVoiceChangerConfig.harmony_lead_level",
+  "SonareRealtimeVoiceChangerConfig.vocoder_level",
+  "MasteringProcessorParamMap.voice.changer.harmonyLevel",
+  "MasteringProcessorParamMap.voice.changer.harmonyLeadLevel",
+  "MasteringProcessorParamMap.voice.changer.vocoderLevel",
+]
+class = "ratio"
+range = [0, 1]
+evidence = "include/sonare/sonare_c_voice_changer.h:180-183: linear gains of the harmony voices, the lead under harmony and the vocoder output, [0, 1]"
+
+[[name]]
+names = [
+  "MasteringProcessorParamMap.saturation.bitcrusher.radioNoiseLevel",
+  "MasteringProcessorParamMap.saturation.bitcrusher.wpNoiseLevel",
+  "MasteringProcessorParamMap.saturation.bitcrusher.discNoiseLevel",
+  "MasteringProcessorParamMap.saturation.bitcrusher.humLevel",
+]
+class = "ratio"
+range = [0, 1]
+evidence = "src/mastering/saturation/bitcrusher.h:85: level of each noise source, linear, [0, 1]"

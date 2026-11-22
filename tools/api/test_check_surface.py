@@ -1139,6 +1139,40 @@ class Dimensionless(CheckerCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("names nothing unit-in-name would flag", problems[0])
 
+    def run_level(self, member, body=""):
+        self.add(_rec("node", "field", f"Probe.{member}", owner="Probe", member=member))
+        dim = self.write("d.toml", body.replace("{name}", f"Probe.{member}"))
+        _, lines = self.run_check("--surface", "node", "--check", "unit-in-name", dimensionless=dim)
+        return [x.strip() for x in lines if x.strip().startswith(f"node field Probe.{member}:")]
+
+    def test_a_bare_peak_rms_or_level_needs_a_row(self):
+        for member in ("monoPeak", "sideRms", "harmonyLevel"):
+            with self.subTest(member=member):
+                self.setUp()
+                self.assertEqual(len(self.run_level(member)), 1)
+
+    def test_a_bare_peak_or_rms_row_is_class_magnitude(self):
+        for member in ("monoPeak", "sideRms"):
+            with self.subTest(member=member):
+                self.setUp()
+                flagged = self.run_level(member, self.ROW.format(name="{name}", cls="ratio"))
+                self.assertEqual(len(flagged), 1, flagged)
+                self.assertIn("its row's class is magnitude", flagged[0])
+                self.setUp()
+                self.assertEqual(
+                    self.run_level(member, self.ROW.format(name="{name}", cls="magnitude")), []
+                )
+        self.setUp()
+        self.assertEqual(
+            self.run_level("harmonyLevel", self.ROW.format(name="{name}", cls="ratio")), []
+        )
+
+    def test_a_switch_verb_or_a_unit_takes_a_level_out(self):
+        for member in ("measureTruePeak", "peakDb", "rmsDbfs"):
+            with self.subTest(member=member):
+                self.setUp()
+                self.assertEqual(self.run_level(member), [])
+
     def test_a_name_in_two_rows_is_refused(self):
         row = self.ROW.format(name="{name}", cls="ratio")
         _, problems = self.run_dim(row + "\n" + row.replace("Probe.threshold", "probe.threshold"))
