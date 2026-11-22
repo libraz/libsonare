@@ -1425,7 +1425,7 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
     expectRefusal(
       () => engine.primeOfflineParameters(0, block),
       RangeError,
-      /^RealtimeEngine\.primeOfflineParameters: numChannels must be an integer in \[1, 2147483647\]$/,
+      /^RealtimeEngine\.primeOfflineParameters: numChannels must be an integer in \[1, 64\]$/,
     );
     expectRefusal(
       () => engine.primeOfflineParameters(2, 0),
