@@ -14013,13 +14013,6 @@ type ChainConfigPathEntry<T, P extends string> = {
       : [`${P}${K}`, NonNullable<T[K]>];
 }[keyof T & string];
 
-/** The flat spelling: every dotted path of the nested config, valued with the type it holds there. */
-type ChainConfigFlatParams = {
-  [E in ChainConfigPathEntry<MasteringChainConfig, ''> as E[0] extends `${string}.${string}`
-    ? E[0]
-    : never]?: E[1];
-};
-
 /**
  * A chain config as an input takes it. A key is a dotted path
  * (`'loudness.targetLufs'`) and a nested object is shorthand for its prefix;
@@ -14032,7 +14025,11 @@ type ChainConfigFlatParams = {
  * one element as `'<path>.<index>'`, which this type does not name. Results
  * always return the nested form.
  */
-export type MasteringChainConfigInput = MasteringChainConfig & ChainConfigFlatParams;
+export type MasteringChainConfigInput = MasteringChainConfig & {
+  [E in ChainConfigPathEntry<MasteringChainConfig, ''> as E[0] extends `${string}.${string}`
+    ? E[0]
+    : never]?: E[1];
+};
 
 /**
  * Constructor input of the block-by-block {@link StreamingMasteringChain}: a
