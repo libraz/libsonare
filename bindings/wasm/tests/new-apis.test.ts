@@ -1456,9 +1456,9 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('rejects an oversized segment/marker list before allocating', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-      // A crafted length past the shared buffer cap (500e6) must be rejected up
-      // front, matching the C ABI, instead of driving an unbounded reserve. A sparse
-      // array carries the length without a real 500M-element allocation.
+      // A crafted length past the native list budget (64 Mi entries) must be
+      // rejected up front instead of driving an unbounded reserve. A sparse array
+      // carries the length without a real 500M-element allocation.
       const oversized: [] = [];
       (oversized as unknown[]).length = 500_000_001;
       expect(expectRefusalOf(() => engine.setTempoSegments(oversized), RangeError).message).toBe(
@@ -1472,6 +1472,44 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(expectRefusalOf(() => engine.setMarkers(oversized), RangeError).message).toBe(
         'RealtimeEngine.setMarkers: markers exceeds the WASM Float32 input budget',
       );
+      engine.destroy();
+    });
+
+    it('refuses a marker list past the native budget without reading an entry', () => {
+      // The native list budget is 64 Mi entries; the proxy carries the length and
+      // counts every entry read, so a walk before the refusal is visible.
+      const budget = 64 * 1024 * 1024;
+      const listOf = (length: number) => {
+        const reads = { count: 0 };
+        const list = new Proxy([] as unknown[], {
+          get(target, key, receiver) {
+            if (key === 'length') {
+              return length;
+            }
+            if (typeof key === 'string' && /^\d+$/.test(key)) {
+              reads.count++;
+              throw new Error('entry read');
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        });
+        return { list: list as [], reads };
+      };
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      const over = listOf(budget + 1);
+      // The native setter draws the same line at the same length.
+      expect(expectRefusalOf(() => engine.setTempoSegments(over.list), RangeError).message).toBe(
+        'RealtimeEngine.setTempoSegments: segments exceeds the WASM Float32 input budget',
+      );
+      over.reads.count = 0;
+      expect(expectRefusalOf(() => engine.setMarkers(over.list), RangeError).message).toBe(
+        'RealtimeEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+      );
+      expect(over.reads.count).toBe(0);
+      // At the budget the list is walked, which the first entry read shows.
+      const at = listOf(budget);
+      expect(() => engine.setMarkers(at.list)).toThrow('entry read');
+      expect(at.reads.count).toBeGreaterThan(0);
       engine.destroy();
     });
 

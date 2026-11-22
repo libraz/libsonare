@@ -30,7 +30,7 @@ import {
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive } from './internal/handle_guard.js';
-import { assignMarkerIds } from './internal/marker_ids.js';
+import { assignMarkerIds, requireMarkerListBudget } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
@@ -1848,6 +1848,7 @@ export class RealtimeEngine {
       this.native.setMarkers(markers as never);
       return [];
     }
+    requireMarkerListBudget(markers);
     let floor = this.nextMarkerId;
     for (const stored of this.markers()) {
       floor = Math.max(floor, stored.id + 1);

@@ -6,7 +6,7 @@ import type {
 } from '../index.js';
 import { capturePunchBound } from '../internal/capture_punch.js';
 import { refuse, refuseType, withEntry } from '../internal/entry.js';
-import { assignMarkerIds } from '../internal/marker_ids.js';
+import { assignMarkerIds, requireMarkerListBudget } from '../internal/marker_ids.js';
 import { isNonArrayObject } from '../internal/value_guards.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
@@ -260,6 +260,7 @@ export function resolveMarkerSet(
   markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>,
   nextMarkerId: number,
 ): { resolved: EngineMarker[]; nextMarkerId: number } {
+  requireMarkerListBudget(markers);
   const seen = new Set<number>();
   for (const marker of markers) {
     // Non-negative as well as finite, which is the domain the native setter

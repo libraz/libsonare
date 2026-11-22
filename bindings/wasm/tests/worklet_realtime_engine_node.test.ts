@@ -3502,6 +3502,27 @@ describe('SonareRealtimeEngineNode', () => {
         ]),
       ).toThrow(/Duplicate marker id/);
 
+      // A list past the native budget is refused before any entry is read.
+      let reads = 0;
+      const oversized = new Proxy([] as unknown[], {
+        get(target, key, receiver) {
+          if (key === 'length') {
+            return 64 * 1024 * 1024 + 1;
+          }
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            reads++;
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      }) as [];
+      expect(() => engine.setMarkers(oversized)).toThrow(
+        expect.objectContaining({
+          name: 'RangeError',
+          message: 'SonareEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+        }),
+      );
+      expect(reads).toBe(0);
+
       // Clearing posts an empty replace-all sync to the worklet.
       engine.setMarkers([]);
       expect(engine.markers().length).toBe(0);
