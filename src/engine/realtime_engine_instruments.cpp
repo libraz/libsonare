@@ -60,7 +60,7 @@ bool RealtimeEngine::route_instrument_param_smoothed(uint32_t destination_id, un
   // Snap to the first observed value so the smoother does not glide up from 0
   // (a cutoff lane starting at 8 kHz must not sweep from 0 Hz on its first
   // block). Mirrors the master-insert slot table.
-  free_slot->smoother.prepare(sample_rate_, 5.0f);
+  free_slot->smoother.prepare(sample_rate_, rt::kClickGuardMs);
   free_slot->smoother.reset(value);
   free_slot->smoother.set_target(value);
   return true;

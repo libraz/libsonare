@@ -9,6 +9,10 @@
 
 namespace sonare::rt {
 
+/// The fixed glide a mixer, insert or instrument target applies under every value it is given,
+/// stepped or engine-smoothed: a click guard, not a smoothing time a caller chooses.
+inline constexpr float kClickGuardMs = 5.0f;
+
 /// One step of a first-order glide from @p current toward @p target, held in double. A step
 /// that rounds to nothing finishes on the target, so a settled glide equals its target at
 /// every sample rate instead of stalling a rate-dependent distance short of it.

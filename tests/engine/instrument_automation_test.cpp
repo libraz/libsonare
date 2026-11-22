@@ -284,7 +284,8 @@ TEST_CASE("An instrument automation id routes through the one-shot parameter pat
   smoothed.arg.f = 0.125f;
   smoothed.sample_time = -1;
   REQUIRE(engine.push_command(smoothed));
-  run_blocks(engine, kBlock, 16);
+  // The smoothed set ramps over the engine's smoothing time (20 ms); 48 blocks is about ten of it.
+  run_blocks(engine, kBlock, 48);
   REQUIRE(std::abs(instrument.level() - 0.125f) < 1.0e-3f);
 
   engine.set_midi_instrument(4, nullptr);

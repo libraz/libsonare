@@ -357,9 +357,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
         state.gain.set_target(db_to_linear(bus_configs_[index].gain_db));
       }
     } else {
-      state.gain.prepare(sample_rate_, kMixerSmoothingMs);
+      state.gain.prepare(sample_rate_, rt::kClickGuardMs);
       state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
-      state.input_trim_gain.prepare(sample_rate_, kMixerSmoothingMs);
+      state.input_trim_gain.prepare(sample_rate_, rt::kClickGuardMs);
       if (max_block_size_ > 0) {
         state.width.prepare(sample_rate_, max_block_size_);
       }

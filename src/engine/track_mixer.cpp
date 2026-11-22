@@ -482,14 +482,14 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
       kMaxSidechainBindings * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   master_key_frames_.fill(0);
   for (LaneState& lane : lane_states_) {
-    lane.fader_gain.prepare(sample_rate_, kMixerSmoothingMs);
-    lane.pan.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.fader_gain.prepare(sample_rate_, rt::kClickGuardMs);
+    lane.pan.prepare(sample_rate_, rt::kClickGuardMs);
     lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
     lane.clip_pdc_delay.set_prepared_channels(kMaxLaneChannels);
     lane.clip_pdc_delay.prepare(sample_rate_, max_block_size_);
     // Same time constant as the stereo pan smoother, so a surround placement
     // glides over the same interval a stereo pan does.
-    lane.surround_glide.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.surround_glide.prepare(sample_rate_, rt::kClickGuardMs);
     lane.surround_primed_channels = -1;
     reset_lane_controls(lane);
     lane.monitor_mode = TrackMonitorMode::kOff;
@@ -498,8 +498,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     }
   }
   for (BusState& bus : bus_states_) {
-    bus.gain.prepare(sample_rate_, kMixerSmoothingMs);
-    bus.input_trim_gain.prepare(sample_rate_, kMixerSmoothingMs);
+    bus.gain.prepare(sample_rate_, rt::kClickGuardMs);
+    bus.input_trim_gain.prepare(sample_rate_, rt::kClickGuardMs);
     bus.width.prepare(sample_rate_, max_block_size_);
     // Every slot, configured or not, so the render never meets an unprepared
     // stage and a surround bus finds state for all of its planes.
@@ -546,7 +546,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     }
   }
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    slot.smoother.prepare(sample_rate_, kMixerSmoothingMs);
+    slot.smoother.prepare(sample_rate_, rt::kClickGuardMs);
     slot.smoother.reset(0.0f);
     slot.active = false;
     slot.assigned = false;
@@ -745,7 +745,7 @@ bool TrackMixerRuntime::sends_valid(const std::vector<TrackLaneConfig::Send>& se
 
 mixing::SendConfig TrackMixerRuntime::send_config_for(const TrackLaneConfig::Send& send) noexcept {
   return mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing,
-                            kMixerSmoothingMs};
+                            rt::kClickGuardMs};
 }
 
 void TrackMixerRuntime::commit_staged_lane_strips(
@@ -900,7 +900,7 @@ void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::Ch
 
 std::unique_ptr<mixing::ChannelStrip> TrackMixerRuntime::make_seed_strip() const {
   mixing::ChannelStripConfig config{
-      0.0f, 0.0f, mixing::PanLaw::Linear0dB, kMixerSmoothingMs, mixing::EqPosition::PreFader,
+      0.0f, 0.0f, mixing::PanLaw::Linear0dB, rt::kClickGuardMs, mixing::EqPosition::PreFader,
       0.0f, false};
   config.mono_pan_centre_unity = true;
   auto strip = std::make_unique<mixing::ChannelStrip>(config);
@@ -964,10 +964,10 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
 
   const auto reset_state = [this](LaneState& lane, uint32_t track_id) noexcept {
     lane.track_id = track_id;
-    lane.fader_gain.prepare(sample_rate_, kMixerSmoothingMs);
-    lane.pan.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.fader_gain.prepare(sample_rate_, rt::kClickGuardMs);
+    lane.pan.prepare(sample_rate_, rt::kClickGuardMs);
     lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
-    lane.surround_glide.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.surround_glide.prepare(sample_rate_, rt::kClickGuardMs);
     reset_lane_controls(lane);
     lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;

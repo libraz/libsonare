@@ -1067,7 +1067,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   MonitorRuntime& monitor() noexcept { return monitor_runtime_; }
 #endif
 
-  // Default ramp time for engine-level kSetParamSmoothed commands, in ms.
+  // Ramp time of kSetParamSmoothed on every target, reserved ones included, in ms; it retimes
+  // running ramps, and 0 makes a smoothed set a step. kSetParam is a step on every target. A
+  // mixer, insert or instrument target keeps its rt::kClickGuardMs glide under both.
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
   /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
   /// parameters are pushed at their final value and retired, and the track
@@ -1484,7 +1486,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // set_time_signature(). Clearing a piecewise map with an empty segment list
   // reverts to these (as documented) rather than the hardcoded default.
   double control_single_tempo_bpm_ = sonare::constants::kDefaultBpm;
-  transport::TimeSignature control_single_time_sig_{};
+  transport::TimeSignature control_single_time_sig_ = transport::kDefaultTimeSignature;
   transport::Transport transport_{};
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};
@@ -1880,9 +1882,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   GraphSwapFault last_graph_swap_fault_{};
 #endif
 
-  // Engine-level parameter smoothing for kSetParamSmoothed. Each active slot
-  // ramps a bound parameter toward its target over param_smoothing_ms_ and is
-  // ticked once per control period. Fixed-size: no audio-thread allocation.
+  // Engine-level parameter smoothing for kSetParamSmoothed. Each active slot ramps one target,
+  // bound or reserved, from its recorded base (or, for a target with none, from its first
+  // value) over param_smoothing_ms_ and is ticked once per control period. Fixed-size: no
+  // audio-thread allocation.
   static constexpr size_t kMaxSmoothedParams = 64;
   static constexpr int kControlPeriod = 64;
   // Audio-thread only: where a control period cut by the end of a block resumes and

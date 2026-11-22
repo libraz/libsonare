@@ -314,22 +314,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       }
       break;
     case rt::CommandType::kSetParamSmoothed:
-#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
-      if (parameter_target_reserved(command.target_id)) {
-        if (route_engine_parameter(command.target_id, command.arg.f)) {
-          record_parameter_base(command.target_id, command.arg.f);
-        } else {
-          report_unknown_target(command.target_id);
-        }
-        break;
-      }
-#endif
-      // Engine-level smoothing: start (or retarget) a one-pole ramp toward the
-      // requested value. The ramp is ticked once per control period in
-      // process() and pushed to the bound parameter, avoiding the zipper noise
-      // of an immediate jump for targets that do not smooth internally. The
-      // recorded base value is the ramp's target, not its current position,
-      // and is recorded whenever the value took effect.
+      // Engine-level smoothing on every target, reserved ones included: start (or retarget) a
+      // one-pole ramp ticked once per control period in process(). A reserved target's own
+      // click guard runs underneath. The recorded base is the ramp's target, recorded whenever
+      // the value took effect.
       if (start_smoothed_param(command.target_id, command.arg.f)) {
         record_parameter_base(command.target_id, command.arg.f);
       }
@@ -740,15 +728,24 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
     // was claimed, but the value still took effect whenever this call
     // succeeds, so the caller (which records a base value on "took effect",
     // not "got a slot") sees that outcome here too.
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+    if (parameter_target_reserved(target_id)) {
+      if (route_engine_parameter(target_id, value)) return true;
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), target_id);
+      return false;
+    }
+#endif
     return automation_.set_parameter(target_id, value);
   }
   free_slot->active = true;
   free_slot->assigned = true;
   free_slot->target_id = target_id;
-  // A free slot may have carried an unrelated target previously. The first
-  // value for a newly claimed target is its baseline, not a destination to
-  // glide toward from the former target's last value.
-  free_slot->smoother.reset(value);
+  // A free slot may have carried an unrelated target previously, so the ramp starts from this
+  // target's recorded base; a target with none takes its first value as the baseline.
+  float start = value;
+  (void)parameter_base_lookup(target_id, &start);
+  free_slot->smoother.reset(start);
   free_slot->smoother.set_target(value);
   return true;
 }

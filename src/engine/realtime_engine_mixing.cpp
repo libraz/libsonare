@@ -870,7 +870,7 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
   free_slot->assigned = true;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
-  free_slot->smoother.prepare(sample_rate_, kMixerSmoothingMs);
+  free_slot->smoother.prepare(sample_rate_, rt::kClickGuardMs);
   free_slot->smoother.reset(baseline);
   free_slot->smoother.set_target(value);
   return true;
