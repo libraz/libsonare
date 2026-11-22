@@ -57,13 +57,13 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
       throw WasmRangeError("invalid page index");
     }
-    const int channel_count = channels_val["length"].as<int>();
-    if (channel_count != channels_) {
+    const std::size_t channel_count = wasmArrayLikeLength(channels_val, "channels");
+    if (channel_count != static_cast<std::size_t>(channels_)) {
       throw WasmRangeError("clip page channel count mismatch");
     }
     auto page = std::make_unique<Page>();
     page->channels.reserve(static_cast<size_t>(channels_));
-    for (int ch = 0; ch < channel_count; ++ch) {
+    for (int ch = 0; ch < channels_; ++ch) {
       std::vector<float> channel = float32ArrayToVector(channels_val[ch], "channels");
       if (ch == 0) {
         page->frames = static_cast<int64_t>(channel.size());

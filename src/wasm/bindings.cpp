@@ -286,8 +286,9 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
   parts.code = static_cast<sonare::ErrorCode>(checkedIntFromVal(object["code"], "refusal.code"));
   parts.form = string_field(object, "form");
   const val subjects = object["subjects"];
-  const int count = subjects.isArray() ? subjects["length"].as<int>() : 0;
-  for (int i = 0; i < count; ++i) parts.subjects.push_back(subjects[i].as<std::string>());
+  const std::size_t count =
+      subjects.isArray() ? wasmArrayLikeLength(subjects, "refusal.subjects") : 0;
+  for (std::size_t i = 0; i < count; ++i) parts.subjects.push_back(subjects[i].as<std::string>());
   parts.predicate = string_field(object, "predicate");
   parts.renamed_to = string_field(object, "renamedTo");
   parts.expected = string_field(object, "expected");
@@ -308,14 +309,14 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
 val js_render_refusal(const val& refusal, const val& names, const val& scales) {
   const sonare::SonareParameterRefusal parsed = refusal_from_object(refusal);
   std::vector<std::string> subjects;
-  const int count = names["length"].as<int>();
-  for (int i = 0; i < count; ++i) subjects.push_back(names[i].as<std::string>());
+  const std::size_t count = wasmArrayLikeLength(names, "subjects");
+  for (std::size_t i = 0; i < count; ++i) subjects.push_back(names[i].as<std::string>());
   std::vector<const char*> pointers;
   for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
   std::vector<double> factors;
   if (scales.isArray()) {
-    const int scale_count = scales["length"].as<int>();
-    for (int i = 0; i < scale_count; ++i) factors.push_back(scales[i].as<double>());
+    const std::size_t scale_count = wasmArrayLikeLength(scales, "scales");
+    for (std::size_t i = 0; i < scale_count; ++i) factors.push_back(scales[i].as<double>());
   }
   const sonare::SonareParameterRefusal rendered = sonare_c_detail::respelled_refusal(
       parsed, pointers.data(), factors.empty() ? nullptr : factors.data(), pointers.size());

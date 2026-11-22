@@ -90,7 +90,8 @@ val js_pitch_shift(val samples, const val& sample_rate_val, const val& semitones
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float semitones = checkedFloatFromVal(semitones_val, "semitones");
   PitchShiftPlan plan;
-  if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
+  if (!make_pitch_shift_plan(wasmArrayLikeLength(samples, "samples"), sample_rate, semitones,
+                             &plan)) {
     throw WasmRangeError("unsupported pitch-shift expansion");
   }
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);

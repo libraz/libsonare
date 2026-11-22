@@ -1,19 +1,5 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`WASM binding sources budget every caller-supplied array length > has no new bare \`.length\` / \`.byteLength\` reads beyond the tracked baseline 1`] = `
-[
-  "common/synth_patch_val.h routings["length"].as<size_t>() #1",
-  "effects/audio.cpp samples["length"].as<size_t>() #1",
-  "mixing/mixing_processing.cpp left["length"].as<int>() #1",
-  "mixing/mixing_processing.cpp left_channels["length"].as<int>() #1",
-  "mixing/mixing_processing.cpp right["length"].as<int>() #1",
-  "mixing/mixing_processing.cpp right_channels["length"].as<int>() #1",
-  "realtime/clips.cpp channels_val["length"].as<int>() #1",
-  "realtime/transport.cpp segments["length"].as<unsigned>() #1",
-  "realtime/transport.cpp segments["length"].as<unsigned>() #2",
-]
-`;
-
 exports[`WASM binding sources stay on the shared common.h field readers > has no new bare literal-key field reads beyond the tracked baseline (snapshot ratchet) 1`] = `
 [
   "project/project_edit.cpp entry["name"].as<std::string>() #1",

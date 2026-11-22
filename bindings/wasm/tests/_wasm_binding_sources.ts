@@ -164,15 +164,56 @@ export function bareFieldReadSites(): BareFieldReadSite[] {
   return scanBareReads(false);
 }
 
+/** A literal `["length"]` / `["byteLength"]` index anywhere under `src/wasm/`. */
+export interface ArrayLengthReadSite {
+  /** Path relative to `src/wasm/`, e.g. `bindings/effects/audio.cpp`. */
+  file: string;
+  /** Text the index is chained on, e.g. `left_channels` or `keys`. */
+  receiver: string;
+  /** Source line. Diagnostic only, not part of {@link id}. */
+  line: number;
+  /** `file receiver["key"] #occurrence`, line-independent as {@link BareFieldReadSite.id} is. */
+  id: string;
+}
+
+const WASM_ROOT = new URL('../../../src/wasm/', import.meta.url).pathname;
+
+/** The literal length index, with the receiver token it is chained on. */
+const ARRAY_LENGTH_INDEX = /([A-Za-z_][\w[\]"]*?)\["(length|byteLength)"\]/g;
+
+/** Every C++ source under `src/wasm/`, the top-level `bindings.cpp` included. */
+export function wasmSourceFiles(): WasmBindingSource[] {
+  return walk(WASM_ROOT)
+    .sort()
+    .map((file) => ({ file, text: readFileSync(join(WASM_ROOT, file), 'utf8') }));
+}
+
 /**
- * The `.length` / `.byteLength` family that {@link bareFieldReadSites}
- * deliberately skips. A caller-supplied length decides an allocation size, so
- * reading it with a bare `.as<T>()` narrows a non-finite, fractional, negative,
- * or fabricated JS Number straight into a `reserve`/`resize` — the shared
- * `wasmArrayLikeLength` guard rejects those before anything is allocated.
+ * Every literal `.length` / `.byteLength` index under `src/wasm/`. A caller-supplied
+ * length read this way narrows a non-integer, negative or fabricated JS number with no
+ * refusal, so such a read belongs in `wasmArrayLikeLength`, which takes the key as an
+ * argument and therefore never appears here.
  */
-export function bareArrayLengthReadSites(): BareFieldReadSite[] {
-  return scanBareReads(true);
+export function bareArrayLengthReadSites(
+  sources: readonly WasmBindingSource[] = wasmSourceFiles(),
+): ArrayLengthReadSite[] {
+  const sites: ArrayLengthReadSite[] = [];
+  for (const { file, text } of sources) {
+    const seen = new Map<string, number>();
+    for (const match of text.matchAll(ARRAY_LENGTH_INDEX)) {
+      const [, receiver, key] = match;
+      const expression = `${receiver}["${key}"]`;
+      const occurrence = (seen.get(expression) ?? 0) + 1;
+      seen.set(expression, occurrence);
+      sites.push({
+        file,
+        receiver,
+        line: text.slice(0, match.index ?? 0).split('\n').length,
+        id: `${file} ${expression} #${occurrence}`,
+      });
+    }
+  }
+  return sites;
 }
 
 /** A `RealtimeEngineWasm::*Offline` member definition and how it renders. */

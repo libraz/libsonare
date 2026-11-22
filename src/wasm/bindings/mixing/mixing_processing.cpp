@@ -97,10 +97,8 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
 
 void MixerWasm::processStereoInto(val left_channels, val right_channels, val out_left,
                                   val out_right) {
-  const int count = left_channels["length"].as<int>();
-  if (count < 0 || right_channels["length"].as<int>() != count) {
-    throw WasmRangeError("leftChannels and rightChannels must have the same length");
-  }
+  const int count = requireMatchedLength(left_channels, right_channels,
+                                         "leftInputs and rightInputs", /*require_non_zero=*/false);
   requireInputCountWithinStrips(static_cast<size_t>(count), stripCount());
 
   // require_non_zero=false: a zero-sample block is a legitimate no-op here
@@ -116,7 +114,8 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
   for (int index = 0; index < count; ++index) {
     val left = left_channels[index];
     val right = right_channels[index];
-    if (left["length"].as<int>() != length_i || right["length"].as<int>() != length_i) {
+    if (wasmArrayLikeLength(left, "leftInputs element") != length ||
+        wasmArrayLikeLength(right, "rightInputs element") != length) {
       throw WasmRangeError("all input and output channels must have the same length");
     }
     auto& left_dest = left_scratch_[static_cast<size_t>(index)];

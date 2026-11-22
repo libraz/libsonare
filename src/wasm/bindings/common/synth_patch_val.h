@@ -316,7 +316,7 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   if (hasProperty(desc, "modRoutings")) {
     emscripten::val routings = desc["modRoutings"];
     if (emscripten::val::global("Array").call<bool>("isArray", routings)) {
-      const size_t count = routings["length"].as<size_t>();
+      const size_t count = wasmArrayLikeLength(routings, "modRoutings");
       if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
         throw WasmRangeError("a synth patch supports at most 8 mod routings");
       }

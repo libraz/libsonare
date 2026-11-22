@@ -37,6 +37,7 @@ import {
   offlineRenderWrapperSites,
   valReaderFunctions,
   wasmBindingSources,
+  wasmSourceFiles,
 } from './_wasm_binding_sources';
 
 describe('WASM binding sources stay on the shared common.h field readers', () => {
@@ -59,23 +60,24 @@ describe('WASM binding sources stay on the shared common.h field readers', () =>
     // it carries the source expression, and it stays unique when the same
     // expression appears twice in one file.
     const sites = [...bareFieldReadSites(), ...bareArrayLengthReadSites()];
-    // A floor sized to the population this scan is meant to shrink would stop
-    // checking the scanner and start checking that remediation did not
-    // happen; this one only needs to stay comfortably above zero.
-    expect(sites.length).toBeGreaterThan(5);
+    expect(sites.length).toBeGreaterThan(0);
     for (const site of sites) {
-      expect(site.id).toContain(site.expression);
       expect(site.id).not.toContain(`:${site.line}`);
+    }
+    for (const site of bareFieldReadSites()) {
+      expect(site.id).toContain(site.expression);
     }
     const ids = sites.map((s) => s.id);
     expect(new Set(ids).size, 'site ids must be unique').toBe(ids.length);
 
     // A file that reads the same expression twice must keep two entries.
-    const repeated = bareArrayLengthReadSites().filter(
-      (s) => s.file === 'realtime/transport.cpp' && s.expression.startsWith('segments['),
-    );
-    expect(repeated.length).toBeGreaterThan(1);
-    expect(repeated.map((s) => s.occurrence)).toEqual(repeated.map((_, index) => index + 1));
+    const repeated = bareArrayLengthReadSites([
+      { file: 'sample.cpp', text: 'a = xs["length"].as<int>();\nb = xs["length"].as<int>();\n' },
+    ]);
+    expect(repeated.map((s) => s.id)).toEqual([
+      'sample.cpp xs["length"] #1',
+      'sample.cpp xs["length"] #2',
+    ]);
   });
 
   it('the realtime voice changer POD reader has no bare field reads (regression check)', () => {
@@ -99,26 +101,38 @@ describe('WASM binding sources stay on the shared common.h field readers', () =>
   });
 });
 
+/**
+ * Length reads that may stay raw, keyed by site id: each reads an array the same
+ * function built itself, so its length is a real array length and never the caller's.
+ */
+const SELF_BUILT_LENGTH_READS: ReadonlyMap<string, string> = new Map([
+  [
+    'bindings/common/common.cpp keys["length"] #1',
+    'masteringParamsFromObject: `keys` is the Object.keys array built two lines above.',
+  ],
+]);
+
 describe('WASM binding sources budget every caller-supplied array length', () => {
-  it('the entry points that size an allocation from `.length` use the shared guard', () => {
-    // A fabricated, negative, fractional, or non-finite `.length` used to reach
-    // a reserve/resize directly here. These read through wasmArrayLikeLength,
-    // which rejects all of those as a RangeError before any
-    // allocation happens.
-    const guarded = ['features/core.cpp', 'metering/metering.cpp', 'realtime/params.cpp'];
-    const sites = bareArrayLengthReadSites().filter((s) => guarded.includes(s.file));
-    expect(sites).toEqual([]);
+  it('scans every source under src/wasm', () => {
+    const files = wasmSourceFiles().map((source) => source.file);
+    expect(files.length).toBeGreaterThan(20);
+    expect(files).toEqual(expect.arrayContaining(['bindings.cpp', 'bindings/common/common.cpp']));
   });
 
-  it('has no new bare `.length` / `.byteLength` reads beyond the tracked baseline', () => {
-    // Same ratchet rationale as the named-field scan above: the remaining sites
-    // are pre-existing and each needs its own review, but the list must not
-    // grow silently — an unbudgeted length is how an untrusted JS number turns
-    // into an unbounded allocation.
-    const sites = bareArrayLengthReadSites()
-      .map((s) => s.id)
-      .sort();
-    expect(sites).toMatchSnapshot();
+  it('reads every caller-supplied length through wasmArrayLikeLength', () => {
+    const raw = bareArrayLengthReadSites().filter((site) => !SELF_BUILT_LENGTH_READS.has(site.id));
+    expect(
+      raw.map((site) => `${site.file}:${site.line} ${site.receiver}`),
+      'A length the caller supplied decides an allocation and a loop bound; read it with ' +
+        'wasmArrayLikeLength, which refuses a non-integer, negative or over-budget length by ' +
+        'name. A read of an array the same function built goes in SELF_BUILT_LENGTH_READS ' +
+        'with the reason.',
+    ).toEqual([]);
+  });
+
+  it('keeps the self-built list to reads that still exist', () => {
+    const live = new Set(bareArrayLengthReadSites().map((site) => site.id));
+    expect([...SELF_BUILT_LENGTH_READS.keys()].filter((id) => !live.has(id))).toEqual([]);
   });
 });
 
