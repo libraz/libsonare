@@ -180,7 +180,7 @@ lint = [
     # Formatting output differs between clang-format majors, so the version the
     # tree was formatted with is pinned exactly.
     "clang-format==18.1.8",
-    "ruff>=0.8",
+    "ruff>=0.17.6",
 ]
 test = ["pytest>=9.0.2"]
 # Repairs and retags the built wheel in the release workflows.

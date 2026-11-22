@@ -383,9 +383,8 @@ class BranchMap:
             elif kind in {"elif", "else"}:
                 if stack:
                     stack[-1][1] += 1
-            elif kind == "endif":
-                if stack:
-                    stack.pop()
+            elif kind == "endif" and stack:
+                stack.pop()
             self._marks.append(
                 (match.end(), tuple((cond, branch) for cond, branch in stack))
             )
