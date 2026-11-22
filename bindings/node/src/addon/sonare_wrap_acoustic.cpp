@@ -254,8 +254,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       break;
   }
 
-  // The core refuses these too, under its member names; checked first so the refusal names the JS
-  // field.
+  // The core refuses these too, under member names; checked first to name the JS field.
   {
     namespace check = sonare::util::check;
     check::greater_than(cfg.aspect_hint_lw, 0.0, "aspectHintLw");
