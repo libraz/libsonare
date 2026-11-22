@@ -8,6 +8,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -71,4 +72,12 @@ TEST_CASE("magphase phase has unit modulus", "[magphase][unit]") {
   REQUIRE_THAT(mp.magnitude[1], WithinAbs(0.0f, 1e-6f));
   REQUIRE_THAT(mp.phase[1].real(), WithinAbs(1.0f, 1e-6f));
   REQUIRE_THAT(mp.phase[1].imag(), WithinAbs(0.0f, 1e-6f));
+}
+
+TEST_CASE("magphase refuses a power that is not a positive number", "[magphase][unit]") {
+  std::vector<std::complex<float>> spec{{1.0f, 2.0f}};
+  for (float power : {0.0f, -2.0f, std::nanf("")}) {
+    CAPTURE(power);
+    REQUIRE_THROWS_AS(magphase(spec.data(), spec.size(), power), SonareException);
+  }
 }

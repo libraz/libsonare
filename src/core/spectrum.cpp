@@ -745,7 +745,7 @@ Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames,
 }
 
 MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
-  if (power <= 0.0f) {
+  if (!(power > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "magphase: power must be > 0");
   }
   if (n > 0 && spec == nullptr) {

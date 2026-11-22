@@ -209,7 +209,7 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
   }
   if (config.n_filters <= 0)
     throw SonareException(ErrorCode::InvalidParameter, "iirt: n_filters must be positive");
-  if (config.Q <= 0.0f)
+  if (!(config.Q > 0.0f))
     throw SonareException(ErrorCode::InvalidParameter, "iirt: Q must be positive");
   if (config.filter_order < 2 || config.filter_order % 2 != 0) {
     throw SonareException(ErrorCode::InvalidParameter, "iirt: filter_order must be even and >= 2");

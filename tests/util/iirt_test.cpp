@@ -10,6 +10,7 @@
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare::constants;
@@ -66,4 +67,15 @@ TEST_CASE("iirt peak row is near MIDI 69 (A4) for 440Hz tone", "[iirt][unit][smo
   CAPTURE(peak_row, expected_row);
   // Filterbank Q is moderate, so allow ±2 semitones of slack.
   REQUIRE(std::abs(peak_row - expected_row) <= 2);
+}
+
+TEST_CASE("iirt refuses a Q that is not a positive number", "[iirt][unit]") {
+  Audio audio = make_tone(440.0f, 22050, 0.25f);
+  for (float q : {0.0f, -1.0f, std::nanf("")}) {
+    CAPTURE(q);
+    IirtConfig cfg;
+    cfg.sr = audio.sample_rate();
+    cfg.Q = q;
+    REQUIRE_THROWS_AS(iirt(audio, cfg), SonareException);
+  }
 }
