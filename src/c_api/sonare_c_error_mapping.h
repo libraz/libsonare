@@ -35,8 +35,12 @@ inline constexpr SonareError c_error_from_error_code(sonare::ErrorCode code) noe
       return SONARE_ERROR_CANCELLED;
     case sonare::ErrorCode::EncodeFailed:
       return SONARE_ERROR_ENCODE_FAILED;
+    case sonare::ErrorCode::AbiMismatch:
+      return SONARE_ERROR_ABI_MISMATCH;
     case sonare::ErrorCode::StaleResult:
       return SONARE_ERROR_STALE_RESULT;
+    case sonare::ErrorCode::Unknown:
+      return SONARE_ERROR_UNKNOWN;
   }
   // A scoped enum can hold an out-of-range underlying value.
   return SONARE_ERROR_UNKNOWN;
@@ -50,7 +54,8 @@ inline constexpr bool core_ordinals_match_c_abi() noexcept {
         sonare::ErrorCode::DecodeFailed, sonare::ErrorCode::InvalidParameter,
         sonare::ErrorCode::OutOfMemory, sonare::ErrorCode::NotSupported,
         sonare::ErrorCode::InvalidState, sonare::ErrorCode::Cancelled,
-        sonare::ErrorCode::EncodeFailed, sonare::ErrorCode::StaleResult}) {
+        sonare::ErrorCode::EncodeFailed, sonare::ErrorCode::AbiMismatch,
+        sonare::ErrorCode::StaleResult, sonare::ErrorCode::Unknown}) {
     if (code == sonare::ErrorCode::Ok) continue;
     if (static_cast<int>(code) != static_cast<int>(c_error_from_error_code(code))) return false;
   }
@@ -59,7 +64,9 @@ inline constexpr bool core_ordinals_match_c_abi() noexcept {
 static_assert(core_ordinals_match_c_abi(), "a core ErrorCode ordinal differs from its C-ABI code");
 
 /// Inverse of c_error_from_error_code(): lets facades that call the C ABI raise
-/// the same core ErrorCode without maintaining a second switch table.
+/// the same core ErrorCode without maintaining a second switch table. Every C
+/// failure code keeps its own enumerator; the default arm takes only values no
+/// C call returns, as Unknown.
 inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
   switch (err) {
     case SONARE_ERROR_FILE_NOT_FOUND:
@@ -80,12 +87,15 @@ inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
       return sonare::ErrorCode::Cancelled;
     case SONARE_ERROR_ENCODE_FAILED:
       return sonare::ErrorCode::EncodeFailed;
+    case SONARE_ERROR_ABI_MISMATCH:
+      return sonare::ErrorCode::AbiMismatch;
     case SONARE_ERROR_STALE_RESULT:
       return sonare::ErrorCode::StaleResult;
-    case SONARE_OK:
     case SONARE_ERROR_UNKNOWN:
+      return sonare::ErrorCode::Unknown;
+    case SONARE_OK:
     default:
-      return sonare::ErrorCode::InvalidState;
+      return sonare::ErrorCode::Unknown;
   }
 }
 

@@ -37,6 +37,9 @@ int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
     // Exit codes are not error codes: error 11 (StaleResult) exits 14, exit 11 is a cancellation.
     case sonare::ErrorCode::StaleResult:
       return 14;
+    case sonare::ErrorCode::AbiMismatch:
+      return 13;
+    case sonare::ErrorCode::Unknown:
     case sonare::ErrorCode::Ok:
     default:
       return 10;

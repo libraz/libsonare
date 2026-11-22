@@ -397,9 +397,17 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           code = 9;
           code_name = "EncodeFailed";
           break;
+        case sonare::ErrorCode::AbiMismatch:
+          code = 10;
+          code_name = "AbiMismatch";
+          break;
         case sonare::ErrorCode::StaleResult:
           code = 11;
           code_name = "StaleResult";
+          break;
+        case sonare::ErrorCode::Unknown:
+          code = 99;
+          code_name = "Unknown";
           break;
       }
     } else {

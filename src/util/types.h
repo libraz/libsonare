@@ -102,8 +102,14 @@ enum class ErrorCode : int {
   ///        and callers routing on the code cannot recover the distinction once
   ///        the two are merged.
   EncodeFailed,
+  /// @brief A binding loaded a native library built for another ABI. Carried through from a
+  ///        C-ABI code so it keeps its name; the core never raises it.
+  AbiMismatch = 10,
   /// @brief An operation was attempted on a result its source has since invalidated.
   StaleResult = 11,
+  /// @brief A failure with no more specific code. Carried through from a C-ABI code so it keeps
+  ///        its name; the core never raises it.
+  Unknown = 99,
 };
 
 /// @brief Pitch class (0-11, C=0).
@@ -267,8 +273,11 @@ inline const char* error_message(ErrorCode code) {
       return "Cancelled";
     case ErrorCode::EncodeFailed:
       return "Encode failed";
+    case ErrorCode::AbiMismatch:
+      return "ABI mismatch";
     case ErrorCode::StaleResult:
       return "Stale result";
+    case ErrorCode::Unknown:
     default:
       return "Unknown error";
   }

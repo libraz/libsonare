@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "analysis/section_analyzer.h"
+#include "c_api/sonare_c_error_mapping.h"
 #include "cli/cli_test_helpers.h"
 
 TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale", "[cli][json]") {
@@ -1348,12 +1349,24 @@ TEST_CASE("CLI exit codes are the contract's named table", "[cli][contract]") {
       {sonare::ErrorCode::Cancelled, "cancelled"},
       {sonare::ErrorCode::EncodeFailed, "encode_failed"},
       {sonare::ErrorCode::StaleResult, "stale_result"},
-      // SONARE_ERROR_UNKNOWN, which the mapping does not name.
-      {static_cast<sonare::ErrorCode>(99), "error"},
+      {sonare::ErrorCode::AbiMismatch, "abi_mismatch"},
+      {sonare::ErrorCode::Unknown, "error"},
   };
   for (const auto& [error, name] : mapped) {
     CAPTURE(name);
     REQUIRE(cli_exit_code_for_error(error) == exit_codes[name].as_int());
+  }
+  // A C failure the CLI rethrows exits as the error-code corpus names it.
+  std::ifstream corpus_input("tests/conformance/c_error_codes.json");
+  REQUIRE(corpus_input.good());
+  const std::string corpus((std::istreambuf_iterator<char>(corpus_input)),
+                           std::istreambuf_iterator<char>());
+  const auto rows = sonare::util::json::parse_strict(corpus)["codes"];
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    CAPTURE(rows[i]["codeName"].as_string());
+    const auto code = static_cast<SonareError>(rows[i]["code"].as_int());
+    CHECK(cli_exit_code_for_error(sonare_c_detail::error_code_from_c_error(code)) ==
+          exit_codes[rows[i]["cliExit"].as_string()].as_int());
   }
 }
 

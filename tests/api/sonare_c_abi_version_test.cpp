@@ -9,6 +9,8 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -19,6 +21,7 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_internal.h"
 #include "util/constants.h"
+#include "util/json.h"
 #ifdef SONARE_WITH_MIXING
 #include "support/alloc_guard.h"
 #endif
@@ -190,6 +193,26 @@ TEST_CASE("C error mapping preserves cancellation", "[c_api][abi]") {
           sonare::ErrorCode::Cancelled);
   REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_INVALID_PARAMETER) ==
           sonare::ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("every C error code round-trips through the core under its own number",
+          "[c_api][abi][conformance]") {
+  std::ifstream input("tests/conformance/c_error_codes.json");
+  REQUIRE(input.good());
+  const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  const auto rows = sonare::util::json::parse_strict(text)["codes"];
+  REQUIRE(rows.size() >= 12);
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    const auto code = static_cast<SonareError>(rows[i]["code"].as_int());
+    CAPTURE(rows[i]["codeName"].as_string());
+    const sonare::ErrorCode core = sonare_c_detail::error_code_from_c_error(code);
+    CHECK(static_cast<int>(core) == static_cast<int>(code));
+    CHECK(sonare_c_detail::c_error_from_error_code(core) == code);
+  }
+  // A value no C call returns lands on Unknown, never on a real failure class.
+  CHECK(sonare_c_detail::error_code_from_c_error(SONARE_OK) == sonare::ErrorCode::Unknown);
+  CHECK(sonare_c_detail::error_code_from_c_error(static_cast<SonareError>(42)) ==
+        sonare::ErrorCode::Unknown);
 }
 
 TEST_CASE("C error mapping round-trips StaleResult", "[c_api][abi]") {

@@ -1,0 +1,17 @@
+{
+  "$comment": "Every C-ABI failure code, the codeName each binding publishes for it, and the CLI exit code (by its name in cli_contract_v2.json) the native CLI exits with. A code keeps its name through every surface: the core ErrorCode it round-trips through carries the same number.",
+  "codes": [
+    {"code": 1, "codeName": "FileNotFound", "cliExit": "file_not_found"},
+    {"code": 2, "codeName": "InvalidFormat", "cliExit": "invalid_format"},
+    {"code": 3, "codeName": "DecodeFailed", "cliExit": "decode_failed"},
+    {"code": 4, "codeName": "InvalidParameter", "cliExit": "invalid_parameter"},
+    {"code": 5, "codeName": "OutOfMemory", "cliExit": "out_of_memory"},
+    {"code": 6, "codeName": "NotSupported", "cliExit": "not_supported"},
+    {"code": 7, "codeName": "InvalidState", "cliExit": "invalid_state"},
+    {"code": 8, "codeName": "Cancelled", "cliExit": "cancelled"},
+    {"code": 9, "codeName": "EncodeFailed", "cliExit": "encode_failed"},
+    {"code": 10, "codeName": "AbiMismatch", "cliExit": "abi_mismatch"},
+    {"code": 11, "codeName": "StaleResult", "cliExit": "stale_result"},
+    {"code": 99, "codeName": "Unknown", "cliExit": "error"}
+  ]
+}

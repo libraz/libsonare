@@ -227,7 +227,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 
 ### Errors and arguments
 
-- `InvalidState` covers a released or uninitialised handle, `NotSupported` a feature compiled out of the build, and `AbiMismatch` a native module whose ABI version disagrees with the binding, checked when the module loads.
+- `InvalidState` covers a released or uninitialised handle, `NotSupported` a feature compiled out of the build, and `AbiMismatch` a native module whose ABI version disagrees with the binding, checked when the module loads. Every C failure code keeps its own name when a binding or the CLI rethrows it (`tests/conformance/c_error_codes.json`); the core's `ErrorCode` carries `AbiMismatch` and `Unknown` only for that, and nothing in the core raises either.
 - An out-of-domain value includes two buffers whose lengths must match.
 - A negative position is refused because a sentinel means different things on different surfaces, and a negative typed by mistake must not edit nothing. A value whose `-1` is a real quantity (a −1 dBTP ceiling) is not a sentinel. The C ABI keeps samples and its own `-1` conventions, which the facades map to.
 - `*Sec` values are converted at the call's sample rate and rounded to the nearest sample.
