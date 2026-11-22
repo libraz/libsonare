@@ -21,8 +21,19 @@
       "version"
     ],
     "CapabilityCatalogChain": ["lists", "params", "stages"],
-    "CapabilityCatalogChainList": ["key", "maxItems", "minItems", "processor"],
-    "CapabilityCatalogChainStage": ["enabledKey", "prefix", "processor"],
+    "CapabilityCatalogChainList": [
+      "form",
+      "key",
+      "maxItems",
+      "minItems",
+      "processor"
+    ],
+    "CapabilityCatalogChainStage": [
+      "enabledKey",
+      "form",
+      "prefix",
+      "processor"
+    ],
     "MasteringPresetCatalogEntry": [
       "kind",
       "maxLimiterGainReductionDb",
@@ -61,9 +72,11 @@
       "category",
       "causal",
       "channelPolicy",
+      "forms",
       "id",
       "kind",
       "latencySamples",
+      "offlineParams",
       "params",
       "realtimeCost",
       "realtimeInsertable",
@@ -79,8 +92,8 @@
     ]
   },
   "optional": {
-    "CapabilityCatalogChainList": ["processor"],
-    "CapabilityCatalogChainStage": ["processor"],
+    "CapabilityCatalogChainList": ["form", "processor"],
+    "CapabilityCatalogChainStage": ["form", "processor"],
     "MasteringPresetCatalogEntry": [
       "maxLimiterGainReductionDb",
       "targetLufs",
@@ -98,7 +111,7 @@
       "uiMin",
       "unit"
     ],
-    "MasteringProcessorCatalogEntry": ["realtimeCost"],
+    "MasteringProcessorCatalogEntry": ["offlineParams", "realtimeCost"],
     "MasteringInsertSlot": ["parent"]
   },
   "aliases": {}

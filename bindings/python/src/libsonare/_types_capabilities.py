@@ -365,6 +365,9 @@ class MasteringProcessorCatalogEntry:
     kind: MasteringProcessorKind
     """``"realtime"`` builds as a scene insert, ``"offline"`` is whole-file only, ``"pair"`` takes
     two inputs."""
+    forms: tuple[Literal["realtime", "offline"], ...]
+    """Every way the id runs, realtime first: ``"realtime"`` as a scene insert, ``"offline"`` over
+    a whole file."""
     realtime_insertable: bool
     """True exactly for ids that always succeed as a realtime scene insert."""
     stereo_only: bool
@@ -382,9 +385,12 @@ class MasteringProcessorCatalogEntry:
     causal: bool
     """Whether the output at a sample depends only on input up to it, plus the reported latency."""
     params: tuple[MasteringInsertParamInfo, ...]
-    """Construction parameters of the processor; empty for an offline entry with none."""
+    """Construction parameters of the processor; empty for an offline entry with none. Describes
+    every listed form unless ``offline_params`` is set."""
     slots: tuple[MasteringInsertSlot, ...]
     """Conditional key groups of an insert in declaration order; empty if not an insert."""
+    offline_params: tuple[MasteringInsertParamInfo, ...] | None = None
+    """The offline form's parameters, set only when they differ from ``params``."""
 
 
 @dataclass(frozen=True)
@@ -454,6 +460,8 @@ class CapabilityCatalogChainStage:
     """Key prefix of the stage."""
     processor: str | None
     """Processor id describing the stage's keys."""
+    form: Literal["offline"] | None
+    """Processor form the stage builds; None exactly where ``processor`` is."""
     enabled_key: str
     """Chain key that switches the stage on."""
 
@@ -470,6 +478,8 @@ class CapabilityCatalogChainList:
     """Chain key of the list."""
     processor: str | None
     """Processor id of each item, or ``None`` for a list of numbers."""
+    form: Literal["offline"] | None
+    """Processor form each item builds; None exactly where ``processor`` is."""
     min_items: int
     """Fewest items the list accepts."""
     max_items: int

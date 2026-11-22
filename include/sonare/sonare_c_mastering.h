@@ -357,9 +357,14 @@ const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
 /// @details A JSON array whose entries contain `id`, `kind`,
-///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
+///   `realtimeInsertable`, `forms`, `stereoOnly`, `latencySamples`, `tailSamples`,
 ///   `realtimeCost`,
-///   `channelPolicy`, `category`, `causal`, `params` and `slots` (UTF-8). `causal` is
+///   `channelPolicy`, `category`, `causal`, `params` and `slots`, plus `offlineParams` where it
+///   applies (UTF-8). `forms` names the registries that run the id, `"realtime"` before
+///   `"offline"`. `params` describes every listed form unless `offlineParams` is present, which it
+///   is exactly when the offline form reads another set (`repair.decrackle`,
+///   `repair.denoiseClassical` and `saturation.ampSim`); `offlineParams` then has the shape of
+///   `params`. `causal` is
 ///   false for `repair.declick`, `repair.declip` and `repair.trimSilence`, which need
 ///   the far side of a defect or the whole signal, and true for the other repair
 ///   stages and every insert. A `repair.*` entry's `params` are measured through the
@@ -367,10 +372,9 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///   ones the stage enforces. `kind` is one of
 ///   "realtime" / "offline" / "pair"
 ///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
-///   for ids usable as live inserts. `realtimeCost` is `"low"`, `"moderate"`,
-///   or `"high"` for those ids and JSON null otherwise; it is a coarse
-///   algorithmic estimate, not a hardware benchmark.
-///   for the ids in @ref sonare_mastering_insert_names. `slots` lists, in
+///   for the ids in @ref sonare_mastering_insert_names, which are usable as live inserts.
+///   `realtimeCost` is `"low"`, `"moderate"`, or `"high"` for those ids and JSON null
+///   otherwise; it is a coarse algorithmic estimate, not a hardware benchmark. `slots` lists, in
 ///   declaration order, the key groups that exist only under a condition,
 ///   each `{"name","parent","activation","minCrossoverCutoffs"}`: `name` is the
 ///   key prefix (`"midBand3"`, `"band1.dyn2"`) a parameter's `slot` names;

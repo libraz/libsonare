@@ -6,12 +6,14 @@
   "chain": {
     "lists": [
       {
+        "form": null,
         "key": "dynamics.multibandComp.crossover.cutoffsHz",
         "maxItems": 63,
         "minItems": 1,
         "processor": null
       },
       {
+        "form": "offline",
         "key": "dynamics.multibandComp.bands",
         "maxItems": 64,
         "minItems": 2,
@@ -634,91 +636,109 @@
     "stages": [
       {
         "enabledKey": "repair.declick.enabled",
+        "form": "offline",
         "prefix": "repair.declick",
         "processor": "repair.declick"
       },
       {
         "enabledKey": "repair.declip.enabled",
+        "form": "offline",
         "prefix": "repair.declip",
         "processor": "repair.declip"
       },
       {
         "enabledKey": "repair.decrackle.enabled",
+        "form": "offline",
         "prefix": "repair.decrackle",
         "processor": "repair.decrackle"
       },
       {
         "enabledKey": "repair.dehum.enabled",
+        "form": "offline",
         "prefix": "repair.dehum",
         "processor": "repair.dehum"
       },
       {
         "enabledKey": "repair.dereverb.enabled",
+        "form": "offline",
         "prefix": "repair.dereverb",
         "processor": "repair.dereverbClassical"
       },
       {
         "enabledKey": "repair.denoise.enabled",
+        "form": "offline",
         "prefix": "repair.denoise",
         "processor": "repair.denoiseClassical"
       },
       {
         "enabledKey": "eq.tilt.enabled",
+        "form": "offline",
         "prefix": "eq.tilt",
         "processor": "eq.tilt"
       },
       {
         "enabledKey": "dynamics.deesser.enabled",
+        "form": "offline",
         "prefix": "dynamics.deesser",
         "processor": "dynamics.deesser"
       },
       {
         "enabledKey": "dynamics.transientShaper.enabled",
+        "form": "offline",
         "prefix": "dynamics.transientShaper",
         "processor": "dynamics.transientShaper"
       },
       {
         "enabledKey": "dynamics.compressor.enabled",
+        "form": "offline",
         "prefix": "dynamics.compressor",
         "processor": "dynamics.compressor"
       },
       {
         "enabledKey": "dynamics.multibandComp.enabled",
+        "form": "offline",
         "prefix": "dynamics.multibandComp",
         "processor": "multiband.compressor"
       },
       {
         "enabledKey": "saturation.tape.enabled",
+        "form": "offline",
         "prefix": "saturation.tape",
         "processor": "saturation.tape"
       },
       {
         "enabledKey": "saturation.exciter.enabled",
+        "form": "offline",
         "prefix": "saturation.exciter",
         "processor": "saturation.exciter"
       },
       {
         "enabledKey": "spectral.airBand.enabled",
+        "form": "offline",
         "prefix": "spectral.airBand",
         "processor": "spectral.airBand"
       },
       {
         "enabledKey": "stereo.imager.enabled",
+        "form": "offline",
         "prefix": "stereo.imager",
         "processor": "stereo.imager"
       },
       {
         "enabledKey": "stereo.monoMaker.enabled",
+        "form": "offline",
         "prefix": "stereo.monoMaker",
         "processor": "stereo.monoMaker"
       },
       {
         "enabledKey": "maximizer.truePeakLimiter.enabled",
+        "form": "offline",
         "prefix": "maximizer.truePeakLimiter",
         "processor": "maximizer.truePeakLimiter"
       },
       {
         "enabledKey": "loudness.enabled",
+        "form": null,
         "prefix": "loudness",
         "processor": null
       }
@@ -1073,6 +1093,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.brickwallLimiter",
       "kind": "realtime",
       "latencySamples": 48,
@@ -1148,6 +1172,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.compressor",
       "kind": "realtime",
       "latencySamples": 0,
@@ -1398,6 +1426,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.deesser",
       "kind": "realtime",
       "latencySamples": 0,
@@ -1553,6 +1585,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.duckingProcessor",
       "kind": "realtime",
       "latencySamples": 0,
@@ -1688,6 +1724,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.expander",
       "kind": "realtime",
       "latencySamples": 0,
@@ -1803,6 +1843,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.gate",
       "kind": "realtime",
       "latencySamples": 0,
@@ -1970,6 +2014,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.limiter",
       "kind": "realtime",
       "latencySamples": 48,
@@ -2085,6 +2133,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.parallelComp",
       "kind": "realtime",
       "latencySamples": 0,
@@ -2280,6 +2332,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.sidechainRouter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -2475,6 +2531,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.transientShaper",
       "kind": "realtime",
       "latencySamples": 0,
@@ -2690,6 +2750,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.upwardCompressor",
       "kind": "realtime",
       "latencySamples": 0,
@@ -2805,6 +2869,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.upwardExpander",
       "kind": "realtime",
       "latencySamples": 0,
@@ -2920,6 +2988,10 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "dynamics.vocalRider",
       "kind": "realtime",
       "latencySamples": 0,
@@ -3119,6 +3191,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.acoustic.roomMorph",
       "kind": "realtime",
       "latencySamples": 256,
@@ -3316,8 +3392,8 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 1.7,
-          "minExclusive": false,
+          "min": 0,
+          "minExclusive": true,
           "name": "heightM",
           "rtSafe": false,
           "scale": "linear",
@@ -3362,7 +3438,7 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 5.15,
+          "min": 0.863402,
           "minExclusive": false,
           "name": "lengthM",
           "rtSafe": false,
@@ -3681,7 +3757,7 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 4.2,
+          "min": 1.22928,
           "minExclusive": false,
           "name": "widthM",
           "rtSafe": false,
@@ -3703,6 +3779,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.delay.stereo",
       "kind": "realtime",
       "latencySamples": 0,
@@ -4209,6 +4289,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.filter.vowel",
       "kind": "realtime",
       "latencySamples": 0,
@@ -4324,6 +4408,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.gsEfx",
       "kind": "realtime",
       "latencySamples": 0,
@@ -4808,6 +4896,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.autoWah",
       "kind": "realtime",
       "latencySamples": 0,
@@ -5090,6 +5182,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.chorus",
       "kind": "realtime",
       "latencySamples": 0,
@@ -5336,6 +5432,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.ensemble",
       "kind": "realtime",
       "latencySamples": 0,
@@ -5629,6 +5729,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.flanger",
       "kind": "realtime",
       "latencySamples": 0,
@@ -5895,6 +5999,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.phaser",
       "kind": "realtime",
       "latencySamples": 0,
@@ -6079,6 +6187,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.pitchShifter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -6412,6 +6524,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.ringModulator",
       "kind": "realtime",
       "latencySamples": 0,
@@ -6577,6 +6693,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.rotary",
       "kind": "realtime",
       "latencySamples": 0,
@@ -6990,6 +7110,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.modulation.wah",
       "kind": "realtime",
       "latencySamples": 0,
@@ -7163,6 +7287,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.reverb.convolution",
       "kind": "realtime",
       "latencySamples": 256,
@@ -7278,6 +7406,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.reverb.fdn",
       "kind": "realtime",
       "latencySamples": 0,
@@ -7393,6 +7525,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.reverb.plate",
       "kind": "realtime",
       "latencySamples": 0,
@@ -7694,6 +7830,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.reverb.room",
       "kind": "realtime",
       "latencySamples": 256,
@@ -7811,8 +7951,8 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 1.7,
-          "minExclusive": false,
+          "min": 0,
+          "minExclusive": true,
           "name": "heightM",
           "rtSafe": false,
           "scale": "linear",
@@ -7857,7 +7997,7 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 5.15,
+          "min": 0.863402,
           "minExclusive": false,
           "name": "lengthM",
           "rtSafe": false,
@@ -8116,7 +8256,7 @@
           "max": 10000,
           "maxExclusive": false,
           "maxRelativeTo": null,
-          "min": 4.2,
+          "min": 1.22928,
           "minExclusive": false,
           "name": "widthM",
           "rtSafe": false,
@@ -8138,6 +8278,10 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "effects.reverb.velvet",
       "kind": "realtime",
       "latencySamples": 0,
@@ -8273,6 +8417,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.bandPass",
       "kind": "realtime",
       "latencySamples": 0,
@@ -8416,6 +8564,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.cutFilter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -8729,6 +8881,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.dynamic",
       "kind": "realtime",
       "latencySamples": 0,
@@ -11137,6 +11293,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.equalizer",
       "kind": "realtime",
       "latencySamples": 0,
@@ -24703,6 +24863,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.graphic",
       "kind": "realtime",
       "latencySamples": 0,
@@ -25358,6 +25522,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.linearPhase",
       "kind": "realtime",
       "latencySamples": 256,
@@ -38523,6 +38691,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.midSide",
       "kind": "realtime",
       "latencySamples": 0,
@@ -64747,6 +64919,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.minimumPhase",
       "kind": "realtime",
       "latencySamples": 0,
@@ -77867,6 +78043,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.parametric",
       "kind": "realtime",
       "latencySamples": 0,
@@ -90987,6 +91167,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.passiveTube",
       "kind": "realtime",
       "latencySamples": 0,
@@ -91211,6 +91395,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.shelving",
       "kind": "realtime",
       "latencySamples": 0,
@@ -91394,6 +91582,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.steppedProportionalQ",
       "kind": "realtime",
       "latencySamples": 0,
@@ -91569,6 +91761,10 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "eq.tilt",
       "kind": "realtime",
       "latencySamples": 0,
@@ -91624,6 +91820,9 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "final.bitDepth",
       "kind": "offline",
       "latencySamples": 0,
@@ -91638,6 +91837,9 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "final.dither",
       "kind": "offline",
       "latencySamples": 0,
@@ -91652,6 +91854,9 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "final.outputChain",
       "kind": "offline",
       "latencySamples": 0,
@@ -91666,6 +91871,9 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "match.abCrossfade",
       "kind": "pair",
       "latencySamples": 0,
@@ -91680,6 +91888,9 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "match.abSwitch",
       "kind": "pair",
       "latencySamples": 0,
@@ -91694,6 +91905,9 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "match.alignReferenceToSource",
       "kind": "pair",
       "latencySamples": 0,
@@ -91708,6 +91922,9 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "match.applyMatchEq",
       "kind": "pair",
       "latencySamples": 0,
@@ -91722,6 +91939,10 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "maximizer.adaptiveRelease",
       "kind": "realtime",
       "latencySamples": 129,
@@ -91921,6 +92142,9 @@
       "category": "maximizer",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "maximizer.loudnessOptimize",
       "kind": "offline",
       "latencySamples": 0,
@@ -91935,6 +92159,10 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "maximizer.maximizer",
       "kind": "realtime",
       "latencySamples": 48,
@@ -92030,6 +92258,10 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "maximizer.softKneeMax",
       "kind": "realtime",
       "latencySamples": 48,
@@ -92125,6 +92357,10 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "maximizer.truePeakLimiter",
       "kind": "realtime",
       "latencySamples": 129,
@@ -92261,6 +92497,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.compressor",
       "kind": "realtime",
       "latencySamples": 0,
@@ -93743,6 +93983,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.dynamicEq",
       "kind": "realtime",
       "latencySamples": 0,
@@ -115673,6 +115917,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.expander",
       "kind": "realtime",
       "latencySamples": 0,
@@ -116975,6 +117223,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.imager",
       "kind": "realtime",
       "latencySamples": 0,
@@ -118097,6 +118349,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.limiter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -119039,6 +119295,10 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "multiband.saturation",
       "kind": "realtime",
       "latencySamples": 0,
@@ -120494,6 +120754,9 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "repair.declick",
       "kind": "offline",
       "latencySamples": 0,
@@ -120609,6 +120872,9 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "repair.declip",
       "kind": "offline",
       "latencySamples": 0,
@@ -120704,9 +120970,84 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "repair.decrackle",
       "kind": "realtime",
       "latencySamples": 1,
+      "offlineParams": [
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 4,
+          "dependsOn": [],
+          "id": null,
+          "max": 24,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 1,
+          "minExclusive": false,
+          "name": "levels",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "count"
+        },
+        {
+          "choices": [
+            {
+              "name": "median",
+              "value": 0
+            },
+            {
+              "name": "waveletShrinkage",
+              "value": 1
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "mode",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0.4,
+          "dependsOn": [],
+          "id": null,
+          "max": 1000,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": true,
+          "name": "threshold",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": 1,
+          "uiMin": 0.05,
+          "unit": "none"
+        }
+      ],
       "params": [
         {
           "choices": null,
@@ -120784,6 +121125,10 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "repair.dehum",
       "kind": "realtime",
       "latencySamples": 0,
@@ -120988,9 +121333,350 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "repair.denoiseClassical",
       "kind": "realtime",
       "latencySamples": 1279,
+      "offlineParams": [
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0.98,
+          "dependsOn": [],
+          "id": null,
+          "max": 1,
+          "maxExclusive": true,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": false,
+          "name": "ddAlpha",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": true,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "gainSmoothing",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 256,
+          "dependsOn": [
+            {
+              "factor": 0.5,
+              "key": "nFft",
+              "relation": "le"
+            }
+          ],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 1,
+          "minExclusive": false,
+          "name": "hopLength",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "samples"
+        },
+        {
+          "choices": [
+            {
+              "name": "logMmse",
+              "value": 0
+            },
+            {
+              "name": "mmseStsa",
+              "value": 1
+            },
+            {
+              "name": "spectralSubtraction",
+              "value": 2
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "mode",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "4",
+              "value": 4
+            },
+            {
+              "name": "8",
+              "value": 8
+            },
+            {
+              "name": "16",
+              "value": 16
+            },
+            {
+              "name": "32",
+              "value": 32
+            },
+            {
+              "name": "64",
+              "value": 64
+            },
+            {
+              "name": "128",
+              "value": 128
+            },
+            {
+              "name": "256",
+              "value": 256
+            },
+            {
+              "name": "512",
+              "value": 512
+            },
+            {
+              "name": "1024",
+              "value": 1024
+            },
+            {
+              "name": "2048",
+              "value": 2048
+            },
+            {
+              "name": "4096",
+              "value": 4096
+            },
+            {
+              "name": "8192",
+              "value": 8192
+            },
+            {
+              "name": "16384",
+              "value": 16384
+            },
+            {
+              "name": "32768",
+              "value": 32768
+            },
+            {
+              "name": "65536",
+              "value": 65536
+            },
+            {
+              "name": "131072",
+              "value": 131072
+            },
+            {
+              "name": "262144",
+              "value": 262144
+            },
+            {
+              "name": "524288",
+              "value": 524288
+            }
+          ],
+          "coupledWith": [],
+          "default": 1024,
+          "dependsOn": [
+            {
+              "factor": 2,
+              "key": "hopLength",
+              "relation": "ge"
+            }
+          ],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "nFft",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "samples"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0.1,
+          "dependsOn": [],
+          "id": null,
+          "max": 1,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": true,
+          "name": "noiseEstimationQuantile",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": [
+            {
+              "name": "quantile",
+              "value": 0
+            },
+            {
+              "name": "mcra",
+              "value": 1
+            },
+            {
+              "name": "imcra",
+              "value": 2
+            },
+            {
+              "name": "spp",
+              "value": 3
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "noiseEstimator",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 2,
+          "dependsOn": [],
+          "id": null,
+          "max": 16,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": false,
+          "name": "overSubtraction",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "ratio"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 26,
+          "dependsOn": [],
+          "id": null,
+          "max": 120,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": false,
+          "name": "reductionDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0.05,
+          "dependsOn": [],
+          "id": null,
+          "max": 1,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": false,
+          "name": "spectralFloor",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": true,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "speechPresenceGain",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        }
+      ],
       "params": [
         {
           "choices": null,
@@ -121334,6 +122020,10 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "repair.dereverbClassical",
       "kind": "realtime",
       "latencySamples": 1023,
@@ -121674,6 +122364,9 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "forms": [
+        "offline"
+      ],
       "id": "repair.trimSilence",
       "kind": "offline",
       "latencySamples": 0,
@@ -121798,9 +122491,757 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.ampSim",
       "kind": "realtime",
       "latencySamples": 48,
+      "offlineParams": [
+        {
+          "choices": [
+            {
+              "name": "classicCrunch",
+              "value": 0
+            },
+            {
+              "name": "cleanCombo",
+              "value": 1
+            },
+            {
+              "name": "modernHiGain",
+              "value": 2
+            },
+            {
+              "name": "vintageCombo",
+              "value": 3
+            },
+            {
+              "name": "classAChime",
+              "value": 4
+            },
+            {
+              "name": "heavyHiGain",
+              "value": 5
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "ampModel",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "bassDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "biasShift",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": true,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "cab",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": true,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "cabIrDrivers",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": false,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "cabIrGenerate",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "guitar4x12",
+              "value": 0
+            },
+            {
+              "name": "bass8x10",
+              "value": 1
+            },
+            {
+              "name": "guitar1x12Combo",
+              "value": 2
+            },
+            {
+              "name": "guitar2x12Open",
+              "value": 3
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "cabModel",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "cone",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "crossover",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "doppler",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0.5,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "drive",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": 770,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "inputDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": 770,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "levelDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micAxis",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micBAxis",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 15,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micBDistanceCm",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "cm"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": false,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micBInvert",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "boolean",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "none",
+              "value": 0
+            },
+            {
+              "name": "dynamic",
+              "value": 1
+            },
+            {
+              "name": "ribbon",
+              "value": 2
+            },
+            {
+              "name": "condenser",
+              "value": 3
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micBModel",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micBlend",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 2.5,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micDistanceCm",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "cm"
+        },
+        {
+          "choices": [
+            {
+              "name": "none",
+              "value": 0
+            },
+            {
+              "name": "dynamic",
+              "value": 1
+            },
+            {
+              "name": "ribbon",
+              "value": 2
+            },
+            {
+              "name": "condenser",
+              "value": 3
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "micModel",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "midDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "nfb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "power",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": [
+            {
+              "name": "6l6",
+              "value": 0
+            },
+            {
+              "name": "el34",
+              "value": 1
+            },
+            {
+              "name": "el84",
+              "value": 2
+            },
+            {
+              "name": "6v6",
+              "value": 3
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "powerTube",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 2,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "preampStages",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "count"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "presenceDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": -1,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "presetIndex",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "sag",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": [
+            {
+              "name": "voiced",
+              "value": 0
+            },
+            {
+              "name": "circuit",
+              "value": 1
+            }
+          ],
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "topology",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "transformer",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "none"
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "trebleDb",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": "dB"
+        }
+      ],
       "params": [
         {
           "choices": null,
@@ -122615,6 +124056,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.bitcrusher",
       "kind": "realtime",
       "latencySamples": 0,
@@ -123195,6 +124640,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.distortion",
       "kind": "realtime",
       "latencySamples": 48,
@@ -123270,6 +124719,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.exciter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -123414,6 +124867,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.hardClipper",
       "kind": "realtime",
       "latencySamples": 0,
@@ -123486,6 +124943,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.multibandExciter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -124788,6 +126249,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.overdrive",
       "kind": "realtime",
       "latencySamples": 48,
@@ -124863,6 +126328,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.softClipper",
       "kind": "realtime",
       "latencySamples": 0,
@@ -124971,6 +126440,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.tape",
       "kind": "realtime",
       "latencySamples": 0,
@@ -125179,6 +126652,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.transformer",
       "kind": "realtime",
       "latencySamples": 0,
@@ -125254,6 +126731,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.tube",
       "kind": "realtime",
       "latencySamples": 48,
@@ -125406,6 +126887,10 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "saturation.waveshaper",
       "kind": "realtime",
       "latencySamples": 0,
@@ -125571,6 +127056,10 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "spectral.airBand",
       "kind": "realtime",
       "latencySamples": 48,
@@ -125666,6 +127155,10 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "spectral.lowEndFocus",
       "kind": "realtime",
       "latencySamples": 0,
@@ -125761,6 +127254,10 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "spectral.presenceEnhancer",
       "kind": "realtime",
       "latencySamples": 0,
@@ -125889,6 +127386,10 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "spectral.spectralShaper",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126056,6 +127557,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.autoPan",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126172,6 +127677,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.binaural",
       "kind": "realtime",
       "latencySamples": 64,
@@ -126316,6 +127825,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.haasEnhancer",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126391,6 +127904,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.imager",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126486,6 +128003,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.monoMaker",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126541,6 +128062,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.phaseAlign",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126616,6 +128141,10 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "stereo.stereoBalance",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126720,6 +128249,10 @@
       "category": "utility",
       "causal": true,
       "channelPolicy": "multichannel",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "utility.gain",
       "kind": "realtime",
       "latencySamples": 0,
@@ -126755,6 +128288,10 @@
       "category": "voice",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "forms": [
+        "realtime",
+        "offline"
+      ],
       "id": "voice.changer",
       "kind": "realtime",
       "latencySamples": 717,
