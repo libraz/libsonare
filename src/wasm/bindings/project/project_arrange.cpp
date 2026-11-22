@@ -161,28 +161,11 @@ void ProjectWasm::setClipWarpRef(const val& clip_id_val, const val& warp_ref_id_
 
 void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  SonareProjectWarpMode mode = SONARE_PROJECT_WARP_MODE_OFF;
-  if (mode_val.typeOf().as<std::string>() == "string") {
-    const std::string mode_string = mode_val.as<std::string>();
-    if (mode_string == "off") {
-      mode = SONARE_PROJECT_WARP_MODE_OFF;
-    } else if (mode_string == "repitch") {
-      mode = SONARE_PROJECT_WARP_MODE_REPITCH;
-    } else if (mode_string == "tempo-sync") {
-      mode = SONARE_PROJECT_WARP_MODE_TEMPO_SYNC;
-    } else if (mode_string == "time-stretch") {
-      mode = SONARE_PROJECT_WARP_MODE_TIME_STRETCH;
-    } else {
-      throw WasmRangeError("unknown warp mode");
-    }
-  } else {
-    const int mode_int = checkedIntFromVal(mode_val, "warp mode");
-    if (mode_int < SONARE_PROJECT_WARP_MODE_OFF ||
-        mode_int > SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
-      throw WasmRangeError("unknown warp mode");
-    }
-    mode = static_cast<SonareProjectWarpMode>(mode_int);
+  const int mode_int = checkedIntFromVal(mode_val, "warp mode");
+  if (mode_int < SONARE_PROJECT_WARP_MODE_OFF || mode_int > SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
+    throw WasmRangeError("unknown warp mode");
   }
+  const auto mode = static_cast<SonareProjectWarpMode>(mode_int);
   checkCError(sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode));
 }
 

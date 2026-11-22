@@ -233,32 +233,17 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
       schedule.fade_out_samples, sonare_c_detail::kEngineClipFadeDomain, fade_out_subject.c_str());
   if (hasProperty(clip_val, "warpMode")) {
     val mode_val = objectProperty(clip_val, "warpMode");
-    if (mode_val.typeOf().as<std::string>() == "string") {
-      const std::string mode = mode_val.as<std::string>();
-      if (mode == "off") {
-        schedule.warp_mode = sonare::engine::WarpMode::kOff;
-      } else if (mode == "repitch") {
-        schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
-      } else if (mode == "tempo-sync") {
-        schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
-      } else if (mode == "time-stretch") {
-        schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
-      } else {
-        throw WasmRangeError("unknown warp mode");
-      }
+    const int mode = checkedIntFromVal(mode_val, "warpMode");
+    if (mode == 0) {
+      schedule.warp_mode = sonare::engine::WarpMode::kOff;
+    } else if (mode == 1) {
+      schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
+    } else if (mode == 2) {
+      schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+    } else if (mode == 3) {
+      schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
     } else {
-      const int mode = checkedIntFromVal(mode_val, "warpMode");
-      if (mode == 0) {
-        schedule.warp_mode = sonare::engine::WarpMode::kOff;
-      } else if (mode == 1) {
-        schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
-      } else if (mode == 2) {
-        schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
-      } else if (mode == 3) {
-        schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
-      } else {
-        throw WasmRangeError("unknown warp mode");
-      }
+      throw WasmRangeError("unknown warp mode");
     }
   }
   if (hasProperty(clip_val, "warpAnchors")) {

@@ -204,37 +204,14 @@ void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& chan
 
 namespace {
 
-/// Resolve one breakpoint curve to its SonareAutomationCurve ordinal.
+/// Resolve one breakpoint curve ordinal, the form the TS facade hands embind.
 ///
-/// The TS facade hands embind the ordinal; a direct embind caller may also pass
-/// the canonical token ("linear", "exponential", "hold", "sCurve") and nothing
-/// else. An unknown token and an out-of-range, fractional or non-finite ordinal
-/// are refused rather than coerced onto a neighbouring curve.
+/// An out-of-range, fractional or non-finite ordinal is refused rather than
+/// coerced onto a neighbouring curve; the facade resolves the public tokens.
 int automationCurveFromVal(val curve) {
-  if (curve.typeOf().as<std::string>() != "string") {
-    // The numeric path is the one the direct caller above actually takes, and it
-    // had no check of its own: 1.5 truncated onto a neighbouring curve and NaN
-    // onto Linear, both reporting success. 2^31 was refused only because it
-    // saturated past the enum, which is the domain check catching a narrowing by
-    // accident -- it says nothing about the fractions in between.
-    const int ordinal = checkedIntFromVal(curve, "automation curve");
-    requireOrdinalInRange(ordinal, SONARE_CURVE_LINEAR, SONARE_CURVE_SCURVE, "automation curve");
-    return ordinal;
-  }
-  const std::string s = curve.as<std::string>();
-  if (s == "linear") {
-    return SONARE_CURVE_LINEAR;
-  }
-  if (s == "exponential") {
-    return SONARE_CURVE_EXPONENTIAL;
-  }
-  if (s == "hold") {
-    return SONARE_CURVE_HOLD;
-  }
-  if (s == "sCurve") {
-    return SONARE_CURVE_SCURVE;
-  }
-  throw WasmRangeError("unknown automation curve: " + s);
+  const int ordinal = checkedIntFromVal(curve, "automation curve");
+  requireOrdinalInRange(ordinal, SONARE_CURVE_LINEAR, SONARE_CURVE_SCURVE, "automation curve");
+  return ordinal;
 }
 
 }  // namespace

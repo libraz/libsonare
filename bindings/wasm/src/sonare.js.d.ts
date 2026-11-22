@@ -1006,7 +1006,7 @@ export interface WasmEngineClip {
   gain?: number;
   fadeInSamples?: number;
   fadeOutSamples?: number;
-  warpMode?: 'off' | 'repitch' | 'tempo-sync' | 'time-stretch' | 0 | 1 | 2 | 3;
+  warpMode?: 0 | 1 | 2 | 3;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
   /** The provider instance that serves this clip's pages. */
   pageProvider?: WasmClipPageProvider;
