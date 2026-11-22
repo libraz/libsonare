@@ -121,28 +121,22 @@ void RealtimeEngineWasm::setTempo(const val& bpm) {
 }
 void RealtimeEngineWasm::setTempoSegments(val segments) {
   std::vector<sonare::transport::TempoSegment> parsed;
-  if (!segments.isUndefined() && !segments.isNull()) {
-    const unsigned count = segments["length"].as<unsigned>();
-    // Mirror the C-ABI guard (sonare_engine_set_tempo_segments): reject an
-    // oversized list before reserving so a crafted length cannot drive an
-    // unbounded allocation.
-    if (count > sonare::kMaxAudioBufferSize) {
-      throw WasmRangeError("segment count exceeds the maximum");
+  // Bounded before reserving, as the C-ABI setter is, so a crafted length cannot
+  // drive an unbounded allocation.
+  const std::size_t count = wasmArrayLikeLength(segments, "segments");
+  parsed.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    val entry = segments[i];
+    sonare::transport::TempoSegment segment{};
+    segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+    segment.bpm = doubleProperty(entry, "bpm", 0.0);
+    segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
+    if (!sonare::transport::valid_public_tempo_segment(segment)) {
+      throw WasmRangeError(
+          "startPpq must be finite and at least 0; bpm must be finite and greater than 0; "
+          "endBpm must be 0 or finite and greater than 0");
     }
-    parsed.reserve(count);
-    for (unsigned i = 0; i < count; ++i) {
-      val entry = segments[i];
-      sonare::transport::TempoSegment segment{};
-      segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      segment.bpm = doubleProperty(entry, "bpm", 0.0);
-      segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
-      if (!sonare::transport::valid_public_tempo_segment(segment)) {
-        throw WasmRangeError(
-            "startPpq must be finite and at least 0; bpm must be finite and greater than 0; "
-            "endBpm must be 0 or finite and greater than 0");
-      }
-      parsed.push_back(segment);
-    }
+    parsed.push_back(segment);
   }
   engine_.set_tempo_segments(std::move(parsed));
 }
@@ -159,28 +153,22 @@ void RealtimeEngineWasm::setTimeSignature(const val& numerator_val, const val& d
 }
 void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   std::vector<sonare::transport::TimeSignatureSegment> parsed;
-  if (!segments.isUndefined() && !segments.isNull()) {
-    const unsigned count = segments["length"].as<unsigned>();
-    // Mirror the C-ABI guard (sonare_engine_set_time_signature_segments): reject
-    // an oversized list before reserving so a crafted length cannot drive an
-    // unbounded allocation.
-    if (count > sonare::kMaxAudioBufferSize) {
-      throw WasmRangeError("segment count exceeds the maximum");
+  // Bounded before reserving, as the C-ABI setter is, so a crafted length cannot
+  // drive an unbounded allocation.
+  const std::size_t count = wasmArrayLikeLength(segments, "segments");
+  parsed.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    val entry = segments[i];
+    sonare::transport::TimeSignatureSegment segment{};
+    segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+    segment.time_sig.numerator = intProperty(entry, "numerator", 0);
+    segment.time_sig.denominator = intProperty(entry, "denominator", 0);
+    if (!sonare::transport::valid_public_time_signature_segment(segment)) {
+      throw WasmRangeError(
+          "startPpq must be finite and at least 0; numerator must be an integer of at least 1; "
+          "denominator must be an integer of at least 1");
     }
-    parsed.reserve(count);
-    for (unsigned i = 0; i < count; ++i) {
-      val entry = segments[i];
-      sonare::transport::TimeSignatureSegment segment{};
-      segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      segment.time_sig.numerator = intProperty(entry, "numerator", 0);
-      segment.time_sig.denominator = intProperty(entry, "denominator", 0);
-      if (!sonare::transport::valid_public_time_signature_segment(segment)) {
-        throw WasmRangeError(
-            "startPpq must be finite and at least 0; numerator must be an integer of at least 1; "
-            "denominator must be an integer of at least 1");
-      }
-      parsed.push_back(segment);
-    }
+    parsed.push_back(segment);
   }
   engine_.set_time_signature_segments(std::move(parsed));
 }

@@ -51,6 +51,7 @@ import {
   vqt,
   vqtToAudio,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 const SR = 22050;
 
@@ -294,10 +295,30 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('rejects out-of-range MIDI targets', () => {
-      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: 200 })).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: -1 })).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: -1, targetMidi: 60 })).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 200, targetMidi: 60 })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: 200 }),
+          RangeError,
+        ).message,
+      ).toBe('pitchCorrectToMidi: targetMidi must be finite and in [0, 127]');
+      expect(
+        expectRefusalOf(
+          () => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: -1 }),
+          RangeError,
+        ).message,
+      ).toBe('pitchCorrectToMidi: targetMidi must be finite and in [0, 127]');
+      expect(
+        expectRefusalOf(
+          () => pitchCorrectToMidi(signal, SR, { currentMidi: -1, targetMidi: 60 }),
+          RangeError,
+        ).message,
+      ).toBe('pitchCorrectToMidi: currentMidi must be finite and in [0, 127]');
+      expect(
+        expectRefusalOf(
+          () => pitchCorrectToMidi(signal, SR, { currentMidi: 200, targetMidi: 60 }),
+          RangeError,
+        ).message,
+      ).toBe('pitchCorrectToMidi: currentMidi must be finite and in [0, 127]');
     });
 
     /** Positional form over a caller-supplied F0 contour. */
@@ -377,8 +398,13 @@ describe('v1.2 feature additions (WASM)', () => {
       const gentle = timevarying(f0, hop, { targetMidi: 59, retuneAmount: 0.25 });
       expect(full.some((x, i) => Math.abs(x - gentle[i]) > 1e-6)).toBe(true);
 
-      expect(() => timevarying(f0, hop, { targetMidi: 59, retuneAmount: 2 })).toThrow();
-      expect(() => timevarying(f0, hop, { targetMidi: 200 })).toThrow();
+      expect(
+        expectRefusalOf(() => timevarying(f0, hop, { targetMidi: 59, retuneAmount: 2 }), RangeError)
+          .message,
+      ).toBe('pitchCorrectTimevarying: retuneAmount must be finite and in [0, 1]');
+      expect(
+        expectRefusalOf(() => timevarying(f0, hop, { targetMidi: 200 }), RangeError).message,
+      ).toBe('pitchCorrectTimevarying: targetMidi must be finite and in [0, 127]');
       expect(() => timevarying(f0, hop, { targetMode: 'Scale' as never })).toThrow(RangeError);
     });
 
@@ -486,15 +512,23 @@ describe('v1.2 feature additions (WASM)', () => {
       // With no explicit flags, invalid probabilities remain rejected by the
       // probability-only path.
       for (const invalid of [Number.NaN, -0.1, 1.1]) {
-        expect(() =>
-          timevarying(f0, hop, {
-            targetMidi: 60,
-            voicedProb: new Float32Array(nFrames).fill(invalid),
-          }),
-        ).toThrow();
-        expect(() =>
-          timevaryingRequest(f0, hop, { voicedProb: new Float32Array(nFrames).fill(invalid) }),
-        ).toThrow();
+        expect(
+          expectRefusalOf(
+            () =>
+              timevarying(f0, hop, {
+                targetMidi: 60,
+                voicedProb: new Float32Array(nFrames).fill(invalid),
+              }),
+            RangeError,
+          ).message,
+        ).toBe('pitchCorrectTimevarying: voicedProb[0] must be finite and in [0, 1]');
+        expect(
+          expectRefusalOf(
+            () =>
+              timevaryingRequest(f0, hop, { voicedProb: new Float32Array(nFrames).fill(invalid) }),
+            RangeError,
+          ).message,
+        ).toBe('pitchCorrectTimevarying: voicedProb[0] must be finite and in [0, 1]');
       }
     });
 
@@ -719,9 +753,12 @@ describe('v1.2 feature additions (WASM)', () => {
       ).not.toThrow();
 
       // Out-of-range strip index must throw.
-      expect(() =>
-        mixer.scheduleInsertAutomation(999, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () => mixer.scheduleInsertAutomation(999, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
+          RangeError,
+        ).message,
+      ).toBe('Mixer.scheduleInsertAutomation: index must be an integer in [0, 1]');
 
       // Processing after scheduling still produces output.
       const vocalL = new Float32Array(BLOCK);
@@ -1078,14 +1115,27 @@ describe('v1.2 feature additions (WASM)', () => {
         engine.setMidiDestinationExternal(id, true);
       }
       expect(() => engine.setMidiDestinationExternal(3, true)).not.toThrow();
-      expect(() => engine.setMidiDestinationExternal(99, true)).toThrow();
+      expect(() => engine.setMidiDestinationExternal(99, true)).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidState,
+          message: expect.stringMatching(
+            /^RealtimeEngine\.setMidiDestinationExternal: external MIDI destination table is full$/,
+          ),
+        }),
+      );
       engine.setMidiDestinationExternal(3, false);
       expect(() => engine.setMidiDestinationExternal(99, true)).not.toThrow();
 
       expect(() => engine.setParamSmoothingMs(0)).not.toThrow();
       expect(() => engine.setParamSmoothingMs(75)).not.toThrow();
-      expect(() => engine.setParamSmoothingMs(-1)).toThrow();
-      expect(() => engine.setParamSmoothingMs(Number.NaN)).toThrow();
+      expect(expectRefusalOf(() => engine.setParamSmoothingMs(-1), RangeError).message).toBe(
+        'RealtimeEngine.setParamSmoothingMs: smoothingMs must be at least 0',
+      );
+      expect(
+        expectRefusalOf(() => engine.setParamSmoothingMs(Number.NaN), RangeError).message,
+      ).toBe(
+        'RealtimeEngine.setParamSmoothingMs: smoothingMs must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
       engine.destroy();
     });
 
@@ -1176,17 +1226,29 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 'linear' }]);
       expect(engine.automationLaneCount).toBe(1);
       // Non-finite ppq is rejected.
-      expect(() =>
-        engine.setAutomationLane(0x4d58ff01, [
-          { ppq: Number.NaN, value: -6, curveToNext: 'linear' },
-        ]),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setAutomationLane(0x4d58ff01, [
+              { ppq: Number.NaN, value: -6, curveToNext: 'linear' },
+            ]),
+          RangeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.setAutomationLane: automation breakpoint ppq and value must be finite',
+      );
       // Non-finite value is rejected.
-      expect(() =>
-        engine.setAutomationLane(0x4d58ff01, [
-          { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 'linear' },
-        ]),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setAutomationLane(0x4d58ff01, [
+              { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 'linear' },
+            ]),
+          RangeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.setAutomationLane: value must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
       expect(engine.automationLaneCount).toBe(1);
       engine.destroy();
     });
@@ -1232,30 +1294,38 @@ describe('v1.2 feature additions (WASM)', () => {
         defaultCurve: 'linear' as const,
       };
       engine.addParameter(parameter);
-      expect(() =>
-        engine.addParameter({
-          ...parameter,
-          name: 'replacement mode',
-          unit: 'steps',
-          minValue: 0,
-          maxValue: 3,
-          defaultValue: 2,
-          rtSafe: false,
-          defaultCurve: 'hold',
-        }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.addParameter({
+              ...parameter,
+              name: 'replacement mode',
+              unit: 'steps',
+              minValue: 0,
+              maxValue: 3,
+              defaultValue: 2,
+              rtSafe: false,
+              defaultCurve: 'hold',
+            }),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.addParameter: duplicate parameter id');
       expect(engine.parameterInfo(17)).toEqual(parameter);
 
       engine.setMarkers([
         { id: 11, ppq: 1, name: 'intro' },
         { id: 12, ppq: 2, name: 'chorus' },
       ]);
-      expect(() =>
-        engine.setMarkers([
-          { id: 21, ppq: 0.5, name: 'verse' },
-          { id: 22, ppq: Number.NaN, name: 'bridge' },
-        ]),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setMarkers([
+              { id: 21, ppq: 0.5, name: 'verse' },
+              { id: 22, ppq: Number.NaN, name: 'bridge' },
+            ]),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setMarkers: marker ppq must be finite and at least 0');
       expect(engine.markers()).toHaveLength(2);
       expect(engine.markers()[0]).toEqual({
         id: 11,
@@ -1266,13 +1336,22 @@ describe('v1.2 feature additions (WASM)', () => {
         keyMinor: false,
       });
       expect(engine.marker(12).name).toBe('chorus');
-      expect(() => engine.setMarkers([{ id: 0, ppq: 3, name: 'invalid id' }])).toThrow();
-      expect(() =>
-        engine.setMarkers([
-          { id: 31, ppq: 3, name: 'duplicate a' },
-          { id: 31, ppq: 4, name: 'duplicate b' },
-        ]),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setMarkers([{ id: 0, ppq: 3, name: 'invalid id' }]),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setMarkers: marker id must be an integer of at least 1');
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setMarkers([
+              { id: 31, ppq: 3, name: 'duplicate a' },
+              { id: 31, ppq: 4, name: 'duplicate b' },
+            ]),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setMarkers: marker ids must be unique');
       expect(engine.markers()).toHaveLength(2);
       expect(engine.marker(11).name).toBe('intro');
       engine.destroy();
@@ -1339,12 +1418,39 @@ describe('v1.2 feature additions (WASM)', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(60);
       expect(engine.sampleAtPpq(1)).toBe(48000);
-      for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-        expect(() => engine.setTempo(invalid)).toThrow();
+      for (const [invalid, message] of [
+        [0, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
+        [-1, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
+        [Number.NaN, 'RealtimeEngine.setTempo: bpm must be a finite number'],
+        [Number.POSITIVE_INFINITY, 'RealtimeEngine.setTempo: bpm must be a finite number'],
+      ] as const) {
+        expect(expectRefusalOf(() => engine.setTempo(invalid), RangeError).message).toBe(message);
         expect(engine.sampleAtPpq(1)).toBe(48000);
       }
-      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: Number.NaN }])).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setTempoSegments([{ startPpq: 0, bpm: Number.NaN }]),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setTempoSegments: bpm must be a finite number');
       expect(engine.sampleAtPpq(1)).toBe(48000);
+      engine.destroy();
+    });
+
+    it('refuses a missing segment list instead of clearing the map', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      engine.setTempoSegments([{ startPpq: 0, bpm: 90 }]);
+      for (const missing of [undefined, null]) {
+        expect(
+          expectRefusalOf(() => engine.setTempoSegments(missing as never), TypeError).message,
+        ).toBe('RealtimeEngine.setTempoSegments: segments must be an array-like object');
+        expect(
+          expectRefusalOf(() => engine.setTimeSignatureSegments(missing as never), TypeError)
+            .message,
+        ).toBe('RealtimeEngine.setTimeSignatureSegments: segments must be an array-like object');
+      }
+      // The 90 BPM map is still in force: one beat at 48 kHz is 32000 samples.
+      expect(engine.sampleAtPpq(1)).toBe(32000);
       engine.destroy();
     });
 
@@ -1354,9 +1460,17 @@ describe('v1.2 feature additions (WASM)', () => {
       // front, matching the C ABI, instead of driving an unbounded reserve. Use a
       // fake array-like so no real 500M-element allocation is attempted.
       const oversized = { length: 500_000_001 } as unknown as [];
-      expect(() => engine.setTempoSegments(oversized)).toThrow();
-      expect(() => engine.setTimeSignatureSegments(oversized)).toThrow();
-      expect(() => engine.setMarkers(oversized)).toThrow();
+      expect(expectRefusalOf(() => engine.setTempoSegments(oversized), RangeError).message).toBe(
+        'RealtimeEngine.setTempoSegments: segments exceeds the WASM Float32 input budget',
+      );
+      expect(
+        expectRefusalOf(() => engine.setTimeSignatureSegments(oversized), RangeError).message,
+      ).toBe(
+        'RealtimeEngine.setTimeSignatureSegments: segments exceeds the WASM Float32 input budget',
+      );
+      expect(expectRefusalOf(() => engine.setMarkers(oversized), RangeError).message).toBe(
+        'RealtimeEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+      );
       engine.destroy();
     });
 
@@ -1388,7 +1502,10 @@ describe('v1.2 feature additions (WASM)', () => {
         expect(() => eq.setSidechainStereo(key, key)).not.toThrow();
         expect(() => eq.clearSidechain()).not.toThrow();
         // Mismatched stereo lengths must throw before reaching WASM.
-        expect(() => eq.setSidechainStereo(key, new Float32Array(64))).toThrow();
+        expect(
+          expectRefusalOf(() => eq.setSidechainStereo(key, new Float32Array(64)), RangeError)
+            .message,
+        ).toBe('StreamingEqualizer.setSidechainStereo: left and right must have the same length');
         // Processing still works after a sidechain round-trip.
         const out = eq.processMono(new Float32Array(128).fill(0.25));
         expect(out.length).toBe(128);
@@ -1777,13 +1894,19 @@ describe('v1.2 feature additions (WASM)', () => {
     // catch it (NaN is not nullish); the guard is in the core meter, which this
     // surface calls directly.
     for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expect(() =>
-        meteringSilenceRatio(samples, SR, {
-          thresholdDb: invalid,
-          frameLength: 1024,
-          hopLength: 1024,
-        }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            meteringSilenceRatio(samples, SR, {
+              thresholdDb: invalid,
+              frameLength: 1024,
+              hopLength: 1024,
+            }),
+          RangeError,
+        ).message,
+      ).toBe(
+        'meteringSilenceRatio: thresholdDb must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
     }
     const chroma = nnlsChroma(generateSine(440, SR, 0.5), SR, {
       enableStftBlend: false,

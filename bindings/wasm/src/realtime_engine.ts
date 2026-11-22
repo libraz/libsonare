@@ -1738,7 +1738,7 @@ export class RealtimeEngine {
    * single tempo. Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
-    this.native.setTempoSegments([...segments]);
+    this.native.setTempoSegments(segments as never);
   }
 
   /**
@@ -1753,7 +1753,7 @@ export class RealtimeEngine {
    * `numerator` / `denominator`. Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
-    this.native.setTimeSignatureSegments([...segments]);
+    this.native.setTimeSignatureSegments(segments as never);
   }
 
   /**
