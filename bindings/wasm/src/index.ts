@@ -20,14 +20,8 @@
 
 import { withEntry } from './internal/entry.js';
 import './lifetime.js';
-import {
-  assertAbiCompatible,
-  assertSameInitOptions,
-  notInitializedError,
-  setSonareModule,
-} from './module_state.js';
+import { initModule, loadedModule, notInitializedError } from './module_state.js';
 import type { Capabilities, CapabilityCatalog, ModuleHandle, SystemInfo } from './public_types.js';
-import type { SonareModule } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
 export type {
@@ -1275,10 +1269,6 @@ export { OfflineWorkerClient } from './worker_client.js';
 // Module State
 // ============================================================================
 
-let module: SonareModule | null = null;
-let initPromise: Promise<void> | null = null;
-let firstInitOptions: object | undefined;
-
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -1286,6 +1276,10 @@ let firstInitOptions: object | undefined;
 /**
  * Initialize the WASM module.
  * Must be called before using any analysis functions.
+ *
+ * One module per realm, shared by every entry point of this build; the
+ * AudioWorklet realm initialises its own. Options apply on the first call; a
+ * later call passing different options is refused.
  *
  * @param options - Optional module configuration
  * @returns Promise that resolves when initialization is complete
@@ -1298,40 +1292,17 @@ export async function init(options?: {
     wasmBinary?: ArrayBuffer | Uint8Array;
   }) => Promise<ModuleHandle>;
 }): Promise<void> {
-  return withEntry('init', async () => {
-    if (module) {
-      assertSameInitOptions(firstInitOptions, options);
-      return;
-    }
-    if (initPromise) {
-      assertSameInitOptions(firstInitOptions, options);
-      return initPromise;
-    }
-    firstInitOptions = options && { ...options };
-
-    initPromise = (async () => {
-      try {
-        const createModule = options?.moduleFactory ?? (await import('./sonare.js')).default;
-        const created = (await createModule(options)) as unknown as SonareModule;
-        assertAbiCompatible(created);
-        module = created;
-        setSonareModule(module);
-      } catch (error) {
-        initPromise = null;
-        firstInitOptions = undefined;
-        throw error;
-      }
-    })();
-
-    return initPromise;
-  });
+  return withEntry('init', () =>
+    initModule('full', options, async () => (await import('./sonare.js')).default),
+  );
 }
 
 /**
- * Check if the module is initialized.
+ * Check if this realm's module is initialized, through any entry point of this
+ * build.
  */
 export function isInitialized(): boolean {
-  return module !== null;
+  return loadedModule('full') !== null;
 }
 
 /**
@@ -1339,6 +1310,7 @@ export function isInitialized(): boolean {
  */
 export function version(): string {
   return withEntry('version', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1355,6 +1327,7 @@ export function version(): string {
  */
 export function capabilities(): Capabilities {
   return withEntry('capabilities', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1375,6 +1348,7 @@ function optionalFact(value: unknown): number | undefined {
  */
 export function systemInfo(): SystemInfo {
   return withEntry('systemInfo', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1418,6 +1392,7 @@ export function systemInfo(): SystemInfo {
  */
 export function capabilityCatalog(): CapabilityCatalog {
   return withEntry('capabilityCatalog', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1432,6 +1407,7 @@ export function capabilityCatalog(): CapabilityCatalog {
  */
 export function abiVersion(): number {
   return withEntry('abiVersion', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1442,6 +1418,7 @@ export function abiVersion(): number {
 /** ABI version of the realtime engine command/telemetry layout in the loaded module. */
 export function engineAbiVersion(): number {
   return withEntry('engineAbiVersion', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }
@@ -1452,6 +1429,7 @@ export function engineAbiVersion(): number {
 /** ABI version of the realtime voice-changer config layout in the loaded module. */
 export function voiceChangerAbiVersion(): number {
   return withEntry('voiceChangerAbiVersion', () => {
+    const module = loadedModule('full');
     if (!module) {
       throw notInitializedError();
     }

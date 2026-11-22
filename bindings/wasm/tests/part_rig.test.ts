@@ -12,7 +12,7 @@ import {
   Project,
   RealtimeEngine,
 } from '../dist/index.js';
-import { setSonareModule } from '../src/module_state.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const LIMITER: PartRigInsert = {
   processor: 'dynamics.limiter',
@@ -22,8 +22,7 @@ const LIMITER: PartRigInsert = {
 describe('Sonare WASM part rig', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   it('exposes the mode table and the all-parts sentinel', () => {
@@ -214,8 +213,7 @@ describe('Sonare WASM part rig', () => {
 describe('Sonare WASM part rig request form', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   const LOUDER: PartRigInsert = { processor: 'dynamics.limiter', params: { thresholdDb: -12 } };

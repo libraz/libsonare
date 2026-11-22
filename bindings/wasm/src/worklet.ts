@@ -8,9 +8,9 @@ import './lifetime.js';
 
 export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer.js';
 export { attachOpfsClipStream } from './clip_page_streamer.js';
-// With code-splitting disabled, the worklet bundle carries its own copy of the
-// module singleton. Re-export the lifecycle so that realm can initialize its
-// own wasm instance, independent of the main-thread `index` module.
+// One module per realm, shared by every entry point of this build: on the main
+// thread `init()` through this entry or `index` loads the same instance, and the
+// AudioWorklet realm initialises its own.
 export { init, isInitialized } from './index.js';
 export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than

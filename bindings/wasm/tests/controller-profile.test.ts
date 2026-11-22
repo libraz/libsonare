@@ -14,7 +14,7 @@ import {
   RealtimeEngine,
   synthEnumTables,
 } from '../dist/index.js';
-import { setSonareModule } from '../src/module_state.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 /** A reed voice — one of the engines whose exciter reads the excitation axes. */
 const REED_PRESET = { preset: 'clarinet' } as const;
@@ -55,8 +55,7 @@ function renderCcRamp(bindCc2ToExcitation: boolean): Float32Array {
 describe('Sonare WASM controller profile', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   it('lists the controller-profile preset catalog', () => {

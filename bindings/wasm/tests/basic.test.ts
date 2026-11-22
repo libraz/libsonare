@@ -40,6 +40,7 @@ import {
 } from '../dist/index.js';
 import { SonareEngineTelemetryError } from '../dist/worklet.js';
 import { EXPECTED_ENGINE_ABI_VERSION } from '../src/realtime_engine';
+import { clearModuleRealm } from './_module_realm.js';
 
 describe('Sonare WASM Module', () => {
   beforeAll(async () => {
@@ -174,6 +175,7 @@ describe('Sonare WASM Module', () => {
 
     it('should allow retry after failed init', async () => {
       vi.resetModules();
+      clearModuleRealm();
       const fresh = await import('../dist/index.js');
 
       await expect(

@@ -10,10 +10,30 @@ import {
   refuse,
   refuseType,
 } from './internal/entry.js';
+import {
+  type ModuleFlavour,
+  type ModuleInitOptions,
+  type ModuleSlot,
+  moduleSlot,
+} from './internal/module_registry.js';
 import { NATIVE_ENTRIES } from './internal/native_entries.js';
 import type { SonareModule } from './sonare.js';
 
-let wrappedModule: SonareModule | null = null;
+/** The holder this bundle's module reads go to; the analysis entry binds its own flavour. */
+let boundSlot: ModuleSlot | null = null;
+
+/** This bundle's error-translating wrapper over the holder's module, rebuilt if it changes. */
+let wrapped: { raw: SonareModule; module: SonareModule } | null = null;
+
+function currentSlot(): ModuleSlot {
+  boundSlot ??= moduleSlot('full');
+  return boundSlot;
+}
+
+/** Point this bundle's module reads at @p flavour's holder. */
+export function bindModuleFlavour(flavour: ModuleFlavour): void {
+  boundSlot = moduleSlot(flavour);
+}
 
 /** The two messages embind uses for a call on, or an argument that is, a deleted instance. */
 const EMBIND_DELETED_PATTERN =
@@ -311,13 +331,50 @@ export function assertSameInitOptions(first: object | undefined, next: object | 
   }
 }
 
-export function setSonareModule(module: SonareModule): void {
-  wrappedModule = wrapModuleErrors(module);
+/**
+ * Load @p flavour's module into the realm's holder, or join the load already in
+ * flight; a later call whose options differ from the first is refused.
+ */
+export function initModule(
+  flavour: ModuleFlavour,
+  options: ModuleInitOptions | undefined,
+  defaultFactory: () => Promise<
+    (options?: Pick<ModuleInitOptions, 'locateFile' | 'wasmBinary'>) => Promise<unknown>
+  >,
+): Promise<void> {
+  const slot = moduleSlot(flavour);
+  if (slot.module || slot.pending) {
+    assertSameInitOptions(slot.firstOptions, options);
+    return slot.pending ?? Promise.resolve();
+  }
+  slot.firstOptions = options && { ...options };
+  slot.pending = (async () => {
+    try {
+      const createModule = options?.moduleFactory ?? (await defaultFactory());
+      const created = (await createModule(options)) as unknown as SonareModule;
+      assertAbiCompatible(created);
+      slot.module = created;
+    } catch (error) {
+      slot.pending = null;
+      slot.firstOptions = undefined;
+      throw error;
+    }
+  })();
+  return slot.pending;
+}
+
+/** @p flavour's loaded module in this realm, unwrapped, or null before `init()` resolves. */
+export function loadedModule(flavour: ModuleFlavour): SonareModule | null {
+  return moduleSlot(flavour).module;
 }
 
 export function getSonareModule(): SonareModule {
-  if (!wrappedModule) {
+  const raw = currentSlot().module;
+  if (!raw) {
     throw notInitializedError();
   }
-  return wrappedModule;
+  if (wrapped?.raw !== raw) {
+    wrapped = { raw, module: wrapModuleErrors(raw) };
+  }
+  return wrapped.module;
 }

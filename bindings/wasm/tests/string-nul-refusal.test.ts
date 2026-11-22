@@ -31,8 +31,9 @@ import {
   realtimeVoiceChangerPresetNames,
   realtimeVoiceChangerValidatePresetJson,
 } from '../dist/index.js';
-import { getSonareModule, setSonareModule } from '../src/module_state.js';
+import { getSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 import { wasmBindingSources } from './_wasm_binding_sources';
 
 const NUL = '\0';
@@ -122,8 +123,7 @@ function vocalRequest() {
 describe('embedded NUL refusal, by reader', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   it('stringProperty names the key', () => {
@@ -179,8 +179,7 @@ describe('embedded NUL refusal, by reader', () => {
 describe('embedded NUL refusal, by handoff kind', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   it('a name lookup (mixer bus id)', () => {
@@ -249,6 +248,7 @@ describe('embedded NUL refusal, mastering names', () => {
 
   beforeAll(async () => {
     await init();
+    shareBuiltModuleWithSource();
   });
 
   const expectRangeRefusal = (call: () => unknown) => {
@@ -300,6 +300,7 @@ describe('embedded NUL refusal, mastering names', () => {
 describe('embedded NUL refusal, std::string entry points', () => {
   beforeAll(async () => {
     await init();
+    shareBuiltModuleWithSource();
   });
 
   it('a preset name or note name is refused by name, not looked up truncated', () => {

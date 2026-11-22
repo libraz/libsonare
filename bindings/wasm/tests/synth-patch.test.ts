@@ -42,8 +42,8 @@ import {
   synthPresetPatch,
 } from '../dist/index.js';
 import type { SynthPatch } from '../src/instrument_types.js';
-import { setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 /** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
 function bounceSynth(
@@ -81,8 +81,7 @@ function peak(audio: Float32Array): number {
 describe('Sonare WASM NativeSynth', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   function buildMidiOnlyProject(note = 60): Project {

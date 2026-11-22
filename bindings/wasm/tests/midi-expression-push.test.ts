@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, RealtimeEngine } from '../dist/index.js';
-import { setSonareModule } from '../src/module_state.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const DESTINATION = 0;
 const BLOCK = 128;
@@ -96,8 +96,7 @@ function peak(buf: Float32Array): number {
 describe('Sonare WASM live per-note expression', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   for (const family of ['input-source', 'destination'] as const) {

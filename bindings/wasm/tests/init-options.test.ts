@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode, SonareError } from '../dist/index.js';
+import { clearModuleRealm } from './_module_realm.js';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
@@ -22,6 +23,7 @@ describe.each(entries)('init() on the %s entry', (_name, load) => {
 
   beforeEach(async () => {
     vi.resetModules();
+    clearModuleRealm();
     fresh = await load();
   });
 

@@ -19,7 +19,7 @@ import {
   type SynthEngineMode,
   synthEnumTables,
 } from '../dist/index.js';
-import { setSonareModule } from '../src/module_state.js';
+import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const BLOCK = 128;
 
@@ -79,8 +79,7 @@ function peak(samples: Float32Array): number {
 describe('Sonare WASM articulation', () => {
   beforeAll(async () => {
     await init();
-    const createModule = (await import('../dist/sonare.js')).default;
-    setSonareModule(await createModule());
+    shareBuiltModuleWithSource();
   });
 
   it('exposes the articulation enum table', () => {
