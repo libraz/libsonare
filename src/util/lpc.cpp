@@ -47,8 +47,14 @@ bool has_cubic_context(size_t start, size_t end, size_t size) {
   return start >= 2 && end + 1 < size;
 }
 
-bool can_use_lpc(size_t size, int order) {
-  return order > 0 && size > static_cast<size_t>(order + 2);
+// Handles the empty-input and order-0 cases, where the variance is the mean energy; returns
+// whether it did.
+bool fill_trivial_variance(const float* x, size_t n, int order, LpcResult* result) {
+  if (n != 0 && order != 0) return false;
+  double energy = 0.0;
+  for (size_t i = 0; i < n; ++i) energy += static_cast<double>(x[i]) * x[i];
+  result->variance = n == 0 ? 0.0f : static_cast<float>(energy / static_cast<double>(n));
+  return true;
 }
 
 float interpolate_gap_sample(const float* samples, size_t n, size_t start, size_t end, size_t j) {
@@ -68,21 +74,15 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
   LpcResult result;
   result.ar.assign(static_cast<size_t>(order + 1), 0.0f);
   result.ar[0] = 1.0f;
-  if (n == 0 || order == 0) {
-    double energy = 0.0;
-    for (size_t i = 0; i < n; ++i) energy += static_cast<double>(x[i]) * x[i];
-    result.variance = n == 0 ? 0.0f : static_cast<float>(energy / static_cast<double>(n));
-    return result;
-  }
+  if (fill_trivial_variance(x, n, order, &result)) return result;
 
-  std::vector<double> y(x, x + n);
   std::vector<double> ar(static_cast<size_t>(order + 1), 0.0);
   std::vector<double> ar_prev(static_cast<size_t>(order + 1), 0.0);
   ar[0] = 1.0;
   ar_prev[0] = 1.0;
 
-  std::vector<double> fwd(y.begin() + 1, y.end());
-  std::vector<double> bwd(y.begin(), y.end() - 1);
+  std::vector<double> fwd(x + 1, x + n);
+  std::vector<double> bwd(x, x + n - 1);
   size_t fwd_start = 0;
   size_t active_len = fwd.size();
 
@@ -115,17 +115,14 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
       bwd[k] = b + reflection * f;
     }
 
-    if (active_len > 0) {
-      const double q = 1.0 - reflection * reflection;
-      const double bwd_back = bwd[active_len - 1];
-      const double fwd_front = fwd[fwd_start];
-      den = q * den - bwd_back * bwd_back - fwd_front * fwd_front;
-    }
+    // order < n, so active_len is still positive here.
+    const double q = 1.0 - reflection * reflection;
+    const double bwd_back = bwd[active_len - 1];
+    const double fwd_front = fwd[fwd_start];
+    den = q * den - bwd_back * bwd_back - fwd_front * fwd_front;
 
-    if (active_len > 0) {
-      ++fwd_start;
-      --active_len;
-    }
+    ++fwd_start;
+    --active_len;
   }
 
   for (int i = 0; i <= order; ++i) {
@@ -150,12 +147,7 @@ void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out,
   result.variance = 0.0f;
   result.ar.assign(static_cast<size_t>(order + 1), 0.0f);
   result.ar[0] = 1.0f;
-  if (n == 0 || order == 0) {
-    double energy = 0.0;
-    for (size_t i = 0; i < n; ++i) energy += static_cast<double>(x[i]) * x[i];
-    result.variance = n == 0 ? 0.0f : static_cast<float>(energy / static_cast<double>(n));
-    return;
-  }
+  if (fill_trivial_variance(x, n, order, &result)) return;
 
   std::vector<float>& raw = workspace->lags;
   unnormalized_autocorrelation(x, n, static_cast<size_t>(order + 1), &workspace->autocorrelation,
@@ -284,11 +276,9 @@ bool ar_interpolate_region(float* samples, size_t n, size_t start, size_t end,
   constexpr size_t kMinLpcSignalLength = 32;
   constexpr int kMinLpcOrder = 4;
   if (context_size < kMinLpcSignalLength || max_order < kMinLpcOrder) return true;
-  if (!can_use_lpc(context_size, max_order)) return true;
 
   const int nu = static_cast<int>(gap);
   const int nrows = static_cast<int>(context_size) - max_order;  // number of filter-output rows
-  if (nrows <= 0) return true;
 
   const int iters = std::max(params.iterations, 1);
   // Blend weight for the LPC estimate vs. the Step-1 interpolation baseline,
@@ -315,7 +305,6 @@ bool ar_interpolate_region(float* samples, size_t n, size_t start, size_t end,
 
     // rhs = -A_k y_k, initialised as -A * samples (all columns),
     // then we subtract A_u * x_u to isolate A_k * y_k.
-    rhs.setZero();
 
     for (int r = 0; r < nrows; ++r) {
       // Compute (A * samples)[r] = sum_k a[k] * samples[r+p-k] for k=0..p

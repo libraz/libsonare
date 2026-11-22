@@ -64,14 +64,16 @@ std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, 
     const double step = 1.0 / lipschitz;
     for (int iteration = 0; iteration < max_iter; ++iteration) {
       const Eigen::MatrixXd next = (y - step * (AtA * y - AtB)).cwiseMax(0.0);
-      const double denominator = std::max(1.0, x.norm());
       // Do not accept the naturally small first FISTA updates as convergence:
       // use a stricter iterate tolerance and require a short warm-up. This
       // preserves the public solver's historical 1e-4 solution accuracy while
       // retaining the batched matrix path.
-      if (iteration >= 15 && (next - x).norm() <= static_cast<double>(tol) * 0.1 * denominator) {
-        x = next;
-        break;
+      if (iteration >= 15) {
+        const double denominator = std::max(1.0, x.norm());
+        if ((next - x).norm() <= static_cast<double>(tol) * 0.1 * denominator) {
+          x = next;
+          break;
+        }
       }
       const double next_momentum = 0.5 * (1.0 + std::sqrt(1.0 + 4.0 * momentum * momentum));
       y = next + ((momentum - 1.0) / next_momentum) * (next - x);

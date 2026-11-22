@@ -43,20 +43,15 @@ inline std::string formatted(const char* format, Args... args) {
   char stack_buffer[64];
   const int needed = std::snprintf(stack_buffer, sizeof(stack_buffer), format, args...);
   if (needed < 0) return std::string();
+  std::string text;
   if (static_cast<std::size_t>(needed) < sizeof(stack_buffer)) {
-    std::string text(stack_buffer, static_cast<std::size_t>(needed));
-    const char point = c_decimal_point();
-    if (point != '.') {
-      for (char& c : text) {
-        if (c == point) c = '.';
-      }
-    }
-    return text;
+    text.assign(stack_buffer, static_cast<std::size_t>(needed));
+  } else {
+    // A fixed-notation DBL_MAX runs to well over three hundred characters.
+    std::vector<char> heap_buffer(static_cast<std::size_t>(needed) + 1);
+    std::snprintf(heap_buffer.data(), heap_buffer.size(), format, args...);
+    text.assign(heap_buffer.data(), static_cast<std::size_t>(needed));
   }
-  // A fixed-notation DBL_MAX runs to well over three hundred characters.
-  std::vector<char> heap_buffer(static_cast<std::size_t>(needed) + 1);
-  std::snprintf(heap_buffer.data(), heap_buffer.size(), format, args...);
-  std::string text(heap_buffer.data(), static_cast<std::size_t>(needed));
   const char point = c_decimal_point();
   if (point != '.') {
     for (char& c : text) {

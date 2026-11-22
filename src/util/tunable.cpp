@@ -25,6 +25,15 @@ namespace tuning {
 
 namespace {
 
+/// The entries of @p table as a vector sorted by key.
+template <typename Map>
+std::vector<std::pair<std::string, typename Map::mapped_type>> sorted_by_key(const Map& table) {
+  std::vector<std::pair<std::string, typename Map::mapped_type>> rows(table.begin(), table.end());
+  insertion_sort(rows.begin(), rows.end(),
+                 [](const auto& a, const auto& b) { return a.first < b.first; });
+  return rows;
+}
+
 /// Parse `name=value` pairs from `text`, separated by commas or newlines.
 /// Whitespace around either side is trimmed; blank entries and `#` comments are
 /// skipped. An unparseable entry is dropped rather than aborting, and named on
@@ -137,26 +146,15 @@ class Recorder {
     for (const auto& row : rigs_) {
       out << "#rig\t" << row.first << '\t' << row.second << '\n';
     }
-    std::vector<std::pair<std::string, std::pair<float, float>>> bounds(bounds_.begin(),
-                                                                        bounds_.end());
-    insertion_sort(bounds.begin(), bounds.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
-    for (const auto& row : bounds) {
+    for (const auto& row : sorted_by_key(bounds_)) {
       out << "#bound\t" << row.first << '\t' << row.second.first << '\t' << row.second.second
           << '\n';
     }
-    std::vector<std::pair<std::string, std::pair<float, float>>> ranged(tunable_bounds_.begin(),
-                                                                        tunable_bounds_.end());
-    insertion_sort(ranged.begin(), ranged.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
-    for (const auto& row : ranged) {
+    for (const auto& row : sorted_by_key(tunable_bounds_)) {
       out << "#tunable_bound\t" << row.first << '\t' << row.second.first << '\t'
           << row.second.second << '\n';
     }
-    std::vector<std::pair<std::string, float>> rows(seen_.begin(), seen_.end());
-    insertion_sort(rows.begin(), rows.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
-    for (const auto& row : rows) out << row.first << '\t' << row.second << '\n';
+    for (const auto& row : sorted_by_key(seen_)) out << row.first << '\t' << row.second << '\n';
   }
 
   void note(const std::string& key, float default_value) { seen_.emplace(key, default_value); }
@@ -211,6 +209,8 @@ std::string file_scope(const char* file) {
   return s;
 }
 
+std::string scoped_key(const char* file, const char* name) { return file_scope(file) + "." + name; }
+
 }  // namespace
 
 float tunable_keyed(const char* key, float default_value) {
@@ -224,14 +224,14 @@ float tunable_keyed(const char* key, float default_value) {
 float tunable_value(const char* file, const char* name, float default_value) {
   const auto& table = overrides();
   if (table.empty() && !recording()) return default_value;
-  const std::string key = file_scope(file) + "." + name;
+  const std::string key = scoped_key(file, name);
   if (recording()) Recorder::instance().note(key, default_value);
   const auto it = table.find(key);
   return it == table.end() ? default_value : it->second;
 }
 
 float tunable_ranged(const char* file, const char* name, float default_value, float lo, float hi) {
-  const std::string key = file_scope(file) + "." + name;
+  const std::string key = scoped_key(file, name);
   if (recording()) Recorder::instance().note_tunable_bound(key, lo, hi);
   const float value = tunable_value(file, name, default_value);
   if (!(value >= lo && value <= hi)) {

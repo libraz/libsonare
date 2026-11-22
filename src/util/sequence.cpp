@@ -11,6 +11,15 @@ namespace sonare {
 
 namespace {
 
+// Whether a * b stays addressable by an int index expression.
+bool fits_int_product(int a, int b) {
+  return static_cast<int64_t>(a) * static_cast<int64_t>(b) <=
+         static_cast<int64_t>(std::numeric_limits<int>::max());
+}
+
+// Probability floor applied before a log.
+constexpr float kProbabilityFloor = 1e-30f;
+
 enum class DtwMetric { Euclidean, Cosine, Manhattan, Chebyshev };
 
 DtwMetric parse_dtw_metric(const std::string& metric) {
@@ -100,8 +109,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   // (UB) before any allocation. The largest index is X_cols * Y_cols - 1, so
   // guard that product. (~46k x 46k cells is already far beyond any musical
   // alignment.)
-  if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+  if (!fits_int_product(X_cols, Y_cols)) {
     throw SonareException(ErrorCode::InvalidParameter, "dtw: cost matrix too large");
   }
 
@@ -132,15 +140,17 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   // derived in place instead of materialised into an [X_cols x Y_cols] cache.
   // Only the cosine norms are worth hoisting, and they are one value per column.
   const DtwMetric resolved_metric = parse_dtw_metric(metric);
-  std::vector<float> X_norms(static_cast<size_t>(X_cols), 0.0f);
-  std::vector<float> Y_norms(static_cast<size_t>(Y_cols), 0.0f);
-  if (resolved_metric == DtwMetric::Cosine) {
+  const bool cosine = resolved_metric == DtwMetric::Cosine;
+  std::vector<float> X_norms;
+  std::vector<float> Y_norms;
+  if (cosine) {
     X_norms = column_norms(X, X_rows, X_cols);
     Y_norms = column_norms(Y, Y_rows, Y_cols);
   }
   auto local_cost = [&](int i, int j) {
     return pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, resolved_metric,
-                         X_norms[static_cast<size_t>(i)], Y_norms[static_cast<size_t>(j)]);
+                         cosine ? X_norms[static_cast<size_t>(i)] : 0.0f,
+                         cosine ? Y_norms[static_cast<size_t>(j)] : 0.0f);
   };
 
   // Initialise. `subseq` lets the path start at any column of Y by zeroing the
@@ -219,8 +229,7 @@ RqaResult rqa(const float* rec, int n) {
   if (rec == nullptr || n <= 0) return out;
   // rec is an n x n matrix indexed with the int expression `i * n + j`; reject a
   // size whose element count would overflow int (UB) before iterating.
-  if (static_cast<int64_t>(n) * static_cast<int64_t>(n) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+  if (!fits_int_product(n, n)) {
     throw SonareException(ErrorCode::InvalidParameter, "rqa: recurrence matrix too large");
   }
   int n2 = n * n;
@@ -270,9 +279,7 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
   // backpointers with `t * n_states + s`, and the transition matrix with
   // `p * n_states + s`; reject sizes whose element counts would overflow int
   // (UB) before iterating, matching dtw/rqa above.
-  const int64_t int_max = static_cast<int64_t>(std::numeric_limits<int>::max());
-  if (static_cast<int64_t>(n_states) * static_cast<int64_t>(n_steps) > int_max ||
-      static_cast<int64_t>(n_states) * static_cast<int64_t>(n_states) > int_max) {
+  if (!fits_int_product(n_states, n_steps) || !fits_int_product(n_states, n_states)) {
     throw SonareException(ErrorCode::InvalidParameter, "viterbi: trellis too large");
   }
   // Transition logs are step-invariant; a single-step path never reads them.
@@ -280,7 +287,7 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
   if (n_steps > 1) {
     log_transition.resize(static_cast<size_t>(n_states) * n_states);
     for (size_t i = 0; i < log_transition.size(); ++i) {
-      log_transition[i] = std::log(std::max(transition[i], 1e-30f));
+      log_transition[i] = std::log(std::max(transition[i], kProbabilityFloor));
     }
   }
   const float minus_inf = -std::numeric_limits<float>::infinity();
@@ -294,8 +301,8 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
 
   // Initial step.
   for (int s = 0; s < n_states; ++s) {
-    float init =
-        p_init ? std::log(std::max(p_init[s], 1e-30f)) : -std::log(static_cast<float>(n_states));
+    float init = p_init ? std::log(std::max(p_init[s], kProbabilityFloor))
+                        : -std::log(static_cast<float>(n_states));
     prev_scores[static_cast<size_t>(s)] = init + log_prob[s * n_steps + 0];
   }
   // Recursion. Predecessor-major with per-state accumulators: `transition` is row-major
@@ -352,15 +359,14 @@ std::vector<int> viterbi_discriminative(const float* posteriors, int n_states, i
   if (n_states <= 0 || n_steps <= 0) return {};
   // Mirror viterbi's overflow guard: this function indexes `s * n_steps + t` with
   // int arithmetic in the loop below, before delegating to viterbi().
-  if (static_cast<int64_t>(n_states) * static_cast<int64_t>(n_steps) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+  if (!fits_int_product(n_states, n_steps)) {
     throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: trellis too large");
   }
   std::vector<float> log_prob(static_cast<size_t>(n_states) * n_steps);
   for (int s = 0; s < n_states; ++s) {
-    float lp_state = std::log(std::max(p_state[s], 1e-30f));
+    float lp_state = std::log(std::max(p_state[s], kProbabilityFloor));
     for (int t = 0; t < n_steps; ++t) {
-      float post = std::max(posteriors[s * n_steps + t], 1e-30f);
+      float post = std::max(posteriors[s * n_steps + t], kProbabilityFloor);
       log_prob[s * n_steps + t] = std::log(post) - lp_state;
     }
   }

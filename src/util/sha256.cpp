@@ -87,12 +87,7 @@ void compress_block(std::uint32_t state[8], const std::uint8_t block[64]) {
 
 Sha256::Sha256() noexcept
     : state_{0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
-             0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u},
-      block_{},
-      block_size_(0),
-      bit_length_(0),
-      digest_{},
-      finalized_(false) {}
+             0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u} {}
 
 void Sha256::update(const std::uint8_t* data, std::size_t size) {
   if (finalized_) {

@@ -49,9 +49,7 @@ std::vector<float> fix_length(const float* x, std::size_t n, std::size_t size, f
     return std::vector<float>(x, x + size);
   }
   std::vector<float> out(size, pad_value);
-  if (n > 0) {
-    std::memcpy(out.data(), x, n * sizeof(float));
-  }
+  std::memcpy(out.data(), x, n * sizeof(float));
   return out;
 }
 

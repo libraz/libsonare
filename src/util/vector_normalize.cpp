@@ -15,7 +15,6 @@ namespace sonare {
 namespace {
 
 float compute_norm(const float* x, std::size_t n, NormType type) {
-  if (n == 0) return 0.0f;
   switch (type) {
     case NormType::Inf:
       return peak_abs(x, n);
@@ -24,21 +23,14 @@ float compute_norm(const float* x, std::size_t n, NormType type) {
       for (std::size_t i = 0; i < n; ++i) s += std::abs(x[i]);
       return s;
     }
-    case NormType::L2: {
-      double s = 0.0;
-      for (std::size_t i = 0; i < n; ++i) {
-        double v = x[i];
-        s += v * v;
-      }
-      return static_cast<float>(std::sqrt(s));
-    }
+    case NormType::L2:
     case NormType::Power: {
       double s = 0.0;
       for (std::size_t i = 0; i < n; ++i) {
         double v = x[i];
         s += v * v;
       }
-      return static_cast<float>(s);
+      return static_cast<float>(type == NormType::L2 ? std::sqrt(s) : s);
     }
   }
   return 0.0f;
@@ -52,7 +44,6 @@ float compute_norm(const float* x, std::size_t n, NormType type) {
 void block_column_norms(const float* x, int rows, int cols, int c0, int n, NormType type,
                         std::vector<float>& norms, std::vector<double>& acc) {
   norms.assign(static_cast<std::size_t>(n), 0.0f);
-  if (rows == 0) return;
   const std::size_t stride = static_cast<std::size_t>(cols);
   switch (type) {
     case NormType::Inf:

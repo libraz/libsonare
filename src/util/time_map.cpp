@@ -114,7 +114,7 @@ void TimeStretchMap::assign(const std::vector<TimeStretchSegment>& segments) {
 }
 
 float TimeStretchMap::input_position(int output_frame) const noexcept {
-  if (segments_.size() == 1) {
+  if (constant()) {
     // The expression the scalar sites use, not an equivalent of it, so the
     // equality holds by construction rather than by a rounding argument.
     return static_cast<float>(output_frame) * segments_[0].rate;
@@ -128,7 +128,7 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
   // the equality with it covers that argument too. Callers keep their own
   // positivity rejection where they have one.
   SONARE_CHECK(input_frame_count >= 0, ErrorCode::InvalidParameter);
-  if (segments_.size() == 1) {
+  if (constant()) {
     size_t count = 0;
     SONARE_CHECK(numeric::checked_projected_count(static_cast<size_t>(input_frame_count),
                                                   segments_[0].rate, kMaxCount, &count),
@@ -141,7 +141,7 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
 
 size_t TimeStretchMap::output_sample_count(size_t input_sample_count, int hop_length) const {
   SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
-  if (segments_.size() == 1) {
+  if (constant()) {
     size_t count = 0;
     SONARE_CHECK(
         numeric::checked_projected_count(input_sample_count, segments_[0].rate, kMaxCount, &count),
