@@ -16,9 +16,8 @@ namespace sonare::metering {
 
 namespace {
 
-// floor_db is the caller's clamp, applied to the measured level; it never detects silence.
-float rms_db_for_window(const float* data, size_t start, size_t length, float floor_db) {
-  return std::max(floor_db, amplitude_to_level_db(rms(data + start, length)));
+float rms_db_for_window(const float* data, size_t start, size_t length) {
+  return amplitude_to_level_db(rms(data + start, length));
 }
 
 }  // namespace
@@ -32,8 +31,6 @@ void validate_dynamic_range_config(const DynamicRangeConfig& config) {
   if (config.low_percentile > config.high_percentile) {
     check::refuse_relation({"low_percentile", "high_percentile"}, "{0} must be at most {1}");
   }
-  // -inf asks for no clamp at all.
-  if (!(config.floor_db == kNoLevelDb)) check::finite_float(config.floor_db, "floor_db");
 }
 
 DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_sec,
@@ -83,14 +80,14 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   if (audio.size() < window) {
     // The signal is shorter than a single analysis window: measure the whole
     // thing once so short clips still yield a defined result.
-    result.window_rms_db.push_back(rms_db_for_window(data, 0, audio.size(), config.floor_db));
+    result.window_rms_db.push_back(rms_db_for_window(data, 0, audio.size()));
   } else {
     // Emit only complete windows. A trailing partial window is computed over its
     // own (shorter) length, so its RMS is not comparable to the full-length
     // windows and would skew the low/high percentiles.
     const size_t last_start = audio.size() - window;
     for (size_t start = 0;;) {
-      result.window_rms_db.push_back(rms_db_for_window(data, start, window, config.floor_db));
+      result.window_rms_db.push_back(rms_db_for_window(data, start, window));
       if (hop > last_start - start) break;
       start += hop;
     }
@@ -100,8 +97,9 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   std::sort(sorted.begin(), sorted.end());
   result.low_percentile_db = static_cast<float>(percentile_sorted(sorted, config.low_percentile));
   result.high_percentile_db = static_cast<float>(percentile_sorted(sorted, config.high_percentile));
-  result.dynamic_range_db =
-      level_difference_db(result.high_percentile_db, result.low_percentile_db);
+  result.dynamic_range_db = result.high_percentile_db == kNoLevelDb
+                                ? kNotMeasured
+                                : result.high_percentile_db - result.low_percentile_db;
   return result;
 }
 

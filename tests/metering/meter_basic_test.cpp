@@ -1153,15 +1153,7 @@ TEST_CASE("dynamic range rejects non-finite and overflowing configuration", "[me
     config = {};
     config.low_percentile = value;
     REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
-    // -inf is the floor that clamps nothing; NaN and +inf are refused.
-    if (value == -inf) continue;
-    config = {};
-    config.floor_db = value;
-    REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
   }
-  metering::DynamicRangeConfig unclamped;
-  unclamped.floor_db = -inf;
-  REQUIRE_NOTHROW(metering::dynamic_range(audio, unclamped));
 
   metering::DynamicRangeConfig huge;
   huge.window_sec = std::numeric_limits<float>::max();
@@ -1602,20 +1594,44 @@ TEST_CASE("level meters read silence as -inf and an empty input as not measured"
     CHECK(std::isnan(metering::true_peak_db(empty)));
   }
 
-  SECTION("dynamic range windows take the caller's clamp, -inf without one") {
+  SECTION("dynamic range: silent windows read -inf, and the range follows the percentiles") {
     metering::DynamicRangeConfig config;
     config.window_sec = 0.5f;
     config.hop_sec = 0.5f;
-    const auto clamped = metering::dynamic_range(silence, config);
-    REQUIRE(!clamped.window_rms_db.empty());
-    for (float v : clamped.window_rms_db) CHECK(v == constants::kFloorDb);
-    CHECK(clamped.dynamic_range_db == 0.0f);
-    config.floor_db = kNoLevel;
-    const auto unclamped = metering::dynamic_range(silence, config);
-    for (float v : unclamped.window_rms_db) CHECK(v == kNoLevel);
-    // The spread of -inf windows is -inf - -inf: no range to report.
-    CHECK(unclamped.low_percentile_db == kNoLevel);
-    CHECK(std::isnan(unclamped.dynamic_range_db));
+
+    // Fully silent: every level -inf, and no range.
+    const auto silent_result = metering::dynamic_range(silence, config);
+    REQUIRE(silent_result.window_rms_db.size() == 2);
+    for (float v : silent_result.window_rms_db) CHECK(v == kNoLevel);
+    CHECK(silent_result.low_percentile_db == kNoLevel);
+    CHECK(silent_result.high_percentile_db == kNoLevel);
+    CHECK(std::isnan(silent_result.dynamic_range_db));
+
+    // A silent gap inside programme: the low percentile lands on it, so the range is +inf.
+    std::vector<float> gapped(4 * 24000);
+    for (size_t i = 0; i < gapped.size(); ++i) {
+      gapped[i] =
+          (i / 24000 == 1)
+              ? 0.0f
+              : 0.5f * static_cast<float>(std::sin(constants::kTwoPiD * 440.0 * i / 48000.0));
+    }
+    const auto gap_result =
+        metering::dynamic_range(Audio::from_buffer(gapped.data(), gapped.size(), 48000), config);
+    REQUIRE(gap_result.window_rms_db.size() == 4);
+    CHECK(gap_result.window_rms_db[1] == kNoLevel);
+    CHECK(gap_result.low_percentile_db == kNoLevel);
+    CHECK(std::isfinite(gap_result.high_percentile_db));
+    CHECK(gap_result.dynamic_range_db == std::numeric_limits<float>::infinity());
+
+    // No silence: every reading finite. One window sits 20 dB down; the low percentile (0.10 of
+    // four windows) interpolates 70% of the way to it, so the range is 14 dB.
+    for (size_t i = 24000; i < 48000; ++i) gapped[i] = 0.1f * gapped[i - 24000];
+    const auto full_result =
+        metering::dynamic_range(Audio::from_buffer(gapped.data(), gapped.size(), 48000), config);
+    for (float v : full_result.window_rms_db) CHECK(std::isfinite(v));
+    CHECK(std::isfinite(full_result.low_percentile_db));
+    CHECK_THAT(full_result.dynamic_range_db, WithinAbs(14.0, 0.01));
+
     const auto none = metering::dynamic_range(empty, config);
     CHECK(none.window_rms_db.empty());
     CHECK(std::isnan(none.low_percentile_db));
@@ -1623,9 +1639,8 @@ TEST_CASE("level meters read silence as -inf and an empty input as not measured"
     CHECK(std::isnan(none.dynamic_range_db));
   }
 
-  SECTION("a quiet window reads its level under no clamp") {
+  SECTION("a quiet window reads its level however quiet") {
     metering::DynamicRangeConfig config;
-    config.floor_db = kNoLevel;
     const auto result = metering::dynamic_range(level_tone(-250.0), config);
     REQUIRE(!result.window_rms_db.empty());
     CHECK_THAT(result.window_rms_db.front(), WithinAbs(-253.0103, 0.01));
@@ -1839,10 +1854,8 @@ TEST_CASE("Welch spectrum normalizes a zero-padded tail frame by its own window 
   REQUIRE_THAT(tail_result.magnitude[0], WithinAbs(full_result.magnitude[0], 1e-4f));
 }
 
-// The per-window fold wrote floor_db as std::max's FIRST argument, which is what
-// kept a non-finite window level out of the std::sort that computes the
-// percentiles -- an invariant held by an argument order and stated nowhere. The
-// refusal moves it to the input, where a later readability swap cannot undo it.
+// A non-finite window level would reach the sort that computes the percentiles, so the input
+// is refused before any window is measured.
 TEST_CASE("dynamic range refuses audio it cannot order", "[meter][numeric]") {
   const float nan_sample = std::numeric_limits<float>::quiet_NaN();
   metering::DynamicRangeConfig config;
@@ -2000,10 +2013,6 @@ TEST_CASE("dynamic range config refuses a member by its name", "[metering][dynam
   config.high_percentile = 0.5f;
   CHECK_THROWS_WITH(validate_dynamic_range_config(config),
                     "low_percentile must be at most high_percentile");
-  config = DynamicRangeConfig();
-  config.floor_db = std::numeric_limits<float>::infinity();
-  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
-                    "floor_db must be finite and in [-3.4028235e38, 3.4028235e38]");
 
   CHECK_THROWS_WITH(dynamic_range_config_from_public(-1.0f, 0.0f, 0.0f, 0.0f),
                     "window_sec must be finite and at least 0");

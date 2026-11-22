@@ -6,10 +6,12 @@
 #include <vector>
 
 #include "core/audio.h"
-#include "util/constants.h"
 
 namespace sonare::metering {
 
+/// A silent window reads -inf and the percentiles are taken over the windows as measured, so a
+/// low percentile landing on silence is -inf and the range +inf. The range is not measured (NaN)
+/// when the high percentile is silent too, which includes fully silent input.
 struct DynamicRangeResult {
   float dynamic_range_db = 0.0f;
   float low_percentile_db = 0.0f;
@@ -22,9 +24,6 @@ struct DynamicRangeConfig {
   float hop_sec = 1.0f;
   float low_percentile = 0.10f;
   float high_percentile = 0.95f;
-  /// Clamp applied to each window level, max(level, floor_db); -inf applies none. Silence reads
-  /// this value under the default clamp and -inf without one.
-  float floor_db = sonare::constants::kFloorDb;
 };
 
 /// Decodes the public C/JS sentinel convention into a validated core config.
