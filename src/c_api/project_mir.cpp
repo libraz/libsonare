@@ -71,9 +71,7 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(
   bridge_config.include_octave_candidates = options.include_octave_candidates != 0;
 
   sonare::Audio wrapped = sonare::Audio::from_buffer(audio, len, sample_rate);
-  sonare::BeatAnalyzer analyzer(wrapped, beat_config);
-  return sonare::mir::estimate_tempo(sonare::mir::make_input_from_analyzer(analyzer),
-                                     bridge_config);
+  return sonare::mir::estimate_tempo_from_audio(wrapped, beat_config, bridge_config);
 }
 
 // The values are checked rather than clamped.
