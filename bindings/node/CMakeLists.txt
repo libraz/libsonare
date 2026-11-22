@@ -60,6 +60,7 @@ add_subdirectory(${SONARE_ROOT} ${CMAKE_BINARY_DIR}/libsonare)
 set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/vocal_edit.cpp
+  src/addon/vocal_edit_convert.cpp
   src/addon/sonare_wrap_engine.cpp
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
