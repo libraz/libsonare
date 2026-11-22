@@ -287,9 +287,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # The pinned release is tracked in one file; build:wasm and prepack refuse any other emcc.
+      - id: emsdk-version
+        run: echo "version=$(cat bindings/wasm/.emscripten-version)" >> "$GITHUB_OUTPUT"
       - uses: mymindstorm/setup-emsdk@v16
         with:
-          version: 7.0.1
+          version: ${{ steps.emsdk-version.outputs.version }}
       # The engines floor only: this job's coverage build is the expensive part,
       # and the floor is the version the WASM package promises to run on.
       - uses: actions/setup-node@v7

@@ -47,7 +47,7 @@ cd bindings/wasm   && yarn install --immutable && yarn build && yarn test
 make test-python
 ```
 
-**The WASM module** — additionally emsdk 7.0.1:
+**The WASM module** — additionally emsdk at the release pinned in `bindings/wasm/.emscripten-version`:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh
@@ -142,6 +142,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 
 ### WASM
 
+- Raise Emscripten by editing `bindings/wasm/.emscripten-version`; `build:wasm` refuses any other `emcc`.
 - Give every translation unit that contains a `catch` the `-fexceptions` flag in `src/CMakeLists.txt`, and run the exception-scope check after a WASM build.
 
 ### Build options
