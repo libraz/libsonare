@@ -47,3 +47,29 @@ describe('dB conversion forms', () => {
     );
   });
 });
+
+describe('dB conversion topDb', () => {
+  const LEVELS = [
+    ['powerToDb', powerToDb, new Float32Array([1, 1e-12]), 1e-15],
+    ['amplitudeToDb', amplitudeToDb, new Float32Array([1, 1e-6]), 1e-9],
+  ] as const;
+
+  it.each(LEVELS)('%s clips at topDb under the peak', (_name, convert, values, amin) => {
+    const out = convert({ values, amin, topDb: 40 }) as Float32Array;
+    expect(out[0]).toBeCloseTo(0, 4);
+    expect(out[1]).toBeCloseTo(-40, 4);
+  });
+
+  it.each(LEVELS)('%s keeps every level with topDb Infinity', (_name, convert, values, amin) => {
+    const out = convert({ values, amin, topDb: Number.POSITIVE_INFINITY }) as Float32Array;
+    expect(out[0]).toBeCloseTo(0, 4);
+    expect(out[1]).toBeCloseTo(-120, 3);
+  });
+
+  it.each(LEVELS)('%s refuses a negative or NaN topDb', (_name, convert, values, amin) => {
+    for (const topDb of [-1, Number.NaN]) {
+      expect(() => convert({ values, amin, topDb })).toThrow(RangeError);
+      expect(() => convert({ values, amin, topDb })).toThrow(/topDb must be at least 0/);
+    }
+  });
+});
