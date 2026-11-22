@@ -356,10 +356,24 @@ def test_voice_change_formant_mode() -> None:
 def test_voice_change_absolute_mode_refuses_unreachable_factor() -> None:
     sr = 22050
     samples = _tone(sr)
-    # 2**(4/12) = 1.2599, so [0.55, 1.65] reaches [0.693, 2.079], printed rounded inward.
+    # 2**(4/12) = 1.2599, so the warp range [0.55, 1.65] admits factors from 0.693 up;
+    # the factor's own range caps the top at 1.65.
     with pytest.raises(
         libsonare.SonareValueError,
-        match=r"^voice_change: formant_factor must be finite and in \[0\.693, 2\.078\]$",
+        match=r"^voice_change: formant_factor must be finite and in \[0\.693, 1\.65\] when "
+        r"formant_mode is absolute at pitch_semitones 4 \(the warp it needs must lie in "
+        r"\[0\.55, 1\.65\]\)$",
+    ):
+        libsonare.voice_change(
+            samples,
+            sample_rate=sr,
+            pitch_semitones=4.0,
+            formant_factor=0.6,
+            formant_mode="absolute",
+        )
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^voice_change: formant_factor must be finite and in \[0\.55, 1\.65\]$",
     ):
         libsonare.voice_change(
             samples,

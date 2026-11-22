@@ -100,7 +100,7 @@ def test_a_flag_must_be_a_bool(mixer, name: str) -> None:
         mixer.configure_meter(**{name: 1})
 
 
-def test_true_peak_off_leaves_the_true_peak_fields_at_their_floor(mixer) -> None:
+def test_true_peak_off_leaves_the_true_peak_fields_unmeasured(mixer) -> None:
     block = (0.5 * np.sin(2 * math.pi * 997.0 * np.arange(256) / 48000)).astype(np.float32)
     mixer.configure_meter(measure_true_peak=False, measure_lufs=False)
     mixer.process_stereo([block], [block])
@@ -108,5 +108,11 @@ def test_true_peak_off_leaves_the_true_peak_fields_at_their_floor(mixer) -> None
     mixer.configure_meter(measure_lufs=False)
     mixer.process_stereo([block], [block])
     on = mixer.meter_snapshot()
-    assert on.true_peak_dbtp_l > off.true_peak_dbtp_l
+    assert (off.true_peak_dbtp_l, off.true_peak_dbtp_r, off.max_true_peak_dbtp) == (
+        None,
+        None,
+        None,
+    )
+    assert on.true_peak_dbtp_l is not None
+    assert math.isfinite(on.true_peak_dbtp_l)
     assert on.peak_db_l == pytest.approx(off.peak_db_l, abs=1e-4)

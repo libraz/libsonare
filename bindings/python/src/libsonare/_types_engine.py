@@ -54,38 +54,41 @@ class MixMeterSnapshot:
     size. :func:`metering_true_peak_dbtp` measures a whole signal at once.
     """
 
-    peak_db_l: float
-    """Left sample peak, in dBFS."""
-    peak_db_r: float
-    """Right sample peak, in dBFS."""
-    rms_db_l: float
-    """Left RMS level, in dBFS."""
-    rms_db_r: float
-    """Right RMS level, in dBFS."""
-    correlation: float
-    """Stereo phase correlation, -1..1."""
-    mono_compat_width: float
-    """Stereo width measure for mono compatibility."""
+    peak_db_l: float | None
+    """Left sample peak, in dBFS; -inf for silence, None when not measured."""
+    peak_db_r: float | None
+    """Right sample peak, in dBFS; -inf for silence, None when not measured."""
+    rms_db_l: float | None
+    """Left RMS level, in dBFS; -inf for silence, None when not measured."""
+    rms_db_r: float | None
+    """Right RMS level, in dBFS; -inf for silence, None when not measured."""
+    correlation: float | None
+    """Stereo phase correlation, -1..1; None when not measured."""
+    mono_compat_width: float | None
+    """Stereo width measure for mono compatibility; None when not measured, inf when the mid
+    signal is silent but the side is not."""
     mono_compat_peak: float
     """Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude."""
     mono_compat_side_rms: float
     """RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude."""
     likely_mono_compatible: bool
     """Whether the signal is likely to fold down to mono safely."""
-    momentary_lufs: float
-    """Momentary loudness, in LUFS."""
-    short_term_lufs: float
-    """Short-term loudness, in LUFS."""
-    integrated_lufs: float
-    """Integrated loudness, in LUFS."""
+    momentary_lufs: float | None
+    """Momentary loudness, in LUFS; -inf for silence, None until the window fills."""
+    short_term_lufs: float | None
+    """Short-term loudness, in LUFS; -inf for silence, None until the window fills."""
+    integrated_lufs: float | None
+    """Integrated loudness, in LUFS; None before the first gating block, -inf while nothing
+    passes the gate."""
     gain_reduction_db: float
     """Gain reduction applied, in dB."""
-    true_peak_dbtp_l: float
-    """Left true peak, in dBTP."""
-    true_peak_dbtp_r: float
-    """Right true peak, in dBTP."""
-    max_true_peak_dbtp: float
-    """Maximum true peak over both channels, in dBTP."""
+    true_peak_dbtp_l: float | None
+    """Left true peak, in dBTP; -inf for silence, None when not measured."""
+    true_peak_dbtp_r: float | None
+    """Right true peak, in dBTP; -inf for silence, None when not measured."""
+    max_true_peak_dbtp: float | None
+    """Maximum true peak over both channels, in dBTP; -inf for silence, None when not
+    measured."""
     seq: int
     """Sequence number of the snapshot."""
     # Per-plane surround meters (5.1/7.1). Each tuple holds num_channels values;
@@ -93,11 +96,11 @@ class MixMeterSnapshot:
     num_channels: int | None = None
     """Number of valid planes in the per-plane tuples; None before any audio."""
     peak_db: tuple[float, ...] = ()
-    """Sample peak per plane, in dBFS."""
+    """Sample peak per plane, in dBFS; -inf for silence, NaN in a plane not measured."""
     rms_db: tuple[float, ...] = ()
-    """RMS level per plane, in dBFS."""
+    """RMS level per plane, in dBFS; -inf for silence, NaN in a plane not measured."""
     true_peak_dbtp: tuple[float, ...] = ()
-    """True peak per plane, in dBTP."""
+    """True peak per plane, in dBTP; -inf for silence, NaN in a plane not measured."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -779,29 +782,31 @@ class MeterTelemetryRecord:
     num_channels: int
     """Number of valid planes."""
     peak_db: npt.NDArray[np.float32]
-    """Sample peak per plane, in dBFS."""
+    """Sample peak per plane, in dBFS; -inf for silence, NaN in a plane not written."""
     rms_db: npt.NDArray[np.float32]
-    """RMS level per plane, in dBFS."""
+    """RMS level per plane, in dBFS; -inf for silence, NaN in a plane not measured."""
     true_peak_dbtp: npt.NDArray[np.float32]
-    """True peak per plane, in dBTP."""
-    max_true_peak_dbtp: float
-    """Maximum true peak over all planes, in dBTP."""
-    correlation: float
-    """Stereo phase correlation, -1..1."""
-    mono_compat_width: float
-    """Stereo width measure for mono compatibility."""
-    momentary_lufs: float
-    """Momentary loudness, in LUFS."""
-    short_term_lufs: float
-    """Short-term loudness, in LUFS."""
-    integrated_lufs: float
-    """Integrated loudness, in LUFS."""
+    """True peak per plane, in dBTP; -inf for silence, NaN in a plane not measured."""
+    max_true_peak_dbtp: float | None
+    """Maximum true peak over all planes, in dBTP; -inf for silence, None when not measured."""
+    correlation: float | None
+    """Stereo phase correlation, -1..1; None when not measured."""
+    mono_compat_width: float | None
+    """Stereo width measure for mono compatibility; None when not measured, inf when the mid
+    signal is silent but the side is not."""
+    momentary_lufs: float | None
+    """Momentary loudness, in LUFS; -inf for silence, None until the window fills."""
+    short_term_lufs: float | None
+    """Short-term loudness, in LUFS; -inf for silence, None until the window fills."""
+    integrated_lufs: float | None
+    """Integrated loudness, in LUFS; None before the first gating block, -inf while nothing
+    passes the gate."""
     gain_reduction_db: float
     """Gain reduction applied, in dB."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
     input_peak_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
-    """Input-tap sample peak per plane, in dBFS."""
+    """Input-tap sample peak per plane, in dBFS; -inf for silence, NaN in a plane not written."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -822,7 +827,8 @@ class ScopeTelemetryRecord:
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
     bands: npt.NDArray[np.float32]
-    """Spectrum band levels."""
+    """Spectrum band levels; -inf for a band of zero power, NaN for a band no bin reaches and
+    before the first transform."""
     points: list[tuple[float, float]]
     """Vectorscope points as (left, right) tuples."""
 

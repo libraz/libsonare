@@ -32,7 +32,7 @@ from ._ffi import (
     SonareRhythmResult,
     SonareTimbreResult,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _Respelling
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -40,6 +40,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _measured_level,
     _narrow_int,
     _optional_from_c_float_array,
     _to_c_float,
@@ -356,6 +357,13 @@ def _analyze_with_callbacks(
     return _parse_analysis_json(data)
 
 
+# The core refuses the beat lists under their own names; the caller wrote them as ``beats``.
+_BEAT_RESPELLED = {
+    "beat_times": _Respelling("beats[].time_sec"),
+    "beat_strengths": _Respelling("beats[].strength"),
+}
+
+
 @_entry("estimate_meter")
 def estimate_meter(
     beats: Sequence[Beat],
@@ -460,8 +468,10 @@ def estimate_meter(
     entries = list(beats)
     if not all(isinstance(entry, Beat) for entry in entries):
         raise _refuse_type("beats must be a sequence of Beat")
-    times = _validate_samples([entry.time_sec for entry in entries], arg_name="beats.time_sec")
-    strengths = _validate_samples([entry.strength for entry in entries], arg_name="beats.strength")
+    times = _validate_samples([entry.time_sec for entry in entries], arg_name="beats[].time_sec")
+    strengths = _validate_samples(
+        [entry.strength for entry in entries], arg_name="beats[].strength"
+    )
     c_times, time_count = _to_c_float_array(times)
     c_strengths, _ = _to_c_float_array(strengths)
 
@@ -490,7 +500,7 @@ def estimate_meter(
         ctypes.byref(options),
         ctypes.byref(out_json),
     )
-    _check(rc, flattened="options")
+    _check(rc, flattened="options", respelled=_BEAT_RESPELLED)
     try:
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")
@@ -760,11 +770,11 @@ def analyze_dynamics(
     _check(rc)
     try:
         return DynamicsResult(
-            dynamic_range_db=float(out.dynamic_range_db),
+            dynamic_range_db=_measured_level(out.dynamic_range_db),
             peak_db=float(out.peak_db),
             rms_db=float(out.rms_db),
-            crest_factor=float(out.crest_factor),
-            loudness_range_lu=float(out.loudness_range_lu),
+            crest_factor=_measured_level(out.crest_factor),
+            loudness_range_lu=_measured_level(out.loudness_range_lu),
             is_compressed=bool(out.is_compressed),
             loudness_times_sec=_from_c_float_array(out.loudness_times_sec, out.loudness_count),
             loudness_rms_db=_from_c_float_array(out.loudness_rms_db, out.loudness_count),

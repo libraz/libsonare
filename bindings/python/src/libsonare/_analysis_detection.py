@@ -16,6 +16,7 @@ from ._ffi_types_core import (
     SonareOnsetDetectConfig,
 )
 from ._narrowing import _narrow_double
+from ._result_records import _fill_null_ends, _optional_float
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -465,6 +466,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
 
     This is an internal helper of :func:`analyze`.
     """
+    _fill_null_ends(data, "analysis_result")
     # Key
     key_d = data.get("key", {})
     key = Key(
@@ -579,11 +581,11 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     )
     dyn_d = data["dynamics"]
     dynamics = AnalysisDynamics(
-        dynamic_range_db=float(dyn_d["dynamicRangeDb"]),
+        dynamic_range_db=_optional_float(dyn_d.get("dynamicRangeDb")),
         peak_db=float(dyn_d["peakDb"]),
         rms_db=float(dyn_d["rmsDb"]),
-        crest_factor=float(dyn_d["crestFactor"]),
-        loudness_range_lu=float(dyn_d["loudnessRangeLu"]),
+        crest_factor=_optional_float(dyn_d.get("crestFactor")),
+        loudness_range_lu=_optional_float(dyn_d.get("loudnessRangeLu")),
         is_compressed=bool(dyn_d["isCompressed"]),
     )
     rhy_d = data["rhythm"]

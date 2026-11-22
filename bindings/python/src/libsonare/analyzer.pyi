@@ -1481,7 +1481,7 @@ def lufs_series_interleaved(
 def ebur128_loudness_range_lu(
     samples: FloatSamples,
     sample_rate: int,
-) -> float: ...
+) -> float | None: ...
 def decompose(
     s: FloatSamples,
     n_features: int,
@@ -1790,7 +1790,6 @@ def mastering_repair_declip(
     clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> DeclipResult: ...
 def mastering_repair_declip_stereo(
     left: FloatSamples,
@@ -1800,7 +1799,6 @@ def mastering_repair_declip_stereo(
     clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> DeclipStereoResult: ...
 def mastering_repair_decrackle(
     samples: FloatSamples,
@@ -1953,7 +1951,6 @@ def mastering_repair_detect_clipping(
     clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> ClipDetection: ...
 def mastering_repair_detect_crackle(
     samples: FloatSamples,
@@ -2045,8 +2042,10 @@ def momentary_lufs(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, A
 def short_term_lufs(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
 def metering_stereo_correlation(
     left: FloatSamples, right: FloatSamples, sample_rate: int
-) -> float: ...
-def metering_stereo_width(left: FloatSamples, right: FloatSamples, sample_rate: int) -> float: ...
+) -> float | None: ...
+def metering_stereo_width(
+    left: FloatSamples, right: FloatSamples, sample_rate: int
+) -> float | None: ...
 def metering_vectorscope(
     left: FloatSamples,
     right: FloatSamples,
@@ -2099,12 +2098,12 @@ def metering_silence_ratio(
     frame_length: int = 1024,
     hop_length: int = 256,
 ) -> float: ...
-def metering_crest_factor_db(samples: FloatSamples, sample_rate: int) -> float: ...
+def metering_crest_factor_db(samples: FloatSamples, sample_rate: int) -> float | None: ...
 def metering_crest_factor_db_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-) -> float: ...
+) -> float | None: ...
 def metering_dc_offset(samples: FloatSamples, sample_rate: int) -> float: ...
 def metering_true_peak_dbtp(
     samples: FloatSamples,

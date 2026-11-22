@@ -28,6 +28,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _max_block_size,
+    _measured_level,
     _narrow_int,
     _planar_channel_arrays,
     _to_c_float,
@@ -556,9 +557,12 @@ class PlaybackLoudnessMeter:
         )
 
     @property
-    def integrated_lufs(self) -> float:
-        """Integrated loudness of everything pushed so far, in LUFS."""
+    def integrated_lufs(self) -> float | None:
+        """Integrated loudness of everything pushed so far, in LUFS.
+
+        ``None`` before the first gating block is complete; ``-inf`` while nothing passes the gate.
+        """
         handle = self._require_handle()
         out = ctypes.c_float()
         _check(self._lib.sonare_playback_loudness_meter_integrated_lufs(handle, ctypes.byref(out)))
-        return float(out.value)
+        return _measured_level(out.value)

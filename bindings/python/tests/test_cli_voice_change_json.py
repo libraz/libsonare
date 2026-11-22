@@ -124,13 +124,13 @@ def test_voice_change_absolute_mode_reports_mode_and_refuses_unreachable_factor(
         "--pitch-semitones",
         "5",
         "--formant-factor",
-        "3",
+        "0.6",
         "--formant-mode",
         "absolute",
         "--json",
     )
     assert refused.returncode == 3
-    assert "[0.7342, 2.202]" in refused.stderr
+    assert "[0.7342, 1.65] when formant_mode is absolute at pitch_semitones 5" in refused.stderr
 
     unknown = _run_cli(
         "voice-change", str(source), "--output", str(tmp_path / "x.wav"), "--formant-mode", "no"

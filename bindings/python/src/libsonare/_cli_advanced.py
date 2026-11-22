@@ -8,6 +8,7 @@ import statistics
 from ._cli_common import (
     PITCH_NAMES,
     _array_stats,
+    _fmt_optional,
     _strict_json_dumps,
 )
 from ._cli_common import (
@@ -106,11 +107,11 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
         )
     else:
         print("  Dynamics:")
-        print(f"    Dynamic range:  {r.dynamic_range_db:.2f} dB")
+        print(f"    Dynamic range:  {_fmt_optional(r.dynamic_range_db, '.2f', ' dB')}")
         print(f"    Peak:           {r.peak_db:.2f} dB")
         print(f"    RMS:            {r.rms_db:.2f} dB")
-        print(f"    Crest factor:   {r.crest_factor:.4f}")
-        print(f"    Loudness range: {r.loudness_range_lu:.2f} dB")
+        print(f"    Crest factor:   {_fmt_optional(r.crest_factor, '.4f')}")
+        print(f"    Loudness range: {_fmt_optional(r.loudness_range_lu, '.2f', ' dB')}")
         print(f"    Compressed:     {r.is_compressed}")
     return 0
 
@@ -173,9 +174,9 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     else:
         print("  Loudness (LUFS):")
         print(f"    Integrated:     {r.integrated_lufs:.2f} LUFS")
-        print(f"    Momentary:      {r.momentary_lufs:.2f} LUFS")
-        print(f"    Short-term:     {r.short_term_lufs:.2f} LUFS")
-        print(f"    Loudness range: {r.loudness_range_lu:.2f} LU")
+        print(f"    Momentary:      {_fmt_optional(r.momentary_lufs, '.2f', ' LUFS')}")
+        print(f"    Short-term:     {_fmt_optional(r.short_term_lufs, '.2f', ' LUFS')}")
+        print(f"    Loudness range: {_fmt_optional(r.loudness_range_lu, '.2f', ' LU')}")
         if series is not None:
             print(f"    Momentary samples:  {len(series.momentary_lufs)}")
             print(f"    Short-term samples: {len(series.short_term_lufs)}")

@@ -130,16 +130,16 @@ class Beat:
 class AnalysisDynamics:
     """Dynamics summary embedded in :class:`AnalysisResult`."""
 
-    dynamic_range_db: float
-    """Dynamic range, in dB."""
+    dynamic_range_db: float | None
+    """Dynamic range, in dB; None for a silent input."""
     peak_db: float
-    """Peak level, in dB."""
+    """Peak level, in dB; -inf for a silent input."""
     rms_db: float
-    """RMS level, in dB."""
-    crest_factor: float
-    """Peak-to-RMS ratio of the signal."""
-    loudness_range_lu: float
-    """Loudness range, in LU."""
+    """RMS level, in dB; -inf for a silent input."""
+    crest_factor: float | None
+    """Peak-to-RMS ratio of the signal; None for a silent input."""
+    loudness_range_lu: float | None
+    """Loudness range, in LU; None for a silent input."""
     is_compressed: bool
     """True when the signal is flagged as compressed."""
 
@@ -375,17 +375,21 @@ class LufsResult:
     """
 
     integrated_lufs: float
-    """Integrated loudness over the whole signal, in LUFS."""
-    momentary_lufs: float
-    """Loudness of the final complete 400 ms window, in LUFS; not Max-M."""
-    short_term_lufs: float
-    """Loudness of the final complete 3 s window, in LUFS; not Max-S."""
-    max_momentary_lufs: float
-    """Maximum 400 ms window loudness (EBU R128 Max-M), in LUFS."""
-    max_short_term_lufs: float
-    """Maximum 3 s window loudness (EBU R128 Max-S), in LUFS."""
-    loudness_range_lu: float
-    """Loudness range, in LU."""
+    """Integrated loudness over the whole signal, in LUFS; -inf when nothing passes the gate."""
+    momentary_lufs: float | None
+    """Loudness of the final complete 400 ms window, in LUFS; not Max-M. -inf for zero energy,
+    None when the signal is shorter than one window."""
+    short_term_lufs: float | None
+    """Loudness of the final complete 3 s window, in LUFS; not Max-S. -inf for zero energy,
+    None when the signal is shorter than one window."""
+    max_momentary_lufs: float | None
+    """Maximum 400 ms window loudness (EBU R128 Max-M), in LUFS; -inf for zero energy, None when
+    the signal is shorter than one window."""
+    max_short_term_lufs: float | None
+    """Maximum 3 s window loudness (EBU R128 Max-S), in LUFS; -inf for zero energy, None when
+    the signal is shorter than one window."""
+    loudness_range_lu: float | None
+    """Loudness range, in LU; None when not measured."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -568,22 +572,23 @@ class RhythmResult:
 class DynamicsResult:
     """Dynamics and loudness analysis primitives."""
 
-    dynamic_range_db: float
-    """Dynamic range, in dB."""
+    dynamic_range_db: float | None
+    """Dynamic range, in dB; None when not measured."""
     peak_db: float
-    """Peak level, in dB."""
+    """Peak level, in dB; -inf for silence."""
     rms_db: float
-    """RMS level, in dB."""
-    crest_factor: float
-    """Peak-to-RMS ratio of the signal."""
-    loudness_range_lu: float
-    """Loudness range, in LU."""
+    """RMS level, in dB; -inf for silence."""
+    crest_factor: float | None
+    """Peak-to-RMS ratio of the signal; None when not measured."""
+    loudness_range_lu: float | None
+    """Loudness range, in LU; None when not measured."""
     is_compressed: bool
     """True when the signal is flagged as compressed."""
     loudness_times_sec: npt.NDArray[np.float32]
     """Loudness curve timestamps, in seconds, parallel to ``loudness_rms_db``."""
     loudness_rms_db: npt.NDArray[np.float32]
-    """Loudness curve RMS values, in dB, parallel to ``loudness_times_sec``."""
+    """Loudness curve RMS values, in dB, parallel to ``loudness_times_sec``; -inf for an all-zero
+    window."""
 
 
 @dataclass(frozen=True, slots=True)

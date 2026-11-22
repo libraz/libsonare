@@ -394,11 +394,24 @@ def test_a_closed_hrtf_set_is_refused_rather_than_silently_falling_back_to_the_d
 
 def test_loudness_meter_integrates_pushed_frames() -> None:
     with PlaybackLoudnessMeter(num_channels=2, sample_rate=SR) as meter:
-        block = _sine(4096 * 2, hz=200.0)
+        block = _sine(SR * 2, hz=200.0)
         meter.push_interleaved(block)
         lufs = meter.integrated_lufs
+        assert lufs is not None
         assert np.isfinite(lufs)
         assert lufs < 0.0
+
+
+def test_loudness_meter_is_unmeasured_before_the_first_gating_block() -> None:
+    with PlaybackLoudnessMeter(num_channels=2, sample_rate=SR) as meter:
+        meter.push_interleaved(_sine(4096 * 2, hz=200.0))
+        assert meter.integrated_lufs is None
+
+
+def test_loudness_meter_reads_minus_infinity_while_nothing_passes_the_gate() -> None:
+    with PlaybackLoudnessMeter(num_channels=2, sample_rate=SR) as meter:
+        meter.push_interleaved([0.0] * (SR * 2))
+        assert meter.integrated_lufs == -math.inf
 
 
 def test_loudness_meter_rejects_an_unsupported_channel_count() -> None:

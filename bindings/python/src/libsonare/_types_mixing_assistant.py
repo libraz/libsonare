@@ -58,11 +58,12 @@ class MixAssistantTrackProfile:
     duration_sec: float
     """Track duration in seconds."""
     integrated_lufs: float | None
-    """BS.1770 integrated loudness in LUFS; None for a track with no gated block to measure."""
-    true_peak_dbtp: float
-    """True peak in dBTP."""
-    crest_factor_db: float
-    """Crest factor (peak over RMS) in dB."""
+    """BS.1770 integrated loudness in LUFS; ``-inf`` when no block passes the gate, None for
+    an excluded track."""
+    true_peak_dbtp: float | None
+    """True peak in dBTP; ``-inf`` for silence, None for an excluded track."""
+    crest_factor_db: float | None
+    """Crest factor (peak over RMS) in dB; None for a silent or excluded track."""
     spectral_centroid_hz: float
     """Spectral centroid in Hz."""
     spectral_flatness: float
@@ -126,7 +127,7 @@ class MixMonoRisk:
     correlation: float
     """Inter-channel correlation in ``[-1, 1]``."""
     width: float
-    """Side-to-mid level ratio, clamped finite so an anti-phase pair reads a large value."""
+    """Side-to-mid level ratio; ``inf`` for an anti-phase pair, whose mid is silent."""
     wide_low_end: bool
     """True when the track carries meaningful low-frequency stereo width."""
 

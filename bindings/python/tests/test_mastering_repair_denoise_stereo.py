@@ -38,10 +38,6 @@ SR = 22050
 # in sonare_c_mastering.h.
 _NOISE_BAND_COUNT = 32
 
-# sonare::constants::kFloorDb, the value power_to_dbfs saturates at for a band
-# whose bin range is empty at this n_fft / sample rate.
-_FLOOR_DB = -120.0
-
 
 def _noisy(freq: float, seed: int, *, duration: float = 0.5, noise_amp: float = 0.2) -> np.ndarray:
     """A tone plus a broadband bed, deterministic per ``seed``."""
@@ -89,34 +85,33 @@ class TestMasteringRepairDenoiseClassicalStereo:
         assert isinstance(result.report, libsonare.DenoiseReport)
         assert isinstance(result.report.detected, libsonare.NoiseDetection)
 
-    def test_band_floor_array_is_full_length_and_measured(self) -> None:
-        """All 32 entries, not just the first.
+    def test_band_floor_array_lists_every_measured_band(self) -> None:
+        """Every band a bin lands in, each beside its index, and no other.
 
         A ctypes mirror that truncated or misordered ``band_floor_dbfs`` would
         still satisfy a test reading entry 0 alone. At 22050 Hz with the
         default 1024-point STFT the bin grid is 21.5 Hz wide, so the lowest
-        geometric bands cover no bin at all and saturate at the dB floor
-        exactly; the upper bands are measured and must sit well above it.
+        geometric bands cover no bin at all and are left out; the rest are
+        measured and must sit well inside the dB range.
         """
         left, right = _pair()
         result = libsonare.mastering_repair_denoise_classical_stereo(left, right, SR)
-        bands = result.report.detected.band_floor_dbfs
+        detected = result.report.detected
+        bands = detected.band_floor_dbfs
+        edges = libsonare.mastering_repair_noise_band_bins(SR, n_fft=1024)
+        covered = [band for band in range(_NOISE_BAND_COUNT) if edges[band] < edges[band + 1]]
 
-        assert len(bands) == _NOISE_BAND_COUNT
+        assert detected.band_floor_band.tolist() == covered
+        assert len(bands) == len(covered) < _NOISE_BAND_COUNT
+        # A bed at 0.2 RMS puts the per-band floor tens of dB below unity.
         assert all(np.isfinite(bands))
-        assert all(b >= _FLOOR_DB for b in bands)
-
-        measured = [b for b in bands if b > _FLOOR_DB]
-        # A bed at 0.2 RMS puts the per-band floor tens of dB below unity but
-        # nowhere near the -120 dB saturation point.
-        assert len(measured) >= 12
-        assert min(measured) > -100.0
-        assert max(measured) < 0.0
+        assert min(bands) > -100.0
+        assert max(bands) < 0.0
 
         # The broadband figure sums the bands, so it sits above every one of
         # them and below unity.
-        assert _FLOOR_DB < result.report.detected.floor_dbfs < 0.0
-        assert result.report.detected.floor_dbfs >= max(measured)
+        assert detected.floor_dbfs is not None
+        assert max(bands) <= detected.floor_dbfs < 0.0
 
     def test_detected_levels_are_pair_level_not_per_channel(self) -> None:
         """``detected`` is measured on the SUMMED power across both channels.
@@ -150,7 +145,6 @@ class TestMasteringRepairDenoiseClassicalStereo:
                 one.report.detected.band_floor_dbfs,
                 strict=True,
             )
-            if m > _FLOOR_DB
         ]
         assert len(band_deltas) >= 12
         assert all(2.9 < d < 3.1 for d in band_deltas)

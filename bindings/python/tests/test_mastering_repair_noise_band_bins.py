@@ -1,12 +1,11 @@
 """Tests for the noise-band grid the denoise floor is reported on.
 
-The grid exists to separate two things a ``band_floor_dbfs`` entry cannot tell
-apart on its own: a band that measured the floor sentinel because the region was
-quiet, and one that reads the sentinel because the geometric band edges rounded
-to the same bin and NO bin landed in it. So the load-bearing test here is not
-that the numbers are non-decreasing -- it is that the grid actually explains the
-sentinels a real measurement produces, checked with both an empty and a
-non-empty band present so the comparison has two sides to decide between.
+The grid explains which bands ``band_floor_band`` leaves out: those whose
+geometric band edges rounded to the same bin, so NO bin landed in them. So the
+load-bearing test here is not that the numbers are non-decreasing -- it is that
+the grid actually matches the bands a real measurement lists, checked with both
+an empty and a non-empty band present so the comparison has two sides to decide
+between.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ SR = 48000
 N_FFT = 1024
 BAND_COUNT = 32
 EDGE_COUNT = BAND_COUNT + 1
-FLOOR_SENTINEL_DBFS = -120.0
 
 # The grid at SR / N_FFT: the lowest bands are narrower than the 46.9 Hz bin
 # spacing, so six of them round shut.
@@ -38,7 +36,7 @@ def _noise(sigma: float = 0.01, length: int = SR // 2, seed: int = 7) -> NDArray
 
 
 class TestNoiseBandBins:
-    def test_explains_which_band_floors_are_sentinels(self) -> None:
+    def test_names_exactly_the_bands_the_detection_lists(self) -> None:
         """The reason this entry exists, measured against a real floor."""
         bins = libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=SR)
         floor = libsonare.mastering_repair_detect_noise_floor(_noise(), SR, n_fft=N_FFT)
@@ -49,10 +47,9 @@ class TestNoiseBandBins:
         assert len(empty) == EMPTY_BANDS
         assert len(filled) == FILLED_BANDS
 
-        for k in empty:
-            assert floor.band_floor_dbfs[k] == FLOOR_SENTINEL_DBFS
-        for k in filled:
-            assert floor.band_floor_dbfs[k] > FLOOR_SENTINEL_DBFS
+        assert floor.band_floor_band.tolist() == filled
+        assert len(floor.band_floor_dbfs) == len(filled)
+        assert np.isfinite(floor.band_floor_dbfs).all()
 
     def test_is_a_non_decreasing_cover_of_the_one_sided_spectrum(self) -> None:
         bins = libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=SR)

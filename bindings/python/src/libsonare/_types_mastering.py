@@ -221,21 +221,20 @@ class LoudnessMatchResult:
     ``reference_lufs``; it equals ``reference_lufs - source_lufs`` unless the
     gain moves blocks across the absolute gate. It carries no upper bound, so
     ``matched_true_peak_dbtp`` reports where the gain left the peak instead of
-    the match being capped to keep it. A silent or below-gate take has no
-    loudness: its ``reference_lufs`` or ``source_lufs`` is ``None``, and
-    ``applied_gain_db`` is then 0.
+    the match being capped to keep it. A take with no measurable loudness
+    (silent or below the gate) is refused with :class:`SonareValueError`.
     """
 
     samples: npt.NDArray[np.float32]
     """The matched take as float32."""
     sample_rate: int
     """Sample rate of ``samples`` in Hz."""
-    reference_lufs: float | None
-    """Integrated loudness of the reference in LUFS; None for a silent or below-gate take."""
-    source_lufs: float | None
-    """Integrated loudness of the source in LUFS; None for a silent or below-gate take."""
+    reference_lufs: float
+    """Integrated loudness of the reference in LUFS."""
+    source_lufs: float
+    """Integrated loudness of the source in LUFS."""
     applied_gain_db: float
-    """Gain applied to the source, in dB; 0 when either loudness is None."""
+    """Gain applied to the source, in dB."""
     matched_true_peak_dbtp: float
     """True peak of the matched take after the gain, in dBTP."""
 
@@ -250,12 +249,12 @@ class LoudnessMatchStereoResult:
     """The matched right channel as float32."""
     sample_rate: int
     """Sample rate of both channels in Hz."""
-    reference_lufs: float | None
-    """Integrated loudness of the reference in LUFS; None for a silent or below-gate take."""
-    source_lufs: float | None
-    """Integrated loudness of the source in LUFS; None for a silent or below-gate take."""
+    reference_lufs: float
+    """Integrated loudness of the reference in LUFS."""
+    source_lufs: float
+    """Integrated loudness of the source in LUFS."""
     applied_gain_db: float
-    """Shared gain applied to both channels, in dB; 0 when either loudness is None."""
+    """Shared gain applied to both channels, in dB."""
     matched_true_peak_dbtp: float
     """True peak of the matched take after the gain, in dBTP."""
 
@@ -279,17 +278,18 @@ class StreamingLoudnessGain:
     equals the gain :func:`master_audio` applies, ceiling clamp included.
     Pass ``loudness_static_gain_db`` and ``true_peak_dbtp`` as the constructor's
     ``loudness_static_gain_db`` and ``loudness_static_gain_peak_dbtp``. A silent or
-    below-gate stage input has no ``integrated_lufs`` (``None``) and a gain of 0;
-    digital silence has no ``true_peak_dbtp`` (``None``), which the constructor
-    reads as no measured peak.
+    below-gate stage input has no gain (``None``, which the constructor applies as
+    none); its ``integrated_lufs`` is ``-inf``, and digital silence has a
+    ``true_peak_dbtp`` of ``-inf``.
     """
 
-    loudness_static_gain_db: float
-    """Static gain of the loudness stage in dB, ceiling clamp included."""
-    true_peak_dbtp: float | None
-    """True peak at the stage input in dBTP; None for digital silence."""
-    integrated_lufs: float | None
-    """Integrated loudness at the stage input in LUFS; None for a silent or below-gate input."""
+    loudness_static_gain_db: float | None
+    """Static gain of the loudness stage in dB, ceiling clamp included; None for a silent or
+    below-gate input."""
+    true_peak_dbtp: float
+    """True peak at the stage input in dBTP; -inf for digital silence."""
+    integrated_lufs: float
+    """Integrated loudness at the stage input in LUFS; -inf for a silent or below-gate input."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,15 +312,17 @@ class MasteringLoudnessSummary:
     """Existing EBU R128 measurements captured before or after mastering."""
 
     integrated_lufs: float
-    """Integrated loudness in LUFS."""
-    max_momentary_lufs: float
-    """Maximum momentary loudness in LUFS."""
-    max_short_term_lufs: float
-    """Maximum short-term loudness in LUFS."""
+    """Integrated loudness in LUFS; -inf for silence or when nothing passes the gate."""
+    max_momentary_lufs: float | None
+    """Maximum momentary loudness in LUFS; -inf for silence, None when the signal is shorter than
+    one window."""
+    max_short_term_lufs: float | None
+    """Maximum short-term loudness in LUFS; -inf for silence, None when the signal is shorter than
+    one window."""
     true_peak_dbtp: float
-    """True peak, in dBTP."""
-    loudness_range_lu: float
-    """EBU Tech 3342 loudness range, in LU."""
+    """True peak, in dBTP; -inf for silence."""
+    loudness_range_lu: float | None
+    """EBU Tech 3342 loudness range, in LU; None when not measured."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -338,7 +340,8 @@ class MasteringReport:
     loudness_target_limited: bool
     """True when peak headroom prevented the requested LUFS target."""
     band_energy_delta_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
-    """32 log-spaced after-minus-before spectral energy deltas in dB, 20 Hz to Nyquist."""
+    """32 log-spaced after-minus-before spectral energy deltas in dB, 20 Hz to Nyquist; NaN in a
+    band where either spectrum has no level."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -364,10 +367,10 @@ class MasteringChainResult:
     #: when loudness is disabled but that stage ran. The two disagree by
     #: roughly 0.02 dB between 4x and 8x.
     output_true_peak_dbtp: float = 0.0
-    """True peak of the output, in dBTP."""
+    """True peak of the output, in dBTP; -inf for silence."""
     #: EBU Tech 3342 Loudness Range of the output (LU).
-    output_loudness_range_lu: float = 0.0
-    """EBU Tech 3342 loudness range of the output, in LU."""
+    output_loudness_range_lu: float | None = None
+    """EBU Tech 3342 loudness range of the output, in LU; None when not measured."""
     #: True when peak headroom prevented the requested LUFS target.
     loudness_target_limited: bool = False
     """True when peak headroom prevented the requested LUFS target."""
@@ -412,9 +415,9 @@ class MasteringChainStereoResult:
     """Identifiers of the stages the chain applied."""
     #: See :class:`MasteringChainResult` for field semantics.
     output_true_peak_dbtp: float = 0.0
-    """True peak of the output, in dBTP."""
-    output_loudness_range_lu: float = 0.0
-    """EBU Tech 3342 loudness range of the output, in LU."""
+    """True peak of the output, in dBTP; -inf for silence."""
+    output_loudness_range_lu: float | None = None
+    """EBU Tech 3342 loudness range of the output, in LU; None when not measured."""
     loudness_target_limited: bool = False
     """True when peak headroom prevented the requested LUFS target."""
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)

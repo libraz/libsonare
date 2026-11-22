@@ -23,6 +23,7 @@ from ._cli_common import (
     _atomic_write_bytes,
     _audio_array,
     _cli_token,
+    _fmt_optional,
     _json_key_to_snake_case,
     _library_token,
     _load_channels_or_downmix,
@@ -562,7 +563,7 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
         print("  Channel strip:")
         print(f"    Samples:     {frames}")
         print(f"    Sample rate: {sample_rate} Hz")
-        print(f"    Correlation: {meter.correlation:.6f}")
+        print(f"    Correlation: {_fmt_optional(meter.correlation, '.6f')}")
         print(f"    Mono-compatible: {'yes' if meter.likely_mono_compatible else 'no'}")
         if args.output:
             print(f"    Wrote: {args.output}")

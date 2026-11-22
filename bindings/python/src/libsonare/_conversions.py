@@ -29,6 +29,7 @@ from ._runtime import (
     _from_c_int_array,
     _get_lib,
     _guard_buffer,
+    _measured_level,
     _narrow_int,
     _out_float_array,
     _out_int_array,
@@ -484,8 +485,9 @@ class SilenceCommonReport:
     (>= 2) and whether the takes differ in how broken up they are.
     """
 
-    silence_ceiling_db: float
-    """Largest ``top_db`` at which every signal still shows silence."""
+    silence_ceiling_db: float | None
+    """Largest ``top_db`` at which every signal still shows silence; None when any signal's peak is
+    0 or it holds an exactly zero frame, where the depth has no finite value."""
     max_signal_intervals: int
     """Interval count of the most fragmented signal on its own, before the union."""
     min_signal_intervals: int
@@ -602,7 +604,7 @@ def split_silence_common_with_report(
     return SplitSilenceCommonWithReportResult(
         intervals=intervals,
         report=SilenceCommonReport(
-            silence_ceiling_db=float(report.silence_ceiling_db),
+            silence_ceiling_db=_measured_level(report.silence_ceiling_db),
             max_signal_intervals=int(report.max_signal_intervals),
             min_signal_intervals=int(report.min_signal_intervals),
         ),

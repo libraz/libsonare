@@ -22,7 +22,7 @@ import numpy as np
 from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._mastering_offline import _mastering_params
 from ._narrowing import _narrow_double
-from ._result_records import _fields
+from ._result_records import _fields, _fill_null_ends
 from ._runtime import (
     _C_INT_MAX,
     _as_float32_buffer,
@@ -286,16 +286,15 @@ def _track_profile_from_wire(wire: dict[str, Any]) -> MixAssistantTrackProfile:
     for key in (
         "source_confidence",
         "duration_sec",
-        "true_peak_dbtp",
-        "crest_factor_db",
         "spectral_centroid_hz",
         "spectral_flatness",
         "attack_per_second",
         "sustain_ratio",
     ):
         fields[key] = float(fields[key])
-    if fields["integrated_lufs"] is not None:
-        fields["integrated_lufs"] = float(fields["integrated_lufs"])
+    # Absent for an excluded track (and the crest factor for a silent one): not measured.
+    for key in ("integrated_lufs", "true_peak_dbtp", "crest_factor_db"):
+        fields[key] = None if fields.get(key) is None else float(fields[key])
     fields["band_occupancy"] = {band: float(share) for band, share in wire["bandOccupancy"].items()}
     return MixAssistantTrackProfile(**fields)
 
@@ -340,6 +339,7 @@ def _mix_profile_from_wire(wire: dict[str, Any]) -> MixAssistantMixProfile:
 
 
 def _mix_assistant_result_from_wire(wire: dict[str, Any]) -> MixAssistantResult:
+    _fill_null_ends(wire, "mix_assistant_result")
     return MixAssistantResult(
         scene=wire["scene"],
         tracks=[_track_profile_from_wire(track) for track in wire["tracks"]],

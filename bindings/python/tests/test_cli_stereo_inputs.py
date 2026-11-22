@@ -272,7 +272,8 @@ def test_normalize_carries_a_stereo_source_through_on_one_gain(tmp_path) -> None
 
 _ROOM_MORPH_ARGS = [
     *("--length", "6", "--width", "4", "--height", "3"),
-    *("--source-x", "1.5", "--source-y", "1.5", "--listener-x", "4", "--listener-y", "2"),
+    *("--source-x", "1.5", "--source-y", "1.5", "--source-z", "1.5"),
+    *("--listener-x", "4", "--listener-y", "2", "--listener-z", "1.5"),
     *("--max-sec", "0.3"),
 ]
 

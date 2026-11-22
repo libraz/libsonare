@@ -22,10 +22,9 @@ from ._mastering_offline import (
     _mastering_params,
 )
 from ._narrowing import _narrow_double
-from ._result_records import _record
+from ._result_records import _fill_null_ends, _optional_float, _record
 from ._runtime import (
     _check,
-    _finite_or_none,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -321,8 +320,8 @@ def mastering_ab_match_loudness(
     return LoudnessMatchResult(
         samples=matched,
         sample_rate=sample_rate,
-        reference_lufs=_finite_or_none(match.reference_lufs),
-        source_lufs=_finite_or_none(match.source_lufs),
+        reference_lufs=float(match.reference_lufs),
+        source_lufs=float(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),
         matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
     )
@@ -391,8 +390,8 @@ def mastering_ab_match_loudness_stereo(
         left=matched[0],
         right=matched[1],
         sample_rate=sample_rate,
-        reference_lufs=_finite_or_none(match.reference_lufs),
-        source_lufs=_finite_or_none(match.source_lufs),
+        reference_lufs=float(match.reference_lufs),
+        source_lufs=float(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),
         matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
     )
@@ -490,10 +489,6 @@ def _take_json(lib: Any, json_ptr: ctypes.c_char_p) -> Any:
             lib.sonare_free_string(json_ptr)
 
 
-def _optional_float(value: Any) -> float | None:
-    return None if value is None else float(value)
-
-
 def _pair_analysis_from_wire(
     name: str, wire: Mapping[str, Any]
 ) -> (
@@ -503,20 +498,22 @@ def _pair_analysis_from_wire(
     | MatchEstimateReferenceDelaySamplesResult
 ):
     if name == "match.referenceLoudness":
+        _fill_null_ends(wire, "match_reference_loudness")
         return MatchReferenceLoudnessResult(
-            source_lufs=_optional_float(wire["sourceLufs"]),
-            reference_lufs=_optional_float(wire["referenceLufs"]),
-            gain_to_match_db=_optional_float(wire["gainToMatchDb"]),
+            source_lufs=float(wire["sourceLufs"]),
+            reference_lufs=float(wire["referenceLufs"]),
+            gain_to_match_db=_optional_float(wire.get("gainToMatchDb")),
         )
     if name in ("match.tonalBalance", "match.tonalBalanceLogBands"):
+        _fill_null_ends(wire, "match_tonal_balance")
         return MatchTonalBalanceResult(
             bands=[
                 MatchTonalBalanceBand(
                     low_hz=float(band["lowHz"]),
                     high_hz=float(band["highHz"]),
-                    source_db=float(band["sourceDb"]),
-                    reference_db=float(band["referenceDb"]),
-                    deviation_db=float(band["deviationDb"]),
+                    source_db=_optional_float(band.get("sourceDb")),
+                    reference_db=_optional_float(band.get("referenceDb")),
+                    deviation_db=_optional_float(band.get("deviationDb")),
                 )
                 for band in wire["bands"]
             ]
@@ -533,9 +530,10 @@ def _stereo_analysis_from_wire(
     name: str, wire: Mapping[str, Any]
 ) -> StereoMonoCompatCheckResult | StereoMonoCompatCheckLogBandsResult:
     if name == "stereo.monoCompatCheck":
+        _fill_null_ends(wire, "stereo_mono_compat")
         return StereoMonoCompatCheckResult(
-            correlation=float(wire["correlation"]),
-            width=_optional_float(wire["width"]),
+            correlation=_optional_float(wire.get("correlation")),
+            width=_optional_float(wire.get("width")),
             mono_peak=float(wire["monoPeak"]),
             side_rms=float(wire["sideRms"]),
             likely_mono_compatible=bool(wire["likelyMonoCompatible"]),
@@ -554,17 +552,14 @@ def _stereo_analysis_from_wire(
 
 
 def _streaming_preview_from_wire(wire: Mapping[str, Any]) -> MasteringStreamingPreviewResult:
+    _fill_null_ends(wire, "streaming_preview")
     return MasteringStreamingPreviewResult(
         platforms=[
             MasteringStreamingPreviewPlatform(
                 name=str(platform["name"]),
-                integrated_lufs=(
-                    None
-                    if platform["integratedLufs"] is None
-                    else float(platform["integratedLufs"])
-                ),
+                integrated_lufs=float(platform["integratedLufs"]),
                 true_peak_dbtp=float(platform["truePeakDbtp"]),
-                normalization_gain_db=float(platform["normalizationGainDb"]),
+                normalization_gain_db=_optional_float(platform.get("normalizationGainDb")),
                 ceiling_risk=bool(platform["ceilingRisk"]),
             )
             for platform in wire["platforms"]
@@ -573,6 +568,7 @@ def _streaming_preview_from_wire(wire: Mapping[str, Any]) -> MasteringStreamingP
 
 
 def _assistant_result_from_wire(wire: Mapping[str, Any]) -> MasteringAssistantResult:
+    _fill_null_ends(wire, "assistant_result")
     return MasteringAssistantResult(
         chain_config=_document_params(wire["chainConfig"]),
         explanation=[str(line) for line in wire["explanation"]],
@@ -581,6 +577,7 @@ def _assistant_result_from_wire(wire: Mapping[str, Any]) -> MasteringAssistantRe
 
 
 def _audio_profile_from_wire(wire: Mapping[str, Any]) -> MasteringAudioProfile:
+    _fill_null_ends(wire, "audio_profile")
     defects = wire.get("defects")
     return MasteringAudioProfile(
         duration_sec=float(wire["durationSec"]),

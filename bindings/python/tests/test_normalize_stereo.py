@@ -165,13 +165,17 @@ class TestNormalizeStereoSilence:
             (_RMS_STEREO, -20.0),
         ],
     )
-    def test_a_silent_pair_comes_back_untouched(self, call: object, target_db: float) -> None:
+    def test_a_silent_pair_is_refused(self, call: object, target_db: float) -> None:
+        # Silence has no level to scale toward, so no gain is a guess.
         silence = np.zeros(512, dtype=np.float32)
-        result = call(silence, silence, SR, target_db=target_db)  # type: ignore[operator]
+        with pytest.raises(SonareValueError, match="audio has no measurable level"):
+            call(silence, silence, SR, target_db=target_db)  # type: ignore[operator]
 
-        assert result.length == len(silence)
-        assert np.array_equal(np.asarray(result.left, dtype=np.float32), silence)
-        assert np.array_equal(np.asarray(result.right, dtype=np.float32), silence)
+    @pytest.mark.parametrize("mode", ["peak", "rms"])
+    def test_a_silent_take_is_refused_in_each_mono_mode(self, mode: str) -> None:
+        silence = np.zeros(512, dtype=np.float32)
+        with pytest.raises(SonareValueError, match="normalize: audio has no measurable level"):
+            libsonare.normalize(silence, SR, mode=mode)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
         ("call", "target_db"),
@@ -181,11 +185,11 @@ class TestNormalizeStereoSilence:
         ],
     )
     def test_a_quiet_but_not_silent_pair_does_move(self, call: object, target_db: float) -> None:
-        """Control for the silence case: untouched must mean silence, not "quiet".
+        """Control for the silence case: the refusal must mean silence, not "quiet".
 
-        At -80 dBFS the pair is far below anything audible and still sits well
-        above the silence epsilon, so an untouched result here would mean the
-        short-circuit had swallowed a real signal.
+        At -80 dBFS the pair is far below anything audible and still measurable,
+        so a refusal or an untouched result here would mean the silence check had
+        swallowed a real signal.
         """
         quiet = _alternating(1e-4, 512)
         result = call(quiet, quiet, SR, target_db=target_db)  # type: ignore[operator]

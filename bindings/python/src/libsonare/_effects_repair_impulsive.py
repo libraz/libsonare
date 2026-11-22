@@ -291,25 +291,22 @@ def mastering_repair_declip(
     clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> DeclipResult:
     """Offline LPC-based declipper.
 
     Only clipped runs of at most 512 consecutive samples are reconstructed with the
     LPC solver. The cap is a fixed sample count: it is not derived from ``lpc_order``,
     from ``sample_rate``, or from any other argument, so its duration depends on the
-    rate (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
-    instead, which keeps the solver's dense matrices bounded by the cap rather than by
-    the input. Exceeding the cap silently changes the reconstruction method rather than
-    raising: ``lpc_order``, ``iterations`` and ``lpc_blend`` have no effect on the
-    interpolated run.
+    rate (~10.7 ms at 48 kHz), and it keeps the solver's dense matrices bounded by the
+    cap rather than by the input. A longer run, a run with no usable solve, and a run
+    whose reconstruction would rise more than 20 dB above the threshold are left
+    clipped and counted in ``unreconstructed_runs``; none of them raises.
     """
     # Narrowed rather than coerced: int() takes 2.7 as 2, an iteration count nobody asked for.
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
         iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
-        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     lib = _get_lib()
     audio, report = _run_repair(
@@ -346,12 +343,11 @@ def mastering_repair_detect_clipping(
     clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> ClipDetection:
     """Measure clipping without repairing it.
 
     Counts samples at or past ``clip_threshold_db``; NO other argument reaches the
-    result. ``lpc_order``, ``iterations`` and ``lpc_blend`` are accepted so one
+    result. ``lpc_order`` and ``iterations`` are accepted so one
     set of arguments configures both this call and
     :func:`mastering_repair_declip`, and ``sample_rate`` is validated without
     being read, since no field here is a rate::
@@ -360,9 +356,8 @@ def mastering_repair_detect_clipping(
         if detected.clipped_ratio > 0.0:
             samples = libsonare.mastering_repair_declip(samples, 44100).samples
 
-    ``longest_run_samples`` past 512 is the one field that predicts the repair's
-    method rather than its extent: a longer run takes the interpolation fallback
-    instead of the LPC solver, for which the three solver arguments do nothing.
+    ``longest_run_samples`` past 512 predicts what the repair leaves alone: a
+    longer run is left clipped rather than reconstructed.
 
     The flat-top fields (``flat_run_count``, ``longest_flat_run_samples``,
     ``flat_sample_count``, ``flat_level``) answer a different question: they
@@ -393,8 +388,6 @@ def mastering_repair_detect_clipping(
         lpc_order: LPC order the repair would use (default 36); not read here.
         iterations: Reconstruction iterations the repair would use (default 2);
             not read here.
-        lpc_blend: LPC vs interpolation blend the repair would use (default
-            0.65); not read here.
 
     Returns:
         :class:`~libsonare.types.ClipDetection`.
@@ -407,7 +400,6 @@ def mastering_repair_detect_clipping(
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
         iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
-        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     return _extract_clip_detection(
         _run_detection(
@@ -424,7 +416,7 @@ def _extract_declip_report(raw: Any) -> DeclipReport:
     return DeclipReport(
         detected=_extract_clip_detection(raw.detected),
         lpc_reconstructed_runs=int(raw.lpc_reconstructed_runs),
-        interpolated_runs=int(raw.interpolated_runs),
+        unreconstructed_runs=int(raw.unreconstructed_runs),
         repaired_samples=int(raw.repaired_samples),
         linked_runs=int(raw.linked_runs),
     )
@@ -440,7 +432,6 @@ def mastering_repair_declip_stereo(
     clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
-    lpc_blend: float = 0.65,
 ) -> DeclipStereoResult:
     """Declips a stereo pair over the union of both channels' clipped runs.
 
@@ -460,7 +451,6 @@ def mastering_repair_declip_stereo(
             (default 20 * log10(0.98)).
         lpc_order: LPC order used for prediction (default 36).
         iterations: LPC reconstruction iterations (default 2).
-        lpc_blend: LPC vs interpolation blend (default 0.65).
 
     Returns:
         :class:`DeclipStereoResult` with the declipped channels and each
@@ -475,7 +465,6 @@ def mastering_repair_declip_stereo(
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
         iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
-        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     out = SonareDeclipStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_declip_stereo(

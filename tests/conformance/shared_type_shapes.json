@@ -98,6 +98,7 @@
   "optional": {
     "CapabilityCatalogChainList": ["form", "processor"],
     "CapabilityCatalogChainStage": ["form", "processor"],
+    "DynamicsResult": ["crestFactor", "dynamicRangeDb", "loudnessRangeLu"],
     "MasteringPresetCatalogEntry": [
       "maxLimiterGainReductionDb",
       "targetLufs",

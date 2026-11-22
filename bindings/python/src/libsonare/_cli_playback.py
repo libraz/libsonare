@@ -179,9 +179,9 @@ def _resolved_program_lufs(
     """The caller's --program-lufs, or a fresh measure of the whole input.
 
     Returns ``None`` (leaving the config's own null/schema default) when there
-    is nothing to overlay: an input too short or too quiet for BS.1770 gating
-    to report anything measures at the library's generic dB floor, well
-    outside the schema's accepted range.
+    is nothing to overlay: an input too short for BS.1770 gating to report
+    anything reads ``None``, and one too quiet reads ``-inf``, outside the
+    schema's accepted range.
     """
     if args.program_lufs is not None:
         return float(args.program_lufs)
@@ -191,7 +191,7 @@ def _resolved_program_lufs(
         measured = meter.integrated_lufs
     finally:
         meter.close()
-    if not math.isfinite(measured) or measured < -70.0 or measured > 0.0:
+    if measured is None or not math.isfinite(measured) or measured < -70.0 or measured > 0.0:
         return None
     return measured
 

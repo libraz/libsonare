@@ -14,6 +14,7 @@ from ._cli_common import (
     _YELLOW,
     _array_stats,
     _decode_mono,
+    _fmt_optional,
     _strict_json_dumps,
     _styled,
 )
@@ -176,7 +177,7 @@ def cmd_meter(args: argparse.Namespace) -> int:
         _print_file_heading(args, "Meters:", _YELLOW)
         print(f"    Peak:           {peak:.2f} dB")
         print(f"    RMS:            {rms:.2f} dB")
-        print(f"    Crest Factor:   {crest:.2f} dB")
+        print(f"    Crest Factor:   {_fmt_optional(crest, '.2f', ' dB')}")
         print(f"    True Peak:      {true_peak:.2f} dBTP")
         print(f"    Clipping Ratio: {clipping_ratio:.6f}")
         print(f"    Silence Ratio:  {silence:.6f}")
@@ -279,8 +280,8 @@ def cmd_stereo(args: argparse.Namespace) -> int:
         print(_strict_json_dumps({"correlation": correlation, "stereo_width": width}))
     else:
         print("Stereo Image:")
-        print(f"  Correlation:  {correlation:.4f}")
-        print(f"  Stereo Width: {width:.4f}")
+        print(f"  Correlation:  {_fmt_optional(correlation, '.4f')}")
+        print(f"  Stereo Width: {_fmt_optional(width, '.4f')}")
     return 0
 
 

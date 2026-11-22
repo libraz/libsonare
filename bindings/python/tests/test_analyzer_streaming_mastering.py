@@ -411,16 +411,14 @@ def test_streaming_mastering_chain_refuses_a_renamed_key_as_any_other_unknown_ke
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
-    """A loudness-enabled config no longer raises when a static gain is supplied."""
+    """A loudness-enabled config builds with no static gain, which applies none, or with one."""
     from libsonare import StreamingMasteringChain
 
-    # Without a static gain a loudness target raises (cannot measure online)...
-    with raises_coded():
-        StreamingMasteringChain(
-            {"loudness": {"targetLufs": -14.0}}, sample_rate=44100, num_channels=1
-        )
+    with StreamingMasteringChain(
+        {"loudness": {"targetLufs": -14.0}}, sample_rate=44100, num_channels=1
+    ) as no_gain:
+        assert all(math.isfinite(x) for x in no_gain.process_mono([0.1] * 128))
 
-    # ...but supplying a precomputed static gain makes it processable.
     chain = StreamingMasteringChain(
         {"loudness": {"targetLufs": -14.0}},
         sample_rate=44100,

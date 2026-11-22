@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -77,19 +78,24 @@ def test_streaming_preview_result(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
 
 
-def test_a_silent_take_has_no_integrated_loudness(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_silent_take_reads_minus_infinity_and_prints_it_as_null(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from libsonare._cli_common import _sanitize_json_value
     from libsonare._result_records import _result_to_json_dict
 
     silence = np.zeros(SR, dtype=np.float32)
     wires = _capture_wire(monkeypatch, "_audio_profile_from_wire")
     profile = libsonare.mastering_audio_profile(silence, SR)
     preview = libsonare.mastering_streaming_preview(silence, SR)
-    assert profile.loudness.integrated_lufs is None
-    assert all(p.integrated_lufs is None for p in preview.platforms)
-    # The command line used to print the absent measurement as null; it now omits the key.
+    assert profile.loudness.integrated_lufs == -math.inf
+    assert all(p.integrated_lufs == -math.inf for p in preview.platforms)
+    # The reader restores the document's null to the infinite end in place; the command
+    # line prints that end as null again.
     (wire,) = wires
-    assert _cli_view(wire)["loudness"]["integrated_lufs"] is None
-    assert "integrated_lufs" not in _result_to_json_dict(profile)["loudness"]
+    assert _cli_view(wire)["loudness"]["integrated_lufs"] == -math.inf
+    printed = _sanitize_json_value(_result_to_json_dict(profile))
+    assert printed["loudness"]["integrated_lufs"] is None
 
 
 def test_audio_profile_result(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -183,8 +189,8 @@ def test_stereo_analysis_results(monkeypatch: pytest.MonkeyPatch, name: str, typ
     assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
 
 
-def test_an_out_of_phase_pair_has_no_width() -> None:
+def test_an_out_of_phase_pair_is_infinitely_wide() -> None:
     result = libsonare.mastering_analyze_stereo("stereo.monoCompatCheck", SOURCE, -SOURCE, SR)
     assert isinstance(result, libsonare.StereoMonoCompatCheckResult)
-    assert result.width is None
+    assert result.width == math.inf
     assert result.correlation == pytest.approx(-1.0, abs=1e-3)

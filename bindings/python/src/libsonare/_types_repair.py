@@ -149,9 +149,9 @@ class DeclipReport:
     """What one channel's declip pass found and did to it.
 
     ``lpc_reconstructed_runs`` is runs the solver filled;
-    ``interpolated_runs`` is runs past the 512-sample cap filled by cubic /
-    linear interpolation instead, for which ``lpc_order``, ``iterations`` and
-    ``lpc_blend`` had no effect. ``linked_runs`` is the part of the repaired
+    ``unreconstructed_runs`` is runs left clipped: past the 512-sample gap cap,
+    without a usable solve, or reconstructed more than 20 dB above the
+    threshold. ``linked_runs`` is the part of the repaired
     runs reaching past this channel's own clipped samples because the other
     channel's run was wider -- always 0 from the mono declip entry point.
     """
@@ -160,10 +160,10 @@ class DeclipReport:
     """This channel's own clip detection on the input, before repair."""
     lpc_reconstructed_runs: int
     """Number of runs the LPC solver filled."""
-    interpolated_runs: int
-    """Number of runs past the 512-sample cap, filled by interpolation instead of the LPC solver."""
+    unreconstructed_runs: int
+    """Number of runs left clipped rather than reconstructed."""
     repaired_samples: int
-    """Number of samples overwritten by either fill."""
+    """Number of samples in the reconstructed runs."""
     linked_runs: int
     """Repaired runs reaching past this channel's own clipped samples; always 0 from the mono entry
     point."""
@@ -285,8 +285,9 @@ class HumDetection:
     the config says -- the fixed path notches the configured frequency
     without ever looking for hum, so a detector following the flag would
     hand back its own input. ``harmonic_dbfs`` is measured for every
-    harmonic the sample rate carries, not only the notched ones; an entry
-    past Nyquist reads the dB floor because nothing is there to measure.
+    harmonic the sample rate carries, not only the notched ones, and ends before the
+    first harmonic at or past Nyquist, where nothing is there to measure; a harmonic
+    with no energy reads ``-inf``.
     ``fundamental_prominence`` is a linear energy ratio (not dB); 1.0 means no
     peak was found.
     """
@@ -367,15 +368,18 @@ class NoiseDetection:
     on the channel-summed power, so two identical channels read about 3 dB
     above the same material through :func:`mastering_repair_denoise_classical`.
     Compare a stereo floor against another stereo floor, never against a
-    mono one. ``band_floor_dbfs`` has 32 entries on a geometric grid from
-    20 Hz to Nyquist, low to high.
+    mono one.
     """
 
-    floor_dbfs: float
-    """Broadband estimated noise floor in dBFS."""
+    floor_dbfs: float | None
+    """Broadband estimated noise floor in dBFS; -inf for digital silence, None when there is
+    nothing to measure from."""
     band_floor_dbfs: npt.NDArray[np.float32]
-    """Noise floor in dBFS per band: 32 entries on a geometric grid from 20 Hz to Nyquist, low to
-    high."""
+    """Noise floor in dBFS of each band holding an analysis bin, low to high, on a 32-band
+    geometric grid from 20 Hz to Nyquist; ``band_floor_band`` names each entry's band, and a band
+    of zero power reads -inf."""
+    band_floor_band: npt.NDArray[np.int32]
+    """Band index, in ``[0, 32)``, of each ``band_floor_dbfs`` entry, ascending."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -625,8 +629,6 @@ class DeclipStage:
     """LPC order used for prediction."""
     iterations: int | None = None
     """Number of LPC reconstruction iterations."""
-    lpc_blend: float | None = None
-    """Blend between the LPC reconstruction and interpolation."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -781,7 +783,8 @@ class MasteringRepairAnalysis:
     """Whether a declip at the flat level leaves louder audio alone; when False, declip is withheld
     from ``recommended``."""
     integrated_lufs: float
-    """Integrated loudness in LUFS the noise floor is compared against."""
+    """Integrated loudness in LUFS the noise floor is compared against; -inf for a silent or
+    below-gate take."""
     recommended: list[RepairStage]
     """Stages the measurement supports, in application order, each with every setting given."""
     explanation: list[str]

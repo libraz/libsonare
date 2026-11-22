@@ -30,7 +30,9 @@ def _defects() -> AudioDefects:
             flat_level=None,
         ),
         crackle=CrackleDetection(sample_count=0, sample_fraction=0.0, per_second=0.0),
-        noise=NoiseDetection(floor_dbfs=-72.0, band_floor_dbfs=[-80.0, -61.5, -90.0]),
+        noise=NoiseDetection(
+            floor_dbfs=-72.0, band_floor_dbfs=[-80.0, -61.5, -90.0], band_floor_band=[0, 2, 3]
+        ),
         hum=HumDetection(
             fundamental_hz=60.0,
             fundamental_prominence=4.0,
@@ -56,6 +58,7 @@ def test_report_keeps_each_detector_group_in_snake_case() -> None:
     # No flat run was found, so no flat-top level was measured.
     assert "flat_level" not in report["clip"]
     assert report["noise"]["band_floor_dbfs"] == [-80.0, -61.5, -90.0]
+    assert report["noise"]["band_floor_band"] == [0, 2, 3]
     assert report["hum"]["harmonic_dbfs"] == [-50.0, -44.0, -120.0]
     assert report["reverb"] == {"late_decay_ratio_db": -18.0}
 
@@ -71,5 +74,5 @@ def test_text_report_derives_the_loudest_band_and_harmonic(
 ) -> None:
     _print_repair_detection_report(_repair_detection_report(_defects()))
     out = capsys.readouterr().out
-    assert "loudest band -61.5 dBFS (band 1)" in out
+    assert "loudest band -61.5 dBFS (band 2)" in out
     assert "fundamental -50.0 dBFS, loudest harmonic -44.0 dBFS" in out

@@ -873,6 +873,17 @@ def _native_cli() -> Path | None:
     return None
 
 
+def _build_type(artifact: Path) -> str | None:
+    """CMAKE_BUILD_TYPE of the build tree an artifact sits in (``<tree>/{bin,lib}/``), if known."""
+    cache = artifact.resolve().parent.parent / "CMakeCache.txt"
+    if not cache.is_file():
+        return None
+    for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("CMAKE_BUILD_TYPE:"):
+            return line.partition("=")[2] or None
+    return None
+
+
 def _write_pcm16_input(path: Path, channels: int, frames: int) -> None:
     import numpy as np
 
@@ -913,6 +924,13 @@ def test_python_cli_wav_data_matches_the_native_cli_byte_for_byte(
     native = _native_cli()
     if native is None:
         pytest.skip("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+    from libsonare._ffi import resolved_library_path
+
+    # Float rendering differs across optimization levels, so two build types are two measurements.
+    native_type = _build_type(native)
+    library_type = _build_type(Path(resolved_library_path()))
+    if native_type and library_type and native_type != library_type:
+        pytest.skip(f"not compared: native CLI is {native_type}, library is {library_type}")
     source = tmp_path / "in.wav"
     _write_pcm16_input(source, channels, _CHUNK + 5000)
     outputs = {}

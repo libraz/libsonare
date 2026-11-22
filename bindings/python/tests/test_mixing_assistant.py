@@ -10,6 +10,7 @@ when every decision domain is switched off.
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
 import pytest
@@ -534,7 +535,7 @@ def test_a_track_profile_reports_absent_facts_as_none():
     assert bass.integrated_lufs is not None
     assert set(bass.band_occupancy) == {"sub", "low", "lowMid", "mid", "highMid", "high", "air"}
     assert sum(bass.band_occupancy.values()) == pytest.approx(1.0, abs=1e-3)
-    # A silent track has no gated block, so no loudness, and says why it was set aside.
+    # A silent track reads -inf loudness, and says why it was set aside.
     assert silence.name == "pad"
-    assert silence.integrated_lufs is None
+    assert silence.integrated_lufs == -math.inf
     assert silence.exclusion_reason == "track is silent"

@@ -139,12 +139,10 @@ class TestWhatTheChannelCountMoves:
         per_band = np.asarray(three.report.detected.band_floor_dbfs) - np.asarray(
             one.report.detected.band_floor_dbfs
         )
-        # Bands whose bin range is empty saturate at the floor sentinel and
-        # cannot move; every band that measured anything moves by the same
-        # amount as the broadband figure.
-        live = per_band[np.asarray(one.report.detected.band_floor_dbfs) > -120.0]
-        assert live.size > 0
-        assert np.allclose(live, 10.0 * np.log10(3.0), atol=1e-3)
+        # Bands holding no bin are not listed; every band that measured
+        # anything moves by the same amount as the broadband figure.
+        assert per_band.size > 0
+        assert np.allclose(per_band, 10.0 * np.log10(3.0), atol=1e-3)
 
     def test_denoise_attenuation_figures_are_fractions_and_stay_put(
         self, signal: NDArray[np.float32]

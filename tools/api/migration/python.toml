@@ -3624,10 +3624,10 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are
 [[entry]]
 kind = "field"
 old = "DynamicsResult.loudness_rms_db"
-changed = "float32 ndarray instead of list"
+changed = "float32 ndarray instead of list; -inf for an all-zero window"
 domain = "analysis"
 rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
 
 [[entry]]
 kind = "field"
@@ -6092,10 +6092,10 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "PlaybackLoudnessMeter.integrated_lufs"
-changed = "a property (was a method)"
+changed = "a property (was a method); None before the first gating block and -inf while nothing passes the gate"
 domain = "engine"
 rule = "getters"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+test = "bindings/python/tests/test_playback.py::test_loudness_meter_is_unmeasured_before_the_first_gating_block"
 
 [[entry]]
 kind = "method"
@@ -7351,30 +7351,38 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "LufsResult.loudness_range"
-new = "LufsResult.loudness_range_lu"
+changed = "loudness_range -> loudness_range_lu, float | None: None when no short-term window passes the gate (a signal shorter than 3 s, or silence)"
+to = "LufsResult.loudness_range_lu"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
 
 [[entry]]
 kind = "field"
 old = "MasteringLoudnessSummary.loudness_range"
-new = "MasteringLoudnessSummary.loudness_range_lu"
+changed = "loudness_range -> loudness_range_lu, float | None: None when not measured"
+to = "MasteringLoudnessSummary.loudness_range_lu"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
 
 [[entry]]
 kind = "field"
 old = "DynamicsResult.loudness_range_db"
-new = "DynamicsResult.loudness_range_lu"
+changed = "loudness_range_db -> loudness_range_lu, float | None: None when not measured (silence)"
+to = "DynamicsResult.loudness_range_lu"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
 
 [[entry]]
 kind = "field"
 old = "MasteringChainResult.output_lra"
-new = "MasteringChainResult.output_loudness_range_lu"
+changed = "output_lra -> output_loudness_range_lu, float | None: None when not measured (a take shorter than 3 s, or silence)"
+to = "MasteringChainResult.output_loudness_range_lu"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
 
 [[entry]]
 kind = "field"
@@ -7386,23 +7394,29 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.true_peak_db_l"
-new = "MixMeterSnapshot.true_peak_dbtp_l"
+changed = "true_peak_db_l -> true_peak_dbtp_l, float | None: -inf for silence, None when true peak is switched off"
+to = "MixMeterSnapshot.true_peak_dbtp_l"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.true_peak_db_r"
-new = "MixMeterSnapshot.true_peak_dbtp_r"
+changed = "true_peak_db_r -> true_peak_dbtp_r, float | None: -inf for silence, None when true peak is switched off"
+to = "MixMeterSnapshot.true_peak_dbtp_r"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.max_true_peak_db"
-new = "MixMeterSnapshot.max_true_peak_dbtp"
+changed = "max_true_peak_db -> max_true_peak_dbtp, float | None: -inf for silence, None when true peak is switched off"
+to = "MixMeterSnapshot.max_true_peak_dbtp"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
 
 [[entry]]
 kind = "field"
@@ -7491,9 +7505,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "AnalysisDynamics.loudness_range_db"
-new = "AnalysisDynamics.loudness_range_lu"
+to = "AnalysisDynamics.loudness_range_lu"
+changed = "loudness_range_db -> loudness_range_lu, float | None: None for a silent input"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_level_silence.py::test_silent_analysis_dynamics_read_minus_infinity"
 
 [[entry]]
 kind = "field"
@@ -7521,9 +7537,11 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_metronome_clic
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.max_true_peak_db"
-new = "MeterTelemetryRecord.max_true_peak_dbtp"
+changed = "max_true_peak_db -> max_true_peak_dbtp, float | None: -inf for silence, None when not measured"
+to = "MeterTelemetryRecord.max_true_peak_dbtp"
 domain = "engine"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
 
 [[entry]]
 kind = "field"
@@ -7542,11 +7560,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGain.true_peak_db"
+changed = "true_peak_db -> true_peak_dbtp: -inf for digital silence, never None"
 to = "StreamingLoudnessGain.true_peak_dbtp"
-changed = "None for digital silence (was the meter's -120 floor); the StreamingMasteringChain constructor reads None as no measured peak"
 domain = "mastering"
-rule = "unit-in-name"
-test = "bindings/python/tests/test_absent_measurements.py::test_silent_loudness_reads_are_absent"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_streaming_loudness_gain.py::test_silence_leaves_the_gain_unmeasured"
 
 [[entry]]
 kind = "type"
@@ -7890,28 +7908,28 @@ test = "bindings/python/tests/test_chord_annotation.py::test_an_unknown_root_or_
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGain.integrated_lufs"
-changed = "None for a silent or below-gate input (was non-finite)"
+changed = "-inf for a silent or below-gate input, never None"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_measurements.py::test_silent_loudness_reads_are_absent"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_streaming_loudness_gain.py::test_silence_leaves_the_gain_unmeasured"
 
 [[entry]]
 kind = "field"
 old = "LoudnessMatch.reference_lufs"
 to = "LoudnessMatchResult.reference_lufs"
-changed = "None for a silent or below-gate take (was non-finite)"
+changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_reports_no_loudness_and_no_gain"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_as_having_no_loudness_to_match"
 
 [[entry]]
 kind = "field"
 old = "LoudnessMatch.source_lufs"
 to = "LoudnessMatchResult.source_lufs"
-changed = "None for a silent or below-gate take (was non-finite)"
+changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
 domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_reports_no_loudness_and_no_gain"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_as_having_no_loudness_to_match"
 
 [[entry]]
 kind = "field"
@@ -8017,16 +8035,16 @@ test = "bindings/python/tests/test_analyzer_features.py::test_frame_time_convers
 kind = "field"
 old = "MasteringAudioProfileLoudness.lraLu"
 to = "MasteringAudioProfileLoudness.loudness_range_lu"
-changed = "lraLu -> loudness_range_lu"
+changed = "lraLu -> loudness_range_lu; float | None: None for a silent take"
 domain = "mastering"
 rule = "loudness-names"
-test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_profile_reads_minus_infinity_and_leaves_the_ratios_unmeasured"
 
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileLoudness.truePeakDb"
 to = "MasteringAudioProfileLoudness.true_peak_dbtp"
-changed = "truePeakDb -> true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp; -inf for digital silence"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -8035,16 +8053,16 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 kind = "field"
 old = "MasteringAssistantProfile.lraLu"
 to = "MasteringAssistantProfile.loudness_range_lu"
-changed = "lraLu -> loudness_range_lu"
+changed = "lraLu -> loudness_range_lu; float | None: None for a silent take"
 domain = "mastering"
 rule = "loudness-names"
-test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_assistant_profile_reads_minus_infinity"
 
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
 to = "MasteringAssistantProfile.true_peak_dbtp"
-changed = "truePeakDb -> true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp; -inf for digital silence"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -8071,7 +8089,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.truePeakDb"
 to = "MasteringStreamingPreviewPlatform.true_peak_dbtp"
-changed = "truePeakDb -> true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp; -inf for digital silence"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
@@ -8088,9 +8106,11 @@ rule = "typed-results"
 [[entry]]
 kind = "function"
 old = "ebur128_loudness_range"
-new = "ebur128_loudness_range_lu"
+changed = "renamed to ebur128_loudness_range_lu; returns float | None: None when no 3 s window passes the gate (a signal shorter than 3 s, or silence)"
+to = "ebur128_loudness_range_lu"
 domain = "mastering"
-rule = "loudness-names"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_ebur128_loudness_range_is_none_without_a_gated_window"
 
 [[entry]]
 kind = "function"
@@ -8560,9 +8580,11 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.crestFactorDb"
-new = "MasteringAssistantProfile.crest_factor_db"
+to = "MasteringAssistantProfile.crest_factor_db"
+changed = "crestFactorDb -> crest_factor_db, float | None: None for a silent take"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_assistant_profile_reads_minus_infinity"
 
 [[entry]]
 kind = "field"
@@ -8574,9 +8596,11 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.integratedLufs"
-new = "MasteringAssistantProfile.integrated_lufs"
+to = "MasteringAssistantProfile.integrated_lufs"
+changed = "integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_assistant_profile_reads_minus_infinity"
 
 [[entry]]
 kind = "field"
@@ -8630,16 +8654,20 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileLoudness.crestFactorDb"
-new = "MasteringAudioProfileLoudness.crest_factor_db"
+to = "MasteringAudioProfileLoudness.crest_factor_db"
+changed = "crestFactorDb -> crest_factor_db, float | None: None for a silent take"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_profile_reads_minus_infinity_and_leaves_the_ratios_unmeasured"
 
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileLoudness.integratedLufs"
-new = "MasteringAudioProfileLoudness.integrated_lufs"
+to = "MasteringAudioProfileLoudness.integrated_lufs"
+changed = "integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_profile_reads_minus_infinity_and_leaves_the_ratios_unmeasured"
 
 [[entry]]
 kind = "field"
@@ -8714,16 +8742,20 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.integratedLufs"
-new = "MasteringStreamingPreviewPlatform.integrated_lufs"
+to = "MasteringStreamingPreviewPlatform.integrated_lufs"
+changed = "integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_streaming_preview_has_no_normalization_gain"
 
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.normalizationGainDb"
-new = "MasteringStreamingPreviewPlatform.normalization_gain_db"
+to = "MasteringStreamingPreviewPlatform.normalization_gain_db"
+changed = "normalizationGainDb -> normalization_gain_db, float | None: None for a silent take (was 0)"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_streaming_preview_has_no_normalization_gain"
 
 [[entry]]
 kind = "field"
@@ -8957,10 +8989,10 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis
 [[entry]]
 kind = "type"
 old = "StereoMonoCompatCheckResult"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; width is None for a fully out-of-phase pair"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; width is inf for a fully out-of-phase pair, and correlation and width are None when both channels are silent"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mastering_result_types.py::test_an_out_of_phase_pair_has_no_width"
+test = "bindings/python/tests/test_level_silence.py::test_an_anti_phase_pair_is_infinitely_wide_and_a_silent_pair_unmeasured"
 
 [[entry]]
 kind = "type"
@@ -8981,23 +9013,29 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analys
 [[entry]]
 kind = "field"
 old = "MatchReferenceLoudnessResult.sourceLufs"
-new = "MatchReferenceLoudnessResult.source_lufs"
+to = "MatchReferenceLoudnessResult.source_lufs"
+changed = "sourceLufs -> source_lufs: -inf below the gate, never None"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_side_leaves_no_gain_to_match"
 
 [[entry]]
 kind = "field"
 old = "MatchReferenceLoudnessResult.referenceLufs"
-new = "MatchReferenceLoudnessResult.reference_lufs"
+to = "MatchReferenceLoudnessResult.reference_lufs"
+changed = "referenceLufs -> reference_lufs: -inf below the gate, never None"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_side_leaves_no_gain_to_match"
 
 [[entry]]
 kind = "field"
 old = "MatchReferenceLoudnessResult.gainToMatchDb"
-new = "MatchReferenceLoudnessResult.gain_to_match_db"
+to = "MatchReferenceLoudnessResult.gain_to_match_db"
+changed = "gainToMatchDb -> gain_to_match_db, float | None: None when either take is silent"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_silent_side_leaves_no_gain_to_match"
 
 [[entry]]
 kind = "field"
@@ -9030,9 +9068,11 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "MatchTonalBalanceBand.deviationDb"
-new = "MatchTonalBalanceBand.deviation_db"
+to = "MatchTonalBalanceBand.deviation_db"
+changed = "deviationDb -> deviation_db, float | None: -inf when only the source band is empty, None when the reference band is"
 domain = "mastering"
-rule = "typed-results"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_an_empty_reference_band_leaves_no_deviation"
 
 [[entry]]
 kind = "field"
@@ -10101,10 +10141,10 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_trans
 [[entry]]
 kind = "function"
 old = "normalize"
-changed = "returns a float32 ndarray instead of list[float]"
+changed = "returns a float32 ndarray instead of list[float]; a silent take is refused with SonareValueError ('has no measurable level') in both modes"
 domain = "effects"
 rule = "array-results"
-test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+test = "bindings/python/tests/test_normalize_stereo.py::test_a_silent_take_is_refused_in_each_mono_mode"
 
 [[entry]]
 kind = "function"
@@ -13705,3 +13745,379 @@ changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (I
 domain = "project"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_core_validation_refusals.py::test_midi_fx_config_refused_as_an_argument"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip(lpc_blend)"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip_stereo(lpc_blend)"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_clipping(lpc_blend)"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "DeclipReport.interpolated_runs"
+changed = "counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs"
+to = "DeclipReport.unreconstructed_runs"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_repair_extra.py::test_a_run_past_the_gap_cap_is_left_clipped"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.dynamic_range_db"
+changed = "float -> float | None: None for a silent input"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_silent_analysis_dynamics_read_minus_infinity"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.crest_factor"
+changed = "float -> float | None: None for a silent input"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_silent_analysis_dynamics_read_minus_infinity"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.peak_db"
+changed = "-inf for a silent input"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_silent_analysis_dynamics_read_minus_infinity"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.rms_db"
+changed = "-inf for a silent input"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_silent_analysis_dynamics_read_minus_infinity"
+
+[[entry]]
+kind = "field"
+old = "NoiseDetection.floor_dbfs"
+changed = "float -> float | None: -inf for digital silence, None when there is nothing to measure from"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_noise_floor_lists_only_the_bands_a_bin_lands_in"
+
+[[entry]]
+kind = "field"
+old = "NoiseDetection.band_floor_dbfs"
+changed = "holds only the bands an analysis bin lands in, so it can be shorter than 32; the new band_floor_band names each entry's band, and an empty band is no longer a sentinel entry"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_silence.py::test_a_noise_floor_lists_only_the_bands_a_bin_lands_in"
+[[entry]]
+kind = "field"
+old = "DynamicsResult.dynamic_range_db"
+changed = "float -> float | None: None when not measured (silence)"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.crest_factor"
+changed = "float -> float | None: None when not measured (silence)"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.peak_db"
+changed = "-inf for silence"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.rms_db"
+changed = "-inf for silence"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_dynamics_result_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.integrated_lufs"
+changed = "-inf when nothing passes the gate"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.momentary_lufs"
+changed = "float -> float | None: -inf for zero energy, None when the signal is shorter than one window"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.short_term_lufs"
+changed = "float -> float | None: -inf for zero energy, None when the signal is shorter than one window"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.max_momentary_lufs"
+changed = "float -> float | None: -inf for zero energy, None when the signal is shorter than one window"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.max_short_term_lufs"
+changed = "float -> float | None: -inf for zero energy, None when the signal is shorter than one window"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_lufs_reads_an_unfilled_window"
+
+[[entry]]
+kind = "function"
+old = "metering_crest_factor_db"
+changed = "returns float | None: None for silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_crest_factor_is_none_for_silence"
+
+[[entry]]
+kind = "function"
+old = "metering_crest_factor_db_stereo"
+changed = "returns float | None: None for silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_crest_factor_is_none_for_silence"
+
+[[entry]]
+kind = "function"
+old = "metering_stereo_correlation"
+changed = "returns float | None: None when either channel has zero energy"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_stereo_correlation_and_width_are_none"
+
+[[entry]]
+kind = "function"
+old = "metering_stereo_width"
+changed = "returns float | None: inf for a silent mid under a nonzero side, None when both are silent"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_stereo_correlation_and_width_are_none"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGain.loudness_static_gain_db"
+changed = "float -> float | None: None for a silent or below-gate stage input, which a StreamingMasteringChain given it applies as no gain"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_streaming_loudness_gain.py::test_silence_leaves_the_gain_unmeasured"
+
+[[entry]]
+kind = "field"
+old = "SilenceCommonReport.silence_ceiling_db"
+changed = "float -> float | None: None when any signal's peak is 0 or it holds an exactly zero frame"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_split_silence_common.py::test_report_leaves_the_ceiling_unmeasured"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.integrated_lufs"
+changed = "-inf for silence or when nothing passes the gate"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.max_momentary_lufs"
+changed = "float -> float | None: -inf for silence, None when the signal is shorter than one window"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.max_short_term_lufs"
+changed = "float -> float | None: -inf for silence, None when the signal is shorter than one window"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.true_peak_dbtp"
+changed = "-inf for silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainResult.output_true_peak_dbtp"
+changed = "-inf for silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_report_reads_a_short_take"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peak_db_l"
+changed = "float -> float | None: -inf for silence, None when not measured"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peak_db_r"
+changed = "float -> float | None: -inf for silence, None when not measured"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rms_db_l"
+changed = "float -> float | None: -inf for silence, None when not measured"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rms_db_r"
+changed = "float -> float | None: -inf for silence, None when not measured"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.correlation"
+changed = "float -> float | None: None on a zero channel or silence"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.mono_compat_width"
+changed = "float -> float | None: None on a zero channel or silence, inf for a silent mid under a nonzero side"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.momentary_lufs"
+changed = "float -> float | None: -inf for silence, None until the window fills"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.short_term_lufs"
+changed = "float -> float | None: -inf for silence, None until the window fills"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.integrated_lufs"
+changed = "float -> float | None: None before the first gating block, -inf while nothing passes the gate"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.correlation"
+changed = "float -> float | None: None on a zero channel or silence"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.mono_compat_width"
+changed = "float -> float | None: None on a zero channel or silence, inf for a silent mid under a nonzero side"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.momentary_lufs"
+changed = "float -> float | None: -inf for silence, None until the window fills"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.short_term_lufs"
+changed = "float -> float | None: -inf for silence, None until the window fills"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.integrated_lufs"
+changed = "float -> float | None: None before the first gating block, -inf while nothing passes the gate"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+
+[[entry]]
+kind = "field"
+old = "ScopeTelemetryRecord.bands"
+changed = "-inf for a band of zero power, NaN for a band no bin reaches and before the first transform"
+domain = "engine"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_scope_telemetry_bands_keep"
+
+[[entry]]
+kind = "field"
+old = "HumDetection.harmonic_dbfs"
+changed = "ends before the first harmonic at or past Nyquist instead of reading the dB floor; a harmonic with no energy is -inf"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_mastering_repair_detect.py::test_the_harmonics_end_before_nyquist"
+
+[[entry]]
+kind = "function"
+old = "normalize_stereo"
+changed = "a silent pair is refused with SonareValueError ('has no measurable level') instead of coming back untouched"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_normalize_stereo.py::test_a_silent_pair_is_refused"

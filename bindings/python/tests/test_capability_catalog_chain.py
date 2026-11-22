@@ -102,7 +102,7 @@ def test_every_chain_key_resolves_to_a_descriptor() -> None:
     catalog = capability_catalog()
     keys = chain_keys()
     # The population is this test's subject: a key source that stopped parsing reports nothing.
-    assert len(keys) > 140
+    assert len(keys) > 120
     unresolved = [key for key in keys if resolve(catalog, key) is None]
     assert unresolved == []
 

@@ -129,7 +129,6 @@ class TestMasteringRepairDeclipStereo:
             clip_threshold_db=20.0 * math.log10(0.85),
             lpc_order=24,
             iterations=1,
-            lpc_blend=0.5,
         )
         assert result.length == len(left)
 

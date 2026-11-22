@@ -7,6 +7,8 @@ returns a number, so the mapping cannot have turned every value into ``None``.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -123,9 +125,10 @@ def test_a_pattern_position_with_no_voted_chord_is_none() -> None:
     assert pattern[1] is not None and int(pattern[1].root) == 9
 
 
-def test_silent_loudness_reads_are_absent() -> None:
+def test_silent_loudness_reads_are_minus_infinity_and_its_gain_is_absent() -> None:
     silence = np.zeros(SR, dtype=np.float32)
     gain = libsonare.streaming_loudness_gain(silence, SR)
-    assert (gain.integrated_lufs, gain.true_peak_dbtp) == (None, None)
+    assert (gain.integrated_lufs, gain.true_peak_dbtp) == (-math.inf, -math.inf)
     loud = libsonare.streaming_loudness_gain(_tone(1.0), SR)
     assert isinstance(loud.integrated_lufs, float) and isinstance(loud.true_peak_dbtp, float)
+    assert math.isfinite(loud.integrated_lufs) and math.isfinite(loud.true_peak_dbtp)

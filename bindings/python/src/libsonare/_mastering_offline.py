@@ -34,6 +34,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_error,
+    _measured_level,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -705,10 +706,10 @@ def _extract_mastering_loudness_summary(raw: object) -> MasteringLoudnessSummary
     summary = cast(Any, raw)
     return MasteringLoudnessSummary(
         integrated_lufs=float(summary.integrated_lufs),
-        max_momentary_lufs=float(summary.max_momentary_lufs),
-        max_short_term_lufs=float(summary.max_short_term_lufs),
+        max_momentary_lufs=_measured_level(summary.max_momentary_lufs),
+        max_short_term_lufs=_measured_level(summary.max_short_term_lufs),
         true_peak_dbtp=float(summary.true_peak_dbtp),
-        loudness_range_lu=float(summary.loudness_range_lu),
+        loudness_range_lu=_measured_level(summary.loudness_range_lu),
     )
 
 
@@ -772,7 +773,7 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
         "applied_gain_db": float(out.applied_gain_db),
         "stages": _extract_stages(out.stages, int(out.stages_count)),
         "output_true_peak_dbtp": float(out.output_true_peak_dbtp),
-        "output_loudness_range_lu": float(out.output_loudness_range_lu),
+        "output_loudness_range_lu": _measured_level(out.output_loudness_range_lu),
         "loudness_target_limited": bool(out.loudness_target_limited),
         "stage_gain_reductions": _extract_stage_gain_reductions(
             out.stage_gain_reduction_stages,

@@ -125,7 +125,7 @@ def test_add_strip_returns_the_new_strip_index(mixer) -> None:
 
 
 def test_strip_meter_returns_snapshots(mixer) -> None:
-    """strip_meter returns a MixMeterSnapshot with numeric fields at either tap."""
+    """strip_meter returns a MixMeterSnapshot with measured levels and unfilled windows as None."""
     from libsonare.types import MixMeterSnapshot
 
     _process_one_block(mixer)
@@ -138,14 +138,15 @@ def test_strip_meter_returns_snapshots(mixer) -> None:
         snapshot.rms_db_l,
         snapshot.rms_db_r,
         snapshot.correlation,
-        snapshot.momentary_lufs,
-        snapshot.short_term_lufs,
-        snapshot.integrated_lufs,
         snapshot.true_peak_dbtp_l,
         snapshot.max_true_peak_dbtp,
     ):
         assert isinstance(value, float)
         assert math.isfinite(value)
+    # One 256-sample block fills no loudness window.
+    assert snapshot.momentary_lufs is None
+    assert snapshot.short_term_lufs is None
+    assert snapshot.integrated_lufs is None
     assert isinstance(snapshot.likely_mono_compatible, bool)
     assert isinstance(snapshot.seq, int)
 
@@ -971,7 +972,7 @@ def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
 
     A zero-frame block is a legitimate no-op for the C mixer, so without a
     facade guard `mix_stereo` answers an empty result plus meters reading the
-    -120 dB floor — indistinguishable from a real mix. The positive control in
+    silence readings — indistinguishable from a real mix. The positive control in
     the same test keeps this from passing because the call failed for some
     unrelated reason.
     """
@@ -1054,7 +1055,7 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
     """True peak is a max-hold, not an integrator, so it is valid immediately.
 
     Pins the `mix_stereo` docstring's meter caveat, which previously claimed
-    true peak needed sustained streaming and read the floor on a one-shot mix.
+    true peak needed sustained streaming and read as unmeasured on a one-shot mix.
     The loudness half of the caveat is real and is asserted alongside it.
     """
     from libsonare import metering_true_peak_dbtp, mix_stereo
@@ -1064,8 +1065,8 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
         tone = [0.5 * math.sin(2 * math.pi * frequency * i / sr) for i in range(n)]
         meter = mix_stereo([(tone, tone)], sample_rate=sr).meters[0]
 
-        # Not the floor sentinel, and above the -6.02 dBFS sample peak by the
-        # genuine inter-sample overshoot rather than by chance.
+        # Measured, and above the -6.02 dBFS sample peak by the genuine
+        # inter-sample overshoot rather than by chance.
         assert meter.true_peak_dbtp_l > -20.0
         assert meter.true_peak_dbtp_l > meter.peak_db_l
         # One block over the whole signal leaves no internal block edge, so the
@@ -1075,13 +1076,11 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
         )
         # The integrating loudness fields genuinely have not filled their
         # windows at these lengths.
-        assert meter.momentary_lufs == pytest.approx(-120.0)
+        assert meter.momentary_lufs is None
 
-    # True peak floors only on digital silence.
+    # Digital silence has a true peak of -inf.
     silence = [0.0] * 1024
-    assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_dbtp_l == (
-        pytest.approx(-120.0)
-    )
+    assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_dbtp_l == -math.inf
 
 
 def test_one_shot_true_peak_covers_a_peak_in_the_last_samples() -> None:

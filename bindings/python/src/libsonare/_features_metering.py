@@ -30,6 +30,7 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _measured_level,
     _mode_value,
     _narrow_double,
     _narrow_int,
@@ -130,11 +131,11 @@ def lufs(
     _check(rc)
     return LufsResult(
         integrated_lufs=float(out.integrated_lufs),
-        momentary_lufs=float(out.momentary_lufs),
-        short_term_lufs=float(out.short_term_lufs),
-        max_momentary_lufs=float(out.max_momentary_lufs),
-        max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range_lu=float(out.loudness_range_lu),
+        momentary_lufs=_measured_level(out.momentary_lufs),
+        short_term_lufs=_measured_level(out.short_term_lufs),
+        max_momentary_lufs=_measured_level(out.max_momentary_lufs),
+        max_short_term_lufs=_measured_level(out.max_short_term_lufs),
+        loudness_range_lu=_measured_level(out.loudness_range_lu),
     )
 
 
@@ -202,11 +203,11 @@ def lufs_interleaved(
     _check(rc)
     return LufsResult(
         integrated_lufs=float(out.integrated_lufs),
-        momentary_lufs=float(out.momentary_lufs),
-        short_term_lufs=float(out.short_term_lufs),
-        max_momentary_lufs=float(out.max_momentary_lufs),
-        max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range_lu=float(out.loudness_range_lu),
+        momentary_lufs=_measured_level(out.momentary_lufs),
+        short_term_lufs=_measured_level(out.short_term_lufs),
+        max_momentary_lufs=_measured_level(out.max_momentary_lufs),
+        max_short_term_lufs=_measured_level(out.max_short_term_lufs),
+        loudness_range_lu=_measured_level(out.loudness_range_lu),
     )
 
 
@@ -267,8 +268,11 @@ def lufs_series_interleaved(
 def ebur128_loudness_range_lu(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
-    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
+) -> float | None:
+    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
+
+    ``None`` when no 3 s window passes the gate (a signal shorter than 3 s, or silence).
+    """
     sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -280,7 +284,7 @@ def ebur128_loudness_range_lu(
         ctypes.byref(out),
     )
     _check(rc)
-    return float(out.value)
+    return _measured_level(out.value)
 
 
 # ============================================================================
@@ -357,9 +361,11 @@ def metering_silence_ratio(
 def metering_crest_factor_db(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
-    """Crest factor in dB (peak_db - rms_db)."""
-    return _metering_scalar("sonare_metering_crest_factor_db", samples, sample_rate)
+) -> float | None:
+    """Crest factor in dB (peak_db - rms_db); ``None`` for silence."""
+    return _measured_level(
+        _metering_scalar("sonare_metering_crest_factor_db", samples, sample_rate)
+    )
 
 
 @_entry("metering_crest_factor_db_stereo")
@@ -367,8 +373,8 @@ def metering_crest_factor_db_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
-    """Crest factor in dB across both channels of a stereo pair.
+) -> float | None:
+    """Crest factor in dB across both channels of a stereo pair; ``None`` for silence.
 
     Takes the peak across both channels and the RMS over both together. An
     out-of-phase pair cancels in the ``0.5 * (left + right)`` downmix
@@ -391,7 +397,7 @@ def metering_crest_factor_db_stereo(
         ctypes.byref(out),
     )
     _check(rc)
-    return float(out.value)
+    return _measured_level(out.value)
 
 
 @_entry("metering_dc_offset")
@@ -480,7 +486,7 @@ def _stereo_scalar(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
+) -> float | None:
     # ``name`` is the C symbol; validation messages quote the facade spelling
     # the caller actually invoked.
     left_buf = _validate_samples(left, arg_name="left")
@@ -499,7 +505,7 @@ def _stereo_scalar(
         ctypes.byref(out),
     )
     _check(rc)
-    return float(out.value)
+    return _measured_level(out.value)
 
 
 @_entry("metering_stereo_correlation")
@@ -507,8 +513,11 @@ def metering_stereo_correlation(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
-    """Uncentered correlation (cosine similarity) between equal-length channels."""
+) -> float | None:
+    """Uncentered correlation (cosine similarity) between equal-length channels.
+
+    ``None`` when either channel has zero energy.
+    """
     return _stereo_scalar(
         "sonare_metering_stereo_correlation",
         left,
@@ -522,13 +531,13 @@ def metering_stereo_width(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-) -> float:
+) -> float | None:
     """Stereo width as ``sqrt(side_energy / mid_energy)``.
 
     This is the side/mid RMS *amplitude* ratio, not the energy ratio: 0 = pure
     mono, ~1 = wide stereo, larger = increasingly decorrelated / out of phase.
     The range is ``[0, +Infinity)`` -- ``inf`` is returned when mid is silent
-    but side is not, and 0 when both are silent. Convert to dB with
+    but side is not, and ``None`` when both are silent. Convert to dB with
     ``20 * log10(value)``; ``10 * log10`` would understate the true energy ratio
     by half.
     """
@@ -672,6 +681,8 @@ def metering_spectrum(
 
     Omit ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the
     library defaults (2048 / 3 / 1.0 / kEpsilon); an explicit 0 is refused.
+    Silence reads ``20*log10(db_amin / db_ref)`` dB: the magnitude is clamped to
+    ``db_amin`` before the dB conversion.
     """
     n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
         n_fft, octave_fraction, db_ref, db_amin
@@ -729,6 +740,8 @@ def metering_spectrum_frame(
     zero-padded. ``frame_offset`` 0 is the first frame. Omit ``n_fft`` /
     ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the library defaults
     (2048 / 3 / 1.0 / kEpsilon); an explicit 0 is refused.
+    Silence reads ``20*log10(db_amin / db_ref)`` dB: the magnitude is clamped to
+    ``db_amin`` before the dB conversion.
 
     The frame is also the only span validated: a non-finite sample inside it is
     rejected, while one outside it neither reaches the FFT nor refuses the call.

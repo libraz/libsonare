@@ -362,6 +362,19 @@ def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
         assert _split_silence_covers(both_intervals, item["end_sample"] - 1)
 
 
+def test_split_silence_cli_prints_an_unmeasured_ceiling_as_a_dash(tmp_path) -> None:
+    """Takes each holding an exactly zero frame, never quiet together, have no ceiling to print."""
+    sample_rate = 22050
+    early = str(tmp_path / "early.wav")
+    late = str(tmp_path / "late.wav")
+    _write_test_wav(early, _blocked_sine([(0.5, 0.5), (0.0, 0.5)], sample_rate), sample_rate)
+    _write_test_wav(late, _blocked_sine([(0.0, 0.5), (0.5, 0.5)], sample_rate), sample_rate)
+
+    result = _run_cli(["split-silence", early, late, "--report"])
+    assert result.returncode == 0, result.stderr
+    assert "  silence ceiling - at --top-db " in result.stdout
+
+
 def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
     """With one take the intervals are exactly split_silence()'s own."""
     import libsonare

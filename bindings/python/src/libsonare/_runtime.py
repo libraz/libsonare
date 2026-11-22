@@ -775,20 +775,13 @@ def _to_c_float_array_owned(
     return c_array, length
 
 
-# The meters' -120 dB floor: a reading at or below it measured nothing.
-_METER_FLOOR_DB = -120.0
+def _measured_level(value: float) -> float | None:
+    """A level as a float, ``None`` where the core did not measure it (NaN).
 
-
-def _finite_or_none(value: float) -> float | None:
-    """A C reading, or ``None`` where it is non-finite (nothing was measured)."""
+    Silence stays ``-inf``: it is a measurement, not an absence.
+    """
     value = float(value)
-    return value if math.isfinite(value) else None
-
-
-def _measured_db(value: float) -> float | None:
-    """A level, or ``None`` at the meter floor or where the reading is non-finite."""
-    value = float(value)
-    return value if math.isfinite(value) and value > _METER_FLOOR_DB else None
+    return None if math.isnan(value) else value
 
 
 def _from_c_float_array(array: object, count: int) -> np.ndarray:
@@ -1133,22 +1126,22 @@ def _warp_mode_value(mode: ProjectWarpMode, key: str) -> int:
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
     return MixMeterSnapshot(
-        peak_db_l=float(snapshot.peak_db_l),
-        peak_db_r=float(snapshot.peak_db_r),
-        rms_db_l=float(snapshot.rms_db_l),
-        rms_db_r=float(snapshot.rms_db_r),
-        correlation=float(snapshot.correlation),
-        mono_compat_width=float(snapshot.mono_compat_width),
+        peak_db_l=_measured_level(snapshot.peak_db_l),
+        peak_db_r=_measured_level(snapshot.peak_db_r),
+        rms_db_l=_measured_level(snapshot.rms_db_l),
+        rms_db_r=_measured_level(snapshot.rms_db_r),
+        correlation=_measured_level(snapshot.correlation),
+        mono_compat_width=_measured_level(snapshot.mono_compat_width),
         mono_compat_peak=float(snapshot.mono_compat_peak),
         mono_compat_side_rms=float(snapshot.mono_compat_side_rms),
         likely_mono_compatible=bool(snapshot.likely_mono_compatible),
-        momentary_lufs=float(snapshot.momentary_lufs),
-        short_term_lufs=float(snapshot.short_term_lufs),
-        integrated_lufs=float(snapshot.integrated_lufs),
+        momentary_lufs=_measured_level(snapshot.momentary_lufs),
+        short_term_lufs=_measured_level(snapshot.short_term_lufs),
+        integrated_lufs=_measured_level(snapshot.integrated_lufs),
         gain_reduction_db=float(snapshot.gain_reduction_db),
-        true_peak_dbtp_l=float(snapshot.true_peak_dbtp_l),
-        true_peak_dbtp_r=float(snapshot.true_peak_dbtp_r),
-        max_true_peak_dbtp=float(snapshot.max_true_peak_dbtp),
+        true_peak_dbtp_l=_measured_level(snapshot.true_peak_dbtp_l),
+        true_peak_dbtp_r=_measured_level(snapshot.true_peak_dbtp_r),
+        max_true_peak_dbtp=_measured_level(snapshot.max_true_peak_dbtp),
         seq=int(snapshot.seq),
         num_channels=int(snapshot.num_channels) or None,
         peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.num_channels)),

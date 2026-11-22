@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -152,9 +153,14 @@ def mastering_repair_denoise_classical(
 
 
 def _extract_noise_detection(raw: Any) -> NoiseDetection:
+    levels = _from_c_float_array(raw.band_floor_dbfs, len(raw.band_floor_dbfs))
+    # A band holding no bin is NaN in the C struct; it is left out with its index.
+    measured = ~np.isnan(levels)
+    floor = float(raw.floor_dbfs)
     return NoiseDetection(
-        floor_dbfs=float(raw.floor_dbfs),
-        band_floor_dbfs=_from_c_float_array(raw.band_floor_dbfs, len(raw.band_floor_dbfs)),
+        floor_dbfs=None if math.isnan(floor) else floor,
+        band_floor_dbfs=levels[measured],
+        band_floor_band=np.flatnonzero(measured).astype(np.int32),
     )
 
 
@@ -184,13 +190,15 @@ def mastering_repair_detect_noise_floor(
     than here::
 
         floor = libsonare.mastering_repair_detect_noise_floor(samples, 44100)
-        print(floor.floor_dbfs, floor.band_floor_dbfs[0])
+        print(floor.floor_dbfs, floor.band_floor_dbfs[0], floor.band_floor_band[0])
 
     A buffer shorter than ``n_fft`` is padded for analysis, as
     :func:`mastering_repair_detect_reverb` pads one.
 
-    ``band_floor_dbfs`` has 32 entries on a geometric grid from 20 Hz to Nyquist,
-    low to high -- the same axis the mastering report's band energy deltas use.
+    ``band_floor_dbfs`` holds one level per band that an analysis bin lands in, on a
+    32-band geometric grid from 20 Hz to Nyquist, low to high -- the same axis the
+    mastering report's band energy deltas use -- and ``band_floor_band`` names each
+    entry's band.
     Every level is absolute, so compare a figure only against one measured over
     the same channel count.
 
@@ -257,22 +265,19 @@ _NOISE_BAND_EDGE_COUNT = SONARE_REPAIR_NOISE_BAND_COUNT + 1
 def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.ndarray:
     """Bin boundaries of the grid a denoise noise floor is reported on.
 
-    Band ``k`` of :attr:`~libsonare.types.NoiseDetection.band_floor_dbfs` covers
-    the one-sided STFT bins ``[bins[k], bins[k + 1])``, and bin ``b`` sits at
-    ``b * sample_rate / n_fft`` Hz::
+    Band ``k`` covers the one-sided STFT bins ``[bins[k], bins[k + 1])``, and bin
+    ``b`` sits at ``b * sample_rate / n_fft`` Hz;
+    :attr:`~libsonare.types.NoiseDetection.band_floor_band` names the band of
+    each measured level::
 
         bins = libsonare.mastering_repair_noise_band_bins(n_fft=1024, sample_rate=48000)
         floor = libsonare.mastering_repair_detect_noise_floor(samples, 48000, n_fft=1024)
-        for k, level in enumerate(floor.band_floor_dbfs):
-            if bins[k] == bins[k + 1]:
-                continue  # empty band: `level` is the sentinel, not a measurement
-            print(bins[k] * 48000 / 1024, level)
+        for band, level in zip(floor.band_floor_band, floor.band_floor_dbfs):
+            print(bins[band] * 48000 / 1024, level)
 
     The geometric band edges are rounded to bins, so a band narrower than the
-    bin spacing comes out EMPTY -- ``bins[k] == bins[k + 1]`` -- and its level
-    reads as the floor sentinel because no bin landed in it, not because that
-    region was quiet. Telling those two apart is what this grid is for, and it
-    is why the rounding cannot be recovered from the band count alone.
+    bin spacing comes out EMPTY -- ``bins[k] == bins[k + 1]`` -- and the detection
+    leaves it out of ``band_floor_band``, since nothing landed in it to measure.
 
     Nothing but the analysis geometry decides the grid, so no denoise config is
     taken: one call describes every floor measured at that ``n_fft`` and
@@ -617,11 +622,14 @@ def mastering_repair_dehum(
 
 
 def _extract_hum_detection(raw: Any) -> HumDetection:
+    levels = _from_c_float_array(raw.harmonic_dbfs, len(raw.harmonic_dbfs))
+    # The measured harmonics are a prefix; the unmeasured (NaN) suffix past Nyquist is cut.
+    unmeasured = np.flatnonzero(np.isnan(levels))
     return HumDetection(
         fundamental_hz=float(raw.fundamental_hz),
         fundamental_prominence=float(raw.fundamental_prominence),
         harmonics=int(raw.harmonics),
-        harmonic_dbfs=_from_c_float_array(raw.harmonic_dbfs, len(raw.harmonic_dbfs)),
+        harmonic_dbfs=levels[: int(unmeasured[0])] if unmeasured.size else levels,
     )
 
 
@@ -659,9 +667,10 @@ def mastering_repair_detect_hum(
     the median candidate, a linear ratio (not dB); 1.0 means no peak: none
     was found, or the winner was not a stationary line through most analysis
     frames (a repeating kick reads 1.0). It is not a lock flag.
-    ``harmonic_dbfs`` has 16 entries measured at every ``k * f0`` the
-    sample rate carries, not only the notched ones, so an entry at or past
-    Nyquist reads the dB floor because nothing is there to measure.
+    ``harmonic_dbfs`` has at most 16 entries, measured at every ``k * f0`` the
+    sample rate carries, not only the notched ones, and ending before the first
+    ``k * f0`` at or past Nyquist, where nothing is there to measure; a harmonic
+    with no energy reads ``-inf``.
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).

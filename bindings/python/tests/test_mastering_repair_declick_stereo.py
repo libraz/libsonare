@@ -81,21 +81,23 @@ class TestMasteringRepairDeclickStereo:
         assert result.left_report.repaired_runs > result.left_report.detected.count
         assert result.right_report.repaired_runs > result.right_report.detected.count
 
-    def test_right_only_click_changes_left_channel_vs_mono(self) -> None:
+    def test_right_only_click_adds_a_linked_run_to_the_left_report(self) -> None:
         """The one assertion a mono-called-twice implementation cannot pass.
 
-        The mono declicker never sees the right channel's click, so it leaves
-        the left channel's samples at that position untouched. The stereo
-        entry point repairs that position in the left channel too (a linked
-        run), so the two must disagree exactly there.
+        The mono declicker never sees the right channel's click, so its left report
+        counts only the left channel's own runs. The stereo entry point repairs the
+        right-only run in the left channel too and reports it as linked. The sample
+        there is not compared: an LPC fill of a clean tone can reproduce it.
         """
         left, right = _fixture()
         stereo = libsonare.mastering_repair_declick_stereo(left, right, SR)
-        mono_left = libsonare.mastering_repair_declick(left, SR).samples
+        mono = libsonare.mastering_repair_declick(left, SR)
 
-        assert stereo.left[_RIGHT_ONLY_CLICK_POSITION] != float(
-            mono_left[_RIGHT_ONLY_CLICK_POSITION]
+        assert stereo.left_report.detected.count == mono.report.detected.count
+        assert stereo.left_report.repaired_runs == (
+            mono.report.repaired_runs + stereo.left_report.linked_runs
         )
+        assert stereo.left_report.linked_runs > 0
 
     def test_explicit_kwargs(self) -> None:
         left, right = _fixture()

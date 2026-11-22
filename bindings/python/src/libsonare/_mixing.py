@@ -1201,11 +1201,11 @@ def mix_stereo(
     Note:
         The per-strip meters in the result expose integrating loudness fields
         (``momentary_lufs``, ``short_term_lufs``, ``integrated_lufs``) whose
-        windows a short one-shot mix does not fill, so they read the ``-120`` dB
-        floor sentinel; drive a strip over a streaming session when a meaningful
-        loudness number is needed. ``true_peak_dbtp`` is not an integrator — it is
-        a max-hold over the block just processed, so it is valid immediately and
-        floors only on digital silence. This call mixes the whole signal in one
+        windows a short one-shot mix does not fill, so they read ``None``; drive a
+        strip over a streaming session when a meaningful loudness number is needed.
+        ``true_peak_dbtp`` is not an integrator — it is a max-hold over the block
+        just processed, so it is valid immediately and reads ``-inf`` on digital
+        silence. This call mixes the whole signal in one
         block and flushes the meters after it, so the reported true peak
         matches :func:`metering_true_peak_dbtp` over the same signal exactly.
     """
@@ -1237,7 +1237,7 @@ def mix_stereo(
     length: int | None = None
     for index, (left, right) in enumerate(strips):
         # A NaN loses every comparison the peak meter makes, so an unguarded
-        # non-finite strip reads as the -120 dB silence floor rather than as a
+        # non-finite strip reads as silence (-inf dB) rather than as a
         # fault; an infinity propagates into the master sum and the meter.
         left_buf = _validate_samples(left, arg_name=f"strips[{index}][0]", allow_empty=True)
         right_buf = _validate_samples(right, arg_name=f"strips[{index}][1]", allow_empty=True)

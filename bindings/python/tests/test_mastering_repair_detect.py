@@ -156,7 +156,7 @@ class TestDetectNoiseFloor:
         loud = libsonare.mastering_repair_detect_noise_floor(_noise(0.1), SR)
 
         assert isinstance(quiet, libsonare.NoiseDetection)
-        assert len(quiet.band_floor_dbfs) == 32
+        assert 0 < len(quiet.band_floor_dbfs) == len(quiet.band_floor_band) <= 32
         assert quiet.floor_dbfs < loud.floor_dbfs
         # Two decades of level separate the two buffers; a wrapper reading the
         # wrong struct field would not track them.
@@ -219,7 +219,7 @@ class TestDetectClipping:
 
         default = libsonare.mastering_repair_detect_clipping(clipped, SR)
         other_solver = libsonare.mastering_repair_detect_clipping(
-            clipped, SR, lpc_order=8, iterations=1, lpc_blend=0.1
+            clipped, SR, lpc_order=8, iterations=1
         )
         assert other_solver == default
 
@@ -345,17 +345,19 @@ class TestDetectHum:
 
         _assert_same_detection(detected, repaired.left_report.detected)
 
-    def test_a_harmonic_past_nyquist_reads_the_floor(self) -> None:
+    def test_the_harmonics_end_before_nyquist(self) -> None:
         """16 harmonics of a 5 kHz fundamental cannot all fit under Nyquist.
 
-        The trailing entries are the dB floor because nothing is there to
-        measure, not because they went unmeasured.
+        The array ends at the last harmonic below Nyquist: nothing is there to
+        measure past it, so no entry stands in for one.
         """
         detected = libsonare.mastering_repair_detect_hum(
             _tone(freq=5000.0), SR, fundamental_hz=5000.0
         )
 
-        assert detected.harmonic_dbfs[-1] == pytest.approx(-120.0)
+        below_nyquist = int((SR / 2) // 5000.0)
+        assert len(detected.harmonic_dbfs) == below_nyquist
+        assert not np.isnan(detected.harmonic_dbfs).any()
 
 
 class TestDetectReverb:
@@ -642,7 +644,6 @@ class TestDefaultsPath:
             clip_threshold_db=20.0 * math.log10(0.98),
             lpc_order=36,
             iterations=2,
-            lpc_blend=0.65,
         ) == libsonare.mastering_repair_detect_clipping(clipped, SR)
 
     def test_detect_crackle(self) -> None:

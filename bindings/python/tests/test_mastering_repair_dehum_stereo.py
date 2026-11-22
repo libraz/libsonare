@@ -79,15 +79,15 @@ class TestMasteringRepairDehumStereo:
         # different hum, and the notch filtering does not erase that.
         assert not np.array_equal(result.left, result.right)
 
-    def test_full_harmonic_array_past_nyquist_reads_the_floor(self) -> None:
-        """The whole 16-entry array, not just its first slot.
+    def test_harmonic_array_ends_before_nyquist(self) -> None:
+        """The whole measured array, not just its first slot.
 
         A ctypes mirror that dropped or misordered ``harmonic_dbfs`` would
         still pass a test asserting only entry 0. At 48 kHz a 3 kHz
         fundamental with all 16 harmonics requested reaches Nyquist at the
         eighth: the cascade notches the first seven regardless of what either
-        channel carries, and nothing is there to measure past Nyquist, so
-        those slots read the dB floor exactly rather than an unset zero.
+        channel carries, and nothing is there to measure at or past Nyquist, so
+        the array ends before it rather than carrying an unset zero.
         """
         left = sine(440.0, 1.0, sr=SR, amp=0.3)
         right = sine(660.0, 1.0, sr=SR, amp=0.3)
@@ -97,9 +97,13 @@ class TestMasteringRepairDehumStereo:
 
         for report in (result.left_report, result.right_report):
             assert report.notched_harmonics == 7
-            assert len(report.detected.harmonic_dbfs) == _MAX_HARMONICS
-            for k in range(7, _MAX_HARMONICS):
-                assert report.detected.harmonic_dbfs[k] == -120.0
+            # The measured count is set by the tracked fundamental, which sits a
+            # little under the configured 3 kHz, so it is checked against that.
+            f0 = report.detected.fundamental_hz
+            count = len(report.detected.harmonic_dbfs)
+            assert count < _MAX_HARMONICS
+            assert count * f0 < SR / 2 <= (count + 1) * f0
+            assert not np.isnan(report.detected.harmonic_dbfs).any()
 
     def test_fixed_mode_is_independent_and_drift_is_exactly_zero(self) -> None:
         """Without adaptive tracking, nothing is shared between the channels.

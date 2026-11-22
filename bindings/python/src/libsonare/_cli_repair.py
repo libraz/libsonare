@@ -262,11 +262,17 @@ def _print_repair_detection_report(report: dict[str, dict[str, object]] | None) 
             "or a lossy codec erases a real one, so this is not proof of no clipping)"
         )
     band_floor = cast("list[float]", noise["band_floor_dbfs"])
-    loudest_band = max(range(len(band_floor)), key=band_floor.__getitem__)
-    print(
-        f"    Noise floor:  {cast('float', noise['floor_dbfs']):.1f} dBFS, "
-        f"loudest band {band_floor[loudest_band]:.1f} dBFS (band {loudest_band})"
-    )
+    band_index = cast("list[int]", noise["band_floor_band"])
+    floor_dbfs = noise.get("floor_dbfs")
+    floor_text = "not measured" if floor_dbfs is None else f"{cast('float', floor_dbfs):.1f} dBFS"
+    if band_floor:
+        loudest = max(range(len(band_floor)), key=band_floor.__getitem__)
+        print(
+            f"    Noise floor:  {floor_text}, "
+            f"loudest band {band_floor[loudest]:.1f} dBFS (band {band_index[loudest]})"
+        )
+    else:
+        print(f"    Noise floor:  {floor_text}")
     if cast("float", hum["fundamental_prominence"]) > 1.0:
         harmonic_dbfs = cast("list[float]", hum["harmonic_dbfs"])
         print(

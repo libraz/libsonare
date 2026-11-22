@@ -555,9 +555,9 @@ def test_stereo_crest_factor_survives_a_cancelling_pair() -> None:
     assert libsonare.metering_crest_factor_db_stereo(left, right, sample_rate=sr) == pytest.approx(
         3.01, abs=0.5
     )
-    # The anti-phase pair cancels to silence in the downmix, which reports the
-    # 0 dB neutral rather than the pair's real 3 dB crest factor.
-    assert libsonare.metering_crest_factor_db(downmix, sample_rate=sr) == pytest.approx(0.0)
+    # The anti-phase pair cancels to silence in the downmix, whose crest factor
+    # is not measured rather than the pair's real 3 dB.
+    assert libsonare.metering_crest_factor_db(downmix, sample_rate=sr) is None
 
 
 def test_stereo_analysis_rejects_mismatched_channel_lengths() -> None:
@@ -657,8 +657,13 @@ def test_master_audio_reports_output_metrics() -> None:
     # Output true peak must be finite and near/under the -1 dBTP ceiling.
     assert math.isfinite(result.output_true_peak_dbtp)
     assert result.output_true_peak_dbtp <= 0.0
-    assert math.isfinite(result.output_loudness_range_lu)
-    assert result.output_loudness_range_lu >= 0.0
+    # A signal shorter than 3 s has no short-term window, so no loudness range.
+    assert result.output_loudness_range_lu is None
+    long_samples = [0.3 * math.sin(2 * math.pi * 220 * i / sr) for i in range(5 * sr)]
+    long_result = libsonare.master_audio(long_samples, sample_rate=sr, overrides=config)
+    assert long_result.output_loudness_range_lu is not None
+    assert math.isfinite(long_result.output_loudness_range_lu)
+    assert long_result.output_loudness_range_lu >= 0.0
     assert isinstance(result.loudness_target_limited, bool)
     assert result.report is not None
     assert result.report.before.integrated_lufs == result.input_lufs
@@ -677,7 +682,7 @@ def test_master_audio_reports_output_metrics() -> None:
     # master_audio (preset + overrides path) exposes the same fields.
     preset_result = libsonare.master_audio(samples, sample_rate=sr, preset="pop")
     assert math.isfinite(preset_result.output_true_peak_dbtp)
-    assert math.isfinite(preset_result.output_loudness_range_lu)
+    assert preset_result.output_loudness_range_lu is None
     assert isinstance(preset_result.stage_gain_reductions, list)
     assert preset_result.report is not None
 

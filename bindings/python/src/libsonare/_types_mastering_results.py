@@ -1,8 +1,9 @@
 """Result records of the explainable-mastering helpers.
 
 The audio profile, assistant suggestion and streaming preview come back as
-frozen records with snake_case attributes. A measurement that is not finite (a
-silent take has no integrated loudness) is ``None`` where the field says so.
+frozen records with snake_case attributes. A level of silence is ``-inf`` (an
+anti-phase width ``inf``), and a measurement the library did not take is ``None``
+where the field says so.
 The pair and mono-compatibility analyses return one record per analysis name.
 """
 
@@ -22,14 +23,14 @@ from ._types_repair import AudioDefects
 class MasteringAudioProfileLoudness:
     """Loudness group of :class:`MasteringAudioProfile`."""
 
-    integrated_lufs: float | None
-    """Integrated loudness in LUFS; None for a silent or below-gate take."""
-    loudness_range_lu: float
-    """EBU Tech 3342 loudness range, in LU."""
+    integrated_lufs: float
+    """Integrated loudness in LUFS; -inf for a silent or below-gate take."""
+    loudness_range_lu: float | None
+    """EBU Tech 3342 loudness range, in LU; None for a silent take."""
     true_peak_dbtp: float
-    """True peak, in dBTP."""
-    crest_factor_db: float
-    """Crest factor (peak over RMS level) in dB."""
+    """True peak, in dBTP; -inf for digital silence."""
+    crest_factor_db: float | None
+    """Crest factor (peak over RMS level) in dB; None for a silent take."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,22 +38,23 @@ class MasteringAudioProfileSpectral:
     """Spectral group of :class:`MasteringAudioProfile`.
 
     Band levels (``*_rms_db``) are dBFS, mean square: a full-scale sine reads
-    -3.01 dBFS in its band.
+    -3.01 dBFS in its band, a band with no energy reads -inf, and a band lying wholly
+    above the Nyquist frequency is not measured and reads None.
     """
 
-    sub_rms_db: float
+    sub_rms_db: float | None
     """Sub band level in dBFS."""
-    low_rms_db: float
+    low_rms_db: float | None
     """Low band level in dBFS."""
-    low_mid_rms_db: float
+    low_mid_rms_db: float | None
     """Low-mid band level in dBFS."""
-    mid_rms_db: float
+    mid_rms_db: float | None
     """Mid band level in dBFS."""
-    high_mid_rms_db: float
+    high_mid_rms_db: float | None
     """High-mid band level in dBFS."""
-    high_rms_db: float
+    high_rms_db: float | None
     """High band level in dBFS."""
-    air_rms_db: float
+    air_rms_db: float | None
     """Air band level in dBFS."""
     centroid_hz: float
     """Spectral centroid in Hz."""
@@ -137,14 +139,14 @@ class MasteringAssistantProfile:
     """Estimated tempo in BPM."""
     bpm_confidence: float
     """Confidence of the tempo estimate."""
-    integrated_lufs: float | None
-    """Integrated loudness in LUFS; None for a silent or below-gate take."""
-    loudness_range_lu: float
-    """EBU Tech 3342 loudness range, in LU."""
+    integrated_lufs: float
+    """Integrated loudness in LUFS; -inf for a silent or below-gate take."""
+    loudness_range_lu: float | None
+    """EBU Tech 3342 loudness range, in LU; None for a silent take."""
     true_peak_dbtp: float
-    """True peak, in dBTP."""
-    crest_factor_db: float
-    """Crest factor (peak over RMS level) in dB."""
+    """True peak, in dBTP; -inf for digital silence."""
+    crest_factor_db: float | None
+    """Crest factor (peak over RMS level) in dB; None for a silent take."""
     spectral_centroid_hz: float
     """Spectral centroid in Hz."""
     spectral_flatness: float
@@ -184,12 +186,12 @@ class MasteringStreamingPreviewPlatform:
 
     name: str
     """Platform name, echoed from the requested target."""
-    integrated_lufs: float | None
-    """None for a silent or below-gate take."""
+    integrated_lufs: float
+    """Integrated loudness in LUFS; -inf for a silent or below-gate take."""
     true_peak_dbtp: float
-    """True peak of the take, in dBTP."""
-    normalization_gain_db: float
-    """Gain that lands the take on the platform's target; 0 when the loudness is None."""
+    """True peak of the take, in dBTP; -inf for digital silence."""
+    normalization_gain_db: float | None
+    """Gain that lands the take on the platform's target; None for a silent take."""
     ceiling_risk: bool
     """True when that gain would push the true peak above the platform's ceiling."""
 
@@ -206,15 +208,15 @@ class MasteringStreamingPreviewResult:
 class MatchReferenceLoudnessResult:
     """Result of the ``match.referenceLoudness`` pair analysis.
 
-    A loudness a silent take cannot give, and the gain derived from it, is None.
+    A silent take's loudness is -inf, and the gain derived from it is None.
     """
 
-    source_lufs: float | None
-    """Integrated loudness of the source in LUFS; None for a silent take."""
-    reference_lufs: float | None
-    """Integrated loudness of the reference in LUFS; None for a silent take."""
+    source_lufs: float
+    """Integrated loudness of the source in LUFS; -inf for a silent take."""
+    reference_lufs: float
+    """Integrated loudness of the reference in LUFS; -inf for a silent take."""
     gain_to_match_db: float | None
-    """Gain that brings the source to the reference loudness."""
+    """Gain that brings the source to the reference loudness; None when either take is silent."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,12 +227,15 @@ class MatchTonalBalanceBand:
     """Lower band edge in Hz."""
     high_hz: float
     """Upper band edge in Hz."""
-    source_db: float
-    """Source level in the band, in dB."""
-    reference_db: float
-    """Reference level in the band, in dB."""
-    deviation_db: float
-    """Source level minus reference level."""
+    source_db: float | None
+    """Source level in the band, in dB; -inf for a band with no energy, None for a band no
+    spectrum bin falls in."""
+    reference_db: float | None
+    """Reference level in the band, in dB; -inf for a band with no energy, None for a band no
+    spectrum bin falls in."""
+    deviation_db: float | None
+    """Source level minus reference level; -inf when only the source band is empty, None when
+    the reference band is or when no spectrum bin falls in the band."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,10 +268,10 @@ class MatchEstimateReferenceDelaySamplesResult:
 class StereoMonoCompatCheckResult:
     """Result of the ``stereo.monoCompatCheck`` analysis."""
 
-    correlation: float
-    """Inter-channel correlation in ``[-1, 1]``."""
+    correlation: float | None
+    """Inter-channel correlation in ``[-1, 1]``; None when both channels are silent."""
     width: float | None
-    """Stereo width; None for a fully out-of-phase pair."""
+    """Stereo width; inf for a fully out-of-phase pair, None when both channels are silent."""
     mono_peak: float
     """Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude."""
     side_rms: float

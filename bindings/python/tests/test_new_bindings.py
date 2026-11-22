@@ -432,8 +432,16 @@ def test_lufs_series_interleaved_rejects_non_multiple_length() -> None:
         libsonare.lufs_series_interleaved(interleaved[:-1], 2, SR)
 
 
-def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
-    lra = libsonare.ebur128_loudness_range_lu(_tone(), sample_rate=22050)
+def test_ebur128_loudness_range_is_none_without_a_gated_window() -> None:
+    # `_tone()` is shorter than the 3 s short-term window, so no block is gated.
+    assert libsonare.ebur128_loudness_range_lu(_tone(), sample_rate=22050) is None
+
+
+def test_ebur128_loudness_range_is_finite_nonnegative_over_a_long_tone() -> None:
+    t = np.arange(5 * 22050) / 22050
+    tone = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    lra = libsonare.ebur128_loudness_range_lu(tone, sample_rate=22050)
+    assert lra is not None
     assert math.isfinite(lra)
     assert lra >= 0.0
 

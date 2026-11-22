@@ -59,13 +59,10 @@ def test_reported_peak_is_the_matched_take_not_the_source() -> None:
     assert result.matched_true_peak_dbtp > 20.0 * np.log10(float(np.max(np.abs(SOURCE))))
 
 
-def test_silent_source_reports_no_loudness_and_no_gain() -> None:
+def test_a_silent_take_is_refused_as_having_no_loudness_to_match() -> None:
     silent = np.zeros(SR // 2, dtype=np.float32)
-    result = mastering_ab_match_loudness(silent, REFERENCE, SR)
-    assert result.source_lufs is None
-    assert result.reference_lufs is not None
-    assert result.applied_gain_db == 0.0
-    np.testing.assert_array_equal(result.samples, silent)
+    with pytest.raises(SonareValueError, match="has no measurable loudness"):
+        mastering_ab_match_loudness(silent, REFERENCE, SR)
 
 
 def test_invalid_sample_rate_is_rejected_by_the_c_abi() -> None:

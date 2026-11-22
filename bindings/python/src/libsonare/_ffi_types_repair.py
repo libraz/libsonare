@@ -239,7 +239,6 @@ class SonareDeclipConfig(CStruct):
         ("clip_threshold_db", ctypes.c_float),
         ("lpc_order", ctypes.c_int),
         ("iterations", ctypes.c_int),
-        ("lpc_blend", ctypes.c_float),
     ]
 
 
@@ -264,7 +263,7 @@ class SonareDeclipReport(CStruct):
     _fields_ = [
         ("detected", SonareClipDetection),
         ("lpc_reconstructed_runs", ctypes.c_size_t),
-        ("interpolated_runs", ctypes.c_size_t),
+        ("unreconstructed_runs", ctypes.c_size_t),
         ("repaired_samples", ctypes.c_size_t),
         ("linked_runs", ctypes.c_size_t),
     ]

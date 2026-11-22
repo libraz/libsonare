@@ -35,9 +35,23 @@ class TestMasteringRepairDeclip:
             clip_threshold_db=20.0 * math.log10(0.85),
             lpc_order=24,
             iterations=1,
-            lpc_blend=0.5,
         ).samples
         assert out.shape == samples.shape
+
+    def test_a_run_past_the_gap_cap_is_left_clipped(self) -> None:
+        # 12 Hz clipped at half its amplitude: each plateau spans about 612 samples at
+        # 22050 Hz, past the 512-sample cap, so none is reconstructed.
+        t = np.arange(SR // 2) / SR
+        samples = np.clip(np.sin(2.0 * np.pi * 12.0 * t), -0.5, 0.5).astype(np.float32)
+        result = libsonare.mastering_repair_declip(
+            samples, SR, clip_threshold_db=20.0 * math.log10(0.5)
+        )
+        report = result.report
+        assert report.detected.longest_run_samples > 512
+        assert report.lpc_reconstructed_runs == 0
+        assert report.unreconstructed_runs == report.detected.run_count
+        assert report.repaired_samples == 0
+        np.testing.assert_array_equal(result.samples, samples)
 
 
 class TestMasteringRepairDecrackle:

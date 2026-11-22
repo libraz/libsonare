@@ -246,7 +246,11 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
 def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     unreachable = dataclasses.replace(
-        base, voice_engine="grain", formant_mode="absolute", retune_pitch_semitones=-9.0
+        base,
+        voice_engine="grain",
+        formant_mode="absolute",
+        retune_pitch_semitones=-9.0,
+        retune_mix=1.0,
     )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
     with pytest.raises(
@@ -396,8 +400,9 @@ def test_an_explicit_grain_reads_back_as_given() -> None:
 
 _FORMANT_RANGE = r"formant_factor must be finite and in \[0\.55, 1\.65\]$"
 _FORMANT_WARP = (
-    r"formant_factor must be finite and in \[0\.55, 0\.981\] in absolute formant mode at "
-    r"retune_pitch_semitones -9 \(the warp reaches \[0\.3271, 0\.981\] there\)$"
+    r"formant_factor must be finite and in \[0\.55, 0\.981\] when formant_mode is absolute at "
+    r"retune_pitch_semitones -9 and retune_mix 1 \(the warp it needs must lie in "
+    r"\[0\.55, 1\.65\]\)$"
 )
 
 

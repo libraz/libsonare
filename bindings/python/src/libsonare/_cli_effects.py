@@ -18,6 +18,7 @@ from ._cli_common import (
     _catalog_token,
     _emit_effect_result,
     _find_cli_token,
+    _fmt_optional,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
     _mean_abs,
@@ -485,7 +486,7 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
             # have, and one at or over it means the quiet is there and they do not
             # share it.
             print(
-                f"  silence ceiling {report.silence_ceiling_db:.2f} dB "
+                f"  silence ceiling {_fmt_optional(report.silence_ceiling_db, '.2f', ' dB')} "
                 f"at --top-db {float(top_db):.2f}"
             )
             print(

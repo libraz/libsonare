@@ -50,21 +50,34 @@ def test_stereo_gain_equals_the_offline_applied_gain() -> None:
     assert gain.loudness_static_gain_db == pytest.approx(offline.applied_gain_db, abs=0)
 
 
-def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
+def test_silence_leaves_the_gain_unmeasured_and_the_result_feeds_a_chain() -> None:
     silence = np.zeros(SR, dtype=np.float32)
     gain = libsonare.streaming_loudness_gain(silence, SR, STAGED)
-    assert gain.loudness_static_gain_db == 0.0
-    assert gain.integrated_lufs is None
-    assert gain.true_peak_dbtp is None
-    with libsonare.StreamingMasteringChain(
-        STAGED,
-        sample_rate=SR,
-        max_block_size=512,
-        loudness_static_gain_db=gain.loudness_static_gain_db,
-        loudness_static_gain_peak_dbtp=gain.true_peak_dbtp,
-        num_channels=1,
-    ) as chain:
-        assert len(chain.process_mono([0.0] * 512)) == 512
+    assert gain.loudness_static_gain_db is None
+    assert gain.integrated_lufs == -math.inf
+    assert gain.true_peak_dbtp == -math.inf
+    block = _program(0.05)[:512]
+    # The result goes in as it is: no gain, and an explicit 0 dB gain is the reference.
+    with (
+        libsonare.StreamingMasteringChain(
+            STAGED,
+            sample_rate=SR,
+            max_block_size=512,
+            loudness_static_gain_db=gain.loudness_static_gain_db,
+            loudness_static_gain_peak_dbtp=gain.true_peak_dbtp,
+            num_channels=1,
+        ) as from_silence,
+        libsonare.StreamingMasteringChain(
+            STAGED,
+            sample_rate=SR,
+            max_block_size=512,
+            loudness_static_gain_db=0.0,
+            num_channels=1,
+        ) as unity,
+    ):
+        assert np.array_equal(
+            np.asarray(from_silence.process_mono(block)), np.asarray(unity.process_mono(block))
+        )
 
 
 def test_streaming_chain_built_from_the_helper_tracks_the_offline_render() -> None:

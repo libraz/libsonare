@@ -104,17 +104,17 @@ def test_report_reads_a_part_that_never_stops_as_unfixable_by_threshold() -> Non
     assert report.silence_ceiling_db < 6.0
 
 
-def test_report_reads_takes_that_never_go_quiet_together_against_top_db() -> None:
-    """The ceiling at or above top_db, with one interval, is the alignment case."""
+def test_report_leaves_the_ceiling_unmeasured_for_takes_holding_a_zero_frame() -> None:
+    """Takes that never go quiet together, each with an exactly zero frame, have no ceiling."""
     early = _tone_in_window(0.0, 0.5)
     late = _tone_in_window(0.5, 1.0)
     result = split_silence_common_with_report([early, late], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
     intervals, report = result.intervals, result.report
     assert len(intervals) == 1
-    # The silence is there at this very setting, so a single interval means the
-    # takes do not share it. The interval counts do NOT say so -- a take that
-    # sounds once and stops counts 1, the same as a take with no silence at all.
-    assert report.silence_ceiling_db >= TOP_DB
+    # A take holding an exactly zero frame has no finite ceiling. The interval
+    # counts do NOT say the takes fail to share it -- a take that sounds once
+    # and stops counts 1, the same as a take with no silence at all.
+    assert report.silence_ceiling_db is None
     assert report.max_signal_intervals == 1
     assert report.min_signal_intervals == 1
 

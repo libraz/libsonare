@@ -27,7 +27,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _max_block_size,
-    _measured_db,
+    _measured_level,
     _narrow_float,
     _narrow_int,
     _to_c_double,
@@ -53,9 +53,9 @@ from .types import (
 def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> StreamingLoudnessGain:
     """Copy the C result into the public dataclass."""
     return StreamingLoudnessGain(
-        loudness_static_gain_db=float(out.loudness_static_gain_db),
-        true_peak_dbtp=_measured_db(out.true_peak_dbtp),
-        integrated_lufs=_measured_db(out.integrated_lufs),
+        loudness_static_gain_db=_measured_level(out.loudness_static_gain_db),
+        true_peak_dbtp=float(out.true_peak_dbtp),
+        integrated_lufs=float(out.integrated_lufs),
     )
 
 
@@ -73,7 +73,7 @@ def streaming_loudness_gain(
     :func:`master_audio` applies (ceiling clamp included) and ``true_peak_dbtp``
     is the peak that clamp used. The gain is computed from the ``loudness``
     section whether or not the stage is enabled; a silent or below-gate stage
-    input yields a gain of 0.
+    input has no gain (``None``), which a chain given it applies as none.
 
     Args:
         samples: Mono audio samples.
@@ -203,16 +203,17 @@ class StreamingMasteringChain:
             loudness_static_gain_db: Precomputed loudness normalization gain in
                 dB, measured at the loudness stage's input (see
                 :func:`streaming_loudness_gain`). The streaming chain cannot
-                measure whole-signal integrated LUFS, so a ``loudness``-enabled
-                config raises unless a static gain is supplied here; when
-                supplied it is applied per block before the loudness stage's
-                true-peak limiter.
+                measure whole-signal integrated LUFS, so a ``loudness`` target
+                takes effect only through this gain, applied per block before
+                the loudness stage's true-peak limiter. ``None`` applies no gain
+                and the limiter still runs.
             loudness_static_gain_peak_dbtp: True peak (dBFS) of the loudness
                 stage's input the static gain was computed for. When given, the static
                 gain is clamped to ``(ceilingDbtp - peak) +
                 max(max_limiter_gain_reduction_db, 0)`` so the streaming preview
                 does not overdrive the loudness limiter harder than the offline
-                render. Ignored unless ``loudness_static_gain_db`` is given.
+                render; ``-inf`` (silence) applies it verbatim. Ignored unless
+                ``loudness_static_gain_db`` is given.
         """
         # Set first so a rejected config or a missing build leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.
@@ -229,11 +230,15 @@ class StreamingMasteringChain:
             # NaN is how the C ABI spells "no offline peak measured", so the
             # caller's own value is narrowed here rather than at the conversion:
             # a saturating one would arrive as that same reading.
-            peak = (
-                math.nan
-                if loudness_static_gain_peak_dbtp is None
-                else _narrow_float(loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp")
-            )
+            # The peak of digital silence is -inf, which the chain applies verbatim.
+            if loudness_static_gain_peak_dbtp is None:
+                peak = math.nan
+            elif loudness_static_gain_peak_dbtp == -math.inf:
+                peak = -math.inf
+            else:
+                peak = _narrow_float(
+                    loudness_static_gain_peak_dbtp, "loudness_static_gain_peak_dbtp"
+                )
             options.loudness_static_gain_db = _to_c_float(
                 loudness_static_gain_db, "loudness_static_gain_db"
             )

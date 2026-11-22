@@ -129,8 +129,8 @@ def test_frame_offset_at_or_past_the_end_yields_a_silent_frame() -> None:
         assert report.frequencies.shape == (N_FFT // 2 + 1,)
         assert np.array_equal(report.magnitude, np.zeros(N_FFT // 2 + 1, dtype=np.float32))
         assert np.array_equal(report.power, np.zeros(N_FFT // 2 + 1, dtype=np.float32))
-        # Silence lands on the dB floor rather than on -inf.
-        assert np.all(report.db == -120.0)
+        # Silence lands on the db_amin clamp (20 * log10(1e-10) by default), not on -inf.
+        assert np.allclose(report.db, -200.0)
 
     past_end = libsonare.metering_spectrum_frame(_with(8000, math.nan), SR, LENGTH, N_FFT)
     assert float(np.max(past_end.magnitude)) == 0.0

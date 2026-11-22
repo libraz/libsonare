@@ -137,7 +137,9 @@ def test_empty_beat_series_is_rejected_by_the_facade() -> None:
     message keeps the argument name, because a bare "must not be empty" also
     matches the empty candidate-list guard and would pass for the wrong reason.
     """
-    with pytest.raises(SonareValueError, match="beats.time_sec must not be empty") as excinfo:
+    with pytest.raises(
+        SonareValueError, match=r"^estimate_meter: beats\[\]\.time_sec must not be empty$"
+    ) as excinfo:
         libsonare.estimate_meter([])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
@@ -146,9 +148,12 @@ def test_negative_beat_times_still_reach_the_core_check() -> None:
     """The facade preflight is a diagnostic layer, not a replacement.
 
     It only rejects empty and non-finite input, so the core's own domain rule
-    stays reachable and keeps reporting under its own wording.
+    stays reachable, named after the beats the caller wrote.
     """
-    with pytest.raises(SonareValueError, match="beatTimes") as excinfo:
+    with pytest.raises(
+        SonareValueError,
+        match=r"^estimate_meter: beats\[\]\.time_sec must hold only finite values of at least 0$",
+    ) as excinfo:
         libsonare.estimate_meter(_beats([-1.0, 0.5], [1.0, 1.0]))
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 

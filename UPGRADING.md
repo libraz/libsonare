@@ -599,6 +599,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareClipDetection.sample_fraction` | `SonareClipDetection.clipped_ratio` |
+| `SonareDeclipReport.interpolated_runs` | `SonareDeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
 | `SonareRirSynthConfig.absorption_band_count` | `SonareRirSynthConfig.band_absorption_count` |
 | `SonareRirSynthConfig.absorption_bands` | `SonareRirSynthConfig.band_absorption` |
 | `SonareRirSynthConfig.late_model` | `SonareRirSynthConfig.prefer_eyring` |
@@ -650,12 +651,18 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMixMeterSnapshot.true_peak_db_l` | `SonareMixMeterSnapshot.true_peak_dbtp_l` |
 | `SonareMixMeterSnapshot.true_peak_db_r` | `SonareMixMeterSnapshot.true_peak_dbtp_r` |
 | `SonareMixMeterSnapshot.true_peak_db` | `SonareMixMeterSnapshot.true_peak_dbtp` |
-| `SonareStreamingLoudnessGain.true_peak_db` | `SonareStreamingLoudnessGain.true_peak_dbtp` |
 | `SonareStreamingPlatform.ceiling_db` | `SonareStreamingPlatform.ceiling_dbtp` |
 | `sonare_audio_ebur128_loudness_range` | `sonare_audio_ebur128_loudness_range_lu` |
 | `sonare_audio_true_peak_db` | `sonare_audio_true_peak_dbtp` |
 | `sonare_ebur128_loudness_range` | `sonare_ebur128_loudness_range_lu` |
 | `sonare_metering_true_peak_db` | `sonare_metering_true_peak_dbtp` |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareStreamingLoudnessGain.loudness_static_gain_db` | NaN for a silent or below-gate stage input instead of 0; sonare_streaming_mastering_chain_create reads a NaN static gain as no gain |
+| `SonareStreamingLoudnessGain.true_peak_db` | `SonareStreamingLoudnessGain.true_peak_dbtp`: -inf for digital silence instead of -120 |
 
 #### String values are lowerCamelCase tokens
 
@@ -696,7 +703,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_eq_create` | SonareError sonare_eq_create(sample_rate, max_block_size, &eq); read the error from the return value, the handle from eq (NULL on failure) |
 | `sonare_mixer_create` | SonareError sonare_mixer_create(sample_rate, max_block_size, &mixer); read the error from the return value, the handle from mixer (NULL on failure) |
-| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields, NaN when not given |
+| `sonare_streaming_mastering_chain_create` | SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is |
 
 #### C results are released by a function named after the result
 
@@ -778,6 +785,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareDeclipConfig.lpc_blend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 
@@ -1439,7 +1447,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `AnalysisDynamics.loudness_range_db` | `AnalysisDynamics.loudness_range_lu` |
+| `AnalysisDynamics.loudness_range_db` | `AnalysisDynamics.loudness_range_lu`: loudness_range_db -> loudness_range_lu, float \| None: None for a silent input |
 | `AnalysisMelody.mean_frequency` | `MelodyResult.mean_frequency_hz` |
 | `AnalysisMelody.vibrato_rate` | `MelodyResult.vibrato_rate_hz` |
 | `AnalysisResult.tuning` | `AnalysisResult.tuning_cents` |
@@ -1448,10 +1456,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Chord.end` | `Chord.end_sec` |
 | `Chord.start` | `Chord.start_sec` |
 | `ChordAnalysisResult.tuning` | `ChordAnalysisResult.tuning_cents` |
-| `DynamicsResult.loudness_range_db` | `DynamicsResult.loudness_range_lu` |
 | `DynamicsResult.loudness_times` | `DynamicsResult.loudness_times_sec` |
 | `KeyDetection.tuning` | `KeyDetection.tuning_cents` |
-| `LufsResult.loudness_range` | `LufsResult.loudness_range_lu` |
 | `MelodyPoint.frequency` | `MelodyPoint.frequency_hz`: None for an unvoiced point (was 0.0) |
 | `MelodyPoint.time` | `MelodyPoint.time_sec` |
 | `MelodyResult.mean_frequency` | `MelodyResult.mean_frequency_hz` |
@@ -1508,6 +1514,27 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `griffin_lim(n_fft)` | omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError |
 | `mel_to_audio(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
 | `mfcc_to_audio(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AnalysisDynamics.crest_factor` | float -> float \| None: None for a silent input |
+| `AnalysisDynamics.dynamic_range_db` | float -> float \| None: None for a silent input |
+| `AnalysisDynamics.peak_db` | -inf for a silent input |
+| `AnalysisDynamics.rms_db` | -inf for a silent input |
+| `DynamicsResult.crest_factor` | float -> float \| None: None when not measured (silence) |
+| `DynamicsResult.dynamic_range_db` | float -> float \| None: None when not measured (silence) |
+| `DynamicsResult.loudness_range_db` | `DynamicsResult.loudness_range_lu`: loudness_range_db -> loudness_range_lu, float \| None: None when not measured (silence) |
+| `DynamicsResult.peak_db` | -inf for silence |
+| `DynamicsResult.rms_db` | -inf for silence |
+| `LufsResult.integrated_lufs` | -inf when nothing passes the gate |
+| `LufsResult.loudness_range` | `LufsResult.loudness_range_lu`: loudness_range -> loudness_range_lu, float \| None: None when no short-term window passes the gate (a signal shorter than 3 s, or silence) |
+| `LufsResult.max_momentary_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
+| `LufsResult.max_short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
+| `LufsResult.momentary_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
+| `LufsResult.short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
+| `SilenceCommonReport.silence_ceiling_db` | float -> float \| None: None when any signal's peak is 0 or it holds an exactly zero frame |
 
 #### Every call scans its input for non-finite values
 
@@ -1593,7 +1620,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `BpmAnalysisResult.tempogram` | float32 ndarray instead of list |
 | `ChromaResult.mean_energy` | float32 ndarray instead of list[float] |
 | `CqtResult.frequencies` | float32 ndarray instead of list[float] |
-| `DynamicsResult.loudness_rms_db` | float32 ndarray instead of list |
+| `DynamicsResult.loudness_rms_db` | float32 ndarray instead of list; -inf for an all-zero window |
 | `EqSpectrumSnapshot.band_gain_db` | a float32 ndarray instead of list[float] |
 | `EqSpectrumSnapshot.post_left` | a float32 ndarray instead of list[float] |
 | `EqSpectrumSnapshot.post_right` | a float32 ndarray instead of list[float] |
@@ -2173,6 +2200,15 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `spectral_edit(n_fft)` | omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError instead of selecting the default |
 | `time_stretch(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `HumDetection.harmonic_dbfs` | ends before the first harmonic at or past Nyquist instead of reading the dB floor; a harmonic with no energy is -inf |
+| `NoiseDetection.band_floor_dbfs` | holds only the bands an analysis bin lands in, so it can be shorter than 32; the new band_floor_band names each entry's band, and an empty band is no longer a sentinel entry |
+| `NoiseDetection.floor_dbfs` | float -> float \| None: -inf for digital silence, None when there is nothing to measure from |
+| `normalize_stereo` | a silent pair is refused with SonareValueError ('has no measurable level') instead of coming back untouched |
+
 #### Every call scans its input for non-finite values
 
 | 1.x | 2.0.0 |
@@ -2269,7 +2305,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingRetune.process_mono` | returns a float32 ndarray instead of list[float] |
 | `harmonic` | returns a float32 ndarray instead of list[float] |
 | `mastering_repair_noise_band_bins` | returns an int32 ndarray instead of list[int] |
-| `normalize` | returns a float32 ndarray instead of list[float] |
+| `normalize` | returns a float32 ndarray instead of list[float]; a silent take is refused with SonareValueError ('has no measurable level') in both modes |
 | `note_move` | returns a float32 ndarray instead of list[float] |
 | `note_stretch` | returns a float32 ndarray instead of list[float] |
 | `percussive` | returns a float32 ndarray instead of list[float] |
@@ -2417,11 +2453,15 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DeclipReport.interpolated_runs` | `DeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
 | `PitchDecomposition.centre_hz` | `PitchDecompositionResult.center_hz`: None for a note with no usable pitch (was 0.0) |
 | `RealtimeVoiceChangerConfig.from_pod` | removed: the C struct mirror is internal; build the record by keyword, or read RealtimeVoiceChanger.config |
 | `RealtimeVoiceChangerConfig.to_pod` | removed: the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...) |
 | `auto_tune(reference_midi)` | `auto_tune(scale_reference_midi)` |
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
+| `mastering_repair_declip(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
+| `mastering_repair_declip_stereo(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
+| `mastering_repair_detect_clipping(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
@@ -2483,14 +2523,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `MasteringAssistantProfile.attackDensity` | `MasteringAssistantProfile.attack_per_second`: attackDensity -> attack_per_second |
 | `MasteringAudioProfileDynamics.attackDensity` | `MasteringAudioProfileDynamics.attack_per_second`: attackDensity -> attack_per_second |
-| `MasteringChainResult.output_lra` | `MasteringChainResult.output_loudness_range_lu` |
 | `MasteringChainStereoResult.output_lra` | `MasteringChainStereoResult.output_loudness_range_lu` |
-| `MasteringLoudnessSummary.loudness_range` | `MasteringLoudnessSummary.loudness_range_lu` |
-| `MixMeterSnapshot.max_true_peak_db` | `MixMeterSnapshot.max_true_peak_dbtp` |
-| `MixMeterSnapshot.true_peak_db_l` | `MixMeterSnapshot.true_peak_dbtp_l` |
-| `MixMeterSnapshot.true_peak_db_r` | `MixMeterSnapshot.true_peak_dbtp_r` |
 | `MixMeterSnapshot.true_peak_db` | `MixMeterSnapshot.true_peak_dbtp` |
-| `StreamingLoudnessGain.true_peak_db` | `StreamingLoudnessGain.true_peak_dbtp`: None for digital silence (was the meter's -120 floor); the StreamingMasteringChain constructor reads None as no measured peak |
 | `mastering(ceiling_db)` | `mastering(ceiling_dbtp)`: the ceiling is held on a true-peak measurement, so the keyword carries dBTP; ceiling_db raises TypeError |
 | `metering_detect_clipping(threshold)` | `metering_detect_clipping(threshold_db)`: threshold -> threshold_db, a level in dBFS in [-120, 0] instead of a linear amplitude (default 20*log10(0.999)); omitted or NaN hands the core its default and a level outside the range raises SonareValueError |
 
@@ -2498,21 +2532,17 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudness_range_lu`: lraLu -> loudness_range_lu |
-| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.true_peak_dbtp`: truePeakDb -> true_peak_dbtp |
-| `MasteringAudioProfileLoudness.lraLu` | `MasteringAudioProfileLoudness.loudness_range_lu`: lraLu -> loudness_range_lu |
-| `MasteringAudioProfileLoudness.truePeakDb` | `MasteringAudioProfileLoudness.true_peak_dbtp`: truePeakDb -> true_peak_dbtp |
-| `MasteringStreamingPreviewPlatform.truePeakDb` | `MasteringStreamingPreviewPlatform.true_peak_dbtp`: truePeakDb -> true_peak_dbtp |
-| `ebur128_loudness_range` | `ebur128_loudness_range_lu` |
+| `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudness_range_lu`: lraLu -> loudness_range_lu; float \| None: None for a silent take |
+| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.true_peak_dbtp`: truePeakDb -> true_peak_dbtp; -inf for digital silence |
+| `MasteringAudioProfileLoudness.lraLu` | `MasteringAudioProfileLoudness.loudness_range_lu`: lraLu -> loudness_range_lu; float \| None: None for a silent take |
+| `MasteringAudioProfileLoudness.truePeakDb` | `MasteringAudioProfileLoudness.true_peak_dbtp`: truePeakDb -> true_peak_dbtp; -inf for digital silence |
+| `MasteringStreamingPreviewPlatform.truePeakDb` | `MasteringStreamingPreviewPlatform.true_peak_dbtp`: truePeakDb -> true_peak_dbtp; -inf for digital silence |
 | `metering_true_peak_db` | `metering_true_peak_dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
 | 1.x | 2.0.0 |
 |---|---|
-| `LoudnessMatch.reference_lufs` | `LoudnessMatchResult.reference_lufs`: None for a silent or below-gate take (was non-finite) |
-| `LoudnessMatch.source_lufs` | `LoudnessMatchResult.source_lufs`: None for a silent or below-gate take (was non-finite) |
-| `StreamingLoudnessGain.integrated_lufs` | None for a silent or below-gate input (was non-finite) |
 | `mastering(release_ms)` | absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError |
 | `metering_dynamic_range(hop_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
 | `metering_dynamic_range(window_sec)` | None (the default) is the library default; an explicit 0 raises SonareValueError |
@@ -2536,6 +2566,50 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `mastering(true_peak_oversample)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
 | `metering_detect_clipping(min_region_samples)` | omitted or 0 hands the core its default (was the literal 1) |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `LoudnessMatch.reference_lufs` | `LoudnessMatchResult.reference_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
+| `LoudnessMatch.source_lufs` | `LoudnessMatchResult.source_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
+| `MasteringAssistantProfile.crestFactorDb` | `MasteringAssistantProfile.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
+| `MasteringAssistantProfile.integratedLufs` | `MasteringAssistantProfile.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
+| `MasteringAudioProfileLoudness.crestFactorDb` | `MasteringAudioProfileLoudness.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
+| `MasteringAudioProfileLoudness.integratedLufs` | `MasteringAudioProfileLoudness.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
+| `MasteringChainResult.output_lra` | `MasteringChainResult.output_loudness_range_lu`: output_lra -> output_loudness_range_lu, float \| None: None when not measured (a take shorter than 3 s, or silence) |
+| `MasteringChainResult.output_true_peak_dbtp` | -inf for silence |
+| `MasteringLoudnessSummary.integrated_lufs` | -inf for silence or when nothing passes the gate |
+| `MasteringLoudnessSummary.loudness_range` | `MasteringLoudnessSummary.loudness_range_lu`: loudness_range -> loudness_range_lu, float \| None: None when not measured |
+| `MasteringLoudnessSummary.max_momentary_lufs` | float -> float \| None: -inf for silence, None when the signal is shorter than one window |
+| `MasteringLoudnessSummary.max_short_term_lufs` | float -> float \| None: -inf for silence, None when the signal is shorter than one window |
+| `MasteringLoudnessSummary.true_peak_dbtp` | -inf for silence |
+| `MasteringStreamingPreviewPlatform.integratedLufs` | `MasteringStreamingPreviewPlatform.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
+| `MasteringStreamingPreviewPlatform.normalizationGainDb` | `MasteringStreamingPreviewPlatform.normalization_gain_db`: normalizationGainDb -> normalization_gain_db, float \| None: None for a silent take (was 0) |
+| `MatchReferenceLoudnessResult.gainToMatchDb` | `MatchReferenceLoudnessResult.gain_to_match_db`: gainToMatchDb -> gain_to_match_db, float \| None: None when either take is silent |
+| `MatchReferenceLoudnessResult.referenceLufs` | `MatchReferenceLoudnessResult.reference_lufs`: referenceLufs -> reference_lufs: -inf below the gate, never None |
+| `MatchReferenceLoudnessResult.sourceLufs` | `MatchReferenceLoudnessResult.source_lufs`: sourceLufs -> source_lufs: -inf below the gate, never None |
+| `MatchTonalBalanceBand.deviationDb` | `MatchTonalBalanceBand.deviation_db`: deviationDb -> deviation_db, float \| None: -inf when only the source band is empty, None when the reference band is |
+| `MixMeterSnapshot.correlation` | float -> float \| None: None on a zero channel or silence |
+| `MixMeterSnapshot.integrated_lufs` | float -> float \| None: None before the first gating block, -inf while nothing passes the gate |
+| `MixMeterSnapshot.max_true_peak_db` | `MixMeterSnapshot.max_true_peak_dbtp`: max_true_peak_db -> max_true_peak_dbtp, float \| None: -inf for silence, None when true peak is switched off |
+| `MixMeterSnapshot.momentary_lufs` | float -> float \| None: -inf for silence, None until the window fills |
+| `MixMeterSnapshot.mono_compat_width` | float -> float \| None: None on a zero channel or silence, inf for a silent mid under a nonzero side |
+| `MixMeterSnapshot.peak_db_l` | float -> float \| None: -inf for silence, None when not measured |
+| `MixMeterSnapshot.peak_db_r` | float -> float \| None: -inf for silence, None when not measured |
+| `MixMeterSnapshot.rms_db_l` | float -> float \| None: -inf for silence, None when not measured |
+| `MixMeterSnapshot.rms_db_r` | float -> float \| None: -inf for silence, None when not measured |
+| `MixMeterSnapshot.short_term_lufs` | float -> float \| None: -inf for silence, None until the window fills |
+| `MixMeterSnapshot.true_peak_db_l` | `MixMeterSnapshot.true_peak_dbtp_l`: true_peak_db_l -> true_peak_dbtp_l, float \| None: -inf for silence, None when true peak is switched off |
+| `MixMeterSnapshot.true_peak_db_r` | `MixMeterSnapshot.true_peak_dbtp_r`: true_peak_db_r -> true_peak_dbtp_r, float \| None: -inf for silence, None when true peak is switched off |
+| `StreamingLoudnessGain.integrated_lufs` | -inf for a silent or below-gate input, never None |
+| `StreamingLoudnessGain.loudness_static_gain_db` | float -> float \| None: None for a silent or below-gate stage input, which a StreamingMasteringChain given it applies as no gain |
+| `StreamingLoudnessGain.true_peak_db` | `StreamingLoudnessGain.true_peak_dbtp`: true_peak_db -> true_peak_dbtp: -inf for digital silence, never None |
+| `ebur128_loudness_range` | `ebur128_loudness_range_lu`: renamed to ebur128_loudness_range_lu; returns float \| None: None when no 3 s window passes the gate (a signal shorter than 3 s, or silence) |
+| `metering_crest_factor_db_stereo` | returns float \| None: None for silence |
+| `metering_crest_factor_db` | returns float \| None: None for silence |
+| `metering_stereo_correlation` | returns float \| None: None when either channel has zero energy |
+| `metering_stereo_width` | returns float \| None: inf for a silent mid under a nonzero side, None when both are silent |
 
 #### Every call scans its input for non-finite values
 
@@ -2598,9 +2672,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `LoudnessMatch.matched_true_peak_dbtp` | `LoudnessMatchResult.matched_true_peak_dbtp` |
 | `LoudnessMatch` | removed: mastering_ab_match_loudness returns LoudnessMatchResult, which carries the matched samples and sample_rate beside the measurements; the stereo form returns LoudnessMatchStereoResult |
 | `MasteringAssistantProfile.bpmConfidence` | `MasteringAssistantProfile.bpm_confidence` |
-| `MasteringAssistantProfile.crestFactorDb` | `MasteringAssistantProfile.crest_factor_db` |
 | `MasteringAssistantProfile.durationSec` | `MasteringAssistantProfile.duration_sec` |
-| `MasteringAssistantProfile.integratedLufs` | `MasteringAssistantProfile.integrated_lufs` |
 | `MasteringAssistantProfile.spectralCentroidHz` | `MasteringAssistantProfile.spectral_centroid_hz` |
 | `MasteringAssistantProfile.spectralFlatness` | `MasteringAssistantProfile.spectral_flatness` |
 | `MasteringAssistantProfile.sustainRatio` | `MasteringAssistantProfile.sustain_ratio` |
@@ -2613,8 +2685,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAudioProfileDynamics.shortTermLufsStd` | `MasteringAudioProfileDynamics.short_term_lufs_std` |
 | `MasteringAudioProfileDynamics.sustainRatio` | `MasteringAudioProfileDynamics.sustain_ratio` |
 | `MasteringAudioProfileDynamics` | a frozen dataclass with snake_case attributes instead of a TypedDict |
-| `MasteringAudioProfileLoudness.crestFactorDb` | `MasteringAudioProfileLoudness.crest_factor_db` |
-| `MasteringAudioProfileLoudness.integratedLufs` | `MasteringAudioProfileLoudness.integrated_lufs` |
 | `MasteringAudioProfileLoudness` | a frozen dataclass with snake_case attributes instead of a TypedDict |
 | `MasteringAudioProfileSpectral.airRmsDb` | `MasteringAudioProfileSpectral.air_rms_db` |
 | `MasteringAudioProfileSpectral.centroidHz` | `MasteringAudioProfileSpectral.centroid_hz` |
@@ -2629,19 +2699,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAudioProfile` | a frozen dataclass with snake_case attributes instead of a TypedDict; loudness, spectral and dynamics are records, defects is an AudioDefects or None, and an integrated loudness that was not measured is None |
 | `MasteringChainConfigDocument` | removed: MasteringAssistantResult.chain_config is the document's params as a MasteringChainConfig |
 | `MasteringStreamingPreviewPlatform.ceilingRisk` | `MasteringStreamingPreviewPlatform.ceiling_risk` |
-| `MasteringStreamingPreviewPlatform.integratedLufs` | `MasteringStreamingPreviewPlatform.integrated_lufs` |
-| `MasteringStreamingPreviewPlatform.normalizationGainDb` | `MasteringStreamingPreviewPlatform.normalization_gain_db` |
 | `MasteringStreamingPreviewPlatform` | a frozen dataclass with snake_case attributes instead of a TypedDict |
 | `MasteringStreamingPreviewResult` | a frozen dataclass with snake_case attributes instead of a TypedDict |
 | `MatchEqCurveResult.gainDb` | `MatchEqCurveResult.gain_db` |
 | `MatchEqCurveResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; frequencies and gain_db are float32 arrays |
 | `MatchEstimateReferenceDelaySamplesResult.delaySamples` | `MatchEstimateReferenceDelaySamplesResult.delay_samples` |
 | `MatchEstimateReferenceDelaySamplesResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; delay_samples is an int of whole samples |
-| `MatchReferenceLoudnessResult.gainToMatchDb` | `MatchReferenceLoudnessResult.gain_to_match_db` |
-| `MatchReferenceLoudnessResult.referenceLufs` | `MatchReferenceLoudnessResult.reference_lufs` |
-| `MatchReferenceLoudnessResult.sourceLufs` | `MatchReferenceLoudnessResult.source_lufs` |
 | `MatchReferenceLoudnessResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; a loudness that could not be measured is None |
-| `MatchTonalBalanceBand.deviationDb` | `MatchTonalBalanceBand.deviation_db` |
 | `MatchTonalBalanceBand.highHz` | `MatchTonalBalanceBand.high_hz` |
 | `MatchTonalBalanceBand.lowHz` | `MatchTonalBalanceBand.low_hz` |
 | `MatchTonalBalanceBand.referenceDb` | `MatchTonalBalanceBand.reference_db` |
@@ -2657,7 +2721,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StereoMonoCompatCheckResult.likelyMonoCompatible` | `StereoMonoCompatCheckResult.likely_mono_compatible` |
 | `StereoMonoCompatCheckResult.monoPeak` | `StereoMonoCompatCheckResult.mono_peak` |
 | `StereoMonoCompatCheckResult.sideRms` | `StereoMonoCompatCheckResult.side_rms` |
-| `StereoMonoCompatCheckResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; width is None for a fully out-of-phase pair |
+| `StereoMonoCompatCheckResult` | a frozen dataclass with snake_case attributes instead of a TypedDict; width is inf for a fully out-of-phase pair, and correlation and width are None when both channels are silent |
 | `StreamingEqualizer.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `StreamingMasteringChain.flush_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `StreamingMasteringChain.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
@@ -2875,7 +2939,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMetronomeConfig.click_seconds` | `EngineMetronomeConfig.click_sec`: float \| None, default None: None selects the library click length and an explicit 0 raises SonareValueError |
-| `MeterTelemetryRecord.max_true_peak_db` | `MeterTelemetryRecord.max_true_peak_dbtp` |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -2926,6 +2989,18 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.prepare(max_channels)` | omitted takes the library default (was 64) and an explicit 0 raises SonareValueError |
 | `RealtimeEngine.prepare(telemetry_capacity)` | omitted takes the library default (was 1024) and an explicit 0 raises SonareValueError |
 | `RealtimeEngine.render_offline(block_size)` | omitted takes the library default (was 128) and an explicit 0 raises SonareValueError |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MeterTelemetryRecord.correlation` | float -> float \| None: None on a zero channel or silence |
+| `MeterTelemetryRecord.integrated_lufs` | float -> float \| None: None before the first gating block, -inf while nothing passes the gate |
+| `MeterTelemetryRecord.max_true_peak_db` | `MeterTelemetryRecord.max_true_peak_dbtp`: max_true_peak_db -> max_true_peak_dbtp, float \| None: -inf for silence, None when not measured |
+| `MeterTelemetryRecord.momentary_lufs` | float -> float \| None: -inf for silence, None until the window fills |
+| `MeterTelemetryRecord.mono_compat_width` | float -> float \| None: None on a zero channel or silence, inf for a silent mid under a nonzero side |
+| `MeterTelemetryRecord.short_term_lufs` | float -> float \| None: -inf for silence, None until the window fills |
+| `ScopeTelemetryRecord.bands` | -inf for a band of zero power, NaN for a band no bin reaches and before the first transform |
 
 #### String values are lowerCamelCase tokens
 
@@ -3087,7 +3162,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.strip_count` | a property (was a method) |
 | `Mixer.tail_samples` | a property (was a method) |
 | `Mixer.vca_group_count` | a property (was a method) |
-| `PlaybackLoudnessMeter.integrated_lufs` | a property (was a method) |
+| `PlaybackLoudnessMeter.integrated_lufs` | a property (was a method); None before the first gating block and -inf while nothing passes the gate |
 | `PlaybackRenderer.input_channels` | `PlaybackRenderer.num_input_channels`: a property named for the channel count (was the method input_channels) |
 | `PlaybackRenderer.latency_samples` | a property (was a method) |
 | `PlaybackRenderer.non_finite_discard_count` | a property (was a method) |
@@ -4174,6 +4249,13 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AnalysisDynamics.peakDb` | optional: `-Infinity` for silence, absent when not measured |
+| `AnalysisDynamics.rmsDb` | optional: `-Infinity` for silence, absent when not measured |
 
 #### Every call scans its input for non-finite values
 
@@ -5395,6 +5477,11 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AutoTuneRequest.strength` | `AutoTuneRequest.retuneAmount` |
 | `ClipDetection.sampleCount` | `ClipDetection.clippedSamples`: sampleCount -> clippedSamples |
 | `ClipDetection.sampleFraction` | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
+| `DeclipOptions.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
+| `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairStage` | discriminated union: ({stage:'declick'} & DeclickOptions) \| ({stage:'declip'} & DeclipOptions) \| ({stage:'decrackle'} & DecrackleOptions) \| ({stage:'dehum'} & DehumOptions) \| ({stage:'denoise'} & DenoiseClassicalOptions) \| ({stage:'dereverb'} & DereverbClassicalOptions) |
 | `NoteEdit` | every field readonly |
 | `NoteObject.amplitude` | readonly |
@@ -5531,12 +5618,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `LufsSeriesResult.momentary` | `LufsSeriesResult.momentaryLufs`: momentary -> momentaryLufs |
 | `LufsSeriesResult.shortTerm` | `LufsSeriesResult.shortTermLufs`: shortTerm -> shortTermLufs |
 | `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu |
-| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MasteringAudioProfile.loudness.crestFactorDb` | `MasteringAudioProfileLoudness.crestFactorDb` |
 | `MasteringAudioProfile.loudness.integratedLufs` | `MasteringAudioProfileLoudness.integratedLufs` |
 | `MasteringAudioProfile.loudness.lraLu` | `MasteringAudioProfileLoudness.loudnessRangeLu` |
 | `MasteringAudioProfile.loudness.truePeakDb` | `MasteringAudioProfileLoudness.truePeakDbtp` |
-| `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb} |
+| `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu?, truePeakDbtp?, crestFactorDb?}: an unmeasured level is absent, silence is -Infinity |
 | `MasteringChainConfig.loudness.ceilingDb` | `MasteringChainConfig.loudness.ceilingDbtp` |
 | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `MasteringChainResult.outputLra` | `MasteringChainResult.outputLoudnessRangeLu`: outputLra -> outputLoudnessRangeLu |
@@ -5545,7 +5632,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringOptions.ceilingDb` | `MasteringNormalizeLoudnessOptions.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 | `MasteringRequest.ceilingDb` | `MasteringNormalizeLoudnessRequest.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 | `MasteringStreamingPreviewPlatform.truePeakDb` | `MasteringStreamingPreviewPlatform.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MixMeterSnapshot.maxTruePeakDb` | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
 | `MixMeterSnapshot.truePeakDbL` | `MixMeterSnapshot.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
 | `MixMeterSnapshot.truePeakDbR` | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
@@ -5558,7 +5645,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringAssistantProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
 | `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -5574,21 +5660,16 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringInsertSlot.parent` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringOptions.releaseMs` | `MasteringNormalizeLoudnessOptions.releaseMs`: absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MasteringProcessorCatalogEntry.realtimeCost` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringStreamingPreviewRequest.platforms` | an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set |
 | `MasteringStreamingPreviewStereoRequest.platforms` | an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set |
 | `MatchReferenceLoudnessResult.gainToMatchDb` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MeteringDynamicRangeOptions.hopSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
-| `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.octaveFraction` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `StereoMonoCompatCheckResult.width` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `StreamingEqualizer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is refused |
 | `StripMeteringOptions.truePeakOversample` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 
@@ -5599,6 +5680,25 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringOptions.truePeakOversample` | `MasteringNormalizeLoudnessOptions.truePeakOversample`: absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDetectClippingOptions.minRegionSamples` | absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringTruePeakRequest.oversampleFactor` | `MeteringTruePeakDbtpRequest.oversampleFactor`: absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
+| `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
+| `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
+| `MatchTonalBalanceBand.deviationDb` | optional: `-Infinity` when only the source band is silent, absent when the reference band is silent or the band holds no bin |
+| `MatchTonalBalanceBand.referenceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
+| `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
+| `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
+| `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixMonoRisk.correlation` | optional: absent when either channel is silent |
+| `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
+| `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
+| `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
 
 #### Every call scans its input for non-finite values
 
@@ -6049,6 +6149,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClippingReport.clippingRatio` | `ClippingReport.clippedRatio`: clippingRatio -> clippedRatio |
+| `MasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MeteringDynamicRangeOptions.lowPercentile` | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
@@ -7175,6 +7276,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.fromMemoryWithBrowserFallback` | fallback failures throw SonareError NotSupported (no decoding context) or DecodeFailed with the decoder error as cause |
+| `ErrorCode.AbiMismatch` | a C-ABI failure coded as an ABI mismatch (10) now arrives as SonareError AbiMismatch instead of InvalidState |
+| `ErrorCode.Unknown` | a C-ABI failure the library codes as unknown (99) now arrives as SonareError Unknown instead of InvalidState |
 | `OfflineWorkerClient` | constructor without a Worker throws SonareError NotSupported; a worker crash or malformed message rejects pending calls with a SonareError |
 | `SonareError.codeName` | typed as the ErrorCodeName union instead of string, and derived from code |
 | `SonareError.code` | typed as the ErrorCode union instead of number |
@@ -9964,6 +10067,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipDetection.sampleCount` | `ClipDetection.clippedSamples`: sampleCount -> clippedSamples |
 | `ClipDetection.sampleFraction` (`./analysis`) | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
 | `ClipDetection.sampleFraction` | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
+| `DeclipOptions.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `DeclipReport.interpolatedRuns` (`./analysis`) | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
+| `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
+| `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairStage` | discriminated union: ({stage:'declick'} & DeclickOptions) \| ({stage:'declip'} & DeclipOptions) \| ({stage:'decrackle'} & DecrackleOptions) \| ({stage:'dehum'} & DehumOptions) \| ({stage:'denoise'} & DenoiseClassicalOptions) \| ({stage:'dereverb'} & DereverbClassicalOptions) |
 | `NoteEdit` (`./analysis`) | every field readonly |
 | `NoteEdit` | every field readonly |
@@ -10167,15 +10276,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `LufsSeriesResult.momentary` | `LufsSeriesResult.momentaryLufs`: momentary -> momentaryLufs |
 | `LufsSeriesResult.shortTerm` (`./analysis`) | `LufsSeriesResult.shortTermLufs`: shortTerm -> shortTermLufs |
 | `LufsSeriesResult.shortTerm` | `LufsSeriesResult.shortTermLufs`: shortTerm -> shortTermLufs |
-| `MasteringAssistantProfile.lraLu` (`./analysis`) | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu |
-| `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu |
-| `MasteringAssistantProfile.truePeakDb` (`./analysis`) | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MasteringAssistantProfile.lraLu` (`./analysis`) | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu, now optional: absent when no block passes the gate |
+| `MasteringAssistantProfile.lraLu` | `MasteringAssistantProfile.loudnessRangeLu`: lraLu -> loudnessRangeLu, now optional: absent when no block passes the gate |
+| `MasteringAssistantProfile.truePeakDb` (`./analysis`) | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
+| `MasteringAssistantProfile.truePeakDb` | `MasteringAssistantProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MasteringAudioProfile.loudness.crestFactorDb` | `MasteringAudioProfileLoudness.crestFactorDb` |
 | `MasteringAudioProfile.loudness.integratedLufs` | `MasteringAudioProfileLoudness.integratedLufs` |
 | `MasteringAudioProfile.loudness.lraLu` | `MasteringAudioProfileLoudness.loudnessRangeLu` |
 | `MasteringAudioProfile.loudness.truePeakDb` | `MasteringAudioProfileLoudness.truePeakDbtp` |
-| `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb} |
+| `MasteringAudioProfile.loudness` | MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu?, truePeakDbtp?, crestFactorDb?}: an unmeasured level is absent, silence is -Infinity |
 | `MasteringChainConfig.loudness.ceilingDb` (`./analysis`) | `MasteringChainConfig.loudness.ceilingDbtp` |
 | `MasteringChainConfig.loudness.ceilingDb` | `MasteringChainConfig.loudness.ceilingDbtp` |
 | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./analysis`) | `MasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
@@ -10191,8 +10300,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringRequest.ceilingDb` | `MasteringNormalizeLoudnessRequest.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
 | `MasteringStreamingPreviewPlatform.truePeakDb` (`./analysis`) | `MasteringStreamingPreviewPlatform.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `MasteringStreamingPreviewPlatform.truePeakDb` | `MasteringStreamingPreviewPlatform.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `MixAssistantTrackProfile.truePeakDb` (`./analysis`) | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp |
+| `MixAssistantTrackProfile.truePeakDb` (`./analysis`) | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
+| `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MixMeterSnapshot.maxTruePeakDb` (`./analysis`) | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
 | `MixMeterSnapshot.maxTruePeakDb` | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
 | `MixMeterSnapshot.truePeakDbL` (`./analysis`) | `MixMeterSnapshot.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
@@ -10222,7 +10331,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MasteringAssistantProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringAudioProfile.defects` | defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes) |
 | `MasteringAudioProfileDefects.measured` | removed: test whether defects is present; it is absent when detectDefects is false |
 | `MasteringInsertParamInfo.choices` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -10239,18 +10347,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringOptions.releaseMs` (`./analysis`) | `MasteringNormalizeLoudnessOptions.releaseMs`: absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MasteringOptions.releaseMs` | `MasteringNormalizeLoudnessOptions.releaseMs`: absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MasteringProcessorCatalogEntry.realtimeCost` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MasteringStreamingPreviewRequest.platforms` | an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set |
 | `MasteringStreamingPreviewStereoRequest.platforms` | an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set |
 | `MatchReferenceLoudnessResult.gainToMatchDb` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
-| `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `MeteringDynamicRangeOptions.hopSec` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.hopSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
-| `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SpectrumOptions.dbAmin` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -10259,7 +10363,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.octaveFraction` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.octaveFraction` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
-| `StereoMonoCompatCheckResult.width` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `StreamingMasteringChainConfig.loudnessStaticGainDb` (`./analysis`) | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
 | `StreamingMasteringChainConfig.loudnessStaticGainDb` (`./worklet`) | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
 | `StreamingMasteringChainConfig.loudnessStaticGainDb` | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
@@ -10275,6 +10378,25 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MeteringDetectClippingOptions.minRegionSamples` | absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringTruePeakRequest.oversampleFactor` (`./analysis`) | `MeteringTruePeakDbtpRequest.oversampleFactor`: absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringTruePeakRequest.oversampleFactor` | `MeteringTruePeakDbtpRequest.oversampleFactor`: absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError ("omit for the default") |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
+| `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
+| `MatchReferenceLoudnessResult.referenceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
+| `MatchReferenceLoudnessResult.sourceLufs` | T \| null -> number: `-Infinity` below the gate, never null |
+| `MatchTonalBalanceBand.deviationDb` | optional: `-Infinity` when only the source band is silent, absent when the reference band is silent or the band holds no bin |
+| `MatchTonalBalanceBand.referenceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
+| `MatchTonalBalanceBand.sourceDb` | optional: `-Infinity` for a silent band, absent when the band holds no bin |
+| `MixAssistantTrackProfile.crestFactorDb` | optional: absent for silence or a track that could not be measured |
+| `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
+| `MixMonoRisk.correlation` | optional: absent when either channel is silent |
+| `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
+| `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
+| `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
 
 #### Every call scans its input for non-finite values
 
@@ -10991,6 +11113,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `ClippingReport.clippingRatio` (`./analysis`) | `ClippingReport.clippedRatio`: clippingRatio -> clippedRatio |
 | `ClippingReport.clippingRatio` | `ClippingReport.clippedRatio`: clippingRatio -> clippedRatio |
+| `MasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringProcessorParams` (`./analysis`) | MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P] |
 | `MasteringProcessorParams` | MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P] |
 | `MeteringDynamicRangeOptions.lowPercentile` (`./analysis`) | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
@@ -11000,6 +11124,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
+| `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./worklet`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `StreamingMasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `SurroundPan.distance` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `SurroundPan.elevation` (`./analysis`) | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
@@ -12655,7 +12782,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `declip` (python CLI only) | removed: use repair --stages declip; its four options are the --params keys repair.declip.clipThresholdDb, lpcOrder, iterations and lpcBlend |
+| `declip` (python CLI only) | removed: use repair --stages declip; its options are the --params keys repair.declip.clipThresholdDb, lpcOrder and iterations |
 | `decompose-stems --init` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `decompose-stems --n-components` | a value below 1 is refused as a usage error (exit 2) before the input is read; --n-iter, --n-fft, --hop-length and --mask-power (at least 1) are refused the same way |
 | `decompose-stems --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |

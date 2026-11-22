@@ -19,7 +19,7 @@ from ._cancellation import (
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
 from ._errors import _entry, _refuse_type
 from ._ffi import SonareMasteringProgressCallback
-from ._result_records import _camel, _fields, _snake
+from ._result_records import _camel, _fields, _fill_null_ends, _snake
 from ._runtime import (
     _check,
     _get_lib,
@@ -79,6 +79,11 @@ def _detection(detection_type: type, values: Mapping[str, Any]) -> Any:
     if detection_type is ClipDetection and not detected["flat_run_count"]:
         # With no flat run there is no level to report; the document still carries one.
         detected["flat_level"] = None
+    if detection_type is NoiseDetection:
+        # The document omits the broadband floor when there is nothing to measure from.
+        detected.setdefault("floor_dbfs", None)
+        detected["band_floor_dbfs"] = np.asarray(detected["band_floor_dbfs"], dtype=np.float32)
+        detected["band_floor_band"] = np.asarray(detected["band_floor_band"], dtype=np.int32)
     if detection_type is ReverbDetection:
         # The document omits the key when the WPE stage did not run.
         detected.setdefault("late_predictability", None)
@@ -112,6 +117,7 @@ def _stage_to_wire(stage: RepairStage) -> dict[str, Any]:
 
 
 def _repair_analysis_from_wire(values: Mapping[str, Any]) -> MasteringRepairAnalysis:
+    _fill_null_ends(values, "repair_analysis")
     defects = values.get("defects")
     channels = values.get("channels")
     return MasteringRepairAnalysis(
