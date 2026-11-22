@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  ErrorCode,
   griffinLim,
+  Mixer,
   masterAudio,
   masterAudioAsync,
   masterAudioStereo,
@@ -10,6 +12,7 @@ import {
   melToAudio,
   mfccToAudio,
   mfccToMel,
+  Project,
   pitchShift,
   resample,
   StreamingEqualizer,
@@ -852,5 +855,58 @@ describe('masterAudio refuses a call giving neither a preset nor overrides', () 
       expect(error, name).toBeInstanceOf(kind);
       expect((error as Error).message, name).toMatch(text);
     }
+  });
+});
+
+type MixSceneLoader = 'mixer_from_json' | 'mixer_scene_option' | 'project_set_mixer_scene';
+type MixSceneCase = {
+  id: string;
+  scene: Record<string, unknown>;
+  cause?: 'format';
+  code?: keyof typeof ErrorCode;
+  message?: string;
+};
+const mixScene = (
+  corpus as unknown as {
+    mix_scene_document: {
+      loaders: MixSceneLoader[];
+      accepted: MixSceneCase[];
+      refused: MixSceneCase[];
+    };
+  }
+).mix_scene_document;
+const MIX_OPTIONS = { sampleRate: 48000, maxBlockSize: 512 };
+const loadMixScene: Record<MixSceneLoader, (scene: Record<string, unknown>) => void> = {
+  mixer_from_json: (scene) => Mixer.fromJson(JSON.stringify(scene), MIX_OPTIONS).destroy(),
+  mixer_scene_option: (scene) => new Mixer({ ...MIX_OPTIONS, scene: scene as never }).destroy(),
+  project_set_mixer_scene: (scene) => {
+    const project = new Project();
+    try {
+      project.setMixerSceneJson(JSON.stringify(scene));
+    } finally {
+      project.destroy();
+    }
+  },
+};
+
+describe('mix-scene document refusals come from the core', () => {
+  it.each(mixScene.loaders)('loads every accepted scene through %s', (loader) => {
+    for (const { scene } of mixScene.accepted) {
+      expect(() => loadMixScene[loader](scene)).not.toThrow();
+    }
+  });
+
+  const refused = mixScene.loaders.flatMap((loader) =>
+    mixScene.refused.map((entry) => ({ loader, ...entry })),
+  );
+  it.each(refused)('refuses $id through $loader', ({ loader, scene, cause, code, message }) => {
+    // A document's content is refused by the core's reader, never re-labelled as an argument.
+    expect(cause).toBe('format');
+    expect(() => loadMixScene[loader](scene)).toThrow(
+      expect.objectContaining({
+        code: ErrorCode[code as keyof typeof ErrorCode],
+        message: expect.stringContaining(message as string),
+      }),
+    );
   });
 });

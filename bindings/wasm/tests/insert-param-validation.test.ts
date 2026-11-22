@@ -13,7 +13,6 @@ import {
   masteringInsertParamInfo,
   masteringInsertParamNames,
   masteringProcessorCatalog,
-  Project,
 } from '../dist/index.js';
 import { expectRefusalOf } from './_helpers';
 
@@ -301,58 +300,5 @@ describe('insert param validation (WASM)', () => {
     expect(
       Mixer.fromJson(annotated, { sampleRate: SR, maxBlockSize: BLOCK }).sceneWarnings(),
     ).toEqual([]);
-  });
-
-  it('refuses a retired or unknown token in a loaded scene document as InvalidFormat', () => {
-    const options = { sampleRate: 48000, maxBlockSize: 512 };
-    const base = () => ({
-      version: 2,
-      buses: [
-        { id: 'master', role: 'master' },
-        { id: 'fx', role: 'aux' },
-      ],
-      strips: [{ id: 'vocal', sends: [{ id: 's', destinationBusId: 'fx' }] }],
-      connections: [{ source: 'vocal', destination: 'master' }],
-    });
-    type Scene = ReturnType<typeof base>;
-    const cases: Array<[string, (scene: Scene) => void, string]> = [
-      [
-        'strips[0].sends[0].timing',
-        (scene) => Object.assign(scene.strips[0].sends[0], { timing: 'pre' }),
-        'preFader, postFader',
-      ],
-      [
-        'strips[0].sends[0].timing',
-        (scene) => Object.assign(scene.strips[0].sends[0], { timing: 0 }),
-        'preFader, postFader',
-      ],
-      [
-        'strips[0].panMode',
-        (scene) => Object.assign(scene.strips[0], { panMode: 'stereo-pan' }),
-        'balance, stereoPan, dualPan',
-      ],
-      [
-        'buses[1].panLaw',
-        (scene) => Object.assign(scene.buses[1], { panLaw: 'const3dB' }),
-        'const3Db, const4.5Db, const6Db, linear0Db',
-      ],
-    ];
-    for (const [path, mutate, tokens] of cases) {
-      const scene = base();
-      mutate(scene);
-      const json = JSON.stringify(scene);
-      const refusal = expect.objectContaining({
-        code: ErrorCode.InvalidFormat,
-        message: expect.stringContaining(`${path} must be one of ${tokens}`),
-      });
-      expect(() => Mixer.fromJson(json, options), path).toThrow(refusal);
-      expect(() => new Mixer({ ...options, scene: scene as never }), path).toThrow(refusal);
-      const project = new Project();
-      try {
-        expect(() => project.setMixerSceneJson(json), path).toThrow(refusal);
-      } finally {
-        project.destroy();
-      }
-    }
   });
 });
