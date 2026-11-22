@@ -226,7 +226,7 @@ def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
             sample_rate=SR,
             num_channels=2,
         )
-        manifest = proj.soundfont_manifest()
+        manifest = proj.sound_font_manifest()
     finally:
         proj.close()
     check_gm_fallback(manifest)

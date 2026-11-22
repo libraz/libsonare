@@ -178,7 +178,7 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
             seen["frames"] = total_frames
             return [[0.0, 0.0]] * total_frames
 
-        def soundfont_manifest(self):
+        def sound_font_manifest(self):
             return {}
 
         def close(self):
@@ -245,7 +245,7 @@ def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
                 Path(dump).write_text(json.dumps(record))
             return [[0.0, 0.0]] * total_frames
 
-        def soundfont_manifest(self):
+        def sound_font_manifest(self):
             return {}
 
         def close(self):

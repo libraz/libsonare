@@ -111,11 +111,10 @@ def read_units(library: Path) -> tuple[dict[str, dict[str, float | str]], set[st
     try:
         catalogue = dump_catalogue(0, "sustain", str(library), sr=48000)
     except RuntimeError as exc:
-        raise SystemExit(
-            f"{library}: {str(exc).splitlines()[0]}\n"
-            f"The registry is read from the library's own knob dump, which only a "
-            f"-DBUILD_TUNING=ON build writes."
-        ) from exc
+        # The first line says which step failed; the last is the child's own exception.
+        lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+        cause = f"\n{lines[-1]}" if len(lines) > 1 else ""
+        raise SystemExit(f"{library}: {lines[0]}{cause}") from exc
     units: dict[str, dict[str, float | str]] = {}
     for key, value in catalogue.defaults.items():
         prefix, _, rest = key.partition(".")

@@ -156,14 +156,14 @@ def ensure_lib_path() -> str:
 def check_gm_fallback(manifest) -> None:
     """Fail unless every program in a render went through the built-in GM bank.
 
-    Backend 0 is that bank; anything else means a SoundFont was loaded, and the
+    Backend "synth" is that bank; "sf2" means a SoundFont was loaded, and the
     render then measures sampled audio while reporting on physical models. The
     harness never loads one, so this is a guard against the day something else
     does — and it belongs to every renderer here, not just the one that grew it
     first.
     """
     for entry in manifest:
-        if entry.backend != 0:
+        if entry.backend != "synth":
             raise RuntimeError(
                 f"program {entry.program} rendered via backend {entry.backend}, "
                 f"expected GM fallback"
@@ -312,7 +312,7 @@ def _bounce(libsonare, smf_bytes: bytes, total_seconds: float, sr: int, *, rig: 
                 total_frames=round(total_seconds * sr),
                 sample_rate=sr,
             )
-            manifest = project.soundfont_manifest()
+            manifest = project.sound_font_manifest()
     finally:
         project.close()
     return audio, manifest

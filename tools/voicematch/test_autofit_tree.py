@@ -198,14 +198,14 @@ def test_a_dir_belonging_to_another_checkout_is_refused(tmp_path):
 # What a render is allowed to have come from
 # --------------------------------------------------------------------------- #
 class _ManifestEntry:
-    def __init__(self, program: int, backend: int):
+    def __init__(self, program: int, backend: str):
         self.program, self.backend = program, backend
 
 
 def test_a_soundfont_render_is_not_reported_as_the_native_bank():
-    check_gm_fallback([_ManifestEntry(0, 0), _ManifestEntry(40, 0)])
+    check_gm_fallback([_ManifestEntry(0, "synth"), _ManifestEntry(40, "synth")])
     with pytest.raises(RuntimeError, match="expected GM fallback"):
-        check_gm_fallback([_ManifestEntry(0, 0), _ManifestEntry(40, 1)])
+        check_gm_fallback([_ManifestEntry(0, "synth"), _ManifestEntry(40, "sf2")])
 
 
 def test_the_corpus_renderer_checks_the_backend_too():
