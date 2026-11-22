@@ -17,6 +17,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/piano_resonance.h"
 #include "midi/synth/piano_voice_math.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
@@ -1003,5 +1004,25 @@ TEST_CASE("NativeSynth applies sustain contact when a sostenuto capture is relea
   const std::vector<float> repeated_cc = render_after_capture_release(true);
   REQUIRE(rms(capture_release, 0, 9600) > 1.0e-5f);
   const bool identical = capture_release == repeated_cc;
+  REQUIRE(identical);
+}
+
+TEST_CASE("Soundboard prepare discards a strike still pending from before",
+          "[midi][synth][piano]") {
+  using sonare::midi::synth::PianoSoundboard;
+  PianoSoundboard struck;
+  struck.prepare(48000.0, 1.0f);
+  struck.strike(1.0f);
+  struck.strike_board(1.0f);
+  struck.prepare(48000.0, 1.0f);
+  PianoSoundboard fresh;
+  fresh.prepare(48000.0, 1.0f);
+  std::vector<float> a(4800);
+  std::vector<float> b(4800);
+  for (size_t i = 0; i < a.size(); ++i) {
+    a[i] = struck.process(0.0f);
+    b[i] = fresh.process(0.0f);
+  }
+  const bool identical = a == b;
   REQUIRE(identical);
 }

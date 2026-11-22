@@ -498,12 +498,18 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     board_strike_a_ = std::clamp(
         1.0f - std::exp(-1000.0f / (std::max(0.01f, kBoardStrikeSpreadMs) * sr)), 0.0f, 1.0f);
   }
+  board_strike_ = 0.0f;
+  board_strike_lp_ = 0.0f;
+  case_strike_ = 0.0f;
   in1_ = 0.0f;
   in2_ = 0.0f;
   air_env_ = 0.0f;
   air_lp_ = 0.0f;
   air_lp2_ = 0.0f;
   air_hp_ = 0.0f;
+  air_drv_lp_ = 0.0f;
+  air_drv_lp2_ = 0.0f;
+  air_drv_hp_ = 0.0f;
   air_rng_ = 0x9E3779B9u;
   air_attack_ =
       1.0f - std::exp(-1.0f / (std::max(kAirAttackMs, 0.1f) * 0.001f * static_cast<float>(sr)));
@@ -553,6 +559,9 @@ void PianoSoundboard::reset() noexcept {
   air_lp_ = 0.0f;
   air_lp2_ = 0.0f;
   air_hp_ = 0.0f;
+  air_drv_lp_ = 0.0f;
+  air_drv_lp2_ = 0.0f;
+  air_drv_hp_ = 0.0f;
   air_rng_ = 0x9E3779B9u;
 }
 
