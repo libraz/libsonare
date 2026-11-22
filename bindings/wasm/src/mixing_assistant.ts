@@ -1,4 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
@@ -127,6 +128,7 @@ function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTr
   if (!Array.isArray(tracks)) {
     throw refuseType(`tracks must be an array`);
   }
+  requireListBudget(tracks, 'tracks');
   const left: Float32Array[] = [];
   const right: (Float32Array | null)[] = [];
   const ids: string[] = [];

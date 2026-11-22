@@ -224,6 +224,7 @@ export function assertAudioChannels(
   if (!Array.isArray(channels)) {
     throw refuseType(`${argName} must be an array of Float32Array`);
   }
+  requireListBudget(channels, argName);
   if (channels.length === 0) {
     throw refuse(`${argName} must not be empty`);
   }
@@ -475,6 +476,7 @@ export function toInt32Array(values: Int32Array | ArrayLike<number>, argName: st
   ) {
     throw refuseType(`${argName} must be an Int32Array or an array of numbers`);
   }
+  requireListBudget(values, argName);
   const out = new Int32Array(values.length);
   for (let i = 0; i < values.length; i++) {
     const element = values[i];

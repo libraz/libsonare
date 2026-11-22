@@ -41,7 +41,6 @@ const EXEMPT: Record<string, string> = {
     'inputs and outputs are the port arrays the audio runtime hands each render quantum',
   'SonarePlaybackNode.setConfig':
     'config is posted over the port; the stringify is in the renderer',
-  'SonarePlaybackNode.create': 'config is posted over the port; the stringify is in the renderer',
   'SonarePlaybackWorkletProcessor.process':
     'inputs and outputs are the port arrays the audio runtime hands each render quantum',
   'SonareStreamAnalyzerWorkletProcessor.process':
@@ -50,118 +49,8 @@ const EXEMPT: Record<string, string> = {
     'inputs and outputs are the port arrays the audio runtime hands each render quantum',
 };
 
-const UNGUARDED = 'facade walks the list unguarded; fix pending';
-
 /** Callables that walk a caller list in the facade with no budget check, by the walking site. */
 const KNOWN_UNGUARDED: Record<string, string> = {};
-function unguarded(site: string, names: readonly string[]): void {
-  for (const name of names) {
-    KNOWN_UNGUARDED[name] = `${UNGUARDED} (${site})`;
-  }
-}
-unguarded('mixer.ts constructor, JSON.stringify of scene', ['Mixer.constructor']);
-unguarded('vocal_project.ts copyOriginalSources', ['Project.rehydrateVocalEdits']);
-unguarded('project_internal.ts interleaveChannels', ['Project.addClip', 'Project.setSourceAudio']);
-unguarded('project_class.ts importExternalStems', ['Project.importExternalStems']);
-unguarded('project_class.ts interleaveLoopRecording', ['Project.addLoopRecordingTakes']);
-unguarded('project_internal.ts assertProjectMidiEvents', ['Project.setMidiEvents']);
-unguarded('project_class.ts bounce instrument lists', ['Project.bounce']);
-unguarded('project_internal.ts takesToNative', ['Project.setClipTakes']);
-unguarded('project_internal.ts compSegmentsToNative', ['Project.setClipCompSegments']);
-unguarded('project_internal.ts projectAutomationLaneValue', [
-  'Project.addAutomationLane',
-  'Project.editAutomationLane',
-]);
-unguarded('project_internal.ts projectKeySegmentsToNative', ['Project.annotateKeys']);
-unguarded('project_internal.ts projectChordSymbolsToNative', ['Project.annotateChords']);
-unguarded('analysis_helpers.ts keyModeValues', [
-  'Audio.detectKey',
-  'Audio.detectKeyCandidates',
-  'detectKey',
-  'detectKeyCandidates',
-]);
-unguarded('internal/chain_config.ts chainConfigJson, JSON.stringify of the config', [
-  'Audio.masterAudio',
-  'masterAudio',
-  'masterAudioStereo',
-  'streamingLoudnessGain',
-  'streamingLoudnessGainStereo',
-  'StreamingMasteringChain.constructor',
-]);
-unguarded('internal/effects_common.ts toVoicedFloat32 and resolveEntryTimes', [
-  'decomposeNotePitch',
-  'extractNotes',
-  'mergeNotes',
-  'noteSegments',
-  'pitchCorrectTimevarying',
-  'renderNotes',
-  'splitNote',
-]);
-unguarded('effects_percussive.ts asFloat32 and percussiveRequest, Float32Array.from', [
-  'extractPercussiveEvents',
-  'renderPercussiveEvents',
-]);
-unguarded('validation.ts assertAudioChannels', [
-  'masteringRepairAnalyze',
-  'masteringRepairApply',
-  'masteringRepairDenoiseClassicalLinked',
-  'masteringRepairDereverbClassicalLinked',
-  'decomposeStemsLinked',
-  'lufsMultichannel',
-  'lufsSeriesMultichannel',
-  'realtimeVoiceChangerRender',
-]);
-unguarded('internal/metering_native.ts interleaveMeterChannels', [
-  'waveformPeaks',
-  'waveformPeakPyramid',
-]);
-unguarded('mastering_core.ts previewPlatforms', [
-  'masteringStreamingPreview',
-  'masteringStreamingPreviewStereo',
-]);
-unguarded('mixing_oneshot.ts mixStereo strips.forEach', ['mixStereo']);
-unguarded('effects_spectral.ts spectralEdit ops.map', ['spectralEdit']);
-unguarded('validation.ts toInt32Array', [
-  'fixFrames',
-  'onsetBacktrack',
-  'remix',
-  'remixAlignedIntervals',
-  'segmentSubsegment',
-]);
-unguarded('feature_core.ts assertCommonSignals', [
-  'splitSilenceCommon',
-  'splitSilenceCommonWithReport',
-]);
-unguarded('internal/midi_cc_binding.ts assertMidiCcBindingListBytes', [
-  'midiCcToBreakpoint',
-  'midiParamToCc',
-]);
-unguarded('mixing_assistant.ts planarTracks', ['mixingAssistantSuggest']);
-unguarded('quick_analysis.ts chordFunctions entries.map', ['chordFunctions']);
-unguarded('quick_analysis.ts estimateMeter beats.forEach', ['estimateMeter']);
-unguarded('quick_analysis.ts roomGeometryFromEstimate Float32Array.from', [
-  'roomGeometryFromEstimate',
-]);
-unguarded('playback_renderer.ts configJsonText, JSON.stringify of the config', [
-  'renderPlayback',
-  'PlaybackRenderer.constructor',
-  'PlaybackRenderer.setConfig',
-  'SonarePlaybackWorkletProcessor.constructor',
-  'SonarePlaybackWorkletProcessor.receiveMessage',
-]);
-unguarded(
-  'internal/mix_scene.ts and engine strip setters, JSON.stringify of inserts and eq.bands',
-  [
-    'RealtimeEngine.setStrip',
-    'RealtimeEngine.setBusStrip',
-    'SonareEngine.setStrip',
-    'SonareEngine.setBusStrip',
-  ],
-);
-unguarded('realtime_voice_changer.ts assertPlanes', ['RealtimeVoiceChanger.processPlanar']);
-unguarded('opfs_clip_pages.ts validateOpfsClipChannels', ['writeOpfsClip']);
-unguarded('vocal_edit.ts resolveOperationTimes', ['VocalEditDraft.apply']);
-unguarded('web_midi.ts bindWebMidi, Set(inputIds) and for-of ccBindings', ['bindWebMidi']);
 
 const MIN_LIST_TAKING = 116;
 const MIN_CALLABLES = 855;

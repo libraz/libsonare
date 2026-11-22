@@ -10,6 +10,7 @@ import {
   withEntry,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { expectedRevisionOption } from './internal/vocal_revision.js';
@@ -305,6 +306,7 @@ function resolveOperationTimes(
   operations: readonly VocalEditOperation[],
   sampleRate: number,
 ): { operations: readonly VocalEditOperation[]; respelled: Respelled } {
+  requireListBudget(operations, 'operations');
   const respellings: Respelled[] = [];
   const bound = (
     at: string,

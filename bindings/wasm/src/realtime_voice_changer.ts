@@ -7,6 +7,7 @@ import {
   withEntry,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import {
@@ -117,6 +118,7 @@ function assertPlanes(channels: unknown, carrier?: unknown): Float32Array[] {
   if (!Array.isArray(channels)) {
     throw refuseType(`channels must be an array of Float32Array`);
   }
+  requireListBudget(channels, 'channels');
   assertChannelCount(channels.length);
   channels.forEach((plane, i) => {
     if (!(plane instanceof Float32Array)) {

@@ -3,6 +3,7 @@ import { ErrorCode } from './errors.js';
 import { registerOpfsClipPageProviderFactory } from './internal/clip_page_native.js';
 import { codedError, invalidState, refuse, refuseType, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 
 /** Source file and paging layout of an OPFS-backed clip page provider. */
@@ -423,7 +424,11 @@ function validateOpfsClipChannels(path: unknown, channels: unknown): Float32Arra
   if (typeof path !== 'string' || opfsClipPathKey(path) === '') {
     throw refuseType('path must be a non-empty string');
   }
-  if (!Array.isArray(channels) || !channels.every((c) => c instanceof Float32Array)) {
+  if (!Array.isArray(channels)) {
+    throw refuseType('channels must be an array of Float32Array');
+  }
+  requireListBudget(channels, 'channels');
+  if (!channels.every((c) => c instanceof Float32Array)) {
     throw refuseType('channels must be an array of Float32Array');
   }
   const list = channels as Float32Array[];

@@ -1,4 +1,5 @@
 import { refuse, refuseType } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -138,6 +139,7 @@ export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): 
   if (!Array.isArray(modes)) {
     throw refuseType(`modes must be an array or mode-set string`);
   }
+  requireListBudget(modes, 'modes');
   if (modes.length === 0) {
     throw refuse(`modes must not be empty; omit it for the default mode set`);
   }

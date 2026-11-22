@@ -4,6 +4,7 @@
  */
 
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -91,6 +92,9 @@ export function spectralEdit(...args: unknown[]): Float32Array {
       windowOrdinal(request.window);
     }
     // A non-Array array-like goes to the native reader, which bounds its length.
+    if (Array.isArray(requestOps)) {
+      requireListBudget(requestOps, 'ops');
+    }
     const respellings: Respelled[] = [];
     const nativeOps = Array.isArray(requestOps)
       ? requestOps.map((op, index) => {

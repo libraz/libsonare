@@ -1,5 +1,6 @@
 import { chainConfigFromDocument } from './internal/chain_config.js';
 import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
@@ -306,6 +307,7 @@ function previewPlatforms(platforms: unknown): StreamingPlatform[] {
   if (!Array.isArray(platforms)) {
     throw refuseType(`platforms must be an array`);
   }
+  requireListBudget(platforms, 'platforms');
   if (platforms.length === 0) {
     throw refuse(`platforms must not be empty; omit it for the built-in set`);
   }

@@ -1,4 +1,5 @@
 import { assertU7 } from '../validation.js';
+import { requireListBudget } from './list_budget.js';
 
 /**
  * The binding fields that carry a MIDI data byte; the C struct holds them as `uint8_t`.
@@ -25,6 +26,7 @@ export function assertMidiCcBindingBytes(binding: unknown, path = ''): void {
 /** {@link assertMidiCcBindingBytes} over a `bindings` list, naming each by its index. */
 export function assertMidiCcBindingListBytes(bindings: unknown): void {
   if (Array.isArray(bindings)) {
+    requireListBudget(bindings, 'bindings');
     for (const [index, binding] of bindings.entries()) {
       assertMidiCcBindingBytes(binding, `bindings[${index}].`);
     }

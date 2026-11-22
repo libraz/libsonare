@@ -1,5 +1,6 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { stringifyWithinBudget } from './internal/list_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -23,7 +24,7 @@ function configJsonText(config: PlaybackRendererConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
-  return JSON.stringify(config);
+  return stringifyWithinBudget(config, 'config');
 }
 
 const FLOAT32_MAX = 3.4028234663852886e38;

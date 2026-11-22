@@ -488,6 +488,20 @@ describe('Web MIDI helper', () => {
     expect(engine.messages).toEqual([]);
   });
 
+  it.each(['inputIds', 'ccBindings'])(
+    'refuses a null or non-array %s by name instead of reading it as absent',
+    async (key) => {
+      installMidi(new FakeAccess());
+      for (const value of [null, 'a', { length: 1 }]) {
+        const call = bindWebMidi(new FakeEngine() as never, { [key]: value } as never);
+        await expect(call).rejects.toThrow(TypeError);
+        await expect(
+          bindWebMidi(new FakeEngine() as never, { [key]: value } as never),
+        ).rejects.toThrow(`bindWebMidi: ${key} must be an array`);
+      }
+    },
+  );
+
   it('hands every message it would push to the filter first and drops what the filter refuses', async () => {
     const access = new FakeAccess();
     const input = new FakeInput('keys', 'Keys');

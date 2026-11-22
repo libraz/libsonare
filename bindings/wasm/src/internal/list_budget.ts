@@ -13,10 +13,19 @@ export function requireListBudget(list: ArrayLike<unknown>, subject: string): vo
   }
 }
 
-/** `JSON.stringify` that refuses a value too large to serialize as past the list budget, not as a raw `RangeError`. */
+/**
+ * `JSON.stringify` that refuses any array past the list budget, at every depth
+ * and before it is walked, and a value too large to serialize at all, as past
+ * the budget rather than as a raw `RangeError`.
+ */
 export function stringifyWithinBudget(value: unknown, subject: string): string {
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value, (_key, item: unknown) => {
+      if (Array.isArray(item)) {
+        requireListBudget(item, subject);
+      }
+      return item;
+    });
   } catch (error) {
     if (error instanceof RangeError) {
       throw refuse(`${subject} exceeds the WASM Float32 input budget`);

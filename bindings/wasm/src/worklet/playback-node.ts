@@ -2,6 +2,7 @@ import { ErrorCode, type SonareError } from '../errors.js';
 import { init, isInitialized } from '../index.js';
 import { codedError, entryClass, refuseType, withEntry } from '../internal/entry.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
+import { stringifyWithinBudget } from '../internal/list_budget.js';
 import { isNonArrayObject } from '../internal/value_guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
@@ -119,7 +120,9 @@ export class SonarePlaybackNode {
     if (!isInitialized()) {
       await init(options.wasmBinary === undefined ? undefined : { wasmBinary: options.wasmBinary });
     }
-    const outputChannels = getSonareModule().playbackConfigOutputChannels(JSON.stringify(config));
+    const outputChannels = getSonareModule().playbackConfigOutputChannels(
+      stringifyWithinBudget(config, 'config'),
+    );
     if (options.moduleUrl && context.audioWorklet?.addModule) {
       await context.audioWorklet.addModule(options.moduleUrl);
     }

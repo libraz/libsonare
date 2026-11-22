@@ -16,6 +16,7 @@ import {
   refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isNonArrayObject } from './internal/value_guards.js';
@@ -221,6 +222,7 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
   if (!Array.isArray(audio)) {
     return desc;
   }
+  requireListBudget(audio, 'audio');
   if ((desc as { audioChannels?: unknown }).audioChannels !== undefined) {
     throw refuseType(
       'audioChannels must be omitted for planar audio; the channel count is the number of arrays',
@@ -489,6 +491,7 @@ export class Project {
     if (!Array.isArray(stems)) {
       throw refuseType('stems must be an array');
     }
+    requireListBudget(stems, 'stems');
     return this.native.importExternalStems({
       sampleRate,
       stems: stems.map((stem) => {
@@ -1035,6 +1038,7 @@ export class Project {
           );
     if (instruments !== undefined && instruments !== null) {
       const pairs = Array.isArray(instruments) ? instruments : [instruments];
+      requireListBudget(pairs, 'instruments');
       pairs.forEach((pair, index) => {
         const instrument = (pair as { instrument?: ExternalInstrument } | null)?.instrument;
         for (const key of ['prepare', 'onEvent', 'render'] as const) {

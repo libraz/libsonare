@@ -5,6 +5,7 @@
 import type { VoicedFlags } from '../public_types.js';
 import { resolveSampleBound } from '../validation.js';
 import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { isNonArrayObject } from './value_guards.js';
 
 // The embind layer reads the companion voicing array as Float32Array. Keep the
@@ -23,6 +24,9 @@ export function toVoicedFloat32(voiced: VoicedFlags): Float32Array {
     throw refuseType(
       `voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]`,
     );
+  }
+  if (Array.isArray(voiced)) {
+    requireListBudget(voiced, 'voiced');
   }
   const out = new Float32Array(voiced.length);
   for (let index = 0; index < voiced.length; index += 1) {
@@ -75,6 +79,7 @@ export function resolveEntryTimes<T extends TimedEntry>(
   sampleRate: number,
   spans: boolean,
 ): ResolvedEntries<T> {
+  requireListBudget(entries, arrayName);
   const respellings: Respelled[] = [];
   const resolvedEntries = entries.map((entry, index) => {
     if (entry === null || typeof entry !== 'object') {

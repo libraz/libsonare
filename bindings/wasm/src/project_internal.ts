@@ -302,6 +302,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
   if (!Array.isArray(value)) {
     throw refuseType(`${option} must be an array of { destinationId?, instrument } pairs`);
   }
+  requireListBudget(value, option);
   return value.map((pair: unknown, index: number) => {
     const label = `${option}[${index}]`;
     if (!isNonArrayObject(pair)) {
@@ -729,6 +730,7 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
   if (!Array.isArray(events)) {
     throw refuseType(`events must be an array`);
   }
+  requireListBudget(events, 'events');
   events.forEach((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
@@ -852,6 +854,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
     throw refuseType(`takes must be an array`);
   }
+  requireListBudget(takes, 'takes');
   return takes.map((entry: unknown, index) => {
     const where = `takes[${index}]`;
     if (!isNonArrayObject(entry)) {
@@ -882,6 +885,7 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
   if (!Array.isArray(segments)) {
     throw refuseType(`segments must be an array`);
   }
+  requireListBudget(segments, 'segments');
   return segments.map((entry: unknown, index) => {
     if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
@@ -943,6 +947,7 @@ export type NativeChordSymbol = Omit<ProjectChordSymbol, 'quality'> & { quality?
 export function projectKeySegmentsToNative(
   keys: ReadonlyArray<ProjectKeySegment>,
 ): NativeKeySegment[] {
+  requireListBudget(keys, 'keys');
   return keys.map((key) =>
     key.mode === undefined
       ? (key as NativeKeySegment)
@@ -953,6 +958,7 @@ export function projectKeySegmentsToNative(
 export function projectChordSymbolsToNative(
   chords: ReadonlyArray<ProjectChordSymbol>,
 ): NativeChordSymbol[] {
+  requireListBudget(chords, 'chords');
   return chords.map((chord) =>
     chord.quality === undefined
       ? (chord as NativeChordSymbol)
@@ -1101,6 +1107,7 @@ export function projectAutomationLaneValue(
     throw refuse('project automation lane targetParamId must be non-zero');
   }
   const { targetKind, points, ...rest } = desc;
+  requireListBudget(points, 'points');
   return {
     ...rest,
     ...(targetKind === undefined

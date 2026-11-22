@@ -1,5 +1,6 @@
 import type { TrimResult } from './feature_spectrogram.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -789,6 +790,7 @@ export function splitSilence(...args: unknown[]): Int32Array {
 /** Preflight each signal; an empty or non-array `signals` is left to the native refusal. */
 function assertCommonSignals(signals: unknown): void {
   if (Array.isArray(signals)) {
+    requireListBudget(signals, 'signals');
     signals.forEach((signal, i) => {
       assertAudioSamples(signal, {}, `signals[${i}]`);
     });

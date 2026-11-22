@@ -8,6 +8,7 @@ import type { ClipDetection, DeclipReport } from '../public_types_repair.js';
 import type { WasmClipDetection, WasmDeclipReport } from '../sonare.js';
 import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
 import { refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { interleavePlanes } from './pod_config.js';
 
 /**
@@ -50,6 +51,7 @@ export function interleaveMeterChannels(
     if (!Array.isArray(channels)) {
       throw refuseType(`channels must be an array of Float32Array`);
     }
+    requireListBudget(channels, 'channels');
     if (channels.length === 0) {
       throw refuse(`channels must not be empty`);
     }

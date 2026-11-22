@@ -13,6 +13,7 @@ import {
 } from './analysis_helpers.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { codedError, refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
@@ -589,6 +590,7 @@ export function chordFunctions<T extends ChordFunctionsInput>(
   return withEntry('chordFunctions', () => {
     requestObject('chordFunctions', request, 'request', true);
     const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
+    requireListBudget(entries, 'chords' in request.chords ? 'chords.chords' : 'chords');
     // The module reads each chord's quality as its native ordinal.
     const nativeEntries = entries.map((chord) => ({
       root: chord.root,
@@ -905,6 +907,7 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
     if (!Array.isArray(beats)) {
       throw refuseType('beats must be an array of { timeSec, strength }');
     }
+    requireListBudget(beats, 'beats');
     const times: number[] = [];
     const strengths: number[] = [];
     beats.forEach((beat, i) => {
@@ -1065,6 +1068,9 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
       throw refuseType('estimate must be an object');
     }
     const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
+    if (bandAbsorption !== undefined) {
+      requireListBudget(bandAbsorption, 'estimate.bandAbsorption');
+    }
     const geometry = module.roomGeometryFromEstimate({
       lengthM,
       widthM,

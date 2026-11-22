@@ -5,6 +5,7 @@
 
 import { resolveEntryTimes } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
@@ -22,7 +23,11 @@ function requireModule() {
  */
 /** A plain numeric array is read as the Float32Array it stands for; anything else is left to the preflight. */
 function asFloat32(samples: Float32Array | readonly number[]): Float32Array | readonly number[] {
-  return Array.isArray(samples) ? Float32Array.from(samples) : samples;
+  if (!Array.isArray(samples)) {
+    return samples;
+  }
+  requireListBudget(samples, 'samples');
+  return Float32Array.from(samples);
 }
 
 // The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
@@ -30,6 +35,9 @@ function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
 >(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
   const first = args[0];
+  if (Array.isArray(first)) {
+    requireListBudget(first, 'samples');
+  }
   const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
   return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
 }

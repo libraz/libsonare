@@ -1,5 +1,6 @@
 import { ErrorCode } from './errors.js';
 import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ProjectMidiCcBinding } from './project_types.js';
 import type { MidiBank } from './public_types_midi_messages.js';
@@ -394,6 +395,7 @@ export function isWebMidiAvailable(): boolean {
  * @throws TypeError when `options` is not an object or holds an undeclared key.
  * @throws TypeError when `options.filter` is given and is not a function.
  * @throws RangeError when `options.group` is outside 0 to 15.
+ * @throws TypeError when `options.inputIds` or `options.ccBindings` is given and is not an array.
  * @throws RangeError when `options.inputIds` is an empty array.
  * @throws TypeError when `options.context` is given with `timestampToOffsetInBlockSamples`, lacks
  *   `getOutputTimestamp`, or is given for an engine without `lateMidiEventCount`; when
@@ -424,6 +426,15 @@ export async function bindWebMidi(
     const group = options.group ?? 0;
     assertNibble(group, 'group');
     const destinationId = options.destinationId ?? 0;
+    for (const key of ['inputIds', 'ccBindings'] as const) {
+      const list = options[key];
+      if (list !== undefined) {
+        if (!Array.isArray(list)) {
+          throw refuseType(`${key} must be an array`);
+        }
+        requireListBudget(list, key);
+      }
+    }
     if (options.inputIds !== undefined && options.inputIds.length === 0) {
       throw refuse('inputIds must not be empty; omit it to bind every input');
     }

@@ -42,11 +42,11 @@ describe('facades refuse an oversized caller list before walking it', () => {
 
   it.each(FACADE_ROWS.map((row) => [row.callable, row.message, row] as const))(
     '%s: %s',
-    (_callable, message, row) => {
+    async (_callable, message, row) => {
       const { list, reads } = hugeList();
       let caught: unknown;
       try {
-        row.run(api, list);
+        await row.run(api, list);
       } catch (error) {
         caught = error;
       }

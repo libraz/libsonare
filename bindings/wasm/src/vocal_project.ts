@@ -1,4 +1,5 @@
 import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
@@ -297,6 +298,7 @@ function copyOriginalSources(
   if (!Array.isArray(originals)) {
     throw refuseType('originals must be an array');
   }
+  requireListBudget(originals, 'originals');
   const seen = new Set<number>();
   return originals.map((original, index) => {
     const source = requireObject(original, `originals[${index}]`);

@@ -7,6 +7,7 @@ import {
 } from './codes.js';
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { stringifyWithinBudget } from './internal/list_budget.js';
 import { assertStripMetering } from './internal/mix_scene.js';
 import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -281,7 +282,7 @@ export class Mixer {
       if (!isAbsent(bag.scene) && !isPlainRecord(bag.scene)) {
         throw refuseType('scene must be an object');
       }
-      sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
+      sceneJson = stringifyWithinBudget(bag.scene ?? { strips: [], buses: [] }, 'scene');
     }
     const module = getSonareModule();
     this.mixerHandle = module.createMixerFromSceneJson(
