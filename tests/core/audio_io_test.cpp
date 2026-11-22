@@ -413,6 +413,34 @@ using sonare::test::generate_sine;
 
 }  // namespace
 
+TEST_CASE("an MP3 stream with an ID3v1 tail decodes every frame and no more", "[audio_io]") {
+  constexpr size_t kFrames = 3;
+  std::vector<uint8_t> id3v1_tag = {'T', 'A', 'G'};
+  id3v1_tag.resize(128, 0);
+  const std::vector<uint8_t>& id3v1 = id3v1_tag;
+
+  for (const size_t frames : {size_t{1}, kFrames}) {
+    CAPTURE(frames);
+    std::vector<uint8_t> tailed = silent_mp3_stream(frames);
+    tailed.insert(tailed.end(), id3v1.begin(), id3v1.end());
+    auto [samples, rate] = load_buffer_mp3(tailed.data(), tailed.size());
+    CHECK(rate == 48000);
+    CHECK(samples.size() == frames * kMp3FrameSamples);
+  }
+}
+
+TEST_CASE("an MP3 stream followed by null padding keeps the frames before its last one",
+          "[audio_io]") {
+  // The decoder accepts a frame only when the next header or the end of the input follows it,
+  // so the frame the padding follows is dropped; the frames before it must still decode.
+  constexpr size_t kFrames = 3;
+  std::vector<uint8_t> padded = silent_mp3_stream(kFrames);
+  padded.resize(padded.size() + 512, 0);
+  auto [samples, rate] = load_buffer_mp3(padded.data(), padded.size());
+  CHECK(rate == 48000);
+  CHECK(samples.size() == (kFrames - 1) * kMp3FrameSamples);
+}
+
 TEST_CASE("detect_format WAV", "[audio_io]") {
   // RIFF....WAVE header
   std::vector<uint8_t> wav_header = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E'};
