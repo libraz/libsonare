@@ -1168,6 +1168,9 @@ from .types import (
     MasteringChainConfig as MasteringChainConfig,
 )
 from .types import (
+    MasteringChainConfigInput as MasteringChainConfigInput,
+)
+from .types import (
     MasteringChainResult as MasteringChainResult,
 )
 from .types import (

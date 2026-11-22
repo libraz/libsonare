@@ -575,6 +575,9 @@ from ._types_mastering_results import (
     MasteringChainConfig as MasteringChainConfig,
 )
 from ._types_mastering_results import (
+    MasteringChainConfigInput as MasteringChainConfigInput,
+)
+from ._types_mastering_results import (
     MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
 )
 from ._types_mastering_results import (

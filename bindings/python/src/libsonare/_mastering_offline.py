@@ -43,7 +43,7 @@ from ._types_capabilities import _from_wire
 from .types import (
     CapabilityCatalog,
     MasteringAmpPresetCatalogEntry,
-    MasteringChainConfig,
+    MasteringChainConfigInput,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -737,7 +737,7 @@ def _run_mastering(
     lib: Any,
     symbol: str,
     head: tuple[Any, ...],
-    overrides: MasteringChainConfig | None,
+    overrides: MasteringChainConfigInput | None,
     on_progress: Callable[[float, str], None] | None,
     cancel: Callable[[], bool] | None,
     out: Any,
@@ -812,7 +812,7 @@ def master_audio(
     sample_rate: int,
     *,
     preset: str | None = None,
-    overrides: MasteringChainConfig | None = None,
+    overrides: MasteringChainConfigInput | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainResult:
@@ -829,7 +829,7 @@ def master_audio(
         sample_rate: Sample rate in Hz.
         preset: Preset identifier from :func:`mastering_preset_names`; None runs
             ``overrides`` alone.
-        overrides: Chain document params (:data:`MasteringChainConfig`), e.g.
+        overrides: Chain document params (:data:`MasteringChainConfigInput`), e.g.
             ``{"dynamics": {"compressor": {"thresholdDb": -24}},
             "loudness.targetLufs": -14}``, applied on top of the preset defaults
             when a preset is given. A boolean toggles a module/processor's
@@ -879,7 +879,7 @@ def master_audio_stereo(
     sample_rate: int,
     *,
     preset: str | None = None,
-    overrides: MasteringChainConfig | None = None,
+    overrides: MasteringChainConfigInput | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainStereoResult:

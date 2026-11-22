@@ -183,7 +183,7 @@ from .types import (
     KeyMode,
     KeyProfile,
     LufsResult,
-    MasteringChainConfig,
+    MasteringChainConfigInput,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
@@ -1035,7 +1035,7 @@ class Audio:
         self,
         *,
         preset: str | None = None,
-        overrides: MasteringChainConfig | None = None,
+        overrides: MasteringChainConfigInput | None = None,
         on_progress: Callable[[float, str], None] | None = None,
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult:

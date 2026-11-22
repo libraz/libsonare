@@ -103,6 +103,7 @@ from .types import (
     MasteringAssistantResult,
     MasteringAudioProfile,
     MasteringChainConfig,
+    MasteringChainConfigInput,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -1094,7 +1095,7 @@ def master_audio(
     sample_rate: int,
     *,
     preset: MasteringPreset | None = None,
-    overrides: MasteringChainConfig | None = None,
+    overrides: MasteringChainConfigInput | None = None,
     on_progress: ProgressCallback | None = None,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainResult:
@@ -1114,20 +1115,20 @@ def master_audio_stereo(
     sample_rate: int,
     *,
     preset: MasteringPreset | None = None,
-    overrides: MasteringChainConfig | None = None,
+    overrides: MasteringChainConfigInput | None = None,
     on_progress: ProgressCallback | None = None,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def streaming_loudness_gain(
     samples: FloatSamples,
     sample_rate: int,
-    config: MasteringChainConfig | None = None,
+    config: MasteringChainConfigInput | None = None,
 ) -> StreamingLoudnessGain: ...
 def streaming_loudness_gain_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    config: MasteringChainConfig | None = None,
+    config: MasteringChainConfigInput | None = None,
 ) -> StreamingLoudnessGain: ...
 def mastering_apply_pair_processor(
     processor: PairProcessor,

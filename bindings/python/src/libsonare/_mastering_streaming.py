@@ -44,7 +44,7 @@ from ._types_enums import _EQ_PHASE_MODES, _EQ_STEREO_PLACEMENTS, EqPhaseMode, E
 from .types import (
     EqBandInput,
     EqSpectrumSnapshot,
-    MasteringChainConfig,
+    MasteringChainConfigInput,
     StereoBlock,
     StreamingLoudnessGain,
 )
@@ -64,7 +64,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
 def streaming_loudness_gain(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    config: MasteringChainConfig | None = None,
+    config: MasteringChainConfigInput | None = None,
 ) -> StreamingLoudnessGain:
     """Measure the loudness numbers a :class:`StreamingMasteringChain` needs.
 
@@ -115,7 +115,7 @@ def streaming_loudness_gain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    config: MasteringChainConfig | None = None,
+    config: MasteringChainConfigInput | None = None,
 ) -> StreamingLoudnessGain:
     """Stereo counterpart of :func:`streaming_loudness_gain`.
 
@@ -182,7 +182,7 @@ class StreamingMasteringChain:
     @_entry("StreamingMasteringChain")
     def __init__(
         self,
-        config: MasteringChainConfig | None = None,
+        config: MasteringChainConfigInput | None = None,
         *,
         sample_rate: int,
         num_channels: int,

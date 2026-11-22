@@ -8,6 +8,7 @@ The pair and mono-compatibility analyses return one record per analysis name.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
@@ -99,15 +100,22 @@ class MasteringAudioProfile:
 
 
 MasteringChainConfig = dict[str, Any]
-"""The ``params`` of a version 2 mastering chain document, with camelCase keys.
+"""The ``params`` of a version 2 mastering chain document as the core wrote it, camelCase keys.
+
+The form the preset, chain-config and assistant calls return. A boolean toggles an ``enabled``
+flag, an enum leaf is its token, and a list (``crossover.cutoffsHz``, ``bands``) is a list. Every
+call taking a chain config takes it as :data:`MasteringChainConfigInput`, which this form is one
+spelling of.
+"""
+
+MasteringChainConfigInput = Mapping[str, Any]
+"""A mastering chain config as a caller gives it: :data:`MasteringChainConfig`, flat or mixed.
 
 A key is a dotted path (``"loudness.targetLufs"``) and a nested object is shorthand for its
-prefix (``{"loudness": {"targetLufs": -14}}``); giving one path both ways is refused. A
-boolean toggles an ``enabled`` flag, an enum leaf is its token, and a list
-(``crossover.cutoffsHz``, ``bands``) is a list. The core reads it on the way in, so a
-content refusal is ``SonareError`` (``InvalidFormat``) naming the path. The form
-:func:`libsonare.master_audio` takes as ``overrides`` and the preset, chain-config and
-assistant calls return, as the core wrote it.
+prefix (``{"loudness": {"targetLufs": -14}}``); giving one path both ways is refused. The core
+reads it on the way in, so a content refusal is ``SonareError`` (``InvalidFormat``) naming the
+path. The form :func:`libsonare.master_audio` takes as ``overrides`` and the streaming
+mastering calls take as ``config``.
 """
 
 EqBandInput = dict[str, Any]
