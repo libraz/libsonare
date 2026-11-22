@@ -94,7 +94,7 @@ function pythonCode(call: string): Answer {
     'except Exception as error:',
     '    print(type(error).__name__ + ":" + str(getattr(error, "code", "no code")))',
   ].join('\n');
-  const stdout = execFileSync('rye', ['run', 'python', '-c', script], {
+  const stdout = execFileSync('uv', ['run', '--locked', 'python', '-c', script], {
     cwd: PYTHON_PACKAGE,
     encoding: 'utf8',
   }).trim();

@@ -40,7 +40,7 @@ function pythonCode(body: string): Answer {
     'except Exception as error:',
     '    print(getattr(error, "code", "no code"))',
   ].join('\n');
-  const stdout = execFileSync('rye', ['run', 'python', '-c', script], {
+  const stdout = execFileSync('uv', ['run', '--locked', 'python', '-c', script], {
     cwd: PYTHON_PACKAGE,
     encoding: 'utf8',
   }).trim();
