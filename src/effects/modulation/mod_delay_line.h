@@ -45,8 +45,6 @@ class ModDelayLine {
   void set_interpolation(DelayInterpolation interpolation) noexcept {
     interpolation_ = interpolation;
   }
-  DelayInterpolation interpolation() const noexcept { return interpolation_; }
-  int max_delay_samples() const noexcept { return max_delay_samples_; }
 
  private:
   float process_lagrange3(float input, float delay_samples);
