@@ -256,6 +256,20 @@ export interface MasteringInsertParamInfo {
    * `dependsOn` cannot state (a receiver spacing against the room geometry); `min` / `max` are measured with them at their defaults. Empty for an independent key.
    */
   readonly coupledWith: readonly string[];
+  /**
+   * The key's own lower limit with the `coupledWith` relation set aside. Only a `"number"` key with
+   * a non-empty `coupledWith` and no `choices` carries the two flags below, and its limits beside
+   * them; a limit is absent there when the relation is that side's only bound. A value inside the
+   * domain can still be refused by the relation: a receiver spacing's domain is (0, 4] while `max`
+   * is the default room's 2.5.
+   */
+  readonly domainMin?: number;
+  /** Whether {@link domainMin} itself is refused; `false` when `domainMin` is absent. */
+  readonly domainMinExclusive?: boolean;
+  /** The key's own upper limit, as {@link domainMin}; follows `maxRelativeTo` as `max` does. */
+  readonly domainMax?: number;
+  /** Whether {@link domainMax} itself is refused; `false` when `domainMax` is absent. */
+  readonly domainMaxExclusive?: boolean;
 }
 
 /** Latency and tail of one insert built from given params and prepared at a given sample rate. */
