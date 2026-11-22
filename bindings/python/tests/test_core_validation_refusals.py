@@ -41,6 +41,7 @@ _RETUNE_CONFIG = _CORPUS["streaming_retune_config"]
 _RESAMPLE = _CORPUS["resample"]
 _ZERO_CROSSINGS = _CORPUS["zero_crossings"]
 _MASTER = _CORPUS["master_audio"]
+_SCENE = _CORPUS["mix_scene_document"]
 
 # Every function the C headers declare: the oracle for "this prefix is a C entry name".
 _C_ENTRIES = frozenset(
@@ -458,3 +459,33 @@ def test_refusal_names_no_c_entry_after_the_public_name(
         token = match.group(2)
         assert f"sonare_{token}" not in _C_ENTRIES and token not in _C_ENTRIES, str(caught.value)
     assert _without_c_entry(case["message"]) in str(caught.value)
+
+
+_SCENE_LOADERS: dict[str, Callable[[str], object]] = {
+    "mixer_from_json": lambda text: libsonare.Mixer.from_json(text, sample_rate=48000),
+    "project_set_mixer_scene": lambda text: libsonare.Project().set_mixer_scene_json(text),
+}
+
+
+def test_scene_loaders_cover_the_python_row() -> None:
+    assert sorted(_SCENE["loaders_by_surface"]["python"]) == sorted(_SCENE_LOADERS)
+    assert set(_SCENE_LOADERS) <= set(_SCENE["loaders"])
+
+
+@pytest.mark.parametrize("loader", sorted(_SCENE_LOADERS))
+@pytest.mark.parametrize("case", _SCENE["accepted"], ids=lambda case: case["id"])
+def test_mix_scene_document_accepts(case: dict, loader: str) -> None:
+    _SCENE_LOADERS[loader](json.dumps(case["scene"]))
+
+
+@pytest.mark.parametrize("loader", sorted(_SCENE_LOADERS))
+@pytest.mark.parametrize("case", _SCENE["refused"], ids=lambda case: case["id"])
+def test_mix_scene_document_refuses(case: dict, loader: str) -> None:
+    assert case["cause"] == "format"
+    with pytest.raises(libsonare.SonareError, match=re.escape(case["message"])) as caught:
+        _SCENE_LOADERS[loader](json.dumps(case["scene"]))
+    assert caught.value.code == libsonare.ErrorCode[_CODE_NAMES[case["code"]]]
+    assert not isinstance(caught.value, SonareValueError)
+
+
+_CODE_NAMES = {"InvalidFormat": "INVALID_FORMAT"}

@@ -7,6 +7,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
@@ -756,4 +757,45 @@ TEST_CASE("the resample engine still serves internal rates the checked entry ref
   CHECK_FALSE(sonare::resample(samples.data(), samples.size(), 48000, 768000).empty());
   CHECK_THROWS_AS(sonare::resample_checked(samples.data(), samples.size(), 48000, 768000),
                   sonare::SonareException);
+}
+
+TEST_CASE("a mix-scene document is refused by the core reader through every C loader",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["mix_scene_document"];
+
+  // Each loader returns the refusal code of one load, with sonare_last_error_message set.
+  std::vector<std::pair<std::string, std::function<SonareError(const std::string&)>>> loaders;
+  loaders.emplace_back("mixer_from_json", [](const std::string& json) {
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), 48000, 0);
+    if (mixer == nullptr) return sonare_last_error_code();
+    sonare_mixer_destroy(mixer);
+    return SONARE_OK;
+  });
+#if defined(SONARE_WITH_ARRANGEMENT)
+  loaders.emplace_back("project_set_mixer_scene", [](const std::string& json) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    const SonareError rc = sonare_project_set_mixer_scene_json(project, json.c_str());
+    // A release function leaves the thread's last error in place.
+    sonare_project_destroy(project);
+    return rc;
+  });
+#endif
+
+  for (const auto& [name, load] : loaders) {
+    INFO(name);
+    for (const auto& item : route["accepted"].as_array()) {
+      INFO(item["id"].as_string());
+      CHECK(load(sonare::util::json::dump(item["scene"])) == SONARE_OK);
+    }
+    for (const auto& item : route["refused"].as_array()) {
+      INFO(item["id"].as_string());
+      REQUIRE(item["cause"].as_string() == "format");
+      REQUIRE(item["code"].as_string() == "InvalidFormat");
+      CHECK(load(sonare::util::json::dump(item["scene"])) == SONARE_ERROR_INVALID_FORMAT);
+      CHECK_THAT(last_error_message(),
+                 Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+    }
+  }
 }

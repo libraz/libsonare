@@ -155,12 +155,10 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 ///        failure -- the return code alone does -- and the caller owns the string
 ///        on every return code and must release it with @ref sonare_free_string.
 ///        A key no record of the document reads (other than `$`- and `x-`-prefixed ones)
-///        fails the load as `invalid_format`, naming its path: `unknown project key
-///        'clips[3].bogus'`, or `scene: unknown scene key 'strips[2].faderDB'` inside the
-///        embedded mixer scene. Insert `params` bags and the MIDI content map's keys are data
-///        and are not checked.
-///        Pass NULL to ignore the diagnostics entirely. Malformed input returns
-///        an error WITHOUT crashing.
+///        fails the load as `invalid_format`, naming its path: `unknown key clips[3].bogus`, or
+///        `unknown key scene.strips[2].faderDB` inside the embedded mixer scene. Insert `params`
+///        bags and the MIDI content map's keys are data and are not checked. Pass NULL to ignore
+///        the diagnostics entirely. Malformed input returns an error WITHOUT crashing.
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
                                        char** out_diag);
 
@@ -412,7 +410,7 @@ void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata*
 /// @brief Replaces the project's mixer scene from scene JSON.
 /// @details A key the scene reader does not consume (other than `$`- and `x-`-prefixed ones)
 ///   fails the call with SONARE_ERROR_INVALID_FORMAT naming it, e.g.
-///   `unknown scene key 'strips[2].faderDB'`; the project's scene is left unchanged.
+///   `unknown key strips[2].faderDB`; the project's scene is left unchanged.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
 
 /// @brief Reads the project sample rate (Hz).
