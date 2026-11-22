@@ -248,6 +248,15 @@ class GettersRule(unittest.TestCase):
         factory = member("node", "Pool", "defaultCount", ts_kind="method", static=True)
         self.assertFalse(check.judge(rule("getters"), [*self.CLEAN, factory]).failed)
 
+    def test_asynchronous_count_stays_a_method(self) -> None:
+        remote = member("wasm", "SonareEngine", "lateMidiInputCount", ts_kind="method")
+        remote["sigs"][0]["returns"] = "Promise<number>"
+        verdict = check.judge(rule("getters"), [*self.CLEAN, remote])
+        self.assertFalse(verdict.failed)
+        self.assertEqual(verdict.read, 3)
+        remote["sigs"][0]["returns"] = "number"
+        self.assertTrue(check.judge(rule("getters"), [*self.CLEAN, remote]).failed)
+
 
 class AsyncTeardownRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [

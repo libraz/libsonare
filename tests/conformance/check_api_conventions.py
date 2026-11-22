@@ -88,9 +88,12 @@ def _argument_less(record: dict) -> bool:
 
 
 def _count_method_is_a_getter(record: dict) -> str | None:
-    if record.get("ts_kind") == "method" and _argument_less(record):
-        return "an argument-less count is a readonly getter, not a method"
-    return None
+    if record.get("ts_kind") != "method" or not _argument_less(record):
+        return None
+    # A count read across a message round trip is not cheap state, so it stays a method.
+    if all((sig.get("returns") or "").startswith("Promise<") for sig in record["sigs"]):
+        return None
+    return "an argument-less count is a readonly getter, not a method"
 
 
 def _members(records: Iterable[dict], kind: str = "method") -> dict[tuple[str, str, str], dict]:
