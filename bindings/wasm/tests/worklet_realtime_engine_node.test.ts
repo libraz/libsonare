@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import { ErrorCode } from '../src/errors';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
+import { SONARE_ENGINE_ROWS } from './_list_budget_rows';
 import {
   describe,
   expect,
@@ -3557,68 +3558,15 @@ describe('SonareRealtimeEngineNode', () => {
           return Reflect.get(target, key, receiver);
         },
       }) as never;
-      const cases: Array<[string, string, () => unknown]> = [
-        [
-          'setTempoSegments',
-          'segments exceeds the WASM Float32 input budget',
-          () => engine.setTempoSegments(oversized),
-        ],
-        [
-          'setTimeSignatureSegments',
-          'segments exceeds the WASM Float32 input budget',
-          () => engine.setTimeSignatureSegments(oversized),
-        ],
-        [
-          'setAutomationLane',
-          'points exceeds the WASM Float32 input budget',
-          () => engine.setAutomationLane(1, oversized),
-        ],
-        [
-          'setTrackLanes',
-          'lanes exceeds the WASM Float32 input budget',
-          () => engine.setTrackLanes(oversized),
-        ],
-        [
-          'setTrackLanes',
-          'sends exceeds the WASM Float32 input budget',
-          () => engine.setTrackLanes([{ trackId: 1, sends: oversized }]),
-        ],
-        [
-          'setTrackSends',
-          'sends exceeds the WASM Float32 input budget',
-          () => engine.setTrackSends(1, oversized),
-        ],
-        [
-          'setMidiClips',
-          'clips exceeds the WASM Float32 input budget',
-          () => engine.setMidiClips(oversized),
-        ],
-        [
-          'setMidiClips',
-          'events exceeds the WASM Float32 input budget',
-          () => engine.setMidiClips([{ events: oversized } as never]),
-        ],
-        [
-          'setStrip',
-          'strip.sends exceeds the WASM Float32 input budget',
-          () => engine.setStrip('master', { sends: oversized } as never),
-        ],
-        ['pushMidiUmp', 'words must hold 1 to 4 words', () => engine.pushMidiUmp(1, oversized)],
-        [
-          'pushMidiInputUmp',
-          'words must hold 1 to 4 words',
-          () => engine.pushMidiInputUmp(oversized),
-        ],
-      ];
-      for (const [method, text, call] of cases) {
+      for (const row of SONARE_ENGINE_ROWS) {
         reads = 0;
-        expect(call, `${method} ${text}`).toThrow(
+        expect(() => row.call(engine, oversized), `${row.method} ${row.text}`).toThrow(
           expect.objectContaining({
             name: 'RangeError',
-            message: `SonareEngine.${method}: ${text}`,
+            message: `SonareEngine.${row.method}: ${row.text}`,
           }),
         );
-        expect(reads, `${method} ${text} reads`).toBe(0);
+        expect(reads, `${row.method} ${row.text} reads`).toBe(0);
       }
       engine.destroy();
     });
