@@ -735,7 +735,7 @@ def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> 
 
     def refuse(*a, **k):
         raise libsonare.SonareError(
-            libsonare.ErrorCode.INVALID_PARAMETER, "acoustic.source_outside_room: outside"
+            libsonare.ErrorCode.INVALID_PARAMETER, "source.x must be finite and in [0, 7]"
         )
 
     monkeypatch.setattr(libsonare, "synthesize_rir", refuse)
@@ -774,7 +774,7 @@ def test_synthesize_rir_invalid_geometry_exit_code_end_to_end() -> None:
             + ["--source-x", "999", "--source-y", "1", "--source-z", "1.2"]
         )
         assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
-        assert "acoustic.source_outside_room" in result.stderr
+        assert "source.x must be finite and in [0, 7]" in result.stderr
 
 
 def test_pcm16_clamps_and_stays_byte_identical() -> None:

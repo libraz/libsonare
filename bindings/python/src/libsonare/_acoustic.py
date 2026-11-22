@@ -249,15 +249,15 @@ def synthesize_rir(
         air_humidity_percent: Relative humidity in percent; None = the ISO
             reference climate's 50 %, and 0 is 0 %. Both climate values are read only while
             ``air_absorption_enabled`` is set, and an implausible pair raises
-            ``SonareError`` (``acoustic.invalid_air_absorption``).
+            ``SonareError`` naming the value.
 
     Returns:
         A :class:`RirResult`; its ``diagnostics`` are warnings.
 
     Raises:
         SonareError: The geometry, placement or timing is unusable (for example
-            a source outside the room); the message leads with the diagnostic
-            code, such as ``acoustic.source_outside_room``.
+            a source outside the room); the message names the refused value
+            and the range it must lie in.
     """
     lib = _get_lib()
     bands_ptr, bands_count, _bands_owner = _band_array_args(

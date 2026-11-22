@@ -107,8 +107,9 @@ TEST_CASE("sonare acoustic C API refuses invalid RIR geometry with its diagnosti
   REQUIRE(result.rir == nullptr);
   REQUIRE(result.length == 0);
   const std::string detail = sonare_last_error_message();
-  REQUIRE(detail.find("acoustic.invalid_dimensions") != std::string::npos);
-  REQUIRE(detail.find("length_m must be finite, positive and within bounds") != std::string::npos);
+  REQUIRE(detail.find("length_m must be finite and in (0, 10000]") != std::string::npos);
+  REQUIRE(detail.find("acoustic.") == std::string::npos);
+  REQUIRE(has_diagnostic_code("acoustic.invalid_dimensions"));
 
   sonare_free_rir_synth_result(&result);
 }
@@ -543,8 +544,9 @@ TEST_CASE("sonare acoustic C API refuses a source outside the room", "[c_api][ac
   const SonareError err = sonare_synthesize_rir(&cfg, 48000, &result);
 
   REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(std::string(sonare_last_error_message()).find("acoustic.source_outside_room") !=
+  REQUIRE(std::string(sonare_last_error_message()).find("source.x must be finite and in [0, ") !=
           std::string::npos);
+  REQUIRE(has_diagnostic_code("acoustic.source_outside_room"));
   REQUIRE(result.length == 0);
   REQUIRE(result.rir == nullptr);
   sonare_free_rir_synth_result(&result);
@@ -1034,7 +1036,9 @@ TEST_CASE("sonare acoustic C API reports an implausible air climate", "[c_api][a
     REQUIRE(out.length == 0);
     const char* message = sonare_last_error_message();
     REQUIRE(message != nullptr);
-    REQUIRE(std::string(message).find("acoustic.invalid_air_absorption") != std::string::npos);
+    REQUIRE(std::string(message).find(
+                "air_temperature_c must be finite and greater than -273.15") != std::string::npos);
+    REQUIRE(has_diagnostic_code("acoustic.invalid_air_absorption"));
     sonare_free_rir_synth_result(&out);
   }
 

@@ -153,7 +153,7 @@ rule = "c-error-path"
 [[entry]]
 kind = "field"
 old = "SonareRirSynthResult.has_error"
-removed = 'check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic as "code: message" in sonare_last_error_message()'
+removed = 'check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic message in sonare_last_error_message() and every diagnostic, code included, in sonare_last_diagnostic'
 domain = "effects"
 rule = "c-error-path"
 

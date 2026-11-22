@@ -532,7 +532,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareRirSynthResult.has_error` | removed: check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic as "code: message" in sonare_last_error_message() |
+| `SonareRirSynthResult.has_error` | removed: check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic message in sonare_last_error_message() and every diagnostic, code included, in sonare_last_diagnostic |
 | `sonare_synthesize_rir` | an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set |
 
 #### Each operation has exactly one entry point

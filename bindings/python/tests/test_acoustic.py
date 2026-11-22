@@ -127,7 +127,9 @@ def test_a_nan_placement_component_is_refused_by_index() -> None:
 @acoustic
 def test_synthesize_rir_raises_for_invalid_geometry() -> None:
     # Source outside the room => geometry validation error => coded SonareError.
-    with pytest.raises(libsonare.SonareValueError, match="acoustic.source_outside_room") as caught:
+    with pytest.raises(
+        libsonare.SonareValueError, match=r"source\.x must be finite and in \[0, 7\]"
+    ) as caught:
         libsonare.synthesize_rir(7.0, 5.0, 3.0, source=(99.0, 1.0, 1.2), sample_rate=48000)
     assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 
@@ -400,7 +402,9 @@ def test_synthesize_rir_raises_on_an_implausible_air_climate() -> None:
         max_sec=0.2,
         sample_rate=48000,
     )
-    with pytest.raises(libsonare.SonareError, match="acoustic.invalid_air_absorption"):
+    with pytest.raises(
+        libsonare.SonareError, match="air_temperature_c must be finite and greater than -273.15"
+    ):
         libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=-500.0)
     # The same implausible value is ignored while the flag is off.
     libsonare.synthesize_rir(**hall, air_absorption_enabled=False, air_temperature_c=-500.0)

@@ -123,8 +123,8 @@ typedef struct {
   /// Non-zero applies the ISO 9613-1 atmospheric absorption to the late tail; _init sets 1.
   /// While on, the per-band late RT60 gains the 4 m V air term, which mainly shortens the
   /// high bands of a large room. Out-of-range climate values are refused with
-  /// SONARE_ERROR_INVALID_PARAMETER and acoustic.invalid_air_absorption in
-  /// sonare_last_error_message().
+  /// SONARE_ERROR_INVALID_PARAMETER, coded acoustic.invalid_air_absorption in
+  /// sonare_last_diagnostic.
   int air_absorption_enabled;
   /// Air temperature in degrees Celsius for the air absorption (default 20, the ISO reference).
   float air_temperature_c;
@@ -307,9 +307,9 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config);
 /// @param sample_rate Output sample rate (Hz).
 /// @param out         Receives the synthesized RIR (caller frees).
 /// @return SONARE_ERROR_INVALID_PARAMETER for an invalid room or placement, with the
-///   first Error diagnostic as "code: message" in sonare_last_error_message() (for
-///   example acoustic.source_outside_room); @p out is left empty. Recoverable
-///   problems (a clamped tail) are Warning entries of sonare_last_diagnostic.
+///   first Error diagnostic's message in sonare_last_error_message() and its code (for
+///   example acoustic.source_outside_room) in sonare_last_diagnostic; @p out is left empty.
+///   Recoverable problems (a clamped tail) are Warning entries of sonare_last_diagnostic.
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out);
 /// @brief Release the buffer of a @ref SonareRirSynthResult; NULL-safe.
