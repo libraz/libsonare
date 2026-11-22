@@ -67,9 +67,9 @@ class MixMeterSnapshot:
     mono_compat_width: float
     """Stereo width measure for mono compatibility."""
     mono_compat_peak: float
-    """Peak of the mono fold-down."""
+    """Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude."""
     mono_compat_side_rms: float
-    """RMS of the side signal in the mono fold-down."""
+    """RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude."""
     likely_mono_compatible: bool
     """Whether the signal is likely to fold down to mono safely."""
     momentary_lufs: float

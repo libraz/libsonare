@@ -260,9 +260,9 @@ class StereoMonoCompatCheckResult:
     width: float | None
     """Stereo width; None for a fully out-of-phase pair."""
     mono_peak: float
-    """Peak of the mono fold-down."""
+    """Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude."""
     side_rms: float
-    """RMS level of the side signal."""
+    """RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude."""
     likely_mono_compatible: bool
     """True when the pair is likely to survive a mono fold-down."""
 
