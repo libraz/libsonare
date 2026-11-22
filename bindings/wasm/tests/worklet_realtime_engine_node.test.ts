@@ -1940,10 +1940,14 @@ describe('SonareRealtimeEngineNode', () => {
         offline: OfflineEngineOption;
         automationId: number;
       }> => {
-        const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        const realtime = new (await import('../dist/index.js')).RealtimeEngine({
           sampleRate: 48000,
           maxBlockSize: blockSize,
-        }) as unknown as OfflineEngineOption;
+        });
+        // A zero smoothing time makes a smoothed set a step, so the insert's 5 ms guard is the
+        // only glide and its rate bounds what one block must move.
+        realtime.setParamSmoothingMs(0);
+        const offline = realtime as unknown as OfflineEngineOption;
         const engine = await SonareEngine.create(fakeContext(), {
           numChannels: 2,
           mode: 'postMessage',
@@ -1997,9 +2001,13 @@ describe('SonareRealtimeEngineNode', () => {
         expect(baselineFirst[0][0]).toBeGreaterThan(0);
         expect(rejectedPriming[0][0]).toBeGreaterThan(0);
         expect(baselinePriming[0][0]).toBeGreaterThan(0);
-        // Insert automation advances once per render block, so compare two
-        // successive blocks rather than samples within one block.
-        expect(Math.abs(expectedNext[0][0] - expected[0][0])).toBeGreaterThan(0.05);
+        // Insert automation advances once per render block, so compare two successive blocks
+        // rather than samples within one block. The guard covers 1 - e^(-T/5 ms) of what is left
+        // per block, so the second block still moves e^(-T/5 ms) times that much of the step.
+        const gainOf = (db: number) => 0.25 * 10 ** (db / 20);
+        const perBlock = 1 - Math.exp(-blockSize / (48000 * 0.005));
+        const minimumMove = (gainOf(12) - gainOf(-12)) * (1 - perBlock) * perBlock;
+        expect(Math.abs(expectedNext[0][0] - expected[0][0])).toBeGreaterThan(minimumMove);
         expect(maxDiff).toBeLessThanOrEqual(1e-6);
       } finally {
         rejected.engine.destroy();
