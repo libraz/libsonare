@@ -21,8 +21,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 /// @brief Parabolic interpolation for sub-sample precision.
@@ -72,9 +70,6 @@ struct YinDiffContext {
     // Match librosa's YIN difference while retaining FFT acceleration:
     // d(tau) = 2 * (acf(0) - acf(tau)) - sum(x[0:tau]^2).
     const int available_lags = std::min(max_lag, frame_length);
-    if (available_lags <= 0) {
-      return;
-    }
 
     const int required_n_fft = next_power_of_2(2 * frame_length - 1);
     if (required_n_fft != n_fft) {

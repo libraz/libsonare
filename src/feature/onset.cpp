@@ -11,8 +11,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.

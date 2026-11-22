@@ -16,8 +16,8 @@ namespace sonare {
 
 namespace {
 
-std::vector<float> normalize_chroma_columns(std::vector<float> features, int n_chroma, int n_frames,
-                                            int norm) {
+std::vector<float> normalize_chroma_columns(const std::vector<float>& features, int n_chroma,
+                                            int n_frames, int norm) {
   NormType norm_type = NormType::L2;
   if (norm == 0) {
     norm_type = NormType::Inf;
@@ -71,7 +71,7 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
   // librosa.feature.chroma_stft normalizes each frame with norm=np.inf (L-inf /
   // max norm) by default; match it so analyze()/chroma_stft agree with librosa
   // (and with the L-inf chroma_cqt path) per-frame, not just in argmax.
-  chroma_features = normalize_chroma_columns(std::move(chroma_features), n_chroma, n_frames, 0);
+  chroma_features = normalize_chroma_columns(chroma_features, n_chroma, n_frames, 0);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }

@@ -14,7 +14,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
 using sonare::constants::kPi;
 
 MelSpectrogram::MelSpectrogram() : n_mels_(0), n_frames_(0), sample_rate_(0), hop_length_(0) {}
@@ -89,9 +88,7 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling and
   // top_db clamp. This is exactly the shared power_to_db (ref=1.0, amin=kEpsilon,
   // top_db=kDefaultTopDb), so route through it instead of reimplementing it.
-  std::vector<float> log_mel(power_.size());
-  power_to_db(power_.data(), power_.size(), /*ref=*/1.0f, /*amin=*/kEpsilon,
-              /*top_db=*/constants::kDefaultTopDb, log_mel.data());
+  std::vector<float> log_mel = to_db();
 
   // Apply DCT-II to each frame using Eigen matrix multiplication
   std::vector<float> mfcc_out(n_mfcc * n_frames_);

@@ -375,12 +375,10 @@ std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int
   std::vector<int> start(len);
   std::vector<int> count(len, 1);
   std::vector<int> next(len);
-  std::vector<int> prev(len);
   std::vector<double> centroid(static_cast<size_t>(len) * static_cast<size_t>(rows));
   for (int c = 0; c < len; ++c) {
     start[c] = c;
     next[c] = (c + 1 < len) ? c + 1 : -1;
-    prev[c] = c - 1;
     for (int r = 0; r < rows; ++r) {
       centroid[static_cast<size_t>(c) * rows + r] = block[static_cast<size_t>(r) * len + c];
     }
@@ -423,7 +421,6 @@ std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int
     }
     count[best] += count[victim];
     next[best] = next[victim];
-    if (next[victim] != -1) prev[next[victim]] = best;
     --n_runs;
   }
 

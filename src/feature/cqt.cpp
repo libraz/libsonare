@@ -24,8 +24,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 /// @brief Cache key for CQT kernel
@@ -596,6 +594,21 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
                    sr);
 }
 
+namespace {
+
+/// Bins per octave recovered from the first two bins of a CQT frequency axis (12 when unreadable).
+int bins_per_octave_from_frequencies(const std::vector<float>& frequencies) {
+  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
+  if (frequencies.size() >= 2 && frequencies[0] > 0.0f && frequencies[1] > frequencies[0]) {
+    const float ratio = frequencies[1] / frequencies[0];
+    const float estimated_bpo = 1.0f / std::log2(ratio);
+    bins_per_octave = std::max(1, static_cast<int>(std::lround(estimated_bpo)));
+  }
+  return bins_per_octave;
+}
+
+}  // namespace
+
 Audio icqt(const CqtResult& cqt_result, int length) {
   if (cqt_result.empty()) {
     return Audio();
@@ -610,12 +623,7 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     return Audio();
   }
 
-  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
-  if (frequencies.size() >= 2 && frequencies[0] > 0.0f && frequencies[1] > frequencies[0]) {
-    const float ratio = frequencies[1] / frequencies[0];
-    const float estimated_bpo = 1.0f / std::log2(ratio);
-    bins_per_octave = std::max(1, static_cast<int>(std::lround(estimated_bpo)));
-  }
+  const int bins_per_octave = bins_per_octave_from_frequencies(frequencies);
 
   CqtConfig config;
   config.hop_length = hop_length;
@@ -902,11 +910,7 @@ std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& mag, i
   // The CQT result carries its grid only as a frequency axis, so recover the
   // bin spacing and the pitch class of bin 0 before handing them to the shared
   // fold.
-  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
-  if (freqs.size() >= 2 && freqs[0] > 0.0f && freqs[1] > freqs[0]) {
-    const float ratio = freqs[1] / freqs[0];
-    bins_per_octave = std::max(1, static_cast<int>(std::lround(1.0f / std::log2(ratio))));
-  }
+  const int bins_per_octave = bins_per_octave_from_frequencies(freqs);
   const int fmin_pitch_class = freqs.empty() ? 0 : chroma_class_of_frequency(freqs[0], n_chroma);
 
   return fold_cqt_bins_to_chroma(mag.data(), n_bins, n_frames, bins_per_octave, n_chroma,

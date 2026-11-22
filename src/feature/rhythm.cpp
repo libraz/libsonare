@@ -23,6 +23,13 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// Tempo in BPM of Fourier tempogram bin @p bin: bin_freq * 60 * sr / hop_length.
+double fourier_bin_bpm(int bin, int win_length, int sr, int hop_length) {
+  const double freq = static_cast<double>(bin) / static_cast<double>(win_length);
+  return freq * constants::kSecondsPerMinute * static_cast<double>(sr) /
+         static_cast<double>(hop_length);
+}
+
 /// @brief Center-pad an onset envelope with librosa.tempogram's linear ramp.
 std::vector<float> pad_envelope_linear_ramp(const std::vector<float>& env, int pad, bool center) {
   if (!center || pad <= 0) return env;
@@ -229,8 +236,7 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
 
   const double octave_width = std::log(2.0);
   for (int bin = 1; bin < fourier_bins; ++bin) {
-    const double bpm = static_cast<double>(bin) / static_cast<double>(config.win_length) * 60.0 *
-                       static_cast<double>(sr) / static_cast<double>(config.hop_length);
+    const double bpm = fourier_bin_bpm(bin, config.win_length, sr, config.hop_length);
     if (bpm <= 0.0) continue;
     double phase = std::fmod(std::log(bpm / static_cast<double>(bpm_min)) / octave_width, 1.0);
     if (phase < 0.0) phase += 1.0;
@@ -285,8 +291,7 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
 
   // Tempo per Fourier bin = bin_freq * 60 * sr / hop_length (in BPM).
   auto bin_to_bpm = [&](int b) {
-    const double freq = static_cast<double>(b) / static_cast<double>(config.win_length);
-    return freq * 60.0 * static_cast<double>(config.sr) / static_cast<double>(config.hop_length);
+    return fourier_bin_bpm(b, config.win_length, config.sr, config.hop_length);
   };
 
   // Restrict to tempo band, pick argmax per frame to define mask. Bin-major with per-frame

@@ -15,8 +15,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 /// @brief Rejects a non-positive spectrogram dimension, naming the one that failed.

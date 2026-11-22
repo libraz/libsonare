@@ -69,10 +69,6 @@ std::vector<float> tonnetz(const float* chromagram, int n_chroma, int n_frames) 
       for (int k = 0; k < n_chroma; ++k) {
         norm[k * n_frames + t] = chromagram[k * n_frames + t] / sum;
       }
-    } else {
-      for (int k = 0; k < n_chroma; ++k) {
-        norm[k * n_frames + t] = 0.0f;
-      }
     }
   }
 
