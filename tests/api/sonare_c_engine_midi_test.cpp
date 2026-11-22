@@ -959,7 +959,8 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
 
   // Every other refusal names the key, or the list element, it is about.
   const std::pair<const char*, const char*> out_of_domain[] = {
-      {"{\"chordIntervals\":[0,\"x\"]}", "config.chordIntervals[1] must be a whole number"},
+      {"{\"chordIntervals\":[0,\"x\"]}", "config.chordIntervals[1] must be a number"},
+      {"{\"chordIntervals\":[0,4.5]}", "config.chordIntervals[1] must be a whole number"},
       {"{\"chordIntervals\":[]}", "config.chordIntervals must hold 1 to "},
       {"{\"arpeggiatorIntervals\":[0,7.5],\"arpeggiatorStepPpq\":1}",
        "config.arpeggiatorIntervals[1] must be a whole number"},

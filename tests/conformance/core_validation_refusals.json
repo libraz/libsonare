@@ -205,6 +205,8 @@
       { "id": "wrong_kind", "config": {"velocityScale": true}, "cause": "shape", "code": "InvalidParameter", "message": "config.velocityScale must be a number" },
       { "id": "out_of_domain", "config": {"velocityGamma": 0}, "cause": "argument", "code": "InvalidParameter", "message": "config.velocityGamma must be > 0" },
       { "id": "list_element", "config": {"chordIntervals": [0, 7.5]}, "cause": "argument", "code": "InvalidParameter", "message": "config.chordIntervals[1] must be a whole number" },
+      { "id": "list_element_type", "config": {"chordIntervals": [0, "4"]}, "cause": "shape", "code": "InvalidParameter", "message": "config.chordIntervals[1] must be a number" },
+      { "id": "arpeggiator_element_type", "config": {"arpeggiatorIntervals": [0, true], "arpeggiatorStepPpq": 0.25}, "cause": "shape", "code": "InvalidParameter", "message": "config.arpeggiatorIntervals[1] must be a number" },
       { "id": "non_positive_length", "config": {"quantizePpq": 0}, "cause": "argument", "code": "InvalidParameter", "message": "config.quantizePpq must be a positive PPQ length" }
     ]
   },

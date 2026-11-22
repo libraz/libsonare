@@ -207,9 +207,10 @@ inline void midi_fx_chain_from_json(const char* config_json, sonare::midi::MidiF
     }
     chord.count = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number() ||
-          !sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
-        refuse_at(schema::index_path("chordIntervals", i), "must be a whole number");
+      const std::string element_at = schema::index_path("chordIntervals", i);
+      if (!values[i].is_number()) refuse_type(at(element_at), schema::Kind::Number);
+      if (!sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
+        refuse_at(element_at, "must be a whole number");
       }
     }
     chain->set_chord(chord);
@@ -237,9 +238,11 @@ inline void midi_fx_chain_from_json(const char* config_json, sonare::midi::MidiF
     arpeggiator.enabled = true;
     arpeggiator.steps = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number() || !sonare::numeric::checked_integral_cast(
-                                        values[i].as_number(), &arpeggiator.intervals[i])) {
-        refuse_at(schema::index_path("arpeggiatorIntervals", i), "must be a whole number");
+      const std::string element_at = schema::index_path("arpeggiatorIntervals", i);
+      if (!values[i].is_number()) refuse_type(at(element_at), schema::Kind::Number);
+      if (!sonare::numeric::checked_integral_cast(values[i].as_number(),
+                                                  &arpeggiator.intervals[i])) {
+        refuse_at(element_at, "must be a whole number");
       }
     }
     arpeggiator.step_frames = std::max<int64_t>(1, step_frames);
