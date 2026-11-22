@@ -103,6 +103,10 @@ const catalogParameter = {
   slot: 'band1',
   dependsOn: [{ key: 'maxHz', relation: 'le', factor: 1 }],
   coupledWith: ['minHz'],
+  domainMin: undefined,
+  domainMinExclusive: undefined,
+  domainMax: undefined,
+  domainMaxExclusive: undefined,
 } satisfies MasteringInsertParamInfo;
 
 const catalogSlot = {
