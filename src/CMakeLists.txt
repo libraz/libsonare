@@ -156,6 +156,7 @@ set(SONARE_SOURCES
   analysis/bpm_analyzer.cpp
   analysis/key_analyzer.cpp
   analysis/onset_analyzer.cpp
+  analysis/event_time_refinement.cpp
   analysis/dynamics_analyzer.cpp
   analysis/beat_analyzer.cpp
   analysis/meter_analyzer.cpp

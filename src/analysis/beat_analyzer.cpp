@@ -208,6 +208,7 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   onset_shift_frames_ = onset_center_shift_frames(stft_config, onset_config.center);
 
   track_beats();
+  refine_beat_times(audio, evidence_half_window_s(window.win_length, window.n_fft, sr_));
   // Onset strength is a log-spectral difference, so accents that differ only
   // in amplitude can disappear after dB normalization. Audio-backed analysis
   // can recover that evidence from beat-local low-frequency energy.
@@ -229,6 +230,46 @@ BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int
   // No audio, so no bar-start evidence: the downbeats stay seeded at phase 0.
   // Callers that have audio (e.g. MusicAnalyzer) refine afterwards.
   track_beats();
+}
+
+void BeatAnalyzer::refine_beat_times(const Audio& audio, float half_window_s) {
+  refiner_.emplace(audio);
+  refine_half_window_s_ = half_window_s;
+  if (beats_.empty()) return;
+  std::vector<int> frames;
+  frames.reserve(beats_.size());
+  for (const Beat& beat : beats_) {
+    frames.push_back(beat.frame);
+  }
+  const std::vector<std::optional<float>> refined = refine_event_times(frames);
+  std::vector<float> shifts;
+  for (size_t i = 0; i < beats_.size(); ++i) {
+    if (refined[i]) shifts.push_back(*refined[i] - beats_[i].time);
+  }
+  const size_t needed = std::max<size_t>(4, beats_.size() / 4);
+  if (shifts.size() < needed) return;
+
+  std::sort(shifts.begin(), shifts.end());
+  const size_t mid = shifts.size() / 2;
+  const float offset =
+      shifts.size() % 2 == 1 ? shifts[mid] : 0.5f * (shifts[mid - 1] + shifts[mid]);
+  for (Beat& beat : beats_) {
+    beat.time = std::max(0.0f, beat.time + offset);
+  }
+  for (Beat& beat : downbeats_) {
+    beat.time = std::max(0.0f, beat.time + offset);
+  }
+}
+
+std::vector<std::optional<float>> BeatAnalyzer::refine_event_times(
+    const std::vector<int>& frames) const {
+  if (!refiner_) return std::vector<std::optional<float>>(frames.size());
+  std::vector<float> centres;
+  centres.reserve(frames.size());
+  for (int frame : frames) {
+    centres.push_back(frames_to_time(frame, sr_, hop_length_));
+  }
+  return refiner_->refine(centres, refine_half_window_s_);
 }
 
 float transition_cost_with_tightness(int from_frame, int to_frame, float period, float tightness) {

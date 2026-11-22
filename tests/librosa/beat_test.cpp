@@ -2,6 +2,7 @@
 /// @brief Reference compatibility tests for beat tracking.
 /// @details Reference values from: tests/librosa/reference/beat.json
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -65,11 +66,16 @@ TEST_CASE("beat tracking reference compatibility", "[beat][reference]") {
     REQUIRE(std::abs(frames[i] - expected_frame) <= 2);
   }
 
-  // Beat times are the start of the evidence frame.
+  // Beat times are the evidence-frame times moved by one refinement offset, so the spacing stays
+  // the frames'.
   REQUIRE(times.size() == frames.size());
+  const int shift = analyzer.onset_shift_frames();
+  const double offset =
+      times.back() - envelope_frame_time(frames.back(), shift, sr, config.hop_length);
   for (size_t i = 0; i < frames.size(); ++i) {
-    CAPTURE(i, frames[i], times[i]);
-    REQUIRE(times[i] ==
-            envelope_frame_time(frames[i], analyzer.onset_shift_frames(), sr, config.hop_length));
+    const float frame_time = envelope_frame_time(frames[i], shift, sr, config.hop_length);
+    if (frame_time + offset < 0.0) continue;  // clamped at the start of the signal
+    CAPTURE(i, frames[i], times[i], offset);
+    REQUIRE(static_cast<double>(times[i]) - frame_time == Catch::Approx(offset).margin(1.0e-5));
   }
 }

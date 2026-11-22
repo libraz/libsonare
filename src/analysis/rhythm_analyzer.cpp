@@ -40,8 +40,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
   downbeat_phase_ = beat_analyzer.downbeat_phase();
 
-  // Detect onsets from onset strength envelope
-  detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
+  detect_onsets(beat_analyzer);
 
   analyze();
 }
@@ -56,19 +55,21 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
   downbeat_phase_ = beat_analyzer.downbeat_phase();
 
-  // Detect onsets from onset strength envelope
-  detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
+  detect_onsets(beat_analyzer);
 
   analyze();
 }
 
-void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength, int shift_frames) {
+void RhythmAnalyzer::detect_onsets(const BeatAnalyzer& beat_analyzer) {
   // Reuse the library's canonical OnsetAnalyzer peak-picker (pre/post-max
   // windows, wait/refractory constraint, adaptive local-average gating) on the
   // beat-aligned onset-strength envelope instead of a divergent local heuristic,
   // so swing/groove analysis shares a single onset definition with
   // OnsetAnalyzer::onset_times() and the two cannot drift apart (analysis#7).
+  // The onsets take the beats' time definition, so their positions inside a beat compare like
+  // with like.
   onset_times_.clear();
+  const std::vector<float>& onset_strength = beat_analyzer.onset_strength();
   if (onset_strength.size() < 3) {
     return;
   }
@@ -76,8 +77,14 @@ void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength, int
   OnsetDetectConfig onset_config;
   onset_config.n_fft = config_.n_fft;
   onset_config.hop_length = hop_length_;
-  OnsetAnalyzer onset_analyzer(onset_strength, sr_, hop_length_, onset_config, shift_frames);
+  OnsetAnalyzer onset_analyzer(onset_strength, sr_, hop_length_, onset_config,
+                               beat_analyzer.onset_shift_frames());
   onset_times_ = onset_analyzer.onset_times();
+  const std::vector<std::optional<float>> refined =
+      beat_analyzer.refine_event_times(onset_analyzer.onset_frames());
+  for (size_t i = 0; i < onset_times_.size(); ++i) {
+    if (refined[i]) onset_times_[i] = *refined[i];
+  }
 }
 
 float RhythmAnalyzer::calculate_swing_ratio() const {

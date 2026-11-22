@@ -120,6 +120,7 @@ add_executable(sonare_tests
   analysis/key_front_end_test.cpp
   analysis/key_synthetic_matrix_test.cpp
   analysis/onset_analyzer_test.cpp
+  analysis/event_time_refinement_test.cpp
   analysis/dynamics_analyzer_test.cpp
   analysis/beat_analyzer_test.cpp
   analysis/beat_event_time_test.cpp

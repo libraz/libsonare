@@ -2,6 +2,7 @@
 
 #include "analysis/analysis_rate.h"
 #include "analysis/downbeat_analyzer.h"
+#include "analysis/event_time_refinement.h"
 #include "analysis/section_structure.h"
 #include "analysis/tempo_curve.h"
 #include "core/spectrum.h"
@@ -156,8 +157,11 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(
         onset_strength(), analysis_sr_, config_->hop_length, beat_config,
         onset_center_shift_frames(analysis_stft_, true));
-    // Same order as the Audio constructor: the meter reads the energy, then the bar phase is
-    // selected from the cached analysis spectrogram.
+    // Same order as the Audio constructor: beat times are refined, the meter reads the energy,
+    // then the bar phase is selected from the cached analysis spectrogram.
+    beat_analyzer_->refine_beat_times(
+        analysis_audio_,
+        evidence_half_window_s(analysis_stft_.win_length, analysis_stft_.n_fft, analysis_sr_));
     beat_analyzer_->estimate_time_signature(beat_low_frequency_energy());
     const Spectrogram& spec = spectrogram();
     beat_analyzer_->refine_downbeats(downbeat_phase_evidence(
@@ -205,6 +209,9 @@ OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
     onset_analyzer_ = std::make_unique<OnsetAnalyzer>(
         onset_strength(), analysis_sr_, config_->hop_length, onset_config,
         onset_center_shift_frames(analysis_stft_, true));
+    onset_analyzer_->refine_onset_times(
+        analysis_audio_,
+        evidence_half_window_s(analysis_stft_.win_length, analysis_stft_.n_fft, analysis_sr_));
   });
   return *onset_analyzer_;
 }

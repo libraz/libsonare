@@ -3,8 +3,10 @@
 /// @file beat_analyzer.h
 /// @brief Beat tracking using dynamic programming.
 
+#include <optional>
 #include <vector>
 
+#include "analysis/event_time_refinement.h"
 #include "core/audio.h"
 
 namespace sonare {
@@ -18,8 +20,10 @@ constexpr float kOnsetEvidenceRelativeThreshold = 0.1f;
 
 /// @brief Detected beat event.
 struct Beat {
-  float time;  ///< Beat time in seconds, at the start of the evidence frame
-  int frame;   ///< Beat frame index
+  /// Beat time in seconds: the start of the evidence frame, moved by the track's refinement
+  /// offset where refine_beat_times() found one
+  float time;
+  int frame;  ///< Beat frame index
   /// @brief Onset-envelope value sampled at @ref frame.
   /// @details A single raw frame, neither windowed nor normalized, so it is
   ///          sensitive to beat-position jitter and its scale depends on the
@@ -64,6 +68,8 @@ class BeatAnalyzer {
   /// @brief Constructs beat analyzer from audio.
   /// @param audio Input audio
   /// @param config Beat configuration
+  /// @details Beat times are refined against @p audio (refine_beat_times()) before the meter and
+  ///          downbeat passes read them.
   explicit BeatAnalyzer(const Audio& audio, const BeatConfig& config = BeatConfig());
 
   /// @brief Constructs beat analyzer from pre-computed onset strength.
@@ -96,6 +102,22 @@ class BeatAnalyzer {
   ///          are the beats phase, phase + numerator, and so on. 0 when no
   ///          evidence was measured, as for the onset-envelope constructor.
   int downbeat_phase() const { return downbeat_phase_; }
+
+  /// @brief Moves every beat time by one per-track offset towards the steepest energy rises.
+  /// @param audio The signal the onset envelope was computed from.
+  /// @param half_window_s Half the envelope's analysis window, in seconds.
+  /// @details Each beat is refined inside its own evidence frame (event_time_refinement.h); a
+  ///          beat whose frame holds a rise coincides with an onset. The offset is the median
+  ///          refinement over those beats and applies to every beat and downbeat, so the spacing
+  ///          stays the tracker's; it is 0 when fewer than max(4, beats / 4) beats coincide.
+  ///          Frames are untouched. Call it once, before the meter and downbeat passes.
+  void refine_beat_times(const Audio& audio, float half_window_s);
+
+  /// @brief Refines events at ascending envelope frames against the signal refine_beat_times()
+  ///        was given.
+  /// @details Lets onsets read from this analyzer's envelope share the beats' time definition.
+  ///          Every entry is empty when refine_beat_times() has not run.
+  std::vector<std::optional<float>> refine_event_times(const std::vector<int>& frames) const;
 
   /// @brief Re-estimates the time signature and re-seeds the downbeats at phase 0.
   /// @param beat_energy Per-beat low-frequency energy, or empty. A beat whose onset evidence a
@@ -177,6 +199,8 @@ class BeatAnalyzer {
   int hop_length_;
   int onset_shift_frames_ = 0;
   BeatConfig config_;
+  std::optional<EventTimeRefiner> refiner_;
+  float refine_half_window_s_ = 0.0f;
 };
 
 /// @brief Rewrites an onset envelope so each frame carries the energy around it.

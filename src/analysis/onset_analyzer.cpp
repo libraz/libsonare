@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "analysis/analysis_rate.h"
+#include "analysis/event_time_refinement.h"
 #include "core/convert.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
@@ -33,6 +34,8 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
 
   if (config_.backtrack) {
     backtrack_onsets();
+  } else {
+    refine_onset_times(audio, evidence_half_window_s(window.win_length, window.n_fft, sr_));
   }
 }
 
@@ -124,6 +127,20 @@ void OnsetAnalyzer::detect_onsets() {
 
     onsets_.push_back({envelope_frame_time(i, onset_shift_frames_, sr_, hop_length_), current, i});
     last_onset_frame = i;
+  }
+}
+
+void OnsetAnalyzer::refine_onset_times(const Audio& audio, float half_window_s) {
+  if (onsets_.empty()) return;
+  std::vector<float> centres;
+  centres.reserve(onsets_.size());
+  for (const auto& onset : onsets_) {
+    centres.push_back(frames_to_time(onset.frame, sr_, hop_length_));
+  }
+  const std::vector<std::optional<float>> refined =
+      EventTimeRefiner(audio).refine(centres, half_window_s);
+  for (size_t i = 0; i < onsets_.size(); ++i) {
+    if (refined[i]) onsets_[i].time = *refined[i];
   }
 }
 

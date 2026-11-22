@@ -14,7 +14,9 @@ namespace sonare {
 
 /// @brief Detected onset event.
 struct Onset {
-  float time;      ///< Onset time in seconds, at the start of the evidence frame
+  /// Onset time in seconds: from audio without backtracking, the steepest energy rise inside the
+  /// evidence frame (event_time_refinement.h), else the start of the evidence frame
+  float time;
   float strength;  ///< Onset strength
   int frame = 0;   ///< Envelope frame index (after backtracking, the backtracked frame)
 };
@@ -103,6 +105,8 @@ class OnsetAnalyzer {
   /// @param audio Input audio
   /// @param config Onset configuration; `hop_length` is in samples of @p audio
   /// @param framing Whether `n_fft` is rescaled from 22050 Hz to the input rate
+  /// @details Without `backtrack`, each onset time is refined inside its evidence frame
+  ///          (event_time_refinement.h); a frame holding no rise keeps the evidence-frame time.
   explicit OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config = OnsetDetectConfig(),
                          OnsetFraming framing = OnsetFraming::kAnalysisRate);
 
@@ -138,6 +142,14 @@ class OnsetAnalyzer {
 
   /// @brief Returns the centering shift, in frames, subtracted from envelope frames for times.
   int onset_shift_frames() const { return onset_shift_frames_; }
+
+  /// @brief Refines each onset time inside its evidence frame (event_time_refinement.h).
+  /// @param audio The signal the onset envelope was computed from.
+  /// @param half_window_s Half the envelope's analysis window, in seconds.
+  /// @details For the envelope constructor, whose caller holds the audio. A frame holding no rise
+  ///          keeps its time; frames are untouched. Call it at most once, and not after
+  ///          backtracking, which places onsets by a different rule.
+  void refine_onset_times(const Audio& audio, float half_window_s);
 
  private:
   void detect_onsets();
