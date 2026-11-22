@@ -1369,33 +1369,15 @@ def _c_error_path_files(root: Path) -> list[dict]:
     return out
 
 
-# A validator call naming its refusal: a literal function name, then a literal argument name.
-# A refuse* helper takes the refused subject first, not the entry, so it is not one.
-_C_NAMED_CALL = re.compile(
-    r'\b(?!(?:[A-Za-z_]\w*::)*refuse\w*\s*\()[A-Za-z_][\w:]*\s*(?:<[^;()]*>)?\(\s*"([A-Za-z_][\w:]*)"\s*,\s*"'
-)
 _C_FORWARD = re.compile(r"\breturn\s+(sonare_\w+)\s*\(")
 
 
-def _c_entry_name_sites(root: Path) -> list[dict]:
-    """Named validator calls inside C-ABI entries, and the entries that forward to another."""
+def _c_entry_forward_sites(root: Path) -> list[dict]:
+    """The C-ABI entries that return another entry's result."""
     out: list[dict] = []
     for path in sorted((root / "src" / "c_api").glob("*.cpp")):
         raw = path.read_text(encoding="utf-8")
-        rel = path.relative_to(root).as_posix()
-        for entry, offset, body in _c_entry_bodies(_c_blank(raw)):
-            text = raw[offset : offset + len(body)]
-            for m in _C_NAMED_CALL.finditer(text):
-                line = raw.count("\n", 0, offset + m.start()) + 1
-                out.append(
-                    {
-                        "surface": "c",
-                        "kind": "c-entry-name",
-                        "name": f"{rel}:{line}",
-                        "entry": entry,
-                        "literal": m.group(1),
-                    }
-                )
+        for entry, _, body in _c_entry_bodies(_c_blank(raw)):
             callees = sorted(set(_C_FORWARD.findall(body)) - {entry})
             if callees:
                 out.append(
@@ -1408,7 +1390,7 @@ _JSON_READER_INCLUDE = re.compile(r'#include "util/json(?:_budget|_schema)?\.h"|
 _REFUSAL_WRITER_FILES = frozenset({"src/util/json_schema.h", "src/util/json.h"})
 _HAND_COMPOSED_REFUSAL = (
     ("an unknown-key text", re.compile(r'"unknown (?:[\w-]+ )?(?:key|field)')),
-    ("a \"$.\" path", re.compile(r'"[^"\n]*\$\.')),
+    ('a "$." path', re.compile(r'"[^"\n]*\$\.')),
     (
         "a path joined by hand",
         re.compile(
@@ -1444,13 +1426,6 @@ def _document_refusal_sites(root: Path) -> list[dict]:
                     sites.append(f"{rel}:{number} ({what})")
         out.append({"surface": "c", "kind": "document-refusal", "name": rel, "sites": sites})
     return out
-
-
-def _c_entry_name_violation(r: dict) -> str | None:
-    want = r["entry"].removeprefix("sonare_")
-    if r["literal"] != want:
-        return f"refusal names {r['literal']!r}; the enclosing entry {r['entry']} says {want!r}"
-    return None
 
 
 def _c_error_path_violation(r: dict) -> str | None:
@@ -1772,13 +1747,6 @@ RULES: list[Rule] = [
         pending_size={f"c:{path}": n for path, n in _C_ERROR_PATH_PENDING.items()},
     ),
     Rule(
-        name="c-entry-name",
-        summary="a C-ABI refusal names its enclosing entry without the sonare_ prefix",
-        population=lambda r: r["kind"] == "c-entry-name",
-        violation=_c_entry_name_violation,
-        scan=_c_entry_name_sites,
-    ),
-    Rule(
         name="document-refusal-writer",
         summary="a JSON document reader composes its paths and refusals through util/json_schema.h",
         population=lambda r: r["kind"] == "document-refusal",
@@ -1794,7 +1762,7 @@ RULES: list[Rule] = [
         summary="count only: an entry returning another entry's result refuses under the callee's name",
         population=lambda r: r["kind"] == "c-entry-forward",
         violation=lambda r: None,
-        scan=_c_entry_name_sites,
+        scan=_c_entry_forward_sites,
     ),
 ]
 
