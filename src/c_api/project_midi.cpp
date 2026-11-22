@@ -1325,8 +1325,7 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
   SONARE_C_REQUIRE_NONNULL(config_json);
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
-  const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
-  if (parse_err != SONARE_OK) return parse_err;
+  midi_fx_chain_from_json(config_json, &chain);
 
   arr::MidiClipEventList current;
   const auto it = project->history.midi_content().events.find(clip_id);
@@ -1369,8 +1368,7 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
   SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
-  const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
-  if (parse_err != SONARE_OK) return parse_err;
+  midi_fx_chain_from_json(config_json, &chain);
 
   arr::MidiClipEventList current;
   const auto it = project->history.midi_content().events.find(clip_id);

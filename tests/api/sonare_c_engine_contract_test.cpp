@@ -408,10 +408,9 @@ TEST_CASE("sonare_engine_set_warp_voice_capacity enforces the documented ceiling
 
 TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
           "[c_api][engine][json]") {
-  // The shared parser raises one JsonError; the entry points used to map it to
-  // three different codes, including SONARE_ERROR_UNKNOWN. Syntactically
-  // malformed input is SONARE_ERROR_INVALID_FORMAT everywhere, and never
-  // UNKNOWN on any path.
+  // Syntactically malformed input takes the code of what the JSON is: a document
+  // is SONARE_ERROR_INVALID_FORMAT, a call's argument bag is
+  // SONARE_ERROR_INVALID_PARAMETER, and no path reports UNKNOWN.
   const char* malformed[] = {
       "not json", "{", "{\"a\":}", "{\"a\":1,}", "[1,", "", "{\"a\":1 \"b\":2}",
   };
@@ -427,7 +426,7 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
   for (const char* json : malformed) {
     INFO(json);
 #if defined(SONARE_WITH_ARRANGEMENT)
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, json) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_project_set_mixer_scene_json(project, json) == SONARE_ERROR_INVALID_FORMAT);
 #endif
 #if defined(SONARE_WITH_MIXING)

@@ -1758,10 +1758,10 @@ SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t d
 /// @param mode 0 bank, 1 none, 2 chain (the project's SonarePartRigMode).
 /// @param inserts_json Required for mode 2, NULL otherwise; the format and
 ///        limits of @ref sonare_project_set_part_rig.
-/// @return SONARE_ERROR_INVALID_FORMAT for malformed @p inserts_json;
-///         SONARE_ERROR_INVALID_PARAMETER for an out-of-range part or mode,
-///         inserts that do not match the mode, an invalid chain, or a
-///         destination with no instrument; SONARE_ERROR_NOT_SUPPORTED for an
+/// @return SONARE_ERROR_INVALID_PARAMETER for an out-of-range part or mode,
+///         inserts that do not match the mode, malformed @p inserts_json, an
+///         invalid chain, or a destination with no instrument;
+///         SONARE_ERROR_NOT_SUPPORTED for an
 ///         instrument without part rigs (the built-in synth, a callback
 ///         instrument) or a chain in a build without mastering.
 SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destination_id, uint8_t part,

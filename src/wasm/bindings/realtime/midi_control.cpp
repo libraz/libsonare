@@ -449,20 +449,13 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
   }
   if (has_inserts) {
     const std::string json = inserts_json.as<std::string>();
-    const SonareError parsed =
-        sonare_c_detail::parse_part_rig_inserts(wasmCString(json, "insertsJson"), &rig.stages);
-    if (parsed == SONARE_ERROR_INVALID_FORMAT) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid part rig inserts");
-    }
+    rig.stages = sonare_c_detail::read_part_rig_inserts(wasmCString(json, "insertsJson"));
   }
   if (!sonare::midi::validate_part_rig(static_cast<uint8_t>(part), rig)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid part rig");
+    sonare_c_detail::refuse_part_rig_stage_count();
   }
 #if defined(SONARE_WITH_MASTERING)
-  if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "invalid part rig insert chain");
-  }
+  sonare_c_detail::validate_part_rig_chain(rig.stages);
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
     throw sonare::SonareException(sonare::ErrorCode::NotSupported,

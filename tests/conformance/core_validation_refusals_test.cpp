@@ -799,3 +799,128 @@ TEST_CASE("a mix-scene document is refused by the core reader through every C lo
     }
   }
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+constexpr int kChainMode = 2;
+
+SonareError set_project_part_rig(const std::string& inserts) {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const SonareError rc = sonare_project_set_part_rig(project, 1, 0, kChainMode, inserts.c_str());
+  sonare_project_destroy(project);
+  return rc;
+}
+
+SonareError set_engine_part_rig(const std::string& inserts) {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  const SonareError rc = sonare_engine_set_part_rig(engine, 1, 0, kChainMode, inserts.c_str());
+  sonare_engine_destroy(engine);
+  return rc;
+}
+
+}  // namespace
+
+TEST_CASE("part-rig inserts are a call's argument on both setters and a document inside a project",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["part_rig_inserts"];
+  const std::vector<std::pair<std::string, std::function<SonareError(const std::string&)>>>
+      setters = {{"project_set_part_rig", set_project_part_rig},
+                 {"engine_set_part_rig", set_engine_part_rig}};
+
+#if defined(SONARE_WITH_MASTERING)
+  for (const auto& item : route["accepted"].as_array()) {
+    INFO(item["id"].as_string());
+    CHECK(set_project_part_rig(sonare::util::json::dump(item["inserts"])) == SONARE_OK);
+  }
+  for (const auto& [name, set] : setters) {
+    INFO(name);
+    for (const auto& item : route["refused"].as_array()) {
+      INFO(item["id"].as_string());
+      REQUIRE(item["code"].as_string() == "InvalidParameter");
+      CHECK(set(sonare::util::json::dump(item["inserts"])) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK_THAT(last_error_message(),
+                 Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+    }
+  }
+#endif
+
+  SonareProject* empty = nullptr;
+  REQUIRE(sonare_project_create(&empty) == SONARE_OK);
+  char* serialized = nullptr;
+  REQUIRE(sonare_project_serialize(empty, &serialized, nullptr) == SONARE_OK);
+  Value document = sonare::util::json::parse_strict(serialized);
+  sonare_free_string(serialized);
+  sonare_project_destroy(empty);
+  for (const auto& item : route["project_document"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["code"].as_string() == "InvalidFormat");
+    sonare::util::json::Object rig = {
+        {"destinationId", 1.0}, {"part", 0.0}, {"mode", "chain"}, {"inserts", item["inserts"]}};
+    document.as_object()["partRigs"] = sonare::util::json::Array{Value(std::move(rig))};
+    const std::string text = sonare::util::json::dump(document);
+    SonareProject* loaded = nullptr;
+    char* diag = nullptr;
+    CHECK(sonare_project_deserialize(text.c_str(), text.size(), &loaded, &diag) ==
+          SONARE_ERROR_INVALID_FORMAT);
+    // A refused load reports its reason through the diagnostics string.
+    REQUIRE(diag != nullptr);
+    CHECK_THAT(std::string(diag), Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+    sonare_free_string(diag);
+    if (loaded != nullptr) sonare_project_destroy(loaded);
+  }
+}
+
+TEST_CASE("a MIDI-FX config is a call's argument on every entry that takes one",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["midi_fx_config"];
+
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  const std::vector<std::pair<std::string, std::function<SonareError(const std::string&)>>>
+      setters = {
+          {"engine_set_midi_fx",
+           [&](const std::string& json) {
+             return sonare_engine_set_midi_fx(engine, 5, json.c_str());
+           }},
+          {"project_bake_midi_fx",
+           [&](const std::string& json) {
+             return sonare_project_bake_midi_fx(project, clip, json.c_str(), nullptr, 0, nullptr);
+           }},
+          {"project_preview_midi_fx_count",
+           [&](const std::string& json) {
+             size_t count = 0;
+             return sonare_project_preview_midi_fx_count(project, clip, json.c_str(), &count);
+           }},
+      };
+
+  for (const auto& [name, set] : setters) {
+    INFO(name);
+    for (const auto& item : route["accepted"].as_array()) {
+      INFO(item["id"].as_string());
+      CHECK(set(sonare::util::json::dump(item["config"])) == SONARE_OK);
+    }
+    for (const auto& item : route["refused"].as_array()) {
+      INFO(item["id"].as_string());
+      REQUIRE(item["code"].as_string() == "InvalidParameter");
+      CHECK(set(sonare::util::json::dump(item["config"])) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK_THAT(last_error_message(),
+                 Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+    }
+  }
+
+  sonare_project_destroy(project);
+  sonare_engine_destroy(engine);
+}
+#endif  // defined(SONARE_WITH_ARRANGEMENT)

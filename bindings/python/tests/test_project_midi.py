@@ -640,16 +640,16 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
     [
         (
             {"transpose_semitones": 12},
-            "transpose_semitones is an earlier spelling; write transposeSemitones",
+            "unknown key config.transpose_semitones (renamed to config.transposeSemitones)",
         ),
-        ({"transposeSemitone": 12}, "unknown key transposeSemitone"),
+        ({"transposeSemitone": 12}, "unknown key config.transposeSemitone"),
         ({"velocityScale": float("nan")}, None),
-        ({"velocityGamma": 0.0}, "velocityGamma must be > 0"),
+        ({"velocityGamma": 0.0}, "config.velocityGamma must be > 0"),
         (
             {"quantizePpq": 240, "quantizeStrength": 2.0},
-            "quantizeStrength must be in [0, 1]",
+            "config.quantizeStrength must be in [0, 1]",
         ),
-        ({"humanizeVelocity": 200}, "humanizeVelocity must be an integer in [0, 127]"),
+        ({"humanizeVelocity": 200}, "config.humanizeVelocity must be an integer in [0, 127]"),
     ],
     ids=[
         "earlier_spelling",
@@ -660,10 +660,10 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
         "humanize_velocity",
     ],
 )
-def test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key(
+def test_a_midi_fx_config_refusal_is_an_argument_refusal_naming_the_key(
     config: dict[str, object], message: str | None
 ) -> None:
-    """The MIDI-FX config names its keys in camelCase; a refusal names the key it read.
+    """The MIDI-FX config is a call's argument; a refusal names the key it read under ``config``.
 
     A value out of its domain is refused naming the key. A non-finite value fails the
     JSON parse, so only its code is pinned.
@@ -672,11 +672,11 @@ def test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key(
     try:
         clip = project.add_midi_clip(0.0, 4.0).clip_id
         with raises_coded(
-            ErrorCode.INVALID_FORMAT, match=None if message is None else re.escape(message)
+            ErrorCode.INVALID_PARAMETER, match=None if message is None else re.escape(message)
         ):
             project.preview_midi_fx_count(clip, config)
         with raises_coded(
-            ErrorCode.INVALID_FORMAT, match=None if message is None else re.escape(message)
+            ErrorCode.INVALID_PARAMETER, match=None if message is None else re.escape(message)
         ):
             project.bake_midi_fx(clip, config)
     finally:

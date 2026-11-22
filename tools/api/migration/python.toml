@@ -7084,7 +7084,7 @@ test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation
 [[entry]]
 kind = "method"
 old = "Project.set_part_rig"
-changed = "mode takes a PartRigMode token; an ordinal is TypeError"
+changed = "mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig')"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_part_rig.py::test_invalid_input_is_refused"
@@ -9587,7 +9587,7 @@ to = "Project.bake_midi_fx(config)"
 changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
 domain = "project"
 rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_an_argument_refusal_naming_the_key"
 
 [[entry]]
 kind = "option"
@@ -9596,7 +9596,7 @@ to = "Project.preview_midi_fx_count(config)"
 changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
 domain = "project"
 rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_an_argument_refusal_naming_the_key"
 
 [[entry]]
 kind = "option"
@@ -10244,7 +10244,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_noise_band_bin
 [[entry]]
 kind = "method"
 old = "Project.bake_midi_fx"
-changed = "with with_source_index returns an int32 ndarray instead of list[int]"
+changed = "with with_source_index returns an int32 ndarray instead of list[int]; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0')"
 domain = "project"
 rule = "array-results"
 test = "bindings/python/tests/test_project_midi.py::test_bake_midi_fx_reports_source_index"
@@ -13681,3 +13681,27 @@ changed = "the threshold is read on a new scale, the mean accent between the bea
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_binding_consistency.py::test_estimate_meter_keyword_defaults_match_the_core"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_part_rig"
+changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig')"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_part_rig_inserts_refused_as_an_argument"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_midi_fx"
+changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0')"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_midi_fx_config_refused_as_an_argument"
+
+[[entry]]
+kind = "method"
+old = "Project.preview_midi_fx_count"
+changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0')"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_midi_fx_config_refused_as_an_argument"

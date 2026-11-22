@@ -636,14 +636,11 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   SONARE_C_TRY
   sonare::midi::PartRig rig;
   rig.mode = admitted_ordinal_to_enum<sonare::midi::PartRigMode>(mode);
-  if (inserts_json != nullptr) {
-    const SonareError parsed = parse_part_rig_inserts(inserts_json, &rig.stages);
-    if (parsed != SONARE_OK) return parsed;
-  }
+  if (inserts_json != nullptr) rig.stages = read_part_rig_inserts(inserts_json);
   // The part was admitted above, so what is left to refuse is the content of inserts_json.
-  if (!sonare::midi::validate_part_rig(part, rig)) return refuse_part_rig_stage_count();
+  if (!sonare::midi::validate_part_rig(part, rig)) refuse_part_rig_stage_count();
 #if defined(SONARE_WITH_MASTERING)
-  if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
+  validate_part_rig_chain(rig.stages);
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
     return refuse_value_not_compiled_in(Feature::kMastering, "mode");
@@ -752,8 +749,7 @@ SonareError sonare_engine_set_midi_fx(SonareEngine* engine, uint32_t destination
 #else
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
-  const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
-  if (parse_err != SONARE_OK) return parse_err;
+  midi_fx_chain_from_json(config_json, &chain);
   return engine->engine.set_midi_fx(destination_id, chain) ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #endif

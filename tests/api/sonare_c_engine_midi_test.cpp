@@ -896,15 +896,15 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") == SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantizePpq\":0}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantizePpq\":1e300}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":1e100}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chordIntervals\":[0,7.5]}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   // The three velocity-curve fields are narrowed to float from a full JSON
   // double, so a value outside float range is refused rather than cast first
   // and inspected as +inf afterwards.
@@ -912,8 +912,10 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
     const std::string too_large = std::string("{\"") + key + "\":1e39}";
     const std::string too_small = std::string("{\"") + key + "\":-1e39}";
     INFO(key);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) == SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
   REQUIRE(sonare_engine_set_midi_fx(
               engine, 5, "{\"velocityScale\":1.5,\"velocityOffset\":-4,\"velocityGamma\":0.8}") ==
@@ -923,16 +925,16 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
   // An earlier snake_case key is refused naming the key to write, an unknown
   // key by its own name, and an annotation key passes.
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "transpose_semitones is an earlier spelling; write transposeSemitones");
+        "unknown key config.transpose_semitones (renamed to config.transposeSemitones)");
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"arpeggiator_gate_ppq\":0.5}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "arpeggiator_gate_ppq is an earlier spelling; write arpeggiatorGatePpq");
+        "unknown key config.arpeggiator_gate_ppq (renamed to config.arpeggiatorGatePpq)");
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitone\":12}") ==
-          SONARE_ERROR_INVALID_FORMAT);
-  CHECK(std::string(sonare_last_error_message()) == "unknown key transposeSemitone");
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "unknown key config.transposeSemitone");
   REQUIRE(sonare_engine_set_midi_fx(engine, 5,
                                     "{\"$comment\":\"up\",\"x-ui\":1,\"transposeSemitones\":12}") ==
           SONARE_OK);
@@ -940,38 +942,39 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
 
   // A present key holding the wrong kind is refused by name, never read as absent.
   const std::pair<const char*, const char*> wrong_kinds[] = {
-      {"{\"transposeSemitones\":\"3\"}", "transposeSemitones must be a number"},
-      {"{\"velocityScale\":true}", "velocityScale must be a number"},
-      {"{\"seed\":null}", "seed must be a number"},
-      {"{\"humanizePpq\":0.1,\"humanizeVelocity\":false}", "humanizeVelocity must be a number"},
-      {"{\"quantizePpq\":1,\"quantizeStrength\":null}", "quantizeStrength must be a number"},
-      {"{\"chordIntervals\":null}", "chordIntervals must be an array"},
-      {"{\"arpeggiatorIntervals\":\"0,7\"}", "arpeggiatorIntervals must be an array"},
+      {"{\"transposeSemitones\":\"3\"}", "config.transposeSemitones must be a number"},
+      {"{\"velocityScale\":true}", "config.velocityScale must be a number"},
+      {"{\"seed\":null}", "config.seed must be a number"},
+      {"{\"humanizePpq\":0.1,\"humanizeVelocity\":false}",
+       "config.humanizeVelocity must be a number"},
+      {"{\"quantizePpq\":1,\"quantizeStrength\":null}", "config.quantizeStrength must be a number"},
+      {"{\"chordIntervals\":null}", "config.chordIntervals must be an array"},
+      {"{\"arpeggiatorIntervals\":\"0,7\"}", "config.arpeggiatorIntervals must be an array"},
   };
   for (const auto& [config, message] : wrong_kinds) {
     INFO(config);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) == message);
   }
 
   // Every other refusal names the key, or the list element, it is about.
   const std::pair<const char*, const char*> out_of_domain[] = {
-      {"{\"chordIntervals\":[0,\"x\"]}", "chordIntervals[1] must be a whole number"},
-      {"{\"chordIntervals\":[]}", "chordIntervals must hold 1 to "},
+      {"{\"chordIntervals\":[0,\"x\"]}", "config.chordIntervals[1] must be a whole number"},
+      {"{\"chordIntervals\":[]}", "config.chordIntervals must hold 1 to "},
       {"{\"arpeggiatorIntervals\":[0,7.5],\"arpeggiatorStepPpq\":1}",
-       "arpeggiatorIntervals[1] must be a whole number"},
-      {"{\"arpeggiatorIntervals\":[0]}", "arpeggiatorStepPpq must be a positive PPQ length"},
-      {"{\"quantizePpq\":0}", "quantizePpq must be a positive PPQ length"},
-      {"{\"quantizePpq\":1,\"quantizeStrength\":2}", "quantizeStrength must be in [0, 1]"},
-      {"{\"velocityGamma\":0}", "velocityGamma must be > 0"},
-      {"{\"transposeSemitones\":1.5}", "transposeSemitones must be a whole number"},
-      {"{\"humanizeVelocity\":200}", "humanizeVelocity must be an integer in [0, 127]"},
-      {"{\"seed\":-1}", "seed must be a non-negative whole number"},
-      {"[]", "the document must be an object"},
+       "config.arpeggiatorIntervals[1] must be a whole number"},
+      {"{\"arpeggiatorIntervals\":[0]}", "config.arpeggiatorStepPpq must be a positive PPQ length"},
+      {"{\"quantizePpq\":0}", "config.quantizePpq must be a positive PPQ length"},
+      {"{\"quantizePpq\":1,\"quantizeStrength\":2}", "config.quantizeStrength must be in [0, 1]"},
+      {"{\"velocityGamma\":0}", "config.velocityGamma must be > 0"},
+      {"{\"transposeSemitones\":1.5}", "config.transposeSemitones must be a whole number"},
+      {"{\"humanizeVelocity\":200}", "config.humanizeVelocity must be an integer in [0, 127]"},
+      {"{\"seed\":-1}", "config.seed must be a non-negative whole number"},
+      {"[]", "config must be an object"},
   };
   for (const auto& [config, prefix] : out_of_domain) {
     INFO(config);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()).rfind(prefix, 0) == 0);
   }
 #else
@@ -994,7 +997,8 @@ TEST_CASE("config_json exceeding the JSON byte budget is refused, not parsed",
   // this size into json::Value nodes first.
   const std::string oversized =
       "{\"x-pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, oversized.c_str()) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, oversized.c_str()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   // The same destination still accepts an ordinary config, so the refusal
   // above is the size and not some other change to midi_fx_chain_from_json.

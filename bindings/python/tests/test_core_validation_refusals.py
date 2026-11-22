@@ -489,3 +489,96 @@ def test_mix_scene_document_refuses(case: dict, loader: str) -> None:
 
 
 _CODE_NAMES = {"InvalidFormat": "INVALID_FORMAT"}
+
+
+_RIG = _CORPUS["part_rig_inserts"]
+_FX = _CORPUS["midi_fx_config"]
+_ARGUMENT_CAUSES = ("argument", "shape")
+
+
+def _project_part_rig(inserts: list) -> None:
+    with libsonare.Project() as project:
+        project.set_part_rig(1, 0, mode="chain", inserts=inserts)
+
+
+def _engine_part_rig(inserts: list) -> None:
+    with libsonare.RealtimeEngine(sample_rate=48000) as engine:
+        engine.set_part_rig(1, 0, mode="chain", inserts=inserts)
+
+
+_RIG_SETTERS: dict[str, Callable[[list], object]] = {
+    "project_set_part_rig": _project_part_rig,
+    "engine_set_part_rig": _engine_part_rig,
+}
+
+
+def test_part_rig_setters_cover_the_corpus_row() -> None:
+    assert sorted(_RIG["setters"]) == sorted(_RIG_SETTERS)
+
+
+@pytest.mark.parametrize("case", _RIG["accepted"], ids=lambda case: case["id"])
+def test_part_rig_inserts_accepted(case: dict) -> None:
+    for name in _RIG["accepting_setters"]:
+        _RIG_SETTERS[name](case["inserts"])
+
+
+@pytest.mark.parametrize("setter", sorted(_RIG_SETTERS))
+@pytest.mark.parametrize("case", _RIG["refused"], ids=lambda case: case["id"])
+def test_part_rig_inserts_refused_as_an_argument(case: dict, setter: str) -> None:
+    assert case["cause"] in _ARGUMENT_CAUSES
+    with pytest.raises(SonareValueError, match=re.escape(case["message"])) as caught:
+        _RIG_SETTERS[setter](case["inserts"])
+    assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+
+
+@pytest.mark.parametrize("case", _RIG["project_document"], ids=lambda case: case["id"])
+def test_part_rig_inserts_refused_as_a_document_inside_a_project(case: dict) -> None:
+    with libsonare.Project() as project:
+        document = json.loads(project.to_json())
+    document["partRigs"] = [
+        {"destinationId": 1, "part": 0, "mode": "chain", "inserts": case["inserts"]}
+    ]
+    with pytest.raises(libsonare.SonareError, match=re.escape(case["message"])) as caught:
+        libsonare.Project.from_json(json.dumps(document))
+    assert caught.value.code == libsonare.ErrorCode[_CODE_NAMES[case["code"]]]
+    assert not isinstance(caught.value, SonareValueError)
+
+
+def _engine_midi_fx(config: dict) -> None:
+    with libsonare.RealtimeEngine(sample_rate=48000) as engine:
+        engine.set_midi_fx(5, config)
+
+
+def _project_midi_fx(call: str) -> Callable[[dict], object]:
+    def run(config: dict) -> None:
+        with libsonare.Project() as project:
+            clip = project.add_midi_clip(0.0, 4.0).clip_id
+            getattr(project, call)(clip, config)
+
+    return run
+
+
+_FX_SETTERS: dict[str, Callable[[dict], object]] = {
+    "engine_set_midi_fx": _engine_midi_fx,
+    "project_bake_midi_fx": _project_midi_fx("bake_midi_fx"),
+    "project_preview_midi_fx_count": _project_midi_fx("preview_midi_fx_count"),
+}
+
+
+def test_midi_fx_setters_cover_the_corpus_row() -> None:
+    assert sorted(_FX["setters"]) == sorted(_FX_SETTERS)
+
+
+@pytest.mark.parametrize("setter", sorted(_FX_SETTERS))
+@pytest.mark.parametrize("case", _FX["accepted"], ids=lambda case: case["id"])
+def test_midi_fx_config_accepted(case: dict, setter: str) -> None:
+    _FX_SETTERS[setter](case["config"])
+
+
+@pytest.mark.parametrize("setter", sorted(_FX_SETTERS))
+@pytest.mark.parametrize("case", _FX["refused"], ids=lambda case: case["id"])
+def test_midi_fx_config_refused_as_an_argument(case: dict, setter: str) -> None:
+    assert case["cause"] in _ARGUMENT_CAUSES
+    with pytest.raises(SonareValueError, match=re.escape(case["message"])) as caught:
+        _FX_SETTERS[setter](case["config"])
+    assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER

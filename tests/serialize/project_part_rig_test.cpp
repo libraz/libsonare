@@ -133,7 +133,6 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
   ProjectHandle h;
   const std::string before = serialize(h.p);
   const SonareError bad = SONARE_ERROR_INVALID_PARAMETER;
-  const SonareError bad_format = SONARE_ERROR_INVALID_FORMAT;
 
   CHECK(sonare_project_set_part_rig(nullptr, 1, 0, SONARE_PART_RIG_NONE, nullptr) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 16, SONARE_PART_RIG_NONE, nullptr) == bad);
@@ -144,19 +143,17 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_NONE, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_BANK, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nullptr) == bad);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[]") == bad_format);
-  // Malformed documents.
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "not json") == bad_format);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "{}") == bad_format);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"params":{}}])") ==
-        bad_format);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[]") == bad);
+  // Malformed inserts.
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "not json") == bad);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "{}") == bad);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"params":{}}])") == bad);
   CHECK(sonare_project_set_part_rig(
             h.p, 1, 0, SONARE_PART_RIG_CHAIN,
-            R"([{"processor":"saturation.softClipper","params":"{\"drive\":0.5}"}])") ==
-        bad_format);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[1]") == bad_format);
+            R"([{"processor":"saturation.softClipper","params":"{\"drive\":0.5}"}])") == bad);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[1]") == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"processor":""}])") ==
-        bad_format);
+        bad);
 
   // More stages than a chain may hold.
   std::string nine = "[";
@@ -165,15 +162,14 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
     nine += R"({"processor":"saturation.softClipper","params":{}})";
   }
   nine += "]";
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nine.c_str()) == bad_format);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nine.c_str()) == bad);
 
 #if defined(SONARE_WITH_MASTERING)
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
-                                    R"([{"processor":"no.such.processor","params":{}}])") ==
-        bad_format);
+                                    R"([{"processor":"no.such.processor","params":{}}])") == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
                                     R"([{"processor":"saturation.softClipper","params":"{"}])") ==
-        bad_format);
+        bad);
 #endif
 
   CHECK(serialize(h.p) == before);

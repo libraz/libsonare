@@ -865,6 +865,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_midi_route_events(out_overflow_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_playback_renderer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_set_midi_fx` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
+| `sonare_engine_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
+
 #### Each operation has exactly one entry point
 
 | 1.x | 2.0.0 |
@@ -961,7 +968,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_auto_tempo_with_options` | removed: call sonare_project_auto_tempo, which takes the options |
 | `sonare_project_auto_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour |
 | `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
-| `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted |
+| `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels |
 | `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
 | `sonare_project_edit_automation_lane` | takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor |
@@ -1024,6 +1031,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareVocalRenderResult.sample_count` | the length is a size_t instead of an int64_t |
 | `sonare_project_rehydrate_vocal_edits(original_count)` | the count is a size_t instead of a uint64_t |
 | `sonare_project_set_sample_rate(sample_rate)` | the sample rate is an int instead of a double |
+
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_project_preview_midi_fx_count` | refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
+| `sonare_project_set_part_rig` | refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT |
 
 #### Each operation has exactly one entry point
 
@@ -3060,6 +3074,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Mixer.read_goniometer_latest(max_points)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
 | `Mixer.strip_by_id` | an unknown id raises SonareValueError instead of KeyError |
 | `Mixer` | a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone |
+| `RealtimeEngine.set_midi_fx` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
+| `RealtimeEngine.set_part_rig` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig') |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -3393,7 +3409,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.set_clip_loop(loop_mode)` | 'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused |
 | `Project.set_clip_warp_mode(mode)` | takes a ProjectWarpMode token ('off', 'repitch', 'tempoSync', 'timeStretch'); 'tempo-sync' and 'time-stretch' raise SonareValueError and a number is TypeError |
 | `Project.set_overlap_policy(policy)` | takes "disallow" or "allow"; an integer raises TypeError |
-| `Project.set_part_rig` | mode takes a PartRigMode token; an ordinal is TypeError |
+| `Project.set_part_rig` | mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig') |
 | `Project.set_track_kind(kind)` | takes a ProjectTrackKind token ('audio', 'midi', 'aux'); a number is TypeError |
 | `ProjectClip.loop_mode` | a ProjectLoopMode token ('off', 'loop') instead of an ordinal |
 | `ProjectClip.source_kind` | a ProjectSourceKind token ('audio', 'midi') instead of an ordinal |
@@ -3454,7 +3470,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.bake_midi_fx` | with with_source_index returns an int32 ndarray instead of list[int] |
+| `Project.bake_midi_fx` | with with_source_index returns an int32 ndarray instead of list[int]; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `Project.unresolved_audio_source_ids` | returns a uint32 ndarray instead of list[int] |
 
 #### Python keyword arguments and attributes are snake_case only
@@ -3474,6 +3490,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.preview_midi_fx_count` | raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for a config the library refuses, naming the key under config ('config.velocityGamma must be > 0') |
 | `Project.set_max_history_bytes(bytes)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a non-integer number or one outside [0, SIZE_MAX] stays SonareValueError |
 | `Project.set_mixer_scene_json` | returns None; an unknown scene key raises SonareError (INVALID_FORMAT) naming its path instead of being returned as a warning |
 

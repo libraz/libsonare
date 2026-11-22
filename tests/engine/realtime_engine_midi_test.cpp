@@ -3293,18 +3293,18 @@ TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][m
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_NONE, kChain) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  // Malformed JSON and a wrong shape are a format error with a message.
+  // Malformed JSON and a wrong shape are an argument error with a message.
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "[{") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()) != "");
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "{}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   // Valid shape, unknown processor, an empty chain, and an unbound destination.
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN,
                                      R"([{"processor":"no.such.insert"}])") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "[]") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_part_rig(engine, 99, 0, SONARE_PART_RIG_NONE, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   sonare_engine_destroy(engine);

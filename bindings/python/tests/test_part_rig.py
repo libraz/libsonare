@@ -18,7 +18,7 @@ from libsonare import (
     SonareValueError,
 )
 
-from ._helpers import LIB_AVAILABLE, raises_coded
+from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
@@ -71,7 +71,7 @@ def test_chain_round_trip():
 
 def test_params_json_string_is_refused():
     with _project() as project:
-        with raises_coded(int(ErrorCode.INVALID_FORMAT), match="params"):
+        with pytest.raises(SonareValueError, match=r"inserts\[0\]\.params must be an object"):
             project.set_part_rig(
                 DESTINATION,
                 1,
@@ -109,20 +109,18 @@ def test_invalid_input_is_refused():
             project.set_part_rig(DESTINATION, 16, mode="none")
         assert bad_part.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareError) as empty_chain:
+        with pytest.raises(SonareValueError, match="inserts must hold 1 to 8 entries") as empty:
             project.set_part_rig(DESTINATION, 0, mode="chain", inserts=[])
-        assert not isinstance(empty_chain.value, SonareValueError)
-        assert empty_chain.value.code == int(ErrorCode.INVALID_FORMAT)
+        assert empty.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareError) as bad_json:
+        with pytest.raises(SonareValueError, match=r"inserts\[0\]\.params") as bad_params:
             project.set_part_rig(
                 DESTINATION,
                 0,
                 mode="chain",
                 inserts=[{"processor": "saturation.softClipper", "params": "{not json"}],
             )
-        assert not isinstance(bad_json.value, SonareValueError)
-        assert bad_json.value.code == int(ErrorCode.INVALID_FORMAT)
+        assert bad_params.value.code == int(ErrorCode.INVALID_PARAMETER)
         assert project.part_rig(DESTINATION, 0) is None
 
 

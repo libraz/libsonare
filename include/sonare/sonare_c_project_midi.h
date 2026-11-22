@@ -504,9 +504,9 @@ SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id,
 /// This is an offline/control-plane destructive bake over the clip's event list,
 /// not a live RT insert chain. Clips larger than the realtime MIDI-FX buffer are
 /// drained in bounded chunks; either every transformed event is committed in
-/// canonical timestamp order or the original clip remains unchanged. Malformed JSON returns
-/// SONARE_ERROR_INVALID_FORMAT; invalid values return
-/// SONARE_ERROR_INVALID_PARAMETER.
+/// canonical timestamp order or the original clip remains unchanged. @p config_json is a
+/// per-call argument, so malformed JSON, an unknown key and an invalid value all return
+/// SONARE_ERROR_INVALID_PARAMETER, refused under the root @c config.
 /// @brief Bakes the MIDI-FX chain into the clip, optionally reporting per-event
 ///        provenance so a host can carry a selection or an editorial annotation
 ///        across the bake.

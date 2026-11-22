@@ -1247,9 +1247,9 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(saw_g5);
 
   REQUIRE(sonare_project_bake_midi_fx(project, clip, "{\"quantizePpq\":0}", nullptr, 0, nullptr) ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", nullptr, 0, nullptr) ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);
@@ -1363,11 +1363,11 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
   SECTION("invalid input is rejected before anything is written") {
     size_t written = 12345;
     REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json", nullptr, 0, &written) ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(written == 12345);
     size_t count = 999;
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{bad json", &count) ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(count == 999);
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{}", nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -1562,10 +1562,10 @@ TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]"
   // An empty interval list and a non-positive step are rejected by the parser.
   REQUIRE(sonare_project_bake_midi_fx(project, clip,
                                       "{\"arpeggiatorIntervals\":[],\"arpeggiatorStepPpq\":0.25}",
-                                      nullptr, 0, nullptr) == SONARE_ERROR_INVALID_FORMAT);
+                                      nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_bake_midi_fx(project, clip,
                                       "{\"arpeggiatorIntervals\":[0],\"arpeggiatorStepPpq\":0}",
-                                      nullptr, 0, nullptr) == SONARE_ERROR_INVALID_FORMAT);
+                                      nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);

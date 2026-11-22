@@ -171,6 +171,40 @@
     "accepted": [{ "id": "empty_overrides", "overrides": {}, "returns": "input" }],
     "refused": [{ "id": "neither_preset_nor_overrides", "cause": "missing_argument", "message": "give preset or overrides" }]
   },
+  "part_rig_inserts": {
+    "setters": ["project_set_part_rig", "engine_set_part_rig"],
+    "accepting_setters": ["project_set_part_rig"],
+    "accepted": [
+      { "id": "one_insert", "inserts": [{"processor": "saturation.softClipper", "params": {}}] },
+      { "id": "eight_inserts", "inserts": [{"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}] }
+    ],
+    "refused": [
+      { "id": "empty", "inserts": [], "cause": "argument", "code": "InvalidParameter", "message": "inserts must hold 1 to 8 entries for a chain rig" },
+      { "id": "nine_inserts", "inserts": [{"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}, {"processor": "saturation.softClipper", "params": {}}], "cause": "argument", "code": "InvalidParameter", "message": "inserts must hold 1 to 8 entries for a chain rig" },
+      { "id": "empty_processor", "inserts": [{"processor": ""}], "cause": "argument", "code": "InvalidParameter", "message": "inserts[0].processor must not be empty" },
+      { "id": "unknown_processor", "inserts": [{"processor": "no.such.processor", "params": {}}], "cause": "argument", "code": "InvalidParameter", "message": "inserts[0].processor must name a processor that can be built" },
+      { "id": "params_not_object", "inserts": [{"processor": "saturation.softClipper", "params": "{}"}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[0].params must be an object" },
+      { "id": "param_wrong_kind", "inserts": [{"processor": "saturation.softClipper", "params": {}}, {"processor": "utility.gain", "params": {"gainDb": "x"}}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[1].params.gainDb must be a number or a boolean" }
+    ],
+    "project_document": [
+      { "id": "processor_not_string", "inserts": [{"processor": 5}], "cause": "format", "code": "InvalidFormat", "message": "partRigs[0].inserts[0].processor must be a string" }
+    ]
+  },
+  "midi_fx_config": {
+    "setters": ["engine_set_midi_fx", "project_bake_midi_fx", "project_preview_midi_fx_count"],
+    "accepted": [
+      { "id": "transpose", "config": {"transposeSemitones": 12} },
+      { "id": "annotations", "config": {"$comment": "up", "x-ui": 1, "transposeSemitones": 12} }
+    ],
+    "refused": [
+      { "id": "renamed_key", "config": {"transpose_semitones": 12}, "cause": "shape", "code": "InvalidParameter", "message": "unknown key config.transpose_semitones (renamed to config.transposeSemitones)" },
+      { "id": "unknown_key", "config": {"transposeSemitone": 12}, "cause": "shape", "code": "InvalidParameter", "message": "unknown key config.transposeSemitone" },
+      { "id": "wrong_kind", "config": {"velocityScale": true}, "cause": "shape", "code": "InvalidParameter", "message": "config.velocityScale must be a number" },
+      { "id": "out_of_domain", "config": {"velocityGamma": 0}, "cause": "argument", "code": "InvalidParameter", "message": "config.velocityGamma must be > 0" },
+      { "id": "list_element", "config": {"chordIntervals": [0, 7.5]}, "cause": "argument", "code": "InvalidParameter", "message": "config.chordIntervals[1] must be a whole number" },
+      { "id": "non_positive_length", "config": {"quantizePpq": 0}, "cause": "argument", "code": "InvalidParameter", "message": "config.quantizePpq must be a positive PPQ length" }
+    ]
+  },
   "mix_scene_document": {
     "loaders": ["mixer_from_json", "mixer_scene_option", "project_set_mixer_scene"],
     "loaders_by_surface": { "python": ["mixer_from_json", "project_set_mixer_scene"] },

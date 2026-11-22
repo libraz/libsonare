@@ -4526,7 +4526,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_bake_midi_fx"
-changed = "takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted"
+changed = "takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)')"
 domain = "project"
 rule = "options-struct"
 test = "tests/bindings/binding_project_midi_test.cpp::project C surface MIDI-FX bake reports per-event provenance"
@@ -5034,3 +5034,35 @@ changed = "the threshold is read on a new scale, the mean accent between the bea
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the core defaults"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_set_part_rig"
+changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/conformance/core_validation_refusals_test.cpp::part-rig inserts are a call's argument on both setters and a document inside a project"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_part_rig"
+changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/conformance/core_validation_refusals_test.cpp::part-rig inserts are a call's argument on both setters and a document inside a project"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_set_midi_fx"
+changed = "refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)')"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is a call's argument on every entry that takes one"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_preview_midi_fx_count"
+changed = "refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)')"
+domain = "project"
+rule = "error-class-by-cause"
+test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is a call's argument on every entry that takes one"
