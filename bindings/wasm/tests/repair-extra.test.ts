@@ -14,6 +14,7 @@ import {
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
 } from '../src/index';
+import { expectRefusalOf } from './_helpers';
 
 const SR = 22050;
 
@@ -80,7 +81,12 @@ describe('masteringRepairDecrackle (WASM)', () => {
 
   it('rejects unknown mode', () => {
     const samples = sine(440, 0.3);
-    expect(() => masteringRepairDecrackle(samples, SR, { mode: 'not-a-mode' as never })).toThrow();
+    expect(
+      expectRefusalOf(
+        () => masteringRepairDecrackle(samples, SR, { mode: 'not-a-mode' as never }),
+        RangeError,
+      ).message,
+    ).toBe('masteringRepairDecrackle: unknown decrackle mode: not-a-mode');
   });
 });
 
@@ -151,7 +157,12 @@ describe('masteringRepairDereverbClassical (WASM)', () => {
   });
 
   it('rejects non-power-of-two nFft', () => {
-    expect(() => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 })).toThrow();
+    expect(
+      expectRefusalOf(
+        () => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 }),
+        RangeError,
+      ).message,
+    ).toBe('masteringRepairDereverbClassical: nFft must be a power of two in [2, 524288]');
   });
 });
 
@@ -246,14 +257,22 @@ describe('masteringRepairDereverbConfigForRoom (WASM)', () => {
   });
 
   it('rejects a missing estimate', () => {
-    expect(() =>
-      // @ts-expect-error deliberately passing the null the C ABI rejects
-      masteringRepairDereverbConfigForRoom(null),
-    ).toThrow();
-    expect(() =>
-      // @ts-expect-error deliberately passing no estimate at all
-      masteringRepairDereverbConfigForRoom(undefined),
-    ).toThrow();
+    expect(
+      expectRefusalOf(
+        () =>
+          // @ts-expect-error deliberately passing the null the C ABI rejects
+          masteringRepairDereverbConfigForRoom(null),
+        TypeError,
+      ).message,
+    ).toBe('masteringRepairDereverbConfigForRoom: request must be an object');
+    expect(
+      expectRefusalOf(
+        () =>
+          // @ts-expect-error deliberately passing no estimate at all
+          masteringRepairDereverbConfigForRoom(undefined),
+        TypeError,
+      ).message,
+    ).toBe('masteringRepairDereverbConfigForRoom: request must be an object');
   });
 
   it('resolves every omitted field to the library default', () => {
@@ -328,9 +347,17 @@ describe('masteringRepairTrimSilence (WASM)', () => {
 
   it('rejects unknown mode and negative padding', () => {
     const samples = withSilence();
-    expect(() =>
-      masteringRepairTrimSilence(samples, SR, { mode: 'not-a-mode' as never }),
-    ).toThrow();
-    expect(() => masteringRepairTrimSilence(samples, SR, { paddingSamples: -1 })).toThrow();
+    expect(
+      expectRefusalOf(
+        () => masteringRepairTrimSilence(samples, SR, { mode: 'not-a-mode' as never }),
+        RangeError,
+      ).message,
+    ).toBe('masteringRepairTrimSilence: unknown trim silence mode: not-a-mode');
+    expect(
+      expectRefusalOf(
+        () => masteringRepairTrimSilence(samples, SR, { paddingSamples: -1 }),
+        RangeError,
+      ).message,
+    ).toBe('masteringRepairTrimSilence: paddingSamples must be at least 0');
   });
 });

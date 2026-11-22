@@ -30,7 +30,7 @@ import {
   waveformPeaks,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-import { unknownKeyText } from './_helpers';
+import { expectRefusalOf, unknownKeyText } from './_helpers';
 
 const SR = 22050;
 
@@ -125,18 +125,33 @@ describe('empty-sample guards (WASM)', () => {
 
 describe('NaN/Inf guards (WASM)', () => {
   it('resample rejects invalid source/target sample rates before allocation', () => {
-    expect(() => resample(sine(), 0, SR)).toThrow();
-    expect(() => resample(sine(), SR, 2_000_000_000)).toThrow();
+    expect(expectRefusalOf(() => resample(sine(), 0, SR), RangeError).message).toBe(
+      'resample: src_sr must be within [8000, 384000]',
+    );
+    expect(expectRefusalOf(() => resample(sine(), SR, 2_000_000_000), RangeError).message).toBe(
+      'resample: target_sr must be within [8000, 384000]',
+    );
   });
   it('feature-core wrappers reject NaN and inconsistent matrix dimensions', () => {
-    expect(() =>
-      pcen({ values: { data: new Float32Array([1, Number.NaN, 3, 4]), rows: 2, cols: 2 } }),
-    ).toThrow(new RangeError('pcen: values.data contains a non-finite sample at index 1'));
-    expect(() =>
-      pcen({ values: { data: new Float32Array([1, 2, 3]), rows: 2, cols: 2 } }),
-    ).toThrow();
-    expect(() => tempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow();
-    expect(() => plp({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow();
+    expect(
+      expectRefusalOf(
+        () => pcen({ values: { data: new Float32Array([1, Number.NaN, 3, 4]), rows: 2, cols: 2 } }),
+        RangeError,
+      ).message,
+    ).toBe('pcen: values.data contains a non-finite sample at index 1');
+    expect(
+      expectRefusalOf(
+        () => pcen({ values: { data: new Float32Array([1, 2, 3]), rows: 2, cols: 2 } }),
+        RangeError,
+      ).message,
+    ).toBe('pcen: values.data length must equal rows * cols');
+    expect(
+      expectRefusalOf(() => tempogram({ onsetEnvelope: withNaN(), sampleRate: SR }), RangeError)
+        .message,
+    ).toBe('tempogram: onsetEnvelope contains a non-finite value at index 100');
+    expect(
+      expectRefusalOf(() => plp({ onsetEnvelope: withNaN(), sampleRate: SR }), RangeError).message,
+    ).toBe('plp: onsetEnvelope contains a non-finite value at index 100');
     // The cyclic and ratio tempogram wrappers previously skipped finiteness
     // validation and silently returned NaN-filled arrays (unlike the C ABI).
     expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(
@@ -148,7 +163,10 @@ describe('NaN/Inf guards (WASM)', () => {
   });
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
-    expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
+    expect(
+      expectRefusalOf(() => equalizer.match(sine(), withNaN(), { maxBands: 4 }), RangeError)
+        .message,
+    ).toBe('StreamingEqualizer.match: reference contains a non-finite sample at index 100');
     equalizer.destroy();
   });
   it('lufs rejects NaN with index', () => {
@@ -245,16 +263,24 @@ describe('native backstop closes gaps the JS guards missed (WASM)', () => {
   // diverged from the other surfaces. The shared native validation now rejects
   // them uniformly.
   it('pitchYin rejects an empty buffer', () => {
-    expect(() => pitchYin(new Float32Array(0), SR)).toThrow();
+    expect(expectRefusalOf(() => pitchYin(new Float32Array(0), SR), RangeError).message).toBe(
+      'pitchYin: samples must not be empty',
+    );
   });
   it('pitchYin rejects NaN', () => {
-    expect(() => pitchYin(withNaN(), SR)).toThrow();
+    expect(expectRefusalOf(() => pitchYin(withNaN(), SR), RangeError).message).toBe(
+      'pitchYin: samples contains a non-finite sample at index 100',
+    );
   });
   it('pitchYin rejects an out-of-range sample rate', () => {
-    expect(() => pitchYin(sine(), 100)).toThrow();
+    expect(expectRefusalOf(() => pitchYin(sine(), 100), RangeError).message).toBe(
+      'pitchYin: sampleRate must be an integer in [8000, 384000]',
+    );
   });
   it('meteringDcOffset rejects an out-of-range sample rate', () => {
-    expect(() => meteringDcOffset(sine(), 100)).toThrow();
+    expect(expectRefusalOf(() => meteringDcOffset(sine(), 100), RangeError).message).toBe(
+      'meteringDcOffset: sampleRate must be an integer in [8000, 384000]',
+    );
   });
 });
 
@@ -264,23 +290,40 @@ describe('detailed-analysis config geometry matches the C ABI (WASM)', () => {
   // flat C ABI does instead of letting the analyzer silently clamp.
   const audio = sine(SR);
   it('analyzeBpm rejects an inverted BPM range', () => {
-    expect(() => analyzeBpm(audio, SR, { bpmMin: 200, bpmMax: 100 })).toThrow();
+    expect(
+      expectRefusalOf(() => analyzeBpm(audio, SR, { bpmMin: 200, bpmMax: 100 }), RangeError)
+        .message,
+    ).toBe('analyzeBpm: bpmMax must be finite and greater than bpmMin');
   });
   it('analyzeBpm rejects a non-positive bpmMin', () => {
-    expect(() => analyzeBpm(audio, SR, { bpmMin: 0 })).toThrow();
+    expect(expectRefusalOf(() => analyzeBpm(audio, SR, { bpmMin: 0 }), RangeError).message).toBe(
+      'analyzeBpm: bpmMin must be finite and greater than 0',
+    );
   });
   it('analyzeRhythm rejects an inverted BPM range', () => {
-    expect(() => analyzeRhythm(audio, SR, { bpmMin: 200, bpmMax: 100 })).toThrow();
+    expect(
+      expectRefusalOf(() => analyzeRhythm(audio, SR, { bpmMin: 200, bpmMax: 100 }), RangeError)
+        .message,
+    ).toBe('analyzeRhythm: bpmMax must be finite and greater than bpmMin');
   });
   it('analyzeDynamics rejects a non-positive window', () => {
-    expect(() => analyzeDynamics(audio, SR, { windowSec: 0 })).toThrow();
+    expect(
+      expectRefusalOf(() => analyzeDynamics(audio, SR, { windowSec: 0 }), RangeError).message,
+    ).toBe('analyzeDynamics: windowSec must be finite and greater than 0');
   });
   it('analyzeDynamics rejects a negative compression threshold', () => {
-    expect(() => analyzeDynamics(audio, SR, { compressionThresholdDb: -1 })).toThrow();
+    expect(
+      expectRefusalOf(() => analyzeDynamics(audio, SR, { compressionThresholdDb: -1 }), RangeError)
+        .message,
+    ).toBe('analyzeDynamics: compressionThresholdDb must be finite and at least 0');
   });
   it('analyzeTimbre rejects non-positive nMels/nMfcc', () => {
-    expect(() => analyzeTimbre(audio, SR, { nMels: 0 })).toThrow();
-    expect(() => analyzeTimbre(audio, SR, { nMfcc: 0 })).toThrow();
+    expect(expectRefusalOf(() => analyzeTimbre(audio, SR, { nMels: 0 }), RangeError).message).toBe(
+      'analyzeTimbre: nMels must be an integer in [1, 2147483647]',
+    );
+    expect(expectRefusalOf(() => analyzeTimbre(audio, SR, { nMfcc: 0 }), RangeError).message).toBe(
+      'analyzeTimbre: nMfcc must be an integer in [1, 2147483647]',
+    );
   });
 });
 
@@ -305,6 +348,10 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
   interface NonFiniteField {
     entry: string;
     key: string;
+    /** Refusal for a NaN or infinite value. */
+    nonFinite: string;
+    /** Refusal for a finite value that saturates onto an infinity. */
+    saturated: string;
     run: (value: number) => unknown;
   }
 
@@ -312,40 +359,57 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     {
       entry: 'analyzeMelody',
       key: 'fmin',
+      nonFinite: 'analyzeMelody: f0MinHz must be finite and greater than 0',
+      saturated: 'analyzeMelody: f0MinHz must be finite and in [-3.4028235e38, 3.4028235e38]',
       run: (v) => m().analyzeMelody(tone, SR, v, 2093, 2048, 256, 0.1, false, true),
     },
     {
       entry: 'cqt',
       key: 'fmin',
+      nonFinite: 'cqt: fminHz must be finite and in [-3.4028235e38, 3.4028235e38]',
+      saturated: 'cqt: fminHz must be finite and in [-3.4028235e38, 3.4028235e38]',
       run: (v) => m().cqt(cqtTone, SR, 512, v, 12, 12, undefined),
     },
     {
       entry: 'vqt',
       key: 'fmin',
+      nonFinite: 'vqt: fminHz must be finite and in [-3.4028235e38, 3.4028235e38]',
+      saturated: 'vqt: fminHz must be finite and in [-3.4028235e38, 3.4028235e38]',
       run: (v) => m().vqt(cqtTone, SR, 512, v, 12, 12, undefined, 0),
     },
   ];
 
   const cases = fields.flatMap((field) => nonFinite.map((value) => ({ ...field, value })));
 
-  it.each(cases)('$entry refuses $key = $value', ({ run, value }) => {
-    expect(() => run(value)).toThrow();
+  it.each(cases)('$entry refuses $key = $value', ({ run, value, nonFinite }) => {
+    expect(expectRefusalOf(() => run(value), RangeError).message).toBe(nonFinite);
   });
 
-  it.each(fields)('$entry refuses a $key that saturates onto an infinity', ({ run }) => {
-    expect(() => run(SATURATES_ONTO_AN_INFINITY)).toThrow();
+  it.each(fields)('$entry refuses a $key that saturates onto an infinity', ({ run, saturated }) => {
+    expect(expectRefusalOf(() => run(SATURATES_ONTO_AN_INFINITY), RangeError).message).toBe(
+      saturated,
+    );
   });
 
   it('vqt refuses an infinite gamma', () => {
-    expect(() =>
-      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.POSITIVE_INFINITY),
-    ).toThrow();
-    expect(() =>
-      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.NEGATIVE_INFINITY),
-    ).toThrow();
-    expect(() =>
-      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, SATURATES_ONTO_AN_INFINITY),
-    ).toThrow();
+    expect(
+      expectRefusalOf(
+        () => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.POSITIVE_INFINITY),
+        RangeError,
+      ).message,
+    ).toBe('vqt: gamma must be finite and at least 0');
+    expect(
+      expectRefusalOf(
+        () => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.NEGATIVE_INFINITY),
+        RangeError,
+      ).message,
+    ).toBe('vqt: gamma must be finite and at least 0');
+    expect(
+      expectRefusalOf(
+        () => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, SATURATES_ONTO_AN_INFINITY),
+        RangeError,
+      ).message,
+    ).toBe('vqt: gamma must be finite and in [-3.4028235e38, 3.4028235e38]');
   });
 
   it('vqt reads an omitted gamma as the automatic bandwidth and refuses a written NaN', () => {
@@ -361,9 +425,20 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
   });
 
   it('refuses an inverted but finite ordering pair', () => {
-    expect(() => m().analyzeBpm(tone, SR, 200, 100, 120, 2048, 512, 5)).toThrow();
-    expect(() => m().analyzeRhythm(tone, SR, 200, 100, 120, 2048, 512)).toThrow();
-    expect(() => m().analyzeMelody(tone, SR, 400, 200, 2048, 256, 0.1, false, true)).toThrow();
+    expect(
+      expectRefusalOf(() => m().analyzeBpm(tone, SR, 200, 100, 120, 2048, 512, 5), RangeError)
+        .message,
+    ).toBe('analyzeBpm: bpmMax must be finite and greater than bpmMin');
+    expect(
+      expectRefusalOf(() => m().analyzeRhythm(tone, SR, 200, 100, 120, 2048, 512), RangeError)
+        .message,
+    ).toBe('analyzeRhythm: bpmMax must be finite and greater than bpmMin');
+    expect(
+      expectRefusalOf(
+        () => m().analyzeMelody(tone, SR, 400, 200, 2048, 256, 0.1, false, true),
+        RangeError,
+      ).message,
+    ).toBe('analyzeMelody: f0MaxHz must be finite and greater than f0MinHz');
   });
 
   // Controls: the same entry points accept a finite configuration and return a

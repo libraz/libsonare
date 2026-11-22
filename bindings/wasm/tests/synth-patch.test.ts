@@ -43,6 +43,7 @@ import {
 } from '../dist/index.js';
 import type { SynthPatch } from '../src/instrument_types.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 /** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
@@ -120,7 +121,9 @@ describe('Sonare WASM NativeSynth', () => {
     // The "va:" routing prefix is accepted.
     expect(synthPresetPatch('va:ePiano').engineMode).toBe('fm');
     expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
-    expect(() => synthPresetPatch('no-such-preset')).toThrow();
+    expect(expectRefusalOf(() => synthPresetPatch('no-such-preset'), RangeError).message).toBe(
+      'synthPresetPatch: name must be one of sine, saw, square, triangle, sawLead, squareLead, subBass, warmPad, ePiano, bell, brass, pluck, classicalGuitar, steelGuitar, electricGuitar, harp, harpsichord, bassAcoustic, bassFingered, bassPicked, bassFretless, bassSlap, marimba, glass, organ, drumKit, acousticPiano, churchOrgan, churchFlute, churchBourdon, churchTrumpet, violin, viola, cello, contrabass, clarinet, sopranoSax, altoSax, tenorSax, baritoneSax, oboe, englishHorn, bassoon, trumpet, trombone, tuba, frenchHorn, mutedTrumpet, cornet, flugelhorn, euphonium, concertFlute, piccolo, recorder, panFlute, shakuhachi, tinWhistle, ocarina, blownBottle, harpPlucked, koto, sitar, tanpura, choirAah, choirOoh, voiceEeh, accordion, harmonica, bandoneon, reedOrgan, singingVoice',
+    );
   });
 
   it('keeps every NativeSynth enum table in parity with native round-trip names', () => {
@@ -189,9 +192,12 @@ describe('Sonare WASM NativeSynth', () => {
       expect(synthPatchRoundTripForTest({ retrigger: name }).retrigger).toBe(name);
     }
     expect(synthPatchRoundTripForTest({}).retrigger).toBe('default');
-    expect(() =>
-      synthPatchRoundTripForTest({ retrigger: 'phase' } as unknown as SynthPatch),
-    ).toThrow();
+    expect(
+      expectRefusalOf(
+        () => synthPatchRoundTripForTest({ retrigger: 'phase' } as unknown as SynthPatch),
+        RangeError,
+      ).message,
+    ).toBe("synthPatchRoundTripForTest: Unknown retrigger mode name: 'phase'");
     expect(() =>
       synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length } as never),
     ).toThrow(TypeError);
@@ -204,9 +210,12 @@ describe('Sonare WASM NativeSynth', () => {
       expect(synthPatchRoundTripForTest({ lfoShape: name }).lfoShape).toBe(name);
     }
     expect(synthPatchRoundTripForTest({}).lfoShape).toBe('default');
-    expect(() =>
-      synthPatchRoundTripForTest({ lfoShape: 'square' } as unknown as SynthPatch),
-    ).toThrow();
+    expect(
+      expectRefusalOf(
+        () => synthPatchRoundTripForTest({ lfoShape: 'square' } as unknown as SynthPatch),
+        RangeError,
+      ).message,
+    ).toBe("synthPatchRoundTripForTest: Unknown LFO shape name: 'square'");
     expect(() =>
       synthPatchRoundTripForTest({ lfoShape: SYNTH_LFO_SHAPES.length } as never),
     ).toThrow(TypeError);
@@ -237,9 +246,12 @@ describe('Sonare WASM NativeSynth', () => {
     });
     expect(synthPatchRoundTripForTest({}).sampleLoop).toBe('default');
     expect(synthPatchRoundTripForTest({}).sampleKeyTrack).toBe('default');
-    expect(() =>
-      synthPatchRoundTripForTest({ sampleLoop: 'sometimes' } as unknown as SynthPatch),
-    ).toThrow();
+    expect(
+      expectRefusalOf(
+        () => synthPatchRoundTripForTest({ sampleLoop: 'sometimes' } as unknown as SynthPatch),
+        RangeError,
+      ).message,
+    ).toBe("synthPatchRoundTripForTest: Unknown sample loop mode name: 'sometimes'");
   });
 
   it('sets drift rate, envelope delay and hold and one-shot, and reads them back', () => {
@@ -319,9 +331,12 @@ describe('Sonare WASM NativeSynth', () => {
       const absent = synthPatchRoundTripForTest({ [field]: null } as unknown as SynthPatch);
       expect(absent[field], field).toBe(base[field]);
       for (const wrong of [true, {}, 1]) {
-        expect(() =>
-          synthPatchRoundTripForTest({ [field]: wrong } as unknown as SynthPatch),
-        ).toThrow(new TypeError(`synthPatchRoundTripForTest: ${field} must be a name`));
+        expect(
+          expectRefusalOf(
+            () => synthPatchRoundTripForTest({ [field]: wrong } as unknown as SynthPatch),
+            TypeError,
+          ).message,
+        ).toBe(`synthPatchRoundTripForTest: ${field} must be a name`);
       }
     }
   });
@@ -337,7 +352,12 @@ describe('Sonare WASM NativeSynth', () => {
       const first = bounceSynth(project, 'sawLead', { totalFrames: 24000 });
       const second = bounceSynth(project, 'sawLead', { totalFrames: 24000 });
       expect(first).toEqual(second);
-      expect(() => bounceSynth(project, 'no-such-preset', { totalFrames: 128 })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => bounceSynth(project, 'no-such-preset', { totalFrames: 128 }),
+          RangeError,
+        ).message,
+      ).toBe('Project.bounce: unknown synth preset name');
     } finally {
       project.destroy();
     }
@@ -444,20 +464,28 @@ describe('Sonare WASM NativeSynth', () => {
   it('refuses a mod routing naming none on either end', () => {
     const project = buildMidiOnlyProject();
     try {
-      expect(() =>
-        bounceSynth(
-          project,
-          { modRoutings: [{ source: 'none', destination: 'pitchCents', depth: 80 }] },
-          { totalFrames: 128 },
-        ),
-      ).toThrow();
-      expect(() =>
-        bounceSynth(
-          project,
-          { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
-          { totalFrames: 128 },
-        ),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            bounceSynth(
+              project,
+              { modRoutings: [{ source: 'none', destination: 'pitchCents', depth: 80 }] },
+              { totalFrames: 128 },
+            ),
+          RangeError,
+        ).message,
+      ).toBe('Project.bounce: mod routing refused: source and destination must not be none');
+      expect(
+        expectRefusalOf(
+          () =>
+            bounceSynth(
+              project,
+              { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
+              { totalFrames: 128 },
+            ),
+          RangeError,
+        ).message,
+      ).toBe('Project.bounce: mod routing refused: source and destination must not be none');
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
         project,
@@ -486,10 +514,14 @@ describe('Sonare WASM NativeSynth', () => {
         { totalFrames: 24000 },
       );
       expect(wobble).not.toEqual(plain);
-      expect(() =>
-        // @ts-expect-error unknown waveform name is rejected at runtime
-        bounceSynth(project, { waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            // @ts-expect-error unknown waveform name is rejected at runtime
+            bounceSynth(project, { waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
+          RangeError,
+        ).message,
+      ).toBe("Project.bounce: Unknown oscillator waveform name: 'sawtooth-ish'");
     } finally {
       project.destroy();
     }
@@ -766,7 +798,12 @@ describe('Sonare WASM NativeSynth', () => {
         }
       }
       expect(p).toBeGreaterThan(0);
-      expect(() => engine.setSynthInstrument(7, { preset: 'no-such-preset' })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setSynthInstrument(7, { preset: 'no-such-preset' }),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setSynthInstrument: unknown synth preset name');
       expect(engine.midiInstrumentCount).toBe(1);
     } finally {
       engine.destroy();

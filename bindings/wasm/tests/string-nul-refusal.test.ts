@@ -13,6 +13,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type BuiltinSynthWaveform,
+  ErrorCode,
   init,
   type MasteringPreset,
   Mixer,
@@ -33,6 +34,7 @@ import {
 } from '../dist/index.js';
 import { getSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 import { wasmBindingSources } from './_wasm_binding_sources';
 
@@ -185,7 +187,9 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a name lookup (mixer bus id)', () => {
     withMixer((mixer) => {
       expect(() => mixer.busMeter('master')).not.toThrow();
-      expect(() => mixer.busMeter('masterx')).toThrow();
+      expect(expectRefusalOf(() => mixer.busMeter('masterx'), RangeError).message).toBe(
+        'Mixer.busMeter: busId must be the id of a bus in this mixer',
+      );
       expectNulRefusal(() => mixer.busMeter(`master${NUL}x`), 'Mixer.busMeter', 'busId');
     });
   });
@@ -204,7 +208,14 @@ describe('embedded NUL refusal, by handoff kind', () => {
       engine.setBusStrip(1, SCENE_BUS);
       const native = nativeOf(engine);
       expect(() => native.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
-      expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow();
+      expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /^RealtimeEngine\.setBusStripEqBandJson: unexpected JSON character at byte 0$/,
+          ),
+        }),
+      );
       expectNulRefusal(
         () => native.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
         'RealtimeEngine.setBusStripEqBandJson',
@@ -231,7 +242,9 @@ describe('embedded NUL refusal, by handoff kind', () => {
     withEngine((engine) => {
       engine.setGraph(graph('a'));
       expect(engine.graphNodeCount).toBe(1);
-      expect(() => engine.setGraph(graph('zz'))).toThrow();
+      expect(expectRefusalOf(() => engine.setGraph(graph('zz')), RangeError).message).toBe(
+        'RealtimeEngine.setGraph: failed to swap graph',
+      );
       expectNulRefusal(
         () => engine.setGraph(graph(`a${NUL}b`)),
         'RealtimeEngine.setGraph',

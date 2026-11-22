@@ -40,6 +40,7 @@ import {
 } from '../dist/index.js';
 import { SonareEngineTelemetryError } from '../dist/worklet.js';
 import { EXPECTED_ENGINE_ABI_VERSION } from '../src/realtime_engine';
+import { expectRefusalOf } from './_helpers';
 import { clearModuleRealm } from './_module_realm.js';
 
 describe('Sonare WASM Module', () => {
@@ -322,15 +323,19 @@ describe('Sonare WASM Module', () => {
       });
       expect(cosine.data).toBeInstanceOf(Float32Array);
       expect(cosine.data.length).toBe(4 * onset.length);
-      expect(() =>
-        tempogram({
-          onsetEnvelope: onset,
-          sampleRate: 22050,
-          hopLength: 512,
-          winLength: 4,
-          mode: 'invalid' as never,
-        }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            tempogram({
+              onsetEnvelope: onset,
+              sampleRate: 22050,
+              hopLength: 512,
+              winLength: 4,
+              mode: 'invalid' as never,
+            }),
+          RangeError,
+        ).message,
+      ).toBe('tempogram: mode must be one of autocorrelation, cosine');
       expect(
         plp({
           onsetEnvelope: onset,

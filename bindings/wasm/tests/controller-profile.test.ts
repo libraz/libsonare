@@ -8,12 +8,14 @@ import {
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
   controllerProfileNames,
+  ErrorCode,
   init,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,
   RealtimeEngine,
   synthEnumTables,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 /** A reed voice — one of the engines whose exciter reads the excitation axes. */
@@ -83,10 +85,19 @@ describe('Sonare WASM controller profile', () => {
       engine.setControllerProfile(0, 'breath');
       expect(engine.controllerBindingCount(0)).toBeGreaterThan(0);
       expect(engine.controllerVelocityMeaningful(0)).toBe(false);
-      expect(() => engine.setControllerProfile(0, 'no-such-profile')).toThrow();
+      expect(
+        expectRefusalOf(() => engine.setControllerProfile(0, 'no-such-profile'), RangeError)
+          .message,
+      ).toBe(
+        "RealtimeEngine.setControllerProfile: unknown controller profile preset: 'no-such-profile'",
+      );
       // A destination nothing is bound to is an error, not an empty profile.
-      expect(() => engine.setControllerProfile(3, 'gm')).toThrow();
-      expect(() => engine.controllerBindingCount(3)).toThrow();
+      expect(expectRefusalOf(() => engine.setControllerProfile(3, 'gm'), RangeError).message).toBe(
+        'RealtimeEngine.setControllerProfile: no MIDI instrument is bound to this destination',
+      );
+      expect(expectRefusalOf(() => engine.controllerBindingCount(3), RangeError).message).toBe(
+        'RealtimeEngine.controllerBindingCount: no MIDI instrument is bound to this destination',
+      );
     });
   });
 
@@ -128,9 +139,21 @@ describe('Sonare WASM controller profile', () => {
       // A misspelling is refused rather than resolved to a default, which would
       // configure a dimension the caller never named.
       // @ts-expect-error unknown dimension name is rejected at runtime
-      expect(() => engine.setControllerNoteTracking(0, 'no-such-dimension', 'last')).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setControllerNoteTracking(0, 'no-such-dimension', 'last'),
+          RangeError,
+        ).message,
+      ).toBe(
+        "RealtimeEngine.setControllerNoteTracking: Unknown dimension name: 'no-such-dimension'",
+      );
       // @ts-expect-error unknown tracking name is rejected at runtime
-      expect(() => engine.setControllerNoteTracking(0, 'bend', 'no-such-rule')).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setControllerNoteTracking(0, 'bend', 'no-such-rule'),
+          RangeError,
+        ).message,
+      ).toBe("RealtimeEngine.setControllerNoteTracking: Unknown tracking name: 'no-such-rule'");
     });
   });
 
@@ -138,23 +161,63 @@ describe('Sonare WASM controller profile', () => {
     withEngine((engine) => {
       engine.setSynthInstrument(0, REED_PRESET);
       const base = { input: 'controlChange', index: 2, axis: 'excitation' } as const;
-      expect(() =>
-        // @ts-expect-error unknown axis name is rejected at runtime
-        engine.bindController(0, { ...base, axis: 'resonance' }),
-      ).toThrow();
-      expect(() =>
-        // @ts-expect-error unknown input name is rejected at runtime
-        engine.bindController(0, { ...base, input: 'breath' }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () =>
+            // @ts-expect-error unknown axis name is rejected at runtime
+            engine.bindController(0, { ...base, axis: 'resonance' }),
+          RangeError,
+        ).message,
+      ).toBe("RealtimeEngine.bindController: Unknown controller axis name: 'resonance'");
+      expect(
+        expectRefusalOf(
+          () =>
+            // @ts-expect-error unknown input name is rejected at runtime
+            engine.bindController(0, { ...base, input: 'breath' }),
+          RangeError,
+        ).message,
+      ).toBe("RealtimeEngine.bindController: Unknown controller input name: 'breath'");
       // Loudness is channel-level state, so a per-note input cannot reach it.
-      expect(() => engine.bindController(0, { input: 'polyPressure', axis: 'loudness' })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.bindController(0, { input: 'polyPressure', axis: 'loudness' }),
+          RangeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.bindController: controller binding: a poly-pressure binding named a channel-level axis',
+      );
       // An axis that means nothing is a caller mistake, not an empty slot.
-      expect(() => engine.bindController(0, { ...base, axis: 'none' })).toThrow();
-      expect(() => engine.bindController(0, { ...base, hi: Number.POSITIVE_INFINITY })).toThrow();
-      expect(() => engine.bindController(0, { ...base, lo: Number.NaN })).toThrow();
-      expect(() => engine.bindController(0, { ...base, curve: 0 })).toThrow();
-      expect(() => engine.bindController(0, { ...base, curve: Number.NaN })).toThrow();
-      expect(() => engine.bindController(0, { ...base, index: 128 })).toThrow();
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, axis: 'none' }), RangeError)
+          .message,
+      ).toBe('RealtimeEngine.bindController: controller binding: the axis is none');
+      expect(
+        expectRefusalOf(
+          () => engine.bindController(0, { ...base, hi: Number.POSITIVE_INFINITY }),
+          RangeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.bindController: hi must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, lo: Number.NaN }), RangeError)
+          .message,
+      ).toBe(
+        'RealtimeEngine.bindController: lo must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, curve: 0 }), RangeError).message,
+      ).toBe('RealtimeEngine.bindController: binding curve must be finite and greater than 0');
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, curve: Number.NaN }), RangeError)
+          .message,
+      ).toBe(
+        'RealtimeEngine.bindController: curve must be finite and in [-3.4028235e38, 3.4028235e38]',
+      );
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, index: 128 }), RangeError)
+          .message,
+      ).toBe('RealtimeEngine.bindController: controller binding index is out of range');
       // The struct fields are bytes, so a value that would truncate INTO the
       // domain has to be refused on this side: 256 is CC 0 and input 0 once
       // narrowed, and 257 is a valid axis. embind does not narrow for us.
@@ -164,9 +227,14 @@ describe('Sonare WASM controller profile', () => {
       expect(() => engine.bindController(0, { ...base, axis: 257 as never })).toThrow(TypeError);
       // input and axis have no default.
       // @ts-expect-error input is required
-      expect(() => engine.bindController(0, { axis: 'excitation' })).toThrow();
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { axis: 'excitation' }), TypeError).message,
+      ).toBe('RealtimeEngine.bindController: binding.input must be given');
       // @ts-expect-error axis is required
-      expect(() => engine.bindController(0, { input: 'controlChange' })).toThrow();
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { input: 'controlChange' }), TypeError)
+          .message,
+      ).toBe('RealtimeEngine.bindController: binding.axis must be given');
     });
   });
 
@@ -179,14 +247,56 @@ describe('Sonare WASM controller profile', () => {
     ]) {
       withEngine((engine) => {
         bind(engine);
-        expect(() => engine.controllerBindingCount(0)).toThrow();
-        expect(() => engine.setControllerProfile(0, 'gm')).toThrow();
+        expect(() => engine.controllerBindingCount(0)).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.controllerBindingCount: the bound instrument holds no controller profile$/,
+            ),
+          }),
+        );
+        expect(() => engine.setControllerProfile(0, 'gm')).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.setControllerProfile: the bound instrument declined a controller profile$/,
+            ),
+          }),
+        );
         expect(() =>
           engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' }),
-        ).toThrow();
-        expect(() => engine.clearControllerBindings(0)).toThrow();
-        expect(() => engine.setControllerVelocityMeaningful(0, true)).toThrow();
-        expect(() => engine.controllerVelocityMeaningful(0)).toThrow();
+        ).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.bindController: the bound instrument holds no controller profile$/,
+            ),
+          }),
+        );
+        expect(() => engine.clearControllerBindings(0)).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.clearControllerBindings: the bound instrument holds no controller profile$/,
+            ),
+          }),
+        );
+        expect(() => engine.setControllerVelocityMeaningful(0, true)).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.setControllerVelocityMeaningful: the bound instrument holds no controller profile$/,
+            ),
+          }),
+        );
+        expect(() => engine.controllerVelocityMeaningful(0)).toThrow(
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /^RealtimeEngine\.controllerVelocityMeaningful: the bound instrument holds no controller profile$/,
+            ),
+          }),
+        );
       });
     }
   });

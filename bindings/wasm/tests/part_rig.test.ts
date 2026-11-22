@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   init,
   PART_RIG_ALL_PARTS,
   PART_RIG_MODES,
@@ -12,6 +13,7 @@ import {
   Project,
   RealtimeEngine,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const LIMITER: PartRigInsert = {
@@ -101,13 +103,28 @@ describe('Sonare WASM part rig', () => {
         project.setPartRig({ destinationId: 0, part: 0, mode: 2 as never, inserts: [LIMITER] }),
       ).toThrow(/string token/);
       // Inserts belong to the chain mode only, and the chain needs them.
-      expect(() =>
-        project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
-      ).toThrow();
-      expect(() => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
+          RangeError,
+        ).message,
+      ).toBe('Project.setPartRig: insertsJson must be NULL unless mode is chain');
+      expect(
+        expectRefusalOf(
+          () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
+          RangeError,
+        ).message,
+      ).toBe('Project.setPartRig: insertsJson must not be NULL when mode is chain');
       expect(() =>
         project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),
-      ).toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /^Project\.setPartRig: the document must hold 1 to 8 inserts for a chain rig$/,
+          ),
+        }),
+      );
       expect(() =>
         project.setPartRig({
           destinationId: 0,
@@ -115,7 +132,14 @@ describe('Sonare WASM part rig', () => {
           mode: 'chain',
           inserts: [{ processor: 'no.such.processor' }],
         }),
-      ).toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /^Project\.setPartRig: \[0\]\.processor must name a processor that can be built$/,
+          ),
+        }),
+      );
       expect(() =>
         project.setPartRig({
           destinationId: 0,
@@ -123,7 +147,14 @@ describe('Sonare WASM part rig', () => {
           mode: 'chain',
           inserts: Array(9).fill(LIMITER),
         }),
-      ).toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /^Project\.setPartRig: the document must hold 1 to 8 inserts for a chain rig$/,
+          ),
+        }),
+      );
       expect(() =>
         project.setPartRig({
           destinationId: 0,
@@ -178,7 +209,12 @@ describe('Sonare WASM part rig', () => {
       expect(() => engine.setPartRig({ destinationId: 0, part: 16, mode: 'none' })).toThrow(
         /out of range/,
       );
-      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' })).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setPartRig: insertsJson must be given when mode is chain');
       expect(() =>
         engine.setPartRig({
           destinationId: 0,
@@ -186,7 +222,14 @@ describe('Sonare WASM part rig', () => {
           mode: 'chain',
           inserts: [{ processor: 'no.such.processor' }],
         }),
-      ).toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /^RealtimeEngine\.setPartRig: invalid part rig insert chain$/,
+          ),
+        }),
+      );
     } finally {
       engine.destroy();
     }
@@ -237,17 +280,46 @@ describe('Sonare WASM part rig request form', () => {
   });
 
   it.each([
-    ['an unknown mode', { mode: 'loud' }],
-    ['a non-numeric part', { part: 'x' }],
-    ['a non-numeric destination', { destinationId: 'x' }],
-    ['a non-array inserts', { mode: 'chain', inserts: 'nope' }],
-    ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }],
-    ['an out-of-range part', { part: 16 }],
-  ])('refuses %s', (_, change) => {
+    [
+      'an unknown mode',
+      { mode: 'loud' },
+      new RangeError("Project.setPartRig: Unknown part rig mode name: 'loud'"),
+    ],
+    [
+      'a non-numeric part',
+      { part: 'x' },
+      new TypeError('Project.setPartRig: part must be a number'),
+    ],
+    [
+      'a non-numeric destination',
+      { destinationId: 'x' },
+      new TypeError('Project.setPartRig: destinationId must be a number'),
+    ],
+    [
+      'a non-array inserts',
+      { mode: 'chain', inserts: 'nope' },
+      new TypeError('Project.setPartRig: inserts must be an array'),
+    ],
+    [
+      'an insert without a processor',
+      { mode: 'chain', inserts: [{ params: {} }] },
+      new TypeError('Project.setPartRig: inserts[0].processor must be a string'),
+    ],
+    [
+      'an out-of-range part',
+      { part: 16 },
+      new RangeError('Project.setPartRig: part is out of range'),
+    ],
+  ])('refuses %s', (_, change, refusal) => {
     const project = new Project();
     try {
       const r = { destinationId: 4, part: 0, mode: 'none', ...change };
-      expect(() => project.setPartRig(r as never)).toThrow();
+      expect(
+        expectRefusalOf(
+          () => project.setPartRig(r as never),
+          refusal.constructor as typeof RangeError | typeof TypeError,
+        ).message,
+      ).toBe(refusal.message);
       expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
     } finally {
       project.destroy();
@@ -257,14 +329,18 @@ describe('Sonare WASM part rig request form', () => {
   it('refuses an unknown key field on a read or a clear', () => {
     const project = new Project();
     try {
-      expect(() => project.partRig({ destinationId: 4, part: 0, mode: 'none' } as never)).toThrow(
-        new TypeError('Project.partRig: unknown key key.mode (expected destinationId, part)'),
-      );
-      expect(() =>
-        project.clearPartRig({ destinationId: 4, part: 0, mode: 'none' } as never),
-      ).toThrow(
-        new TypeError('Project.clearPartRig: unknown key key.mode (expected destinationId, part)'),
-      );
+      expect(
+        expectRefusalOf(
+          () => project.partRig({ destinationId: 4, part: 0, mode: 'none' } as never),
+          TypeError,
+        ).message,
+      ).toBe('Project.partRig: unknown key key.mode (expected destinationId, part)');
+      expect(
+        expectRefusalOf(
+          () => project.clearPartRig({ destinationId: 4, part: 0, mode: 'none' } as never),
+          TypeError,
+        ).message,
+      ).toBe('Project.clearPartRig: unknown key key.mode (expected destinationId, part)');
       expect(() => project.partRig(4 as never)).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -283,9 +359,12 @@ describe('Sonare WASM part rig request form', () => {
           inserts: [LIMITER],
         }),
       ).not.toThrow();
-      expect(() =>
-        engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
-      ).toThrow();
+      expect(
+        expectRefusalOf(
+          () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setPartRig: insertsJson must be omitted unless mode is chain');
       expect(() =>
         engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', extra: 1 } as never),
       ).toThrow(TypeError);
