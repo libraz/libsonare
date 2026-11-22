@@ -2,7 +2,12 @@ import { ErrorCode } from './errors.js';
 import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ProjectMidiCcBinding } from './project_types.js';
-import { assertNibble, assertNonNegativeScalar } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertNibble,
+  assertNonNegativeScalar,
+  requestObject,
+} from './validation.js';
 import { AUDIO_WORKLET_RENDER_QUANTUM } from './worklet/render_quantum.js';
 
 /** The slice of {@link RealtimeEngine} that {@link bindWebMidi} drives. */
@@ -181,8 +186,8 @@ export interface BindWebMidiOptions {
    */
   timestampToOffsetInBlockSamples?: (eventTimeMs: number) => number;
   /**
-   * The AudioContext the engine renders in. Each event's timestamp is placed on its clock through
-   * `getOutputTimestamp()`, delayed by {@link scheduleAheadSec}, and pushed with `contextTimeSec`,
+   * The AudioContext the engine renders in. Each event's timestamp is placed on its clock by
+   * {@link webMidiEventContextTime}, delayed by {@link scheduleAheadSec}, and pushed with `contextTimeSec`,
    * so events keep their spacing to the sample instead of bunching at block heads. Requires an
    * engine whose pushes take `contextTimeSec` (the AudioWorklet `SonareEngine`). Exclusive with
    * {@link timestampToOffsetInBlockSamples}.
@@ -198,6 +203,12 @@ export interface BindWebMidiOptions {
   scheduleAheadSec?: number;
   /** Observe hot-plug updates after the helper rebinds matching inputs. */
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
+}
+
+/** Options for {@link webMidiEventContextTime}. */
+export interface WebMidiEventContextTimeOptions {
+  /** Seconds added on the context clock; default as {@link BindWebMidiOptions.scheduleAheadSec}. */
+  scheduleAheadSec?: number;
 }
 
 /** Handle returned by {@link bindWebMidi}; call `destroy` to release the inputs. */
@@ -454,17 +465,72 @@ function resolveEventTiming(engine: WebMidiEngine, options: BindWebMidiOptions):
   if (scheduleAheadSec !== undefined) {
     assertNonNegativeScalar(scheduleAheadSec, 'scheduleAheadSec');
   }
-  return (eventTimeMs) => {
-    const stamp = context.getOutputTimestamp();
-    const ahead =
-      scheduleAheadSec ??
-      reportedLatency(context.baseLatency) +
-        reportedLatency(context.outputLatency) +
-        (2 * AUDIO_WORKLET_RENDER_QUANTUM) / context.sampleRate;
-    const eventContextTime =
-      (stamp.contextTime ?? 0) + (eventTimeMs - (stamp.performanceTime ?? 0)) / 1000;
-    return [undefined, { contextTimeSec: Math.max(0, eventContextTime + ahead) }];
-  };
+  return (eventTimeMs) => [
+    undefined,
+    { contextTimeSec: eventContextTime(context, eventTimeMs, scheduleAheadSec) },
+  ];
+}
+
+/** The one timestamp-to-context-time mapping, over arguments already validated. */
+function eventContextTime(
+  context: WebMidiAudioContext,
+  eventTimeMs: number,
+  scheduleAheadSec: number | undefined,
+): number {
+  const stamp = context.getOutputTimestamp();
+  const ahead =
+    scheduleAheadSec ??
+    reportedLatency(context.baseLatency) +
+      reportedLatency(context.outputLatency) +
+      (2 * AUDIO_WORKLET_RENDER_QUANTUM) / context.sampleRate;
+  const contextTime =
+    (stamp.contextTime ?? 0) + (eventTimeMs - (stamp.performanceTime ?? 0)) / 1000;
+  return Math.max(0, contextTime + ahead);
+}
+
+/**
+ * Maps a Web MIDI event timestamp to the AudioContext time {@link bindWebMidi} pushes it at, for a
+ * caller that owns its own MIDI listeners and pushes with `{ contextTimeSec }` itself.
+ *
+ * The timestamp is placed on the context clock through `context.getOutputTimestamp()`, then
+ * delayed by `scheduleAheadSec` (default: the context's `baseLatency + outputLatency`, a missing
+ * or non-finite value read as 0, plus two render quanta); a time before the context started reads
+ * as 0. The clock pair and the latencies are read on every call.
+ *
+ * @param eventTimeMs The event's `timeStamp` (or `receivedTime`), on the `performance.now()` clock.
+ * @returns AudioContext time in seconds.
+ * @throws TypeError when `context` has no `getOutputTimestamp`, `eventTimeMs` is not a number, or
+ *   `options` is not an object or holds an undeclared key.
+ * @throws RangeError when `eventTimeMs` is not finite, or `scheduleAheadSec` is negative or not
+ *   finite.
+ *
+ * @example
+ * ```ts
+ * input.onmidimessage = (event) => {
+ *   const contextTimeSec = webMidiEventContextTime(context, event.timeStamp);
+ *   engine.pushMidiInputNoteOn(0, 0, event.data[1], event.data[2], undefined, { contextTimeSec });
+ * };
+ * ```
+ */
+export function webMidiEventContextTime(
+  context: WebMidiAudioContext,
+  eventTimeMs: number,
+  options?: WebMidiEventContextTimeOptions,
+): number {
+  return withEntry('webMidiEventContextTime', () => {
+    if (typeof context?.getOutputTimestamp !== 'function') {
+      throw refuseType('context must be an AudioContext with getOutputTimestamp');
+    }
+    assertFiniteScalar(eventTimeMs, 'eventTimeMs');
+    const scheduleAheadSec =
+      options === undefined
+        ? undefined
+        : requestObject('webMidiEventContextTime', options, 'options', true).scheduleAheadSec;
+    if (scheduleAheadSec !== undefined) {
+      assertNonNegativeScalar(scheduleAheadSec, 'scheduleAheadSec');
+    }
+    return eventContextTime(context, eventTimeMs, scheduleAheadSec);
+  });
 }
 
 function dispatchMidiMessage(

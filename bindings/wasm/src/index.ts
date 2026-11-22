@@ -1260,9 +1260,10 @@ export type {
   BindWebMidiOptions,
   WebMidiBinding,
   WebMidiEngine,
+  WebMidiEventContextTimeOptions,
   WebMidiInputInfo,
 } from './web_midi.js';
-export { bindWebMidi, isWebMidiAvailable } from './web_midi.js';
+export { bindWebMidi, isWebMidiAvailable, webMidiEventContextTime } from './web_midi.js';
 export type {
   OfflineWorker,
   OfflineWorkerCallOptions,

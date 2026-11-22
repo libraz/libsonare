@@ -104,8 +104,11 @@ const METHOD_SHAPES = [
   'vocalRender',
 ];
 
+// Option bags trailing positional arguments; each entry's own test file carries its unknown-key case.
+const TRAILING_OPTION_SHAPES = ['webMidiEventContextTime'];
+
 const names = (Object.keys(REQUEST_SHAPES) as RequestFn[])
-  .filter((name) => !METHOD_SHAPES.includes(name))
+  .filter((name) => !METHOD_SHAPES.includes(name) && !TRAILING_OPTION_SHAPES.includes(name))
   .sort();
 
 describe('request objects refuse unknown keys', () => {

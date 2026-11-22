@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { bindWebMidi, isWebMidiAvailable } from '../dist/index.js';
+import { bindWebMidi, isWebMidiAvailable, webMidiEventContextTime } from '../dist/index.js';
 
 type MidiMessage =
   | {
@@ -661,6 +661,56 @@ describe('Web MIDI helper', () => {
       bindWebMidi(new TimedEngine() as never, { scheduleAheadSec: 0.01 }),
     ).rejects.toThrow(TypeError);
     expect(calls).toEqual([]);
+  });
+
+  it('maps an event timestamp onto the context clock through the exported helper', () => {
+    const context = fakeContext({ baseLatency: 0.01, outputLatency: 0.02 });
+    expect(webMidiEventContextTime(context, 1010)).toBeCloseTo(
+      2 + 0.01 + 0.01 + 0.02 + TWO_QUANTA_SEC,
+      12,
+    );
+    expect(webMidiEventContextTime(context, 1250, { scheduleAheadSec: 0 })).toBeCloseTo(2.25, 12);
+    expect(webMidiEventContextTime(context, 1250, { scheduleAheadSec: 0.1 })).toBeCloseTo(2.35, 12);
+    expect(webMidiEventContextTime(context, 0, { scheduleAheadSec: 0 })).toBe(1);
+    // A time before the context started reads as 0, as bindWebMidi pushes it.
+    expect(webMidiEventContextTime(context, -5000, { scheduleAheadSec: 0 })).toBe(0);
+    expect(webMidiEventContextTime(context, 1250, {})).toBeCloseTo(
+      2.25 + 0.03 + TWO_QUANTA_SEC,
+      12,
+    );
+  });
+
+  it('pushes exactly what the exported helper computes for the same event', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('a');
+    access.inputs.set(input.id, input);
+    installMidi(access);
+    const engine = new TimedEngine();
+    const context = fakeContext({ baseLatency: 0.004, outputLatency: 0.013 });
+    await bindWebMidi(engine as never, { context });
+    const timed = new TimedEngine();
+    await bindWebMidi(timed as never, { context, scheduleAheadSec: 0.05 });
+
+    input.emit([0x90, 60, 100], 1333.25);
+    expect(engine.timed[0].contextTimeSec).toBe(webMidiEventContextTime(context, 1333.25));
+    expect(timed.timed[0].contextTimeSec).toBe(
+      webMidiEventContextTime(context, 1333.25, { scheduleAheadSec: 0.05 }),
+    );
+  });
+
+  it('refuses what the context-time helper cannot map', () => {
+    const context = fakeContext();
+    expect(() => webMidiEventContextTime({ sampleRate: 48000 } as never, 0)).toThrow(TypeError);
+    expect(() => webMidiEventContextTime(context, Number.NaN)).toThrow(RangeError);
+    expect(() => webMidiEventContextTime(context, '10' as never)).toThrow(TypeError);
+    expect(() => webMidiEventContextTime(context, 0, { scheduleAheadSec: -1 })).toThrow(RangeError);
+    expect(() =>
+      webMidiEventContextTime(context, 0, { scheduleAheadSec: Number.POSITIVE_INFINITY }),
+    ).toThrow(RangeError);
+    expect(() => webMidiEventContextTime(context, 0, { scheduleAhead: 0 } as never)).toThrow(
+      /webMidiEventContextTime: .*scheduleAhead/,
+    );
+    expect(() => webMidiEventContextTime(context, 0, 0 as never)).toThrow(TypeError);
   });
 
   it('throws when Web MIDI is unavailable', async () => {
