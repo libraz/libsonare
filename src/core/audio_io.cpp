@@ -48,6 +48,9 @@ namespace {
 
 constexpr int kMinSupportedChannels = 1;
 
+/// @brief Full-scale magnitude of a signed 16-bit PCM sample.
+constexpr float kInt16Scale = 32768.0f;
+
 /// @brief Widest plane count any ChannelLayout carries.
 constexpr int kMaxLayoutPlanes = channel_count(ChannelLayout::SevenPointOne);
 
@@ -650,7 +653,7 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
 
     normalized.resize(read_samples);
     for (size_t i = 0; i < read_samples; ++i) {
-      normalized[i] = static_cast<float>(chunk[i]) / 32768.0f;
+      normalized[i] = static_cast<float>(chunk[i]) / kInt16Scale;
     }
     if (retain_enabled) {
       append_optional_retained(
@@ -808,13 +811,15 @@ namespace {
 // with 0 meaning no limit, so a path loader can hand its own
 // AudioLoadOptions::max_file_size down instead of hitting a second, fixed one it
 // cannot raise.
-AudioLoadResult load_buffer_bounded(const uint8_t* data, size_t size, size_t max_bytes) {
+void check_buffer_bounds(const uint8_t* data, size_t size, size_t max_bytes) {
   SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
                        " bytes (max: " + std::to_string(max_bytes) + " bytes)");
   validate_buffer_pointer(data, size);
-  AudioFormat format = detect_format(data, size);
+}
 
+// Decodes a buffer whose @p format has already been detected.
+AudioLoadResult load_buffer_as(const uint8_t* data, size_t size, AudioFormat format) {
   switch (format) {
     case AudioFormat::WAV:
 #ifdef SONARE_WITH_FFMPEG
@@ -834,6 +839,11 @@ AudioLoadResult load_buffer_bounded(const uint8_t* data, size_t size, size_t max
       SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_buffer_message());
 #endif
   }
+}
+
+AudioLoadResult load_buffer_bounded(const uint8_t* data, size_t size, size_t max_bytes) {
+  check_buffer_bounds(data, size, max_bytes);
+  return load_buffer_as(data, size, detect_format(data, size));
 }
 
 }  // namespace
@@ -864,7 +874,8 @@ AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& opti
   // max_file_size = 0 mean "no limit" all the way through, as it is documented
   // to, rather than failing at the fixed buffer ceiling after the whole file has
   // been read into memory.
-  return load_buffer_bounded(data.data(), data.size(), options.max_file_size);
+  check_buffer_bounds(data.data(), data.size(), options.max_file_size);
+  return load_buffer_as(data.data(), data.size(), format);
 }
 
 int audio_channel_count(const std::string& path, const AudioLoadOptions& options) {
@@ -1040,7 +1051,7 @@ namespace {
 std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int channel_count,
                                     int bits_per_sample, size_t& non_finite) {
   const bool sixteen = bits_per_sample == 16;
-  const float scale = sixteen ? 32768.0f : 8388608.0f;
+  const float scale = sixteen ? kInt16Scale : 8388608.0f;
   const long min_code = sixteen ? -32768 : -8388608;
   const long max_code = sixteen ? 32767 : 8388607;
   const bool dither = !on_pcm_grid(samples, n_samples, scale);
@@ -1104,6 +1115,20 @@ void write_wav_image_atomic(const std::string& path, const std::vector<uint8_t>&
   guard.committed = true;
 }
 
+/// Bytes of the canonical PCM WAV header (RIFF + fmt + data chunk headers).
+constexpr size_t kPcmWavHeaderBytes = 44;
+/// Bytes of the WAVE_FORMAT_EXTENSIBLE header.
+constexpr size_t kExtensibleWavHeaderBytes = 68;
+
+/// Appends the data chunk: tag, size, samples, and the RIFF pad byte after an odd size.
+void append_data_chunk(std::vector<uint8_t>& image, const std::vector<uint8_t>& pcm) {
+  const auto data_size = static_cast<uint32_t>(pcm.size());
+  append_tag(image, "data");
+  append_le32(image, data_size);
+  image.insert(image.end(), pcm.begin(), pcm.end());
+  if (data_size % 2 != 0) image.push_back(0);
+}
+
 /// Builds a plain WAVE_FORMAT_PCM file image (mono/stereo): the canonical 44-byte
 /// header, the samples, and the RIFF pad byte after an odd-sized data chunk.
 std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, int channel_count,
@@ -1122,7 +1147,7 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
   const uint32_t fmt_size = 16;
 
   std::vector<uint8_t> image;
-  image.reserve(44 + pcm.size() + pad);
+  image.reserve(kPcmWavHeaderBytes + pcm.size() + pad);
   append_tag(image, "RIFF");
   append_le32(image, 4 + (8 + fmt_size) + (8 + data_size + pad));
   append_tag(image, "WAVE");
@@ -1134,10 +1159,7 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
   append_le32(image, format_fields.byte_rate);
   append_le16(image, block_align);
   append_le16(image, static_cast<uint16_t>(bits_per_sample));
-  append_tag(image, "data");
-  append_le32(image, data_size);
-  image.insert(image.end(), pcm.begin(), pcm.end());
-  if (pad != 0) image.push_back(0);
+  append_data_chunk(image, pcm);
   return image;
 }
 
@@ -1167,7 +1189,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
                                             0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
 
   std::vector<uint8_t> image;
-  image.reserve(68 + pcm.size() + pad);
+  image.reserve(kExtensibleWavHeaderBytes + pcm.size() + pad);
   append_tag(image, "RIFF");
   append_le32(image, riff_size);
   append_tag(image, "WAVE");
@@ -1185,10 +1207,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   append_le32(image, channel_mask);
   image.insert(image.end(), kPcmSubFormat, kPcmSubFormat + 16);
 
-  append_tag(image, "data");
-  append_le32(image, data_size);
-  image.insert(image.end(), pcm.begin(), pcm.end());
-  if (pad != 0) image.push_back(0);
+  append_data_chunk(image, pcm);
   return image;
 }
 

@@ -147,6 +147,16 @@ Audio validated_decoded_audio(std::vector<float> samples, int sample_rate) {
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+/// One channel of an interleaved buffer, @p frames long.
+std::vector<float> deinterleave_channel(const std::vector<float>& interleaved, std::size_t stride,
+                                        std::size_t channel, std::size_t frames) {
+  std::vector<float> plane(frames);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    plane[frame] = interleaved[frame * stride + channel];
+  }
+  return plane;
+}
+
 }  // namespace
 
 Audio Audio::from_file(const std::string& path) {
@@ -163,11 +173,8 @@ Audio Audio::from_file_channel(const std::string& path, int channel_index) {
   SONARE_CHECK_MSG(channels > 0, ErrorCode::DecodeFailed, "decoded audio reports no channels");
   util::check::integer_in_range(channel_index, 0, channels - 1, "channel_index");
   const std::size_t frames = interleaved.size() / static_cast<std::size_t>(channels);
-  std::vector<float> plane(frames);
-  for (std::size_t frame = 0; frame < frames; ++frame) {
-    plane[frame] = interleaved[frame * static_cast<std::size_t>(channels) +
-                               static_cast<std::size_t>(channel_index)];
-  }
+  std::vector<float> plane = deinterleave_channel(interleaved, static_cast<std::size_t>(channels),
+                                                  static_cast<std::size_t>(channel_index), frames);
   // The same policy from_file applies: one plane of a stereo file is decoded
   // audio like any other, and accepting a NaN here because it arrived beside a
   // finite channel is the gap this whole entry point exists to close.
@@ -196,11 +203,8 @@ std::vector<Audio> Audio::from_memory_channels(const uint8_t* data, size_t size)
   std::vector<Audio> planes;
   planes.reserve(stride);
   for (std::size_t channel = 0; channel < stride; ++channel) {
-    std::vector<float> plane(frames);
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-      plane[frame] = interleaved[frame * stride + channel];
-    }
-    planes.push_back(validated_decoded_audio(std::move(plane), sample_rate));
+    planes.push_back(validated_decoded_audio(
+        deinterleave_channel(interleaved, stride, channel, frames), sample_rate));
   }
   return planes;
 }
