@@ -1,8 +1,13 @@
-// Public entry for the AudioWorklet surface. The implementation is split into
-// focused modules under ./worklet/*; tsup bundles them back into a single
-// self-contained dist/worklet.js (code-splitting is disabled because a real
-// AudioWorkletGlobalScope cannot resolve sibling chunks), so the public surface
-// is unchanged.
+/**
+ * AudioWorklet entry: the processors, their nodes and rings, and the classes designed to run on
+ * the audio thread.
+ *
+ * This entry is bundled self-contained, so its classes are not the root entry's: an object built
+ * from one entry is not an `instanceof` the other entry's class. Pass plain data between realms.
+ */
+
+// tsup bundles ./worklet/* into one dist/worklet.js; a real AudioWorkletGlobalScope cannot
+// resolve sibling chunks, so code-splitting is disabled.
 
 import './lifetime.js';
 
