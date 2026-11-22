@@ -302,25 +302,52 @@ TEST_CASE("Absolute mode refuses a factor the warp cannot reach and names the ra
   constexpr int sample_rate = 22050;
   const sonare::Audio audio =
       sonare::Audio::from_vector(sine(220.0f, sample_rate, 4096), sample_rate);
+  const std::vector<std::string> reach_subjects{"formant_factor", "formant_mode",
+                                                "pitch_semitones"};
 
   VoiceChangerConfig config;
   config.formant_mode = FormantMode::Absolute;
   config.pitch_semitones = 4.0f;
+  // Outside the factor's own range: the static refusal names the factor alone.
   config.formant_factor = 2.5f;
-  // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.69296, 2.07887]; each printed
-  // bound is rounded inward to four digits so it is itself accepted.
   try {
     VoiceChanger(config).process(audio);
     FAIL("expected a refusal");
   } catch (const sonare::SonareParameterRefusal& e) {
     REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
     REQUIRE(e.subjects() == std::vector<std::string>{"formant_factor"});
-    REQUIRE(std::string(e.what()) == "formant_factor must be finite and in [0.693, 2.078]");
+    REQUIRE(std::string(e.what()) == "formant_factor must be finite and in [0.55, 1.65]");
+  }
+
+  // Inside it, but 2^(4/12) = 1.2599 needs a warp of 0.476: the conditional refusal names the
+  // mode and the shift, with the factor range narrowed to [0.69296, 1.65] rounded inward.
+  config.formant_factor = 0.6f;
+  try {
+    VoiceChanger(config).process(audio);
+    FAIL("expected a refusal");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(e.subjects() == reach_subjects);
+    REQUIRE(std::string(e.what()) ==
+            "formant_factor must be finite and in [0.693, 1.65] when formant_mode is absolute at "
+            "pitch_semitones 4 (the warp it needs must lie in [0.55, 1.65])");
+  }
+
+  // Past 2^(19.02/12) = 3 no factor in the range has a warp in it: the mode is named.
+  config.pitch_semitones = 20.0f;
+  config.formant_factor = 1.0f;
+  try {
+    VoiceChanger(config).process(audio);
+    FAIL("expected a refusal");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    REQUIRE(e.subjects() == reach_subjects);
+    REQUIRE(std::string(e.what()) ==
+            "formant_mode must be relative at pitch_semitones 20: no formant_factor in "
+            "[0.55, 1.65] has a warp in [0.55, 1.65] there");
   }
 
   // Preserving formants (factor 1) at -9 semitones needs a warp of 1.68, past the range.
   config.pitch_semitones = -9.0f;
-  config.formant_factor = 1.0f;
   REQUIRE_THROWS_AS(VoiceChanger(config).process(audio), sonare::SonareException);
 
   // The same request is accepted in relative mode, where factor 1 is itself the warp.
@@ -439,13 +466,19 @@ TEST_CASE("sonare_voice_change selects the formant mode", "[voice_changer][forma
   REQUIRE(absolute.size() == relative.size());
   REQUIRE_FALSE(std::equal(absolute.begin(), absolute.end(), relative.begin()));
 
-  // Unreachable: refused, with the reachable range in the message.
+  // Outside the factor's range, then unreachable at the shift: two refusals the caller can tell
+  // apart.
   config.formant_factor = 5.0f;
   std::vector<float> none;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
-  // 2^(3/12) = 1.1892, so the warp range reaches [0.65406, 1.96219] at +3 semitones.
   REQUIRE(std::string(sonare_last_error_message()) ==
-          "config.formant_factor must be finite and in [0.6541, 1.962]");
+          "config.formant_factor must be finite and in [0.55, 1.65]");
+  // 2^(3/12) = 1.1892, so the warp range reaches factors from 0.65406 at +3 semitones.
+  config.formant_factor = 0.6f;
+  REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "config.formant_factor must be finite and in [0.6541, 1.65] when config.formant_mode "
+          "is absolute at config.pitch_semitones 3 (the warp it needs must lie in [0.55, 1.65])");
 
   config.formant_factor = 1.1f;
   config.formant_mode = 2;
@@ -836,19 +869,27 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
 
   RealtimeVoiceChangerConfig config = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  // 2^(-9/12) = 0.5946: the warp reaches [0.32703, 0.98107], which the factor's own range
-  // [0.55, 1.65] narrows to [0.55, 0.98107]. Every bound is printed inward at four digits.
+  // 2^(-9/12) = 0.5946: the warp's range [0.55, 1.65] is reached by factors up to 0.98107,
+  // printed inward at four digits.
   REQUIRE(error ==
-          "formant.factor must be finite and in [0.55, 0.981] in absolute formant mode at "
-          "retune.pitchSemitones -9 (the warp reaches [0.3271, 0.981] there)");
+          "formant.factor must be finite and in [0.55, 0.981] when formant.mode is absolute at "
+          "retune.pitchSemitones -9 and retune.mix 1 (the warp it needs must lie in [0.55, 1.65])");
 
   config.formant.factor = 0.8f;
   REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
 
+  // The warp undoes only the wet share of the shift, so half the mix halves the reach's shift.
+  config.formant.factor = 1.0f;
+  config.retune.mix = 0.5f;
+  REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  config.retune.mix = 1.0f;
+
   // Nothing is reachable this far down.
   config.retune.semitones = -24.0f;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("no formant factor is reachable"));
+  REQUIRE(error ==
+          "formant.mode must be relative at retune.pitchSemitones -24 and retune.mix 1: no "
+          "formant.factor in [0.55, 1.65] has a warp in [0.55, 1.65] there");
 
   // Relative mode never refuses on reach.
   config.formant_mode = FormantMode::Relative;
@@ -864,6 +905,77 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
   REQUIRE(chain.config().retune.semitones == 0.0f);
   std::vector<float> noise(4096, 0.1f);
   REQUIRE_NOTHROW(run_chain(chain, noise));
+}
+
+TEST_CASE(
+    "The grain engine accepts an absolute factor exactly when the warp it applies is in range",
+    "[voice_changer][formant_mode][realtime]") {
+  // Exhaustive over the shift, the wet share and the factor's own range: the applied warp is
+  // computed here from its definition, independently of the library's reach arithmetic.
+  RealtimeVoiceChangerConfig normalized;
+  std::string error;
+  int accepted = 0;
+  int refused = 0;
+  for (int semitones = -24; semitones <= 24; ++semitones) {
+    for (const float mix : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f}) {
+      for (int step = 0; step <= 22; ++step) {
+        const float factor =
+            sonare::kFormantFactorMin + (sonare::kFormantFactorMax - sonare::kFormantFactorMin) *
+                                            static_cast<float>(step) / 22.0f;
+        RealtimeVoiceChangerConfig config =
+            bare_chain_config(static_cast<float>(semitones),
+                              std::min(factor, sonare::kFormantFactorMax), FormantMode::Absolute);
+        config.retune.mix = mix;
+        const double ratio = std::exp2(static_cast<double>(semitones) * static_cast<double>(mix) /
+                                       static_cast<double>(sonare::constants::kSemitonesPerOctave));
+        const float warp = static_cast<float>(static_cast<double>(config.formant.factor) / ratio);
+        const bool in_range =
+            warp >= sonare::kFormantFactorMin && warp <= sonare::kFormantFactorMax;
+        CAPTURE(semitones, mix, config.formant.factor, warp);
+        CHECK(validate_realtime_voice_changer_config(config, &normalized, &error) == in_range);
+        (in_range ? accepted : refused) += 1;
+      }
+    }
+  }
+  // Both outcomes are reached, so the equality above was tested in both directions.
+  CHECK(accepted > 0);
+  CHECK(refused > 0);
+}
+
+TEST_CASE("Psola renders an absolute factor at both ends of its range an octave either way",
+          "[voice_changer][formant_mode][realtime]") {
+  // Psola resamples its grains by the factor whatever the shift, so no reach narrows it.
+  constexpr int sample_rate = 48000;
+  const std::vector<float> input = three_formant_vowel(150.0, sample_rate, sample_rate);
+  for (const float semitones : {-12.0f, 12.0f}) {
+    double low_centroid = 0.0;
+    for (const float factor : {sonare::kFormantFactorMin, sonare::kFormantFactorMax}) {
+      CAPTURE(semitones, factor);
+      RealtimeVoiceChangerConfig config =
+          bare_chain_config(semitones, factor, FormantMode::Absolute);
+      config.voice_engine.engine = PitchEngine::Psola;
+      std::string error;
+      RealtimeVoiceChangerConfig normalized;
+      REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
+      RealtimeVoiceChanger chain(config);
+      chain.prepare(sample_rate, 128, 1);
+      const std::vector<float> output = run_chain(chain, input);
+      REQUIRE(std::all_of(output.begin(), output.end(), [](float v) { return std::isfinite(v); }));
+      const std::size_t start = static_cast<std::size_t>(sample_rate / 2);
+      const std::vector<float> tail(output.begin() + static_cast<std::ptrdiff_t>(start),
+                                    output.end());
+      double energy = 0.0;
+      for (const float v : tail) energy += static_cast<double>(v) * static_cast<double>(v);
+      REQUIRE(energy > 1.0e-3);
+      const double centroid = band_centroid(tail, sample_rate);
+      if (factor == sonare::kFormantFactorMin) {
+        low_centroid = centroid;
+      } else {
+        // The two ends land apart in the direction of the factor.
+        CHECK(centroid > low_centroid * 1.5);
+      }
+    }
+  }
 }
 
 TEST_CASE("The formant mode round-trips through the JSON documents",

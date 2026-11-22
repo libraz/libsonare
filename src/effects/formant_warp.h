@@ -20,8 +20,7 @@ namespace sonare {
 
 class FFT;
 
-/// Factor range the warp is defined over. It clamps its own factor to these, so
-/// they belong to the warp rather than to any one caller's parameter policy.
+/// Factor range the warp is defined over, and the range of a formant factor on every surface.
 inline constexpr float kFormantFactorMin = 0.55f;
 inline constexpr float kFormantFactorMax = 1.65f;
 
@@ -85,7 +84,8 @@ class FormantWarpStream {
   void prepare(int frame_size, int lpc_order);
   /// @brief Clears the delay and overlap state; the factor is kept.
   void reset() noexcept;
-  /// @brief Sets the warp applied from the next analysis frame on, clamped to the factor range.
+  /// @brief Sets the warp applied from the next analysis frame on.
+  /// @pre @p factor satisfies formant_factor_in_range; every caller validates it first.
   void set_factor(float factor) noexcept;
   float factor() const noexcept { return factor_; }
   /// @brief Samples the output lags the input by; 0 before prepare().

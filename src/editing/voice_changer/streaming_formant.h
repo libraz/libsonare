@@ -13,6 +13,11 @@
 
 namespace sonare::editing::voice_changer {
 
+/// Factor range the colour filter's sections are designed over, its own domain apart from the
+/// envelope warp's; its tail budget is swept at these ends.
+inline constexpr float kFormantColourFactorMin = 0.55f;
+inline constexpr float kFormantColourFactorMax = 1.65f;
+
 struct StreamingFormantConfig {
   float factor = 1.0f;
   /// Strength of the formant-frequency displacement: 0 keeps factor at 1,

@@ -310,11 +310,8 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
     // The warp carries the factor, so the colour stage stays neutral; amount does not apply.
     state.formant.set_config(neutral_colour(config.formant));
     // The retune shifts only its wet share, so the warp undoes pitch_ratio^mix.
-    const double pitch_ratio = std::exp2(
-        static_cast<double>(config.retune.semitones) * static_cast<double>(config.retune.mix) /
-        static_cast<double>(sonare::constants::kSemitonesPerOctave));
     state.warp.set_factor(
-        static_cast<float>(static_cast<double>(config.formant.factor) / pitch_ratio));
+        absolute_formant_warp(config.formant.factor, config.retune.semitones, config.retune.mix));
   } else {
     state.formant.set_config(config.formant);
   }

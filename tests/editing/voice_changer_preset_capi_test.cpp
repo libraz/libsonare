@@ -1134,13 +1134,19 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad stru
   config.retune_pitch_semitones = -9.0f;
   config.formant_factor = 1.0f;
   SonareRealtimeVoiceChanger* handle = nullptr;
+  // The init preset leaves the retune dry, so the shift carries nothing and the warp is 1.
+  config.retune_mix = 0.0f;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
+  sonare_realtime_voice_changer_destroy(handle);
+  handle = nullptr;
+  config.retune_mix = 1.0f;
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(handle == nullptr);
   // Both members are named as the C struct spells them.
   CHECK(std::string(sonare_last_error_message()) ==
-        "formant_factor must be finite and in [0.55, 0.981] in absolute formant mode at "
-        "retune_pitch_semitones -9 (the warp reaches [0.3271, 0.981] there)");
+        "formant_factor must be finite and in [0.55, 0.981] when formant_mode is absolute at "
+        "retune_pitch_semitones -9 and retune_mix 1 (the warp it needs must lie in [0.55, 1.65])");
 
   config.retune_pitch_semitones = 0.0f;
   config.formant_mode = 7;

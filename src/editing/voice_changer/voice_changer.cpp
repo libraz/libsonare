@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -35,10 +38,42 @@ const char* formant_mode_name(FormantMode mode) noexcept {
   return mode == FormantMode::Absolute ? "absolute" : "relative";
 }
 
-void reachable_formant_factor_range(float pitch_semitones, double* lo, double* hi) noexcept {
-  const double ratio = pitch_ratio(pitch_semitones);
-  *lo = static_cast<double>(kFormantFactorMin) * ratio;
-  *hi = static_cast<double>(kFormantFactorMax) * ratio;
+float absolute_formant_warp(float factor, float semitones, float mix) noexcept {
+  return static_cast<float>(
+      static_cast<double>(factor) /
+      pitch_ratio(static_cast<float>(static_cast<double>(semitones) * static_cast<double>(mix))));
+}
+
+bool absolute_formant_reachable(float factor, float semitones, float mix) noexcept {
+  return formant_factor_in_range(absolute_formant_warp(factor, semitones, mix));
+}
+
+std::optional<SonareParameterRefusal> absolute_formant_reach_refusal(
+    float factor, float semitones, float mix, const FormantReachSubjects& subjects) {
+  if (absolute_formant_reachable(factor, semitones, mix)) return std::nullopt;
+  using util::refusal::bound_text;
+  const double ratio =
+      pitch_ratio(static_cast<float>(static_cast<double>(semitones) * static_cast<double>(mix)));
+  const double range_lo = static_cast<double>(kFormantFactorMin);
+  const double range_hi = static_cast<double>(kFormantFactorMax);
+  const double lo = std::max(range_lo, range_lo * ratio);
+  const double hi = std::min(range_hi, range_hi * ratio);
+  const std::string range = "[" + bound_text(range_lo) + ", " + bound_text(range_hi) + "]";
+  std::vector<std::string> names{subjects.factor, subjects.mode, subjects.semitones};
+  std::string at = " at {2} " + bound_text(static_cast<double>(semitones));
+  if (!subjects.mix.empty()) {
+    names.push_back(subjects.mix);
+    at += " and {3} " + bound_text(static_cast<double>(mix));
+  }
+  if (lo > hi) {
+    return SonareParameterRefusal::relation(ErrorCode::InvalidParameter, std::move(names),
+                                            "{1} must be relative" + at + ": no {0} in " + range +
+                                                " has a warp in " + range + " there");
+  }
+  return SonareParameterRefusal::relation(ErrorCode::InvalidParameter, std::move(names),
+                                          "{0} " + util::refusal::computed_range_predicate(lo, hi) +
+                                              " when {1} is absolute" + at +
+                                              " (the warp it needs must lie in " + range + ")");
 }
 
 VoiceChanger::VoiceChanger(VoiceChangerConfig config) : config_(config) {}
@@ -56,20 +91,15 @@ Audio VoiceChanger::process(const Audio& audio) const {
 
   // The warp factor is resolved, and an unreachable absolute request refused, before the
   // pitch shift is paid for.
-  check::finite_float(config_.formant_factor, "formant_factor");
+  check::in_range(config_.formant_factor, kFormantFactorMin, kFormantFactorMax, "formant_factor");
   float warp_factor = config_.formant_factor;
-  if (config_.formant_mode == FormantMode::Relative) {
-    check::in_range(config_.formant_factor, kFormantFactorMin, kFormantFactorMax, "formant_factor");
-  }
   if (config_.formant_mode == FormantMode::Absolute) {
-    double lo = 0.0;
-    double hi = 0.0;
-    reachable_formant_factor_range(config_.pitch_semitones, &lo, &hi);
-    const double requested = static_cast<double>(config_.formant_factor);
-    check::in_computed_range(requested, lo, hi, "formant_factor");
-    warp_factor = static_cast<float>(std::clamp(requested / pitch_ratio(config_.pitch_semitones),
-                                                static_cast<double>(kFormantFactorMin),
-                                                static_cast<double>(kFormantFactorMax)));
+    if (auto refusal = absolute_formant_reach_refusal(
+            config_.formant_factor, config_.pitch_semitones, 1.0f,
+            {"formant_factor", "formant_mode", "pitch_semitones", std::string()})) {
+      throw *refusal;
+    }
+    warp_factor = absolute_formant_warp(config_.formant_factor, config_.pitch_semitones, 1.0f);
   }
 
   PitchShiftConfig pitch_config;

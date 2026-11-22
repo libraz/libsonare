@@ -1,6 +1,7 @@
 #include "effects/formant_warp.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -110,7 +111,8 @@ void FormantWarpStream::reset() noexcept {
 }
 
 void FormantWarpStream::set_factor(float factor) noexcept {
-  factor_ = std::isfinite(factor) ? std::clamp(factor, kFormantFactorMin, kFormantFactorMax) : 1.0f;
+  assert(formant_factor_in_range(factor));
+  factor_ = factor;
   bypass_target_ = is_unity(factor_) ? 1.0f : 0.0f;
 }
 

@@ -161,9 +161,11 @@ struct RealtimeVoiceChangerConfig {
   ///          stage then runs at its neutral factor and keeps body, brightness and nasal. The warp
   ///          adds one analysis frame of latency, and @ref StreamingFormantConfig::amount is
   ///          ignored in this mode.
-  ///          The warp it needs, factor / 2^(semitones / 12), must lie in [kFormantFactorMin,
-  ///          kFormantFactorMax]: @ref validate_realtime_voice_changer_config refuses a
-  ///          configuration outside that.
+  ///          On the grain engine the warp it needs, factor / 2^(semitones * mix / 12), must lie
+  ///          in [kFormantFactorMin, kFormantFactorMax]: @ref
+  ///          validate_realtime_voice_changer_config refuses a configuration outside that. Psola
+  ///          resamples its grains by the factor itself, so there the factor's own range is the
+  ///          whole contract.
   FormantMode formant_mode = FormantMode::Relative;
   CharacterEqConfig eq;
   VoiceGateConfig gate;
@@ -696,9 +698,9 @@ std::string realtime_voice_changer_field_path(std::string_view member,
                                               ConfigFieldSpelling spelling);
 
 /// @brief Checks that @p config's formant warp is within reach.
-/// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the
-///          warp is defined over [kFormantFactorMin, kFormantFactorMax]. On failure @p error names
-///          the formant factors reachable at the configuration's semitones.
+/// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones * mix / 12)
+///          and must lie in [kFormantFactorMin, kFormantFactorMax]. On failure @p error is
+///          @ref absolute_formant_reach_refusal's text in @p spelling.
 bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
                                ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
 

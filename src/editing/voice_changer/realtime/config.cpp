@@ -7,9 +7,7 @@
 
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/realtime/config_ranges.h"
-#include "effects/formant_warp.h"
 #include "util/json_schema.h"
-#include "util/refusal_predicates.h"
 
 namespace sonare::editing::voice_changer {
 namespace detail {
@@ -166,7 +164,8 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
                                    path("reverbVariation.division") + ", the delay line's length");
     }
   }
-  // Only the grain engine warps the formants ahead of the shift; psola resamples its grains.
+  // Only the grain engine warps the formants ahead of the shift. Psola resamples its grains by the
+  // factor itself, whatever the shift, so the factor's own range is its whole contract there.
   if (ok && config.voice_engine.engine == PitchEngine::Grain &&
       !formant_warp_is_reachable(config, error, spelling)) {
     ok = false;
@@ -177,36 +176,16 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
 
 bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
                                ConfigFieldSpelling spelling) {
-  if (config.formant_mode != FormantMode::Absolute) return true;
-  double lo = 0.0;
-  double hi = 0.0;
-  reachable_formant_factor_range(config.retune.semitones, &lo, &hi);
-  const double factor = static_cast<double>(config.formant.factor);
-  if (factor >= lo && factor <= hi) return true;
-  // The factor itself lives in the warp's own range, so that is the most that can be named.
-  const double named_lo = std::max(lo, static_cast<double>(kFormantFactorMin));
-  const double named_hi = std::min(hi, static_cast<double>(kFormantFactorMax));
-  if (error) {
-    using ::sonare::util::refusal::bound_text;
-    using ::sonare::util::refusal::Inward;
-    const std::string at = " in absolute formant mode at " +
-                           field_path("retune.pitchSemitones", spelling) + " " +
-                           bound_text(static_cast<double>(config.retune.semitones));
-    const std::string reach = "the warp reaches [" + bound_text(lo, Inward::Up) + ", " +
-                              bound_text(hi, Inward::Down) + "] there";
-    if (named_lo > named_hi) {
-      *error =
-          schema::refusal(field_path("formant.mode", spelling),
-                          "must be relative: no formant factor is reachable" + at + " (" + reach +
-                              ", outside [" + bound_text(static_cast<double>(kFormantFactorMin)) +
-                              ", " + bound_text(static_cast<double>(kFormantFactorMax)) + "])");
-    } else {
-      *error =
-          schema::refusal(field_path("formant.factor", spelling),
-                          "must be finite and in [" + bound_text(named_lo, Inward::Up) + ", " +
-                              bound_text(named_hi, Inward::Down) + "]" + at + " (" + reach + ")");
-    }
+  if (config.formant_mode != FormantMode::Absolute ||
+      absolute_formant_reachable(config.formant.factor, config.retune.semitones,
+                                 config.retune.mix)) {
+    return true;
   }
+  const auto refusal = absolute_formant_reach_refusal(
+      config.formant.factor, config.retune.semitones, config.retune.mix,
+      {field_path("formant.factor", spelling), field_path("formant.mode", spelling),
+       field_path("retune.pitchSemitones", spelling), field_path("retune.mix", spelling)});
+  if (error) *error = refusal->what();
   return false;
 }
 

@@ -11,7 +11,7 @@ namespace sonare::editing::voice_changer {
 namespace {
 
 float clamp_factor(float value) noexcept {
-  return std::clamp(value, kFormantFactorMin, kFormantFactorMax);
+  return std::clamp(value, kFormantColourFactorMin, kFormantColourFactorMax);
 }
 
 float effective_factor(float factor, float amount) noexcept {
@@ -122,7 +122,7 @@ rt::TailBudget StreamingFormant::tail(double sample_rate) noexcept {
   if (!(sample_rate > 0.0)) return budget;
   // Each section rings longest at one end of the factor and tone ranges.
   std::array<rt::TailBudget, 4> worst{};
-  for (const float factor : {kFormantFactorMin, kFormantFactorMax}) {
+  for (const float factor : {kFormantColourFactorMin, kFormantColourFactorMax}) {
     for (const float body : {-1.0f, 1.0f}) {
       for (const float tone : {-1.0f, 1.0f}) {
         std::array<rt::BiquadState, 4> sections{};
