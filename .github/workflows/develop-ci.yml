@@ -156,6 +156,8 @@ jobs:
           uv sync --locked --project bindings/python
           export PATH="$PWD/bindings/python/.venv/bin:$PATH"
           (cd tools/audition/web && yarn install --immutable)
+          (cd tools/audition/web && yarn lint && yarn typecheck)
+          make lint-static
           make abi-layout-check
           make check-abi-version
           make processor-types-check

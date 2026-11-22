@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint check-js-types wasm coverage \
+.PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint lint-static check-js-types wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check scene-token-cases result-null-means processor-types processor-types-check ci-local \
@@ -442,6 +442,11 @@ lint:
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
 	fi
+	$(MAKE) lint-static
+
+# The static and drift gates that read committed sources alone. `make lint` and
+# CI's drift-gate step both run it, so a push is gated on the list a local lint runs.
+lint-static:
 	python3 -c "$$GS_EFX_SR_COEFFICIENT_LINT_PY"
 	python3 -c "$$MASTERING_ENUM_CAST_LINT_PY"
 # The test-independence rule, stated in CONTRIBUTING.md: the byte-to-physical-unit

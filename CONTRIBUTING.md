@@ -71,7 +71,7 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | Job | Runs on | What it checks |
 | --- | --- | --- |
 | `clang-format` | both | `clang-format --dry-run --Werror` over every tracked `.h` / `.hpp` / `.c` / `.cpp` / `.mm` outside `third_party/` |
-| `lint` | both | Biome over the WASM and Node bindings, a `tsc` type-check of both bindings and their tests, `ruff check .` over the whole repository, and four drift gates: the ABI layout snapshot, the ABI version mirrors, the generated processor types, and cross-surface parity |
+| `lint` | both | Biome over the WASM and Node bindings, a `tsc` type-check of both bindings and their tests, `ruff check .` over the whole repository, Biome and a type-check of the listening page, the drift gates (the ABI layout snapshot, the ABI version mirrors, the generated processor types, cross-surface parity), and `make lint-static` |
 | `Python tools` | both | The Python tools' own tests: the instrument-bank calibration harness under `tools/voicematch` and `tools/audition`, and the SOFA-to-HRTF converter under `tools/playback` |
 | `Native C++` | both | A Debug build and the default ctest run; Linux on `develop`, Linux and macOS on `main` |
 | `Installed package` | both | Installs into a scratch prefix and links each exported archive on its own |
@@ -214,6 +214,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - A TypeScript declaration emit only adds to `dist/`, so a deleted or renamed source leaves its `.d.ts` behind, and the npm tarball ships `dist/` whole. The package scripts clear it; a bare `tsc` does not, and nothing fails while the orphan is there.
 - A WASM build overwrites `bindings/wasm/dist/` wherever its build directory lives, and every surface's tests import it. Emscripten compiles its system libraries through a path relative to the build directory, so a worktree under `/tmp` fails to link for a reason unrelated to your change.
 - The drift gates need only `python3`. `make ci-local` and `make format` need Node and uv, because they reach the layout snapshot through uv and the binding linters through yarn.
+- `make lint-static` holds the static and drift gates that read committed sources alone: the generated tables' drift checks, the GS EFX coverage equation and its include-scope and skeleton pins, the coefficient-name and enum-cast greps, and the numeric-domain rows. `make lint` and the CI `lint` job both run it, so a push is gated on the list a local lint runs.
 - `make lint` type-checks the typed surfaces: `tsc` over the Node and WASM bindings and their tests (`make check-js-types`, against the declarations already in `dist/`), and `mypy --strict` for Python. A Python stub is invisible to every other gate: ruff does not read it, no test imports it, and the module answers at runtime whatever the stub says.
 - `Installed package` is the only CI job that sees the library the way an external C++ consumer does. Every in-tree target links the whole set, so an archive missing a declared dependency still links in tree.
 
