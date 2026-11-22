@@ -786,18 +786,18 @@ bool cancelCallbackRequested(const val& callback) {
   return outcome.isTrue();
 }
 
-int requireMatchedLength(const val& a, const char* a_subject, const val& b, const char* b_subject,
-                         bool require_non_zero) {
-  const std::size_t a_length = wasmArrayLikeLength(a, a_subject);
-  const std::size_t b_length = wasmArrayLikeLength(b, b_subject);
-  const std::string pair = std::string(a_subject) + " and " + b_subject;
-  if (a_length != b_length) {
+int requireMatchedLength(const val& first, const char* first_subject, const val& second,
+                         const char* second_subject, bool require_non_zero) {
+  const std::size_t first_length = wasmArrayLikeLength(first, first_subject);
+  const std::size_t second_length = wasmArrayLikeLength(second, second_subject);
+  const std::string pair = std::string(first_subject) + " and " + second_subject;
+  if (first_length != second_length) {
     throw WasmRangeError(pair + " must have the same length");
   }
-  if (require_non_zero && a_length == 0) {
+  if (require_non_zero && first_length == 0) {
     throw WasmRangeError(pair + " must not be empty");
   }
-  return static_cast<int>(a_length);
+  return static_cast<int>(first_length);
 }
 
 void requireOrdinalInRange(int value, int min, int max, const char* subject) {

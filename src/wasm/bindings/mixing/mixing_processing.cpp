@@ -115,8 +115,10 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
     val left = left_channels[index];
     val right = right_channels[index];
     const std::string at = "[" + std::to_string(index) + "]";
-    if (wasmArrayLikeLength(left, ("leftInputs" + at).c_str()) != length ||
-        wasmArrayLikeLength(right, ("rightInputs" + at).c_str()) != length) {
+    const std::string left_subject = "leftInputs" + at;
+    const std::string right_subject = "rightInputs" + at;
+    if (wasmArrayLikeLength(left, left_subject.c_str()) != length ||
+        wasmArrayLikeLength(right, right_subject.c_str()) != length) {
       throw WasmRangeError("all input and output channels must have the same length");
     }
     auto& left_dest = left_scratch_[static_cast<size_t>(index)];

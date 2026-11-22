@@ -508,13 +508,13 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'mixing/mixing_processing.cpp',
       text: 'left_subject.c_str()',
-      count: 1,
+      count: 2,
       reason: 'error-subject label built from a literal name and a strip index',
     },
     {
       file: 'mixing/mixing_processing.cpp',
       text: 'right_subject.c_str()',
-      count: 1,
+      count: 2,
       reason: 'error-subject label built from a literal name and a strip index',
     },
     {
