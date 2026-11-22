@@ -1018,12 +1018,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => magnitudeSum(native.clicks(CLICK_TIMES, SAMPLE_RATE, SAMPLE_RATE, 1000, v)),
   },
   {
-    name: 'amplitudeToDb topDb',
-    site: 'features/conversion.cpp AmplitudeToDb topDb',
-    control: [10, 80],
-    call: (v) => JSON.stringify(native.amplitudeToDb(KNOWN_AMPLITUDES, 1, 1e-5, v)),
-  },
-  {
     name: 'dbToPower ref',
     site: 'features/conversion.cpp DbToPower ref',
     control: [1, 2],
@@ -1130,6 +1124,33 @@ describe('a gamma is given or absent, and absent is the automatic ERB value', ()
       }
     },
   );
+});
+
+/**
+ * The dB conversions' `topDb`, read against the core's [0, +inf] domain.
+ *
+ * +inf is the written spelling of no clipping, and a finite value past `FLT_MAX` saturates to it,
+ * which clips nothing either: `max - 1e39` lies under every level the data can hold.
+ */
+describe('a dB conversion topDb meets the core domain, where Infinity means no clipping', () => {
+  const CONVERSIONS = [
+    ['powerToDb', (v: number) => JSON.stringify(native.powerToDb(KNOWN_AMPLITUDES, 1, 1e-12, v))],
+    [
+      'amplitudeToDb',
+      (v: number) => JSON.stringify(native.amplitudeToDb(KNOWN_AMPLITUDES, 1, 1e-6, v)),
+    ],
+  ] as const;
+
+  it.each(CONVERSIONS)('%s topDb', (name, call) => {
+    expect(call(10)).not.toBe(call(80));
+    const unclipped = call(Number.POSITIVE_INFINITY);
+    expect(call(1e39)).toBe(unclipped);
+    expect(call(1000)).toBe(unclipped);
+    for (const value of [-1e39, Number.NEGATIVE_INFINITY, Number.NaN, -1]) {
+      expect(() => call(value), `${name} topDb ${value}`).toThrow(RangeError);
+      expect(() => call(value), `${name} topDb ${value}`).toThrow(/topDb must be at least 0/);
+    }
+  });
 });
 
 describe('the table covers the whole reader population', () => {

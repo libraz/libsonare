@@ -177,7 +177,7 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   float amin{};
   if (!RequiredFloatArg(env, info, 2, "amin", &amin)) return env.Undefined();
   float top_db{};
-  if (!RequiredFloatArg(env, info, 3, "topDb", &top_db)) return env.Undefined();
+  if (!RequiredDomainFloatArg(env, info, 3, "topDb", &top_db)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -199,7 +199,7 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   float amin{};
   if (!RequiredFloatArg(env, info, 2, "amin", &amin)) return env.Undefined();
   float top_db{};
-  if (!OptionalFloatArg(env, info, 3, "topDb", 80.0f, &top_db)) return env.Undefined();
+  if (!RequiredDomainFloatArg(env, info, 3, "topDb", &top_db)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =

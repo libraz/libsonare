@@ -13,7 +13,7 @@ export interface PowerToDbRequest<T extends Float32Array | Matrix2D = Float32Arr
   ref?: number;
   /** Floor under which a power is clamped. Default 1e-10. */
   amin?: number;
-  /** Dynamic range kept below the peak, in dB. Default 80. */
+  /** Dynamic range kept below the peak, in dB: at least 0, or `Infinity` for no clipping. Default 80. */
   topDb?: number;
 }
 
@@ -25,7 +25,7 @@ export interface AmplitudeToDbRequest<T extends Float32Array | Matrix2D = Float3
   ref?: number;
   /** Floor under which an amplitude is clamped. Default 1e-5. */
   amin?: number;
-  /** Dynamic range kept below the peak, in dB. Default 80. */
+  /** Dynamic range kept below the peak, in dB: at least 0, or `Infinity` for no clipping. Default 80. */
   topDb?: number;
 }
 
