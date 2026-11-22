@@ -5,7 +5,6 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   init,
   PART_RIG_ALL_PARTS,
   PART_RIG_MODES,
@@ -115,54 +114,48 @@ describe('Sonare WASM part rig', () => {
           RangeError,
         ).message,
       ).toBe('Project.setPartRig: insertsJson must not be NULL when mode is chain');
-      expect(() =>
-        project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),
-      ).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringMatching(
-            /^Project\.setPartRig: the document must hold 1 to 8 inserts for a chain rig$/,
-          ),
-        }),
-      );
-      expect(() =>
-        project.setPartRig({
-          destinationId: 0,
-          part: 0,
-          mode: 'chain',
-          inserts: [{ processor: 'no.such.processor' }],
-        }),
-      ).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringMatching(
-            /^Project\.setPartRig: \[0\]\.processor must name a processor that can be built$/,
-          ),
-        }),
-      );
-      expect(() =>
-        project.setPartRig({
-          destinationId: 0,
-          part: 0,
-          mode: 'chain',
-          inserts: Array(9).fill(LIMITER),
-        }),
-      ).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringMatching(
-            /^Project\.setPartRig: the document must hold 1 to 8 inserts for a chain rig$/,
-          ),
-        }),
-      );
-      expect(() =>
-        project.setPartRig({
-          destinationId: 0,
-          part: 0,
-          mode: 'chain',
-          inserts: [{ processor: LIMITER.processor, params: '{not json' as never }],
-        }),
-      ).toThrow(TypeError);
+      expect(
+        expectRefusalOf(
+          () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),
+          RangeError,
+        ).message,
+      ).toBe('Project.setPartRig: inserts must hold 1 to 8 entries for a chain rig');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: [{ processor: 'no.such.processor' }],
+            }),
+          RangeError,
+        ).message,
+      ).toBe('Project.setPartRig: inserts[0].processor must name a processor that can be built');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: Array(9).fill(LIMITER),
+            }),
+          RangeError,
+        ).message,
+      ).toBe('Project.setPartRig: inserts must hold 1 to 8 entries for a chain rig');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: [{ processor: LIMITER.processor, params: '{not json' as never }],
+            }),
+          TypeError,
+        ).message,
+      ).toBe('Project.setPartRig: inserts[0].params must be an object');
       expect(project.partRig({ destinationId: 0, part: 0 })).toEqual({ mode: 'none' });
     } finally {
       project.destroy();
@@ -215,20 +208,19 @@ describe('Sonare WASM part rig', () => {
           RangeError,
         ).message,
       ).toBe('RealtimeEngine.setPartRig: insertsJson must be given when mode is chain');
-      expect(() =>
-        engine.setPartRig({
-          destinationId: 0,
-          part: 0,
-          mode: 'chain',
-          inserts: [{ processor: 'no.such.processor' }],
-        }),
-      ).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringMatching(
-            /^RealtimeEngine\.setPartRig: invalid part rig insert chain$/,
-          ),
-        }),
+      expect(
+        expectRefusalOf(
+          () =>
+            engine.setPartRig({
+              destinationId: 0,
+              part: 0,
+              mode: 'chain',
+              inserts: [{ processor: 'no.such.processor' }],
+            }),
+          RangeError,
+        ).message,
+      ).toBe(
+        'RealtimeEngine.setPartRig: inserts[0].processor must name a processor that can be built',
       );
     } finally {
       engine.destroy();
@@ -303,7 +295,7 @@ describe('Sonare WASM part rig request form', () => {
     [
       'an insert without a processor',
       { mode: 'chain', inserts: [{ params: {} }] },
-      new TypeError('Project.setPartRig: inserts[0].processor must be a string'),
+      new TypeError('Project.setPartRig: inserts[0].processor must be given'),
     ],
     [
       'an out-of-range part',

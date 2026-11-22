@@ -623,10 +623,24 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
-      // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079], printed inward.
-      const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
-      expect(() => voiceChange(signal, SR, request)).toThrow(RangeError);
-      expect(() => voiceChange(signal, SR, request)).toThrow(/\[0\.693, 2\.078\]$/);
+      // 2^(4/12) = 1.2599: a warp in [0.55, 1.65] needs a factor of at least 0.693, printed inward,
+      // and the factor itself stays within [0.55, 1.65].
+      const absolute = { formantMode: 'absolute' as const };
+      expect(() =>
+        voiceChange(signal, SR, { ...absolute, pitchSemitones: 4, formantFactor: 0.6 }),
+      ).toThrow(
+        new RangeError(
+          'voiceChange: formantFactor must be finite and in [0.693, 1.65] when formantMode is absolute at pitchSemitones 4 (the warp it needs must lie in [0.55, 1.65])',
+        ),
+      );
+      expect(() =>
+        voiceChange(signal, SR, { ...absolute, pitchSemitones: 4, formantFactor: 2.5 }),
+      ).toThrow(new RangeError('voiceChange: formantFactor must be finite and in [0.55, 1.65]'));
+      expect(() => voiceChange(signal, SR, { ...absolute, pitchSemitones: 20 })).toThrow(
+        new RangeError(
+          'voiceChange: formantMode must be relative at pitchSemitones 20: no formantFactor in [0.55, 1.65] has a warp in [0.55, 1.65] there',
+        ),
+      );
       expect(() =>
         voiceChange(signal, SR, { formantMode: 'sideways' as unknown as 'relative' }),
       ).toThrow(RangeError);
@@ -1077,12 +1091,9 @@ describe('v1.2 feature additions (WASM)', () => {
         ],
       ];
       for (const [config, message] of refusals) {
-        expect(() => engine.setMidiFx(0, config as never)).toThrow(
-          expect.objectContaining({
-            code: ErrorCode.InvalidFormat,
-            message: `RealtimeEngine.setMidiFx: ${message}`,
-          }),
-        );
+        expect(
+          expectRefusalOf(() => engine.setMidiFx(0, config as never), RangeError).message,
+        ).toBe(`RealtimeEngine.setMidiFx: config.${message}`);
       }
       engine.setMidiInputSource(0);
       expect(engine.midiInputPendingCount).toBe(0);

@@ -43,7 +43,7 @@ import {
   synthGsVariationIsVoicedApart,
 } from '../dist/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/project_types';
-import { expectArgumentRefusal } from './_helpers';
+import { expectArgumentRefusal, expectRefusalOf } from './_helpers';
 
 describe('Sonare WASM Project', () => {
   beforeAll(async () => {
@@ -1154,20 +1154,29 @@ describe('Sonare WASM Project', () => {
       const { clipId } = project.addMidiClip(0, 4);
       const bake = (config: unknown) => () =>
         project.bakeMidiFx({ clipId, config: config as never });
-      expect(bake('{}')).toThrow(TypeError);
-      expect(bake(null)).toThrow(TypeError);
-      expect(bake({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
-      for (const config of [
-        { transposeSemitones: '12' },
-        { chordIntervals: [0, '4'] },
-        { transpose_semitones: 12 },
-        { seed: Number.NaN },
-        { nope: 1 },
-      ]) {
-        expect(bake(config)).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+      const entry = 'Project.bakeMidiFx: ';
+      const refused = (config: unknown, text: string) => {
+        expect(expectRefusalOf(bake(config), TypeError).message).toBe(`${entry}${text}`);
+      };
+      refused('{}', 'config must be an object');
+      refused(null, 'config must be an object');
+      const typeRefusals: [unknown, string][] = [
+        [{ transposeSemitones: '12' }, 'config.transposeSemitones must be a number'],
+        [{ chordIntervals: [0, '4'] }, 'config.chordIntervals[1] must be a number'],
+        [
+          { transpose_semitones: 12 },
+          'unknown key config.transpose_semitones (renamed to config.transposeSemitones)',
+        ],
+        [{ seed: Number.NaN }, 'config.seed must be a number'],
+        [{ nope: 1 }, 'unknown key config.nope'],
+      ];
+      for (const [config, text] of typeRefusals) {
+        refused(config, text);
       }
-      expect(bake({ transpose_semitones: 12 })).toThrow(/write transposeSemitones/);
-      expect(() => project.previewMidiFxCount({ clipId, config: 1 as never })).toThrow(TypeError);
+      expect(
+        expectRefusalOf(() => project.previewMidiFxCount({ clipId, config: 1 as never }), TypeError)
+          .message,
+      ).toBe('Project.previewMidiFxCount: config must be an object');
     } finally {
       project.destroy();
     }

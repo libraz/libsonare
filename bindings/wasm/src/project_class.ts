@@ -630,9 +630,9 @@ export class Project {
    * is {@link PART_RIG_ALL_PARTS}, on MIDI destination `destinationId`, via an
    * undoable edit. `'chain'` takes 1-8 `inserts` and is the only mode that does;
    * a destination no track references is stored and read back all the same.
-   * Refused: a malformed insert document (invalid format), an out-of-range part,
-   * an unknown mode or processor, or inserts on a non-chain mode (invalid
-   * parameter), and an insert chain in a build without mastering.
+   * Refused: an insert of the wrong shape (`TypeError`), an out-of-range part,
+   * an unknown mode or processor, or inserts on a non-chain mode (`RangeError`),
+   * and an insert chain in a build without mastering (`NotSupported`).
    */
   setPartRig(request: PartRigRequest): void {
     requestObject('setPartRig', request, 'request', true);

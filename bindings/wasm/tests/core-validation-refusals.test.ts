@@ -13,6 +13,7 @@ import {
   mfccToMel,
   Project,
   pitchShift,
+  RealtimeEngine,
   resample,
   StreamingEqualizer,
   StreamingMasteringChain,
@@ -26,7 +27,7 @@ import { expectRefusalOf, unknownKeyText } from './_helpers';
 // The core function owns each refusal in this corpus. The embind wrappers call the
 // core directly, so the refusal is asserted on the raw module as well as on the facade.
 
-type Cause = 'argument' | 'missing_argument';
+type Cause = 'argument' | 'missing_argument' | 'shape';
 type MfccInput = { n_mfcc: number; n_frames: number; fill: number };
 type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
@@ -167,6 +168,7 @@ const corpus = JSON.parse(
 const errorClassFor: Record<Cause, typeof RangeError> = {
   argument: RangeError,
   missing_argument: TypeError,
+  shape: TypeError,
 };
 const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 /** A core text as the facade renders it: the leading snake_case key respelled in camelCase. */
@@ -898,6 +900,170 @@ describe('mix-scene document refusals come from the core', () => {
         code: ErrorCode[code as keyof typeof ErrorCode],
         message: expect.stringContaining(message as string),
       }),
+    );
+  });
+});
+
+type CorpusCode = keyof typeof ErrorCode;
+type RigCase = {
+  id: string;
+  inserts: unknown[];
+  cause?: Cause | 'format';
+  code?: CorpusCode;
+  message?: string;
+};
+type FxCase = {
+  id: string;
+  config: Record<string, unknown>;
+  cause?: Cause;
+  code?: CorpusCode;
+  message?: string;
+};
+const rigCorpus = (
+  corpus as unknown as {
+    part_rig_inserts: {
+      setters: string[];
+      accepting_setters: string[];
+      accepted: RigCase[];
+      refused: RigCase[];
+      project_document: RigCase[];
+    };
+  }
+).part_rig_inserts;
+const fxCorpus = (
+  corpus as unknown as {
+    midi_fx_config: { setters: string[]; accepted: FxCase[]; refused: FxCase[] };
+  }
+).midi_fx_config;
+const ENGINE_OPTIONS = { sampleRate: 48000, maxBlockSize: 128 };
+const RIG_SETTERS: Record<string, (inserts: unknown[]) => void> = {
+  project_set_part_rig: (inserts) => {
+    const project = new Project();
+    try {
+      project.setPartRig({ destinationId: 1, part: 0, mode: 'chain', inserts: inserts as never });
+    } finally {
+      project.destroy();
+    }
+  },
+  engine_set_part_rig: (inserts) => {
+    const engine = new RealtimeEngine(ENGINE_OPTIONS);
+    try {
+      engine.setPartRig({ destinationId: 1, part: 0, mode: 'chain', inserts: inserts as never });
+    } finally {
+      engine.destroy();
+    }
+  },
+};
+const projectMidiFx =
+  (call: 'bakeMidiFx' | 'previewMidiFxCount') => (config: Record<string, unknown>) => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      project[call]({ clipId, config: config as never });
+    } finally {
+      project.destroy();
+    }
+  };
+const FX_SETTERS: Record<string, (config: Record<string, unknown>) => void> = {
+  engine_set_midi_fx: (config) => {
+    const engine = new RealtimeEngine(ENGINE_OPTIONS);
+    try {
+      engine.setMidiFx(5, config as never);
+    } finally {
+      engine.destroy();
+    }
+  },
+  project_bake_midi_fx: projectMidiFx('bakeMidiFx'),
+  project_preview_midi_fx_count: projectMidiFx('previewMidiFxCount'),
+};
+/** An argument refusal: the class follows the cause; the corpus code is the C ABI's. */
+const expectArgumentRefusal = (
+  call: () => void,
+  cause: Cause,
+  code: CorpusCode,
+  message: string,
+) => {
+  expect(code).toBe('InvalidParameter');
+  let caught: unknown;
+  try {
+    call();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(errorClassFor[cause]);
+  expect((caught as Error).message).toContain(message);
+};
+
+describe('part-rig inserts are refused as a call argument by the core', () => {
+  it('drives every setter the corpus names', () => {
+    expect(Object.keys(RIG_SETTERS).sort()).toEqual([...rigCorpus.setters].sort());
+  });
+
+  it.each(rigCorpus.accepted)('accepts $id', ({ inserts }) => {
+    for (const setter of rigCorpus.accepting_setters) {
+      expect(() => RIG_SETTERS[setter](inserts)).not.toThrow();
+    }
+  });
+
+  const refused = rigCorpus.setters.flatMap((setter) =>
+    rigCorpus.refused.map((entry) => ({ setter, ...entry })),
+  );
+  it.each(refused)('refuses $id through $setter', ({ setter, inserts, cause, code, message }) => {
+    expectArgumentRefusal(
+      () => RIG_SETTERS[setter](inserts),
+      cause as Cause,
+      code as CorpusCode,
+      message as string,
+    );
+  });
+
+  it.each(rigCorpus.project_document)(
+    'refuses $id as document content inside a loaded project',
+    ({ inserts, code, message }) => {
+      const blank = new Project();
+      const document = JSON.parse(blank.toJson()) as Record<string, unknown>;
+      blank.destroy();
+      document.partRigs = [{ destinationId: 1, part: 0, mode: 'chain', inserts }];
+      expect(() => Project.fromJson(JSON.stringify(document))).toThrow(
+        expect.objectContaining({
+          code: ErrorCode[code as CorpusCode],
+          message: expect.stringContaining(message as string),
+        }),
+      );
+      let caught: unknown;
+      try {
+        Project.fromJson(JSON.stringify(document));
+      } catch (error) {
+        caught = error;
+      }
+      // A document's content is never re-labelled as an argument.
+      expect(caught).not.toBeInstanceOf(TypeError);
+      expect(caught).not.toBeInstanceOf(RangeError);
+    },
+  );
+});
+
+describe('MIDI-FX config is refused as a call argument by the core', () => {
+  it('drives every setter the corpus names', () => {
+    expect(Object.keys(FX_SETTERS).sort()).toEqual([...fxCorpus.setters].sort());
+  });
+
+  const accepted = fxCorpus.setters.flatMap((setter) =>
+    fxCorpus.accepted.map((entry) => ({ setter, ...entry })),
+  );
+  it.each(accepted)('accepts $id through $setter', ({ setter, config }) => {
+    expect(() => FX_SETTERS[setter](config)).not.toThrow();
+  });
+
+  const refused = fxCorpus.setters.flatMap((setter) =>
+    fxCorpus.refused.map((entry) => ({ setter, ...entry })),
+  );
+  it.each(refused)('refuses $id through $setter', ({ setter, config, cause, code, message }) => {
+    expectArgumentRefusal(
+      () => FX_SETTERS[setter](config),
+      cause as Cause,
+      code as CorpusCode,
+      message as string,
     );
   });
 });

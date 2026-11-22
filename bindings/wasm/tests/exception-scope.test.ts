@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, noteToHz, RealtimeEngine } from '../dist/index.js';
+import { init, noteToHz, RealtimeEngine } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
 // emscripten defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing
@@ -33,11 +33,10 @@ describe('WASM exception scope', () => {
     }
   });
 
-  it('reports a refused MIDI FX config as an error code, not a raw exception', () => {
-    // src/c_api/midi_fx_json.h answers SONARE_ERROR_INVALID_FORMAT for a value
-    // it refuses. It is an inline function, so the catch around its JSON parse
-    // belongs to every unit that includes it rather than to the header -- the
-    // reason a unit can be uncovered while its own text spells no catch at all.
+  it('reports a refused MIDI FX config as a translated argument refusal, not a raw exception', () => {
+    // src/c_api/midi_fx_json.h refuses a value it cannot accept. It is an inline function, so the
+    // catch around its JSON parse belongs to every unit that includes it rather than to the
+    // header -- the reason a unit can be uncovered while its own text spells no catch at all.
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       let thrown: unknown;
@@ -46,15 +45,11 @@ describe('WASM exception scope', () => {
       } catch (error) {
         thrown = error;
       }
-      expect(isSonareError(thrown)).toBe(true);
-      if (!isSonareError(thrown)) {
-        throw new Error('expected SonareError');
-      }
-      // The point is that a decoded SonareError arrives at all: an elided
-      // handler delivers the raw json::JsonError, which carries no code for
-      // the decoder to read.
-      expect(typeof thrown.code).toBe('number');
-      expect(thrown.code).not.toBe(ErrorCode.Unknown);
+      // An elided handler delivers the raw json::JsonError instead of a translated RangeError.
+      const error = expectArgumentRefusal(thrown, RangeError, 'setMidiFx');
+      expect(error.message).toBe(
+        'RealtimeEngine.setMidiFx: config.quantizePpq must be a positive PPQ length in range',
+      );
     } finally {
       engine.destroy();
     }
