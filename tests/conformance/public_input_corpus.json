@@ -387,7 +387,8 @@
     "fn": "room_morph_stereo",
     "room": {"sample_rate": 48000, "length_m": 8, "width_m": 6, "height_m": 3, "absorption": 0.3, "wet": 1, "max_sec": 0.3},
     "cases": [
-      { "id": "receiver_spacing_m_top", "key": "receiver_spacing_m", "value": 4, "accepted": true },
+      { "id": "receiver_spacing_m_top", "key": "receiver_spacing_m", "value": 4, "room": {"length_m": 10, "width_m": 10}, "accepted": true },
+      { "id": "receiver_spacing_m_top_unfit", "key": "receiver_spacing_m", "value": 4, "refused": "range", "predicate": "must place both receivers inside the room", "relation": true },
       { "id": "receiver_spacing_m_small", "key": "receiver_spacing_m", "value": 0.01, "accepted": true },
       { "id": "receiver_spacing_m_zero", "key": "receiver_spacing_m", "value": 0, "refused": "range", "predicate": "must be finite and in (0, 4]" },
       { "id": "receiver_spacing_m_above", "key": "receiver_spacing_m", "value": 4.5, "refused": "range", "predicate": "must be finite and in (0, 4]" },
