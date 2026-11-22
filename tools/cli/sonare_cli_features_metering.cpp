@@ -551,8 +551,12 @@ sonare::acoustic::ShoeboxRoom cli_room(const CliArgs& args) {
       args.get_float("absorption", sonare::acoustic::kDefaultWallAbsorption));
 }
 
-sonare::acoustic::SourceListener cli_placement(const CliArgs& args) {
-  const sonare::acoustic::SourceListener& place = sonare::acoustic::kDefaultPlacement;
+// A role left out takes the default placement scaled to @p room; the validator has refused a
+// partly given one.
+sonare::acoustic::SourceListener cli_placement(const CliArgs& args,
+                                               const sonare::acoustic::ShoeboxRoom& room) {
+  const sonare::acoustic::SourceListener place = sonare::acoustic::scaled_default_placement(
+      room.dims.length, room.dims.width, room.dims.height);
   return {{args.get_float("source-x", place.source.x), args.get_float("source-y", place.source.y),
            args.get_float("source-z", place.source.z)},
           {args.get_float("listener-x", place.listener.x),
@@ -576,8 +580,9 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
                                       : sonare::acoustic::ReverbModel::Eyring;
 
+  const sonare::acoustic::ShoeboxRoom room = cli_room(args);
   const auto result =
-      sonare::acoustic::synthesize_rir(cli_room(args), cli_placement(args), sample_rate, cfg);
+      sonare::acoustic::synthesize_rir(room, cli_placement(args, room), sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
     for (const sonare::Diagnostic& diagnostic : result.diagnostics) {
       if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
@@ -672,7 +677,7 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = cli_room(args);
-  cfg.placement = cli_placement(args);
+  cfg.placement = cli_placement(args, cfg.target);
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);

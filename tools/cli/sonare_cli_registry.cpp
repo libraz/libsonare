@@ -775,6 +775,22 @@ CliValidationError validate_midi_render_arguments(const CliArgs& args) {
   return {project_synth_refusal(args, false)};
 }
 
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+// A source or listener is given whole or left to the room's scaled default, never filled in.
+CliValidationError validate_room_placement(const CliArgs& args) {
+  for (const std::string role : {"source", "listener"}) {
+    const std::string x = role + "-x";
+    const std::string y = role + "-y";
+    const std::string z = role + "-z";
+    const int given = int{args.has(x)} + int{args.has(y)} + int{args.has(z)};
+    if (given != 0 && given != 3) {
+      return {"--" + x + ", --" + y + " and --" + z + " must be given together"};
+    }
+  }
+  return {};
+}
+#endif
+
 CliValidationError validate_project_align_takes(const CliArgs& args) {
   return {project_audio_binding_refusal(args)};
 }
@@ -1533,29 +1549,30 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(number_value("width"), "5.0"),
                  library_default(number_value("height"), "3.0"),
                  library_default(with_domain(number_value("absorption"), between(0.0, 1.0)), "0.2"),
-                 library_default(number_value("source-x"), "1.0"),
-                 library_default(number_value("source-y"), "1.0"),
-                 library_default(number_value("source-z"), "1.2"),
-                 library_default(number_value("listener-x"), "5.0"),
-                 library_default(number_value("listener-y"), "4.0"),
-                 library_default(number_value("listener-z"), "1.7"),
+                 with_stated_default(number_value("source-x"), "scaled to the room"),
+                 with_stated_default(number_value("source-y"), "scaled to the room"),
+                 with_stated_default(number_value("source-z"), "scaled to the room"),
+                 with_stated_default(number_value("listener-x"), "scaled to the room"),
+                 with_stated_default(number_value("listener-y"), "scaled to the room"),
+                 with_stated_default(number_value("listener-z"), "scaled to the room"),
                  with_domain(int_value("sample-rate", 48000),
                              between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate)),
                  library_default(int_value("ism-order"), "3"),
                  library_default(with_domain(int_value("seed"), between(0.0, kMaxCliSeed)), "1"),
                  with_stated_default(with_domain(number_value("max-sec"), greater_than(0.0)),
                                      "natural length"),
-                 required_output(), flag("sabine")});
+                 required_output(), flag("sabine")},
+                {}, &validate_room_placement);
     add_command(
         commands, "room-morph", true,
         {number_value("length", 7.0), number_value("width", 5.0), number_value("height", 3.0),
          library_default(with_domain(number_value("absorption"), between(0.0, 1.0)), "0.2"),
-         library_default(number_value("source-x"), "1.0"),
-         library_default(number_value("source-y"), "1.0"),
-         library_default(number_value("source-z"), "1.2"),
-         library_default(number_value("listener-x"), "5.0"),
-         library_default(number_value("listener-y"), "4.0"),
-         library_default(number_value("listener-z"), "1.7"),
+         with_stated_default(number_value("source-x"), "scaled to the room"),
+         with_stated_default(number_value("source-y"), "scaled to the room"),
+         with_stated_default(number_value("source-z"), "scaled to the room"),
+         with_stated_default(number_value("listener-x"), "scaled to the room"),
+         with_stated_default(number_value("listener-y"), "scaled to the room"),
+         with_stated_default(number_value("listener-z"), "scaled to the room"),
          library_default(number_value("suppression"), "0.5"),
          library_default(number_value("wet"), "0.5"), library_default(int_value("ism-order"), "3"),
          library_default(with_domain(int_value("seed"), between(0.0, kMaxCliSeed)), "1"),
@@ -1564,7 +1581,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          library_default(with_domain(number_value("receiver-spacing"), above_zero_up_to(4.0)),
                          "0.5"),
          required_output(), flag("sabine")},
-        {}, nullptr, 0, /*preserves_stereo_input=*/true);
+        {}, &validate_room_placement, 0, /*preserves_stereo_input=*/true);
 #endif
 
     // Metering and scalar utility leaves.
