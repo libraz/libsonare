@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as analysis from '../dist/analysis.js';
+import { analysisRegistrations, declarationText } from '../scripts/write-analysis-module-types.mjs';
 
 describe('analysis-only WASM entry', () => {
   beforeAll(async () => {
@@ -124,5 +128,48 @@ describe('the analysis entry exports only what its binary registers', () => {
     expect(analysis.stft(samples, 22050).magnitude.cols).toBeGreaterThan(0);
     expect(analysis.melSpectrogram(samples, 22050).power.rows).toBeGreaterThan(0);
     expect(analysis.chroma(samples, 22050).features.rows).toBeGreaterThan(0);
+  });
+});
+
+describe('the analysis module declaration', () => {
+  const DECLARATION = fileURLToPath(new URL('../src/sonare-analysis.js.d.ts', import.meta.url));
+
+  /** Property names of the module type the declared factory resolves to. */
+  function declaredModuleKeys(): string[] {
+    // The package's own resolution: `./sonare.js` reaches `sonare.js.d.ts` only under it,
+    // and an unresolved import reads as `any`, which has no properties to compare.
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const config = ts.parseJsonConfigFileContent(
+      ts.readConfigFile(`${root}/tsconfig.json`, ts.sys.readFile).config,
+      ts.sys,
+      root,
+    );
+    const program = ts.createProgram([DECLARATION], { ...config.options, noEmit: true });
+    const checker = program.getTypeChecker();
+    const file = program.getSourceFile(DECLARATION);
+    const moduleSymbol = file && checker.getSymbolAtLocation(file);
+    const factory = moduleSymbol
+      ? checker.getExportsOfModule(moduleSymbol).find((s) => s.name === 'default')
+      : undefined;
+    if (!factory) throw new Error(`${DECLARATION} has no default export`);
+    const [signature] = checker.getTypeOfSymbol(factory).getCallSignatures();
+    const promised = checker.getAwaitedType(signature.getReturnType());
+    if (!promised || promised.flags & ts.TypeFlags.Any) {
+      throw new Error('the factory does not resolve to a declared module type');
+    }
+    return checker
+      .getPropertiesOfType(promised)
+      .map((p) => p.name)
+      .sort();
+  }
+
+  it('names exactly what the analysis-only binary registers', async () => {
+    const registered = await analysisRegistrations();
+    expect(registered.length).toBeGreaterThan(100);
+    expect(declaredModuleKeys()).toEqual(registered);
+  });
+
+  it('is the text the generator writes for those registrations', async () => {
+    expect(readFileSync(DECLARATION, 'utf8')).toBe(declarationText(await analysisRegistrations()));
   });
 });
