@@ -85,7 +85,7 @@ _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
         "y": np.ones((8, 16), np.float32),
     },
     "render_percussive_events": {
-        "events": [libsonare.PercussiveEvent(onset_sample=0, offset_sample=64)]
+        "events": [libsonare.PercussiveEventInput(onset_sample=0, offset_sample=64)]
     },
     "pitch_correct_timevarying": {"f0_hz": np.full(len(_TONE) // 512 + 1, 440.0, np.float32)},
     "decompose": {

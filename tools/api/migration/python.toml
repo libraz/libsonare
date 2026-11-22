@@ -10620,7 +10620,7 @@ test = "bindings/python/tests/test_mixing.py::test_strip_can_be_added_to_a_live_
 [[entry]]
 kind = "type"
 old = "NoteObject"
-changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place)"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place); every field but edit is required and the bounds are never None, so a hand-made span is a NoteObjectInput and a split_note / merge_notes row a NoteSetEntry"
 domain = "effects"
 rule = "frozen-results"
 test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
@@ -10636,7 +10636,7 @@ test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assign
 [[entry]]
 kind = "type"
 old = "PercussiveEvent"
-changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place)"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place); every field but edit is required and the bounds are never None, so a hand-made span is a PercussiveEventInput"
 domain = "effects"
 rule = "frozen-results"
 test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
@@ -13560,3 +13560,45 @@ old = "Project.midi2_program(bank_valid)"
 removed = "pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank"
 domain = "project"
 rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.onset_sec"
+removed = "give onset_sec on a NoteObjectInput; a returned NoteObject carries the sample spelling only"
+domain = "effects"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.offset_sec"
+removed = "give offset_sec on a NoteObjectInput; a returned NoteObject carries the sample spelling only"
+domain = "effects"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.time_offset_sec"
+removed = "give time_offset_sec on a NoteEditInput; a returned NoteEdit carries the sample spelling only"
+domain = "effects"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.onset_sec"
+removed = "give onset_sec on a PercussiveEventInput; a returned PercussiveEvent carries the sample spelling only"
+domain = "effects"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.offset_sec"
+removed = "give offset_sec on a PercussiveEventInput; a returned PercussiveEvent carries the sample spelling only"
+domain = "effects"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEventEdit.time_offset_sec"
+removed = "give time_offset_sec on a PercussiveEventEditInput; a returned PercussiveEventEdit carries the sample spelling only"
+domain = "effects"
+rule = "input-types"

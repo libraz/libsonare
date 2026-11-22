@@ -2238,9 +2238,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `NoteObject` | a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place) |
+| `NoteObject` | a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place); every field but edit is required and the bounds are never None, so a hand-made span is a NoteObjectInput and a split_note / merge_notes row a NoteSetEntry |
 | `NoteTarget` | a frozen dataclass; a changed copy comes from dataclasses.replace |
-| `PercussiveEvent` | a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place) |
+| `PercussiveEvent` | a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place); every field but edit is required and the bounds are never None, so a hand-made span is a PercussiveEventInput |
 | `RealtimeVoiceChangerConfig` | a frozen dataclass; a changed copy comes from dataclasses.replace |
 
 #### Python keyword arguments and attributes are snake_case only
@@ -2321,6 +2321,17 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `PitchDecomposition` | `PitchDecompositionResult` |
+
+#### Input-only types are named <Name>Input
+
+| 1.x | 2.0.0 |
+|---|---|
+| `NoteEdit.time_offset_sec` | removed: give time_offset_sec on a NoteEditInput; a returned NoteEdit carries the sample spelling only |
+| `NoteObject.offset_sec` | removed: give offset_sec on a NoteObjectInput; a returned NoteObject carries the sample spelling only |
+| `NoteObject.onset_sec` | removed: give onset_sec on a NoteObjectInput; a returned NoteObject carries the sample spelling only |
+| `PercussiveEvent.offset_sec` | removed: give offset_sec on a PercussiveEventInput; a returned PercussiveEvent carries the sample spelling only |
+| `PercussiveEvent.onset_sec` | removed: give onset_sec on a PercussiveEventInput; a returned PercussiveEvent carries the sample spelling only |
+| `PercussiveEventEdit.time_offset_sec` | removed: give time_offset_sec on a PercussiveEventEditInput; a returned PercussiveEventEdit carries the sample spelling only |
 
 #### Each list input takes one item form
 
@@ -14059,6 +14070,18 @@ WASM, 2.0.0:
 ```ts
 const input: ProjectMarkerInput = { ... };
 project.setMarker(input);
+```
+
+Python, 1.x:
+
+```python
+libsonare.render_notes(audio, sr, [libsonare.NoteObject(onset_sec=0.1, offset_sec=0.2)])
+```
+
+Python, 2.0.0:
+
+```python
+libsonare.render_notes(audio, sr, [libsonare.NoteObjectInput(onset_sec=0.1, offset_sec=0.2)])
 ```
 
 ### Each list input takes one item form

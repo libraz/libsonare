@@ -19,11 +19,12 @@ from typing import TYPE_CHECKING, Self
 import numpy as np
 
 from ._effects_note_model import (
+    _note_edit_to_c,
     _note_set_index,
     _pitch_hz_from_c,
     _transcribe_reattack,
 )
-from ._errors import _entry, _refuse, _require_open
+from ._errors import _entry, _require_open
 from ._narrowing import _narrow_double
 
 if TYPE_CHECKING:
@@ -32,11 +33,10 @@ if TYPE_CHECKING:
     # consumer reaches as libsonare.NoteEdit / libsonare.NoteObject. Annotating
     # against them is what lets a caller pass back the class it was handed; the
     # two names are the same objects at runtime.
-    from .analyzer import NoteEdit, NoteObject
+    from .analyzer import NoteEdit, NoteEditInput, NoteObject
 else:
-    from ._effects_note_model import NoteEdit, NoteObject
+    from ._effects_note_model import NoteEdit, NoteEditInput, NoteObject
 from ._ffi import (
-    SonareNoteEdit,
     SonareNoteObject,
     SonareNoteRenderConfig,
     SonarePolyphonicConfig,
@@ -52,7 +52,6 @@ from ._runtime import (
     _int_refusal,
     _narrow_int,
     _out_float_array,
-    _resolve_time_offset,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -557,7 +556,7 @@ class PolyphonicAnalysis:
     # -- editing ------------------------------------------------------------
 
     @_entry("PolyphonicAnalysis.set_note_edit")
-    def set_note_edit(self, note: int, edit: NoteEdit | None = None) -> None:
+    def set_note_edit(self, note: int, edit: NoteEdit | NoteEditInput | None = None) -> None:
         """Replace one note's pending edit.
 
         The only thing a host writes. Everything else on a note is a
@@ -593,34 +592,10 @@ class PolyphonicAnalysis:
             )
             return
 
-        curve = np.asarray(edit.amplitude_envelope, dtype=np.float32)
-        if curve.ndim != 1:
-            raise _refuse("edit.amplitude_envelope must be one-dimensional")
-        envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
         # envelope_offset / envelope_count are inert on this door: the points are
         # the argument below and the analysis keeps its own copy.
-        # Narrowed rather than coerced: int(0.5) is 0, which is this field's
-        # identity, so a sub-sample shift would render unmoved and report
-        # success. Int64-bounded: the ctypes field is c_int64.
-        time_offset = _resolve_time_offset(
-            edit.time_offset_samples,
-            edit.time_offset_sec,
-            self._sample_rate,
-            "edit.time_offset_samples",
-            "edit.time_offset_sec",
-        )
-        c_edit = SonareNoteEdit(
-            time_offset_samples=time_offset.value,
-            pitch_semitones=_narrow_double(edit.pitch_semitones, "edit.pitch_semitones"),
-            gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
-            time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, "edit.time_stretch_ratio"),
-            formant_semitones=_narrow_double(edit.formant_semitones, "edit.formant_semitones"),
-            vibrato_depth_change=_narrow_double(
-                edit.vibrato_depth_change, "edit.vibrato_depth_change"
-            ),
-            drift_change=_narrow_double(edit.drift_change, "edit.drift_change"),
-            muted=1 if edit.muted else 0,
-        )
+        c_edit, curve, time_offset = _note_edit_to_c(edit, self._sample_rate, "edit", 0)
+        envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
         _check(
             lib.sonare_polyphonic_set_note_edit(
                 handle,

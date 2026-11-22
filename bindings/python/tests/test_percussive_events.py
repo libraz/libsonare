@@ -432,7 +432,12 @@ def test_the_separation_fields_reach_both_configs() -> None:
 
         # On the render side the same field decides which signal is lifted out of
         # the span, so a gain change renders differently under it.
-        edited = [libsonare.PercussiveEvent(e.onset_sample, e.offset_sample) for e in baseline]
+        edited = [
+            libsonare.PercussiveEventInput(
+                onset_sample=e.onset_sample, offset_sample=e.offset_sample
+            )
+            for e in baseline
+        ]
         edited[0].edit.gain_db = -12.0
         at_default = libsonare.render_percussive_events(audio, SR, edited)
         at_value = libsonare.render_percussive_events(audio, SR, edited, **{field: value})
@@ -480,7 +485,9 @@ def test_hpss_kernel_percussive_reaches_both_configs() -> None:
 
     # And on the render side, where the same field decides which signal is lifted
     # out of the span.
-    edited = libsonare.PercussiveEvent(at_default.onset_sample, at_default.offset_sample)
+    edited = libsonare.PercussiveEventInput(
+        onset_sample=at_default.onset_sample, offset_sample=at_default.offset_sample
+    )
     edited.edit.muted = True
     by_default = libsonare.render_percussive_events(mixed, SR, [edited])
     by_narrow = libsonare.render_percussive_events(mixed, SR, [edited], hpss_kernel_percussive=3)
@@ -533,8 +540,8 @@ def test_a_hand_built_event_needs_only_a_span_and_an_edit() -> None:
     # Up to the second hit, so muting takes the loudest hit and leaves the other
     # two -- the peak the amplitude band below is measured against.
     cut = THREE_HIT_STARTS[1]
-    span = libsonare.PercussiveEvent(onset_sample=0, offset_sample=cut)
-    assert span.edit == libsonare.PercussiveEventEdit()
+    span = libsonare.PercussiveEventInput(onset_sample=0, offset_sample=cut)
+    assert span.edit == libsonare.PercussiveEventEditInput()
     np.testing.assert_array_equal(libsonare.render_percussive_events(audio, SR, [span]), audio)
 
     span.edit.muted = True
@@ -637,14 +644,18 @@ def test_a_time_offset_moves_the_hits_energy() -> None:
 
 def test_a_shift_past_the_end_is_truncated_rather_than_wrapped() -> None:
     audio, events = _extract_three()
-    muted = libsonare.PercussiveEvent(events[0].onset_sample, events[0].offset_sample)
+    muted = libsonare.PercussiveEventInput(
+        onset_sample=events[0].onset_sample, offset_sample=events[0].offset_sample
+    )
     muted.edit.muted = True
     silenced = libsonare.render_percussive_events(audio, SR, [muted])
 
     # Pushed clean past an end nothing arrives, so the result is the muted render
     # exactly. That is also the statement that nothing wrapped around.
     for offset in (len(audio), -len(audio)):
-        shifted = libsonare.PercussiveEvent(events[0].onset_sample, events[0].offset_sample)
+        shifted = libsonare.PercussiveEventInput(
+            onset_sample=events[0].onset_sample, offset_sample=events[0].offset_sample
+        )
         shifted.edit.time_offset_samples = offset
         rendered = libsonare.render_percussive_events(audio, SR, [shifted])
         assert rendered.shape == audio.shape
@@ -659,7 +670,9 @@ def test_gain_scales_the_lifted_signal_by_a_known_factor() -> None:
     audio, events = _extract_three()
 
     def render_with(gain_db: float, muted: bool) -> NDArray[np.float32]:
-        one = libsonare.PercussiveEvent(events[0].onset_sample, events[0].offset_sample)
+        one = libsonare.PercussiveEventInput(
+            onset_sample=events[0].onset_sample, offset_sample=events[0].offset_sample
+        )
         one.edit.gain_db = gain_db
         one.edit.muted = muted
         return libsonare.render_percussive_events(audio, SR, [one])
@@ -691,7 +704,9 @@ def test_muted_discards_the_gain() -> None:
     audio, events = _extract_three()
 
     def render_muted(gain_db: float) -> NDArray[np.float32]:
-        one = libsonare.PercussiveEvent(events[0].onset_sample, events[0].offset_sample)
+        one = libsonare.PercussiveEventInput(
+            onset_sample=events[0].onset_sample, offset_sample=events[0].offset_sample
+        )
         one.edit.gain_db = gain_db
         one.edit.muted = True
         return libsonare.render_percussive_events(audio, SR, [one])
@@ -754,7 +769,7 @@ def test_render_percussive_events_rejects_invalid_arguments() -> None:
     length = len(audio)
 
     def edited(onset: int, offset: int) -> libsonare.PercussiveEvent:
-        event = libsonare.PercussiveEvent(onset_sample=onset, offset_sample=offset)
+        event = libsonare.PercussiveEventInput(onset_sample=onset, offset_sample=offset)
         event.edit.gain_db = -3.0
         return event
 
@@ -812,13 +827,13 @@ def test_a_hand_built_event_has_to_state_its_span() -> None:
     # The bounds are samples or seconds, so the event can be built without either;
     # the refusal arrives at the render, naming the bound that is missing.
     with pytest.raises(libsonare.SonareValueError, match="onset_sample or onset_sec"):
-        libsonare.render_percussive_events(audio, SR, [libsonare.PercussiveEvent()])
+        libsonare.render_percussive_events(audio, SR, [libsonare.PercussiveEventInput()])
     with pytest.raises(libsonare.SonareValueError, match="offset_sample or offset_sec"):
         libsonare.render_percussive_events(
-            audio, SR, [libsonare.PercussiveEvent(onset_sample=4410)]
+            audio, SR, [libsonare.PercussiveEventInput(onset_sample=4410)]
         )
 
-    stated = libsonare.PercussiveEvent(onset_sample=4410, offset_sample=15435)
+    stated = libsonare.PercussiveEventInput(onset_sample=4410, offset_sample=15435)
     stated.edit.muted = True
     rendered = libsonare.render_percussive_events(audio, SR, [stated])
     # The control: the span that IS stated reaches the render and changes it.
@@ -845,14 +860,14 @@ def test_an_unrenderable_span_is_rejected_even_with_an_identity_edit() -> None:
     # An unrenderable set is unrenderable whether or not this call would touch
     # it, so the all-identity fast path does not get to skip the checks.
     audio = _two_hits()
-    identity = libsonare.PercussiveEvent(onset_sample=4410, offset_sample=4410)
-    assert identity.edit == libsonare.PercussiveEventEdit()
+    identity = libsonare.PercussiveEventInput(onset_sample=4410, offset_sample=4410)
+    assert identity.edit == libsonare.PercussiveEventEditInput()
     with pytest.raises(SonareError):
         libsonare.render_percussive_events(audio, SR, [identity])
 
     # One bad event poisons a set that is otherwise renderable and entirely
     # identity.
-    good = libsonare.PercussiveEvent(onset_sample=0, offset_sample=4410)
+    good = libsonare.PercussiveEventInput(onset_sample=0, offset_sample=4410)
     with pytest.raises(SonareError):
         libsonare.render_percussive_events(audio, SR, [good, identity])
     np.testing.assert_array_equal(libsonare.render_percussive_events(audio, SR, [good]), audio)

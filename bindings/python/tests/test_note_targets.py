@@ -48,7 +48,12 @@ def _note(onset_sample: int, offset_sample: int, median_hz: float | None = A4_HZ
     return NoteObject(
         onset_sample=onset_sample,
         offset_sample=offset_sample,
+        frame_start=0,
+        frame_end=0,
         median_hz=median_hz,
+        median_cents=0.0,
+        f0_stability=0.0,
+        amplitude=np.zeros(0, dtype=np.float32),
         edit=NoteEdit(time_stretch_ratio=1.0),
     )
 
@@ -177,7 +182,11 @@ def test_assigned_note_curves_are_independent_of_the_source(curve: str) -> None:
     note = NoteObject(
         onset_sample=0,
         offset_sample=HALF_SECOND,
+        frame_start=0,
+        frame_end=0,
         median_hz=A4_HZ,
+        median_cents=0.0,
+        f0_stability=0.0,
         amplitude=np.array([0.2, 0.4], dtype=np.float32),
         edit=NoteEdit(amplitude_envelope=np.array([1.0, 0.5], dtype=np.float32)),
     )
@@ -202,6 +211,7 @@ def test_everything_the_assignment_does_not_write_survives_it() -> None:
         median_hz=A4_HZ,
         median_cents=1200.0,
         f0_stability=0.75,
+        amplitude=np.zeros(0, dtype=np.float32),
         edit=NoteEdit(
             time_offset_samples=128,
             gain_db=-3.0,

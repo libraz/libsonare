@@ -1,4 +1,6 @@
 {
+"bpm_marker": {"domain": "analysis", "surfaces": ["node", "python", "wasm"]},
+"bpm_marker_input": {"domain": "analysis", "surfaces": ["node", "python", "wasm"]},
 "bpm_mode": {"domain": "analysis", "surfaces": ["node", "wasm"]},
 "bpm_options": {"domain": "analysis", "surfaces": ["c"]},
 "bpm_options_init": {"domain": "analysis", "surfaces": ["c"]},

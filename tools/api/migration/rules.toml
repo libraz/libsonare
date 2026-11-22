@@ -987,6 +987,14 @@ after = '''
 const input: ProjectMarkerInput = { ... };
 project.setMarker(input);
 '''
+[[rule.example]]
+surface = "python"
+before = '''
+libsonare.render_notes(audio, sr, [libsonare.NoteObject(onset_sec=0.1, offset_sec=0.2)])
+'''
+after = '''
+libsonare.render_notes(audio, sr, [libsonare.NoteObjectInput(onset_sec=0.1, offset_sec=0.2)])
+'''
 
 [[rule]]
 slug = "one-input-form"

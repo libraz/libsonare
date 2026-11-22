@@ -7,9 +7,9 @@
   "c": 12,
   "cli-native": 2,
   "cli-python": 2,
-  "node": 22,
-  "python": 16,
-  "wasm": 17
+  "node": 24,
+  "python": 18,
+  "wasm": 19
  },
  "domain_paths": {
   "declaring-file": 22,
@@ -1337,6 +1337,108 @@
    "owner": "BpmResult",
    "surface": "python",
    "type": "float"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmMarker",
+   "owner": "",
+   "surface": "node",
+   "ts_kind": "interface"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmMarker",
+   "owner": "",
+   "surface": "wasm",
+   "ts_kind": "interface"
+  },
+  {
+   "dataclass": true,
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "frozen": true,
+   "has_doc": true,
+   "in_all": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "BpmMarker",
+   "owner": "",
+   "py_kind": "dataclass",
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmMarkerInput",
+   "owner": "",
+   "surface": "node",
+   "ts_kind": "interface"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmMarkerInput",
+   "owner": "",
+   "surface": "wasm",
+   "ts_kind": "interface"
+  },
+  {
+   "dataclass": true,
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "frozen": true,
+   "has_doc": true,
+   "in_all": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "BpmMarkerInput",
+   "owner": "",
+   "py_kind": "dataclass",
+   "surface": "python"
   }
  ]
 }

@@ -7,10 +7,10 @@ import pytest
 
 import libsonare
 from libsonare import (
-    NoteEdit,
-    NoteObject,
-    PercussiveEvent,
-    PercussiveEventEdit,
+    NoteEditInput,
+    NoteObjectInput,
+    PercussiveEventEditInput,
+    PercussiveEventInput,
     RealtimeEngine,
     SonareValueError,
     SpectralRegionOp,
@@ -99,10 +99,10 @@ class TestNoteAndEventObjects:
             self.samples,
             SR,
             [
-                NoteObject(
+                NoteObjectInput(
                     onset_sample=2205,
                     offset_sample=4410,
-                    edit=NoteEdit(time_offset_samples=4410, gain_db=-6.0),
+                    edit=NoteEditInput(time_offset_samples=4410, gain_db=-6.0),
                 )
             ],
         )
@@ -110,10 +110,10 @@ class TestNoteAndEventObjects:
             self.samples,
             SR,
             [
-                NoteObject(
+                NoteObjectInput(
                     onset_sec=0.1,
                     offset_sec=0.2,
-                    edit=NoteEdit(time_offset_sec=0.2, gain_db=-6.0),
+                    edit=NoteEditInput(time_offset_sec=0.2, gain_db=-6.0),
                 )
             ],
         )
@@ -123,25 +123,25 @@ class TestNoteAndEventObjects:
     def test_render_notes_refuses_both_spellings_and_a_missing_span(self) -> None:
         with pytest.raises(SonareValueError, match=r"onset_sample.*onset_sec"):
             libsonare.render_notes(
-                self.samples, SR, [NoteObject(onset_sample=0, onset_sec=0.0, offset_sample=10)]
+                self.samples, SR, [NoteObjectInput(onset_sample=0, onset_sec=0.0, offset_sample=10)]
             )
         with pytest.raises(SonareValueError, match=r"time_offset_samples.*time_offset_sec"):
             libsonare.render_notes(
                 self.samples,
                 SR,
                 [
-                    NoteObject(
+                    NoteObjectInput(
                         onset_sample=0,
                         offset_sample=10,
-                        edit=NoteEdit(time_offset_samples=1, time_offset_sec=1.0),
+                        edit=NoteEditInput(time_offset_samples=1, time_offset_sec=1.0),
                     )
                 ],
             )
         with pytest.raises(SonareValueError, match="onset"):
-            libsonare.render_notes(self.samples, SR, [NoteObject(offset_sample=10)])
+            libsonare.render_notes(self.samples, SR, [NoteObjectInput(offset_sample=10)])
         with pytest.raises(SonareValueError, match="onset_sample"):
             libsonare.render_notes(
-                self.samples, SR, [NoteObject(onset_sample=-1, offset_sample=10)]
+                self.samples, SR, [NoteObjectInput(onset_sample=-1, offset_sample=10)]
             )
 
     def test_render_percussive_events_seconds_equal_samples(self) -> None:
@@ -149,10 +149,10 @@ class TestNoteAndEventObjects:
             self.samples,
             SR,
             [
-                PercussiveEvent(
+                PercussiveEventInput(
                     onset_sample=2205,
                     offset_sample=4410,
-                    edit=PercussiveEventEdit(time_offset_samples=-1103, gain_db=-6.0),
+                    edit=PercussiveEventEditInput(time_offset_samples=-1103, gain_db=-6.0),
                 )
             ],
         )
@@ -160,10 +160,10 @@ class TestNoteAndEventObjects:
             self.samples,
             SR,
             [
-                PercussiveEvent(
+                PercussiveEventInput(
                     onset_sec=0.1,
                     offset_sec=0.2,
-                    edit=PercussiveEventEdit(time_offset_sec=-1103 / SR, gain_db=-6.0),
+                    edit=PercussiveEventEditInput(time_offset_sec=-1103 / SR, gain_db=-6.0),
                 )
             ],
         )
@@ -175,7 +175,7 @@ class TestNoteAndEventObjects:
             libsonare.render_percussive_events(
                 self.samples,
                 SR,
-                [PercussiveEvent(onset_sample=0, offset_sample=100, offset_sec=1.0)],
+                [PercussiveEventInput(onset_sample=0, offset_sample=100, offset_sec=1.0)],
             )
 
 

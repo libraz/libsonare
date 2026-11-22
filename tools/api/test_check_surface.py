@@ -2100,7 +2100,7 @@ class NameVote(unittest.TestCase):
 class FrozenDomains(CheckerCase):
     def test_baseline_counts(self):
         _, lines = self.run_check()
-        self.assertIn("domain vote: 13 names, 0 by tie-break", lines)
+        self.assertIn("domain vote: 15 names, 0 by tie-break", lines)
         self.assertIn("unassigned: 0", lines)
 
     def test_file_wins_over_the_per_surface_domain(self):
@@ -2150,7 +2150,7 @@ class FrozenDomains(CheckerCase):
         out = self.dir / "domains.json"
         _, lines = self.run_check("--regenerate-domains", domains_file=out)
         self.assertEqual(out.read_text(encoding="utf-8"), (TD / "domains.json").read_text())
-        self.assertIn("Regenerated domains.json: 13 names", lines)
+        self.assertIn("Regenerated domains.json: 15 names", lines)
 
 
 class SkipCheck(CheckerCase):
@@ -2417,6 +2417,17 @@ REFUSALS = (
         [_fn("node", "packEvents", file="bindings/node/src/internal/events.ts")],
         [
             "node function packEvents: declared in internal module bindings/node/src/internal/events.ts"
+        ],
+    ),
+    (
+        "record-input-pair",
+        [
+            _rec("node", "type", "TempoMark"),
+            _rec("node", "type", "TempoMarkInput"),
+            _rec("python", "type", "TempoMark"),
+        ],
+        [
+            "python type TempoMark: Node/WASM split it into TempoMark and TempoMarkInput; Python must carry both"
         ],
     ),
     (

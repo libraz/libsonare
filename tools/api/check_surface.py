@@ -139,12 +139,14 @@ ALLOW_CATEGORIES = (
     "standard-symbol",
     "scalar",
     "distinct-operation",
+    "pending-split",
 )
 # A category that only one kind of finding can use.
 _CATEGORY_CHECKS = {
     "standard-symbol": ("token-case",),
     "scalar": ("one-positional-form",),
     "distinct-operation": ("options-struct:suffix",),
+    "pending-split": ("record-input-pair",),
 }
 EXAMPLE_SURFACES = ("wasm", "node", "python", "c", "cli")
 
@@ -1597,6 +1599,27 @@ def chk_worklet_scope(ctx):
     return len(cands), bad
 
 
+def _type_names(ctx, surfaces) -> set[str]:
+    return {r["name"] for r in recs(ctx, surfaces, ("type", "class")) if not r["member"]}
+
+
+def chk_record_input_pair(ctx):
+    js = _type_names(ctx, JS)
+    py = _type_names(ctx, ("python",))
+    paired = sorted(
+        n[: -len("Input")] for n in js if n.endswith("Input") and n[: -len("Input")] in js
+    )
+    bad = [
+        (
+            {"surface": "python", "kind": "type", "name": name, "domain": "core", "member": ""},
+            f"Node/WASM split it into {name} and {name}Input; Python must carry both",
+        )
+        for name in paired
+        if not (name in py and f"{name}Input" in py)
+    ]
+    return len(paired), bad
+
+
 def chk_progress_callback(ctx):
     cands = recs(ctx, LANG, ("function", "method"))
     bad = [
@@ -2589,6 +2612,7 @@ CHECKS: tuple[Check, ...] = (
     Check("teardown:python", ("python",), chk_teardown_python),
     Check("no-internal-types", ("wasm",), chk_no_internal_types),
     Check("worklet-scope", JS, chk_worklet_scope),
+    Check("record-input-pair", ("python",), chk_record_input_pair),
     Check("progress-callback", LANG, chk_progress_callback),
     Check("options-struct:suffix", ("c",), chk_options_suffix),
     Check("options-struct:struct-size", ("c",), chk_options_struct_size),

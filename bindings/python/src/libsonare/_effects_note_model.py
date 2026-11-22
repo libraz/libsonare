@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from numbers import Integral
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ._errors import _refuse, _refuse_integer, _refuse_type
 from ._ffi import (
@@ -35,6 +36,7 @@ from ._runtime import (
     _resolve_time_offset,
     _Respelling,
     _respellings,
+    _SampleBound,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -60,10 +62,8 @@ class NoteEdit:
 
     Attributes:
         time_offset_samples: Moves the note along the timeline; negative moves
-            it earlier. 0 is the identity, so it is also what an unset offset
-            reads as; set this or ``time_offset_sec``, not both.
-        time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
-            nearest sample at the call's sample rate; ``None`` when unset.
+            it earlier. 0 is the identity. A shift stated in seconds is a
+            :class:`NoteEditInput`.
         pitch_semitones: Transposes the note; pitch only, duration is
             unchanged.
         gain_db: Level change applied over the note's span.
@@ -109,31 +109,83 @@ class NoteEdit:
     # ambiguous truth value. __eq__ below puts the curve back in element by
     # element, because an edit carrying an envelope is not the identity edit and
     # must not compare equal to one.
-    amplitude_envelope: np.ndarray = dataclasses.field(
+    amplitude_envelope: NDArray[np.float32] = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
-    time_offset_sec: float | None = None
 
     def __eq__(self, other: object) -> bool:
         """Compare every field, the envelope element by element."""
         if not isinstance(other, NoteEdit):
             return NotImplemented
-        return self._scalars() == other._scalars() and np.array_equal(
+        return _edit_fields(self) == _edit_fields(other) and np.array_equal(
             np.asarray(self.amplitude_envelope), np.asarray(other.amplitude_envelope)
         )
 
-    def _scalars(self) -> tuple[object, ...]:
+
+@dataclasses.dataclass(kw_only=True)
+class NoteEditInput:
+    """A note edit a host builds, for :class:`NoteObjectInput` and :class:`NoteSetEntry`.
+
+    The fields and defaults are :class:`NoteEdit`'s, so the default instance is
+    the identity edit; the time shift may be stated in seconds and the envelope
+    may be any one-dimensional sequence of gains. A returned :class:`NoteEdit`
+    is accepted wherever this is.
+
+    Attributes:
+        time_offset_samples: :attr:`NoteEdit.time_offset_samples`; ``None`` is
+            no shift. Not with ``time_offset_sec``.
+        time_offset_sec: The shift in seconds, rounded to the nearest sample at
+            the call's sample rate. Not with ``time_offset_samples``.
+        pitch_semitones: :attr:`NoteEdit.pitch_semitones`.
+        gain_db: :attr:`NoteEdit.gain_db`.
+        time_stretch_ratio: :attr:`NoteEdit.time_stretch_ratio`.
+        muted: :attr:`NoteEdit.muted`.
+        formant_semitones: :attr:`NoteEdit.formant_semitones`.
+        vibrato_depth_change: :attr:`NoteEdit.vibrato_depth_change`.
+        drift_change: :attr:`NoteEdit.drift_change`.
+        amplitude_envelope: :attr:`NoteEdit.amplitude_envelope`, as any
+            one-dimensional sequence of linear gains; empty is no envelope.
+    """
+
+    time_offset_samples: int | None = None
+    time_offset_sec: float | None = None
+    pitch_semitones: float = 0.0
+    gain_db: float = 0.0
+    time_stretch_ratio: float = 1.0
+    muted: bool = False
+    formant_semitones: float = 0.0
+    vibrato_depth_change: float = 0.0
+    drift_change: float = 0.0
+    # Out of the generated comparison for the reason NoteEdit gives.
+    amplitude_envelope: Sequence[float] | NDArray[np.float32] = dataclasses.field(
+        default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
+    )
+
+    def __eq__(self, other: object) -> bool:
+        """Compare every field, the envelope element by element."""
+        if not isinstance(other, NoteEditInput):
+            return NotImplemented
         return (
-            self.time_offset_samples,
-            self.pitch_semitones,
-            self.gain_db,
-            self.time_stretch_ratio,
-            self.muted,
-            self.formant_semitones,
-            self.vibrato_depth_change,
-            self.drift_change,
-            self.time_offset_sec,
+            _edit_fields(self) == _edit_fields(other)
+            and self.time_offset_sec == other.time_offset_sec
+            and np.array_equal(
+                np.asarray(self.amplitude_envelope), np.asarray(other.amplitude_envelope)
+            )
         )
+
+
+def _edit_fields(edit: NoteEdit | NoteEditInput) -> tuple[object, ...]:
+    """The scalar fields both note edit records define."""
+    return (
+        edit.time_offset_samples,
+        edit.pitch_semitones,
+        edit.gain_db,
+        edit.time_stretch_ratio,
+        edit.muted,
+        edit.formant_semitones,
+        edit.vibrato_depth_change,
+        edit.drift_change,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -146,19 +198,10 @@ class NoteObject:
     The amplitude curve is measured by the extractor and therefore is: it is one
     RMS value per F0 frame, already sliced to this note.
 
-    :func:`render_notes` reads ``onset_sample``, ``offset_sample`` and ``edit``,
-    plus the frame bounds and ``median_hz`` when a curve edit needs them, so a
-    host may hand back exactly what :func:`extract_notes` produced, or build a
-    bare ``NoteObject(onset_sample=..., offset_sample=...)`` for a span it found
-    some other way.
-
-    The span is stated in samples (``onset_sample`` / ``offset_sample``) or in
-    seconds (``onset_sec`` / ``offset_sec``, rounded to the nearest sample at the
-    call's sample rate), one spelling per bound. Neither is defaulted: a note
-    built by hand states its span, and a call given a note with neither bound
-    rejects it, as the other surfaces do, because a default of 0 would be a
-    zero-length span that renders the note's edit as nothing. Notes returned by
-    :func:`extract_notes` always carry the sample bounds.
+    Every field is filled by the library. A note a host builds is a
+    :class:`NoteObjectInput`; a returned note is accepted wherever that is, so
+    the list :func:`extract_notes` produced can be passed back with its edits
+    changed.
 
     Attributes:
         onset_sample: First sample of the note.
@@ -174,27 +217,75 @@ class NoteObject:
             part of ``==``, which compares the span, the metrics and the edit.
         edit: The pending :class:`NoteEdit`, identity on a freshly extracted
             note.
-        onset_sec: ``onset_sample`` in seconds; ``None`` when the span is given
-            in samples.
-        offset_sec: ``offset_sample`` in seconds; ``None`` when the span is
-            given in samples.
+    """
+
+    onset_sample: int
+    offset_sample: int
+    frame_start: int
+    frame_end: int
+    median_hz: float | None
+    median_cents: float
+    f0_stability: float
+    # Out of the comparison: an ndarray field makes the generated __eq__ raise
+    # on ambiguous truth. The span already determines this curve.
+    amplitude: NDArray[np.float32] = dataclasses.field(compare=False)
+    edit: NoteEdit = dataclasses.field(default_factory=NoteEdit)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class NoteObjectInput:
+    """A note a host hands to :func:`render_notes` for a span it found itself.
+
+    The span is stated in samples or in seconds (rounded to the nearest sample
+    at the call's sample rate), one spelling per bound. Neither is defaulted: a
+    note with neither bound is refused, because a default of 0 would be a
+    zero-length span that renders the note's edit as nothing. The frame bounds
+    and ``median_hz`` are read only by a ``vibrato_depth_change`` /
+    ``drift_change`` edit, which slices the F0 track with them.
+
+    Attributes:
+        onset_sample: First sample of the span. Give this or ``onset_sec``.
+        onset_sec: First second of the span. Not with ``onset_sample``.
+        offset_sample: One past the last sample of the span. Give this or
+            ``offset_sec``.
+        offset_sec: End of the span in seconds. Not with ``offset_sample``.
+        frame_start: First frame of the span in the call's ``f0_hz``; ``None``
+            is frame 0.
+        frame_end: One past the last frame of the span; ``None`` is frame 0.
+        median_hz: The centre pitch a curve edit measures its cents against;
+            ``None`` is no pitch.
+        edit: The edit to render; the identity when omitted.
     """
 
     onset_sample: int | None = None
-    offset_sample: int | None = None
-    frame_start: int = 0
-    frame_end: int = 0
-    median_hz: float | None = None
-    median_cents: float = 0.0
-    f0_stability: float = 0.0
-    # Out of the comparison: an ndarray field makes the generated __eq__ raise
-    # on ambiguous truth. The span already determines this curve.
-    amplitude: np.ndarray = dataclasses.field(
-        default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
-    )
-    edit: NoteEdit = dataclasses.field(default_factory=NoteEdit)
     onset_sec: float | None = None
+    offset_sample: int | None = None
     offset_sec: float | None = None
+    frame_start: int | None = None
+    frame_end: int | None = None
+    median_hz: float | None = None
+    edit: NoteEdit | NoteEditInput = dataclasses.field(default_factory=NoteEditInput)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class NoteSetEntry:
+    """One note of the set :func:`split_note` and :func:`merge_notes` re-derive.
+
+    A note set is identified by its frame bounds alone; every note is
+    re-measured from the audio and the track, so nothing else is read. A
+    returned :class:`NoteObject` is accepted wherever this is.
+
+    Attributes:
+        frame_start: First frame of the span in the call's ``f0_hz``.
+        frame_end: One past the last frame of the span; greater than
+            ``frame_start``.
+        edit: The note's pending edit, carried onto the re-derived note; the
+            identity when omitted.
+    """
+
+    frame_start: int
+    frame_end: int
+    edit: NoteEdit | NoteEditInput = dataclasses.field(default_factory=NoteEditInput)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -222,10 +313,10 @@ class PitchDecompositionResult:
     """
 
     center_hz: float | None = None
-    drift_cents: np.ndarray = dataclasses.field(
+    drift_cents: NDArray[np.float32] = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
-    vibrato_cents: np.ndarray = dataclasses.field(
+    vibrato_cents: NDArray[np.float32] = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
 
@@ -502,16 +593,65 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
     return float(value)
 
 
+def _note_edit_to_c(
+    edit: NoteEdit | NoteEditInput, sample_rate: int, subject: str, envelope_offset: int
+) -> tuple[SonareNoteEdit, NDArray[np.float32], _SampleBound]:
+    """Read either note edit record onto the C struct; the one reader every note door uses.
+
+    Returns the struct, the envelope curve it indexes and the resolved time
+    offset, whose respelling the caller hands to :func:`_check`.
+    """
+    curve = np.asarray(edit.amplitude_envelope, dtype=np.float32)
+    if curve.ndim != 1:
+        raise _refuse(f"{subject}.amplitude_envelope must be one-dimensional")
+    # Narrowed rather than coerced: int(0.5) is 0, which is this field's identity,
+    # so a sub-sample shift would render unmoved and report success. Int64-bounded:
+    # the ctypes field is c_int64.
+    time_offset = _resolve_time_offset(
+        0 if edit.time_offset_samples is None else edit.time_offset_samples,
+        edit.time_offset_sec if isinstance(edit, NoteEditInput) else None,
+        sample_rate,
+        f"{subject}.time_offset_samples",
+        f"{subject}.time_offset_sec",
+    )
+    c_edit = SonareNoteEdit(
+        time_offset_samples=time_offset.value,
+        envelope_offset=envelope_offset,
+        envelope_count=int(curve.size),
+        pitch_semitones=_narrow_double(edit.pitch_semitones, f"{subject}.pitch_semitones"),
+        gain_db=_narrow_double(edit.gain_db, f"{subject}.gain_db"),
+        time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, f"{subject}.time_stretch_ratio"),
+        formant_semitones=_narrow_double(edit.formant_semitones, f"{subject}.formant_semitones"),
+        vibrato_depth_change=_narrow_double(
+            edit.vibrato_depth_change, f"{subject}.vibrato_depth_change"
+        ),
+        drift_change=_narrow_double(edit.drift_change, f"{subject}.drift_change"),
+        muted=1 if edit.muted else 0,
+    )
+    return c_edit, curve, time_offset
+
+
+def _note_bound(note: object, name: str) -> tuple[object, object]:
+    """A span bound's sample and second spellings; only :class:`NoteObjectInput` has the latter."""
+    sample = getattr(note, f"{name}_sample", None)
+    sec = getattr(note, f"{name}_sec", None) if isinstance(note, NoteObjectInput) else None
+    return sample, sec
+
+
 def _notes_to_c(
-    notes: Sequence[NoteObject], sample_rate: int
+    notes: Sequence[NoteObject | NoteObjectInput | NoteSetEntry],
+    sample_rate: int,
+    *,
+    require_span: bool,
 ) -> tuple[object, int, object, int, dict[str, _Respelling]]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
-    The C ABI carries every note's envelope in one array the edits index into,
-    which is an ownership arrangement rather than something a caller should have
-    to build; each :class:`NoteEdit` owns its own curve, so the pool is packed
-    here and the offsets are derived. The last element is the respelling of the
-    bounds given in seconds, for :func:`_check`.
+    The one reader for every note record: a field a record does not define is
+    the C default (0), as on the other surfaces. ``require_span`` is set by
+    :func:`render_notes`, the only door that reads the sample span. The C ABI
+    carries every envelope in one array the edits index into, so the pool is
+    packed here and the offsets derived. The last element is the respelling of
+    the bounds given in seconds, for :func:`_check`.
     """
     note_count = len(notes)
     if note_count == 0:
@@ -519,74 +659,46 @@ def _notes_to_c(
     respelled: dict[str, _Respelling] = {}
 
     c_notes = (SonareNoteObject * note_count)()
-    curves: list[np.ndarray] = []
+    curves: list[NDArray[np.float32]] = []
     envelope_offset = 0
     for i, note in enumerate(notes):
-        curve = np.asarray(note.edit.amplitude_envelope, dtype=np.float32)
-        if curve.ndim != 1:
-            raise _refuse(f"notes[{i}].edit.amplitude_envelope must be one-dimensional")
-        curves.append(curve)
         # The metrics and the amplitude offset are not marshalled: nothing on
         # the far side reads them back.
-        # Narrowed rather than coerced, as the edit below is: int() takes 100.7
-        # as 100, and the note would be rendered from a boundary nobody asked for.
         onset = _resolve_sample_bound(
-            note.onset_sample,
-            note.onset_sec,
+            *_note_bound(note, "onset"),
             sample_rate,
             f"notes[{i}].onset_sample",
             f"notes[{i}].onset_sec",
         )
         offset = _resolve_sample_bound(
-            note.offset_sample,
-            note.offset_sec,
+            *_note_bound(note, "offset"),
             sample_rate,
             f"notes[{i}].offset_sample",
             f"notes[{i}].offset_sec",
         )
-        if onset.value is None or offset.value is None:
+        if require_span and (onset.value is None or offset.value is None):
             missing = "onset" if onset.value is None else "offset"
             raise _refuse(f"notes[{i}] needs {missing}_sample or {missing}_sec")
-        c_notes[i].onset_sample = onset.value
-        c_notes[i].offset_sample = offset.value
-        c_notes[i].frame_start = _narrow_int(
-            note.frame_start, f"notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
+        c_notes[i].onset_sample = 0 if onset.value is None else onset.value
+        c_notes[i].offset_sample = 0 if offset.value is None else offset.value
+        for field in ("frame_start", "frame_end"):
+            value = getattr(note, field)
+            setattr(
+                c_notes[i],
+                field,
+                0
+                if value is None
+                else _narrow_int(value, f"notes[{i}].{field}", _C_INT_MIN, _C_INT_MAX),
+            )
+        c_notes[i].median_hz = _note_pitch_hz(
+            getattr(note, "median_hz", None), f"notes[{i}].median_hz"
         )
-        c_notes[i].frame_end = _narrow_int(
-            note.frame_end, f"notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
+        c_edit, curve, time_offset = _note_edit_to_c(
+            note.edit, sample_rate, f"notes[{i}].edit", envelope_offset
         )
-        c_notes[i].median_hz = _note_pitch_hz(note.median_hz, f"notes[{i}].median_hz")
-        time_offset = _resolve_time_offset(
-            note.edit.time_offset_samples,
-            note.edit.time_offset_sec,
-            sample_rate,
-            f"notes[{i}].edit.time_offset_samples",
-            f"notes[{i}].edit.time_offset_sec",
-        )
+        c_notes[i].edit = c_edit
+        curves.append(curve)
         respelled.update(_respellings(onset, offset, time_offset))
-        c_notes[i].edit = SonareNoteEdit(
-            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
-            # identity, so a sub-sample shift would render unmoved and report
-            # success. Int64-bounded like onset_sample/offset_sample above: the
-            # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
-            # would refuse an offset the C ABI, Node and WASM all accept.
-            time_offset_samples=time_offset.value,
-            envelope_offset=envelope_offset,
-            envelope_count=int(curve.size),
-            pitch_semitones=_narrow_double(note.edit.pitch_semitones, "note.edit.pitch_semitones"),
-            gain_db=_narrow_double(note.edit.gain_db, "note.edit.gain_db"),
-            time_stretch_ratio=_narrow_double(
-                note.edit.time_stretch_ratio, "note.edit.time_stretch_ratio"
-            ),
-            formant_semitones=_narrow_double(
-                note.edit.formant_semitones, "note.edit.formant_semitones"
-            ),
-            vibrato_depth_change=_narrow_double(
-                note.edit.vibrato_depth_change, "note.edit.vibrato_depth_change"
-            ),
-            drift_change=_narrow_double(note.edit.drift_change, "note.edit.drift_change"),
-            muted=1 if note.edit.muted else 0,
-        )
         envelope_offset += int(curve.size)
 
     if envelope_offset == 0:
@@ -615,7 +727,7 @@ def _note_set_edit(
     sample_rate: int,
     f0_hz: Sequence[float] | list[float] | np.ndarray,
     frame_rate: float,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteSetEntry],
     voiced: Sequence[int] | list[int] | np.ndarray | None,
     voiced_prob: Sequence[float] | list[float] | np.ndarray | None,
     config: SonareNoteExtractorConfig,
@@ -631,7 +743,9 @@ def _note_set_edit(
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array, voiced_array = _note_voicing_arrays(n_frames, voiced, voiced_prob)
-    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(
+        notes, sample_rate, require_span=False
+    )
 
     out = SonareNoteObjectsResult()
     rc = getattr(lib, symbol)(

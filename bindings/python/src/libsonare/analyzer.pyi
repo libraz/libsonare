@@ -10,13 +10,18 @@ from ._conversions import SilenceCommonReport as SilenceCommonReport
 from ._conversions import SplitSilenceCommonWithReportResult as SplitSilenceCommonWithReportResult
 from ._conversions import TrimResult as TrimResult
 from ._effects_note_model import NoteEdit as NoteEdit
+from ._effects_note_model import NoteEditInput as NoteEditInput
 from ._effects_note_model import NoteObject as NoteObject
+from ._effects_note_model import NoteObjectInput as NoteObjectInput
+from ._effects_note_model import NoteSetEntry as NoteSetEntry
 from ._effects_note_model import PitchDecompositionResult as PitchDecompositionResult
 from ._effects_note_model import TranscribeResult as TranscribeResult
 from ._effects_note_ops import AssignNoteTargetsResult as AssignNoteTargetsResult
 from ._effects_note_ops import NoteTarget as NoteTarget
 from ._effects_percussive import PercussiveEvent as PercussiveEvent
 from ._effects_percussive import PercussiveEventEdit as PercussiveEventEdit
+from ._effects_percussive import PercussiveEventEditInput as PercussiveEventEditInput
+from ._effects_percussive import PercussiveEventInput as PercussiveEventInput
 from ._effects_separation import DecomposeResult as DecomposeResult
 from ._effects_separation import DecomposeStemsLinkedResult as DecomposeStemsLinkedResult
 from ._effects_separation import DecomposeStemsResult as DecomposeStemsResult
@@ -821,7 +826,7 @@ def extract_notes(
 def render_notes(
     samples: FloatSamples,
     sample_rate: int,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteObjectInput],
     *,
     f0_hz: FloatSamples | None = None,
     voiced: IntSamples | None = None,
@@ -867,7 +872,7 @@ def extract_percussive_events(
 def render_percussive_events(
     samples: FloatSamples,
     sample_rate: int,
-    events: Sequence[PercussiveEvent],
+    events: Sequence[PercussiveEvent | PercussiveEventInput],
     *,
     n_fft: int | None = None,
     hop_length: int | None = None,
@@ -888,7 +893,7 @@ def split_note(
     sample_rate: int,
     f0_hz: FloatSamples,
     frame_rate: float,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteSetEntry],
     index: int,
     frame: int,
     *,
@@ -904,7 +909,7 @@ def merge_notes(
     sample_rate: int,
     f0_hz: FloatSamples,
     frame_rate: float,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteSetEntry],
     first: int,
     last: int,
     *,

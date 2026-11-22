@@ -4,10 +4,11 @@
 #   check     a check id (slug or slug:aspect)
 #   surface   wasm | node | python | c | cli-python | cli-native | cli
 #   name      fnmatch pattern on the qualified symbol name
-#   category  librosa-mirror | platform | wire-format | hot-path | standard-symbol | scalar | distinct-operation
+#   category  librosa-mirror | platform | wire-format | hot-path | standard-symbol | scalar | distinct-operation | pending-split
 #             standard-symbol: token-case only; a symbol fixed by a named standard, never one with a word separator
 #             scalar: one-positional-form only; at most four number or boolean parameters and no options
 #             distinct-operation: options-struct:suffix only; a C function named as another plus an extension that is a different operation, never a fixed second-form suffix
+#             pending-split: record-input-pair only; a record Python still spells as one while Node/WASM carry X and XInput, retired with the split
 #   reason    one line
 # --audit-allowlist fails on an entry that excused nothing in a full run.
 
@@ -486,3 +487,73 @@ surface = "c"
 name = "sonare_trim_silence"
 category = "librosa-mirror"
 reason = "librosa.effects.trim: thresholds top_db below the signal's peak and returns the kept span; sonare_trim thresholds at an absolute RMS dBFS level."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "MixSceneBus"
+category = "pending-split"
+reason = "Python takes and returns one mix-scene bus record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "MixSceneDocument"
+category = "pending-split"
+reason = "Python takes and returns one mix-scene document record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "MixSceneSend"
+category = "pending-split"
+reason = "Python takes and returns one mix-scene send record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "MixSceneStrip"
+category = "pending-split"
+reason = "Python takes and returns one mix-scene strip record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "MixSceneVcaGroup"
+category = "pending-split"
+reason = "Python takes and returns one mix-scene VCA group record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "ProjectAssistSidecar"
+category = "pending-split"
+reason = "Python takes and returns one assist sidecar record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "ProjectMarker"
+category = "pending-split"
+reason = "Python takes and returns one project marker record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "RealtimeVoiceChangerConfig"
+category = "pending-split"
+reason = "Python takes and returns one voice changer config record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "VocalAnalysis"
+category = "pending-split"
+reason = "Python takes and returns one vocal analysis record; the returned/input split is not made yet."
+
+[[allow]]
+check = "record-input-pair"
+surface = "python"
+name = "VocalRange"
+category = "pending-split"
+reason = "Python takes and returns one vocal range record; the returned/input split is not made yet."

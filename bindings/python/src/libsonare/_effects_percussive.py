@@ -52,11 +52,7 @@ class PercussiveEventEdit:
     Attributes:
         time_offset_samples: Moves the hit along the timeline; negative moves it
             earlier. A shift that pushes the signal past either end of the audio
-            is truncated there rather than wrapped. 0 is the identity, so it is
-            also what an unset offset reads as; set this or ``time_offset_sec``,
-            not both.
-        time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
-            nearest sample at the call's sample rate; ``None`` when unset.
+            is truncated there rather than wrapped. 0 is the identity.
         gain_db: Level change applied to the hit. It scales the percussive
             component of the span, which is the signal ``peak_amplitude`` is
             measured on, not the source.
@@ -72,7 +68,28 @@ class PercussiveEventEdit:
     time_offset_samples: int = 0
     gain_db: float = 0.0
     muted: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class PercussiveEventEditInput:
+    """A hand-built :class:`PercussiveEventEdit`, whose offset may be given in seconds.
+
+    Every field is optional; an omitted one is the identity. The fields are
+    those of :class:`PercussiveEventEdit`, plus the second spelling of the offset.
+
+    Attributes:
+        time_offset_samples: Moves the hit along the timeline; negative moves it
+            earlier. Set this or ``time_offset_sec``, not both; neither is 0.
+        time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
+            nearest sample at the call's sample rate.
+        gain_db: Level change applied to the hit's percussive component.
+        muted: ``True`` silences the hit; the other fields then do not apply.
+    """
+
+    time_offset_samples: int | None = None
     time_offset_sec: float | None = None
+    gain_db: float = 0.0
+    muted: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,17 +105,8 @@ class PercussiveEvent:
 
     :func:`render_percussive_events` reads ``onset_sample``, ``offset_sample``
     and ``edit`` only, so a host may hand back exactly what
-    :func:`extract_percussive_events` produced, or build a bare
-    ``PercussiveEvent(onset_sample=..., offset_sample=...)`` for a span it found
-    some other way.
-
-    The span is stated in samples (``onset_sample`` / ``offset_sample``) or in
-    seconds (``onset_sec`` / ``offset_sec``, rounded to the nearest sample at the
-    call's sample rate), one spelling per bound. Neither is defaulted: a call
-    given an event with neither bound rejects it, as the other surfaces do,
-    because a default of 0 would be a zero-length span that renders the event's
-    edit as nothing. Events returned by :func:`extract_percussive_events` always
-    carry the sample bounds.
+    :func:`extract_percussive_events` produced. A span found some other way is a
+    :class:`PercussiveEventInput`.
 
     Attributes:
         onset_sample: First sample of the event, backtracked to the start of the
@@ -117,20 +125,41 @@ class PercussiveEvent:
             the span's energy. So it is not a test for whether a hit is there.
         edit: The pending :class:`PercussiveEventEdit`, identity on a freshly
             extracted event.
-        onset_sec: ``onset_sample`` in seconds; ``None`` when the span is given
-            in samples.
-        offset_sec: ``offset_sample`` in seconds; ``None`` when the span is
-            given in samples.
+    """
+
+    onset_sample: int
+    offset_sample: int
+    strength: float
+    peak_amplitude: float
+    percussive_ratio: float
+    edit: PercussiveEventEdit = dataclasses.field(default_factory=PercussiveEventEdit)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class PercussiveEventInput:
+    """A hand-built span for :func:`render_percussive_events`.
+
+    Each bound is stated in samples or in seconds (rounded to the nearest sample
+    at the call's sample rate), one spelling per bound. Neither is defaulted: an
+    event with neither spelling of a bound is rejected, as on the other surfaces,
+    because a default of 0 would be a zero-length span that renders the edit as
+    nothing.
+
+    Attributes:
+        onset_sample: First sample of the span.
+        onset_sec: ``onset_sample`` in seconds.
+        offset_sample: One past the last sample; must be greater than the onset.
+        offset_sec: ``offset_sample`` in seconds.
+        edit: The edit to render; omitted is the identity.
     """
 
     onset_sample: int | None = None
-    offset_sample: int | None = None
-    strength: float = 0.0
-    peak_amplitude: float = 0.0
-    percussive_ratio: float = 0.0
-    edit: PercussiveEventEdit = dataclasses.field(default_factory=PercussiveEventEdit)
     onset_sec: float | None = None
+    offset_sample: int | None = None
     offset_sec: float | None = None
+    edit: PercussiveEventEdit | PercussiveEventEditInput = dataclasses.field(
+        default_factory=PercussiveEventEditInput
+    )
 
 
 def _percussive_separation(
@@ -175,9 +204,9 @@ def _percussive_event_from_c(row: SonarePercussiveEvent) -> PercussiveEvent:
 
 
 def _percussive_events_to_c(
-    events: Sequence[PercussiveEvent], sample_rate: int
+    events: Sequence[PercussiveEvent | PercussiveEventInput], sample_rate: int
 ) -> tuple[object, int, dict[str, _Respelling]]:
-    """Marshal an event list into the C event array; an empty set is NULL and 0.
+    """Marshal either event record into the C event array; an empty set is NULL and 0.
 
     The last element is the respelling of the bounds given in seconds, for :func:`_check`.
     """
@@ -192,14 +221,14 @@ def _percussive_events_to_c(
         # and the edit, so nothing on the far side reads them back.
         onset = _resolve_sample_bound(
             event.onset_sample,
-            event.onset_sec,
+            event.onset_sec if isinstance(event, PercussiveEventInput) else None,
             sample_rate,
             f"events[{i}].onset_sample",
             f"events[{i}].onset_sec",
         )
         offset = _resolve_sample_bound(
             event.offset_sample,
-            event.offset_sec,
+            event.offset_sec if isinstance(event, PercussiveEventInput) else None,
             sample_rate,
             f"events[{i}].offset_sample",
             f"events[{i}].offset_sec",
@@ -212,9 +241,10 @@ def _percussive_events_to_c(
         # Narrowed rather than coerced: int(0.5) is 0, which is this field's
         # identity, so a sub-sample shift would render unmoved and report
         # success. Int64-bounded: the ctypes field is c_int64.
+        edit = event.edit
         time_offset = _resolve_time_offset(
-            event.edit.time_offset_samples,
-            event.edit.time_offset_sec,
+            0 if edit.time_offset_samples is None else edit.time_offset_samples,
+            edit.time_offset_sec if isinstance(edit, PercussiveEventEditInput) else None,
             sample_rate,
             f"events[{i}].edit.time_offset_samples",
             f"events[{i}].edit.time_offset_sec",
@@ -222,8 +252,8 @@ def _percussive_events_to_c(
         respelled.update(_respellings(onset, offset, time_offset))
         c_events[i].edit = SonarePercussiveEventEdit(
             time_offset_samples=time_offset.value,
-            gain_db=_narrow_double(event.edit.gain_db, "event.edit.gain_db"),
-            muted=1 if event.edit.muted else 0,
+            gain_db=_narrow_double(edit.gain_db, f"events[{i}].edit.gain_db"),
+            muted=1 if edit.muted else 0,
         )
     return c_events, count, respelled
 
@@ -347,7 +377,7 @@ def extract_percussive_events(
 def render_percussive_events(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    events: Sequence[PercussiveEvent],
+    events: Sequence[PercussiveEvent | PercussiveEventInput],
     *,
     n_fft: int | None = None,
     hop_length: int | None = None,

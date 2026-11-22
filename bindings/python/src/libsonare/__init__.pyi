@@ -111,9 +111,12 @@ from .analyzer import NoteDivision as NoteDivision
 from .analyzer import (
     NoteEdit as NoteEdit,
 )
+from .analyzer import NoteEditInput as NoteEditInput
 from .analyzer import (
     NoteObject as NoteObject,
 )
+from .analyzer import NoteObjectInput as NoteObjectInput
+from .analyzer import NoteSetEntry as NoteSetEntry
 from .analyzer import (
     NoteTarget as NoteTarget,
 )
@@ -123,6 +126,8 @@ from .analyzer import (
 from .analyzer import (
     PercussiveEventEdit as PercussiveEventEdit,
 )
+from .analyzer import PercussiveEventEditInput as PercussiveEventEditInput
+from .analyzer import PercussiveEventInput as PercussiveEventInput
 from .analyzer import PitchCorrectionMode as PitchCorrectionMode
 from .analyzer import (
     PitchDecompositionResult as PitchDecompositionResult,

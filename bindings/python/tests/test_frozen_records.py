@@ -4,14 +4,36 @@ from __future__ import annotations
 
 import dataclasses
 
+import numpy as np
 import pytest
 
 import libsonare
 
+_RETURNED_NOTE = {
+    "onset_sample": 0,
+    "offset_sample": 1,
+    "frame_start": 0,
+    "frame_end": 1,
+    "median_hz": None,
+    "median_cents": 0.0,
+    "f0_stability": 0.0,
+    "amplitude": np.zeros(0, dtype=np.float32),
+}
+_RETURNED_EVENT = {
+    "onset_sample": 0,
+    "offset_sample": 1,
+    "strength": 0.0,
+    "peak_amplitude": 0.0,
+    "percussive_ratio": 0.0,
+}
+
 _RECORDS = {
-    "NoteObject": {"onset_sample": 0, "offset_sample": 1},
+    "NoteObject": _RETURNED_NOTE,
+    "NoteObjectInput": {"onset_sample": 0, "offset_sample": 1},
+    "NoteSetEntry": {"frame_start": 0, "frame_end": 1},
     "NoteTarget": {"start_sec": 0.0, "end_sec": 1.0, "target_midi": 60.0},
-    "PercussiveEvent": {"onset_sample": 0, "offset_sample": 1},
+    "PercussiveEvent": _RETURNED_EVENT,
+    "PercussiveEventInput": {"onset_sample": 0, "offset_sample": 1},
     "PitchDecompositionResult": {},
 }
 
@@ -35,6 +57,6 @@ def test_voice_changer_config_is_frozen() -> None:
 
 
 def test_the_pending_edit_stays_editable_in_place() -> None:
-    note = libsonare.NoteObject(onset_sample=0, offset_sample=1)
+    note = libsonare.NoteObject(**_RETURNED_NOTE)
     note.edit.gain_db = -6.0
     assert note.edit.gain_db == -6.0

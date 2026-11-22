@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Sequence
-from typing import TypeAlias
+from typing import TypeAlias, get_type_hints
 
 import numpy as np
 import pytest
@@ -287,7 +287,7 @@ def test_hand_built_note_needs_only_a_span_and_an_edit() -> None:
     # render_notes reads onset_sample, offset_sample and edit only, so a host
     # that found a span some other way can build the note itself.
     audio, _, _ = _melody()
-    span = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2)
+    span = libsonare.NoteObjectInput(onset_sample=0, offset_sample=len(audio) // 2)
     span.edit.muted = True
     rendered = libsonare.render_notes(audio, SR, [span])
     assert _rms(rendered[FADE_MARGIN : len(audio) // 2 - FADE_MARGIN]) < 1e-4
@@ -313,10 +313,10 @@ def test_a_hand_built_note_has_to_state_its_span() -> None:
         ({"offset_sample": len(audio) // 2}, "onset"),
     ):
         with pytest.raises(libsonare.SonareValueError) as raised:
-            libsonare.render_notes(audio, SR, [libsonare.NoteObject(**kwargs)])
+            libsonare.render_notes(audio, SR, [libsonare.NoteObjectInput(**kwargs)])
         assert f"{missing}_sample or {missing}_sec" in str(raised.value)
 
-    stated = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2)
+    stated = libsonare.NoteObjectInput(onset_sample=0, offset_sample=len(audio) // 2)
     stated.edit.gain_db = -60.0
     rendered = libsonare.render_notes(audio, SR, [stated])
     # The control: the span that IS stated reaches the render and changes it.
@@ -1159,6 +1159,41 @@ def test_a_note_pitch_is_none_when_absent_and_zero_is_refused() -> None:
             libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, bad)
     assert libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, None).center_hz is None
     audio = np.zeros(SR // 2, dtype=np.float32)
-    span = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2, median_hz=0.0)
+    span = libsonare.NoteObjectInput(onset_sample=0, offset_sample=len(audio) // 2, median_hz=0.0)
     with pytest.raises(libsonare.SonareValueError, match=r"notes\[0\]\.median_hz"):
         libsonare.render_notes(audio, SR, [span])
+
+
+_RETURNED_REQUIRED = {
+    "NoteObject": {"onset_sample": int, "offset_sample": int, "frame_start": int, "frame_end": int},
+    "PercussiveEvent": {"onset_sample": int, "offset_sample": int},
+}
+
+
+@pytest.mark.parametrize("name", sorted(_RETURNED_REQUIRED))
+def test_returned_records_declare_their_bounds_required(name: str) -> None:
+    # A returned record carries the sample spelling only and never an optional
+    # bound; the hand-built input form is the one with seconds and None.
+    cls = getattr(libsonare, name)
+    hints = get_type_hints(cls)
+    fields = {f.name: f for f in dataclasses.fields(cls)}
+    for field, kind in _RETURNED_REQUIRED[name].items():
+        assert hints[field] is kind, f"{name}.{field} is {hints[field]}"
+        assert fields[field].default is dataclasses.MISSING, f"{name}.{field} has a default"
+    assert not [f for f in fields if f.endswith("_sec")], f"{name} carries a seconds field"
+    for edit in ("NoteEdit", "PercussiveEventEdit"):
+        assert "time_offset_sec" not in {
+            f.name for f in dataclasses.fields(getattr(libsonare, edit))
+        }
+    paired = getattr(libsonare, f"{name}Input")
+    assert {"onset_sec", "offset_sec"} <= {f.name for f in dataclasses.fields(paired)}
+
+
+@pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not built")
+def test_extracted_notes_fill_every_bound_with_an_int() -> None:
+    audio, f0_hz, voiced = _melody()
+    notes = libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced=voiced)
+    assert notes
+    for note in notes:
+        for field in ("onset_sample", "offset_sample", "frame_start", "frame_end"):
+            assert type(getattr(note, field)) is int, field

@@ -11,6 +11,8 @@ import numpy as np
 
 from ._effects_note_model import (
     NoteObject,
+    NoteObjectInput,
+    NoteSetEntry,
     PitchDecompositionResult,
     TranscribeResult,
     _note_extractor_config,
@@ -296,7 +298,7 @@ def extract_notes(
 def render_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteObjectInput],
     *,
     f0_hz: Sequence[float] | list[float] | np.ndarray | None = None,
     voiced: Sequence[int] | list[int] | np.ndarray | None = None,
@@ -308,7 +310,8 @@ def render_notes(
 
     Each note's ``onset_sample``, ``offset_sample`` and ``edit`` are read, plus
     its frame bounds and ``median_hz`` when a curve edit needs them, so the list
-    :func:`extract_notes` returned can be passed straight back. A note whose
+    :func:`extract_notes` returned can be passed straight back. A hand-built
+    note is a :class:`NoteObjectInput`, whose bounds may be given in seconds. A note whose
     edit is the identity is not resynthesized, so a set whose edits are all
     identity reproduces the input exactly.
 
@@ -368,7 +371,9 @@ def render_notes(
     lib = _get_lib()
 
     c_array, length = _to_c_float_array(samples)
-    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(
+        notes, sample_rate, require_span=True
+    )
 
     f0_array = None
     voiced_array = None
@@ -506,7 +511,7 @@ def split_note(
     sample_rate: int,
     f0_hz: Sequence[float] | list[float] | np.ndarray,
     frame_rate: float,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteSetEntry],
     index: int,
     frame: int,
     *,
@@ -545,8 +550,9 @@ def split_note(
         sample_rate: Sample rate in Hz.
         f0_hz: Per-frame F0 in Hz, the track the set was extracted from.
         frame_rate: F0 frames per second; must be finite and greater than 0.
-        notes: The current note set. Each note's ``[frame_start, frame_end)``
-            must be non-empty and inside the track.
+        notes: The current note set, as returned or as :class:`NoteSetEntry`
+            rows. Each note's ``[frame_start, frame_end)`` must be non-empty
+            and inside the track.
         index: Note to split.
         frame: Track frame to cut at, strictly inside that note's own span.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
@@ -604,7 +610,7 @@ def merge_notes(
     sample_rate: int,
     f0_hz: Sequence[float] | list[float] | np.ndarray,
     frame_rate: float,
-    notes: Sequence[NoteObject],
+    notes: Sequence[NoteObject | NoteSetEntry],
     first: int,
     last: int,
     *,
@@ -634,8 +640,9 @@ def merge_notes(
         sample_rate: Sample rate in Hz.
         f0_hz: Per-frame F0 in Hz, the track the set was extracted from.
         frame_rate: F0 frames per second; must be finite and greater than 0.
-        notes: The current note set. Each note's ``[frame_start, frame_end)``
-            must be non-empty and inside the track.
+        notes: The current note set, as returned or as :class:`NoteSetEntry`
+            rows. Each note's ``[frame_start, frame_end)`` must be non-empty
+            and inside the track.
         first: Index of the first note to join; must be ``< last``.
         last: Index of the last note to join, inclusive.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
@@ -934,7 +941,9 @@ def assign_note_targets(
             max_correction_semitones, "max_correction_semitones"
         )
 
-    c_notes, note_count, _envelopes, _envelope_count, respelled = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, _envelopes, _envelope_count, respelled = _notes_to_c(
+        notes, sample_rate, require_span=True
+    )
     c_targets, target_count = _note_targets_to_c(targets)
     assigned = ctypes.c_size_t()
     _check(
