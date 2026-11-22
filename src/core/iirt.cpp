@@ -254,10 +254,6 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
       row =
           cascade_frame_rms(y, n_samples, sos, config.win_length, config.hop_length, config.center);
     }
-    if (static_cast<int>(row.size()) != n_frames_global) {
-      // Resize zero-filled rows to match (only happens for early skipped bands).
-      row.resize(n_frames_global, 0.0f);
-    }
     rows.push_back(std::move(row));
   }
 

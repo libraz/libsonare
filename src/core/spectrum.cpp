@@ -142,8 +142,7 @@ class StftWorkspace {
 
     n_frames_ = frames_for_padded_length(signal_length_, n_fft_, hop_length_);
     n_bins_ = n_fft_ / 2 + 1;
-    spectrum_size_ = static_cast<size_t>(n_bins_) * static_cast<size_t>(n_frames_);
-    SONARE_CHECK(spectrum_size_ / static_cast<size_t>(n_bins_) == static_cast<size_t>(n_frames_),
+    SONARE_CHECK(numeric::checked_matrix_element_count(n_bins_, n_frames_, &spectrum_size_),
                  ErrorCode::InvalidParameter);
   }
 
@@ -389,8 +388,8 @@ size_t checked_from_complex_size(int n_bins, int n_frames, int n_fft, int hop_le
                    "Spectrogram::from_complex: win_length must be 0 or in [1, n_fft]");
   // Compute the element count in size_t so the multiply cannot overflow int;
   // reject sizes that would not fit in a vector index.
-  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
-  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+  size_t total = 0;
+  SONARE_CHECK(numeric::checked_matrix_element_count(n_bins, n_frames, &total),
                ErrorCode::InvalidParameter);
   return total;
 }
@@ -614,8 +613,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 
   // Element count in size_t so the n_bins*n_frames multiply and the column-major
   // index cannot overflow int for large caller-supplied n_frames.
-  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
-  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+  size_t total = 0;
+  SONARE_CHECK(numeric::checked_matrix_element_count(n_bins, n_frames, &total),
                ErrorCode::InvalidParameter);
 
   // std::polar of a non-finite magnitude seeds the whole iteration with NaN,

@@ -13,9 +13,11 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
+
+// Squared corner frequencies shared by the A, B and C curves.
+const double kCornerHighSq = 12194.217 * 12194.217;
+const double kCornerLowSq = 20.598997 * 20.598997;
 
 // Clamp inputs to a tiny positive floor so that the DC bin (f = 0) yields a
 // very large negative but finite weight instead of -inf. The floor is well
@@ -25,8 +27,8 @@ namespace {
 inline double log10_safe(double v) { return std::log10(std::max(v, 1e-300)); }
 
 double a_weight_one(double f_sq) {
-  static const double c0 = 12194.217 * 12194.217;
-  static const double c1 = 20.598997 * 20.598997;
+  static const double c0 = kCornerHighSq;
+  static const double c1 = kCornerLowSq;
   static const double c2 = 107.65265 * 107.65265;
   static const double c3 = 737.86223 * 737.86223;
   return 2.0 +
@@ -35,16 +37,16 @@ double a_weight_one(double f_sq) {
 }
 
 double b_weight_one(double f_sq) {
-  static const double c0 = 12194.217 * 12194.217;
-  static const double c1 = 20.598997 * 20.598997;
+  static const double c0 = kCornerHighSq;
+  static const double c1 = kCornerLowSq;
   static const double c2 = 158.48932 * 158.48932;
   return 0.17 + 20.0 * (log10_safe(c0) + 1.5 * log10_safe(f_sq) - log10_safe(f_sq + c0) -
                         log10_safe(f_sq + c1) - 0.5 * log10_safe(f_sq + c2));
 }
 
 double c_weight_one(double f_sq) {
-  static const double c0 = 12194.217 * 12194.217;
-  static const double c1 = 20.598997 * 20.598997;
+  static const double c0 = kCornerHighSq;
+  static const double c1 = kCornerLowSq;
   return 0.062 +
          20.0 * (log10_safe(c0) + log10_safe(f_sq) - log10_safe(f_sq + c0) - log10_safe(f_sq + c1));
 }

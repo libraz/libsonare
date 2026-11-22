@@ -240,9 +240,6 @@ void validate_note_for_render(const NoteObject& note, int64_t audio_samples) {
                      has_usable_pitch(note.f0_hz.values),
                  ErrorCode::InvalidParameter);
   }
-  for (const float value : edit.amplitude_envelope) {
-    SONARE_CHECK(std::isfinite(value) && value >= 0.0f, ErrorCode::InvalidParameter);
-  }
 }
 
 void validate_note_for_render(const NoteObject& note) { validate_note_for_render(note, -1); }
@@ -266,9 +263,7 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
   // Nothing to resynthesize: the source passes through unchanged, bit for bit.
   if (all_identity) {
-    SONARE_CHECK(
-        std::all_of(audio.begin(), audio.end(), [](float sample) { return std::isfinite(sample); }),
-        ErrorCode::InvalidParameter);
+    SONARE_CHECK(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter);
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 
@@ -334,9 +329,7 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
             fade);
   }
 
-  SONARE_CHECK(
-      std::all_of(output.begin(), output.end(), [](float sample) { return std::isfinite(sample); }),
-      ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::all_finite(output.data(), output.size()), ErrorCode::InvalidParameter);
   return Audio::from_vector(std::move(output), sample_rate);
 }
 

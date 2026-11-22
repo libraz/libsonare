@@ -130,29 +130,35 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
   std::vector<float> result = resample(samples, size, src_sr, target_sr);
   if (src_sr == target_sr || result.empty()) return result;
 
-  double source_dc = 0.0;
-  double source_l1 = 0.0;
-  for (size_t index = 0; index < size; ++index) {
-    const double sample = static_cast<double>(samples[index]);
-    source_dc += sample;
-    source_l1 += std::abs(sample);
-  }
-
-  double target_dc = 0.0;
-  double target_l1 = 0.0;
-  for (const float sample : result) {
-    const double value = static_cast<double>(sample);
-    target_dc += value;
-    target_l1 += std::abs(value);
-  }
+  struct Sums {
+    double dc = 0.0;
+    double l1 = 0.0;
+  };
+  const auto sum_of = [](const float* data, size_t count) {
+    Sums sums;
+    for (size_t index = 0; index < count; ++index) {
+      const double sample = static_cast<double>(data[index]);
+      sums.dc += sample;
+      sums.l1 += std::abs(sample);
+    }
+    return sums;
+  };
+  const Sums source = sum_of(samples, size);
+  const Sums target = sum_of(result.data(), result.size());
+  const double source_dc = source.dc;
+  const double source_l1 = source.l1;
+  const double target_dc = target.dc;
+  const double target_l1 = target.l1;
 
   constexpr double kStableDcRelative = 1e-4;
   constexpr double kMinDcGainRelative = 0.5;
   constexpr double kMaxDcGainRelative = 2.0;
-  const bool source_stable = std::isfinite(source_dc) && std::isfinite(source_l1) &&
-                             source_l1 > 0.0 && std::abs(source_dc) > kStableDcRelative * source_l1;
-  const bool target_stable = std::isfinite(target_dc) && std::isfinite(target_l1) &&
-                             target_l1 > 0.0 && std::abs(target_dc) > kStableDcRelative * target_l1;
+  const auto is_stable = [](double dc, double l1) {
+    return std::isfinite(dc) && std::isfinite(l1) && l1 > 0.0 &&
+           std::abs(dc) > kStableDcRelative * l1;
+  };
+  const bool source_stable = is_stable(source_dc, source_l1);
+  const bool target_stable = is_stable(target_dc, target_l1);
   const bool same_sign =
       (source_dc > 0.0 && target_dc > 0.0) || (source_dc < 0.0 && target_dc < 0.0);
 

@@ -120,7 +120,7 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
   // Matches numpy.logspace: 10**linspace(start*log10(base), stop*log10(base))
   if (click_n == 1) {
     click[0] = static_cast<float>(std::sin(0.0));  // = 0
-  } else if (click_n > 1) {
+  } else {
     const double start_exp = 0.0;
     const double stop_exp = -10.0;
     const double step = (stop_exp - start_exp) / static_cast<double>(click_n - 1);
@@ -179,7 +179,6 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
     int end = start + click_n;
     int copy_n = click_n;
     if (end > out_len) copy_n = out_len - start;
-    if (copy_n <= 0) continue;
     for (int i = 0; i < copy_n; ++i) {
       out[static_cast<size_t>(start + i)] += click[static_cast<size_t>(i)];
     }

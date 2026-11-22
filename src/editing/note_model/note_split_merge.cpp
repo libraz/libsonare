@@ -35,6 +35,13 @@ float envelope_at_sample(const std::vector<float>& envelope, long double sample,
   return envelope[lo] * (1.0f - fraction) + envelope[hi] * fraction;
 }
 
+void validate_all_notes(const std::vector<NoteObject>& notes, int64_t audio_samples) {
+  for (const NoteObject& note : notes) {
+    SONARE_CHECK(is_valid_note_span(note, audio_samples), ErrorCode::InvalidParameter);
+    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
+  }
+}
+
 bool checked_multiply(std::uint64_t lhs, std::uint64_t rhs, std::uint64_t* out) noexcept {
   if (out == nullptr || (rhs != 0 && lhs > std::numeric_limits<std::uint64_t>::max() / rhs)) {
     return false;
@@ -201,11 +208,7 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
                                    const std::vector<NoteObject>& notes, size_t index, int frame,
                                    const NoteExtractorConfig& config) {
   SONARE_CHECK(index < notes.size(), ErrorCode::InvalidParameter);
-  for (const NoteObject& note : notes) {
-    SONARE_CHECK(is_valid_note_span(note, static_cast<int64_t>(audio.size())),
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
-  }
+  validate_all_notes(notes, static_cast<int64_t>(audio.size()));
   const NoteObject& source = notes[index];
   SONARE_CHECK(frame > source.frame_start && frame < source.frame_end, ErrorCode::InvalidParameter);
 
@@ -245,11 +248,7 @@ std::vector<NoteObject> merge_notes(const Audio& audio, const pitch_editor::F0Tr
                                     const std::vector<NoteObject>& notes, size_t first, size_t last,
                                     const NoteExtractorConfig& config) {
   SONARE_CHECK(first < last && last < notes.size(), ErrorCode::InvalidParameter);
-  for (const NoteObject& note : notes) {
-    SONARE_CHECK(is_valid_note_span(note, static_cast<int64_t>(audio.size())),
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
-  }
+  validate_all_notes(notes, static_cast<int64_t>(audio.size()));
 
   NoteObject merged =
       make_note(audio, track, notes[first].frame_start, notes[last].frame_end, config);
