@@ -134,15 +134,15 @@
     "node": ">=22.12.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.4",
+    "@biomejs/biome": "^2.6.8",
     "@types/node": "^22.20.5",
     "ajv": "^8.20.0",
     "esbuild": "^0.28.2",
     "smol-toml": "^1.9.1",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
-    "vite": "^8.3.5",
-    "vitest": "^5.0.5",
-    "webpack": "^5.112.2"
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "webpack": "^5.113.0"
   }
 }
