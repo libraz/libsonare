@@ -24,6 +24,7 @@
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
+#include "util/base64.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
@@ -576,8 +577,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
     check_project_keys(root);
 
     arrangement::Project project;
-    const auto invalid_entity_id = [](uint32_t id) {
-      return id == 0 || id == std::numeric_limits<uint32_t>::max();
+    const auto reject_payload_limit = [&]() {
+      result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                    "project decoded payload limit exceeded"});
     };
     const auto reject_entity_id = [&](const std::string& element_path, bool duplicate) {
       result.diagnostics.push_back(
@@ -677,7 +679,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         const std::string at = schema::index_path("sources", index++);
         arrangement::ClipSource src = source_from_json(object_element(sv, at), at);
         const arrangement::SourceId sid = arrangement::source_id(src);
-        if (invalid_entity_id(sid)) {
+        if (!valid_entity_id(sid)) {
           reject_entity_id(at, false);
           return result;
         }
@@ -706,7 +708,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
       for (const auto& tv : *arr) {
         const std::string at = schema::index_path("tracks", index++);
         arrangement::Track t = track_from_json(object_element(tv, at), at);
-        if (invalid_entity_id(t.id)) {
+        if (!valid_entity_id(t.id)) {
           reject_entity_id(at, false);
           return result;
         }
@@ -730,7 +732,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
       for (const auto& cv : *arr) {
         const std::string at = schema::index_path("clips", index++);
         arrangement::EditClip c = clip_from_json(object_element(cv, at), at);
-        if (invalid_entity_id(c.id)) {
+        if (!valid_entity_id(c.id)) {
           reject_entity_id(at, false);
           return result;
         }
@@ -833,12 +835,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
       if (src != nullptr && track != nullptr) {
         const arrangement::SourceKind sk = arrangement::source_kind(*src);
-        const bool audio_ok = track->kind == arrangement::Track::Kind::kAudio &&
-                              sk == arrangement::SourceKind::kAudio;
-        const bool midi_ok =
-            track->kind == arrangement::Track::Kind::kMidi && sk == arrangement::SourceKind::kMidi;
-        // kAux tracks hold no clip sources; any source kind on one is a mismatch.
-        if (!audio_ok && !midi_ok) {
+        if (!arrangement::detail::track_kind_accepts_source_kind(track->kind, sk)) {
           emit_referential_warning("clip_source_kind_mismatch",
                                    "clip " + std::to_string(c.id) +
                                        " source kind does not match track " +
@@ -899,7 +896,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                                 schema::integer_range_predicate(-7, 7)));
         }
         m.key_minor = bool_or(mv, at, "keyMinor", false);
-        if (invalid_entity_id(m.id)) {
+        if (!valid_entity_id(m.id)) {
           reject_entity_id(at, false);
           return result;
         }
@@ -938,8 +935,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         const std::size_t remaining_payload_bytes =
             import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
         if (base64_decoded_upper_bound(payload) > remaining_payload_bytes) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
-                                        "project decoded payload limit exceeded"});
+          reject_payload_limit();
           return result;
         }
         arrangement::AssistSidecar sidecar;
@@ -960,8 +956,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         if (!resource::bounded_accumulate(sidecar.payload.size(),
                                           import_limits.max_decoded_payload_bytes,
                                           &decoded_payload_bytes)) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
-                                        "project decoded payload limit exceeded"});
+          reject_payload_limit();
           return result;
         }
         project.add_assist_sidecar(std::move(sidecar));
@@ -993,12 +988,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
             const std::size_t remaining_payload_bytes =
                 import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
             if (base64_decoded_upper_bound(payload_value.as_string()) > remaining_payload_bytes) {
-              result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
-                                            "project decoded payload limit exceeded"});
+              reject_payload_limit();
               return result;
             }
             std::vector<uint8_t> payload;
-            if (!base64_decode(payload_value.as_string(), &payload, remaining_payload_bytes)) {
+            if (!sonare::base64_decode(payload_value.as_string(), &payload,
+                                       remaining_payload_bytes)) {
               result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sysex_payload",
                                             schema::refusal(payload_path, "must be valid base64")});
               return result;
@@ -1006,8 +1001,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
             if (!resource::bounded_accumulate(payload.size(),
                                               import_limits.max_decoded_payload_bytes,
                                               &decoded_payload_bytes)) {
-              result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
-                                            "project decoded payload limit exceeded"});
+              reject_payload_limit();
               return result;
             }
             result.midi.sysex_payloads[handle] = std::move(payload);

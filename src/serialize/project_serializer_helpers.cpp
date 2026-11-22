@@ -61,10 +61,6 @@ std::string base64_encode(const std::vector<uint8_t>& bytes) {
   return out;
 }
 
-bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t max_output_bytes) {
-  return sonare::base64_decode(text, out, max_output_bytes);
-}
-
 // ===========================================================================
 // Small read helpers. Forward compatibility covers UNKNOWN fields and ABSENT
 // known fields: an absent field falls back to the default. A field that is

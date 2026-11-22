@@ -40,8 +40,13 @@ using json::Value;
 // ===========================================================================
 
 std::string base64_encode(const std::vector<uint8_t>& bytes);
-bool base64_decode(const std::string& text, std::vector<uint8_t>* out,
-                   size_t max_output_bytes = std::numeric_limits<size_t>::max());
+
+// Entity ids the model admits. 0 is the failure/sentinel value and UINT32_MAX
+// is the exhausted-counter sentinel; the id allocator hands out neither, so a
+// document carrying one describes a project no edit sequence could build.
+inline bool valid_entity_id(uint32_t id) noexcept {
+  return id != 0 && id != std::numeric_limits<uint32_t>::max();
+}
 
 // ===========================================================================
 // Bounded decode-path diagnostics.
@@ -83,8 +88,6 @@ class BoundedDiagnostics {
            std::to_string(suppressed_) + " additional decode diagnostics were suppressed"});
     }
   }
-
-  std::size_t suppressed() const noexcept { return suppressed_; }
 
  private:
   std::vector<Diagnostic>* out_;

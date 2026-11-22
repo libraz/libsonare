@@ -23,6 +23,7 @@
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
+#include "util/base64.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_schema.h"
@@ -378,7 +379,7 @@ bool earlier_assist_module_id(const std::string& module_id, std::string* current
 
 bool sidecar_from_borrowed_payload(const std::string& encoded_payload,
                                    arrangement::AssistSidecar* out, size_t max_payload_bytes) {
-  return base64_decode(encoded_payload, &out->payload, max_payload_bytes);
+  return sonare::base64_decode(encoded_payload, &out->payload, max_payload_bytes);
 }
 
 // Metadata is assigned before payload decoding, preserving the installed
@@ -452,13 +453,6 @@ void clamp_negative_gain(float* gain, const char* owner, uint32_t id,
         std::string(owner) + "_gain_clamped",
         std::string(owner) + " " + std::to_string(id) + " had a negative gain; clamped to zero");
   }
-}
-
-// Entity ids the model admits. 0 is the failure/sentinel value and UINT32_MAX
-// is the exhausted-counter sentinel; the id allocator hands out neither, so a
-// document carrying one describes a project no edit sequence could build.
-bool valid_entity_id(uint32_t id) noexcept {
-  return id != 0 && id != std::numeric_limits<uint32_t>::max();
 }
 
 // Identity a sidecar is addressed by. SetAssistSidecar overwrites an existing
