@@ -12,6 +12,9 @@ dependencies = [
   "scipy>=1.14",
 ]
 
+[tool.uv]
+package = false
+
 [tool.rye]
 managed = true
 virtual = true
