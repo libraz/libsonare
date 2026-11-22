@@ -1624,20 +1624,24 @@ describe('a streaming option key is refused past the float range rather than sat
     }
   }
 
-  it.each(ANALYZER_CONFIG_KEYS)('StreamAnalyzer config %s', (key) => {
-    expect(() =>
-      new native.StreamAnalyzer({ ...analyzerConfig, [key]: IN_RANGE[key] ?? 100 }).destroy(),
-    ).not.toThrow();
-    for (const value of PAST_FLOAT_RANGE) {
-      expect(
-        () => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value }),
-        `${value}`,
-      ).toThrow(RangeError);
-      expect(() => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value })).toThrow(
-        new RegExp(key),
-      );
-    }
-  });
+  // Coverage, not a regression guard: a saturated infinity on these keys was already refused by name downstream.
+  it.each(ANALYZER_CONFIG_KEYS)(
+    'StreamAnalyzer config %s (coverage: refused downstream too)',
+    (key) => {
+      expect(() =>
+        new native.StreamAnalyzer({ ...analyzerConfig, [key]: IN_RANGE[key] ?? 100 }).destroy(),
+      ).not.toThrow();
+      for (const value of PAST_FLOAT_RANGE) {
+        expect(
+          () => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value }),
+          `${value}`,
+        ).toThrow(RangeError);
+        expect(() => new native.StreamAnalyzer({ ...analyzerConfig, [key]: value })).toThrow(
+          new RegExp(key),
+        );
+      }
+    },
+  );
 
   it('StreamAnalyzer config fmin and fmax reach the mel bands', () => {
     expect(analyzerMel({ fmin: 0 })).not.toBe(analyzerMel({ fmin: 2000 }));
