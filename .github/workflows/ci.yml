@@ -41,22 +41,32 @@ jobs:
             xargs -0 uv run --no-sync --project bindings/python clang-format --dry-run --Werror
 
   lint:
+    # The engines floor every package promises (the WASM binding's >=22.12.0)
+    # and the Active LTS the repo develops on.
+    name: Lint (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.12.0', '26']
     defaults:
       run:
         working-directory: bindings/wasm
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
-        working-directory: .
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: yarn
-          cache-dependency-path: |
-            bindings/wasm/yarn.lock
-            bindings/node/yarn.lock
-            tools/audition/web/yarn.lock
+          node-version: ${{ matrix.node }}
+      # Node 25 and later ship no corepack, so every leg installs the same one;
+      # `corepack enable` then takes yarn's version from each packageManager.
+      - run: npm install -g corepack@0.36 && corepack enable
+        working-directory: .
+      - uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('bindings/wasm/yarn.lock', 'bindings/node/yarn.lock', 'tools/audition/web/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
       - run: yarn install --immutable
       - run: yarn lint
       - name: Emit the WASM binding's declarations
@@ -277,12 +287,20 @@ jobs:
       - uses: mymindstorm/setup-emsdk@v16
         with:
           version: 6.0.10
-      - run: corepack enable
+      # The engines floor only: this job's coverage build is the expensive part,
+      # and the floor is the version the WASM package promises to run on.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: yarn
-          cache-dependency-path: bindings/wasm/yarn.lock
+          node-version: '22.12.0'
+      # Node 25 and later ship no corepack, so it is installed as in the lint job;
+      # `corepack enable` then takes yarn's version from each packageManager.
+      - run: npm install -g corepack@0.36 && corepack enable
+      - uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('bindings/wasm/yarn.lock', 'bindings/node/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
 
       - name: Cache CMake dependencies
         uses: actions/cache@v6

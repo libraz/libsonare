@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '22.22.3'
+          node-version: '26'
           registry-url: 'https://registry.npmjs.org'
 
       # Pinned to a major so a freshly cut npm release cannot break a publish
@@ -76,8 +76,9 @@ jobs:
       # ^22.22.2 || ^24.15.0 || >=26.0.0, so it is paired with the node-version
       # above; raise both together.
       - run: npm install -g npm@12
-      - run: corepack enable
-      - run: corepack prepare yarn@4.15.0 --activate
+      # Node 25 and later ship no corepack, so it is installed here as in CI;
+      # `corepack enable` then takes yarn's version from each packageManager.
+      - run: npm install -g corepack@0.36 && corepack enable
 
       - uses: actions/cache@v6
         with:
