@@ -111,6 +111,11 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test && yarn test:types
+      - name: Browser smokes (WASM)
+        working-directory: bindings/wasm
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: yarn test:browser:all
 
       - name: Publish to npm
         # Skipped when the version is already on npm, so a tag moved to finish

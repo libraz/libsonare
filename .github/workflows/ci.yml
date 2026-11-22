@@ -500,6 +500,11 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test && yarn test:types && yarn test:bundle
+      - name: Browser smokes (WASM)
+        working-directory: bindings/wasm
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: yarn test:browser:all
       # Re-runs the suite with every public export wrapped and fails when more of
       # the refusals it provokes name a field in C spelling than the ratchet allows.
       - name: Refusal spelling ratchet (WASM)
