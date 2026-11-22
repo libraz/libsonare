@@ -6,6 +6,7 @@ import {
   roomMorphStereo,
   synthesizeRir,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 describe('geometric room acoustics', () => {
   it('synthesizes a decaying RIR from geometry', () => {
@@ -101,8 +102,16 @@ describe('geometric room acoustics', () => {
 
     // Past the uint32 range there is no C-ABI seed to reach, so it is rejected
     // rather than silently answered with the default RIR.
-    expect(() => synthesizeRir({ ...base, seed: 2 ** 32 })).toThrow();
-    expect(() => synthesizeRir({ ...base, seed: 2 ** 40 })).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ ...base, seed: 2 ** 32 }),
+      RangeError,
+      /^synthesizeRir: seed must be a finite number within \[0, 4294967295\]$/,
+    );
+    expectRefusal(
+      () => synthesizeRir({ ...base, seed: 2 ** 40 }),
+      RangeError,
+      /^synthesizeRir: seed must be a finite number within \[0, 4294967295\]$/,
+    );
   });
 
   it('reads crossfadeMs 0 as a hard switch for the RIR splice and for room morph', () => {
@@ -180,44 +189,96 @@ describe('geometric room acoustics', () => {
   });
 
   it('rejects out-of-range sample rates', () => {
-    expect(() => synthesizeRir({ sampleRate: 0 })).toThrow();
-    expect(() => synthesizeRir({ sampleRate: 500000 })).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 0 }),
+      RangeError,
+      /^synthesizeRir: sampleRate must be an integer in \[8000, 384000\]$/,
+    );
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 500000 }),
+      RangeError,
+      /^synthesizeRir: sampleRate must be an integer in \[8000, 384000\]$/,
+    );
     const samples = new Float32Array(1000);
     samples[0] = 1.0;
-    expect(() => estimateRoom(samples, 0)).toThrow();
-    expect(() => roomMorph(samples, 500000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
+    expectRefusal(
+      () => estimateRoom(samples, 0),
+      RangeError,
+      /^estimateRoom: sampleRate must be an integer in \[8000, 384000\]$/,
+    );
+    expectRefusal(
+      () => roomMorph(samples, 500000, { lengthM: 5, widthM: 4, heightM: 3 }),
+      RangeError,
+      /^roomMorph: sampleRate must be an integer in \[8000, 384000\]$/,
+    );
   });
 
   it('rejects empty and non-finite input buffers', () => {
-    expect(() => estimateRoom(new Float32Array(0), 48000)).toThrow();
+    expectRefusal(
+      () => estimateRoom(new Float32Array(0), 48000),
+      RangeError,
+      /^estimateRoom: samples must not be empty$/,
+    );
     const bad = new Float32Array(1000);
     bad[10] = Number.NaN;
-    expect(() => estimateRoom(bad, 48000)).toThrow();
-    expect(() => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
+    expectRefusal(
+      () => estimateRoom(bad, 48000),
+      RangeError,
+      /^estimateRoom: samples contains a non-finite sample at index 10$/,
+    );
+    expectRefusal(
+      () => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 }),
+      RangeError,
+      /^roomMorph: samples contains a non-finite sample at index 10$/,
+    );
   });
 
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
-    expect(() =>
-      synthesizeRir({ sampleRate: 48000, bandAbsorption: new Array(65).fill(0.2) }),
-    ).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 48000, bandAbsorption: new Array(65).fill(0.2) }),
+      RangeError,
+      /^synthesizeRir: bandAbsorption exceeds the maximum of 64 bands$/,
+    );
     // Per-band absorption/scattering outside [0, 1] are rejected, matching the
     // C-ABI oracle's `unit` predicate (they used to be silently clamped here).
-    expect(() => synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 1.5, 0.3] })).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 1.5, 0.3] }),
+      RangeError,
+      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+    );
     expect(() =>
       synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.1, 0.3, 0.5] }),
     ).not.toThrow();
-    expect(() =>
-      synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
-    ).toThrow();
+    expectRefusal(
+      () =>
+        synthesizeRir({ sampleRate: 48000, bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
+      RangeError,
+      /^synthesizeRir: bandScattering must be within \[0, 1\]$/,
+    );
     // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
-    expect(() => synthesizeRir({ sampleRate: 48000, absorption: 2 })).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 48000, absorption: 2 }),
+      RangeError,
+      /^synthesizeRir: absorption must be within \[0, 1\]$/,
+    );
     // Non-finite geometry and timing.
-    expect(() => synthesizeRir({ sampleRate: 48000, lengthM: Number.NaN })).toThrow();
-    expect(() =>
-      synthesizeRir({ sampleRate: 48000, source: { x: Number.POSITIVE_INFINITY, y: 1, z: 1 } }),
-    ).toThrow();
-    expect(() => synthesizeRir({ sampleRate: 48000, maxSec: 100000 })).toThrow();
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 48000, lengthM: Number.NaN }),
+      RangeError,
+      /^synthesizeRir: lengthM must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
+    expectRefusal(
+      () =>
+        synthesizeRir({ sampleRate: 48000, source: { x: Number.POSITIVE_INFINITY, y: 1, z: 1 } }),
+      RangeError,
+      /^synthesizeRir: source\.x must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
+    expectRefusal(
+      () => synthesizeRir({ sampleRate: 48000, maxSec: 100000 }),
+      RangeError,
+      /^synthesizeRir: RIR timing parameters out of range$/,
+    );
     // An in-range absorption of exactly 1.0 is accepted (matches the C ABI's
     // [0, 1] bound, not the old 0.999 clamp).
     expect(() => synthesizeRir({ sampleRate: 48000, absorption: 1, maxSec: 0.1 })).not.toThrow();
@@ -244,30 +305,48 @@ describe('geometric room acoustics', () => {
   it('rejects invalid estimation priors and room-morph configuration', () => {
     const samples = new Float32Array(2000);
     samples[0] = 1;
-    expect(() => estimateRoom(samples, 48000, { referenceAbsorption: Number.NaN })).toThrow();
-    expect(() =>
-      estimateRoom(samples, 48000, { aspectHintLw: Number.POSITIVE_INFINITY }),
-    ).toThrow();
-    expect(() => roomMorph(samples, 48000, { lengthM: -1, widthM: 4, heightM: 3 })).toThrow();
-    expect(() =>
-      roomMorph(samples, 48000, {
-        lengthM: 5,
-        widthM: 4,
-        heightM: 3,
-        source: { x: 99, y: 1, z: 1 },
-      }),
-    ).toThrow();
-    expect(() =>
-      roomMorph(samples, 48000, { lengthM: 5, widthM: 4, heightM: 3, wet: Number.NaN }),
-    ).toThrow();
-    expect(() =>
-      roomMorph(samples, 48000, {
-        lengthM: 5,
-        widthM: 4,
-        heightM: 3,
-        maxSec: Number.POSITIVE_INFINITY,
-      }),
-    ).toThrow();
+    expectRefusal(
+      () => estimateRoom(samples, 48000, { referenceAbsorption: Number.NaN }),
+      RangeError,
+      /^estimateRoom: referenceAbsorption must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
+    expectRefusal(
+      () => estimateRoom(samples, 48000, { aspectHintLw: Number.POSITIVE_INFINITY }),
+      RangeError,
+      /^estimateRoom: aspectHintLw must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
+    expectRefusal(
+      () => roomMorph(samples, 48000, { lengthM: -1, widthM: 4, heightM: 3 }),
+      RangeError,
+      /^roomMorph: lengthM must be finite and in \(0, 10000\]$/,
+    );
+    expectRefusal(
+      () =>
+        roomMorph(samples, 48000, {
+          lengthM: 5,
+          widthM: 4,
+          heightM: 3,
+          source: { x: 99, y: 1, z: 1 },
+        }),
+      RangeError,
+      /^roomMorph: source\.x must be finite and in \[0, 5\]$/,
+    );
+    expectRefusal(
+      () => roomMorph(samples, 48000, { lengthM: 5, widthM: 4, heightM: 3, wet: Number.NaN }),
+      RangeError,
+      /^roomMorph: wet must be finite and in \[0, 1\]$/,
+    );
+    expectRefusal(
+      () =>
+        roomMorph(samples, 48000, {
+          lengthM: 5,
+          widthM: 4,
+          heightM: 3,
+          maxSec: Number.POSITIVE_INFINITY,
+        }),
+      RangeError,
+      /^roomMorph: maxSec must be finite and in \[0, 600\]$/,
+    );
   });
 
   it('honors the late-tail model selector', () => {
@@ -397,33 +476,42 @@ describe('geometric room acoustics', () => {
   it('rejects out-of-range band absorption to match the C ABI (does not clamp)', () => {
     // The C ABI rejects any per-band coefficient outside [0, 1]; the Node facade
     // now rejects too instead of silently clamping (which diverged the RIR).
-    expect(() =>
-      synthesizeRir({
-        sampleRate: 48000,
-        lengthM: 7,
-        widthM: 5,
-        heightM: 3,
-        bandAbsorption: [1.5, 1.5, 1.5, 1.5],
-      }),
-    ).toThrow();
-    expect(() =>
-      synthesizeRir({
-        sampleRate: 48000,
-        lengthM: 7,
-        widthM: 5,
-        heightM: 3,
-        bandAbsorption: [0.1, -0.2, 0.3],
-      }),
-    ).toThrow();
-    expect(() =>
-      synthesizeRir({
-        sampleRate: 48000,
-        lengthM: 7,
-        widthM: 5,
-        heightM: 3,
-        bandAbsorption: [0.1, Number.NaN, 0.3],
-      }),
-    ).toThrow();
+    expectRefusal(
+      () =>
+        synthesizeRir({
+          sampleRate: 48000,
+          lengthM: 7,
+          widthM: 5,
+          heightM: 3,
+          bandAbsorption: [1.5, 1.5, 1.5, 1.5],
+        }),
+      RangeError,
+      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+    );
+    expectRefusal(
+      () =>
+        synthesizeRir({
+          sampleRate: 48000,
+          lengthM: 7,
+          widthM: 5,
+          heightM: 3,
+          bandAbsorption: [0.1, -0.2, 0.3],
+        }),
+      RangeError,
+      /^synthesizeRir: bandAbsorption must be within \[0, 1\]$/,
+    );
+    expectRefusal(
+      () =>
+        synthesizeRir({
+          sampleRate: 48000,
+          lengthM: 7,
+          widthM: 5,
+          heightM: 3,
+          bandAbsorption: [0.1, Number.NaN, 0.3],
+        }),
+      RangeError,
+      /^synthesizeRir: bandAbsorption\[1\] must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
     // An in-range band table is still accepted and produces a valid RIR.
     const ok = synthesizeRir({
       sampleRate: 48000,
@@ -437,16 +525,19 @@ describe('geometric room acoustics', () => {
 
   it('rejects a negative ISM order instead of clamping it to zero', () => {
     // The C ABI rejects a negative ismOrder; Node must too (it used to clamp).
-    expect(() =>
-      synthesizeRir({
-        sampleRate: 48000,
-        lengthM: 7,
-        widthM: 5,
-        heightM: 3,
-        absorption: 0.15,
-        ismOrder: -1,
-      }),
-    ).toThrow();
+    expectRefusal(
+      () =>
+        synthesizeRir({
+          sampleRate: 48000,
+          lengthM: 7,
+          widthM: 5,
+          heightM: 3,
+          absorption: 0.15,
+          ismOrder: -1,
+        }),
+      RangeError,
+      /^synthesizeRir: ismOrder must be an integer in \[0, 2147483647\]$/,
+    );
   });
 
   it('refuses an explicit zero aspect hint', () => {
@@ -570,13 +661,16 @@ describe('geometric room acoustics', () => {
     expect(on.audio.length).toBe(off.audio.length);
     expect(Array.from(on.audio)).not.toEqual(Array.from(off.audio));
     // The morph validates its config rather than diagnosing, so this throws.
-    expect(() =>
-      roomMorph(samples, 48000, {
-        ...target,
-        airAbsorptionEnabled: true,
-        airHumidityPercent: 150,
-      }),
-    ).toThrow();
+    expectRefusal(
+      () =>
+        roomMorph(samples, 48000, {
+          ...target,
+          airAbsorptionEnabled: true,
+          airHumidityPercent: 150,
+        }),
+      RangeError,
+      /^roomMorph: airHumidityPercent must be finite and in \[0, 100\]$/,
+    );
   });
 });
 

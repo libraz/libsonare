@@ -165,13 +165,19 @@ describe('masteringRepairDereverbClassical (Node)', () => {
   });
 
   it('rejects non-power-of-two nFft', () => {
-    expect(() => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 })).toThrow();
+    expectRefusal(
+      () => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 }),
+      RangeError,
+      /^masteringRepairDereverbClassical: nFft must be a power of two in \[2, 524288\]$/,
+    );
   });
 
-  it('rejects hopLength > nFft', () => {
-    expect(() =>
-      masteringRepairDereverbClassical(samples, SR, { nFft: 1024, hopLength: 2048 }),
-    ).toThrow();
+  it('rejects a hopLength above half of nFft', () => {
+    expectRefusal(
+      () => masteringRepairDereverbClassical(samples, SR, { nFft: 1024, hopLength: 513 }),
+      RangeError,
+      /^masteringRepairDereverbClassical: hopLength must be an integer in \[1, 512\]$/,
+    );
   });
 });
 
@@ -262,14 +268,20 @@ describe('masteringRepairDereverbConfigForRoom (Node)', () => {
   });
 
   it('rejects a missing estimate', () => {
-    expect(() =>
-      // @ts-expect-error deliberately passing the null the C ABI rejects
-      masteringRepairDereverbConfigForRoom({ estimate: null }),
-    ).toThrow();
-    expect(() =>
-      // @ts-expect-error deliberately passing no estimate at all
-      masteringRepairDereverbConfigForRoom({ estimate: undefined }),
-    ).toThrow();
+    expectRefusal(
+      () =>
+        // @ts-expect-error deliberately passing the null the C ABI rejects
+        masteringRepairDereverbConfigForRoom({ estimate: null }),
+      TypeError,
+      /^masteringRepairDereverbConfigForRoom: estimate must be a room estimate$/,
+    );
+    expectRefusal(
+      () =>
+        // @ts-expect-error deliberately passing no estimate at all
+        masteringRepairDereverbConfigForRoom({ estimate: undefined }),
+      TypeError,
+      /^masteringRepairDereverbConfigForRoom: estimate must be a room estimate$/,
+    );
   });
 
   it('resolves every omitted field to the library default', () => {
