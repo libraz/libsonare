@@ -6,11 +6,12 @@
  * the names the built `dist/sonare-analysis.js` carries. The list is read off an
  * instantiated module rather than the C++ sources, because which registrations
  * survive is decided by the preprocessor gates and the analysis source set.
- * Runs at the end of `build:wasm:analysis`; after a binary built elsewhere is copied
- * in, run it by hand. `tests/analysis-entry.test.ts` fails when the two part.
+ * Runs first in `build:js`, so a binary built here or copied in is declared by the
+ * normal build; with no analysis binary in `dist/` it leaves the file alone.
+ * `tests/analysis-entry.test.ts` fails when the two part.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { access, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 /** Emscripten runtime methods the module exports beside its embind registrations. */
@@ -48,6 +49,15 @@ export default createSonareAnalysis;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const binary = new URL('dist/sonare-analysis.js', PACKAGE_ROOT);
+  const present = await access(binary).then(
+    () => true,
+    () => false,
+  );
+  if (!present) {
+    console.log(`no ${fileURLToPath(binary)}; analysis module declaration left as is`);
+    process.exit(0);
+  }
   const names = await analysisRegistrations();
   await writeFile(TARGET, declarationText(names));
   console.log(`wrote ${fileURLToPath(TARGET)} (${names.length} registrations)`);
