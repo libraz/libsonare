@@ -1,0 +1,74 @@
+name: Restore ccache
+description: Install ccache, restore the newest cache for a build configuration and route CMake compiles through it.
+inputs:
+  key-prefix:
+    description: Cache key prefix naming the build configuration, ending in a dash.
+    required: true
+  max-size:
+    description: ccache size cap.
+    default: 700M
+  compiler:
+    description: Compiler whose version identifies the toolchain in the key.
+    default: c++
+  toolchain-id:
+    description: Identifier used in the key instead of the compiler version, for toolchains ccache sees only as a wrapper.
+    default: ''
+  compiler-check:
+    description: Value for CCACHE_COMPILERCHECK; empty keeps ccache's default.
+    default: ''
+  compiler-type:
+    description: Value for CCACHE_COMPILERTYPE; empty keeps ccache's detection.
+    default: ''
+outputs:
+  key:
+    description: Key to pass to ccache-save.
+    value: ${{ steps.key.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - name: Install ccache
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Linux ]; then
+          sudo apt-get install -y ccache
+        else
+          brew install ccache
+        fi
+    - name: Configure ccache
+      shell: bash
+      env:
+        MAX_SIZE: ${{ inputs.max-size }}
+        COMPILER_CHECK: ${{ inputs.compiler-check }}
+        COMPILER_TYPE: ${{ inputs.compiler-type }}
+      run: |
+        {
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache"
+          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE"
+          echo "CCACHE_COMPRESS=true"
+          echo "CCACHE_MAXSIZE=$MAX_SIZE"
+          echo "CCACHE_SLOPPINESS=pch_defines,time_macros"
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          [ -z "$COMPILER_CHECK" ] || echo "CCACHE_COMPILERCHECK=$COMPILER_CHECK"
+          [ -z "$COMPILER_TYPE" ] || echo "CCACHE_COMPILERTYPE=$COMPILER_TYPE"
+        } >> "$GITHUB_ENV"
+    - name: Compute key
+      id: key
+      shell: bash
+      env:
+        KEY_PREFIX: ${{ inputs.key-prefix }}
+        COMPILER: ${{ inputs.compiler }}
+        TOOLCHAIN_ID: ${{ inputs.toolchain-id }}
+      run: |
+        toolchain="${TOOLCHAIN_ID:-$("$COMPILER" --version | head -1 | sed 's/[^A-Za-z0-9.]/_/g')}"
+        echo "prefix=${KEY_PREFIX}${ImageOS:-$RUNNER_OS}-$RUNNER_ARCH-$toolchain-" >> "$GITHUB_OUTPUT"
+        echo "key=${KEY_PREFIX}${ImageOS:-$RUNNER_OS}-$RUNNER_ARCH-$toolchain-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+    - name: Restore cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+    - name: Reset statistics
+      shell: bash
+      run: ccache --zero-stats

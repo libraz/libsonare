@@ -78,7 +78,9 @@ A red check on your pull request is not a reason to hold it back; the maintainer
 | `Examples` | `develop` | The Python and C++ examples |
 | `Python wheel` | `develop` | A manylinux x86_64 wheel build |
 | `ASan/UBSan` | `main` | The suite under the address and undefined-behaviour sanitizers |
-| `Coverage + WASM` | `main` | Coverage, plus the emscripten build and the WASM binding's tests |
+| `Coverage` | `main` | The default ctest run under coverage instrumentation, uploaded to Codecov |
+| `Python binding` | `main` | The Python binding's type checks and tests, and the capability catalog drift check |
+| `WASM` | `main` | The emscripten build and the WASM binding's tests |
 | `FFmpeg decode` | `main` | The optional FFmpeg decode path, which every other job compiles out |
 
 ## Checklist

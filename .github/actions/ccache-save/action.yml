@@ -1,0 +1,21 @@
+name: Save ccache
+description: Print ccache statistics and, when asked, save the cache under the key ccache-restore produced.
+inputs:
+  key:
+    description: Output of ccache-restore.
+    required: true
+  save:
+    description: Whether to save; the caller decides from the event and the build outcome.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Show statistics
+      shell: bash
+      run: ccache --show-stats -v
+    - name: Save cache
+      if: inputs.save == 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ${{ inputs.key }}
