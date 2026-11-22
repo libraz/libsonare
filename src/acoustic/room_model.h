@@ -28,6 +28,18 @@ inline constexpr RoomDimensions kDefaultRoomDims{7.0f, 5.0f, 3.0f};
 /// @brief Default source and listener positions inside `kDefaultRoomDims` (m).
 inline constexpr SourceListener kDefaultPlacement{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
+/// @brief The default source and listener of a room of the given dimensions: `kDefaultPlacement`
+///        scaled per axis from `kDefaultRoomDims`, so each point keeps its fraction of every
+///        extent and lies strictly inside any room with positive dimensions. Every room entry
+///        reads its default placement here; the default room maps to `kDefaultPlacement` exactly.
+inline SourceListener scaled_default_placement(float length, float width, float height) {
+  const float sx = length / kDefaultRoomDims.length;
+  const float sy = width / kDefaultRoomDims.width;
+  const float sz = height / kDefaultRoomDims.height;
+  const auto scale = [&](const Vec3& p) { return Vec3{p.x * sx, p.y * sy, p.z * sz}; };
+  return {scale(kDefaultPlacement.source), scale(kDefaultPlacement.listener)};
+}
+
 /// @brief Default uniform wall absorption of a synthesized or morph-target room.
 inline constexpr float kDefaultWallAbsorption = 0.2f;
 /// Largest shoebox dimension (m) the room model accepts: generous for any real room, yet small

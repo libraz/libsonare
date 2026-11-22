@@ -42,15 +42,4 @@ inline float mean_finite_absorption(const float* bands, std::size_t count) {
   return static_cast<float>(sum / static_cast<double>(finite));
 }
 
-/// @brief The default source and listener positions scaled per axis from the default room to a
-///        room of the given dimensions, so they stay inside it; the default room maps to
-///        `kDefaultPlacement` exactly.
-inline SourceListener scaled_default_placement(float length, float width, float height) {
-  const float sx = length / kDefaultRoomDims.length;
-  const float sy = width / kDefaultRoomDims.width;
-  const float sz = height / kDefaultRoomDims.height;
-  const auto scale = [&](const Vec3& p) { return Vec3{p.x * sx, p.y * sy, p.z * sz}; };
-  return {scale(kDefaultPlacement.source), scale(kDefaultPlacement.listener)};
-}
-
 }  // namespace sonare::acoustic

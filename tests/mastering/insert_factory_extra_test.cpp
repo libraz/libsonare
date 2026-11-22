@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,7 @@
 // AirAbsorption carries the ISO reference climate the acoustic ABI's zero
 // sentinel resolves to; the tests read it instead of restating the literals.
 #include "acoustic/late_reverb.h"
+#include "acoustic/room_model.h"
 #endif
 
 namespace {
@@ -2183,3 +2185,62 @@ TEST_CASE("eq.graphic q reaches the DSP on the offline path exactly as on the in
   // Q changes the curve, so a builder that dropped it would read as the default.
   CHECK(broad_db - default_db > 2.0);
 }
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+TEST_CASE("the default placement lies inside every room the room validator accepts",
+          "[mastering][insert_factory]") {
+  using sonare::acoustic::kDefaultPlacement;
+  using sonare::acoustic::kDefaultRoomDims;
+  const float largest = sonare::acoustic::kMaxRoomDimensionM;
+  const std::array<std::array<float, 3>, 7> rooms = {{{1.0e-3f, 1.0e-3f, 1.0e-3f},
+                                                      {0.5f, 0.4f, 0.3f},
+                                                      {4.0f, 3.0f, 2.6f},
+                                                      {7.0f, 5.0f, 3.0f},
+                                                      {40.0f, 30.0f, 12.0f},
+                                                      {largest, 2.0f, 3.0f},
+                                                      {largest, largest, largest}}};
+  for (const auto& room_dims : rooms) {
+    const float length = room_dims[0];
+    const float width = room_dims[1];
+    const float height = room_dims[2];
+    CAPTURE(length, width, height);
+    const sonare::acoustic::SourceListener placement =
+        sonare::acoustic::scaled_default_placement(length, width, height);
+    // Each point keeps the fraction of every extent it has in the default room.
+    const auto keeps_fraction = [&](const sonare::acoustic::Vec3& point,
+                                    const sonare::acoustic::Vec3& reference) {
+      CHECK(point.x / length == Catch::Approx(reference.x / kDefaultRoomDims.length));
+      CHECK(point.y / width == Catch::Approx(reference.y / kDefaultRoomDims.width));
+      CHECK(point.z / height == Catch::Approx(reference.z / kDefaultRoomDims.height));
+    };
+    keeps_fraction(placement.source, kDefaultPlacement.source);
+    keeps_fraction(placement.listener, kDefaultPlacement.listener);
+    const sonare::acoustic::ShoeboxRoom room =
+        sonare::acoustic::uniform_shoebox({length, width, height}, 0.2f);
+    CHECK_FALSE(sonare::has_error(sonare::acoustic::validate_shoebox(room, placement)));
+  }
+}
+
+TEST_CASE("a room insert given only its dimensions places source and listener inside them",
+          "[mastering][insert_factory]") {
+  // From the smallest plan the default 0.5 m receiver pair fits beside the listener upward.
+  const std::array<std::array<double, 3>, 5> rooms = {{{2.0, 1.5, 2.0},
+                                                       {4.0, 3.0, 2.6},
+                                                       {7.0, 5.0, 3.0},
+                                                       {40.0, 30.0, 12.0},
+                                                       {400.0, 300.0, 50.0}}};
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    for (const auto& [length, width, height] : rooms) {
+      CAPTURE(name, length, width, height);
+      sonare::util::json::Object params;
+      params["lengthM"] = length;
+      params["widthM"] = width;
+      params["heightM"] = height;
+      const std::string json = sonare::util::json::dump(sonare::util::json::Value(params));
+      std::unique_ptr<sonare::rt::ProcessorBase> insert;
+      CHECK_NOTHROW(insert = sonare::mastering::api::make_insert(name, json));
+      CHECK(insert != nullptr);
+    }
+  }
+}
+#endif  // SONARE_WITH_ACOUSTIC_SIM

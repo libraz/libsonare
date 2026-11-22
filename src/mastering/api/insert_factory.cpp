@@ -917,8 +917,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dims = {f(params, "lengthM", config.dims.length, kMeters),
                    f(params, "widthM", config.dims.width, kMeters),
                    f(params, "heightM", config.dims.height, kMeters)};
-    config.source = read_vec3(params, "source", config.source);
-    config.listener = read_vec3(params, "listener", config.listener);
+    const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
+        config.dims.length, config.dims.width, config.dims.height);
+    config.source = read_vec3(params, "source", placement.source);
+    config.listener = read_vec3(params, "listener", placement.listener);
     note_room_members(params, "dims", "source", "listener");
     note_room_containment(params);
     note_room_coupling(params);
@@ -947,10 +949,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::note_side_channel_key(params, "bandAbsorption", ParamKind::Array);
     detail::note_side_channel_key(params, "bandScattering", ParamKind::Array);
     config.target = acoustic_room_from_json(params, json_root);
-    const auto& source = sonare::acoustic::kDefaultPlacement.source;
-    const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
-    config.placement.source = read_vec3(params, "source", source);
-    config.placement.listener = read_vec3(params, "listener", listener);
+    const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
+        config.target.dims.length, config.target.dims.width, config.target.dims.height);
+    config.placement.source = read_vec3(params, "source", placement.source);
+    config.placement.listener = read_vec3(params, "listener", placement.listener);
     note_room_members(params, "target.dims", "placement.source", "placement.listener");
     note_room_containment(params);
     note_room_coupling(params);
