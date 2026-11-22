@@ -214,14 +214,6 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
 
 namespace {
 
-/// @brief Read a required number whose domain the core states, keeping NaN and the infinities.
-bool RequiredCoreCheckedFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                                 const char* name, float* out) {
-  if (!RequireNumberValue(env, info[index], name)) return false;
-  *out = sonare::util::check::saturated_float(info[index].As<Napi::Number>().DoubleValue());
-  return true;
-}
-
 /// @brief Copies a C-owned float array into a Float32Array and frees the C copy.
 Napi::Float32Array TakeCFloats(Napi::Env env, float* data, size_t length) {
   Napi::Float32Array out = Float32ArrayFrom(env, data, length);
@@ -242,10 +234,10 @@ Napi::Value SonareWrap::MelFilterbank(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 2, "nMels", &n_mels)) return env.Undefined();
   SonareMelFilterbankOptions options;
   sonare_mel_filterbank_options_init(&options);
-  if (!RequiredCoreCheckedFloatArg(env, info, 3, "fminHz", &options.fmin_hz)) {
+  if (!RequiredDomainFloatArg(env, info, 3, "fminHz", &options.fmin_hz)) {
     return env.Undefined();
   }
-  if (!RequiredCoreCheckedFloatArg(env, info, 4, "fmaxHz", &options.fmax_hz)) {
+  if (!RequiredDomainFloatArg(env, info, 4, "fmaxHz", &options.fmax_hz)) {
     return env.Undefined();
   }
   bool htk = false;
@@ -277,9 +269,9 @@ Napi::Value SonareWrap::MelFrequencies(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!RequiredIntArg(env, info, 0, "nMels", &n_mels)) return env.Undefined();
   float fmin_hz{};
-  if (!RequiredCoreCheckedFloatArg(env, info, 1, "fminHz", &fmin_hz)) return env.Undefined();
+  if (!RequiredDomainFloatArg(env, info, 1, "fminHz", &fmin_hz)) return env.Undefined();
   float fmax_hz{};
-  if (!RequiredCoreCheckedFloatArg(env, info, 2, "fmaxHz", &fmax_hz)) return env.Undefined();
+  if (!RequiredDomainFloatArg(env, info, 2, "fmaxHz", &fmax_hz)) return env.Undefined();
   bool htk = false;
   if (!RequiredBoolArg(env, info, 3, "htk", &htk)) return env.Undefined();
 

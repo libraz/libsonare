@@ -825,6 +825,17 @@ inline bool RequiredFloatValue(Napi::Env env, const Napi::Value& value, const st
   return true;
 }
 
+/// @brief Read a required float value whose domain the core states.
+/// @details The required sibling of @ref DomainFloatProperty: NaN and the infinities pass, and a
+///   finite value past the float range saturates to an infinity, so the core refuses each in its
+///   own domain text. A wrong type is refused by name.
+inline bool RequiredDomainFloatValue(Napi::Env env, const Napi::Value& value,
+                                     const std::string& label, float* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
+  return true;
+}
+
 /// @brief Read a required finite double value (@ref node_narrow_double).
 inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 double* out) {
@@ -1233,6 +1244,13 @@ inline bool RequiredUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, siz
 inline bool RequiredFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                              const char* name, float* out) {
   return RequiredFloatValue(env, info[index], name, out);
+}
+
+/// @brief Read a required float positional argument whose domain the core states
+///        (@ref RequiredDomainFloatValue).
+inline bool RequiredDomainFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                   const char* name, float* out) {
+  return RequiredDomainFloatValue(env, info[index], name, out);
 }
 
 /// @brief Read a required double positional argument.

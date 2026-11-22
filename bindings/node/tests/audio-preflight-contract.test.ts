@@ -448,6 +448,8 @@ const NOT_AUDIO: string[] = [
     'chirp',
     'synthesizeRir',
     'hzToMel',
+    'melFrequencies',
+    'melFilterbank',
     'melToHz',
     'hzToMidi',
     'midiToHz',

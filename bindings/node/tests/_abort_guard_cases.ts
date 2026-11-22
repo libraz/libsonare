@@ -2564,6 +2564,29 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'addon.melFilterbank',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'nMels', call: () => addon.melFilterbank(22050, 2048, '128', 0, 8000, false, 1) },
+      {
+        argument: 'fminHz',
+        call: () => addon.melFilterbank(22050, 2048, 128, '0', 8000, false, 1),
+      },
+      { argument: 'fmaxHz', call: () => addon.melFilterbank(22050, 2048, 128, 0, null, false, 1) },
+      { argument: 'htk', call: () => addon.melFilterbank(22050, 2048, 128, 0, 8000, 1, 1) },
+    ],
+  },
+  {
+    name: 'addon.melFrequencies',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'nMels', call: () => addon.melFrequencies(true, 0, 8000, false) },
+      { argument: 'fminHz', call: () => addon.melFrequencies(128, '0', 8000, false) },
+      { argument: 'fmaxHz', call: () => addon.melFrequencies(128, 0, undefined, false) },
+      { argument: 'htk', call: () => addon.melFrequencies(128, 0, 8000, 'no') },
+    ],
+  },
+  {
     name: 'addon.synthGsDrumKitName',
     missingRequired: [],
     rejectsArgument: [
