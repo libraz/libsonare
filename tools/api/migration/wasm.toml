@@ -16950,7 +16950,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::addSend takes a send o
 [[entry]]
 kind = "method"
 old = "Mixer.scheduleFaderAutomation"
-changed = "scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError"
+changed = "scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through)"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleFaderAutomation takes a point object"
@@ -16958,7 +16958,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleFaderAutomatio
 [[entry]]
 kind = "method"
 old = "Mixer.schedulePanAutomation"
-changed = "schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError"
+changed = "schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through)"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::schedulePanAutomation takes a point object"
@@ -16966,7 +16966,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::schedulePanAutomation 
 [[entry]]
 kind = "method"
 old = "Mixer.scheduleWidthAutomation"
-changed = "scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError"
+changed = "scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through)"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleWidthAutomation takes a point object"
@@ -16974,7 +16974,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleWidthAutomatio
 [[entry]]
 kind = "method"
 old = "Mixer.scheduleSendAutomation"
-changed = "scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb)"
+changed = "scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb); a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through)"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleSendAutomation takes sendDb"
@@ -16982,7 +16982,7 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleSendAutomation
 [[entry]]
 kind = "method"
 old = "Mixer.scheduleInsertAutomation"
-changed = "scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? })"
+changed = "scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? }); a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through)"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleInsertAutomation takes a point object"
@@ -20807,7 +20807,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a marker from one inpu
 [[entry]]
 kind = "method"
 old = "Project.moveClip"
-changed = "the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError"
+changed = "the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError; a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/project.test.ts::takes optional ids in an options object and refuses an explicit zero"
@@ -20831,7 +20831,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a clip fade from one o
 [[entry]]
 kind = "method"
 old = "Project.setClipLoop"
-changed = "setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments"
+changed = "setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments; a NaN, infinite or out-of-range loopLengthPpq or loopCrossfadePpq is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audio and source metadata from one request object each"
@@ -20869,7 +20869,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audi
 [[entry]]
 kind = "method"
 old = "Project.setAssistSidecar"
-changed = "the six-argument positional form is gone; pass one ProjectAssistSidecarInput"
+changed = "the six-argument positional form is gone; pass one ProjectAssistSidecarInput; a NaN, infinite or out-of-range regionStartPpq or regionEndPpq is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
@@ -21018,7 +21018,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp mo
 [[entry]]
 kind = "method"
 old = "Project.editAutomationLane"
-changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'"
+changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'; a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
@@ -22050,7 +22050,7 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiBankProgram"
-removed = "call the module function midiBankProgram"
+removed = "call the module function midiBankProgram, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -22078,7 +22078,7 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midiParamToCc"
-removed = "call the module function midiParamToCc"
+removed = "call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -24845,7 +24845,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertPara
 [[entry]]
 kind = "function"
 old = "masteringInsertTiming"
-changed = "request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported"
+changed = "request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported; a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through)"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/public-input-conformance.test.ts::an unknown insert key is refused with one class and text on every param-bag entry"
@@ -35268,24 +35268,56 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "StreamingMasteringChainConfig.loudnessStaticGainPeakDb"
-new = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+to = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+changed = "renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
 domain = "mastering"
 rule = "loudness-names"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudnessStaticGainDb"
+changed = "omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
 
 [[entry]]
 kind = "field"
 old = "StreamingMasteringChainConfig.loudnessStaticGainPeakDb"
-new = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+to = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+changed = "renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
 domain = "mastering"
 rule = "loudness-names"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudnessStaticGainDb"
+changed = "omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
 entry = "./analysis"
 
 [[entry]]
 kind = "field"
 old = "StreamingMasteringChainConfig.loudnessStaticGainPeakDb"
-new = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+to = "StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp"
+changed = "renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
 domain = "mastering"
 rule = "loudness-names"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.loudnessStaticGainDb"
+changed = "omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/streaming-loudness-gain.test.ts::refuses a written non-finite"
 entry = "./worklet"
 
 [[entry]]
@@ -35362,3 +35394,83 @@ old = "RealtimeEngine.drainMeterTelemetryWide"
 removed = "use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane"
 domain = "engine"
 rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.prepare"
+changed = "a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through)"
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.addMidiClip"
+changed = "a NaN, infinite or out-of-range startPpq or lengthPpq is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.splitClip"
+changed = "a NaN, infinite or out-of-range splitPpq is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.trimClip"
+changed = "a NaN, infinite or out-of-range newStartPpq or newLengthPpq is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.duplicateClip"
+changed = "a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.snapToGrid"
+changed = "a NaN, infinite or out-of-range ppq or strength is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "Project.removeAutomationLane"
+changed = "a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through)"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTempo"
+changed = "a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through)"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTempoSegments"
+changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list instead of clearing the map"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTimeSignatureSegments"
+changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list instead of clearing the map"

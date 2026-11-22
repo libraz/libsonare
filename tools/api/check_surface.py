@@ -77,6 +77,7 @@ RULE_SLUGS = (
     "absent-not-sentinel",
     "library-owned-defaults",
     "non-finite-is-absent",
+    "finite-or-refused",
     "input-always-scanned",
     "token-case",
     "digit-tokens",

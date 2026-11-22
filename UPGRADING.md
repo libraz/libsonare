@@ -9516,6 +9516,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `VoiceChangeRealtimeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 | `VoiceChangeRequest.validate` | removed: every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `StreamingRetune.prepare` | a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through) |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -10142,9 +10148,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `StreamingMasteringChainConfig.loudness.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
 | `StreamingMasteringChainConfig.loudness.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
 | `StreamingMasteringChainConfig.loudness.ceilingDb` | `StreamingMasteringChainConfig.loudness.ceilingDbtp` |
-| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./analysis`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
-| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./worklet`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
-| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./analysis`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp`: renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` (`./worklet`) | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp`: renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
+| `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp`: renamed loudnessStaticGainPeakDbtp; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./analysis`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` (`./worklet`) | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
 | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDb` | `StreamingMasteringChainConfig.maximizer.truePeakLimiter.ceilingDbtp` |
@@ -10193,6 +10199,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SpectrumOptions.octaveFraction` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.octaveFraction` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `StereoMonoCompatCheckResult.width` | T \| null -> optional: a value the result cannot give is an absent field, never null |
+| `StreamingMasteringChainConfig.loudnessStaticGainDb` (`./analysis`) | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
+| `StreamingMasteringChainConfig.loudnessStaticGainDb` (`./worklet`) | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
+| `StreamingMasteringChainConfig.loudnessStaticGainDb` | omit it to leave the gain unset; a written NaN or infinity is refused with RangeError naming the field (a non-finite value used to read as not provided) |
 | `StripMeteringOptions.truePeakOversample` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 
 #### An option left out takes the library's default
@@ -10400,7 +10409,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `masteringInsertTiming(name)` | removed: pass it as insert in MasteringInsertTimingRequest |
 | `masteringInsertTiming(params)` | removed: pass params as a field of MasteringInsertTimingRequest |
 | `masteringInsertTiming(sampleRate)` | removed: pass sampleRate as a field of MasteringInsertTimingRequest |
-| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported |
+| `masteringInsertTiming` | request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming; params keys take the 2.0 spellings (sidechainHighPassHz, keyHighPassHz, bandPassQ, eqHighPassHz, maxSec, accelTauSec, decelTauSec, reverbTimeSec, retunePitchSemitones, retuneGrainSizeSamples, pitchSemitones, pitchCents) and a 1.x key is a TypeError naming it: a params key the insert does not read is a TypeError 'masteringInsertTiming: unknown key params.<key> (expected ...)' (1.x: '<name> does not read parameter(s): <key>'); a streaming mode that cannot run block by block (repair.dereverbClassical wpeEnabled: true, repair.denoiseClassical noiseEstimator 'quantile') is a SonareError coded NotSupported; a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through) |
 | `masteringStreamingPreview(platforms)` | removed: pass platforms as a field of MasteringStreamingPreviewRequest |
 | `masteringStreamingPreviewStereo` | request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult |
 | `masteringStreamingPreview` | one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult; a platforms[i] entry with a key it does not declare is a TypeError reading 'masteringStreamingPreview: unknown key platforms[i].<key> (expected ceilingDbtp, name, targetLufs)' (1.x ignored it) |
@@ -11043,6 +11052,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
+| `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
+| `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -11204,24 +11221,24 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Mixer.scheduleFaderAutomation(curve)` | removed: pass curve as a field of FaderAutomationPoint |
 | `Mixer.scheduleFaderAutomation(faderDb)` | removed: pass faderDb as a field of FaderAutomationPoint |
 | `Mixer.scheduleFaderAutomation(samplePos)` | removed: pass samplePos as a field of FaderAutomationPoint |
-| `Mixer.scheduleFaderAutomation` | scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleFaderAutomation` | scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through) |
 | `Mixer.scheduleInsertAutomation(curve)` | removed: pass curve as a field of InsertAutomationPoint |
 | `Mixer.scheduleInsertAutomation(paramId)` | removed: pass paramId as a field of InsertAutomationPoint |
 | `Mixer.scheduleInsertAutomation(samplePos)` | removed: pass samplePos as a field of InsertAutomationPoint |
 | `Mixer.scheduleInsertAutomation(value)` | removed: pass value as a field of InsertAutomationPoint |
-| `Mixer.scheduleInsertAutomation` | scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? }) |
+| `Mixer.scheduleInsertAutomation` | scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? }); a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through) |
 | `Mixer.schedulePanAutomation(curve)` | removed: pass curve as a field of PanAutomationPoint |
 | `Mixer.schedulePanAutomation(pan)` | removed: pass pan as a field of PanAutomationPoint |
 | `Mixer.schedulePanAutomation(samplePos)` | removed: pass samplePos as a field of PanAutomationPoint |
-| `Mixer.schedulePanAutomation` | schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError |
+| `Mixer.schedulePanAutomation` | schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through) |
 | `Mixer.scheduleSendAutomation(curve)` | removed: pass curve as a field of SendAutomationPoint |
 | `Mixer.scheduleSendAutomation(db)` | removed: pass it as sendDb in SendAutomationPoint |
 | `Mixer.scheduleSendAutomation(samplePos)` | removed: pass samplePos as a field of SendAutomationPoint |
-| `Mixer.scheduleSendAutomation` | scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb) |
+| `Mixer.scheduleSendAutomation` | scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb); a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through) |
 | `Mixer.scheduleWidthAutomation(curve)` | removed: pass curve as a field of WidthAutomationPoint |
 | `Mixer.scheduleWidthAutomation(samplePos)` | removed: pass samplePos as a field of WidthAutomationPoint |
 | `Mixer.scheduleWidthAutomation(width)` | removed: pass width as a field of WidthAutomationPoint |
-| `Mixer.scheduleWidthAutomation` | scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError |
+| `Mixer.scheduleWidthAutomation` | scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError; a NaN, infinite or out-of-range samplePos is refused with RangeError naming it (1.x passed it through) |
 | `RealtimeEngine.applyBusStripInsertParamByNameNow` | `RealtimeEngine.applyBusInsertParamNow`: applyBusInsertParamNow(busId, insertIndex, { name, value }) replaces applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value) |
 | `RealtimeEngine.applyMasterStripInsertParamByNameNow` | removed: Call applyStripInsertParamNow('master', insertIndex, { name, value }). |
 | `RealtimeEngine.applyTrackStripInsertParamByNameNow` | `RealtimeEngine.applyStripInsertParamNow`: applyStripInsertParamNow(ref (a track id or 'master'), insertIndex, { name, value }) replaces applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value) |
@@ -11849,7 +11866,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.moveClip` | the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError |
+| `Project.moveClip` | the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError; a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.setClipTakes` | the active take is options.activeTakeId; absent means the base source and an explicit 0 is a RangeError |
 | `Project.setMarker(markerId)` | removed: pass it as id in ProjectMarkerInput |
 | `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
@@ -11867,6 +11884,17 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectVocalEditDependency.takeId` | absent when the base source was edited (was 0) |
 | `ProjectVocalRehydrateItem.takeId` | absent when the base source was edited (was 0) |
 | `VocalApplyRequest.expectedGeneration` | now optional; omitted means the draft's current generation |
+
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.addMidiClip` | a NaN, infinite or out-of-range startPpq or lengthPpq is refused with RangeError naming it (1.x passed it through) |
+| `Project.duplicateClip` | a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through) |
+| `Project.removeAutomationLane` | a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through) |
+| `Project.snapToGrid` | a NaN, infinite or out-of-range ppq or strength is refused with RangeError naming it (1.x passed it through) |
+| `Project.splitClip` | a NaN, infinite or out-of-range splitPpq is refused with RangeError naming it (1.x passed it through) |
+| `Project.trimClip` | a NaN, infinite or out-of-range newStartPpq or newLengthPpq is refused with RangeError naming it (1.x passed it through) |
 
 #### String values are lowerCamelCase tokens
 
@@ -11893,7 +11921,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PROJECT_AUTOMATION_TARGET_TRACK_PAN` | removed: Pass the string 'trackPan' as targetKind; numeric target kinds are refused. |
 | `Project.addAutomationLane` | targetKind is 'opaque' \| 'trackFaderDb' \| 'trackPan' |
 | `Project.addTrack` | ProjectTrackDesc.kind is 'audio' \| 'midi' \| 'aux'; an ordinal is a TypeError |
-| `Project.editAutomationLane` | targetKind is 'opaque' \| 'trackFaderDb' \| 'trackPan' |
+| `Project.editAutomationLane` | targetKind is 'opaque' \| 'trackFaderDb' \| 'trackPan'; a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through) |
 | `Project.setClipWarpMode` | setClipWarpMode takes 'off' \| 'repitch' \| 'tempoSync' \| 'timeStretch'; an ordinal is a TypeError |
 | `Project.setOverlapPolicy` | setOverlapPolicy takes 'disallow' \| 'allow'; an ordinal is a TypeError |
 | `Project.setTrackKind` | setTrackKind takes 'audio' \| 'midi' \| 'aux'; an ordinal is a TypeError |
@@ -11989,7 +12017,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.clearPartRig(part)` | removed: pass part as a field of PartRigKey |
 | `Project.clearPartRig` | clearPartRig takes one PartRigKey object instead of (destinationId, part) |
 | `Project.rehydrateVocalEdits` | the cancel predicate moves into an options object: rehydrateVocalEdits(originals, { cancel }) |
-| `Project.setAssistSidecar` | the six-argument positional form is gone; pass one ProjectAssistSidecarInput |
+| `Project.setAssistSidecar` | the six-argument positional form is gone; pass one ProjectAssistSidecarInput; a NaN, infinite or out-of-range regionStartPpq or regionEndPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.setAudioSourceMetadata(contentHash)` | removed: pass contentHash as a field of ProjectAudioSourceMetadataInput |
 | `Project.setAudioSourceMetadata(externalStemRole)` | removed: pass externalStemRole as a field of ProjectAudioSourceMetadataInput |
 | `Project.setAudioSourceMetadata(sourceId)` | removed: pass sourceId as a field of ProjectAudioSourceMetadataInput |
@@ -11997,7 +12025,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setClipLoop(loopCrossfadePpq)` | removed: pass loopCrossfadePpq as a field of ProjectClipLoopInput |
 | `Project.setClipLoop(loopLengthPpq)` | removed: pass loopLengthPpq as a field of ProjectClipLoopInput |
 | `Project.setClipLoop(loopMode)` | removed: pass loopMode as a field of ProjectClipLoopInput |
-| `Project.setClipLoop` | setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments |
+| `Project.setClipLoop` | setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments; a NaN, infinite or out-of-range loopLengthPpq or loopCrossfadePpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.setPartRig(destinationId)` | removed: pass destinationId as a field of PartRigRequest |
 | `Project.setPartRig(inserts)` | removed: pass inserts as a field of PartRigRequest |
 | `Project.setPartRig(mode)` | removed: pass mode as a field of PartRigRequest |
@@ -12036,7 +12064,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midi2RegisteredPerNoteController` | removed: call the module function midi2RegisteredPerNoteController |
 | `Project.midi2RelativeAssignableController` | removed: call the module function midi2RelativeAssignableController |
 | `Project.midi2RelativeRegisteredController` | removed: call the module function midi2RelativeRegisteredController |
-| `Project.midiBankProgram` | removed: call the module function midiBankProgram |
+| `Project.midiBankProgram` | removed: call the module function midiBankProgram, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
 | `Project.midiCcIndexForName` | removed: call the module function midiCcIndexForName |
 | `Project.midiCcLearn` | removed: call the module function midiCcLearn |
 | `Project.midiCcName` | removed: call the module function midiCcName |
@@ -12045,7 +12073,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midiChannelPressure` | removed: call the module function midiChannelPressure |
 | `Project.midiNoteOff` | removed: call the module function midiNoteOff |
 | `Project.midiNoteOn` | removed: call the module function midiNoteOn |
-| `Project.midiParamToCc` | removed: call the module function midiParamToCc |
+| `Project.midiParamToCc` | removed: call the module function midiParamToCc, which refuses a NaN, infinite or out-of-range ppq with RangeError naming it |
 | `Project.midiPitchBend` | removed: call the module function midiPitchBend |
 | `Project.midiPolyPressure` | removed: call the module function midiPolyPressure |
 | `Project.midiProgram` | removed: call the module function midiProgram |
@@ -13134,6 +13162,22 @@ Python, 2.0.0:
 
 ```python
 peak = libsonare.metering_peak_db(samples, 48000)
+```
+
+### A number outside its domain is refused, never passed through
+
+A scalar argument or field that has no absent spelling is refused by name when it is NaN, an infinity or outside its type's range, with `RangeError` on Node and WASM; 1.x WASM passed such a value through to the library or read it as not given. A list argument that is missing is a `TypeError`, never an empty list.
+
+WASM, 1.x:
+
+```ts
+engine.setTempoSegments(undefined); // cleared the tempo map
+```
+
+WASM, 2.0.0:
+
+```ts
+engine.setTempoSegments([]);
 ```
 
 ### String values are lowerCamelCase tokens

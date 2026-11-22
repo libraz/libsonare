@@ -259,6 +259,19 @@ peak = libsonare.metering_peak_db(samples, 48000)
 '''
 
 [[rule]]
+slug = "finite-or-refused"
+title = "A number outside its domain is refused, never passed through"
+summary = "A scalar argument or field that has no absent spelling is refused by name when it is NaN, an infinity or outside its type's range, with `RangeError` on Node and WASM; 1.x WASM passed such a value through to the library or read it as not given. A list argument that is missing is a `TypeError`, never an empty list."
+[[rule.example]]
+surface = "wasm"
+before = '''
+engine.setTempoSegments(undefined); // cleared the tempo map
+'''
+after = '''
+engine.setTempoSegments([]);
+'''
+
+[[rule]]
 slug = "token-case"
 title = "String values are lowerCamelCase tokens"
 summary = "Every member of a closed string set is one lowerCamelCase word, identical in JavaScript, Python and JSON documents; acronyms count as one word. CLI values are the same word in kebab-case, read in any letter case; no other spelling is accepted. A name the library enumerates at run time (a preset, processor or analysis name) is an identifier, not a CLI word: the CLI takes and prints it in the library's spelling, also in any letter case. A set that names the members of an enum, such as the error code names, keeps the enum's spelling and is the same set on every binding."

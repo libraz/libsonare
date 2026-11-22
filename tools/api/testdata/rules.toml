@@ -51,6 +51,11 @@ title = "Title of non-finite-is-absent"
 summary = "Summary of non-finite-is-absent."
 
 [[rule]]
+slug = "finite-or-refused"
+title = "Title of finite-or-refused"
+summary = "Summary of finite-or-refused."
+
+[[rule]]
 slug = "input-always-scanned"
 title = "Title of input-always-scanned"
 summary = "Summary of input-always-scanned."

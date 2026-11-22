@@ -8,7 +8,7 @@
 #             standard-symbol: token-case only; a symbol fixed by a named standard, never one with a word separator
 #             scalar: one-positional-form only; at most four number or boolean parameters and no options
 #             distinct-operation: options-struct:suffix only; a C function named as another plus an extension that is a different operation, never a fixed second-form suffix
-#             pending-split: record-input-pair only; a record Python still spells as one while Node/WASM carry X and XInput, retired with the split
+#             pending-split: record-input-pair only; a record Python still spells as one while Node/WASM carry X and XInput, retired with the split; the category is empty at a release
 #   reason    one line
 # --audit-allowlist fails on an entry that excused nothing in a full run.
 
