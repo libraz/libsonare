@@ -200,11 +200,11 @@ describe('estimateMeter()', () => {
     it('rejects an empty beat series', () => {
       // The rejection is the core's, not the binding's: an empty series would
       // otherwise be answered with a fixed low-confidence 4/4 that reads like a
-      // detection result. The wording is asserted unanchored because each
-      // surface decorates the core message differently, but it keeps the field
-      // name: a bare "must not be empty" also matches the empty candidate-list
-      // guard and would let this pass for the wrong reason.
-      expectRefusal(() => estimateMeter({ beats: [] }), RangeError, /beatTimes must not be empty/);
+      // detection result. The core names its own list, which the facade spells
+      // back as the caller's `beats`.
+      expect(() => estimateMeter({ beats: [] })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must not be empty'),
+      );
     });
 
     it('refuses a non-array beats with the same text on every surface', () => {
@@ -260,7 +260,22 @@ describe('estimateMeter()', () => {
     it('rejects beats whose timeSec decreases', () => {
       const beats = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
       beats[5].timeSec = beats[4].timeSec - 1;
-      expectRefusal(() => estimateMeter({ beats }), RangeError);
+      expect(() => estimateMeter({ beats })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must be non-decreasing'),
+      );
+    });
+
+    it('refuses a negative timeSec and a non-finite strength under the beats spelling', () => {
+      const negative = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
+      negative[0].timeSec = -1;
+      expect(() => estimateMeter({ beats: negative })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must hold only finite values of at least 0'),
+      );
+      const unmeasured = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
+      unmeasured[2].strength = Number.NaN;
+      expect(() => estimateMeter({ beats: unmeasured })).toThrow(
+        new RangeError('estimateMeter: beats[].strength must hold only finite values'),
+      );
     });
   });
 });

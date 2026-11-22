@@ -2,6 +2,7 @@ import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entr
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { withRespelled } from './internal/respell.js';
 import { tempoRange } from './internal/tempo_range.js';
 import { addon } from './native.js';
 import type { RequestFn } from './request_keys.js';
@@ -825,6 +826,12 @@ export function analyze(...args: unknown[]): AnalysisResult {
 const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
   values instanceof Float32Array ? values : Float32Array.from(values);
 
+/** The core refuses the beat lists under their own names; the caller wrote them as `beats`. */
+const BEAT_RESPELLED = {
+  beatTimes: { name: 'beats[].timeSec', scale: 1 },
+  beatStrengths: { name: 'beats[].strength', scale: 1 },
+};
+
 /**
  * Estimate meter over a caller-supplied beat series, without audio and without
  * re-running analysis, so an arbitrary span of an existing result — or a beat
@@ -836,7 +843,7 @@ const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
  *
  * Option values are validated by the core, so an out-of-range weight, a
  * denominator that is not a power of two, an empty `candidateNumerators`, or
- * beats whose `timeSec` decreases surfaces as a `SonareError`.
+ * beats whose `timeSec` decreases surfaces as a `RangeError`.
  *
  * The result carries `grouping` alongside the numerator: how the bar divides
  * into accent groups of two and three beats, so a seven comes back as
@@ -863,10 +870,12 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
       times.push(beat.timeSec);
       strengths.push(beat.strength);
     });
-    return addon.estimateMeter(
-      asFloat32Array(times),
-      asFloat32Array(strengths),
-      without(request, 'beats'),
+    return withRespelled(BEAT_RESPELLED, () =>
+      addon.estimateMeter(
+        asFloat32Array(times),
+        asFloat32Array(strengths),
+        without(request, 'beats'),
+      ),
     );
   });
 }
