@@ -91,6 +91,7 @@ import type {
 // tests/sample-bank-module-cycle.test.ts rather than left to review.
 import { SampleBank } from './sample_bank.js';
 import { assertAudioChannels, assertNibble, assertU7, assertU32 } from './validation.js';
+import { SONARE_MAX_PUBLIC_PPQ as MAX_PUBLIC_PPQ } from './worklet/engine-rings.js';
 
 /**
  * A synth binding as the embind layer takes it: the public `sampleBank` handle
@@ -741,8 +742,8 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
     if (record.word1 !== undefined && typeof record.word1 !== 'number') {
       throw refuseType(`${prefix}.word1 must be an integer`);
     }
-    if (!Number.isFinite(record.ppq) || record.ppq < 0) {
-      throw refuse(`${prefix}.ppq must be finite and at least 0`);
+    if (!(Number.isFinite(record.ppq) && record.ppq >= 0 && record.ppq <= MAX_PUBLIC_PPQ)) {
+      throw refuse(`${prefix}.ppq must be finite and in [0, 1e12]`);
     }
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {

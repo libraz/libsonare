@@ -503,7 +503,6 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
                                       "totalFrames");
   requirePrepared();
   checkRenderChannels(num_channels, "numChannels");
-  sonare::util::check::at_least(start_ppq, 0.0, "startPpq");
   // A position past the public timeline has no sample a clip can start at, as setClips refuses.
   sonare::util::check::in_range(start_ppq, 0.0, sonare::transport::kMaxPublicPpq, "startPpq");
   sonare::util::check::at_least(gain, 0.0, "gain");

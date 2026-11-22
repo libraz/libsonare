@@ -129,7 +129,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
     segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
     if (!sonare::transport::valid_public_tempo_segment(segment)) {
       throw WasmRangeError(
-          "startPpq must be finite and at least 0; bpm must be finite and greater than 0; "
+          "startPpq must be finite and in [0, 1e12]; bpm must be finite and greater than 0; "
           "endBpm must be 0 or finite and greater than 0");
     }
     parsed.push_back(segment);
@@ -161,7 +161,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
     segment.time_sig.denominator = intProperty(entry, "denominator", 0);
     if (!sonare::transport::valid_public_time_signature_segment(segment)) {
       throw WasmRangeError(
-          "startPpq must be finite and at least 0; numerator must be an integer of at least 1; "
+          "startPpq must be finite and in [0, 1e12]; numerator must be an integer of at least 1; "
           "denominator must be an integer of at least 1");
     }
     parsed.push_back(segment);
@@ -197,9 +197,8 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   for (int i = 0; i < count; ++i) {
     val marker = markers[i];
     const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
-    if (!std::isfinite(ppq) || ppq < 0.0) {
-      throw WasmRangeError("marker ppq must be finite and at least 0");
-    }
+    sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
+                                  ("markers[" + std::to_string(i) + "].ppq").c_str());
     // The narrowing is uintProperty's; zero stays this field's own rule, which
     // sonare_engine_set_markers enforces on the C side.
     const uint32_t id = uintProperty(marker, "id", static_cast<uint32_t>(i + 1));

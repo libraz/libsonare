@@ -88,7 +88,7 @@ describe('argument refusal error class', () => {
       expect(error).toBeInstanceOf(RangeError);
       expect(isSonareError(error)).toBe(false);
       expect((error as Error).message).toBe(
-        'RealtimeEngine.setMarkers: marker ppq must be finite and at least 0',
+        'RealtimeEngine.setMarkers: markers[0].ppq must be finite and in [0, 1e12]',
       );
     });
   });

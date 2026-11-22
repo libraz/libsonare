@@ -1325,7 +1325,7 @@ describe('v1.2 feature additions (WASM)', () => {
             ]),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setMarkers: marker ppq must be finite and at least 0');
+      ).toBe('RealtimeEngine.setMarkers: markers[1].ppq must be finite and in [0, 1e12]');
       expect(engine.markers()).toHaveLength(2);
       expect(engine.markers()[0]).toEqual({
         id: 11,

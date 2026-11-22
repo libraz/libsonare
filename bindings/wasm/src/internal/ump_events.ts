@@ -1,5 +1,6 @@
 import type { ProjectMidiEvent } from '../project_types.js';
 import { assertBoundedInteger, assertNibble } from '../validation.js';
+import { SONARE_MAX_PUBLIC_PPQ as MAX_PUBLIC_PPQ } from '../worklet/engine-rings.js';
 import { refuse } from './entry.js';
 
 const MIDI2_U16_MAX = 0xffff;
@@ -7,8 +8,8 @@ const MIDI2_U32_MAX = 0xffffffff;
 
 /** Refuses a ppq that is not a non-negative finite number. */
 export function assertEventPpq(ppq: number): void {
-  if (!Number.isFinite(ppq) || ppq < 0) {
-    throw refuse(`ppq must be finite and at least 0`);
+  if (!(Number.isFinite(ppq) && ppq >= 0 && ppq <= MAX_PUBLIC_PPQ)) {
+    throw refuse(`ppq must be finite and in [0, 1e12]`);
   }
 }
 
