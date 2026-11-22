@@ -451,10 +451,6 @@ class ReedVoiceCore {
   // difference, whose displacement biases the reed table. Returns the bias.
   float reed_resonator(float dp) noexcept;
 
-  // The same reed as the Bernoulli valve's own opening: driven toward @p x_rest
-  // (the static valve's opening) at DC gain 1. Returns the clamped displacement.
-  float valve_opening(float x_rest) noexcept;
-
   // 4a: dynamic reed. reed_dyn_ gates it; the resonator is a biquad bandpass
   // (b0, a1, a2) tuned to the reed's natural frequency, its output scaled by
   // reed_couple_ into the table's operating point.

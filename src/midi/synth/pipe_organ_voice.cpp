@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "rt/biquad_design.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -222,9 +223,6 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
   LoopBudget budget;
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
-  drive_index_ = 0;
-  breath_.releasing = false;
-  breath_.level = 0.0f;
   // The wind hiss is a per-sample draw voiced at kLossVoicedSr, so it carries
   // the noise law's gain.
   turb_gain_ = kJetTurbulence * noise_gain_at_rate(sr);
@@ -232,10 +230,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
   // Resolve the registration: an explicit rank list, or a single implicit 8'
   // rank built from the flat {stopped, brightness}.
   PipeOrganRank implicit{};
-  implicit.footage_mult = 1.0f;
   implicit.stopped = params.stopped;
   implicit.brightness = params.brightness;
-  implicit.level = 1.0f;
   implicit.reed = params.reed;
   implicit.radiation = params.radiation;
   const PipeOrganRank* ranks = &implicit;
@@ -274,8 +270,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
   const float mouth = kBreathBase + kBreathSpan * level;
 
   // Wind gate contour: a quick speak on, a ring-down on release.
-  breath_.attack_coeff = ramp_coeff(8.0f, sr);
-  breath_.release_coeff = ramp_coeff(std::max(0.01f, params.release_damp_s) * 1000.0f, sr);
+  breath_.start(8.0f, std::max(0.01f, params.release_damp_s) * 1000.0f, sr);
 
   // Bore purity: tone_decay_s maps to the bore loss (a purer, more sustained,
   // sharply pitched pipe reflects with less loss).
@@ -284,7 +279,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
 
   const float dc_r = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
   phase_servo_ = params.loop_phase_servo;
-  const float even_hp = std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / srf), 0.0f, 1.0f);
+  const float even_hp = rt::one_pole_lowpass_alpha_matched(kEvenPumpDcHz, sr);
 
   for (int r = 0; r < count; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
@@ -331,7 +326,6 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // No trim: with the DC-blocker lead compensated below, the jet locks the loop on its own
     // period (0.0 cents over notes 48..100 at 48 kHz with the detune off).
     pipe.bore.period = period / detune;
-    pipe.sign = 1.0f;
     pipe.jet_ratio = kJetRatioOpen;
 
     // Reed voicing: drive the jet harder and more asymmetrically for a buzzing
@@ -363,7 +357,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // stops at the bottom of the compass: a stopped 16' is pinned over its whole
     // brightness range at and below C#4, which is the register that rank is played in.
     const float alpha =
-        std::clamp(1.0f - std::exp(-kTwoPi * corner / srf), loss_alpha_at_rate(0.05f, sr), 1.0f);
+        std::max(rt::one_pole_lowpass_alpha_matched(corner, sr), loss_alpha_at_rate(0.05f, sr));
     const float a = 1.0f - alpha;
     pipe.lp_alpha = alpha;
     pipe.lp_state = 0.0f;
@@ -432,8 +426,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     pipe.chiff_coeff = std::exp(
         -1.0f / std::max(1.0f, static_cast<float>(std::max(0.5f, params.chiff_ms) * 0.001 * sr)));
     const float chiff_corner = std::min(kChiffCornerMult * base_f0, kChiffCornerMaxHz);
-    pipe.chiff_lp_alpha = std::clamp(1.0f - std::exp(-kTwoPi * chiff_corner / srf),
-                                     loss_alpha_at_rate(0.01f, sr), 1.0f);
+    pipe.chiff_lp_alpha = std::max(rt::one_pole_lowpass_alpha_matched(chiff_corner, sr),
+                                   loss_alpha_at_rate(0.01f, sr));
     pipe.chiff_lp_state = 0.0f;
     // Keep the burst's energy roughly constant as the band narrows (one-pole
     // filtered unit noise has RMS ~ sqrt(alpha / (2 - alpha))): the low pipes'
@@ -445,7 +439,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     const float radiation = std::clamp(ranks[r].radiation, 0.0f, 1.0f);
     pipe.rad_base = radiation;
     pipe.rad_gain = radiation * kRadiationLift;
-    pipe.rad_alpha = std::clamp(1.0f - std::exp(-kTwoPi * kRadiationCornerHz / srf), 0.0f, 1.0f);
+    pipe.rad_alpha = rt::one_pole_lowpass_alpha_matched(kRadiationCornerHz, sr);
     pipe.rad_state = 0.0f;
 
     // Output trim (frequency-compensated toward a flat target peak).
@@ -467,8 +461,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // Jet turbulence band: the wind hiss lives around this pipe's speaking
     // partials.
     const float turb_corner = std::min(kTurbCornerMult * f0, kTurbCornerMaxHz);
-    pipe.turb_alpha = std::clamp(1.0f - std::exp(-kTwoPi * turb_corner / srf),
-                                 loss_alpha_at_rate(0.01f, sr), 1.0f);
+    pipe.turb_alpha = std::max(rt::one_pole_lowpass_alpha_matched(turb_corner, sr),
+                               loss_alpha_at_rate(0.01f, sr));
     pipe.turb_state = 0.0f;
 
     // Post-loop tone filter: this pipe radiates a fairly pure tone; the top
@@ -634,7 +628,7 @@ float PipeOrganVoiceCore::render_internal(float pitch_ratio) noexcept {
     // Open/stopped-end reflection from the previous bore output: one-pole loss
     // lowpass, sign-selected feedback (+ open / - stopped).
     pipe.lp_state += pipe.lp_alpha * (pipe.bore.out - pipe.lp_state);
-    const float temp = pipe.sign * pipe.loss_gain * pipe.lp_state;
+    const float temp = pipe.loss_gain * pipe.lp_state;
 
     // Jet drive: the pressure difference across the flue convects (jet delay)
     // and deflects across the labium (the cubic jet table). The jet is

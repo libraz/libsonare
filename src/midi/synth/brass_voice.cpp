@@ -237,9 +237,6 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   drive_index_ = 0;
-  breath_.releasing = false;
-  breath_.level = 0.0f;
-  breath_.overshoot = 0.0f;
   lp_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();
@@ -340,8 +337,7 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   // Contour + textures. Every seeded level is a per-sample draw voiced at
   // kLossVoicedSr, so each carries the noise law's gain.
   const float noise_gain = noise_gain_at_rate(sr);
-  breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
-  breath_.release_coeff = ramp_coeff(params.release_ms, sr);
+  breath_.start(params.attack_ms, params.release_ms, sr);
   breath_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
                                     params.onset_breath_overshoot_vel_db, vel01,
                                     params.onset_breath_settle_ms, sr);

@@ -14,12 +14,10 @@
 ///      the EXACT allpass + loop-filter phase delay at the fundamental
 ///      compensated in the fractional loop length so the f0 tuning stays
 ///      accurate.
-///   2. NONLINEAR FELT HAMMER: the felt spring F = K*y^p (p ~ 2-3) is folded
-///      in analytically — the excitation is a raised-cosine force pulse
-///      whose contact time shrinks as v^-((p-1)/(p+1)) and whose amplitude
-///      grows as v^(2p/(p+1)) (the Hertz-contact scaling laws), so hard
-///      strikes are shorter (= brighter) the way felt physics dictates, and
-///      the strike-position comb is applied analytically to the pulse.
+///   2. NONLINEAR FELT HAMMER: the felt spring F = K*y^p (p ~ 2-3) is integrated
+///      as a dynamic hammer (mass on a hysteretic nonlinear spring) against the
+///      strings, so the contact time shrinks as v^-((p-1)/(p+1)) and hard
+///      strikes are shorter (= brighter) the way felt physics dictates.
 ///   3. COUPLED UNISON STRINGS / TWO-STAGE DECAY: 2-3 micro-detuned string
 ///      loops share a bridge; the coherent (bridge-moving) component decays
 ///      at the fast "prompt sound" rate while the residual decays at the
@@ -36,7 +34,7 @@
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// per-string detune jitter derives from the (voice_index, note, age)
-/// stream; the hammer pulse is analytic.
+/// stream; the hammer integration is deterministic.
 
 #include <algorithm>
 #include <array>

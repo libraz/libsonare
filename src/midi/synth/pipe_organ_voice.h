@@ -281,7 +281,7 @@ class PipeOrganVoiceCore {
     /// Jet convection delay as a fraction of the bore PERIOD, a duration.
     float jet_ratio = 0.5f;
     /// Open-end reflection: one-pole loss lowpass y += alpha*(x - y), its state,
-    /// the loss gain, and the bore feedback sign (always +1 — the open topology).
+    /// and the loss gain (the bore feedback sign is +1 — the open topology).
     float lp_alpha = 1.0f;
     float lp_state = 0.0f;
     float loss_gain = 1.0f;
@@ -289,7 +289,6 @@ class PipeOrganVoiceCore {
     /// pipe's wind is cut, not left ringing) rather than ringing at the sustain's
     /// near-lossless rate.
     float release_loss = 0.0f;
-    float sign = 1.0f;
     /// Jet / end reflection coefficients (the two feedback taps of the jet loop).
     float jet_reflection = 0.5f;
     float end_reflection = 0.5f;

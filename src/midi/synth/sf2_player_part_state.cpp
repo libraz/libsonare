@@ -166,8 +166,7 @@ int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) 
   // GS variation fallback: unknown variation banks fall back to the capital
   // tone (bank 0); drum banks fall back to the standard kit (program 0).
   if (bank == kDrumBank) {
-    idx = soundfont.find_preset(kDrumBank, 0);
-    return idx;
+    return soundfont.find_preset(kDrumBank, 0);
   }
   if (bank != 0) {
     idx = soundfont.find_preset(0, program);

@@ -219,9 +219,6 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   drive_index_ = 0;
-  breath_.releasing = false;
-  breath_.level = 0.0f;
-  breath_.overshoot = 0.0f;
   lp_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();
@@ -389,8 +386,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // Contour + textures. Every seeded level is a per-sample draw voiced at
   // kLossVoicedSr, so each carries the noise law's gain.
   const float noise_gain = noise_gain_at_rate(sr);
-  breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
-  breath_.release_coeff = ramp_coeff(params.release_ms, sr);
+  breath_.start(params.attack_ms, params.release_ms, sr);
   // The table's operating point sits within about 2 dB of its closing clamp, where any
   // overshoot shuts the reed for as long as it lasts, so only the valve takes one.
   if (params.closing_pressure > 0.0f) {
@@ -607,7 +603,8 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
         law.beta = reed_b0_;
       }
       const PassiveCoupling::Junction junction = valve_.solve(mouth, refl, steady, law);
-      if (reed_dyn_) valve_opening(1.0f - junction.drop / pc);
+      // The state carries the reed's displacement; the valve's opening clamp never enters it.
+      if (reed_dyn_) reed_resonator(1.0f - junction.drop / pc);
       // The gate rides on zeta, so this is WindBore::injection(refl, active, gate) already.
       inj = junction.injection;
     }
@@ -649,18 +646,14 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // Bell radiation (gated): outside the loop, after the throat term because that
   // term recovers the bore's pressure, which is what reaches the bell. The makeup
   // is normalized at the sounding fundamental, so it follows the live ratio.
+  if ((bell_cutoff_hz_ > 0.0f || rad_alpha_ > 0.0f) && ratio != rad_ratio_) {
+    rad_ratio_ = ratio;
+    refresh_radiation_scale();
+  }
   if (bell_cutoff_hz_ > 0.0f) {
     // What the open holes radiate below the lattice cutoff: a first-order rise on the same corner.
-    if (ratio != rad_ratio_) {
-      rad_ratio_ = ratio;
-      refresh_radiation_scale();
-    }
     out = rad_scale_ * bell_hp_.process(out);
   } else if (rad_alpha_ > 0.0f) {
-    if (ratio != rad_ratio_) {
-      rad_ratio_ = ratio;
-      refresh_radiation_scale();
-    }
     rad_state_ += rad_alpha_ * (out - rad_state_);
     out = rad_scale_ * (out - rad_state_);
   }
@@ -709,17 +702,6 @@ float ReedVoiceCore::reed_resonator(float dp) noexcept {
   reed_z2_ = reed_z1_;
   reed_z1_ = y;
   return y;
-}
-
-float ReedVoiceCore::valve_opening(float x_rest) noexcept {
-  // The same damped mass-spring reed as the table bias, driven toward the static
-  // valve's opening instead of by the pressure difference and normalised to DC
-  // gain 1. The state carries the reed's displacement, so the clamp is the
-  // channel's geometry alone and never enters what the reed remembers.
-  const float x = reed_b0_ * x_rest + reed_a1_ * reed_z1_ + reed_a2_ * reed_z2_;
-  reed_z2_ = reed_z1_;
-  reed_z1_ = x;
-  return std::clamp(x, 0.0f, 1.0f);
 }
 
 void ReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {

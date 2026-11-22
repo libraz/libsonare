@@ -193,8 +193,9 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   const float ap_a =
       rt::dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
 
-  const float oct_from_c4_signed = (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
-  const float contrast_x = oct_from_c4_signed - kTwoStageCenterOct;
+  const float note_f = static_cast<float>(note & 0x7Fu);
+  const float octaves_from_c4 = (note_f - 60.0f) / kSemitonesPerOctave;
+  const float contrast_x = octaves_from_c4 - kTwoStageCenterOct;
   const float contrast =
       std::exp(-(contrast_x * contrast_x) / (kTwoStageWidthOct * kTwoStageWidthOct));
   const float inv_fast_full = 1.0f / std::max(0.05f, params.decay_fast_s * bass_scale);
@@ -321,7 +322,6 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   constexpr float kTrebleSpan = 10.0f;
   constexpr float kBassGain = 0.4f;
   constexpr float kTrebleGain = -0.45f;
-  const float note_f = static_cast<float>(note & 0x7Fu);
   float damper_keytrack = 1.0f;
   if (note_f < kAnchorLowNote) {
     const float x = std::clamp((kAnchorLowNote - note_f) / kBassSpan, 0.0f, 1.0f);
@@ -432,7 +432,6 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // register, floored in fundamental PERIODS (treble dwell ~ a full period).
   float contact_ms = std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
                      std::exp2(-(note_f - kMidiA4) / std::max(1.0f, kContactKeytrackSemis));
-  const float octaves_from_c4 = (note_f - 60.0f) / kSemitonesPerOctave;
   const float contact_floor_periods = std::clamp(
       kContactPeriodsAtC4 + kContactPeriodsPerOct * octaves_from_c4, 0.0f, kContactPeriodsMax);
   contact_ms =
@@ -545,16 +544,14 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
       kHammerWidthHarmonics * std::exp2(kWidthBassOct * std::max(0.0f, -octaves_from_c4) +
                                         kWidthTrebleOct * std::max(0.0f, octaves_from_c4));
   const float width_cutoff = std::min(exc_cutoff, width_harm * f0 * dyn_bright);
-  exc_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * width_cutoff / static_cast<float>(sr)),
-                          kOnePoleAlphaFloor, 1.0f);
+  exc_alpha_ = std::max(rt::one_pole_lowpass_alpha_matched(width_cutoff, sr), kOnePoleAlphaFloor);
   // The noise cutoff keytracks DOWN into the bass: the bass hammer is a
   // massive deep-felt head whose scrub spectrum is far darker than the small
   // hard treble hammer's — without this the bass attack carries the same
   // 2 kHz-wide burst as the treble and reads as a jack click.
   const float noise_cutoff = kStrikeNoiseCutoffScale * exc_cutoff *
                              std::exp2(-kNoiseCutoffBassOct * std::max(0.0f, -octaves_from_c4));
-  noise_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * noise_cutoff / static_cast<float>(sr)),
-                            kOnePoleAlphaFloor, 1.0f);
+  noise_alpha_ = std::max(rt::one_pole_lowpass_alpha_matched(noise_cutoff, sr), kOnePoleAlphaFloor);
   noise_alpha3_ = std::clamp(
       1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)),
       kOnePoleAlphaFloor, 1.0f);
@@ -574,7 +571,8 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
                std::exp2(-kNoiseTrebleTaperOct * std::max(0.0f, octaves_from_c4) +
                          kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f) *
                noise_gain_at_rate(sr);
-  knock_gain_ = kKnockGain * std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp) *
+  const float blow_vel = std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp);
+  knock_gain_ = kKnockGain * blow_vel *
                 std::exp2(kKnockBassBoostOct * std::max(0.0f, -octaves_from_c4) -
                           kKnockTrebleTaperOct * std::max(0.0f, octaves_from_c4));
   // The same blow, told to the structure instead of to the listener. It carries
@@ -590,7 +588,6 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // Quoted against mezzo-forte, like the injection's own normalization, so the
   // number is a size at the reference blow rather than a raw amplitude.
   const float blow_norm = mf_level > 0.0f ? hammer_amp_ / mf_level : 0.0f;
-  const float blow_vel = std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp);
   case_strike_ = kCaseStrikeGain * blow_norm * blow_vel;
   board_strike_ = kBoardStrikeGain * blow_norm * blow_vel *
                   std::exp2(kBoardStrikeTrebleOct * std::max(0.0f, octaves_from_c4));
@@ -602,7 +599,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // bass onset is a jack pluck, not a hammer landing.
   const float thud_hz =
       kKnockThudHz * std::exp2(-kKnockThudBassOct * std::max(0.0f, -octaves_from_c4));
-  knock_lp_a_ = std::clamp(1.0f - std::exp(-kTwoPi * thud_hz / static_cast<float>(sr)), 0.0f, 1.0f);
+  knock_lp_a_ = rt::one_pole_lowpass_alpha_matched(thud_hz, sr);
   knock_lp3_a_ = std::clamp(
       1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * thud_hz / static_cast<float>(sr)), 0.0f, 1.0f);
   bloom_ = 0.0f;
@@ -617,8 +614,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   long_level_ = kLongLevel * std::exp2(-kLongTrebleTaperOct * std::max(0.0f, octaves_from_c4));
   const float long_f1 = kLongFirstHzC4 * std::exp2(kLongFirstOct * octaves_from_c4);
   long_prev_ = 0.0f;
-  long_hp_a_ =
-      std::clamp(1.0f - std::exp(-kTwoPi * kLongDriveHpHz / static_cast<float>(sr)), 0.0f, 1.0f);
+  long_hp_a_ = rt::one_pole_lowpass_alpha_matched(kLongDriveHpHz, sr);
   long_x1_ = 0.0f;
   long_x2_ = 0.0f;
   // Above the floor's note the routed and whole-square drives differ by under -45 dB of the note.

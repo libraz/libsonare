@@ -25,6 +25,8 @@ using sonare::constants::kTwoPi;
 /// Excitation noise draws live far above the voice-level draw indices
 /// (detune/phase/drift use 0..~103 on the same per-voice seed).
 constexpr uint64_t kNoiseIndexBase = 1ull << 16;
+/// Excitation scale that leaves headroom for the pick-position comb.
+constexpr float kPluckedCombHeadroom = 0.7f;
 
 /// Bridge-limiter travel above the threshold: the curved surface gives a little
 /// before the string is fully pinned, and a stronger jawari sits the string
@@ -189,7 +191,7 @@ float PluckedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (exc_pos_ < injection_length()) {
     if (pluck_span_ > 0) {
       const PluckBurst pluck{exc_total_, pluck_period_, pick_delay_, pluck_span_};
-      exc = 0.7f * pluck_release(pluck, exc_pos_);  // comb headroom
+      exc = kPluckedCombHeadroom * pluck_release(pluck, exc_pos_);
       ++exc_pos_;
     } else {
       // Pick-position comb: burst[n] - burst[n - pick_delay]. The delayed copy
@@ -204,7 +206,7 @@ float PluckedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
       }
       ++exc_pos_;
       exc_lp_ += exc_alpha_ * (burst - exc_lp_);
-      exc = 0.7f * exc_lp_;  // comb headroom
+      exc = kPluckedCombHeadroom * exc_lp_;
     }
   }
 

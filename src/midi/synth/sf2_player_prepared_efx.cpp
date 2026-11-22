@@ -249,20 +249,14 @@ bool Sf2Player::prepare_sysex(const uint8_t* data, size_t size,
         if (scan.last_lsb_had_msb) {
           const uint16_t type = static_cast<uint16_t>(
               (static_cast<uint16_t>(scan.last_lsb_msb) << 8) | scan.last_lsb);
-          if (!add_candidate(static_cast<uint8_t>(unit), type)) {
-            out.reset();
-            return false;
-          }
+          if (!add_candidate(static_cast<uint8_t>(unit), type)) return false;
         } else {
           // With no MSB before the final LSB, every measured type carrying
           // that low byte is possible at event time. A known non-Thru type
           // must have a prepared node; otherwise this token is unsafe.
           for (const GsEfxTypeDefaults& defaults : kGsEfxTypeDefaults) {
             if (static_cast<uint8_t>(defaults.type & 0x7Fu) != scan.last_lsb) continue;
-            if (!add_candidate(static_cast<uint8_t>(unit), defaults.type)) {
-              out.reset();
-              return false;
-            }
+            if (!add_candidate(static_cast<uint8_t>(unit), defaults.type)) return false;
           }
         }
       }
@@ -329,17 +323,13 @@ void Sf2Player::apply_prepared_node_plan(PreparedEfxNode& node, const GsEfx& tar
   for (size_t s = 0; s < stage_count; ++s) {
     Sf2EfxStageRt& stage = node.unit_rt.stages[s];
     const bool on = enabled[s];
-    if (preserve_enable_fade) {
-      if (on && !stage.enabled_now && stage.fade <= 0.0f && stage.proc != nullptr) {
-        stage.proc->reset();
-      }
-      stage.enabled_target = on;
-      stage.enabled_now = on;
-    } else {
-      stage.enabled_target = on;
-      stage.enabled_now = on;
-      stage.fade = on ? 1.0f : 0.0f;
+    if (preserve_enable_fade && on && !stage.enabled_now && stage.fade <= 0.0f &&
+        stage.proc != nullptr) {
+      stage.proc->reset();
     }
+    stage.enabled_target = on;
+    stage.enabled_now = on;
+    if (!preserve_enable_fade) stage.fade = on ? 1.0f : 0.0f;
   }
 }
 

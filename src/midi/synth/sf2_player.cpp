@@ -24,6 +24,10 @@ namespace {
 
 constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 
+/// GS power-on per-part effect sends (CC91 reverb, CC93 chorus).
+constexpr uint8_t kGsPowerOnReverbSend = 40;
+constexpr uint8_t kGsPowerOnChorusSend = 0;
+
 /// Shared-bus residual attribution memory: how quickly a source's learned
 /// share of the bus-wide residual (part insert/body/reverb tail after its dry
 /// voice stops) decays toward the other live sources.
@@ -422,7 +426,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on
   // hardware, instead of rendering bone dry.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  reset_all_state(kGsPowerOnReverbSend, kGsPowerOnChorusSend);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   // Mix-bus polish: the same ~8 Hz DC blocker pole the NativeSynth host uses.
@@ -473,7 +477,7 @@ void Sf2Player::reset() {
   send_residual_splitter_.reset();
   for (SourceResidualSplitter& s : body_residual_splitters_) s.reset();
   clear_control_owned_gs_state();
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  reset_all_state(kGsPowerOnReverbSend, kGsPowerOnChorusSend);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
 #endif
@@ -540,7 +544,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
 void Sf2Player::gs_reset() noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
   // GS power-on: reverb send 40 (Roland default), everything else cleared.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  reset_all_state(kGsPowerOnReverbSend, kGsPowerOnChorusSend);
 }
 
 void Sf2Player::gm_reset(GmLevel level) noexcept {
@@ -548,7 +552,7 @@ void Sf2Player::gm_reset(GmLevel level) noexcept {
   // GM Level 1 specifies no effect controls, but real GM devices (SC-55 in
   // GM mode) keep their power-on reverb level; match that rather than the
   // paper reading so plain GM files keep the default room.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  reset_all_state(kGsPowerOnReverbSend, kGsPowerOnChorusSend);
   // The receive switches a System On leaves differently from a GS Reset. NRPN
   // goes off at either level, since the NRPNs it would carry are Roland's rather
   // than either GM specification's; the two bank-select switches go off for GM1
