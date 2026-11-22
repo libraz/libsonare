@@ -17,7 +17,7 @@ benchmarks/
 ├── mastering_isp_bench.cpp           # intersample-peak detector (BUILD_MASTERING)
 ├── mastering_support_bench.cpp       # shared mastering DSP utilities (BUILD_MASTERING)
 ├── mastering_stereo_bench.cpp        # stereo width / M-S processors (BUILD_MASTERING)
-├── pyproject.toml                    # rye-managed env (librosa 0.11.0 pinned)
+├── pyproject.toml                    # uv project (librosa 0.11.0 pinned, libsonare from this tree)
 ├── generate_audio.py                 # synthesises the fixture + its ground truth
 ├── run_bench.py                      # times librosa + merges C++ results into results.json
 ├── measure_accuracy.py               # scores the analyzers against the ground truth

@@ -16,6 +16,12 @@ dependencies = [
   "soundfile>=0.12",
 ]
 
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+libsonare = { path = "../bindings/python", editable = true }
+
 [tool.rye]
 managed = true
 virtual = true
