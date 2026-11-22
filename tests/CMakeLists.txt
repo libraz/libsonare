@@ -31,6 +31,7 @@ add_executable(sonare_tests
   util/types_test.cpp
   util/lru_zero_capacity_test.cpp
   util/lru_cache_test.cpp
+  util/parallel_for_test.cpp
   rt/tail_budget_test.cpp
   util/reflect_padding_equivalence_test.cpp
   util/base64_validation_test.cpp
@@ -110,6 +111,7 @@ add_executable(sonare_tests
   effects/fx_reachability_test.cpp
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
+  analysis/chord_hmm_test.cpp
   analysis/acoustic_analyzer_test.cpp
   analysis/frame_energy_allocation_test.cpp
   analysis/bpm_analyzer_test.cpp

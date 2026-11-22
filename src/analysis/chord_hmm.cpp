@@ -167,8 +167,11 @@ float transition_score(int from_idx, int to_idx, const std::vector<ChordTemplate
 std::vector<std::pair<int, float>> normalized_candidates(const ChordHmmObservation& observation,
                                                          const ChordHmmConfig& config) {
   std::vector<std::pair<int, float>> candidates = observation.candidates;
-  std::sort(candidates.begin(), candidates.end(),
-            [](const auto& a, const auto& b) { return a.second > b.second; });
+  // A score tie goes to the lower template index, so the beam cut and the final pick do not
+  // depend on input order or on how a standard library orders equal elements.
+  std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+    return a.second != b.second ? a.second > b.second : a.first < b.first;
+  });
   if (config.beam_width > 0 && static_cast<int>(candidates.size()) > config.beam_width) {
     candidates.resize(config.beam_width);
   }
