@@ -11,7 +11,8 @@ from the loader's set fails on all of them rather than in one schema-only test.
 
 Hand-written cases (any id without the `token:` prefix) are kept in place; the
 generated ones follow them. `--check` exits 1 when the file is not what this
-script would write.
+script would write. A mutation check calls `render()` with a modified schema and
+tests the returned text; it never writes the corpus.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -214,7 +216,10 @@ def main() -> int:
             return 1
         print(f"scene token cases: up to date ({wanted.count(PREFIX)} cases)")
         return 0
-    CORPUS_PATH.write_text(wanted, encoding="utf-8")
+    # Written beside and renamed over, so no reader ever sees a truncated corpus.
+    staged = CORPUS_PATH.with_name(CORPUS_PATH.name + ".tmp")
+    staged.write_text(wanted, encoding="utf-8")
+    os.replace(staged, CORPUS_PATH)
     print(f"scene token cases: wrote {wanted.count(PREFIX)} cases")
     return 0
 
