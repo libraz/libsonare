@@ -1,6 +1,5 @@
 import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import {
-  AUTOMATION_CURVE_VALUES,
   automationCurveCode,
   panLawCode,
   panModeCode,
@@ -13,10 +12,16 @@ import {
 import { ErrorCode } from './errors.js';
 import { capturePunchBound } from './internal/capture_punch.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
+import { bindNativeClipPageProvider } from './internal/clip_page_native.js';
 import {
-  bindNativeClipPageProvider,
-  nativeClipPageProviderOf,
-} from './internal/clip_page_native.js';
+  markerFromNative,
+  meterTelemetryFromNative,
+  midiClipsToNative,
+  nativeClip,
+  nativeMarker,
+  parameterInfoFromNative,
+  telemetryFromNative,
+} from './internal/engine_native.js';
 import {
   codedError,
   entryClass,
@@ -37,7 +42,6 @@ import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { optionalCount, optionalId } from './internal/optional_ints.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
-import { MARKER_KINDS, tokenName, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { assertUmpWordCount } from './internal/ump_events.js';
@@ -97,8 +101,6 @@ import type {
   EngineScopeTelemetry,
   EngineSetParameterOptions,
   EngineTelemetry,
-  EngineTelemetryError,
-  EngineTelemetryType,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
@@ -119,8 +121,6 @@ import type { MidiBank } from './public_types_midi_messages.js';
 import type {
   WasmClipPageProvider,
   WasmEngineBus,
-  WasmEngineClip,
-  WasmEngineMeterTelemetry,
   WasmEngineTrackSend,
   WasmRealtimeEngine,
 } from './sonare.js';
@@ -230,32 +230,6 @@ const METRONOME_CLICK_SAMPLES_MAX = 384000;
 const GRAPH_NODE_TYPES = { passThrough: 0, gain: 1 } as const;
 const GRAPH_MIXES = { replace: 0, add: 1 } as const;
 const CAPTURE_SOURCES = { output: 0, input: 1 } as const;
-const TELEMETRY_TYPES: readonly EngineTelemetryType[] = ['processBlock', 'error'];
-// Indexed by the native error ordinal; 19 is reserved by the worklet protocol.
-const TELEMETRY_ERRORS: readonly EngineTelemetryError[] = [
-  'none',
-  'commandQueueOverflow',
-  'pendingCommandOverflow',
-  'boundaryOverflow',
-  'telemetryOverflow',
-  'captureOverflow',
-  'maxBlockExceeded',
-  'unknownTarget',
-  'nonRealtimeSafeParameter',
-  'notPrepared',
-  'nonQueueableCommand',
-  'automationBindTargetOverflow',
-  'staleAutomationLanes',
-  'smoothedParameterCapacity',
-  'commandBacklogDeferred',
-  'clipPageUnderrun',
-  'insertAutomationOverflow',
-  'midiClockOverflow',
-  'metronomeOverflow',
-  'invalidCommand',
-  'maxChannelsExceeded',
-  'parameterBaseOverflow',
-];
 
 /** Runs an existing token resolver after refusing an ordinal, which is never a public spelling. */
 function noOrdinal(argName: string, value: unknown): void {
@@ -377,22 +351,6 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
-/** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its embind instance. */
-function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
-  const { warpMode, pageProvider, ...rest } = clip;
-  return {
-    ...rest,
-    ...(warpMode === undefined
-      ? {}
-      : {
-          warpMode: resolveEnumOrdinal(warpMode, WARP_MODES, `${label}.warpMode`) as 0 | 1 | 2 | 3,
-        }),
-    ...(pageProvider === undefined
-      ? {}
-      : { pageProvider: nativeClipPageProviderOf(pageProvider) as WasmEngineClip['pageProvider'] }),
-  };
-}
-
 /**
  * An optional engine count whose native `0` is a sentinel: absent stays `undefined`, and `0`, a
  * negative or a value past `max` is refused out of domain under the path the caller typed.
@@ -416,103 +374,6 @@ function engineCount(path: string, value: unknown, max?: number): number | undef
     );
   }
   return value;
-}
-
-/** The schedule as the native layer reads it: an absent length is a missing key, never a `0`. */
-function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknown {
-  if (!Array.isArray(clips)) {
-    return clips;
-  }
-  requireListBudget(clips, 'clips');
-  return clips.map((clip) => {
-    if (typeof clip !== 'object' || clip === null) {
-      return clip;
-    }
-    const { lengthSamples, loopLengthSamples, ...rest } = clip;
-    return {
-      ...rest,
-      ...(isAbsent(lengthSamples) ? {} : { lengthSamples }),
-      ...(isAbsent(loopLengthSamples) ? {} : { loopLengthSamples }),
-    };
-  });
-}
-
-function nativeMarker(marker: EngineMarker, i: number): Record<string, unknown> {
-  const { kind, name, ...rest } = marker;
-  if (name === '') {
-    throw refuse(`markers[${i}].name must not be empty; omit it for an unnamed marker`);
-  }
-  const named = isAbsent(name) ? rest : { ...rest, name };
-  return kind === undefined
-    ? named
-    : { ...named, kind: resolveEnumOrdinal(kind, MARKER_KINDS, `markers[${i}].kind`) };
-}
-
-function markerFromNative(marker: {
-  id: number;
-  ppq: number;
-  name?: string;
-  kind?: number;
-  keyFifths?: number;
-  keyMinor?: boolean;
-}): EngineMarker {
-  const { name, ...rest } = marker;
-  return {
-    ...rest,
-    ...(name === undefined || name === '' ? {} : { name }),
-    kind: tokenName(MARKER_KINDS, marker.kind ?? 0, 'marker kind'),
-  };
-}
-
-function parameterInfoFromNative(info: {
-  id: number;
-  name: string;
-  unit: string;
-  minValue: number;
-  maxValue: number;
-  defaultValue: number;
-  rtSafe: boolean;
-  defaultCurve: number;
-}): Required<EngineParameterInfo> {
-  return {
-    ...info,
-    defaultCurve: tokenName(AUTOMATION_CURVE_VALUES, info.defaultCurve, 'automation curve'),
-  };
-}
-
-function telemetryFromNative(record: {
-  type: number;
-  error: number;
-  renderFrame: number;
-  timelineSample: number;
-  audibleTimelineSample: number;
-  graphLatencySamplesQ8: number;
-  value: number;
-}): EngineTelemetry {
-  const type = TELEMETRY_TYPES[record.type];
-  const error = TELEMETRY_ERRORS[record.error];
-  if (type === undefined || error === undefined) {
-    throw refuse(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
-  }
-  return {
-    type,
-    error,
-    renderFrame: record.renderFrame,
-    timelineSample: record.timelineSample,
-    audibleTimelineSample: record.audibleTimelineSample,
-    graphLatencySamples: record.graphLatencySamplesQ8 / 256,
-    value: record.value,
-  };
-}
-
-function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): EngineMeterTelemetry {
-  const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = record;
-  return {
-    ...rest,
-    numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
-    ...(maxTruePeakDb !== undefined && { maxTruePeakDbtp: maxTruePeakDb }),
-  };
 }
 
 /** A strip address resolved against the engine: a track id or the master strip. */
