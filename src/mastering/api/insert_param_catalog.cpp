@@ -312,6 +312,12 @@ std::vector<Param> insert_probe_params(const std::string& name, const std::strin
 
 namespace {
 
+void append_json_string(std::string& out, const std::string& text) {
+  out += '"';
+  out += text;
+  out += '"';
+}
+
 // ---------------------------------------------------------------------------
 // Parameter bound measurement
 //
@@ -547,9 +553,10 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   // decades (a gate threshold in [-90, -12]) still has a probe point inside it.
   std::vector<double> points = bound_probe_points();
   size_t default_index = points.size();
-  const auto declared_default = empty_build(name).probed_defaults().find(key);
-  if (declared_default != empty_build(name).probed_defaults().end() &&
-      !declared_default->second.ambiguous && std::isfinite(declared_default->second.value) &&
+  const auto& declared_defaults = empty_build(name).probed_defaults();
+  const auto declared_default = declared_defaults.find(key);
+  if (declared_default != declared_defaults.end() && !declared_default->second.ambiguous &&
+      std::isfinite(declared_default->second.value) &&
       std::fabs(declared_default->second.value) <= kBoundProbeLimit &&
       std::find(points.begin(), points.end(), declared_default->second.value) == points.end()) {
     const auto at = points.insert(
@@ -986,9 +993,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   const bool numeric_param = measurable && !is_enum;
   out += ",\"unit\":";
   if (numeric_param && has_meta) {
-    out += '"';
-    out += detail::unit_name(meta.unit);
-    out += '"';
+    append_json_string(out, detail::unit_name(meta.unit));
   } else {
     out += "null";
   }
@@ -1025,9 +1030,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   if (slot == nullptr) {
     out += "null";
   } else {
-    out += '"';
-    out += slot->first;
-    out += '"';
+    append_json_string(out, slot->first);
   }
 
   out += ",\"dependsOn\":[";
@@ -1051,9 +1054,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   if (coupled != params.probed_coupled().end()) {
     for (size_t index = 0; index < coupled->second.size(); ++index) {
       if (index > 0) out += ',';
-      out += '"';
-      out += coupled->second[index];
-      out += '"';
+      append_json_string(out, coupled->second[index]);
     }
   }
   out += "]}";
@@ -1201,12 +1202,6 @@ std::optional<std::string> mastering_enum_names(const std::string& processor,
 
 namespace {
 
-void append_json_string(std::string& out, const std::string& text) {
-  out += '"';
-  out += text;
-  out += '"';
-}
-
 std::string chain_only_param_info_json() {
   ParamMap params;
   (void)read_chain_only_config(params);
@@ -1271,9 +1266,7 @@ std::string insert_slot_info_json(const std::string& name) {
     if (declaration.parent.empty()) {
       out += "null";
     } else {
-      out += '"';
-      out += declaration.parent;
-      out += '"';
+      append_json_string(out, declaration.parent);
     }
     out += ",\"activation\":\"";
     out += declaration.any_key ? "anyKey" : "always";

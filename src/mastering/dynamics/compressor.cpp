@@ -172,25 +172,18 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
         level_db = detector_level_db(peak_lin);
         break;
       case DetectorMode::Rms:
-        // Linear-domain RMS smoothing (10 ms window). Fast response, follows
-        // transients more aggressively than LogRms.
+      case DetectorMode::LogRms: {
+        // Rms: 10 ms linear window, follows transients. LogRms: 50 ms window,
+        // sustained-level estimate that ignores brief transients.
+        const float coeff = cfg.detector == DetectorMode::Rms ? rms_coeff_ : log_rms_coeff_;
         if (reseed_rms_state) {
           rms_state_ = power_lin;
           reseed_rms_state = false;
         }
-        rms_state_ = rms_coeff_ * rms_state_ + (1.0f - rms_coeff_) * power_lin;
+        rms_state_ = coeff * rms_state_ + (1.0f - coeff) * power_lin;
         level_db = detector_level_db(std::sqrt(std::max(rms_state_, 0.0f)));
         break;
-      case DetectorMode::LogRms:
-        // Slower RMS smoothing (50 ms window) for sustained-level estimation.
-        // Used for "musical" compression that ignores brief transients.
-        if (reseed_rms_state) {
-          rms_state_ = power_lin;
-          reseed_rms_state = false;
-        }
-        rms_state_ = log_rms_coeff_ * rms_state_ + (1.0f - log_rms_coeff_) * power_lin;
-        level_db = detector_level_db(std::sqrt(std::max(rms_state_, 0.0f)));
-        break;
+      }
     }
 
     const float target_db = gain_reduction_db(level_db, cfg);

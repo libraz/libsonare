@@ -85,16 +85,12 @@ float one_sided_amplitude_scale(int bin, int n_fft) {
 // the dB array from an already-populated magnitude spectrum.
 void finalize_spectrum(SpectrumResult& result, const SpectrumConfig& config) {
   const int n_bins = static_cast<int>(result.magnitude.size());
-  for (int i = 0; i < n_bins; ++i) {
-    result.power[i] = result.magnitude[i] * result.magnitude[i];
-  }
-
   if (config.apply_octave_smoothing) {
     result.magnitude =
         smooth_fractional_octave(result.magnitude, result.frequencies, config.octave_fraction);
-    for (int i = 0; i < n_bins; ++i) {
-      result.power[i] = result.magnitude[i] * result.magnitude[i];
-    }
+  }
+  for (int i = 0; i < n_bins; ++i) {
+    result.power[i] = result.magnitude[i] * result.magnitude[i];
   }
 
   for (int i = 0; i < n_bins; ++i) {

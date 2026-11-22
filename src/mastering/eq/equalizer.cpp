@@ -171,7 +171,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
 
 void EqualizerProcessor::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "EqualizerProcessor");
-  validate_process_args(channels, num_channels, num_samples);
+  validate_process_buffers(channels, num_channels, num_samples);
   if (num_channels > config_.max_channels) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "EqualizerProcessor num_channels exceeds prepared max_channels");

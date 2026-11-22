@@ -126,7 +126,7 @@ class Crossover {
  private:
   using Biquad = rt::BiquadState;
 
-  static int filter_order(CrossoverSlope slope, CrossoverMode mode);
+  static int filter_order(CrossoverSlope slope);
   struct FilterSection {
     double lowpass_frequency_scale = 1.0;
     double highpass_frequency_scale = 1.0;

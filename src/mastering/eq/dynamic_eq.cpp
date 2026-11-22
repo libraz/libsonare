@@ -113,8 +113,7 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   // the glide reaches at its end. Both grids are anchored to the stream position, so a call that
   // starts or ends mid-block changes nothing about what the block is filtered with.
   const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
-  const float per_sample_coeff =
-      prepared_ ? static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples)) : 1.0f;
+  const float per_sample_coeff = static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples));
   const float interval_decay =
       std::pow(1.0f - per_sample_coeff, static_cast<float>(kCoeffUpdateInterval));
   for (int offset = 0; offset < num_samples;) {

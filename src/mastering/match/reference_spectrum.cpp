@@ -15,8 +15,6 @@
 
 namespace sonare::mastering::match {
 
-using sonare::constants::kEpsilon;
-
 ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrumConfig& config) {
   if (audio.empty()) {
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");

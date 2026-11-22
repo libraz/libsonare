@@ -26,11 +26,6 @@ size_t iir_cut_stage_count(const EqBand& band) {
 
 }  // namespace
 
-void EqualizerProcessor::validate_process_args(float* const* channels, int num_channels,
-                                               int num_samples) {
-  validate_process_buffers(channels, num_channels, num_samples);
-}
-
 void EqualizerProcessor::validate_band_index(size_t index) {
   if (index >= kMaxBands) {
     throw SonareException(ErrorCode::InvalidParameter,

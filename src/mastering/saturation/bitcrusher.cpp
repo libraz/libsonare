@@ -118,10 +118,6 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
       effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
   const bool noisy = noise_sources_active(config_);
   bool discarded = false;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-  }
   // The noise is drawn once per frame and shared by the channels, in spans no
   // longer than the scratch prepare() sized.
   const int span = static_cast<int>(noise_.size());

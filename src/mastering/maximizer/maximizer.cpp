@@ -37,8 +37,6 @@ void Maximizer::process(float* const* channels, int num_channels, int num_sample
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   const float gain = db_to_linear(config_.input_gain_db);
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) channels[ch][i] *= gain;
   }
   limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);

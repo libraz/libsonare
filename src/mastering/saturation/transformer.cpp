@@ -72,8 +72,6 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
 
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     auto& state = states_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       channels[ch][i] = process_sample_with_scalars(hysteresis_, state, channels[ch][i], scalars);

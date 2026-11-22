@@ -53,8 +53,6 @@ void SoftKneeMax::process(float* const* channels, int num_channels, int num_samp
   // between the knee shape and the limiting).
   std::uint32_t substituted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
       float x = channels[ch][i] * drive;
       const float ax = std::abs(x);

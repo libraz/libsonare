@@ -19,6 +19,7 @@
 namespace sonare::mastering::repair {
 
 namespace check = sonare::util::check;
+using sonare::constants::kLn10D;
 namespace {
 
 constexpr double kRegularization = static_cast<double>(sonare::constants::kSpectrumEpsilon);
@@ -57,7 +58,7 @@ int late_delay_frames(const DereverbClassicalConfig& config, int sample_rate) {
 double late_decay(const DereverbClassicalConfig& config, int delay_frames, int sample_rate) {
   const float delay_sec =
       static_cast<float>(delay_frames * config.hop_length) / static_cast<float>(sample_rate);
-  return std::exp(-6.0 * std::log(10.0) * static_cast<double>(delay_sec) /
+  return std::exp(-6.0 * kLn10D * static_cast<double>(delay_sec) /
                   static_cast<double>(config.t60_sec));
 }
 

@@ -211,17 +211,14 @@ float gain_mmse_stsa(double ksi, double gamma_post) {
   // The successive-term ratio therefore carries (z/2)^2 = (half_nu/2)^2.
   const double z_half_sq = 0.25 * half_nu * half_nu;
   double i0 = 1.0;
-  double i1 = 0.0;
   double term0 = 1.0;
   double term1 = 0.5 * half_nu;
-  i1 = term1;
+  double i1 = term1;
   for (int k = 1; k < 25; ++k) {
     term0 *= z_half_sq / static_cast<double>(k * k);
     i0 += term0;
-    if (k >= 1) {
-      term1 *= z_half_sq / static_cast<double>(k * (k + 1));
-      i1 += term1;
-    }
+    term1 *= z_half_sq / static_cast<double>(k * (k + 1));
+    i1 += term1;
   }
   const double envelope = std::exp(-half_nu) * ((1.0 + nu) * i0 + nu * i1);
   const double prefactor = std::sqrt(kPiD) * 0.5 * std::sqrt(nu) / gamma_post;

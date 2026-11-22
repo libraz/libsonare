@@ -266,7 +266,6 @@ MasteringChainConfig make_podcast() {
   // Voicing: speech held tighter, since a podcast is heard in noisy places.
   cfg.dynamics.compressor.config.threshold_db = -22.0f;
   cfg.dynamics.compressor.config.ratio = 3.5f;
-  cfg.dynamics.deesser.enabled = true;
   // -16 LUFS is the loud end of TD1004's -16 to -20 LUFS band. The -1.5 dBTP
   // ceiling has no source: 0.5 dB under R128's maximum, for encoder overshoot.
   enable_loudness(cfg, -16.0f, -1.5f);

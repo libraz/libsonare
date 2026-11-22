@@ -31,8 +31,6 @@ bool valid_decorrelation_amount(float amount) noexcept {
 
 }  // namespace
 
-constexpr float MultibandImager::kDecorrelationFrequenciesHz[];
-
 float MultibandImager::allpass_coefficient(float frequency_hz, double sample_rate) noexcept {
   // y = -c*x + x1 + c*y1 is H(z) = (z^-1 - c) / (1 - c*z^-1), whose -90 degree
   // point sits at fc for c = (1 - tan(pi*fc/fs)) / (1 + tan(pi*fc/fs)). The

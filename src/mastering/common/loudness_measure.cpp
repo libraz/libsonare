@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "metering/lufs.h"
@@ -41,6 +42,30 @@ static_assert(kLoudnessSeriesHopSeconds == metering::kLufsShortTermHopSec,
               "short-term hop mirror drifted from metering::kLufsShortTermHopSec");
 static_assert(kDefaultTruePeakOversample == metering::kDefaultTruePeakOversample,
               "true-peak oversample mirror drifted from metering::kDefaultTruePeakOversample");
+
+void require_planar_pair(const float* left, const float* right, std::size_t frames,
+                         const char* name) {
+  if ((left == nullptr || right == nullptr) && frames != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(name) + ": channel pointer is null with non-zero frames");
+  }
+}
+
+void require_series(const LoudnessSeries* series, const char* name) {
+  if (series == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(name) + ": series pointer is null");
+  }
+}
+
+std::vector<float> interleave_planar(const float* left, const float* right, std::size_t frames) {
+  std::vector<float> interleaved(frames * 2);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    interleaved[2 * frame] = left[frame];
+    interleaved[2 * frame + 1] = right[frame];
+  }
+  return interleaved;
+}
 
 // Linear-domain peak across de-interleaved channels. The buffer overload
 // measures the channel in place; wrapping it in an Audio would deep-copy a
@@ -84,11 +109,7 @@ LoudnessSummary stereo_planar_summary(const float* left, const float* right, std
   // second measurement starts.
   metering::LufsResult lufs;
   {
-    std::vector<float> interleaved(frames * 2);
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-      interleaved[2 * frame] = left[frame];
-      interleaved[2 * frame + 1] = right[frame];
-    }
+    const std::vector<float> interleaved = interleave_planar(left, right, frames);
     lufs = metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate, kSeriesConfig,
                                       series != nullptr ? &series->momentary_lufs : nullptr,
                                       series != nullptr ? &series->short_term_lufs : nullptr);
@@ -158,11 +179,7 @@ float measure_true_peak_dbtp(const Audio& audio, int oversample_factor) {
 
 float measure_true_peak_dbtp_stereo_planar(const float* left, const float* right,
                                            std::size_t frames, int oversample_factor) {
-  if ((left == nullptr || right == nullptr) && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_true_peak_dbtp_stereo_planar: channel pointer is null with non-zero frames");
-  }
+  require_planar_pair(left, right, frames, "measure_true_peak_dbtp_stereo_planar");
   return true_peak_to_dbtp(std::max(metering::true_peak(left, frames, oversample_factor),
                                     metering::true_peak(right, frames, oversample_factor)));
 }
@@ -189,11 +206,7 @@ LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::
 LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const float* right,
                                                        std::size_t frames, int sample_rate,
                                                        int true_peak_oversample) {
-  if ((left == nullptr || right == nullptr) && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_loudness_summary_stereo_planar: channel pointer is null with non-zero frames");
-  }
+  require_planar_pair(left, right, frames, "measure_loudness_summary_stereo_planar");
   return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, nullptr);
 }
 
@@ -201,10 +214,7 @@ LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::
                                                      int channels, int sample_rate,
                                                      int true_peak_oversample,
                                                      LoudnessSeries* series) {
-  if (series == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "measure_loudness_summary_interleaved: series pointer is null");
-  }
+  require_series(series, "measure_loudness_summary_interleaved");
   if (samples == nullptr && frames != 0) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -217,24 +227,14 @@ LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const 
                                                        std::size_t frames, int sample_rate,
                                                        int true_peak_oversample,
                                                        LoudnessSeries* series) {
-  if (series == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "measure_loudness_summary_stereo_planar: series pointer is null");
-  }
-  if ((left == nullptr || right == nullptr) && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_loudness_summary_stereo_planar: channel pointer is null with non-zero frames");
-  }
+  require_series(series, "measure_loudness_summary_stereo_planar");
+  require_planar_pair(left, right, frames, "measure_loudness_summary_stereo_planar");
   return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, series);
 }
 
 void measure_loudness_series_interleaved(const float* samples, std::size_t frames, int channels,
                                          int sample_rate, LoudnessSeries* series) {
-  if (series == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "measure_loudness_series_interleaved: series pointer is null");
-  }
+  require_series(series, "measure_loudness_series_interleaved");
   if (samples == nullptr && frames != 0) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -247,20 +247,9 @@ void measure_loudness_series_interleaved(const float* samples, std::size_t frame
 void measure_loudness_series_stereo_planar(const float* left, const float* right,
                                            std::size_t frames, int sample_rate,
                                            LoudnessSeries* series) {
-  if (series == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "measure_loudness_series_stereo_planar: series pointer is null");
-  }
-  if ((left == nullptr || right == nullptr) && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_loudness_series_stereo_planar: channel pointer is null with non-zero frames");
-  }
-  std::vector<float> interleaved(frames * 2);
-  for (std::size_t frame = 0; frame < frames; ++frame) {
-    interleaved[2 * frame] = left[frame];
-    interleaved[2 * frame + 1] = right[frame];
-  }
+  require_series(series, "measure_loudness_series_stereo_planar");
+  require_planar_pair(left, right, frames, "measure_loudness_series_stereo_planar");
+  const std::vector<float> interleaved = interleave_planar(left, right, frames);
   metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate, kSeriesConfig,
                              &series->momentary_lufs, &series->short_term_lufs);
 }

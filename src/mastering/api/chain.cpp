@@ -34,6 +34,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "rt/true_peak_fir.h"
 #include "util/db.h"
 
 namespace sonare::mastering::api {
@@ -43,7 +44,7 @@ using internal::run_processor_mono;
 using internal::run_processor_stereo;
 
 bool valid_true_peak_oversample(int factor) noexcept {
-  return factor == 1 || factor == 2 || factor == 4 || factor == 8 || factor == 16;
+  return rt::is_supported_polyphase_oversample_factor(factor);
 }
 
 // Runs @p validate and rethrows its message behind the stage name, so a chain
@@ -91,16 +92,21 @@ float interpolated_spectrum_db(const mastering::match::ReferenceSpectrum& spectr
   return spectrum.db[low] + ratio * (spectrum.db[high] - spectrum.db[low]);
 }
 
+// Log-spaced centre frequency of report band @p index from 20 Hz to Nyquist.
+float report_band_frequency_hz(size_t index, int sample_rate) {
+  const float low_hz = std::min(20.0f, static_cast<float>(sample_rate) * 0.5f);
+  const float high_hz = static_cast<float>(sample_rate) * 0.5f;
+  const float position =
+      (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
+  return low_hz * std::pow(high_hz / low_hz, position);
+}
+
 std::array<float, kMasteringReportBandCount> spectrum_delta(
     const mastering::match::ReferenceSpectrum& before,
     const mastering::match::ReferenceSpectrum& after, int sample_rate) {
   std::array<float, kMasteringReportBandCount> delta{};
-  const float low_hz = std::min(20.0f, static_cast<float>(sample_rate) * 0.5f);
-  const float high_hz = static_cast<float>(sample_rate) * 0.5f;
   for (size_t index = 0; index < delta.size(); ++index) {
-    const float position =
-        (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
-    const float frequency_hz = low_hz * std::pow(high_hz / low_hz, position);
+    const float frequency_hz = report_band_frequency_hz(index, sample_rate);
     delta[index] = interpolated_spectrum_db(after, frequency_hz) -
                    interpolated_spectrum_db(before, frequency_hz);
   }
@@ -131,12 +137,8 @@ std::array<float, kMasteringReportBandCount> stereo_spectrum_delta(
     const mastering::match::ReferenceSpectrum& after_left,
     const mastering::match::ReferenceSpectrum& after_right, int sample_rate) {
   std::array<float, kMasteringReportBandCount> delta{};
-  const float low_hz = std::min(20.0f, static_cast<float>(sample_rate) * 0.5f);
-  const float high_hz = static_cast<float>(sample_rate) * 0.5f;
   for (size_t index = 0; index < delta.size(); ++index) {
-    const float position =
-        (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
-    const float frequency_hz = low_hz * std::pow(high_hz / low_hz, position);
+    const float frequency_hz = report_band_frequency_hz(index, sample_rate);
     delta[index] = stereo_spectrum_db(after_left, after_right, frequency_hz) -
                    stereo_spectrum_db(before_left, before_right, frequency_hz);
   }

@@ -37,7 +37,6 @@
 
 namespace sonare::mastering::assistant {
 
-using sonare::constants::kEpsilon;
 namespace {
 
 constexpr float kMinDb = sonare::constants::kFloorDb;

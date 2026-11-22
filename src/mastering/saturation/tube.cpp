@@ -215,10 +215,6 @@ void Tube::reset() {
   paths_.reset();
 }
 
-float Tube::process_model(float sample, const TubeConfig& config) {
-  return process_model_with_scalars(sample, make_model_scalars(config));
-}
-
 bool Tube::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
@@ -272,14 +268,6 @@ int Tube::tail_samples() const noexcept {
   }
   tail.decay(1.0 - miller_alpha(db_to_linear(tube_config_.drive_db), sample_rate_));
   return tail.samples();
-}
-
-float Tube::apply_miller_filter(int channel, float sample) {
-  // Dempwolf/Zoelzer DAFx-11 section 5.6 lists 12AX7 parasitic capacitances
-  // (Cak=0.9 pF, Cgk=2.3 pF, Cag=2.4 pF). We approximate their Miller effect
-  // as a drive-dependent one-pole low-pass in the audio output path.
-  const float coeff = miller_alpha(db_to_linear(tube_config_.drive_db), sample_rate_);
-  return apply_miller_filter_with_alpha(miller_state_, channel, sample, coeff);
 }
 
 }  // namespace sonare::mastering::saturation

@@ -23,6 +23,7 @@ namespace {
 
 using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
+using sonare::constants::kTwoPiD;
 
 struct SectionSpec {
   double lowpass_frequency_scale = 1.0;
@@ -53,7 +54,7 @@ double scaled_digital_frequency(double base_hz, double scale, double sample_rate
 }
 
 float normalized_omega(double frequency_hz, double sample_rate) {
-  return static_cast<float>(2.0 * kPiD * frequency_hz / sample_rate);
+  return static_cast<float>(kTwoPiD * frequency_hz / sample_rate);
 }
 
 rt::BiquadCoeffs rbj_allpass_from_denominator(const rt::BiquadCoeffs& denominator_source) {
@@ -339,7 +340,7 @@ void Crossover::validate_config(const CrossoverConfig& config, double sample_rat
   }
 }
 
-int Crossover::filter_order(CrossoverSlope slope, CrossoverMode /*mode*/) {
+int Crossover::filter_order(CrossoverSlope slope) {
   switch (slope) {
     case CrossoverSlope::LR2:
       return 2;
@@ -353,7 +354,7 @@ int Crossover::filter_order(CrossoverSlope slope, CrossoverMode /*mode*/) {
 
 std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope slope,
                                                                  CrossoverMode mode) {
-  const int order = filter_order(slope, mode);
+  const int order = filter_order(slope);
   const auto to_filter_sections = [](const std::vector<SectionSpec>& specs) {
     std::vector<FilterSection> sections;
     sections.reserve(specs.size());
@@ -565,7 +566,7 @@ void Crossover::rebuild_fir_kernels() {
     for (int i = 0; i < config_.fir_kernel_size; ++i) {
       const int n = i - center;
       const double sinc =
-          n == 0 ? 2.0 * normalized : std::sin(2.0 * kPiD * normalized * n) / (kPiD * n);
+          n == 0 ? 2.0 * normalized : std::sin(kTwoPiD * normalized * n) / (kPiD * n);
       // Symmetric Hann (periodic=false): windowed-sinc FIR taps must use a
       // symmetric window centered on the kernel for linear phase.
       const double window = hann_value(i, config_.fir_kernel_size, false);

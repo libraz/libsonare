@@ -381,11 +381,11 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
         add_to(right_iir_, right_index);
         break;
       case StereoPlacement::Mid:
-        has_mid_side_bands_ = has_mid_side_bands_ || routed.enabled;
+        has_mid_side_bands_ = true;
         add_to(mid_iir_, mid_index);
         break;
       case StereoPlacement::Side:
-        has_mid_side_bands_ = has_mid_side_bands_ || routed.enabled;
+        has_mid_side_bands_ = true;
         add_to(side_iir_, side_index);
         break;
     }

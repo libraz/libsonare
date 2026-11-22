@@ -73,8 +73,6 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
     const bool adaa = config_.aliasing == sonare::rt::AliasingControl::Adaa1;
     bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] == nullptr)
-        throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
       auto& bandpass = bandpass_[static_cast<size_t>(ch)];
       const auto lane = static_cast<size_t>(ch);
       for (int i = 0; i < num_samples; ++i) {
@@ -106,8 +104,6 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
   }
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
       band_scratch_[static_cast<size_t>(i)] =
           bandpass_[static_cast<size_t>(ch)].process(channels[ch][i]);

@@ -33,7 +33,6 @@ bool valid_q(float q) { return std::isfinite(q) && q >= 0.0f; }
 }  // namespace
 
 void GraphicEq::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate;
   low_eq_.prepare(sample_rate, max_block_size);
   high_eq_.prepare(sample_rate, max_block_size);
   rebuild_bands();

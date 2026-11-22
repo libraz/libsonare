@@ -130,13 +130,6 @@ ClipDetection to_detection(const std::vector<float>& samples, const std::vector<
   return detection;
 }
 
-/// Merges two ascending, non-overlapping run lists into the ascending region set
-/// both channels reconstruct over. Runs that merely touch stay separate, as two
-/// adjacent runs already do in one channel.
-std::vector<ClipRun> union_runs(const std::vector<ClipRun>& a, const std::vector<ClipRun>& b) {
-  return union_sorted_runs(a, b);
-}
-
 bool any_at_or_past(const std::vector<float>& samples, const ClipRun& run, float clip_threshold) {
   for (size_t j = run.start; j < run.end; ++j) {
     if (std::abs(samples[j]) >= clip_threshold) return true;
@@ -257,7 +250,7 @@ std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t cha
     samples.emplace_back(channels[c]->data(), channels[c]->data() + channels[c]->size());
     const std::vector<ClipRun> runs = scan_clipped_runs(samples[c], validated->clip_threshold);
     detected.push_back(to_detection(samples[c], runs));
-    applied = c == 0 ? runs : union_runs(applied, runs);
+    applied = c == 0 ? runs : union_sorted_runs(applied, runs);
   }
 
   std::vector<DeclipReport> reports;

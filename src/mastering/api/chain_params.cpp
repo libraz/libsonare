@@ -12,7 +12,6 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/param_field_tables.h"
-#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api {

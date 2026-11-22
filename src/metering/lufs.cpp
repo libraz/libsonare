@@ -33,6 +33,9 @@ constexpr double kEnergyFloor = 1e-15;
 // audio.
 constexpr size_t kChunkFrames = 1u << 17;
 
+// Upper bound of the block overlap fraction the accumulator accepts.
+constexpr float kMaxBlockOverlap = 0.99f;
+
 // Silence sentinel rationale: unlike the level-in-dB meters (true_peak /
 // spectrum / dynamic_range), which report the finite kFloorDb (-120 dB) for
 // silence, LUFS deliberately keeps -inf. -inf ("below the measurement floor") is
@@ -108,7 +111,7 @@ BlockEnergyAccumulator make_block_accumulator(size_t frames, int sample_rate, fl
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
   const size_t window = allow_partial_window ? std::min(block_size, frames) : block_size;
-  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
+  const float clamped_overlap = std::clamp(overlap, 0.0f, kMaxBlockOverlap);
   const size_t hop =
       std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - clamped_overlap))));
   return make_block_accumulator(frames, window, hop);
@@ -275,7 +278,7 @@ float short_term_overlap_for(int sample_rate, float duration_sec) {
       std::max(1.0f, std::round(kLufsShortTermHopSec * static_cast<float>(sample_rate)));
   // Ceiling matches the accumulator's overlap limit so the derived overlap reproduces the
   // exact 100 ms short-term hop instead of being truncated to a 150 ms hop.
-  return std::clamp(1.0f - hop / block, 0.0f, 0.99f);
+  return std::clamp(1.0f - hop / block, 0.0f, kMaxBlockOverlap);
 }
 
 void validate_config(const LufsConfig& config) {

@@ -128,8 +128,6 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
   const auto shelf_design = rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, kInvSqrt2D);
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     float envelope = envelope_[static_cast<size_t>(ch)];
     float current_gain_db = shelf_gain_db_[static_cast<size_t>(ch)];
     int shelf_control_samples = shelf_control_samples_[static_cast<size_t>(ch)];

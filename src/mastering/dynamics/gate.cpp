@@ -108,13 +108,10 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     const float level_db = detector_level_db(detector);
     if (level_db >= cfg.threshold_db) {
       hold_samples_remaining_ = hold_samples;
-    } else if (hold_samples_remaining_ > 0) {
-      --hold_samples_remaining_;
-    }
-    if (level_db >= cfg.threshold_db) {
       gate_open_ = true;
-    } else if (hold_samples_remaining_ == 0 && level_db < cfg.close_threshold_db) {
-      gate_open_ = false;
+    } else {
+      if (hold_samples_remaining_ > 0) --hold_samples_remaining_;
+      if (hold_samples_remaining_ == 0 && level_db < cfg.close_threshold_db) gate_open_ = false;
     }
     const bool open = gate_open_ || hold_samples_remaining_ > 0;
     // Smooth the gain in the linear (0..1) domain. dB-domain smoothing toward an

@@ -134,7 +134,6 @@ class EqualizerProcessor : public rt::ProcessorBase {
                                       const float* dynamic_gain_db, StereoPlacement placement,
                                       const float* frequencies_hz, size_t frequency_count,
                                       float* out_db);
-  static void validate_process_args(float* const* channels, int num_channels, int num_samples);
   static void validate_band_index(size_t index);
   // set_band without the refusal of a frequency the current rate cannot carry.
   void install_band(size_t index, const EqBand& band);

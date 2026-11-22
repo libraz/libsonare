@@ -22,7 +22,6 @@ float plate_dissipation_w(PowerTube tube) noexcept {
 
 float power_tube_scale(PowerTube tube) noexcept {
   const float dissipation = plate_dissipation_w(tube);
-  if (!(dissipation > 0.0f)) return 1.0f;
   // Exactly 1.0 for the 6L6GC, so the default power stage is untouched.
   return std::sqrt(kReferencePlateDissipationW / dissipation);
 }

@@ -79,7 +79,6 @@ void reject_non_streaming_repair(const MasteringChainConfig& config) {
 
 struct StreamingParameterTarget {
   std::string full_key;
-  std::string config_key;
   rt::ProcessorBase* processor = nullptr;
   unsigned int id = 0;
 };
@@ -129,11 +128,9 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
   const auto descriptors = processor->parameter_descriptors();
   for (const auto& descriptor : descriptors) {
     std::string full_key;
-    std::string config_key;
     if (loudness_stage) {
       // The realized stage is loudness.optimize; its public keys are loudness.*.
       full_key = "loudness." + descriptor.key;
-      config_key = full_key;
     } else if (stage_name == "dynamics.multibandComp") {
       // Every band descriptor (`band<i>.<field>`) is a target under the chain's
       // `bands.<i>.<field>` key.
@@ -146,12 +143,10 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
                    std::string(band_key.substr(kBandHead.size(), dot - kBandHead.size())) + "." +
                    std::string(band_key.substr(dot + 1));
       }
-      config_key = full_key;
     } else {
       full_key = stage_name + "." + descriptor.key;
-      config_key = full_key;
     }
-    targets.push_back({std::move(full_key), std::move(config_key), processor, descriptor.id});
+    targets.push_back({std::move(full_key), processor, descriptor.id});
   }
 }
 
@@ -177,12 +172,15 @@ bool same_stage_enablement(const MasteringChainConfig& left,
          left.loudness.enabled == right.loudness.enabled;
 }
 
+// Highest filter frequency a prepared processor accepts: just under Nyquist.
+float frequency_ceiling_hz(double sample_rate) { return static_cast<float>(sample_rate * 0.49); }
+
 void validate_realtime_parameter_domain(const std::string& key, float value, double sample_rate) {
   // Bounds that are tighter than, or depend on the prepared rate beyond, what the
   // processor's own live setter refuses. Anything the processor refuses surfaces
   // from its set_parameter.
   if (key == "dynamics.deesser.frequencyHz") {
-    const float maximum = static_cast<float>(sample_rate * 0.49);
+    const float maximum = frequency_ceiling_hz(sample_rate);
     if (value < 10.0f || value > maximum) {
       throw SonareException(ErrorCode::InvalidParameter,
                             key + " is outside the prepared processor frequency range");
@@ -195,14 +193,14 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
     throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 1");
   }
   if (key == "spectral.airBand.shelfFrequencyHz") {
-    const float maximum = static_cast<float>(sample_rate * 0.49);
+    const float maximum = frequency_ceiling_hz(sample_rate);
     if (value < 20.0f || value > maximum) {
       throw SonareException(ErrorCode::InvalidParameter,
                             key + " is outside the prepared processor frequency range");
     }
   }
   if (key == "saturation.exciter.frequencyHz") {
-    const float maximum = static_cast<float>(sample_rate * 0.49);
+    const float maximum = frequency_ceiling_hz(sample_rate);
     if (value < 10.0f || value > maximum) {
       throw SonareException(ErrorCode::InvalidParameter,
                             key + " is outside the prepared processor frequency range");
@@ -214,11 +212,11 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
                           key + " is below the processor's minimum positive value");
   }
   if (key == "dynamics.compressor.sidechainHighPassHz" &&
-      value > static_cast<float>(sample_rate * 0.49)) {
+      value > frequency_ceiling_hz(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           key + " is above the prepared processor frequency range");
   }
-  if (key == "stereo.monoMaker.frequencyHz" && value > static_cast<float>(sample_rate * 0.49)) {
+  if (key == "stereo.monoMaker.frequencyHz" && value > frequency_ceiling_hz(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           key + " is above the prepared processor frequency range");
   }
@@ -579,11 +577,6 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
         .as_caller_spelled();
   }
   const float float_value = static_cast<float>(value);
-  if (!std::isfinite(float_value)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
-                                            ::sonare::util::json::schema::kFloatRangePredicate)
-        .as_caller_spelled();
-  }
 
   const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
                                    [&full_key](const StreamingParameterTarget& candidate) {
@@ -604,7 +597,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   // Validate a full candidate first so a rejection leaves config() and the DSP untouched.
   MasteringChainConfig candidate = config_;
   // Pass the double through so enum and boolean fields keep their own validation.
-  const Param param{target->config_key, value};
+  const Param param{target->full_key, value};
   apply_chain_config_overrides(candidate, &param, 1);
   if (!same_stage_enablement(config_, candidate)) {
     throw SonareException(
@@ -615,10 +608,10 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
 
   // A repeated value must not reach a setter that rebuilds coefficients; the
   // no-op check precedes the domain check so an accepted value can be repeated.
-  const auto requested_value = chain_config_parameter_value(candidate, target->config_key);
+  const auto requested_value = chain_config_parameter_value(candidate, target->full_key);
   const float canonical_value = static_cast<float>(
       requested_value.has_value() ? *requested_value : static_cast<double>(float_value));
-  const auto current_value = chain_config_parameter_value(config_, target->config_key);
+  const auto current_value = chain_config_parameter_value(config_, target->full_key);
   if (full_key == "dynamics.compressor.sidechainHighPassHz" && !current_value.has_value()) {
     throw SonareException(
         ErrorCode::InvalidParameter,

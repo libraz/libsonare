@@ -48,11 +48,9 @@ class Tube : public rt::ProcessorBase {
 
  private:
   static void validate_config(const TubeConfig& config);
-  static float process_model(float sample, const TubeConfig& config);
   void allocate_scratch();
   void ensure_state(int num_channels);
   void declare_path_latencies();
-  float apply_miller_filter(int channel, float sample);
 
   TubeConfig tube_config_{};
   bool prepared_ = false;

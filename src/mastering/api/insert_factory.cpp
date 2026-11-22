@@ -6,14 +6,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <initializer_list>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -95,9 +92,6 @@
 #endif
 
 #ifdef SONARE_HAVE_FX
-#include <algorithm>
-#include <cmath>
-
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
 #include "effects/delay/stereo_delay.h"
@@ -122,8 +116,6 @@
 #include "acoustic/room_model.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
-#include "util/insertion_sort.h"
-#include "util/number_format.h"
 #endif
 #endif
 
@@ -1206,10 +1198,13 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   }
   const int msb = detail::i(params, "typeMsb", 0, kNone);
   const int lsb = detail::i(params, "typeLsb", 0, kNone);
-  if (msb < 0 || msb > 127)
-    refuse_param("typeMsb", sonare::util::refusal::integer_range_predicate(0, 127));
-  if (lsb < 0 || lsb > 127)
-    refuse_param("typeLsb", sonare::util::refusal::integer_range_predicate(0, 127));
+  const auto require_midi_byte = [](const std::string& key, int value) {
+    if (value < 0 || value > 127) {
+      refuse_param(key, sonare::util::refusal::integer_range_predicate(0, 127));
+    }
+  };
+  require_midi_byte("typeMsb", msb);
+  require_midi_byte("typeLsb", lsb);
   const auto realization = detail::read_enum(params, "realization", GsEfxRealization::kModern);
 
   GsEfx state;
@@ -1228,9 +1223,7 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   for (std::size_t slot = 0; slot < state.params.size(); ++slot) {
     const std::string key = "byte" + std::to_string(slot);
     const int value = detail::i(params, key.c_str(), state.params[slot], kNone);
-    if (value < 0 || value > 127) {
-      refuse_param(key, sonare::util::refusal::integer_range_predicate(0, 127));
-    }
+    require_midi_byte(key, value);
     state.params[slot] = static_cast<uint8_t>(value);
     if (state.type != 0 && !sonare::midi::synth::gs_efx_parameter_takes(
                                state.type, static_cast<uint8_t>(slot), state.params[slot])) {

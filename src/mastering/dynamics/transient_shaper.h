@@ -90,7 +90,6 @@ class TransientShaper : public rt::RtConfigLifecycle<TransientShaper, TransientS
   void update_coefficients(const TransientShaperConfig& config);
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
-  int max_block_size_ = 0;
   bool prepared_ = false;
   // Gain-smoother coefficient, cached because it depends only on sample rate and
   // gain_smoothing_ms; recomputed by update_coefficients() from prepare() and

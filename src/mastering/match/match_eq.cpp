@@ -58,8 +58,6 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   return spectrum.db[index - 1] + (spectrum.db[index] - spectrum.db[index - 1]) * t;
 }
 
-float db_to_gain(float db) { return db_to_linear(db); }
-
 /// Weight in [0, 1] applied to the curve's dB value at @p frequency_hz, so the
 /// realized FIR response returns to unity outside the matched band instead of
 /// extending the curve's endpoint gain to DC and Nyquist.
@@ -542,7 +540,7 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
                             static_cast<float>(config.fft_size);
     const float gain_db =
         interpolate_db(curve_spectrum, frequency) * out_of_band_weight(curve, frequency, nyquist);
-    magnitude[static_cast<size_t>(bin)] = db_to_gain(gain_db);
+    magnitude[static_cast<size_t>(bin)] = db_to_linear(gain_db);
     spectrum[static_cast<size_t>(bin)] = {magnitude[static_cast<size_t>(bin)], 0.0f};
   }
 

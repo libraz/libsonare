@@ -706,11 +706,6 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
   ensure_prepared(prepared_, "AmpSim");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   require_prepared_channels(num_channels, chains_.size(), "AmpSim");
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-  }
 
   // The input trim, ahead of everything: a voicing is calibrated for a
   // full-scale signal and this is what puts a quieter source back on it.

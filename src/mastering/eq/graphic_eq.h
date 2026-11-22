@@ -58,9 +58,6 @@ class GraphicEq : public rt::ProcessorBase {
   ParametricEq low_eq_;
   ParametricEq high_eq_;
   std::array<float, kNumBands> gains_db_{};
-  // Captured in prepare(); used to clamp fixed ISO center frequencies to the
-  // open (0 Hz, Nyquist) interval so bands above Nyquist do not throw.
-  double sample_rate_ = 44100.0;
   // Shared band Q; 0 keeps band_q_for_gain_db().
   float q_ = 0.0f;
 };

@@ -18,12 +18,17 @@
 
 namespace sonare::mastering::api::detail {
 
-inline std::vector<float> mono_mix(const std::vector<float>& left,
-                                   const std::vector<float>& right) {
+inline void require_matching_channel_lengths(const std::vector<float>& left,
+                                             const std::vector<float>& right) {
   if (left.size() != right.size()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "stereo channel lengths must match");
   }
+}
+
+inline std::vector<float> mono_mix(const std::vector<float>& left,
+                                   const std::vector<float>& right) {
+  require_matching_channel_lengths(left, right);
   std::vector<float> mono(left.size());
   for (std::size_t index = 0; index < left.size(); ++index) {
     mono[index] = 0.5f * (left[index] + right[index]);
@@ -33,10 +38,7 @@ inline std::vector<float> mono_mix(const std::vector<float>& left,
 
 inline std::vector<float> interleave_stereo(const std::vector<float>& left,
                                             const std::vector<float>& right) {
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
+  require_matching_channel_lengths(left, right);
   std::vector<float> interleaved(left.size() * 2);
   for (std::size_t index = 0; index < left.size(); ++index) {
     interleaved[2 * index] = left[index];
@@ -60,10 +62,7 @@ inline void apply_gain_db(std::vector<float>& samples, float gain_db) {
 }
 
 inline void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
+  require_matching_channel_lengths(left, right);
   const float gain = db_to_linear(gain_db);
   for (std::size_t index = 0; index < left.size(); ++index) {
     left[index] *= gain;
@@ -169,10 +168,7 @@ inline bool loudness_target_was_limited(float requested_gain_db, float applied_g
 // allocation cost. The meter is rate-agnostic, so it takes no sample rate.
 inline float stereo_true_peak_dbtp(const std::vector<float>& left, const std::vector<float>& right,
                                    int true_peak_oversample) {
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
+  require_matching_channel_lengths(left, right);
   return sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
       left.data(), right.data(), left.size(), true_peak_oversample);
 }

@@ -317,10 +317,8 @@ std::string build_processor_catalog_json() {
 
   // Sorted union of every id the host might surface, so realtime-only ids (e.g.
   // effects.reverb.room) and pair ids absent from processor_names() are covered.
-  std::set<std::string> ids;
-  for (const auto& name : processor_names()) ids.insert(name);
-  for (const auto& name : insert_set) ids.insert(name);
-  for (const auto& name : pair_set) ids.insert(name);
+  std::set<std::string> ids = offline_set;
+  ids.insert(insert_set.begin(), insert_set.end());
 
   std::string out = "[";
   bool first = true;

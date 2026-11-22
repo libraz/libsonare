@@ -41,7 +41,6 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
 
   const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
   prepared_ = true;
   active_ = config_;
   const size_t channel_count = kRealtimePreparedChannels;

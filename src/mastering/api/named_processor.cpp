@@ -93,7 +93,6 @@
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "mastering/utility/gain.h"
-#include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/json.h"
@@ -600,7 +599,8 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
     });
   } else if (name == "final.dither") {
     final::DitherConfig config;
-    config.type = checked_enum<final::DitherType>(i(params, "type", 2), "dither type");
+    config.type = checked_enum<final::DitherType>(i(params, "type", static_cast<int>(config.type)),
+                                                  "dither type");
     config.target_bits = i(params, "targetBits", config.target_bits);
     config.seed = u32(params, "seed", config.seed);
     const uint32_t base_seed = config.seed;
@@ -617,7 +617,8 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
   } else if (name == "final.outputChain") {
     final::DitherConfig dither_config;
     dither_config.target_bits = i(params, "targetBits", dither_config.target_bits);
-    dither_config.type = checked_enum<final::DitherType>(i(params, "ditherType", 2), "dither type");
+    dither_config.type = checked_enum<final::DitherType>(
+        i(params, "ditherType", static_cast<int>(dither_config.type)), "dither type");
     final::BitDepthConfig bit_depth_config;
     bit_depth_config.target_bits = dither_config.target_bits;
     bit_depth_config.clamp = b(params, "clamp", bit_depth_config.clamp);
@@ -668,10 +669,8 @@ bool is_insert_only_name(const std::string& name) {
   return name.rfind("effects.", 0) == 0 || name.rfind("voice.", 0) == 0;
 }
 
-bool try_run_effects_insert_mono(const std::string& name, const std::vector<Param>& params,
-                                 std::vector<float>& samples, int sample_rate,
-                                 int& latency_samples) {
-  if (!is_insert_only_name(name)) return false;
+std::unique_ptr<sonare::rt::ProcessorBase> build_effects_insert(const std::string& name,
+                                                                const std::vector<Param>& params) {
   std::vector<std::string> unread;
   auto processor = make_insert_from_params(name, params, &unread);
   if (!processor) {
@@ -679,6 +678,14 @@ bool try_run_effects_insert_mono(const std::string& name, const std::vector<Para
                           "unknown mastering processor: " + name + retired_processor_note(name));
   }
   detail::refuse_unread_params(unread, insert_param_names(name));
+  return processor;
+}
+
+bool try_run_effects_insert_mono(const std::string& name, const std::vector<Param>& params,
+                                 std::vector<float>& samples, int sample_rate,
+                                 int& latency_samples) {
+  if (!is_insert_only_name(name)) return false;
+  auto processor = build_effects_insert(name, params);
   internal::run_processor_mono(*processor, samples, sample_rate);
   latency_samples = processor->latency_samples();
   return true;
@@ -688,13 +695,7 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
                                    std::vector<float>& left, std::vector<float>& right,
                                    int sample_rate, int& latency_samples) {
   if (!is_insert_only_name(name)) return false;
-  std::vector<std::string> unread;
-  auto processor = make_insert_from_params(name, params, &unread);
-  if (!processor) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unknown mastering processor: " + name + retired_processor_note(name));
-  }
-  detail::refuse_unread_params(unread, insert_param_names(name));
+  auto processor = build_effects_insert(name, params);
   internal::run_processor_stereo(*processor, left, right, sample_rate);
   latency_samples = processor->latency_samples();
   return true;
@@ -988,7 +989,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   MonoResult result;
   result.samples.assign(out.data(), out.data() + out.size());
   result.sample_rate = out.sample_rate();
-  result.input_lufs = lufs_for(std::vector<float>(source, source + source_length), sample_rate);
+  result.input_lufs = common::measure_lufs(source, source_length, sample_rate);
   result.output_lufs = lufs_for(result.samples, result.sample_rate);
   return result;
 }
