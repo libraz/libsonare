@@ -922,7 +922,10 @@ SonareError sonare_engine_set_capture_source(SonareEngine* engine,
 /** Shift the recording window in timeline samples. A positive value delays
  * capture: output frame 0 corresponds to punch_start + offset_samples. Input
  * arriving within the offset after a loop wrap belongs to the end of the pass
- * played before it, so every pass captures the whole loop range. */
+ * played before it, so every pass captures the whole loop range. Has effect
+ * only with the punch on; while looping with an armed punch capture the offset
+ * may span at most one loop pass, and an edit that would break that is refused
+ * with SONARE_ERROR_INVALID_PARAMETER. */
 SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_t offset_samples);
 /// @brief Turns the live input monitor on (@p enabled non-zero) or off with the given @p gain.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a non-finite @p gain.
@@ -1324,7 +1327,10 @@ void sonare_engine_builtin_synth_config_init(SonareEngineBuiltinSynthConfig* con
 ///          and fades the outgoing instrument out over 10 ms in the following
 ///          blocks, so a swap during playback does not click; the replacement
 ///          starts from its own default channel state (program, bank and
-///          controller state are not carried over).
+///          controller state are not carried over). A binding is applied at a
+///          block boundary; for a frame-exact switch, bind both instruments
+///          ahead of time and switch with timed MIDI, or use a timed program
+///          change.
 /// @return SONARE_ERROR_INVALID_PARAMETER if @p config has a struct_size below sizeof or a field
 ///         outside its domain, or if the instrument itself is refused (it
 ///         fails to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or
@@ -1354,7 +1360,10 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
 ///        destination's sounding notes and fades the outgoing instrument out
 ///        over 10 ms in the following blocks, so a swap during playback does
 ///        not click; the replacement starts from its own default channel state
-///        (program, bank and controller state are not carried over).
+///        (program, bank and controller state are not carried over). A binding
+///        is applied at a block boundary; for a frame-exact switch, bind both
+///        instruments ahead of time and switch with timed MIDI, or use a timed
+///        program change.
 /// @return SONARE_ERROR_INVALID_PARAMETER if the synth itself is refused (it fails
 ///         to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or the
 ///         synth cannot prepare a SysEx already scheduled or queued for
@@ -1464,7 +1473,9 @@ void sonare_engine_sf2_instrument_config_init(SonareEngineSf2InstrumentConfig* c
 ///        outgoing instrument out over 10 ms in the following blocks, so a swap
 ///        during playback does not click; the replacement starts from its own
 ///        default channel state (program, bank and controller state are not
-///        carried over).
+///        carried over). A binding is applied at a block boundary; for a
+///        frame-exact switch, bind both instruments ahead of time and switch
+///        with timed MIDI, or use a timed program change.
 /// @return SONARE_ERROR_INVALID_PARAMETER if @p config has a struct_size below sizeof or a field
 ///         outside its domain, or if the player itself is refused (it fails
 ///         to prepare); SONARE_ERROR_INVALID_STATE if the rack is full or the
@@ -1693,6 +1704,10 @@ typedef enum SONARE_ENUM_BASE {
 ///          plucked — and a target pitch below what the engine's delay line can
 ///          hold both fall back to an ordinary note, which
 ///          @ref sonare_engine_legato_fallback_count counts.
+///
+///          The setting belongs to the bound instrument: binding another one to
+///          the destination replaces it with that instrument's own (poly for a
+///          new one) and starts the legato fallback count from zero.
 SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destination_id,
                                            uint8_t channel, int articulation);
 

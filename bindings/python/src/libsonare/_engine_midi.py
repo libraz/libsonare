@@ -316,6 +316,10 @@ class _EngineMidiMixin:
         ``config`` is a :class:`BuiltinSynthConfig` patch; ``None`` installs the
         default sine patch. After binding, MIDI events routed to that
         destination render through the built-in synth.
+
+        A binding is applied at a block boundary; for a frame-exact switch, bind both
+        instruments ahead of time and switch with timed MIDI, or use a timed program
+        change.
         """
         lib = _get_lib()
         given = (config if config is not None else BuiltinSynthConfig())._to_c()
@@ -357,6 +361,10 @@ class _EngineMidiMixin:
         straight afterwards. A sample patch bound without a bank is accepted and
         renders silence, the same way one naming a keymap set the bank lacks
         does.
+
+        A binding is applied at a block boundary; for a frame-exact switch, bind both
+        instruments ahead of time and switch with timed MIDI, or use a timed program
+        change.
 
         :attr:`SynthPatch.use_gm_programs` follows incoming GM bank/program
         changes and routes channel 10 through the GM drum map, exactly like
@@ -464,6 +472,10 @@ class _EngineMidiMixin:
         Without a loaded SoundFont (:meth:`load_sound_font`) — or for programs
         the SoundFont does not cover — notes play through the built-in
         synthesizer GM fallback bank (the data-free floor).
+
+        A binding is applied at a block boundary; for a frame-exact switch, bind both
+        instruments ahead of time and switch with timed MIDI, or use a timed program
+        change.
         """
         lib = _get_lib()
         given = (config if config is not None else Sf2InstrumentConfig())._to_c()
@@ -721,6 +733,10 @@ class _EngineMidiMixin:
         exciter is spent at the onset -- anything struck or plucked -- and a
         target pitch below what the engine's delay line holds both fall back to
         an ordinary note, which :meth:`legato_fallback_count` counts.
+
+        The setting belongs to the bound instrument: binding another one to the
+        destination replaces it with that instrument's own (poly for a new one)
+        and starts the legato fallback count from zero.
 
         Raises :class:`SonareValueError` for an unknown spelling or a destination
         nothing is bound to, and
