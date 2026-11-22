@@ -32,10 +32,10 @@ describe('Mixer input count (Node)', () => {
   it('refuses an input list that is not an array by name before comparing lengths', () => {
     const notAList = {} as unknown as Float32Array[];
     expect(() => mixer.processStereo(notAList, inputs(1))).toThrow(
-      new TypeError('Mixer.processStereo: leftInputs must be an array'),
+      new TypeError('Mixer.processStereo: leftInputs must be an array of Float32Array'),
     );
     expect(() => mixer.processStereo(inputs(1), notAList)).toThrow(
-      new TypeError('Mixer.processStereo: rightInputs must be an array'),
+      new TypeError('Mixer.processStereo: rightInputs must be an array of Float32Array'),
     );
   });
 });

@@ -1,13 +1,16 @@
 #include "sonare_wrap_clip_page_provider.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
+using sonare_node::RequiredFloat32ArrayValue;
 using sonare_node::RequiredInt64Arg;
 using sonare_node::RequiredIntArg;
+using sonare_node::RequiredPlaneListValue;
 using sonare_node::ThrowIfError;
 
 namespace {
@@ -85,25 +88,22 @@ Napi::Value ClipPageProviderWrap::Supply(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, provider_, "ClipPageProvider");
   int64_t page_index = 0;
   if (!RequiredInt64Arg(env, info, 0, "pageIndex", &page_index)) return env.Undefined();
-  if (info.Length() <= 1 || !info[1].IsArray()) {
-    Napi::TypeError::New(env, "channels must be an array of Float32Array")
-        .ThrowAsJavaScriptException();
+  Napi::Array channels;
+  if (!RequiredPlaneListValue(env, info.Length() > 1 ? info[1] : env.Undefined(), "channels",
+                              &channels)) {
     return env.Undefined();
   }
-  Napi::Array channels = info[1].As<Napi::Array>();
   std::vector<std::vector<float>> storage;
   std::vector<const float*> ptrs;
   storage.reserve(channels.Length());
   ptrs.reserve(channels.Length());
   size_t frames = 0;
   for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
-    Napi::Value value = channels.Get(ch);
-    if (!sonare_node::IsFloat32Array(value)) {
-      Napi::TypeError::New(env, "clip page channel must be a Float32Array")
-          .ThrowAsJavaScriptException();
+    Napi::Float32Array channel;
+    if (!RequiredFloat32ArrayValue(env, channels.Get(ch), "channels[" + std::to_string(ch) + "]",
+                                   &channel)) {
       return env.Undefined();
     }
-    Napi::Float32Array channel = value.As<Napi::Float32Array>();
     if (ch == 0) {
       frames = channel.ElementLength();
     } else if (channel.ElementLength() != frames) {

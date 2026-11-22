@@ -243,8 +243,8 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckLinkedArgs(env, info)) return env.Undefined();
   SONARE_NODE_TRY
+  if (!CheckLinkedArgs(env, info)) return env.Undefined();
   ChannelInputs inputs;
   if (!ReadChannelInputs(env, info[0], &inputs)) {
     return env.Undefined();

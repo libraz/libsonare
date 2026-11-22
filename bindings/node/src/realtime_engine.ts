@@ -959,7 +959,10 @@ export class RealtimeEngine {
    * methods (`resolveStripAutomationId` for the master fader, pan and width).
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
-    this.native.setAutomationLane(paramId, points.map(automationPointToNative));
+    this.native.setAutomationLane(
+      paramId,
+      Array.isArray(points) ? points.map(automationPointToNative) : points,
+    );
   }
 
   /** Number of parameters that currently have an automation lane. */

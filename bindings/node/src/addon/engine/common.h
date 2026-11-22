@@ -188,31 +188,29 @@ struct ChannelBlock {
 
 inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
   Napi::Env env = info.Env();
-  if (info.Length() <= index || !info[index].IsArray()) {
-    Napi::TypeError::New(env, "expected an array of Float32Array channels")
-        .ThrowAsJavaScriptException();
+  Napi::Array channels;
+  if (!sonare_node::RequiredPlaneListValue(
+          env, info.Length() > index ? info[index] : env.Undefined(), "channels", &channels)) {
     return {};
   }
-  Napi::Array channels = info[index].As<Napi::Array>();
   const uint32_t count = channels.Length();
   if (count == 0) {
-    Napi::TypeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
     return {};
   }
   ChannelBlock block;
   block.storage.reserve(count);
   block.pointers.reserve(count);
   for (uint32_t i = 0; i < count; ++i) {
-    Napi::Value value = channels.Get(i);
-    if (!sonare_node::IsFloat32Array(value)) {
-      Napi::TypeError::New(env, "each channel must be a Float32Array").ThrowAsJavaScriptException();
+    Napi::Float32Array channel;
+    if (!sonare_node::RequiredFloat32ArrayValue(env, channels.Get(i),
+                                                "channels[" + std::to_string(i) + "]", &channel)) {
       return {};
     }
-    Napi::Float32Array channel = value.As<Napi::Float32Array>();
     if (i == 0) {
       block.frames = static_cast<int>(channel.ElementLength());
       if (block.frames <= 0) {
-        Napi::TypeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
+        Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
         return {};
       }
     } else if (static_cast<int>(channel.ElementLength()) != block.frames) {

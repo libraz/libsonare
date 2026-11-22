@@ -772,8 +772,7 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 1 || !info[1].IsArray()) {
-    Napi::TypeError::New(env, "expected an array of automation points")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "points must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t param_id = 0;
@@ -820,7 +819,7 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "expected an array of markers").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "markers must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Array input = info[0].As<Napi::Array>();

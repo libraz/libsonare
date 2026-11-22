@@ -920,6 +920,20 @@ inline bool RequiredArrayValue(Napi::Env env, const Napi::Value& value, const st
   return true;
 }
 
+/// @brief Read a required list of audio planes; read each plane with
+///        RequiredFloat32ArrayValue under "<label>[i]".
+inline bool RequiredPlaneListValue(Napi::Env env, const Napi::Value& value,
+                                   const std::string& label, Napi::Array* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, label + " must be an array of Float32Array")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Array>();
+  return true;
+}
+
 /// @brief Read a required Float32Array.
 inline bool RequiredFloat32ArrayValue(Napi::Env env, const Napi::Value& value,
                                       const std::string& label, Napi::Float32Array* out) {

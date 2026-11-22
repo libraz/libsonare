@@ -824,10 +824,6 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!info[0].IsArray()) {
-    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   sonare_node::ChannelInputs inputs;
   if (!sonare_node::ReadChannelInputs(env, info[0], &inputs)) {
     return env.Undefined();

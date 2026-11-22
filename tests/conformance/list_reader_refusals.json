@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "description": "List arguments refused by the Node and WASM facades. A list of audio planes is refused as '<arg> must be an array of Float32Array' and a wrong plane as '<arg>[i] must be a Float32Array'; any other list is refused as '<arg> must be an array'. An object carrying a length is not a list.",
+  "wrong_values": {
+    "object": "{}",
+    "undefined": "undefined",
+    "array_like": "{ length: 1, 0: <Float32Array> }",
+    "string": "'ab'"
+  },
+  "plane_lists": [
+    { "call": "Mixer.processStereo", "arg": "leftInputs" },
+    { "call": "ClipPageProvider.supply", "arg": "channels" },
+    { "call": "RealtimeEngine.process", "arg": "channels" },
+    { "call": "downmix", "arg": "channels" }
+  ],
+  "other_lists": [
+    { "call": "RealtimeEngine.setTempoSegments", "arg": "segments" },
+    { "call": "RealtimeEngine.setTimeSignatureSegments", "arg": "segments" },
+    { "call": "RealtimeEngine.setMarkers", "arg": "markers" },
+    { "call": "RealtimeEngine.setAutomationLane", "arg": "points" }
+  ]
+}

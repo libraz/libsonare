@@ -224,9 +224,8 @@ Napi::Value SonareWrap::MasteringRepairDetectReverb(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringRepairDereverbClassicalLinked(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckLinkedArgs(env, info)) return env.Undefined();
-
   SONARE_NODE_TRY
+  if (!CheckLinkedArgs(env, info)) return env.Undefined();
   ChannelInputs inputs;
   if (!ReadChannelInputs(env, info[0], &inputs)) return env.Undefined();
   const int sr = node_narrow_int(env, info[1], "sampleRate");

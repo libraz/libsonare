@@ -134,17 +134,12 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (!info[0].IsArray()) {
-    Napi::TypeError::New(env, "leftInputs must be an array").ThrowAsJavaScriptException();
+  Napi::Array left_input;
+  Napi::Array right_input;
+  if (!sonare_node::RequiredPlaneListValue(env, info[0], "leftInputs", &left_input) ||
+      !sonare_node::RequiredPlaneListValue(env, info[1], "rightInputs", &right_input)) {
     return env.Undefined();
   }
-  if (!info[1].IsArray()) {
-    Napi::TypeError::New(env, "rightInputs must be an array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  Napi::Array left_input = info[0].As<Napi::Array>();
-  Napi::Array right_input = info[1].As<Napi::Array>();
   const size_t count = left_input.Length();
   if (right_input.Length() != count) {
     Napi::RangeError::New(env, "leftInputs and rightInputs must have the same length")

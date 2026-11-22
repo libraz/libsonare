@@ -154,10 +154,8 @@ inline Napi::Array EmitLinkedResultChannels(Napi::Env env, float** channels, siz
 /// @brief Argument check shared by the channel-linked entries, which both take
 ///        (Float32Array[], sampleRate, options?).
 inline bool CheckLinkedArgs(Napi::Env env, const Napi::CallbackInfo& info) {
-  if (!info[0].IsArray()) {
-    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
-    return false;
-  }
+  Napi::Array channels;
+  if (!RequiredPlaneListValue(env, info[0], "channels", &channels)) return false;
   if (!info[1].IsNumber()) {
     Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return false;
