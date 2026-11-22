@@ -1786,8 +1786,8 @@ if(BUILD_WASM)
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
   # Keep the compute core and realtime block processing at Release -O3 while
-  # compiling the remaining JS/WASM glue for size. With emsdk 6.0.10 this saves
-  # about 529 kB raw / 98 kB gzip in the full module and 89 kB / 15 kB in analysis.
+  # compiling the remaining JS/WASM glue for size. With emsdk 7.0.1 this saves
+  # about 492 kB raw / 93 kB gzip in the full module and 103 kB / 20 kB in analysis.
   set(_sonare_wasm_glue_sources "${SONARE_WASM_BINDING_SOURCES}")
   list(FILTER _sonare_wasm_glue_sources INCLUDE REGEX "^wasm/")
   # The per-block entry points (engine, voice changer, playback renderer, mixer) hold the
