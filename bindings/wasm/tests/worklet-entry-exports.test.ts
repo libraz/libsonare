@@ -66,6 +66,7 @@ const WORKLET_VALUE_EXPORTS = [
   'SonarePlaybackWorkletProcessor',
   'SonareRealtimeEngineNode',
   'SonareRealtimeEngineWorkletProcessor',
+  'SonareRealtimeVoiceChangerNode',
   'SonareRealtimeVoiceChangerWorkletProcessor',
   'SonareStreamAnalyzerNode',
   'SonareStreamAnalyzerWorkletProcessor',
