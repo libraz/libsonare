@@ -165,6 +165,15 @@ export function refuseUnknownKey(
   return refuseType(`unknown key ${path} (expected ${expected})`);
 }
 
+/** Refuse the first key of `record` outside `allowed`, named by its path (the key alone when `path` is empty). */
+export function assertDeclaredKeys(record: object, allowed: readonly string[], path: string): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.includes(key)) {
+      throw refuseUnknownKey(path === '' ? key : `${path}.${key}`, allowed);
+    }
+  }
+}
+
 /** A call the object's current state refuses (released, closed, not prepared). */
 export function invalidState(text: string): SonareError {
   return codedError(ErrorCode.InvalidState, text);

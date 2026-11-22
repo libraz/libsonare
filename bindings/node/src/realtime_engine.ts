@@ -2,6 +2,7 @@ import type { ClipPageSampleRequest } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
 import {
+  assertDeclaredKeys,
   codedError,
   entryClass,
   invalidState,
@@ -92,6 +93,7 @@ import {
 } from './validation.js';
 import {
   AUTOMATION_CURVE_VALUES,
+  AUTOMATION_POINT_KEYS,
   automationCurveValue,
   CHANNEL_LAYOUT_VALUES,
   normalizeSynthInstrument,
@@ -491,6 +493,7 @@ function curveName(ordinal: number): AutomationCurve {
 }
 
 function automationPointToNative(point: EngineAutomationPoint, i: number): EngineAutomationPoint {
+  assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${i}]`);
   const curve = isAbsent(point.curveToNext)
     ? AUTOMATION_CURVE_VALUES.linear
     : automationCurveValue(point.curveToNext, `points[${i}].curveToNext`);

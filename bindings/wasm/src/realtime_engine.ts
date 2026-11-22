@@ -17,6 +17,7 @@ import {
   nativeClipPageProviderOf,
 } from './internal/clip_page_native.js';
 import {
+  assertDeclaredKeys,
   codedError,
   entryClass,
   invalidState,
@@ -51,6 +52,7 @@ import type {
 } from './project.js';
 import type { ProjectTimeline } from './project_class.js';
 import {
+  AUTOMATION_POINT_KEYS,
   normalizePartRig,
   normalizeSynthInstrument,
   optionalId,
@@ -510,6 +512,7 @@ function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['cu
 }
 
 function nativeAutomationPoint(point: EngineAutomationPoint, i: number) {
+  assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${i}]`);
   const { curveToNext, ...rest } = point;
   return curveToNext === undefined
     ? rest

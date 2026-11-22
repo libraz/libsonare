@@ -76,3 +76,30 @@ describe("an engine refusal names the field by its path in the caller's argument
     });
   });
 });
+
+describe('an automation point refuses a key it does not declare', () => {
+  const points = [
+    { ppq: 0, value: 0 },
+    { ppq: 1, value: 1 },
+  ];
+
+  it('names the key by its path and lists the declared fields', () => {
+    withEngine((engine) => {
+      expect(() =>
+        engine.setAutomationLane(1, [points[0], { ...points[1], curve: 'hold' } as never]),
+      ).toThrow(
+        new TypeError(
+          'RealtimeEngine.setAutomationLane: unknown key points[1].curve (expected curveToNext, ppq, value)',
+        ),
+      );
+    });
+  });
+
+  it('accepts the same points without the stray key', () => {
+    withEngine((engine) => {
+      engine.addParameter({ id: 1, name: 'p', minValue: 0, maxValue: 1, defaultValue: 0 });
+      engine.setAutomationLane(1, [points[0], { ...points[1], curveToNext: 'hold' }]);
+      expect(engine.automationLaneCount).toBe(1);
+    });
+  });
+});

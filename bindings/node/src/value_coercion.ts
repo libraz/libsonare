@@ -1,4 +1,4 @@
-import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { isNonArrayObject } from './internal/value_guards.js';
@@ -88,18 +88,15 @@ export function projectAutomationPointFromNative(native: {
   };
 }
 
-const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
+/** The fields an automation breakpoint declares. */
+export const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
 export function projectAutomationPointValue(
   point: ProjectAutomationPoint,
   index: number,
 ): NativeAutomationPoint {
-  for (const key of Object.keys(point)) {
-    if (!AUTOMATION_POINT_KEYS.includes(key)) {
-      throw refuseUnknownKey(`points[${index}].${key}`, AUTOMATION_POINT_KEYS);
-    }
-  }
+  assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
   const curveToNext = tokenOrdinal(
     point.curveToNext ?? 'linear',
     AUTOMATION_CURVE_VALUES,

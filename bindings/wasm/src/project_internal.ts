@@ -16,7 +16,13 @@ import type {
   SynthEnumTables,
   SynthPatch,
 } from './instrument_types.js';
-import { codedError, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import {
+  assertDeclaredKeys,
+  codedError,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
@@ -1083,18 +1089,15 @@ export function projectAutomationPointFromNative(native: {
   };
 }
 
-const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
+/** The fields an automation breakpoint declares. */
+export const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
 export function projectAutomationPointValue(
   point: ProjectAutomationPoint,
   index: number,
 ): NativeAutomationPoint {
-  for (const key of Object.keys(point)) {
-    if (!AUTOMATION_POINT_KEYS.includes(key)) {
-      throw refuseUnknownKey(`points[${index}].${key}`, AUTOMATION_POINT_KEYS);
-    }
-  }
+  assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
   const curveToNext = tokenCode(
     'curveToNext',
     point.curveToNext,
