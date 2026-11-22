@@ -219,7 +219,7 @@ inline size_t next_power_of_2(size_t value) {
 /// @param n Number of values
 /// @param ref Reference power value (default 1.0)
 /// @param amin Minimum amplitude threshold (default 1e-10)
-/// @param top_db Maximum dB below peak to clip (negative to disable)
+/// @param top_db Maximum dB below peak to clip (+inf to disable; negative or NaN is refused)
 /// @param out Output dB values (can alias power for in-place conversion)
 void power_to_db(const float* power, size_t n, float ref, float amin, float top_db, float* out);
 

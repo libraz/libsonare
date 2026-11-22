@@ -20,6 +20,14 @@ void require_buffer(const float* data, std::size_t n, const char* subject) {
   util::check::non_null_when_count(data, n, subject, "n");
 }
 
+// top_db is a depth below the maximum; +inf is the one spelling of no clipping.
+void require_top_db(float top_db) {
+  if (!(top_db >= 0.0f)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "top_db",
+                                            "must be at least 0, or +inf for no clipping");
+  }
+}
+
 float resolve_ref(const float* S, std::size_t n, float ref) {
   if (ref > 0.0f) return ref;
   // Use max(|S|) as reference (librosa: ref=np.max behavior).
@@ -32,7 +40,7 @@ std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float a
   util::check::finite_float(ref, "ref");
   // greater_than also refuses a non-finite amin.
   util::check::greater_than(amin, 0.0, "amin");
-  util::check::finite_float(top_db, "top_db");
+  require_top_db(top_db);
   require_buffer(S, n, "S");
   std::vector<float> out(n);
   if (n == 0) return out;
@@ -52,7 +60,7 @@ std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float a
     if (db > max_db) max_db = db;
   }
 
-  if (top_db >= 0.0f && std::isfinite(max_db)) {
+  if (std::isfinite(top_db) && std::isfinite(max_db)) {
     const float floor_db = max_db - top_db;
     for (std::size_t i = 0; i < n; ++i) {
       if (out[i] < floor_db) out[i] = floor_db;
@@ -70,7 +78,7 @@ std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref, flo
   util::check::finite_float(ref, "ref");
   // greater_than also refuses a non-finite amin.
   util::check::greater_than(amin, 0.0, "amin");
-  util::check::finite_float(top_db, "top_db");
+  require_top_db(top_db);
   require_buffer(S, n, "S");
   // Mirror librosa: amplitude_to_db(S) == power_to_db(S^2, amin=amin^2, ref=ref^2).
   std::vector<float> power(n);

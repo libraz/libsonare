@@ -18,6 +18,11 @@ using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
+namespace {
+/// The one spelling of "no clipping" (librosa's top_db=None).
+constexpr float kNoClip = std::numeric_limits<float>::infinity();
+}  // namespace
+
 TEST_CASE("power_to_db scalar matches librosa", "[librosa][db_convert]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/db_conversion.json");
   const auto& cases = json["data"]["power_to_db_scalar_no_topdb"].as_array();
@@ -25,7 +30,7 @@ TEST_CASE("power_to_db scalar matches librosa", "[librosa][db_convert]") {
     float power = cases[i]["power"].as_float();
     float expected = cases[i]["db"].as_float();
     std::vector<float> input{power};
-    auto got = power_to_db(input, 1.0f, 1e-10f, -1.0f);
+    auto got = power_to_db(input, 1.0f, 1e-10f, kNoClip);
     CAPTURE(i, power, got[0], expected);
     REQUIRE_THAT(got[0], WithinAbs(expected, 1e-4f));
   }
@@ -38,7 +43,7 @@ TEST_CASE("amplitude_to_db scalar matches librosa", "[librosa][db_convert]") {
     float amp = cases[i]["amplitude"].as_float();
     float expected = cases[i]["db"].as_float();
     std::vector<float> input{amp};
-    auto got = amplitude_to_db(input, 1.0f, 1e-5f, -1.0f);
+    auto got = amplitude_to_db(input, 1.0f, 1e-5f, kNoClip);
     CAPTURE(i, amp, got[0], expected);
     REQUIRE_THAT(got[0], WithinAbs(expected, 1e-3f));
   }
@@ -124,7 +129,7 @@ TEST_CASE("dB conversions reject non-finite scalar parameters", "[db_convert][ed
 
   REQUIRE_THROWS_AS(power_to_db(input, nan), SonareException);
   REQUIRE_THROWS_AS(power_to_db(input, 1.0f, nan), SonareException);
-  REQUIRE_THROWS_AS(power_to_db(input, 1.0f, 1e-10f, inf), SonareException);
+  REQUIRE_THROWS_AS(power_to_db(input, 1.0f, 1e-10f, nan), SonareException);
   REQUIRE_THROWS_AS(amplitude_to_db(input, inf), SonareException);
   REQUIRE_THROWS_AS(amplitude_to_db(input, 1.0f, nan), SonareException);
   REQUIRE_THROWS_AS(amplitude_to_db(input, 1.0f, 1e-5f, nan), SonareException);
@@ -142,7 +147,7 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
 
   SECTION("a NaN bin comes out NaN and leaves its neighbours untouched") {
     const std::vector<float> S{1.0f, nan, 1e-12f, 0.25f};
-    const auto got = power_to_db(S, 1.0f, 1e-10f, -1.0f);
+    const auto got = power_to_db(S, 1.0f, 1e-10f, kNoClip);
 
     REQUIRE(got.size() == 4);
     REQUIRE(std::isnan(got[1]));
@@ -155,7 +160,7 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
     // The same bins without the NaN present are bit-identical, so the NaN does
     // not perturb the accumulation it passes through.
     const std::vector<float> finite_only{1.0f, 1e-12f, 0.25f};
-    const auto reference = power_to_db(finite_only, 1.0f, 1e-10f, -1.0f);
+    const auto reference = power_to_db(finite_only, 1.0f, 1e-10f, kNoClip);
     REQUIRE(got[0] == reference[0]);
     REQUIRE(got[2] == reference[1]);
     REQUIRE(got[3] == reference[2]);
@@ -163,7 +168,7 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
 
   SECTION("an infinite bin is unchanged: +inf stays +inf, -inf floors at amin") {
     const std::vector<float> S{1.0f, inf, -inf, 0.25f};
-    const auto got = power_to_db(S, 1.0f, 1e-10f, -1.0f);
+    const auto got = power_to_db(S, 1.0f, 1e-10f, kNoClip);
 
     REQUIRE(std::isinf(got[1]));
     REQUIRE(got[1] > 0.0f);
@@ -190,7 +195,7 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
     // reference stays the finite maximum. librosa's ref=np.max is NaN instead and
     // returns nan for every bin; the divergence is the reference, not this bin.
     const std::vector<float> S{1.0f, nan, 1e-12f, 0.25f};
-    const auto got = power_to_db(S, -1.0f, 1e-10f, -1.0f);
+    const auto got = power_to_db(S, -1.0f, 1e-10f, kNoClip);
 
     REQUIRE(std::isnan(got[1]));
     REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-4f));
@@ -200,7 +205,7 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
 
   SECTION("amplitude_to_db inherits the propagation through the squaring") {
     const std::vector<float> A{1.0f, nan, 1e-6f, 0.5f};
-    const auto got = amplitude_to_db(A, 1.0f, 1e-5f, -1.0f);
+    const auto got = amplitude_to_db(A, 1.0f, 1e-5f, kNoClip);
 
     REQUIRE(std::isnan(got[1]));
     // librosa.amplitude_to_db([1, nan, 1e-6, 0.5], ref=1.0, amin=1e-5, top_db=None)
@@ -214,9 +219,26 @@ TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge
 TEST_CASE("dB finite non-positive references retain max-reference sentinel semantics",
           "[db_convert][edge]") {
   const std::vector<float> input{4.0f, 1.0f};
-  const auto zero_ref = power_to_db(input, 0.0f, 1e-10f, -1.0f);
-  const auto negative_ref = power_to_db(input, -1.0f, 1e-10f, -1.0f);
+  const auto zero_ref = power_to_db(input, 0.0f, 1e-10f, kNoClip);
+  const auto negative_ref = power_to_db(input, -1.0f, 1e-10f, kNoClip);
   REQUIRE_THAT(zero_ref[0], WithinAbs(0.0f, 1e-5f));
   REQUIRE_THAT(negative_ref[0], WithinAbs(0.0f, 1e-5f));
   REQUIRE(zero_ref == negative_ref);
+}
+
+TEST_CASE("top_db domain is [0, +inf]", "[librosa][db_convert]") {
+  const std::vector<float> S = {1.0f, 0.1f, 1e-6f, 1e-9f};
+  for (const float bad : {-1.0f, -0.001f, std::numeric_limits<float>::quiet_NaN(),
+                          -std::numeric_limits<float>::infinity()}) {
+    CAPTURE(bad);
+    CHECK_THROWS_AS(power_to_db(S, 1.0f, 1e-10f, bad), SonareException);
+    CHECK_THROWS_AS(amplitude_to_db(S, 1.0f, 1e-5f, bad), SonareException);
+  }
+  // +inf leaves every value where the conversion puts it.
+  const auto unclipped = power_to_db(S, 1.0f, 1e-10f, kNoClip);
+  CHECK_THAT(unclipped[3], WithinAbs(-90.0f, 1e-3f));
+  CHECK_THAT(power_to_db(S, 1.0f, 1e-10f, 1000.0f)[3], WithinAbs(unclipped[3], 0.0f));
+  // 0 clips everything to the maximum.
+  for (const float db : power_to_db(S, 1.0f, 1e-10f, 0.0f)) CHECK(db == unclipped[0]);
+  for (const float db : amplitude_to_db(S, 1.0f, 1e-5f, 0.0f)) CHECK(db == 0.0f);
 }

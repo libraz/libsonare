@@ -24,9 +24,9 @@ inline constexpr float kDefaultAmplitudeDbFloor = 1e-5f;
 /// @param ref Reference value. If <= 0, the maximum of |S| is used.
 /// @param amin Floor value to avoid log(0) (default constants::kEpsilon)
 /// @param top_db Threshold below max(dB) to clamp (default constants::kDefaultTopDb).
-///        Pass a negative value to disable clamping.
+///        +inf disables clamping; a negative or NaN value is refused.
 /// @return dB values, 10 * log10(max(S, amin)) - 10 * log10(max(ref, amin)).
-/// @throw sonare::SonareException if amin <= 0, or n > 0 with null S.
+/// @throw sonare::SonareException if amin <= 0, top_db is negative or NaN, or n > 0 with null S.
 std::vector<float> power_to_db(const float* S, std::size_t n, float ref = kDefaultDbReference,
                                float amin = constants::kEpsilon,
                                float top_db = constants::kDefaultTopDb);

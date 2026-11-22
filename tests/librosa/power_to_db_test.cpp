@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -18,6 +19,8 @@ using namespace sonare::test;
 using Catch::Matchers::WithinRel;
 
 namespace {
+
+constexpr float kNoClip = std::numeric_limits<float>::infinity();
 
 /// @brief Creates a sine tone matching the reference generator.
 std::vector<float> create_tone(int sr, float duration, float freq) {
@@ -95,7 +98,7 @@ TEST_CASE("power_to_db reference compatibility", "[power_to_db][reference]") {
     REQUIRE(mel_spec.n_frames() == expected_n_frames);
 
     // Convert to dB
-    auto db_data = mel_spec.to_db(1.0f, 1e-10f, -1.0f);
+    auto db_data = mel_spec.to_db(1.0f, 1e-10f, kNoClip);
     REQUIRE(db_data.size() == static_cast<size_t>(expected_n_mels * expected_n_frames));
 
     int n_frames = mel_spec.n_frames();

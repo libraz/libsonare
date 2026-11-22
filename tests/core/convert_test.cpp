@@ -397,7 +397,9 @@ TEST_CASE("the dB conversions refuse in the shared parameter vocabulary", "[conv
     CHECK(refusal_message([&] { (void)convert(1.0f, 0.0f, 80.0f); }) ==
           "amin must be finite and greater than 0");
     CHECK(refusal_message([&] { (void)convert(1.0f, 1e-10f, nan_value); }) ==
-          "top_db " + finite_float);
+          "top_db must be at least 0, or +inf for no clipping");
+    CHECK(refusal_message([&] { (void)convert(1.0f, 1e-10f, -1.0f); }) ==
+          "top_db must be at least 0, or +inf for no clipping");
   }
   CHECK(refusal_message([] { (void)power_to_db(nullptr, 2, 1.0f, 1e-10f, 80.0f); }) ==
         "S must not be NULL when n is not 0");

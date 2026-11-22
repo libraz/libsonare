@@ -175,7 +175,7 @@ TEST_CASE("power_to_db basic", "[math_utils]") {
   SECTION("ref=2.0") {
     std::vector<float> power = {2.0f};
     std::vector<float> db(1);
-    power_to_db(power.data(), 1, 2.0f, 1e-10f, -1.0f, db.data());
+    power_to_db(power.data(), 1, 2.0f, 1e-10f, std::numeric_limits<float>::infinity(), db.data());
     REQUIRE_THAT(db[0], WithinAbs(0.0f, 0.01f));
   }
 
@@ -206,7 +206,7 @@ TEST_CASE("power_to_db basic", "[math_utils]") {
     // divergent implementation incorrectly floored ref at amin instead.
     std::vector<float> power = {4.0f, 1.0f, 0.25f};
     std::vector<float> db(3);
-    power_to_db(power.data(), 3, 0.0f, 1e-10f, -1.0f, db.data());
+    power_to_db(power.data(), 3, 0.0f, 1e-10f, std::numeric_limits<float>::infinity(), db.data());
     REQUIRE_THAT(db[0], WithinAbs(0.0f, 0.01f));       // 10*log10(4/4)
     REQUIRE_THAT(db[1], WithinAbs(-6.0206f, 0.01f));   // 10*log10(1/4)
     REQUIRE_THAT(db[2], WithinAbs(-12.0412f, 0.01f));  // 10*log10(0.25/4)

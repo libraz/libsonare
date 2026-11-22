@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 
 #include "analysis/chord_templates.h"
 #include "core/fft.h"
@@ -205,7 +206,7 @@ float dequantize_from_i16(int16_t quantized, float min_val, float max_val) {
 
 float single_power_to_db(float power_val, float ref, float amin) {
   float result;
-  power_to_db(&power_val, 1, ref, amin, -1.0f, &result);
+  power_to_db(&power_val, 1, ref, amin, std::numeric_limits<float>::infinity(), &result);
   return result;
 }
 

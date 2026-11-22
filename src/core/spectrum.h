@@ -360,8 +360,8 @@ class Spectrogram {
   /// @brief Returns magnitude in decibels [n_bins x n_frames].
   /// @param ref Reference value (default 1.0)
   /// @param amin Minimum amplitude to avoid log(0) (default constants::kEpsilon)
-  /// @param top_db Threshold below max dB to clamp (default constants::kDefaultTopDb, negative to
-  /// disable)
+  /// @param top_db Threshold below max dB to clamp (default constants::kDefaultTopDb, +inf to
+  /// disable; negative or NaN is refused)
   /// @return dB values
   std::vector<float> to_db(float ref = 1.0f, float amin = constants::kEpsilon,
                            float top_db = constants::kDefaultTopDb) const;
