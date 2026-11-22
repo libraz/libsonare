@@ -105,7 +105,6 @@ class MonitorRuntime {
   // initialized slot. Consistent with the StripState flag atomics above.
   std::atomic<size_t> size_{0};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
-  int max_block_size_ = 0;
   float smoothing_ms_ = 5.0f;
 };
 

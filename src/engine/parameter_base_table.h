@@ -43,6 +43,13 @@ class ParameterBaseTable {
     if (id == 0 || slots_.empty()) return false;
     uint32_t index = id & mask_;
     uint32_t first_tombstone = static_cast<uint32_t>(slots_.size());
+    const auto fill = [&](Slot& destination) noexcept {
+      destination.occupied = true;
+      destination.tombstone = false;
+      destination.id = id;
+      destination.value = value;
+      ++count_;
+    };
     for (uint32_t probe = 0; probe < slots_.size(); ++probe) {
       Slot& slot = slots_[index];
       if (slot.occupied && slot.id == id) {
@@ -56,23 +63,13 @@ class ParameterBaseTable {
           continue;
         }
         if (count_ >= max_entries_) return false;
-        Slot& destination = first_tombstone == slots_.size() ? slot : slots_[first_tombstone];
-        destination.occupied = true;
-        destination.tombstone = false;
-        destination.id = id;
-        destination.value = value;
-        ++count_;
+        fill(first_tombstone == slots_.size() ? slot : slots_[first_tombstone]);
         return true;
       }
       index = (index + 1) & mask_;
     }
     if (first_tombstone != slots_.size() && count_ < max_entries_) {
-      Slot& destination = slots_[first_tombstone];
-      destination.occupied = true;
-      destination.tombstone = false;
-      destination.id = id;
-      destination.value = value;
-      ++count_;
+      fill(slots_[first_tombstone]);
       return true;
     }
     // Every slot probed without an empty one or a match: the entry cap (at

@@ -138,7 +138,7 @@ bool Metronome::process(float* const* channels, int num_channels, int num_frames
   // final sample. This removes the start/end discontinuities that caused an
   // audible "tick" artifact while keeping the click transient and roughly the
   // same peak loudness as before.
-  const int attack = std::max(1, std::min(click_len / 4, click_len));
+  const int attack = std::max(1, click_len / 4);
   // Decay constant chosen so the exponential reaches ~exp(-6) (about -52 dB) by
   // the end of the click; the explicit zero at the final sample removes any
   // residual tail.

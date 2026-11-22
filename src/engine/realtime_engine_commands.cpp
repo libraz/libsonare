@@ -286,6 +286,10 @@ void RealtimeEngine::apply_due_commands(int64_t boundary_render_frame) noexcept 
 }
 
 void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
+  [[maybe_unused]] const auto report_unknown_target = [this](uint32_t target_id) noexcept {
+    enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                  transport_.sample_position(), target_id);
+  };
   switch (command.type) {
     case rt::CommandType::kSetParam:
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
@@ -294,8 +298,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
           record_parameter_base(command.target_id, command.arg.f);
           reseed_smoothed_param(command.target_id, command.arg.f);
         } else {
-          enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                        transport_.sample_position(), command.target_id);
+          report_unknown_target(command.target_id);
         }
         break;
       }
@@ -316,8 +319,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         if (route_engine_parameter(command.target_id, command.arg.f)) {
           record_parameter_base(command.target_id, command.arg.f);
         } else {
-          enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                        transport_.sample_position(), command.target_id);
+          report_unknown_target(command.target_id);
         }
         break;
       }
@@ -381,8 +383,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       break;
     case rt::CommandType::kSeekMarker:
       if (!seek_marker(command.target_id)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
+        report_unknown_target(command.target_id);
       } else {
         transport_.fold_into_loop();
         // Successful marker seek is a playhead jump: same hang-note release.
@@ -483,12 +484,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const bool solo = (packed & 0x2u) != 0u;
       if (!track_mixer_runtime_.set_lane_solo_mute(static_cast<size_t>(command.target_id), solo,
                                                    mute)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
+        report_unknown_target(command.target_id);
       }
 #else
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                    transport_.sample_position(), command.target_id);
+      report_unknown_target(command.target_id);
 #endif
       break;
     }
@@ -497,12 +496,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const auto mode = static_cast<TrackMonitorMode>(command.arg.i);
       if (!track_mixer_runtime_.set_lane_monitor_mode(static_cast<size_t>(command.target_id),
                                                       mode)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
+        report_unknown_target(command.target_id);
       }
 #else
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                    transport_.sample_position(), command.target_id);
+      report_unknown_target(command.target_id);
 #endif
       break;
     }
@@ -524,8 +521,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       (void)track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index,
                                                                   param_id, command.arg.f);
 #else
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                    transport_.sample_position(), command.target_id);
+      report_unknown_target(command.target_id);
 #endif
       break;
     }
@@ -533,8 +529,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #if defined(SONARE_WITH_MIXING)
       meter_tap_.reset_integrated();
 #else
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                    transport_.sample_position(), command.target_id);
+      report_unknown_target(command.target_id);
 #endif
       break;
     }
@@ -558,14 +553,12 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const unsigned int param_id = packed & 0xFFu;
       // Legacy command: it carries no insert id, so it records no manual base.
       if (!master_insert_target_resolves(insert_index, param_id)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
+        report_unknown_target(command.target_id);
         break;
       }
       (void)route_master_insert_param_smoothed(insert_index, param_id, command.arg.f);
 #else
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                    transport_.sample_position(), command.target_id);
+      report_unknown_target(command.target_id);
 #endif
       break;
     }

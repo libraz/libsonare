@@ -76,6 +76,16 @@ float channel_gain(const PanGains& gains, int channel) noexcept {
   if (channel == 1) return gains.right;
   return 1.0f;
 }
+/// Sum of the panned stereo pair read through @p read, before the 0.5 mono downmix.
+template <typename Read>
+float mono_fold_pair(const PanGains& pan_gains, int last_src, Read&& read) noexcept {
+  float lr = 0.0f;
+  for (int ch = 0; ch < 2; ++ch) {
+    lr += read(std::min(ch, last_src)) * channel_gain(pan_gains, ch);
+  }
+  return lr;
+}
+
 }  // namespace
 
 void ClipBoundaryList::clear() noexcept {
@@ -224,7 +234,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
                                      int64_t timeline_sample) noexcept {
   if (!channels || num_channels <= 0 || num_samples <= 0) return;
   const bool scoped_page_miss_block = !external_page_miss_block_;
-  if (!external_page_miss_block_) {
+  if (scoped_page_miss_block) {
     begin_page_miss_block();
   }
 
@@ -291,11 +301,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         // so 0.5*(L+R) collapses to the source read and only off-center clips
         // change — live and mono bounce agree in level and balance for any pan.
         const int last_src = source_channel_count(clip) - 1;
-        float lr = 0.0f;
-        for (int ch = 0; ch < 2; ++ch) {
-          const int src_ch = std::min(ch, last_src);
-          lr += read_source(src_ch) * channel_gain(pan_gains, ch);
-        }
+        const float lr = mono_fold_pair(pan_gains, last_src, read_source);
         channels[0][i] += 0.5f * lr * gain;
         continue;
       }
@@ -421,21 +427,12 @@ float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position) noexcept
   return std::clamp(gain, 0.0f, 1.0f);
 }
 
-int64_t ClipPlayer::local_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept {
-  const double source_pos = source_position(clip, timeline_sample);
-  if (!(source_pos >= 0.0)) return -1;
-  const double rounded = std::round(source_pos);
-  if (std::abs(source_pos - rounded) > 1.0e-9) return -1;
-  return static_cast<int64_t>(rounded);
-}
-
 double map_warp_to_source(const std::vector<WarpAnchor>& anchors, double warp_sample) noexcept {
   if (anchors.size() < 2) return warp_sample;
   const WarpAnchor* prev = &anchors.front();
   const WarpAnchor* next = &anchors[1];
   if (warp_sample <= anchors.front().warp_sample) {
-    prev = &anchors.front();
-    next = &anchors[1];
+    // prev / next already span the first segment.
   } else if (warp_sample >= anchors.back().warp_sample) {
     prev = &anchors[anchors.size() - 2];
     next = &anchors.back();
@@ -667,10 +664,8 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
       if (!channels[0]) continue;
       // Same mono fold as the resampling path: render the panned stereo pair
       // and downmix, so live mono monitoring matches the mono bounce.
-      float lr = 0.0f;
-      for (int ch = 0; ch < 2; ++ch) {
-        lr += scratch[std::min(ch, last_src)][i] * channel_gain(pan_gains, ch);
-      }
+      const float lr = mono_fold_pair(pan_gains, last_src,
+                                      [&](int src_ch) noexcept { return scratch[src_ch][i]; });
       channels[0][start + i] += 0.5f * lr * gain;
       continue;
     }

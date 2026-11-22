@@ -9,6 +9,7 @@
 #include "midi/midi_clip_envelope.h"
 #include "midi/ump.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/insertion_sort.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 
@@ -21,6 +22,14 @@ int frames_to_control_edge(int64_t position, int period) noexcept {
   const int64_t phase = ((position % period) + period) % period;
   return period - static_cast<int>(phase);
 }
+
+/// out[i] += src[i] over @p frames samples.
+void add_into(float* out, const float* src, int frames) noexcept {
+  for (int i = 0; i < frames; ++i) out[i] += src[i];
+}
+
+/// Zero-fills @p frames samples.
+void zero_fill(float* dst, int frames) noexcept { std::fill(dst, dst + frames, 0.0f); }
 
 }  // namespace
 
@@ -43,7 +52,7 @@ void RealtimeEngine::process_with_monitor(float* const* io, float* const* monito
 void RealtimeEngine::advance_without_render(int frames) noexcept {
   control_resume_.valid = false;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
+  const transport::TempoMap& tempo_map = *active_tempo_map_;
   int remaining = frames;
   while (remaining > 0) {
     if (transport_.fold_into_loop()) {
@@ -103,7 +112,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
 
   adopt_tempo_map_snapshot();
-  const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
+  const transport::TempoMap& tempo_map = *active_tempo_map_;
   // A playhead left at or past loop_end (a loop set behind it, a seek or a new
   // tempo map) wraps before anything reads it, not after the first sub-block.
   [[maybe_unused]] const bool wrapped_at_block_start = transport_.fold_into_loop();
@@ -150,15 +159,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
                                                                 live_midi_input_events_.size(),
                                                                 state.render_frame, frames)
                                : 0;
-  for (size_t i = 1; i < live_midi_input_count_; ++i) {
-    midi::MidiEvent value = live_midi_input_events_[i];
-    size_t j = i;
-    while (j > 0 && live_midi_input_events_[j - 1].render_frame > value.render_frame) {
-      live_midi_input_events_[j] = live_midi_input_events_[j - 1];
-      --j;
-    }
-    live_midi_input_events_[j] = value;
-  }
+  insertion_sort(
+      live_midi_input_events_.begin(),
+      live_midi_input_events_.begin() + static_cast<std::ptrdiff_t>(live_midi_input_count_),
+      [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
+        return a.render_frame < b.render_frame;
+      });
 #endif
   drain_commands(state.render_frame, frames);
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
@@ -344,40 +350,30 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     enqueue_error(TelemetryErrorCode::kNonRealtimeSafeParameter, state.render_frame,
                   state.sample_position, non_rt_rejection_delta);
   }
-  const uint32_t bind_overflow_total = automation_.bind_target_overflow_count();
-  if (bind_overflow_total != automation_bind_overflow_reported_) {
-    const uint32_t delta = bind_overflow_total - automation_bind_overflow_reported_;
-    automation_bind_overflow_reported_ = bind_overflow_total;
-    enqueue_error(TelemetryErrorCode::kAutomationBindTargetOverflow, state.render_frame,
-                  state.sample_position, delta);
-  }
-  const uint32_t stale_lane_total = automation_.stale_lane_apply_count();
-  if (stale_lane_total != automation_stale_lane_reported_) {
-    const uint32_t delta = stale_lane_total - automation_stale_lane_reported_;
-    automation_stale_lane_reported_ = stale_lane_total;
-    enqueue_error(TelemetryErrorCode::kStaleAutomationLanes, state.render_frame,
-                  state.sample_position, delta);
-  }
+  // Reports the growth of a monotonic counter since the last block as one error.
+  const auto report_counter_delta = [&](TelemetryErrorCode code, uint32_t total,
+                                        uint32_t& reported) noexcept {
+    if (total == reported) return;
+    const uint32_t delta = total - reported;
+    reported = total;
+    enqueue_error(code, state.render_frame, state.sample_position, delta);
+  };
+  report_counter_delta(TelemetryErrorCode::kAutomationBindTargetOverflow,
+                       automation_.bind_target_overflow_count(),
+                       automation_bind_overflow_reported_);
+  report_counter_delta(TelemetryErrorCode::kStaleAutomationLanes,
+                       automation_.stale_lane_apply_count(), automation_stale_lane_reported_);
   // Base-value table record drops: surface the per-block delta the same
   // way as the other audio-thread counters above. Unconditional, like the
   // table itself.
-  if (parameter_base_overflow_count_ != parameter_base_overflow_reported_) {
-    const uint32_t delta = parameter_base_overflow_count_ - parameter_base_overflow_reported_;
-    parameter_base_overflow_reported_ = parameter_base_overflow_count_;
-    enqueue_error(TelemetryErrorCode::kParameterBaseOverflow, state.render_frame,
-                  state.sample_position, delta);
-  }
+  report_counter_delta(TelemetryErrorCode::kParameterBaseOverflow, parameter_base_overflow_count_,
+                       parameter_base_overflow_reported_);
 #if defined(SONARE_WITH_MIXING)
   // Insert-parameter automation that could not claim a smoother slot (master or
   // per-lane/bus table full) is dropped silently in the audio path; surface the
   // per-block delta so the host can see automation targets going unheard.
-  const uint32_t insert_overflow_total = insert_automation_overflow_count();
-  if (insert_overflow_total != insert_automation_overflow_reported_) {
-    const uint32_t delta = insert_overflow_total - insert_automation_overflow_reported_;
-    insert_automation_overflow_reported_ = insert_overflow_total;
-    enqueue_error(TelemetryErrorCode::kInsertAutomationOverflow, state.render_frame,
-                  state.sample_position, delta);
-  }
+  report_counter_delta(TelemetryErrorCode::kInsertAutomationOverflow,
+                       insert_automation_overflow_count(), insert_automation_overflow_reported_);
 #endif
   if (boundaries.overflowed()) {
     enqueue_error(TelemetryErrorCode::kBoundaryOverflow, state.render_frame, state.sample_position,
@@ -429,7 +425,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
       if (monitor_out[ch]) {
-        std::fill(monitor_out[ch] + offset, monitor_out[ch] + offset + num_frames, 0.0f);
+        zero_fill(monitor_out[ch] + offset, num_frames);
       }
     }
   }
@@ -446,7 +442,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         if (src) {
           std::copy(src, src + num_frames, dst);
         } else {
-          std::fill(dst, dst + num_frames, 0.0f);
+          zero_fill(dst, num_frames);
         }
       }
 #if defined(SONARE_WITH_MIXING)
@@ -460,7 +456,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         float* channel = sub_channels[static_cast<size_t>(ch)];
         if (!channel) continue;
         if (!monitor.enabled) {
-          std::fill(channel, channel + num_frames, 0.0f);
+          zero_fill(channel, num_frames);
         } else {
           for (int i = 0; i < num_frames; ++i) {
             channel[i] *= monitor.gain;
@@ -478,8 +474,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     const bool monitor_active = lane_monitor_active || legacy_monitor_active;
     if (monitor_active) {
       for (int ch = 0; ch < channels; ++ch) {
-        std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
-                  monitor_bus_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+        zero_fill(monitor_bus_channels_[static_cast<size_t>(ch)], num_frames);
       }
     }
     track_mixer_runtime_.set_monitor_bus(
@@ -508,8 +503,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       // PDC: direct clips are delayed by total instrument latency; lane clips get a per-lane delay.
       for (int ch = 0; ch < channels; ++ch) {
         if (clip_scratch_channels_[static_cast<size_t>(ch)]) {
-          std::fill(clip_scratch_channels_[static_cast<size_t>(ch)],
-                    clip_scratch_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+          zero_fill(clip_scratch_channels_[static_cast<size_t>(ch)], num_frames);
         }
       }
 #if defined(SONARE_WITH_MIXING)
@@ -552,7 +546,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           float* out = sub_channels[static_cast<size_t>(ch)];
           const float* clip = clip_scratch_channels_[static_cast<size_t>(ch)];
           if (!out) continue;
-          for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
+          add_into(out, clip, num_frames);
         }
       }
     } else if (transport_rolling) {
@@ -660,10 +654,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
             const uint32_t track_id = source == 0 ? 0 : source_track_ids[source - 1];
             outputs[source] = {track_id, midi_instrument_source_channels_[source].data()};
             for (int ch = 0; ch < channels; ++ch) {
-              std::fill(
-                  midi_instrument_source_channels_[source][static_cast<size_t>(ch)],
-                  midi_instrument_source_channels_[source][static_cast<size_t>(ch)] + num_frames,
-                  0.0f);
+              zero_fill(midi_instrument_source_channels_[source][static_cast<size_t>(ch)],
+                        num_frames);
             }
           }
           if (instrument == nullptr ||
@@ -716,7 +708,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                 float* out = sub_channels[static_cast<size_t>(ch)];
                 const float* source_audio = outputs[source].channels[static_cast<size_t>(ch)];
                 if (!out || !source_audio) continue;
-                for (int i = 0; i < num_frames; ++i) out[i] += source_audio[i];
+                add_into(out, source_audio, num_frames);
               }
             }
             return;
@@ -724,8 +716,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
 #endif
         for (int ch = 0; ch < channels; ++ch) {
-          std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
-                    midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+          zero_fill(midi_instrument_channels_[static_cast<size_t>(ch)], num_frames);
         }
         if (instrument != nullptr) {
           instrument->process(midi_instrument_channels_.data(), channels, num_frames);
@@ -773,9 +764,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           float* out = sub_channels[static_cast<size_t>(ch)];
           const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
           if (!out) continue;
-          for (int i = 0; i < num_frames; ++i) {
-            out[i] += inst[i];
-          }
+          add_into(out, inst, num_frames);
         }
       };
       instrument_rack_.for_each(render_destination);
@@ -848,9 +837,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           std::copy(monitor, monitor + num_frames, cue);
         }
         if (!fold_monitor_to_main || !out || !monitor) continue;
-        for (int i = 0; i < num_frames; ++i) {
-          out[i] += monitor[i];
-        }
+        add_into(out, monitor, num_frames);
       }
     }
 #endif
@@ -920,7 +907,7 @@ void RealtimeEngine::silence(float* const* io, int num_channels, int num_frames)
   if (!io || num_channels <= 0 || num_frames <= 0) return;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (!io[ch]) continue;
-    std::fill(io[ch], io[ch] + num_frames, 0.0f);
+    zero_fill(io[ch], num_frames);
   }
 }
 

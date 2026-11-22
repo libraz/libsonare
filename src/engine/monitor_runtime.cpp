@@ -8,9 +8,9 @@
 
 namespace sonare::engine {
 
-void MonitorRuntime::prepare(double sample_rate, int max_block_size, float smoothing_ms) noexcept {
+void MonitorRuntime::prepare(double sample_rate, int /*max_block_size*/,
+                             float smoothing_ms) noexcept {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
-  max_block_size_ = std::max(max_block_size, 1);
   smoothing_ms_ = std::max(smoothing_ms, 0.0f);
   // Retained mute and solo flags are audible from the first block after a prepare.
   for (StripState& state : strips_) {
@@ -106,13 +106,16 @@ void MonitorRuntime::process_strip(size_t index, float* const* channels, int num
   StripState& state = strips_[index];
 
   const MonitorMode monitor = state.monitor.load(std::memory_order_acquire);
-  if (monitor_out && monitor == MonitorMode::kPfl) {
+  const auto accumulate_monitor = [&]() noexcept {
     for (int ch = 0; ch < num_channels; ++ch) {
       if (!channels[ch] || !monitor_out[ch]) continue;
       for (int i = 0; i < num_samples; ++i) {
         monitor_out[ch][i] += channels[ch][i];
       }
     }
+  };
+  if (monitor_out && monitor == MonitorMode::kPfl) {
+    accumulate_monitor();
   }
 
   if (state.strip) {
@@ -127,12 +130,7 @@ void MonitorRuntime::process_strip(size_t index, float* const* channels, int num
   }
 
   if (monitor_out && monitor == MonitorMode::kAfl) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (!channels[ch] || !monitor_out[ch]) continue;
-      for (int i = 0; i < num_samples; ++i) {
-        monitor_out[ch][i] += channels[ch][i];
-      }
-    }
+    accumulate_monitor();
   }
 }
 

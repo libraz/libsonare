@@ -304,7 +304,6 @@ class ClipPlayer final : public rt::ProcessorBase {
   // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
   // curve parameter: the legacy single fade_curve field is not consulted here.
   static float fade_gain(const ClipSchedule& clip, int64_t position) noexcept;
-  static int64_t local_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   static double source_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   /// Resolved source read for one timeline sample. Normally a single read
   /// (@c pos with @c gain == 1, @c partner_gain == 0); inside a loop-seam

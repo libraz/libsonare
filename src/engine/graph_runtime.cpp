@@ -11,15 +11,7 @@ namespace sonare::engine {
 
 bool GraphRuntime::bind(graph::Graph* graph, const char* input_node_id, const char* output_node_id,
                         int num_channels) {
-  if (!graph || !graph->compiled() || !input_node_id || !output_node_id || num_channels <= 0) {
-    return false;
-  }
-  graph::Node* input = graph->node(input_node_id);
-  graph::Node* output = graph->node(output_node_id);
-  if (!input || !output || input->num_ports() < num_channels ||
-      output->num_ports() < num_channels) {
-    return false;
-  }
+  if (!graph) return false;
   auto alias = std::shared_ptr<graph::Graph>(graph, [](graph::Graph*) {});
   return swap(std::move(alias), input_node_id, output_node_id, num_channels);
 }
