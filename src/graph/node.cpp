@@ -47,10 +47,6 @@ void Node::prepare(double sample_rate, int max_block_size) {
   prepared_ = true;
 }
 
-int Node::processed_port_count() const noexcept {
-  return sidechain_num_ports_ > 0 ? sidechain_first_port_ : num_ports_;
-}
-
 void Node::prepare_bypass_compensation() {
   bypass_compensation_.assign(static_cast<size_t>(num_ports_), PortDelay{});
   has_bypass_compensation_ = false;

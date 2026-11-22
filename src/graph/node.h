@@ -46,9 +46,6 @@ class Node {
  private:
   float* port_data(std::vector<float>& storage, int port) noexcept;
   const float* port_data(const std::vector<float>& storage, int port) const noexcept;
-  // Number of leading ports the processor actually writes this block; the
-  // trailing ports are sidechain inputs it only reads.
-  int processed_port_count() const noexcept;
   void prepare_bypass_compensation();
   // Advances every port's compensation delay over the block. @p write_back true
   // substitutes the delayed signal (the node is bypassed); false discards it and
