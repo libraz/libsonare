@@ -531,10 +531,7 @@ SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngi
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(lanes, lane_count);
 #if !defined(SONARE_WITH_MIXING)
-  (void)lanes;
-  (void)lane_count;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, lanes, lane_count);
 #else
   static_assert(SONARE_ENGINE_MAX_TRACK_LANES == engine::TrackMixerRuntime::kMaxTrackLanes);
   if (const SonareError err = run_validation([&] {
@@ -612,11 +609,7 @@ SonareError sonare_engine_set_track_sends(SonareEngine* engine, uint32_t track_i
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(sends, send_count);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)sends;
-  (void)send_count;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, sends, send_count);
 #else
   SONARE_C_TRY
   std::vector<engine::TrackLaneConfig::Send> configs;
@@ -643,10 +636,7 @@ SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t tr
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)output_bus_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, output_bus_id);
 #else
   SONARE_C_TRY
   return track_lane_edit_result_to_error(
@@ -663,10 +653,7 @@ SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t trac
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)source_track_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, source_track_id);
 #else
   if (engine->engine.set_lane_sidechain(track_id, insert_index, source_track_id)) return SONARE_OK;
   const SidechainWording wording{"track_id", "a track",
@@ -707,11 +694,7 @@ SonareError sonare_engine_set_bus_sidechain(SonareEngine* engine, uint32_t bus_i
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)source_kind;
-  (void)source_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, source_kind, source_id);
 #else
   engine::SidechainSourceKind kind;
   if (!sidechain_source_kind_from_c(source_kind, &kind)) return refuse_source_kind(source_kind);
@@ -732,11 +715,7 @@ SonareError sonare_engine_set_master_sidechain(SonareEngine* engine, unsigned in
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)source_kind;
-  (void)source_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, source_kind, source_id);
 #else
   engine::SidechainSourceKind kind;
   if (!sidechain_source_kind_from_c(source_kind, &kind)) return refuse_source_kind(source_kind);
@@ -758,10 +737,7 @@ SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngi
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(buses, bus_count);
 #if !defined(SONARE_WITH_MIXING)
-  (void)buses;
-  (void)bus_count;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, buses, bus_count);
 #else
   SONARE_C_TRY
   std::vector<engine::TrackBusConfig> configs;
@@ -812,10 +788,7 @@ SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_
   if (bus_id == 0) return refuse_bus_id();
   SONARE_C_REQUIRE_NONNULL(scene_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)scene_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, scene_json);
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
@@ -839,10 +812,7 @@ SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t tr
   if (track_id == 0) return refuse_track_id();
   SONARE_C_REQUIRE_NONNULL(scene_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)scene_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, scene_json);
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
@@ -867,11 +837,7 @@ SonareError sonare_engine_set_track_strip_eq_band_json(SonareEngine* engine, uin
   if (const SonareError err = check_band_index(band_index); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(band_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)band_index;
-  (void)band_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, band_index, band_json);
 #else
   SONARE_C_TRY
   const mastering::eq::EqBand band = sonare::c_api::parse_eq_band_json(band_json);
@@ -893,12 +859,8 @@ SonareError sonare_engine_set_track_strip_insert_bypassed(SonareEngine* engine, 
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)insert_index;
-  (void)bypassed;
-  (void)reset_on_bypass;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, insert_index, bypassed,
+                                reset_on_bypass);
 #else
   SONARE_C_TRY
   if (engine->engine.set_track_insert_bypassed(track_id, insert_index, bypassed != 0,
@@ -920,9 +882,7 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(scene_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)scene_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, scene_json);
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
@@ -946,10 +906,7 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareEngine* engine, in
   if (const SonareError err = check_band_index(band_index); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(band_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)band_index;
-  (void)band_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, band_index, band_json);
 #else
   SONARE_C_TRY
   const mastering::eq::EqBand band = sonare::c_api::parse_eq_band_json(band_json);
@@ -971,11 +928,7 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareEngine* engine,
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)bypassed;
-  (void)reset_on_bypass;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, bypassed, reset_on_bypass);
 #else
   SONARE_C_TRY
   if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
@@ -1000,11 +953,7 @@ SonareError sonare_engine_set_bus_strip_eq_band_json(SonareEngine* engine, uint3
   if (const SonareError err = check_band_index(band_index); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(band_json);
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)band_index;
-  (void)band_json;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, band_index, band_json);
 #else
   SONARE_C_TRY
   const mastering::eq::EqBand band = sonare::c_api::parse_eq_band_json(band_json);
@@ -1027,12 +976,7 @@ SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareEngine* engine, ui
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)insert_index;
-  (void)bypassed;
-  (void)reset_on_bypass;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, insert_index, bypassed, reset_on_bypass);
 #else
   SONARE_C_TRY
   if (engine->engine.set_bus_insert_bypassed(bus_id, insert_index, bypassed != 0,
@@ -1059,11 +1003,7 @@ SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareEngine* eng
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)insert_index;
-  (void)value;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, insert_index, value);
 #else
   SONARE_C_TRY
   return insert_param_result_to_error(
@@ -1084,10 +1024,7 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareEngine* en
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)value;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, value);
 #else
   SONARE_C_TRY
   if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
@@ -1107,11 +1044,7 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareEngine* engin
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)insert_index;
-  (void)value;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, insert_index, value);
 #else
   SONARE_C_TRY
   return insert_param_result_to_error(
@@ -1132,9 +1065,7 @@ SonareError sonare_engine_apply_track_strip_insert_param_by_name_now(
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_applied);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   *out_applied =
@@ -1158,9 +1089,7 @@ SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareEngi
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_applied);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   *out_applied =
@@ -1183,9 +1112,7 @@ SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareEngine*
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_applied);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   *out_applied =
@@ -1208,9 +1135,7 @@ SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareEngine*
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   if (engine->engine.restore_track_insert_param_by_name(track_id, insert_index, param_name,
@@ -1236,9 +1161,7 @@ SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareEngine
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
@@ -1265,9 +1188,7 @@ SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareEngine* e
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   if (const SonareError err = check_finite_value(value); err != SONARE_OK) return err;
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   if (engine->engine.restore_bus_insert_param_by_name(bus_id, insert_index, param_name, value)) {
@@ -1288,8 +1209,7 @@ SonareError sonare_engine_clear_track_insert_parameter_bases(SonareEngine* engin
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #else
   return engine->engine.clear_track_insert_parameter_bases(track_id) ? SONARE_OK
                                                                      : refuse_track_id();
@@ -1300,8 +1220,7 @@ SonareError sonare_engine_clear_master_insert_parameter_bases(SonareEngine* engi
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_MIXING)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #else
   engine->engine.clear_master_insert_parameter_bases();
   return SONARE_OK;
@@ -1313,8 +1232,7 @@ SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #else
   return engine->engine.clear_bus_insert_parameter_bases(bus_id) ? SONARE_OK : refuse_bus_id();
 #endif
@@ -1326,9 +1244,7 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareEngine* engin
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_value);
 #if !defined(SONARE_WITH_MIXING)
-  (void)param_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, param_id);
 #else
   if (engine->engine.insert_parameter_constructed_value(param_id, out_value)) return SONARE_OK;
   if (!engine::is_insert_param_id(param_id)) {
@@ -1353,10 +1269,7 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareEngine* engin
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, insert_index);
 #else
   SONARE_C_TRY
   const int64_t id =
@@ -1378,9 +1291,7 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engi
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
   if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
@@ -1400,8 +1311,7 @@ SonareError sonare_engine_resolve_master_automation_id(SonareEngine* engine, con
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #else
   SONARE_C_TRY
   const int64_t id = engine->engine.resolve_master_automation_id(param_name);
@@ -1426,10 +1336,7 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareEngine* engine,
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)insert_index;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, insert_index);
 #else
   SONARE_C_TRY
   const int64_t id =
@@ -1451,9 +1358,7 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareEngine* engine,
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id);
 #else
   SONARE_C_TRY
   const int64_t id = engine->engine.resolve_track_lane_automation_id(track_id, param_name);
@@ -1481,9 +1386,7 @@ SonareError sonare_engine_resolve_bus_automation_id(SonareEngine* engine, uint32
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id);
 #else
   SONARE_C_TRY
   const int64_t id = engine->engine.resolve_bus_automation_id(bus_id, param_name);
@@ -1505,10 +1408,7 @@ SonareError sonare_engine_set_track_strip_pan(SonareEngine* engine, uint32_t tra
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)pan;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, pan);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan(pan, "pan"); err != SONARE_OK) return err;
@@ -1525,10 +1425,7 @@ SonareError sonare_engine_set_track_strip_pan_law(SonareEngine* engine, uint32_t
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)pan_law;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, pan_law);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan_law(pan_law); err != SONARE_OK) return err;
@@ -1545,10 +1442,7 @@ SonareError sonare_engine_set_track_strip_pan_mode(SonareEngine* engine, uint32_
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)pan_mode;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, pan_mode);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan_mode(pan_mode); err != SONARE_OK) return err;
@@ -1565,11 +1459,7 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareEngine* engine, uint32_
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)left_pan;
-  (void)right_pan;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, left_pan, right_pan);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan(left_pan, "left_pan"); err != SONARE_OK) return err;
@@ -1588,9 +1478,7 @@ SonareError sonare_engine_set_track_strip_surround_pan(SonareEngine* engine, uin
   if (track_id == 0) return refuse_track_id();
   SONARE_C_REQUIRE_NONNULL(pan);
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id);
 #else
   if (const SonareError err = run_validation([&] {
         util::check::in_range(pan->azimuth, -constants::kDegreesPerHalfTurn,
@@ -1615,10 +1503,7 @@ SonareError sonare_engine_set_bus_strip_pan(SonareEngine* engine, uint32_t bus_i
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)pan;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, pan);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan(pan, "pan"); err != SONARE_OK) return err;
@@ -1634,10 +1519,7 @@ SonareError sonare_engine_set_bus_strip_pan_law(SonareEngine* engine, uint32_t b
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)pan_law;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, pan_law);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan_law(pan_law); err != SONARE_OK) return err;
@@ -1654,10 +1536,7 @@ SonareError sonare_engine_set_bus_strip_pan_mode(SonareEngine* engine, uint32_t 
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)pan_mode;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, pan_mode);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan_mode(pan_mode); err != SONARE_OK) return err;
@@ -1674,11 +1553,7 @@ SonareError sonare_engine_set_bus_strip_dual_pan(SonareEngine* engine, uint32_t 
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)left_pan;
-  (void)right_pan;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, left_pan, right_pan);
 #else
   SONARE_C_TRY
   if (const SonareError err = check_pan(left_pan, "left_pan"); err != SONARE_OK) return err;
@@ -1703,10 +1578,7 @@ SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareEngine* en
     return err;
   }
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)delay_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, delay_samples);
 #else
   SONARE_C_TRY
   return engine->engine.set_track_channel_delay_samples(track_id, delay_samples)
@@ -1725,11 +1597,7 @@ SonareError sonare_engine_can_set_lane_sidechain(SonareEngine* engine, uint32_t 
   // Defined on every exit path; a feature-disabled build reports no valid target.
   *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
-  (void)track_id;
-  (void)insert_index;
-  (void)source_track_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, track_id, insert_index, source_track_id);
 #else
   *out_refusal = static_cast<int>(
       engine->engine.can_set_lane_sidechain(track_id, insert_index, source_track_id));
@@ -1760,12 +1628,7 @@ SonareError sonare_engine_can_set_bus_sidechain(SonareEngine* engine, uint32_t b
   // Defined on every exit path; a feature-disabled build reports no valid target.
   *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
-  (void)bus_id;
-  (void)insert_index;
-  (void)source_kind;
-  (void)source_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, insert_index, source_kind, source_id);
 #else
   *out_refusal = static_cast<int>(engine->engine.can_set_bus_sidechain(
       bus_id, insert_index, sidechain_source_kind_for_query(source_kind), source_id));
@@ -1782,11 +1645,7 @@ SonareError sonare_engine_can_set_master_sidechain(SonareEngine* engine, unsigne
   // Defined on every exit path; a feature-disabled build reports no valid target.
   *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
-  (void)insert_index;
-  (void)source_kind;
-  (void)source_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, insert_index, source_kind, source_id);
 #else
   *out_refusal = static_cast<int>(engine->engine.can_set_master_sidechain(
       insert_index, sidechain_source_kind_for_query(source_kind), source_id));

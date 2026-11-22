@@ -126,9 +126,7 @@ SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t 
     return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   // The name is validated before the engine is touched, so an unknown preset
@@ -149,9 +147,7 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(binding);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   // Ordinals out of range are refused rather than clamped: a value the caller
   // meant as "poly pressure" arriving as "control change" is a binding that
@@ -220,9 +216,7 @@ SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -241,9 +235,7 @@ SonareError sonare_engine_controller_binding_count(SonareEngine* engine, uint32_
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -261,10 +253,7 @@ SonareError sonare_engine_set_controller_velocity_meaningful(SonareEngine* engin
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)meaningful;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, meaningful);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -284,9 +273,7 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_meaningful);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -315,9 +302,7 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
     return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -342,9 +327,7 @@ SonareError sonare_engine_controller_note_tracking(SonareEngine* engine, uint32_
   }
   SONARE_C_REQUIRE_NONNULL(out_tracking);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;

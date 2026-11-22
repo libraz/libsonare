@@ -504,8 +504,7 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #endif
 }
 
@@ -532,9 +531,7 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
   }
   return SONARE_OK;
 #else
-  (void)target_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, target_id);
 #endif
   SONARE_C_CATCH
 }
@@ -555,8 +552,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
   (void)interval_frames;
   (void)band_count;
   if (out_band_count) *out_band_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #endif
 }
 
@@ -592,7 +588,6 @@ SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing);
 #endif
 }

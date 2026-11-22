@@ -253,9 +253,7 @@ SonareError sonare_engine_reset_master_loudness_meter(SonareEngine* engine, int6
   return engine->engine.reset_master_meter_integrated(render_frame) ? SONARE_OK
                                                                     : SONARE_ERROR_OUT_OF_MEMORY;
 #else
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, render_frame);
 #endif
 }
 
@@ -789,12 +787,7 @@ SonareError sonare_engine_set_solo_mute(SonareEngine* engine, uint32_t lane_inde
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_MIXING)
-  (void)lane_index;
-  (void)solo;
-  (void)mute;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, lane_index, solo, mute, render_frame);
 #else
   rt::Command command{};
   command.type = rt::CommandType::kSetSoloMute;
@@ -821,11 +814,7 @@ SonareError sonare_engine_set_track_monitor_mode(SonareEngine* engine, uint32_t 
     return err;
   }
 #if !defined(SONARE_WITH_MIXING)
-  (void)lane_index;
-  (void)mode;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixing, lane_index, mode, render_frame);
 #else
   rt::Command command{};
   command.type = rt::CommandType::kSetTrackMonitorMode;

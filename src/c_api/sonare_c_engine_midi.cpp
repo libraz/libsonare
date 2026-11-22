@@ -244,10 +244,7 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(clips, clip_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)clips;
-  (void)clip_count;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, clips, clip_count);
 #else
   SONARE_C_TRY
   std::vector<midi::MidiClipSchedule> schedules;
@@ -324,9 +321,7 @@ SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t 
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(config);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   if (const SonareError err = run_validation([&] {
         require_struct_size(config->struct_size, sizeof(SonareEngineBuiltinSynthConfig), "config",
@@ -393,8 +388,7 @@ SonareError sonare_engine_set_synth_instrument(SonareEngine* engine,
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(binding);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   SONARE_C_TRY
   return bind_native_synth(engine, binding->destination_id, binding->patch, binding->sample_bank,
@@ -418,9 +412,7 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
   // build both leave the caller a readable id rather than uninitialised memory.
   *out_id = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   const int64_t id = engine->engine.resolve_instrument_automation_id(destination_id, param_name);
@@ -449,8 +441,7 @@ SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* da
         [&] { util::check::integer_within(size, kEngineSoundFontSizeDomain, "size"); });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   SONARE_C_TRY
   if (!sonare::resource::sf2_file_fits(size)) {
@@ -475,9 +466,7 @@ SonareError sonare_engine_set_sf2_instrument(SonareEngine* engine, uint32_t dest
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(config);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   if (const SonareError err = run_validation([&] {
         require_struct_size(config->struct_size, sizeof(SonareEngineSf2InstrumentConfig), "config",
@@ -509,9 +498,7 @@ SonareError sonare_engine_clear_midi_instrument(SonareEngine* engine, uint32_t d
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   if (!engine->engine.set_midi_instrument(destination_id, nullptr)) {
@@ -532,8 +519,7 @@ SonareError sonare_engine_midi_instrument_count(SonareEngine* engine, size_t* ou
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   *out_count = engine->engine.midi_instrument_count();
   return SONARE_OK;
@@ -560,9 +546,7 @@ SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destin
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   return articulation_status(engine->engine.set_instrument_articulation(
       destination_id, channel,
@@ -584,9 +568,7 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
   // without articulation both leave the caller a readable ordinal.
   *out_articulation = SONARE_ARTICULATION_POLY;
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
   const SonareError status =
@@ -603,9 +585,7 @@ SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t d
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
@@ -721,8 +701,7 @@ SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcB
     return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   static_assert(SONARE_MIDI_CC_ANY_CHANNEL == sonare::midi::kCcAnyChannel,
                 "SonareMidiCcBinding wildcard channel must mirror midi::kCcAnyChannel");
@@ -745,8 +724,7 @@ SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   engine->engine.clear_midi_cc_bindings();
   return SONARE_OK;
@@ -759,8 +737,7 @@ SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* ou
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   *out_count = engine->engine.midi_cc_binding_count();
   return SONARE_OK;
@@ -773,9 +750,7 @@ SonareError sonare_engine_set_midi_fx(SonareEngine* engine, uint32_t destination
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(config_json);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
@@ -790,9 +765,7 @@ SonareError sonare_engine_clear_midi_fx(SonareEngine* engine, uint32_t destinati
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   engine->engine.clear_midi_fx(destination_id);
   return SONARE_OK;
@@ -803,9 +776,7 @@ SonareError sonare_engine_set_midi_input_source(SonareEngine* engine, uint32_t d
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   engine->engine.set_midi_input_source(&engine->midi_input_source, destination_id);
   engine->midi_input_source_enabled = true;
@@ -817,8 +788,7 @@ SonareError sonare_engine_clear_midi_input_source(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   engine->engine.set_midi_input_source(nullptr, 0);
   engine->midi_input_source_enabled = false;
@@ -832,8 +802,7 @@ SonareError sonare_engine_midi_input_pending_count(SonareEngine* engine, size_t*
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   *out_count = engine->midi_input_source.pending_count();
   return SONARE_OK;
@@ -846,13 +815,8 @@ SonareError sonare_engine_push_midi_input_note_on(SonareEngine* engine, uint8_t 
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)velocity;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, note, velocity,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
@@ -870,13 +834,8 @@ SonareError sonare_engine_push_midi_input_note_off(SonareEngine* engine, uint8_t
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)velocity;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, note, velocity,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
@@ -894,13 +853,8 @@ SonareError sonare_engine_push_midi_input_cc(SonareEngine* engine, uint8_t group
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)controller;
-  (void)value;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, controller, value,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_cc_error(group, channel, controller, value));
@@ -919,12 +873,8 @@ SonareError sonare_engine_push_midi_input_pitch_bend(SonareEngine* engine, uint8
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)bend14;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, bend14,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_pitch_bend_error(group, channel, bend14));
@@ -942,12 +892,8 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareEngine* engine,
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)pressure;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, pressure,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_channel_pressure_error(group, channel, pressure));
@@ -966,13 +912,8 @@ SonareError sonare_engine_push_midi_input_poly_pressure(SonareEngine* engine, ui
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)pressure;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, note, pressure,
+                                offset_in_block_samples);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_poly_pressure_error(group, channel, note, pressure));
@@ -991,14 +932,8 @@ SonareError sonare_engine_push_midi_note_on(SonareEngine* engine, uint32_t desti
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)velocity;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, note,
+                                velocity, render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
@@ -1020,14 +955,8 @@ SonareError sonare_engine_push_midi_note_off(SonareEngine* engine, uint32_t dest
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)velocity;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, note,
+                                velocity, render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
@@ -1049,14 +978,8 @@ SonareError sonare_engine_push_midi_cc(SonareEngine* engine, uint32_t destinatio
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)controller;
-  (void)value;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, controller,
+                                value, render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_cc_error(group, channel, controller, value));
@@ -1083,13 +1006,8 @@ SonareError sonare_engine_push_midi_pitch_bend(SonareEngine* engine, uint32_t de
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)bend14;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, bend14,
+                                render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_pitch_bend_error(group, channel, bend14));
@@ -1107,13 +1025,8 @@ SonareError sonare_engine_push_midi_channel_pressure(SonareEngine* engine, uint3
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)pressure;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, pressure,
+                                render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_channel_pressure_error(group, channel, pressure));
@@ -1132,14 +1045,8 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareEngine* engine, uint32_t
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)note;
-  (void)pressure;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, note,
+                                pressure, render_frame);
 #else
   if (const SonareError refused =
           refuse_live_push_arg(midi::live_push_poly_pressure_error(group, channel, note, pressure));
@@ -1156,9 +1063,7 @@ SonareError sonare_engine_push_midi_panic(SonareEngine* engine, int64_t render_f
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, render_frame);
 #else
   rt::Command command{};
   command.type = rt::CommandType::kMidiAllNotesOff;
@@ -1179,10 +1084,7 @@ SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destina
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, render_frame);
 #else
   // Preparation precedes publication into the bounded payload/command stores.
   if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
@@ -1216,12 +1118,8 @@ SonareError sonare_engine_push_midi_ump(SonareEngine* engine, uint32_t destinati
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)words;
-  (void)word_count;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, words, word_count,
+                                render_frame);
 #else
   switch (engine->engine.push_midi_ump(destination_id, words, word_count, render_frame)) {
     case sonare::engine::MidiUmpPushResult::kQueued:
@@ -1245,11 +1143,7 @@ SonareError sonare_engine_push_midi_input_ump(SonareEngine* engine, const uint32
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)words;
-  (void)word_count;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, words, word_count, offset_in_block_samples);
 #else
   if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, word_count)) {
     return refuse_live_push_arg(midi::kLivePushUmpShapeError);
@@ -1270,16 +1164,8 @@ SonareError sonare_engine_push_midi_program(SonareEngine* engine, uint32_t desti
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)group;
-  (void)channel;
-  (void)program;
-  (void)bank_valid;
-  (void)bank_msb;
-  (void)bank_lsb;
-  (void)render_frame;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, group, channel, program,
+                                bank_valid, bank_msb, bank_lsb, render_frame);
 #else
   if (const SonareError refused = refuse_live_push_arg(midi::live_push_program_error(
           group, channel, program, bank_valid != 0, bank_msb, bank_lsb));
@@ -1300,15 +1186,8 @@ SonareError sonare_engine_push_midi_input_program(SonareEngine* engine, uint8_t 
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)group;
-  (void)channel;
-  (void)program;
-  (void)bank_valid;
-  (void)bank_msb;
-  (void)bank_lsb;
-  (void)offset_in_block_samples;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, group, channel, program, bank_valid,
+                                bank_msb, bank_lsb, offset_in_block_samples);
 #else
   if (const SonareError refused = refuse_live_push_arg(midi::live_push_program_error(
           group, channel, program, bank_valid != 0, bank_msb, bank_lsb));
@@ -1327,10 +1206,7 @@ SonareError sonare_engine_set_midi_destination_external(SonareEngine* engine,
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  (void)external;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id, external);
 #else
   SONARE_C_TRY
   if (!engine->engine.set_midi_destination_external(destination_id, external != 0)) {
@@ -1346,9 +1222,7 @@ SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, 
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)enabled;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, enabled);
 #else
   SONARE_C_TRY
   engine->engine.set_external_midi_clock_enabled(enabled != 0);
@@ -1363,8 +1237,7 @@ SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, size
   SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement);
 #else
   SONARE_C_TRY
   *out_count = engine->engine.external_midi_dropped_count();
@@ -1395,9 +1268,7 @@ SonareError sonare_engine_drain_external_midi(SonareEngine* engine, SonareExtern
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)max_events;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, max_events);
 #else
   SONARE_C_TRY
   size_t written = 0;

@@ -15,7 +15,6 @@ using namespace sonare_c_detail;
 
 namespace {
 
-constexpr const char* kNotCompiledIn = "mastering support is not compiled in";
 // The value the real entries publish before a measurement exists.
 const SonareStreamingLoudnessGain kUndefinedLoudnessGain = {
     0.0f, sonare::constants::kFloorDb, -std::numeric_limits<float>::infinity()};
@@ -33,12 +32,7 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
                                      SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_apply_processor(const char* processor, const float* samples,
@@ -47,14 +41,8 @@ SonareError sonare_mastering_apply_processor(const char* processor, const float*
                                              SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)processor;
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, processor, samples, length, sample_rate,
+                                params, param_count);
 }
 
 SonareError sonare_mastering_apply_processor_stereo(
@@ -62,15 +50,8 @@ SonareError sonare_mastering_apply_processor_stereo(
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)processor;
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, processor, left, right, length, sample_rate,
+                                params, param_count);
 }
 
 const char* sonare_mastering_preset_names(void) {
@@ -81,17 +62,13 @@ const char* sonare_mastering_preset_names(void) {
 SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)preset;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, preset);
 }
 
 SonareError sonare_mastering_chain_config_from_json(const char* document, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)document;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, document);
 }
 
 void sonare_master_audio_options_init(SonareMasterAudioOptions* options) {
@@ -106,14 +83,8 @@ SonareError sonare_master_audio(const char* preset, const float* samples, size_t
                                 SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)preset;
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)overrides_json;
-  (void)options;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, preset, samples, length, sample_rate,
+                                overrides_json, options);
 }
 
 SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
@@ -122,15 +93,8 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
                                        SonareMasteringChainStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)preset;
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)overrides_json;
-  (void)options;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, preset, left, right, length, sample_rate,
+                                overrides_json, options);
 }
 
 const char* sonare_mastering_processor_names(void) {
@@ -156,22 +120,19 @@ const char* sonare_mastering_stereo_analysis_names(void) {
 SonareError sonare_mastering_processor_catalog(char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering);
 }
 
 SonareError sonare_mastering_amp_preset_catalog(char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering);
 }
 
 SonareError sonare_capability_catalog_json(char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering);
 }
 
 const char* sonare_mastering_insert_names(void) {
@@ -189,32 +150,21 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
                                                char** out_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_json);
-  (void)insert;
-  (void)sample_rate;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, insert, sample_rate);
 }
 
 SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_latency_samples, out_tail_samples);
-  (void)insert;
-  (void)params;
-  (void)sample_rate;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, insert, params, sample_rate);
 }
 
 SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
                                         int* out_is_enum, double* out_value) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_is_enum, out_value);
-  (void)processor;
-  (void)key;
-  (void)name;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, processor, key, name);
 }
 
 SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
@@ -225,17 +175,9 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor, const f
                                                   size_t param_count, SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)processor;
-  (void)source;
-  (void)source_length;
-  (void)reference;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, processor, source, source_length, reference,
+                                reference_length, reference_sample_rate, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_mastering_apply_pair_processor_stereo(
@@ -245,19 +187,9 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)processor;
-  (void)source_left;
-  (void)source_right;
-  (void)source_length;
-  (void)reference_left;
-  (void)reference_right;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, processor, source_left, source_right,
+                                source_length, reference_left, reference_right, reference_length,
+                                reference_sample_rate, sample_rate, params, param_count);
 }
 
 SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
@@ -267,17 +199,9 @@ SonareError sonare_mastering_analyze_pair(const char* analysis, const float* sou
                                           size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)analysis;
-  (void)source;
-  (void)source_length;
-  (void)reference;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, analysis, source, source_length, reference,
+                                reference_length, reference_sample_rate, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
@@ -286,15 +210,8 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* l
                                             char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)analysis;
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, analysis, left, right, length, sample_rate,
+                                params, param_count);
 }
 
 SonareError sonare_mastering_ab_match_loudness(const float* source, size_t source_length,
@@ -304,14 +221,8 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
                                                SonareLoudnessMatch* out_match) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_match);
-  (void)source;
-  (void)source_length;
-  (void)reference;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)sample_rate;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, source, source_length, reference,
+                                reference_length, reference_sample_rate, sample_rate);
 }
 
 SonareError sonare_mastering_ab_match_loudness_stereo(
@@ -321,16 +232,9 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
     size_t* out_length, SonareLoudnessMatch* out_match) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_left, out_right, out_length, out_match);
-  (void)source_left;
-  (void)source_right;
-  (void)source_length;
-  (void)reference_left;
-  (void)reference_right;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)sample_rate;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, source_left, source_right, source_length,
+                                reference_left, reference_right, reference_length,
+                                reference_sample_rate, sample_rate);
 }
 
 const char* sonare_mastering_platform_names(void) {
@@ -372,12 +276,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
                                                  size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_gate_config_init(SonareGateConfig* config) {
@@ -391,12 +290,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
                                            size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config) {
@@ -412,12 +306,7 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
                                                        int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
@@ -425,13 +314,8 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)platforms;
-  (void)platform_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, platforms,
+                                platform_count);
 }
 
 SonareError sonare_mastering_streaming_preview_stereo(const float* left, const float* right,
@@ -440,14 +324,8 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)platforms;
-  (void)platform_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, platforms,
+                                platform_count);
 }
 
 SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
@@ -455,12 +333,7 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
                                            SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = kUndefinedLoudnessGain;
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config_json;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config_json);
 }
 
 SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
@@ -469,13 +342,7 @@ SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float
                                                   SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = kUndefinedLoudnessGain;
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config_json;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config_json);
 }
 
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
@@ -483,13 +350,8 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const float* right,
@@ -498,14 +360,8 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
@@ -513,13 +369,8 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_mastering_audio_profile_stereo(const float* left, const float* right,
@@ -528,34 +379,21 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, params,
+                                param_count);
 }
 
 SonareError sonare_eq_create(int sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)sample_rate;
-  (void)max_block_size;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, sample_rate, max_block_size);
 }
 
 void sonare_eq_destroy(SonareEq* eq) { (void)eq; }
 
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)index;
-  (void)band_json;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, index, band_json);
 }
 
 void sonare_eq_clear(SonareEq* eq) {
@@ -565,26 +403,15 @@ void sonare_eq_clear(SonareEq* eq) {
 
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)mode;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, mode);
 }
 
 SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_length,
                             int sample_rate, const float* reference, size_t reference_length,
                             int reference_sample_rate, int max_bands) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)source;
-  (void)source_length;
-  (void)sample_rate;
-  (void)reference;
-  (void)reference_length;
-  (void)reference_sample_rate;
-  (void)max_bands;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, source, source_length, sample_rate,
+                                reference, reference_length, reference_sample_rate, max_bands);
 }
 
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled) {
@@ -599,26 +426,17 @@ float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
 
 SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)scale;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, scale);
 }
 
 SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)gain_db;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, gain_db);
 }
 
 SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)pan;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, pan);
 }
 
 int sonare_eq_latency_samples(const SonareEq* eq) {
@@ -630,28 +448,19 @@ int sonare_eq_latency_samples(const SonareEq* eq) {
 SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_max_block_size);
-  (void)eq;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq);
 }
 
 SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
-  (void)eq;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq);
 }
 
 SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
                                     int num_samples) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)channels;
-  (void)num_channels;
-  (void)num_samples;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, channels, num_channels, num_samples);
 }
 
 void sonare_eq_clear_sidechain(SonareEq* eq) {
@@ -662,32 +471,19 @@ void sonare_eq_clear_sidechain(SonareEq* eq) {
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
                               int num_samples) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)channels;
-  (void)num_channels;
-  (void)num_samples;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, channels, num_channels, num_samples);
 }
 
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)eq;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq);
 }
 
 SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
                                          const float* frequencies_hz, size_t count, float* out_db) {
   SONARE_C_API_ENTRY;
-  (void)eq;
-  (void)placement;
-  (void)frequencies_hz;
-  (void)count;
-  (void)out_db;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, eq, placement, frequencies_hz, count, out_db);
 }
 
 void sonare_streaming_mastering_chain_options_init(SonareStreamingMasteringChainOptions* options) {
@@ -703,44 +499,28 @@ SonareError sonare_streaming_mastering_chain_create(
     SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)config_json;
-  (void)options;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, config_json, options);
 }
 
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
                                                      int sample_rate, int max_block_size,
                                                      int num_channels) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  (void)sample_rate;
-  (void)max_block_size;
-  (void)num_channels;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, sample_rate, max_block_size,
+                                num_channels);
 }
 
 SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
                                                           float* samples, size_t num_samples) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  (void)samples;
-  (void)num_samples;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, samples, num_samples);
 }
 
 SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
                                                             float* left, float* right,
                                                             size_t num_samples) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  (void)left;
-  (void)right;
-  (void)num_samples;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, left, right, num_samples);
 }
 
 SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain* handle,
@@ -748,11 +528,7 @@ SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMastering
                                                         size_t* samples_written) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(samples_written);
-  (void)handle;
-  (void)samples;
-  (void)capacity;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, samples, capacity);
 }
 
 SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
@@ -761,29 +537,18 @@ SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteri
                                                           size_t* samples_written) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(samples_written);
-  (void)handle;
-  (void)left;
-  (void)right;
-  (void)capacity;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, left, right, capacity);
 }
 
 SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle);
 }
 
 SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain* handle,
                                                            const char* key, double value) {
   SONARE_C_API_ENTRY;
-  (void)handle;
-  (void)key;
-  (void)value;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle, key, value);
 }
 
 int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
@@ -796,9 +561,7 @@ SonareError sonare_streaming_mastering_chain_max_block_size(
     const SonareStreamingMasteringChain* handle, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_max_block_size);
-  (void)handle;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle);
 }
 
 const char* sonare_streaming_mastering_chain_stage_names(
@@ -812,18 +575,14 @@ SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
     const SonareStreamingMasteringChain* handle, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
-  (void)handle;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle);
 }
 
 SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
     const SonareStreamingMasteringChain* handle, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_count);
-  (void)handle;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, handle);
 }
 
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle) {
@@ -848,12 +607,7 @@ SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t l
                                                   SonareClickDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_declick_stereo(const float* left, const float* right,
@@ -862,13 +616,7 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
                                                    SonareDeclickStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result) { (void)result; }
@@ -878,12 +626,7 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
                                             SonareDeclickResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_declick_result(SonareDeclickResult* result) { (void)result; }
@@ -894,12 +637,7 @@ SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, siz
                                                        SonareNoiseDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, int* out_bins) {
@@ -907,10 +645,7 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
   if (out_bins != nullptr) {
     for (int i = 0; i < SONARE_REPAIR_NOISE_BAND_EDGE_COUNT; ++i) out_bins[i] = 0;
   }
-  (void)n_fft;
-  (void)sample_rate;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, n_fft, sample_rate);
 }
 
 SonareError sonare_mastering_repair_denoise_classical_stereo(
@@ -918,13 +653,7 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
     const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result) { (void)result; }
@@ -935,12 +664,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       SonareDenoiseResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_denoise_result(SonareDenoiseResult* result) { (void)result; }
@@ -950,13 +674,8 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
     const SonareDenoiseClassicalConfig* config, SonareDenoiseLinkedResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)channels;
-  (void)num_channels;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, channels, num_channels, length, sample_rate,
+                                config);
 }
 
 void sonare_free_denoise_linked_result(SonareDenoiseLinkedResult* result) { (void)result; }
@@ -973,12 +692,7 @@ SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t
                                                     SonareClipDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_declip_stereo(const float* left, const float* right,
@@ -987,13 +701,7 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
                                                   SonareDeclipStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result) { (void)result; }
@@ -1003,12 +711,7 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            SonareDeclipResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_declip_result(SonareDeclipResult* result) { (void)result; }
@@ -1025,12 +728,7 @@ SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t 
                                                    SonareCrackleDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const float* right,
@@ -1039,13 +737,7 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
                                                      SonareDecrackleStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result) { (void)result; }
@@ -1055,12 +747,7 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
                                               SonareDecrackleResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_decrackle_result(SonareDecrackleResult* result) { (void)result; }
@@ -1076,12 +763,7 @@ SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t leng
                                                SonareHumDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float* right,
@@ -1090,13 +772,7 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
                                                  SonareDehumStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result) { (void)result; }
@@ -1105,12 +781,7 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
                                           const SonareDehumConfig* config, SonareDehumResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_dehum_result(SonareDehumResult* result) { (void)result; }
@@ -1127,12 +798,7 @@ SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t l
                                                   SonareReverbDetection* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_dereverb_classical_stereo(
@@ -1140,13 +806,7 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
     const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result) { (void)result; }
@@ -1157,12 +817,7 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        SonareDereverbResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_dereverb_result(SonareDereverbResult* result) { (void)result; }
@@ -1172,13 +827,8 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
     const SonareDereverbClassicalConfig* config, SonareDereverbLinkedResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)channels;
-  (void)num_channels;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, channels, num_channels, length, sample_rate,
+                                config);
 }
 
 void sonare_free_dereverb_linked_result(SonareDereverbLinkedResult* result) { (void)result; }
@@ -1186,10 +836,7 @@ void sonare_free_dereverb_linked_result(SonareDereverbLinkedResult* result) { (v
 SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
     const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config) {
   SONARE_C_API_ENTRY;
-  (void)estimate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, estimate, config);
 }
 
 void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config) {
@@ -1204,12 +851,7 @@ SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size
                                                       SonareTrimRange* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, const float* right,
@@ -1218,13 +860,7 @@ SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, 
                                                              SonareTrimRange* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
@@ -1233,13 +869,7 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
                                                         SonareTrimSilenceStereoResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)left;
-  (void)right;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, left, right, length, sample_rate, config);
 }
 
 void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result) { (void)result; }
@@ -1250,12 +880,7 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  SonareTrimSilenceResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)config;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, samples, length, sample_rate, config);
 }
 
 void sonare_free_trim_silence_result(SonareTrimSilenceResult* result) { (void)result; }
@@ -1265,13 +890,8 @@ SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t
                                             const char* request_json, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  (void)channels;
-  (void)num_channels;
-  (void)length;
-  (void)sample_rate;
-  (void)request_json;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, channels, num_channels, length, sample_rate,
+                                request_json);
 }
 
 SonareError sonare_mastering_repair_apply(const float* const* channels, size_t num_channels,
@@ -1281,16 +901,7 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
                                           SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(reports_json_out);
-  (void)channels;
-  (void)num_channels;
-  (void)length;
-  (void)sample_rate;
-  (void)stages_json;
-  (void)callback;
-  (void)user_data;
-  (void)out_channels;
-  (void)cancel_cb;
-  (void)cancel_user_data;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMastering, channels, num_channels, length, sample_rate,
+                                stages_json, callback, user_data, out_channels, cancel_cb,
+                                cancel_user_data);
 }

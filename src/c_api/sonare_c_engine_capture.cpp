@@ -334,8 +334,7 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "graph support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kGraph);
 #endif
 }
 
@@ -352,8 +351,7 @@ SonareError sonare_engine_graph_node_count(SonareEngine* engine, size_t* out_cou
   // report NOT_SUPPORTED rather than SONARE_OK with 0, which a caller cannot
   // distinguish from "the feature is compiled in and the graph has no nodes".
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "graph support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kGraph);
 #endif
 }
 
@@ -368,7 +366,6 @@ SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* o
 #else
   // See sonare_engine_graph_node_count.
   *out_count = 0;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "graph support is not compiled in");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kGraph);
 #endif
 }
