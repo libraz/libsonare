@@ -310,11 +310,18 @@ T median_of(std::vector<T> values) {
 /// Amplitude at @p hz in dBFS, from the same sin/cos projection the search uses.
 float projection_dbfs(const std::vector<float>& samples, size_t begin, size_t end, float hz,
                       int sample_rate) {
-  if (end <= begin || !(hz > 0.0f)) return kFloorDb;
+  if (end <= begin || !(hz > 0.0f)) return kNotMeasured;
   const double count = static_cast<double>(end - begin);
   const double amplitude =
       2.0 * std::sqrt(projected_energy(samples, begin, end, hz, sample_rate)) / count;
-  return linear_to_db(static_cast<float>(amplitude));
+  return static_cast<float>(amplitude_to_level_db(amplitude));
+}
+
+/// Median of the measured (non-NaN) levels, -inf sorting lowest; NaN when none was measured.
+float median_level(std::vector<float> levels) {
+  levels.erase(std::remove_if(levels.begin(), levels.end(), [](float v) { return std::isnan(v); }),
+               levels.end());
+  return levels.empty() ? kNotMeasured : median_of(std::move(levels));
 }
 
 float prominence_of(const FundamentalSearch& search) {
@@ -689,7 +696,9 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   require_search_window(validated.get(), sample_rate);
-  if (samples == nullptr || size == 0) return {};
+  HumDetection detection;
+  std::fill(std::begin(detection.harmonic_dbfs), std::end(detection.harmonic_dbfs), kNotMeasured);
+  if (samples == nullptr || size == 0) return detection;
 
   const std::vector<float> buffer(samples, samples + size);
   const size_t frame = detection_frame(size, sample_rate);
@@ -713,8 +722,8 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
       const size_t slot = static_cast<size_t>(harmonic - 1);
       const float hz = search.best_hz * static_cast<float>(harmonic);
       if (!(hz < nyquist)) {
-        levels[slot].push_back(kFloorDb);
-        floors[slot].push_back(kFloorDb);
+        levels[slot].push_back(kNotMeasured);
+        floors[slot].push_back(kNotMeasured);
         continue;
       }
       levels[slot].push_back(projection_dbfs(buffer, begin, end, hz, sample_rate));
@@ -730,16 +739,19 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
     }
   }
 
-  HumDetection detection;
   detection.fundamental_hz = median_of(fundamentals);
   detection.fundamental_prominence = median_of(prominences);
   // Levels are measured either way; a series is counted only on a fundamental that is a line.
   const bool line_found = detection.fundamental_prominence > 1.0f;
   for (int harmonic = 1; harmonic <= kDehumMaxHarmonics; ++harmonic) {
     const size_t slot = static_cast<size_t>(harmonic - 1);
-    const float level = median_of(levels[slot]);
-    detection.harmonic_dbfs[slot] = std::max(level, kFloorDb);
-    if (line_found && level > kFloorDb && level > median_of(floors[slot]) + kHumHarmonicMarginDb) {
+    const float level = median_level(levels[slot]);
+    detection.harmonic_dbfs[slot] = level;
+    // Each frame leaves a suffix unmeasured, and a slot is NaN only where every frame left it.
+    if (!std::isnan(level)) detection.measured_harmonics = harmonic;
+    // The reading keeps its exact level; detection still ignores residue under the library floor.
+    if (line_found && level > kFloorDb &&
+        level > std::max(median_level(floors[slot]), kFloorDb) + kHumHarmonicMarginDb) {
       ++detection.harmonics;
     }
   }

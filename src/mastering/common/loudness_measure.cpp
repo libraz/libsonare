@@ -19,14 +19,8 @@
 namespace sonare::mastering::common {
 namespace {
 
-// Same silence handling metering::true_peak_db() applies to an Audio: below the
-// shared epsilon report the finite dB floor rather than -inf, so every meter
-// spells silence the same way. Taking the maximum in the linear domain first
-// and converting once is equivalent, because the conversion is monotonic.
-float true_peak_to_dbtp(float peak) noexcept {
-  if (peak < sonare::constants::kEpsilon) return sonare::constants::kFloorDb;
-  return linear_to_db(peak);
-}
+// Peak in dBTP: -inf for exact zero, otherwise the computed level however quiet.
+float true_peak_to_dbtp(float peak) noexcept { return amplitude_to_level_db(peak); }
 
 // The series carry the library defaults; naming the config here also pins the
 // four mirrors in loudness_measure.h against metering's own values.
@@ -120,18 +114,12 @@ LoudnessSummary stereo_planar_summary(const float* left, const float* right, std
           true_peak_to_dbtp(true_peak), lufs.loudness_range_lu};
 }
 
-// Silence is -inf in a loudness series. Floor it the way true_peak_to_dbtp
-// floors a silent peak, so differencing two silent blocks yields 0, not NaN.
-float floored_lufs(float lufs) noexcept {
-  return std::isfinite(lufs) ? lufs : sonare::constants::kFloorDb;
-}
-
 void difference_series(const std::vector<float>& before, const std::vector<float>& after,
                        std::vector<float>* out) {
   if (out == nullptr) return;
   out->resize(before.size());
   for (std::size_t index = 0; index < before.size(); ++index) {
-    (*out)[index] = floored_lufs(after[index]) - floored_lufs(before[index]);
+    (*out)[index] = level_difference_db(after[index], before[index]);
   }
 }
 

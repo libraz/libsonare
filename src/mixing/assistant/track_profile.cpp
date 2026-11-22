@@ -24,25 +24,16 @@
 #include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/source_classifier.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mixing::assistant {
-
-using sonare::constants::kFloorDb;
 
 namespace {
 
 // Marks an FFT bin that belongs to no analysis band: below the lowest band
 // edge, or above the highest band edge Nyquist can reach.
 constexpr int kUnbandedBin = -1;
-
-// Silence test threshold, in LUFS. A digitally silent track measures -inf while
-// a track whose content sits under the numerical dB floor measures at the
-// floor, so the test lifts the floor by a margin rather than comparing against
-// it exactly: an equality test on a float that reaches its value through two
-// different paths would only ever be true for one of them.
-constexpr float kSilenceMarginLu = 5.0f;
-constexpr float kSilenceLufsThreshold = kFloorDb + kSilenceMarginLu;
 
 // Coherent gain of the Hann analysis window as a fraction of its length
 // (sum(w) = length / 2). Band power is held in the 48 kHz reference geometry,
@@ -267,8 +258,10 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   TrackProfile profile;
   profile.strip_id = track.id;
   profile.name = track.name;
-  // Unmeasured until BS.1770 runs: reads like a silent track (null in JSON), never a finite 0.
-  profile.base.loudness.integrated_lufs = -std::numeric_limits<float>::infinity();
+  // Not measured until BS.1770 runs: absent in JSON, distinct from a silent track's -inf.
+  profile.base.loudness.integrated_lufs = kNotMeasured;
+  profile.base.loudness.true_peak_db = kNotMeasured;
+  profile.base.loudness.crest_factor_db = kNotMeasured;
 
   // Degenerate input is reported as an unusable track rather than thrown, so a
   // batch call needs no per-track error handling.
@@ -334,7 +327,6 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
 
   // Recover whole-band downmix cancellation from one channel, preserving channel-summed loudness.
   if (stereo && std::isfinite(profile.base.loudness.integrated_lufs) &&
-      profile.base.loudness.integrated_lufs > kSilenceLufsThreshold &&
       peak_band_amplitude(totals, profile.bands.n_frames, config.n_fft) < kMinBandAmplitude) {
     const double left_energy = sum_square_energy(track.left, frames);
     const double right_energy = sum_square_energy(track.right, frames);
@@ -356,10 +348,9 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
     profile.band_occupancy = band_occupancy(totals);
   }
 
-  // Negated rather than written as `<=` so a non-finite measurement is excluded
-  // too: silence gates out of the integrated loudness entirely and reads -inf.
-  // A pure DC offset lands here as well, since K-weighting removes it.
-  if (!(profile.base.loudness.integrated_lufs > kSilenceLufsThreshold)) {
+  // Silence gates out of the integrated loudness entirely and reads -inf; a pure DC offset lands
+  // here as well, since K-weighting removes it.
+  if (!std::isfinite(profile.base.loudness.integrated_lufs)) {
     profile.exclusion_reason = "track is silent";
     return profile;
   }

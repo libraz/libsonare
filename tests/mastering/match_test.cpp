@@ -720,3 +720,41 @@ TEST_CASE("MatchEq delay estimation keeps the tail of the longer signal", "[mast
   REQUIRE(aligned[26] == 0.5f);
   REQUIRE(aligned[31] == 0.5f);
 }
+
+TEST_CASE("ReferenceSpectrum reads a quiet bin at its computed level, silence at -inf",
+          "[mastering][match]") {
+  const ReferenceSpectrumConfig config{2048, 512, false, 3};
+  const auto tone_bin = static_cast<size_t>(std::round(1000.0 / (48000.0 / 2048.0)));
+  const auto quiet = reference_spectrum(sine_audio(1000.0f, 1.0e-15f), config);
+  const auto quieter = reference_spectrum(sine_audio(1000.0f, 1.0e-18f), config);
+  CHECK(std::isfinite(quiet.db[tone_bin]));
+  CHECK(quiet.db[tone_bin] < -200.0f);
+  CHECK_THAT(quiet.db[tone_bin] - quieter.db[tone_bin], WithinAbs(60.0f, 0.5f));
+
+  const auto silent =
+      reference_spectrum(Audio::from_vector(std::vector<float>(48000, 0.0f), 48000), config);
+  for (const float level : silent.db) CHECK((std::isinf(level) && level < 0.0f));
+
+  // A band against silence has no finite deviation; a band holding no bin is not measured.
+  const auto tone = reference_spectrum(sine_audio(1000.0f, 0.5f), config);
+  const auto balance = tonal_balance(tone, silent);
+  REQUIRE_FALSE(balance.empty());
+  for (const auto& band : balance) {
+    CHECK(std::isinf(band.reference_db));
+    CHECK(std::isnan(band.deviation_db));
+  }
+  const ReferenceSpectrum sparse{{100.0f}, {-20.0f}, 48000};
+  for (const auto& band : tonal_balance(sparse, sparse)) {
+    if (band.low_hz == 20.0f) continue;
+    CHECK(std::isnan(band.source_db));
+    CHECK(std::isnan(band.deviation_db));
+  }
+}
+
+TEST_CASE("ReferenceLoudness reports a silent source's gain as not measured",
+          "[mastering][match]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(48000, 0.0f), 48000);
+  const auto result = reference_loudness(silence, sine_audio(1000.0f, 0.2f));
+  CHECK((std::isinf(result.source_lufs) && result.source_lufs < 0.0f));
+  CHECK(std::isnan(result.gain_to_match_db));
+}

@@ -185,6 +185,11 @@ util::json::Value band_array(const std::array<float, kBandCount>& values) {
   return util::json::Value(std::move(object));
 }
 
+// A level that was not measured (NaN) is an absent member; -inf stays and writes null.
+void put_level(util::json::Object& object, const char* key, float level) {
+  if (!std::isnan(level)) util::json::put(object, key, level);
+}
+
 util::json::Value track_to_value(const TrackProfile& profile) {
   util::json::Object object;
   util::json::put(object, "stripId", profile.strip_id);
@@ -195,9 +200,9 @@ util::json::Value track_to_value(const TrackProfile& profile) {
   util::json::put(object, "exclusionReason", profile.exclusion_reason);
   util::json::put(object, "numChannels", profile.channel_count);
   util::json::put(object, "durationSec", profile.duration_sec);
-  util::json::put(object, "integratedLufs", profile.base.loudness.integrated_lufs);
-  util::json::put(object, "truePeakDbtp", profile.base.loudness.true_peak_db);
-  util::json::put(object, "crestFactorDb", profile.base.loudness.crest_factor_db);
+  put_level(object, "integratedLufs", profile.base.loudness.integrated_lufs);
+  put_level(object, "truePeakDbtp", profile.base.loudness.true_peak_db);
+  put_level(object, "crestFactorDb", profile.base.loudness.crest_factor_db);
   util::json::put(object, "spectralCentroidHz", profile.base.spectral.centroid_hz);
   util::json::put(object, "spectralFlatness", profile.base.spectral.flatness);
   util::json::put(object, "attackPerSecond", profile.base.dynamics.attack_density);
@@ -269,8 +274,8 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
   for (const auto& risk : mix.mono_risks) {
     util::json::Object row;
     util::json::put(row, "stripId", risk.strip_id);
-    util::json::put(row, "correlation", risk.correlation);
-    util::json::put(row, "width", risk.width);
+    put_level(row, "correlation", risk.correlation);
+    put_level(row, "width", risk.width);
     util::json::put(row, "wideLowEnd", risk.wide_low_end);
     mono_risks.emplace_back(util::json::Value(std::move(row)));
   }

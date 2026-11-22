@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "core/audio.h"
@@ -291,10 +292,13 @@ TEST_CASE("Property: LUFS measurement is deterministic", "[mastering][property]"
   const auto first = sonare::metering::lufs(audio);
   const auto second = sonare::metering::lufs(audio);
 
-  REQUIRE_THAT(second.integrated_lufs, WithinAbs(first.integrated_lufs, 1.0e-6f));
-  REQUIRE_THAT(second.momentary_lufs, WithinAbs(first.momentary_lufs, 1.0e-6f));
-  REQUIRE_THAT(second.short_term_lufs, WithinAbs(first.short_term_lufs, 1.0e-6f));
-  REQUIRE_THAT(second.loudness_range_lu, WithinAbs(first.loudness_range_lu, 1.0e-6f));
+  // Bit-identical, NaN included: a 1 s tone has no 3 s short-term block to measure.
+  const auto same_bits = [](float x, float y) { return std::memcmp(&x, &y, sizeof(float)) == 0; };
+  REQUIRE(same_bits(second.integrated_lufs, first.integrated_lufs));
+  REQUIRE(same_bits(second.momentary_lufs, first.momentary_lufs));
+  REQUIRE(same_bits(second.short_term_lufs, first.short_term_lufs));
+  REQUIRE(same_bits(second.loudness_range_lu, first.loudness_range_lu));
+  REQUIRE(std::isnan(first.short_term_lufs));
 }
 
 TEST_CASE("Property: true peak measurement is deterministic", "[mastering][property]") {

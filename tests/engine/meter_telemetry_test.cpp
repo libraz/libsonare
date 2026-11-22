@@ -119,31 +119,23 @@ TEST_CASE("MeterTelemetryTap publishes lightweight target records", "[engine][me
   REQUIRE(record.rms_db[1] == Approx(-12.0412f).margin(0.01f));
   REQUIRE(record.correlation == Approx(-1.0f).margin(0.001f));
 
-  // Unmeasured fields must be finite (JSON-safe), not NaN, and sit at the dB
-  // floor so a host can serialize the record without producing invalid JSON.
-  // Finiteness alone would pass on any value, so the fields this path leaves
-  // unmeasured are pinned to the floor: the true-peak fields in particular are
-  // the ones that silently read -120 for every signal when a tap is prepared
-  // without true-peak measurement, and an isfinite check cannot tell the two
-  // apart. Both planes are checked because the lightweight path writes neither.
-  REQUIRE(std::isfinite(record.integrated_lufs));
-  REQUIRE(record.integrated_lufs == Approx(sonare::constants::kFloorDb));
-  REQUIRE(std::isfinite(record.momentary_lufs));
-  REQUIRE(std::isfinite(record.short_term_lufs));
-  REQUIRE(std::isfinite(record.max_true_peak_db));
-  REQUIRE(record.max_true_peak_db == Approx(sonare::constants::kFloorDb));
-  REQUIRE(std::isfinite(record.true_peak_db[0]));
-  REQUIRE(record.true_peak_db[0] == Approx(sonare::constants::kFloorDb));
-  REQUIRE(std::isfinite(record.true_peak_db[1]));
-  REQUIRE(record.true_peak_db[1] == Approx(sonare::constants::kFloorDb));
+  // Fields this path does not measure are NaN (not measured), never a level: a
+  // -inf or floor value would read as a measured silence. Both true-peak planes
+  // are checked because the lightweight path writes neither.
+  REQUIRE(std::isnan(record.integrated_lufs));
+  REQUIRE(std::isnan(record.momentary_lufs));
+  REQUIRE(std::isnan(record.short_term_lufs));
+  REQUIRE(std::isnan(record.max_true_peak_db));
+  REQUIRE(std::isnan(record.true_peak_db[0]));
+  REQUIRE(std::isnan(record.true_peak_db[1]));
   REQUIRE(std::isfinite(record.gain_reduction_db));
   REQUIRE_FALSE(tap.pop(record));
 }
 
-TEST_CASE("MeterTelemetryTap lightweight mono input floors the unused plane",
+TEST_CASE("MeterTelemetryTap lightweight mono input leaves the unused plane unmeasured",
           "[engine][meter_telemetry]") {
-  // A mono lane writes only plane 0; the right plane must report silence
-  // (the dB floor), never an uninitialized 0 dBFS that pins the meter to clip.
+  // A mono lane writes only plane 0; the right plane is NaN (not measured),
+  // never an uninitialized 0 dBFS that pins the meter to clip.
   sonare::engine::MeterTelemetryTap tap;
   tap.prepare(48000.0, kBlock, 0, 8, kLufsOnly);
 
@@ -156,8 +148,8 @@ TEST_CASE("MeterTelemetryTap lightweight mono input floors the unused plane",
   REQUIRE(tap.pop(record));
   REQUIRE(record.channel_count == 1);
   REQUIRE(record.peak_db[0] == Approx(-6.0206f).margin(0.01f));
-  REQUIRE(record.peak_db[1] == Approx(sonare::constants::kFloorDb));
-  REQUIRE(record.rms_db[1] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(std::isnan(record.peak_db[1]));
+  REQUIRE(std::isnan(record.rms_db[1]));
 }
 
 TEST_CASE("MeterTelemetryTap lightweight seq advances monotonically", "[engine][meter_telemetry]") {
@@ -275,8 +267,8 @@ TEST_CASE("MeterTelemetryTap merges pre-trim input peaks and gain reduction acro
   float* silent_channels[] = {silent.data(), silent.data()};
   std::array<float, sonare::mixing::kMaxMeterChannels> first_input{};
   std::array<float, sonare::mixing::kMaxMeterChannels> second_input{};
-  first_input.fill(sonare::constants::kFloorDb);
-  second_input.fill(sonare::constants::kFloorDb);
+  first_input.fill(sonare::kNotMeasured);
+  second_input.fill(sonare::kNotMeasured);
   first_input[0] = -3.0f;
   first_input[1] = -6.0f;
   second_input[0] = -9.0f;
@@ -294,11 +286,11 @@ TEST_CASE("MeterTelemetryTap merges pre-trim input peaks and gain reduction acro
   REQUIRE(record.gain_reduction_db == Approx(-4.0f));
   REQUIRE_FALSE(tap.pop(record));
 
-  // A caller that has no pre-trim measurement gets a finite, explicit floor.
+  // A caller that has no pre-trim measurement gets NaN (not measured).
   tap.process_lightweight(silent_channels, 2, kSubBlock, 128, 17);
   REQUIRE(tap.pop(record));
-  REQUIRE(record.input_peak_db[0] == Approx(sonare::constants::kFloorDb));
-  REQUIRE(record.input_peak_db[1] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(std::isnan(record.input_peak_db[0]));
+  REQUIRE(std::isnan(record.input_peak_db[1]));
   REQUIRE(record.gain_reduction_db == Approx(0.0f));
 }
 
@@ -306,7 +298,7 @@ TEST_CASE("MeterTelemetryTap reset_integrated keeps short-term audio history",
           "[engine][meter_telemetry]") {
   // Fill the complete short-term (3 s) window before checking the value. A
   // 400 ms momentary window is enough in theory, but the K-weighting startup
-  // transient can keep a one-second fixture below the finite floor.
+  // transient can keep a one-second fixture's short-term window unfilled.
   constexpr int kFrames = 3 * kSampleRate;
   sonare::engine::MeterTelemetryTap tap;
   tap.prepare(kSampleRate, kBlock, 18, 128, kLufsOnly);
@@ -329,8 +321,9 @@ TEST_CASE("MeterTelemetryTap reset_integrated keeps short-term audio history",
   float* silence_channels[] = {silence.data(), silence.data()};
   tap.process(silence_channels, 2, kBlock, kFrames);
   const auto after = tap.snapshot();
-  REQUIRE(after.integrated_lufs == Approx(sonare::constants::kFloorDb));
-  REQUIRE(after.momentary_lufs > sonare::constants::kFloorDb);
+  // The cleared histogram has taken no gating block since: not measured.
+  REQUIRE(std::isnan(after.integrated_lufs));
+  REQUIRE(std::isfinite(after.momentary_lufs));
 }
 
 TEST_CASE("MeterTelemetryTap reports an inter-sample peak when configured for true peak",
@@ -373,7 +366,7 @@ TEST_CASE("MeterTelemetryTap reports an inter-sample peak when configured for tr
   REQUIRE(latest.max_true_peak_db < 20.0f * std::log10(kAmplitude) + 0.5f);
   REQUIRE(std::isfinite(latest.max_true_peak_db));
 
-  // Silence must still floor rather than report the previous block's peak.
+  // Silence reads as no level (-inf) rather than the previous block's peak.
   std::vector<float> silence(static_cast<size_t>(frames), 0.0f);
   sonare::engine::MeterTelemetryTap silent_tap;
   silent_tap.prepare(kSampleRate, kBlock, 5, 64, sonare::mixing::MeterConfig{true, true, 4});
@@ -382,6 +375,6 @@ TEST_CASE("MeterTelemetryTap reports an inter-sample peak when configured for tr
     silent_tap.process(channels, 2, kBlock, block * kBlock);
     while (silent_tap.pop(record)) latest = record;
   }
-  REQUIRE(latest.true_peak_db[0] == Approx(sonare::constants::kFloorDb));
-  REQUIRE(latest.max_true_peak_db == Approx(sonare::constants::kFloorDb));
+  REQUIRE((std::isinf(latest.true_peak_db[0]) && latest.true_peak_db[0] < 0.0f));
+  REQUIRE((std::isinf(latest.max_true_peak_db) && latest.max_true_peak_db < 0.0f));
 }

@@ -39,8 +39,6 @@ namespace sonare::mastering::assistant {
 
 namespace {
 
-constexpr float kMinDb = sonare::constants::kFloorDb;
-
 // Onset rise (mel-band mean dB per 512-sample hop at 48 kHz) an attack must exceed; calibrated
 // at the default hop. Geometric mean of the -40 dBFS white-noise peak (2.17, not counted) and a
 // kick's peak under a +24 dB burst (8.44, counted): about 2x margin to each.
@@ -77,21 +75,18 @@ float stddev_finite(const std::vector<float>& values) {
   return count > 1 ? static_cast<float>(std::sqrt(sum / count)) : 0.0f;
 }
 
-float power_to_db(double power) {
-  if (power <= 1.0e-20) return kMinDb;
-  return power_to_db_scalar(power);
-}
-
 // The band's share of the signal's mean square in dBFS, the noise fields' convention (a full-scale
 // sine reads -3.01 dBFS). By Parseval a frame's two-sided bin power is n_fft * Σw² times the mean
 // square of the signal under the window, so the level needs no reference geometry.
 float band_level_dbfs(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,
                       int sr, double window_energy, float min_hz, float max_hz) {
-  if (n_frames <= 0 || !(window_energy > 0.0)) return kMinDb;
+  if (n_frames <= 0 || !(window_energy > 0.0)) return kNotMeasured;
   double power_sum = 0.0;
+  bool any_bin = false;
   for (int bin = 0; bin < n_bins; ++bin) {
     const float hz = static_cast<float>(bin) * static_cast<float>(sr) / static_cast<float>(n_fft);
     if (hz < min_hz || hz >= max_hz) continue;
+    any_bin = true;
     // A one-sided bin stands for its mirror too, except DC and Nyquist.
     const double weight = (bin == 0 || 2 * bin == n_fft) ? 1.0 : 2.0;
     for (int frame = 0; frame < n_frames; ++frame) {
@@ -99,9 +94,11 @@ float band_level_dbfs(const std::vector<float>& magnitude, int n_bins, int n_fra
       power_sum += weight * static_cast<double>(mag) * mag;
     }
   }
+  // A band holding no bin (above Nyquist, or narrower than the bin spacing) is not measured.
+  if (!any_bin) return kNotMeasured;
   const double mean_square =
       power_sum / (static_cast<double>(n_frames) * static_cast<double>(n_fft) * window_energy);
-  return std::max(kMinDb, power_to_db(mean_square));
+  return static_cast<float>(power_to_level_db(mean_square));
 }
 
 float attack_density(const std::vector<float>& onset, float duration_sec) {
@@ -139,8 +136,12 @@ float sustain_ratio(const std::vector<float>& rms, float duration_sec, int lookb
 
 /// Loudest k*f0 of a hum detection; the tie-break after prominence.
 float peak_harmonic_dbfs(const repair::HumDetection& detection) {
-  return *std::max_element(detection.harmonic_dbfs,
-                           detection.harmonic_dbfs + repair::kDehumMaxHarmonics);
+  float peak = kNoLevelDb;
+  for (int slot = 0; slot < repair::kDehumMaxHarmonics; ++slot) {
+    // A harmonic that was not measured (NaN) never wins the comparison.
+    if (detection.harmonic_dbfs[slot] > peak) peak = detection.harmonic_dbfs[slot];
+  }
+  return peak;
 }
 
 /// Whether @p candidate (from channel @p candidate_index) beats @p current (from @p current_index).
@@ -160,15 +161,17 @@ struct ChannelDefects {
   float peak_abs = 0.0f;
 };
 
-double measured_noise_power(float level_dbfs) {
-  // kFloorDb is the detector's zero-energy sentinel. Treating it as a real
-  // power before summing would turn duplicated silence into a false +3 dB
-  // measurement.
-  return level_dbfs > kMinDb ? db_to_power_scalar(static_cast<double>(level_dbfs)) : 0.0;
+// Adds a channel's level to a power sum that is NaN until some channel measured one: -inf adds
+// zero power, a not-measured level adds nothing.
+void add_noise_power(double& sum, float level_dbfs) {
+  if (std::isnan(level_dbfs)) return;
+  const double power =
+      std::isinf(level_dbfs) ? 0.0 : db_to_power_scalar(static_cast<double>(level_dbfs));
+  sum = std::isnan(sum) ? power : sum + power;
 }
 
 float noise_power_to_db(double power) {
-  return power > 0.0 ? std::max(kMinDb, static_cast<float>(power_to_db_scalar(power))) : kMinDb;
+  return std::isnan(power) ? kNotMeasured : static_cast<float>(power_to_level_db(power));
 }
 
 }  // namespace
@@ -258,8 +261,8 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
   double crackle_fraction_sum = 0.0;
   double crackle_per_second_sum = 0.0;
   double clip_fraction_sum = 0.0;
-  double noise_floor_power = 0.0;
-  std::vector<double> noise_band_power(repair::kRepairNoiseBandCount, 0.0);
+  double noise_floor_power = kNotMeasuredD;
+  std::vector<double> noise_band_power(repair::kRepairNoiseBandCount, kNotMeasuredD);
   size_t hum_index = 0;
 
   for (size_t index = 0; index < per_channel.size(); ++index) {
@@ -288,9 +291,9 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
       defects.clip.flat_level = channel.clip.flat_level;
     }
 
-    noise_floor_power += measured_noise_power(channel.noise.floor_dbfs);
+    add_noise_power(noise_floor_power, channel.noise.floor_dbfs);
     for (size_t band = 0; band < noise_band_power.size(); ++band) {
-      noise_band_power[band] += measured_noise_power(channel.noise.band_floor_dbfs[band]);
+      add_noise_power(noise_band_power[band], channel.noise.band_floor_dbfs[band]);
     }
 
     if (index > 0 &&
@@ -593,6 +596,11 @@ namespace {
 
 double json_count(std::size_t value) { return static_cast<double>(value); }
 
+// A level that was not measured (NaN) is an absent member; -inf stays and writes null.
+void put_level(util::json::Object& object, const char* key, float level) {
+  if (!std::isnan(level)) util::json::put(object, key, level);
+}
+
 util::json::Array json_floats(const float* values, std::size_t size) {
   util::json::Array out;
   out.reserve(size);
@@ -634,9 +642,18 @@ util::json::Object detection_to_json(const repair::CrackleDetection& detected) {
 
 util::json::Object detection_to_json(const repair::NoiseDetection& detected) {
   util::json::Object out;
-  util::json::put(out, "floorDbfs", detected.floor_dbfs);
-  util::json::put(out, "bandFloorDbfs",
-                  json_floats(detected.band_floor_dbfs, repair::kRepairNoiseBandCount));
+  put_level(out, "floorDbfs", detected.floor_dbfs);
+  // A band no bin reaches can sit between measured ones, so the measured bands travel with
+  // their grid index rather than leaving a slot to spell "not measured".
+  util::json::Array levels;
+  util::json::Array bands;
+  for (std::size_t band = 0; band < repair::kRepairNoiseBandCount; ++band) {
+    if (std::isnan(detected.band_floor_dbfs[band])) continue;
+    levels.emplace_back(detected.band_floor_dbfs[band]);
+    bands.emplace_back(static_cast<int>(band));
+  }
+  util::json::put(out, "bandFloorDbfs", std::move(levels));
+  util::json::put(out, "bandFloorBand", std::move(bands));
   return out;
 }
 
@@ -645,9 +662,10 @@ util::json::Object detection_to_json(const repair::HumDetection& detected) {
   util::json::put(out, "fundamentalHz", detected.fundamental_hz);
   util::json::put(out, "fundamentalProminence", detected.fundamental_prominence);
   util::json::put(out, "harmonics", detected.harmonics);
+  // Unmeasured harmonics are a suffix, so the array ends at the last measured one.
   util::json::put(
       out, "harmonicDbfs",
-      json_floats(detected.harmonic_dbfs, static_cast<std::size_t>(repair::kDehumMaxHarmonics)));
+      json_floats(detected.harmonic_dbfs, static_cast<std::size_t>(detected.measured_harmonics)));
   return out;
 }
 
@@ -676,18 +694,18 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
 
   json::Object loudness;
   util::json::put(loudness, "integratedLufs", profile.loudness.integrated_lufs);
-  util::json::put(loudness, "loudnessRangeLu", profile.loudness.lra_lu);
-  util::json::put(loudness, "truePeakDbtp", profile.loudness.true_peak_db);
-  util::json::put(loudness, "crestFactorDb", profile.loudness.crest_factor_db);
+  put_level(loudness, "loudnessRangeLu", profile.loudness.lra_lu);
+  put_level(loudness, "truePeakDbtp", profile.loudness.true_peak_db);
+  put_level(loudness, "crestFactorDb", profile.loudness.crest_factor_db);
 
   json::Object spectral;
-  util::json::put(spectral, "subRmsDb", profile.spectral.sub_rms_db);
-  util::json::put(spectral, "lowRmsDb", profile.spectral.low_rms_db);
-  util::json::put(spectral, "lowMidRmsDb", profile.spectral.low_mid_rms_db);
-  util::json::put(spectral, "midRmsDb", profile.spectral.mid_rms_db);
-  util::json::put(spectral, "highMidRmsDb", profile.spectral.high_mid_rms_db);
-  util::json::put(spectral, "highRmsDb", profile.spectral.high_rms_db);
-  util::json::put(spectral, "airRmsDb", profile.spectral.air_rms_db);
+  put_level(spectral, "subRmsDb", profile.spectral.sub_rms_db);
+  put_level(spectral, "lowRmsDb", profile.spectral.low_rms_db);
+  put_level(spectral, "lowMidRmsDb", profile.spectral.low_mid_rms_db);
+  put_level(spectral, "midRmsDb", profile.spectral.mid_rms_db);
+  put_level(spectral, "highMidRmsDb", profile.spectral.high_mid_rms_db);
+  put_level(spectral, "highRmsDb", profile.spectral.high_rms_db);
+  put_level(spectral, "airRmsDb", profile.spectral.air_rms_db);
   util::json::put(spectral, "centroidHz", profile.spectral.centroid_hz);
   util::json::put(spectral, "flatness", profile.spectral.flatness);
   util::json::put(spectral, "rolloffHz", profile.spectral.rolloff_hz);
@@ -738,6 +756,7 @@ const std::vector<std::string>& audio_profile_schema_paths() {
       "defects.hum.harmonicDbfs",
       "defects.hum.harmonics",
       "defects.noise",
+      "defects.noise.bandFloorBand",
       "defects.noise.bandFloorDbfs",
       "defects.noise.floorDbfs",
       "defects.reverb",

@@ -3,6 +3,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <cstdint>
+#include <cstring>
 
 #include "mixing/channel_strip.h"
 #include "mixing/meter.h"
@@ -19,7 +20,7 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
   constexpr int kBlock = 512;
   constexpr float kA = 0.25f;
 
-  // Before the momentary window (400 ms) is full, momentary LUFS stays at the floor.
+  // Before the momentary window (400 ms) is full, momentary LUFS is not measured (NaN).
   {
     sonare::mixing::MeterProcessor warmup;
     warmup.prepare(kSr, kBlock);
@@ -36,7 +37,8 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
     warmup.process(ch, 2, kBlock);
     warmup.process(ch, 2, kBlock);
     const auto early = warmup.snapshot();
-    REQUIRE_THAT(early.momentary_lufs, WithinAbs(sonare::constants::kFloorDb, 0.001f));
+    REQUIRE(std::isnan(early.momentary_lufs));
+    REQUIRE(std::isnan(early.short_term_lufs));
   }
 
   std::vector<float> buffer;
@@ -76,8 +78,9 @@ TEST_CASE("MeterProcessor windows forget loud history exactly", "[mixing]") {
   seasoned.prepare(kSr, kBlock);
   drive_meter_sine(seasoned, 0.3f, kSr, 120.0, kBlock);
   const auto silent = drive_meter_sine(seasoned, 0.0f, kSr, 30.0, kBlock);
-  REQUIRE(silent.momentary_lufs == sonare::constants::kFloorDb);
-  REQUIRE(silent.short_term_lufs == sonare::constants::kFloorDb);
+  // Exact-zero energy in the window is no measurable level: -inf, not a floor.
+  REQUIRE((std::isinf(silent.momentary_lufs) && silent.momentary_lufs < 0.0f));
+  REQUIRE((std::isinf(silent.short_term_lufs) && silent.short_term_lufs < 0.0f));
 
   // A quiet tone afterwards reads as it does on a meter with no history.
   sonare::mixing::MeterProcessor fresh;
@@ -721,9 +724,10 @@ TEST_CASE("MeterProcessor counts a non-finite sample as silence in every publish
       REQUIRE(std::isfinite(value));
     }
     // Peak, RMS, true peak, mono-compat and loudness all counted the same silent sample.
-    REQUIRE(snap.peak_db == control.peak_db);
-    REQUIRE(snap.rms_db == control.rms_db);
-    REQUIRE(snap.true_peak_db == control.true_peak_db);
+    // Bitwise, so the unused channels' not-measured NaN slots compare equal too.
+    REQUIRE(std::memcmp(&snap.peak_db, &control.peak_db, sizeof(snap.peak_db)) == 0);
+    REQUIRE(std::memcmp(&snap.rms_db, &control.rms_db, sizeof(snap.rms_db)) == 0);
+    REQUIRE(std::memcmp(&snap.true_peak_db, &control.true_peak_db, sizeof(snap.true_peak_db)) == 0);
     REQUIRE(snap.max_true_peak_db == control.max_true_peak_db);
     REQUIRE(snap.momentary_lufs == control.momentary_lufs);
     REQUIRE(snap.short_term_lufs == control.short_term_lufs);
@@ -813,4 +817,81 @@ TEST_CASE("StereoWidthProcessor settles exactly on its target and then passes au
     REQUIRE(left[i] == Catch::Approx(in_left[i]).margin(1e-6f));
     REQUIRE(right[i] == Catch::Approx(in_right[i]).margin(1e-6f));
   }
+}
+
+TEST_CASE("MeterProcessor levels are monotonic below the old floor and silence is no level",
+          "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 512;
+
+  float previous_peak = -std::numeric_limits<float>::infinity();
+  for (const float amplitude : {1.0e-15f, 1.0e-10f, 1.0e-5f}) {
+    CAPTURE(amplitude);
+    sonare::mixing::MeterProcessor meter;
+    meter.prepare(kSr, kBlock);
+    const auto snap = drive_meter_sine(meter, amplitude, kSr, 0.5, kBlock);
+    const float expected_peak = 20.0f * std::log10(amplitude);
+    REQUIRE_THAT(snap.peak_db[0], WithinAbs(expected_peak, 0.1f));
+    REQUIRE_THAT(snap.rms_db[0], WithinAbs(expected_peak - 3.0103f, 0.1f));
+    REQUIRE(snap.peak_db[0] > previous_peak);
+    previous_peak = snap.peak_db[0];
+    // A tone this quiet still has a loudness, far below any floor.
+    REQUIRE(std::isfinite(snap.momentary_lufs));
+    REQUIRE_THAT(snap.momentary_lufs, WithinAbs(expected_peak, 1.5f));
+    REQUIRE_THAT(snap.correlation, WithinAbs(1.0f, 0.0001f));
+  }
+  REQUIRE(previous_peak > -101.0f);
+
+  sonare::mixing::MeterProcessor silent;
+  silent.prepare(kSr, kBlock);
+  const auto snap = drive_meter_sine(silent, 0.0f, kSr, 0.5, kBlock);
+  for (const float value :
+       {snap.peak_db[0], snap.peak_db[1], snap.rms_db[0], snap.rms_db[1], snap.momentary_lufs}) {
+    REQUIRE((std::isinf(value) && value < 0.0f));
+  }
+  // Ratios with a zero denominator are undefined, and nothing can cancel in the mono sum.
+  REQUIRE(std::isnan(snap.correlation));
+  REQUIRE(std::isnan(snap.mono_compat_width));
+  REQUIRE(snap.likely_mono_compatible);
+}
+
+TEST_CASE("MeterProcessor true peak is NaN when switched off and -inf for silence", "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 512;
+
+  sonare::mixing::MeterProcessor off;
+  off.prepare(kSr, kBlock);
+  const auto unmeasured = drive_meter_sine(off, 0.5f, kSr, 0.1, kBlock);
+  REQUIRE(std::isnan(unmeasured.max_true_peak_db));
+  for (const float value : unmeasured.true_peak_db) REQUIRE(std::isnan(value));
+
+  sonare::mixing::MeterConfig config;
+  config.measure_true_peak = true;
+  sonare::mixing::MeterProcessor on(config);
+  on.prepare(kSr, kBlock);
+  const auto silent = drive_meter_sine(on, 0.0f, kSr, 0.1, kBlock);
+  REQUIRE((std::isinf(silent.max_true_peak_db) && silent.max_true_peak_db < 0.0f));
+  REQUIRE((std::isinf(silent.true_peak_db[0]) && silent.true_peak_db[0] < 0.0f));
+  // A plane the stereo drive wrote is measured; the unwritten ones are not.
+  REQUIRE(std::isnan(silent.true_peak_db[2]));
+}
+
+TEST_CASE("MeterProcessor loudness windows are NaN until they have filled", "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 512;
+  sonare::mixing::MeterProcessor meter;
+  meter.prepare(kSr, kBlock);
+
+  auto snap = drive_meter_sine(meter, 0.25f, kSr, 0.3, kBlock);
+  REQUIRE(std::isnan(snap.momentary_lufs));
+  REQUIRE(std::isnan(snap.short_term_lufs));
+  REQUIRE(std::isnan(snap.integrated_lufs));
+
+  snap = drive_meter_sine(meter, 0.25f, kSr, 0.4, kBlock);
+  REQUIRE(std::isfinite(snap.momentary_lufs));
+  REQUIRE(std::isnan(snap.short_term_lufs));
+
+  snap = drive_meter_sine(meter, 0.25f, kSr, 2.8, kBlock);
+  REQUIRE(std::isfinite(snap.short_term_lufs));
+  REQUIRE(std::isfinite(snap.integrated_lufs));
 }

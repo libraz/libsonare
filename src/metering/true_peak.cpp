@@ -17,9 +17,6 @@
 
 namespace sonare::metering {
 
-using sonare::constants::kEpsilon;
-using sonare::constants::kFloorDb;
-
 namespace {
 
 // Output indices are screened in groups of this many. Small enough that the
@@ -136,12 +133,8 @@ float true_peak(const Audio& audio, int oversample_factor) {
 }
 
 float true_peak_db(const Audio& audio, int oversample_factor) {
-  const float peak = true_peak(audio, oversample_factor);
-  // Silence floor: report the shared finite dB floor (kFloorDb, -120 dB) rather
-  // than -inf, matching the spectrum and dynamic-range meters. A finite floor is
-  // JSON-safe and gives every level-in-dB meter the same "silence" sentinel.
-  if (peak < kEpsilon) return kFloorDb;
-  return linear_to_db(peak);
+  if (audio.empty()) return kNotMeasured;
+  return amplitude_to_level_db(true_peak(audio, oversample_factor));
 }
 
 }  // namespace sonare::metering

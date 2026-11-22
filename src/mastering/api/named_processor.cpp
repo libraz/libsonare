@@ -115,6 +115,11 @@ void validate_params(const Param* params, std::size_t count) {
 
 namespace {
 
+// A level that was not measured (NaN) is an absent member; -inf stays and writes null.
+void put_level(::sonare::util::json::Object& object, const char* key, float level) {
+  if (!std::isnan(level)) ::sonare::util::json::put(object, key, level);
+}
+
 using detail::b;
 using detail::compressor_config;
 using detail::crossover_config;
@@ -875,6 +880,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
         result.left, result.right, sample_rate, target_lufs, config.ceiling_dbtp,
         config.oversample_factor, max_limiter_gain_reduction_db);
+    detail::require_measurable_loudness(stage_gain);
     const float gain_db = stage_gain.applied_db;
     loudness_target_lufs = target_lufs;
     loudness_requested_gain_db = stage_gain.requested_db;
@@ -1078,7 +1084,7 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     auto result = ::sonare::mastering::match::reference_loudness(source_audio, reference_audio);
     util::json::put(root, "sourceLufs", result.source_lufs);
     util::json::put(root, "referenceLufs", result.reference_lufs);
-    util::json::put(root, "gainToMatchDb", result.gain_to_match_db);
+    put_level(root, "gainToMatchDb", result.gain_to_match_db);
   } else if (name == "match.tonalBalance" || name == "match.tonalBalanceLogBands") {
     auto source_spectrum = ::sonare::mastering::match::reference_spectrum(source_audio);
     auto reference_spectrum = ::sonare::mastering::match::reference_spectrum(reference_audio);
@@ -1094,9 +1100,9 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
       json_ns::Object entry;
       util::json::put(entry, "lowHz", band.low_hz);
       util::json::put(entry, "highHz", band.high_hz);
-      util::json::put(entry, "sourceDb", band.source_db);
-      util::json::put(entry, "referenceDb", band.reference_db);
-      util::json::put(entry, "deviationDb", band.deviation_db);
+      put_level(entry, "sourceDb", band.source_db);
+      put_level(entry, "referenceDb", band.reference_db);
+      put_level(entry, "deviationDb", band.deviation_db);
       band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
     util::json::put(root, "bands", std::move(band_values));
@@ -1147,8 +1153,8 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
   if (name == "stereo.monoCompatCheck") {
     auto result = ::sonare::mastering::stereo::mono_compat_check(
         left, right, length, f(map, "correlationThreshold", 0.0f));
-    util::json::put(root, "correlation", result.correlation);
-    util::json::put(root, "width", result.width);
+    put_level(root, "correlation", result.correlation);
+    put_level(root, "width", result.width);
     util::json::put(root, "monoPeak", result.mono_peak);
     util::json::put(root, "sideRms", result.side_rms);
     util::json::put(root, "likelyMonoCompatible", result.likely_mono_compatible);
@@ -1164,7 +1170,7 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
       json_ns::Object entry;
       util::json::put(entry, "lowHz", band.low_hz);
       util::json::put(entry, "highHz", band.high_hz);
-      util::json::put(entry, "correlation", band.correlation);
+      put_level(entry, "correlation", band.correlation);
       util::json::put(entry, "sideRms", band.side_rms);
       band_values.emplace_back(json_ns::Value(std::move(entry)));
     }

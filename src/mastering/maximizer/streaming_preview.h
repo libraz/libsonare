@@ -19,7 +19,9 @@ struct StreamingPlatform {
 struct StreamingPreviewResult {
   std::string name;
   float integrated_lufs = 0.0f;
-  float true_peak_db = 0.0f;
+  float true_peak_db = 0.0f;  ///< -inf for digital silence.
+  /// Gain to the platform target; NaN (not measured) when the programme is silent or below the
+  /// gate.
   float normalization_gain_db = 0.0f;
   bool ceiling_risk = false;
 };

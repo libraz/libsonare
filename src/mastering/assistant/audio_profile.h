@@ -31,7 +31,8 @@ struct LoudnessProfile {
 /// @brief Spectral shape of the analysed signal.
 /// @details The `*_rms_db` band levels are dBFS on the mean-square convention the noise fields
 ///          use: a band's share of the signal's mean square, so a full-scale sine reads
-///          -3.01 dBFS in its band. They do not move with the input rate. The floor is -120.
+///          -3.01 dBFS in its band. They do not move with the input rate.
+///          A band of exact silence reads -inf; a band holding no bin reads NaN (not measured).
 struct SpectralProfile {
   float sub_rms_db = 0.0f;       ///< 20-60 Hz
   float low_rms_db = 0.0f;       ///< 60-250 Hz

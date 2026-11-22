@@ -430,7 +430,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       {std::max(num_channels, 0), prepared_channels_, static_cast<int>(sub_channels.size())});
 #if defined(SONARE_WITH_MIXING)
   std::array<float, mixing::kMaxMeterChannels> master_input_peak_db =
-      mixing::detail::meter_floor_array();
+      mixing::detail::meter_unmeasured_array();
   float master_gain_reduction_db = 0.0f;
   bool master_gr_published = false;
 #endif

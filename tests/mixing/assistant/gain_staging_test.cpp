@@ -133,11 +133,11 @@ TEST_CASE("gain staging follows the configured target rather than the tracks pre
 
 TEST_CASE("a silent track gets no gain staging delta", "[mixing][assistant]") {
   std::vector<TrackProfile> profiles{make_profile("music", -24.0f), make_profile("silent", 0.0f),
-                                     make_profile("floored", 0.0f)};
-  // Silence reaches the profile either as the BS.1770 -inf sentinel or pinned
-  // at the numerical dB floor; both mean the same thing here.
+                                     make_profile("unmeasured", 0.0f)};
+  // Silence reaches the profile as the BS.1770 -inf (no gated block), or as a loudness that was
+  // not measured (NaN); neither gives a level to stage against.
   profiles[1].base.loudness.integrated_lufs = -std::numeric_limits<float>::infinity();
-  profiles[2].base.loudness.integrated_lufs = sonare::constants::kFloorDb;
+  profiles[2].base.loudness.integrated_lufs = std::numeric_limits<float>::quiet_NaN();
 
   const std::vector<SceneDelta> deltas = decide_gain_staging(profiles, MixAssistantConfig{});
 
@@ -146,7 +146,7 @@ TEST_CASE("a silent track gets no gain staging delta", "[mixing][assistant]") {
   // Not "a delta with a zero trim" — no delta at all, so nothing downstream can
   // read the exclusion as a decision to leave the track where it is.
   CHECK(find_delta(deltas, "silent") == nullptr);
-  CHECK(find_delta(deltas, "floored") == nullptr);
+  CHECK(find_delta(deltas, "unmeasured") == nullptr);
 }
 
 TEST_CASE("a track shorter than one gating block gets no gain staging delta",

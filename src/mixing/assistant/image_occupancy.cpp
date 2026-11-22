@@ -13,14 +13,12 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "mastering/stereo/mono_compat_check.h"
-#include "mixing/meter.h"
 #include "util/constants.h"
 
 namespace sonare::mixing::assistant {
 namespace {
 
 using sonare::constants::kEpsilon;
-using sonare::mixing::kMaxMonoCompatWidth;
 
 // A band counts as crowded once its energy is effectively concentrated into
 // fewer than this many of the kPanBucketCount positions. `exp(entropy)` is the
@@ -314,9 +312,7 @@ std::vector<MonoRisk> analyze_mono_risks(const std::vector<TrackInput>& tracks,
     risk.track_index = static_cast<int>(index);
     risk.strip_id = profile.strip_id.empty() ? track.id : profile.strip_id;
     risk.correlation = compat.correlation;
-    // stereo_width diverges to +inf once the mid collapses. Report the finite
-    // sentinel the meter path already publishes so the value stays serializable.
-    risk.width = std::min(compat.width, kMaxMonoCompatWidth);
+    risk.width = compat.width;
     risk.wide_low_end = wide_low_end;
     risks.push_back(std::move(risk));
   }

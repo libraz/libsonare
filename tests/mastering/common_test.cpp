@@ -1029,9 +1029,9 @@ TEST_CASE("Stage level delta reports a static gain as a flat offset", "[masterin
   }
 }
 
-// Silent blocks are -inf on both sides; subtracting them directly would emit a
-// NaN into a report vector.
-TEST_CASE("Stage level delta reports silence as no change", "[mastering]") {
+// Silent blocks are -inf on both sides; their difference has no value, so it is not measured
+// rather than a NaN of arithmetic or a made-up zero.
+TEST_CASE("Stage level delta reports silence against silence as not measured", "[mastering]") {
   constexpr int kSampleRate = 48000;
   const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
   const std::vector<float> silence(frames, 0.0f);
@@ -1045,8 +1045,52 @@ TEST_CASE("Stage level delta reports silence as no change", "[mastering]") {
   common::stage_level_delta_lu(series, series, &momentary_delta, nullptr);
   REQUIRE(momentary_delta.size() == series.momentary_lufs.size());
   for (const float delta : momentary_delta) {
-    CHECK(delta == 0.0f);
+    CHECK(std::isnan(delta));
   }
+}
+
+TEST_CASE("Stage level delta keeps a stage that silenced its input at -inf", "[mastering]") {
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  const auto tone = series_tone(frames, kSampleRate, 440.0f, 0.4f);
+  const std::vector<float> silence(frames, 0.0f);
+
+  common::LoudnessSeries loud;
+  common::LoudnessSeries silent;
+  common::measure_loudness_series_interleaved(tone.data(), frames, 1, kSampleRate, &loud);
+  common::measure_loudness_series_interleaved(silence.data(), frames, 1, kSampleRate, &silent);
+
+  std::vector<float> removed;
+  std::vector<float> introduced;
+  common::stage_level_delta_lu(loud, silent, &removed, nullptr);
+  common::stage_level_delta_lu(silent, loud, &introduced, nullptr);
+  REQUIRE_FALSE(removed.empty());
+  for (const float delta : removed) CHECK((std::isinf(delta) && delta < 0.0f));
+  // A level against a silent baseline has no finite difference.
+  for (const float delta : introduced) CHECK(std::isnan(delta));
+}
+
+TEST_CASE("Mastering true peak reads its computed level, -inf only for exact silence",
+          "[mastering]") {
+  constexpr int kSampleRate = 48000;
+  float previous = 0.0f;
+  for (const float amplitude : {1.0e-6f, 1.0e-10f, 1.0e-12f, 1.0e-15f}) {
+    const sonare::Audio audio =
+        sonare::Audio::from_vector(std::vector<float>(kSampleRate, amplitude), kSampleRate);
+    const float level = common::measure_true_peak_dbtp(audio);
+    INFO("amplitude " << amplitude);
+    CHECK(std::isfinite(level));
+    CHECK(level < previous - 1.0f);
+    previous = level;
+  }
+  CHECK(previous < -200.0f);
+
+  const sonare::Audio silence =
+      sonare::Audio::from_vector(std::vector<float>(kSampleRate, 0.0f), kSampleRate);
+  const float silent_level = common::measure_true_peak_dbtp(silence);
+  CHECK((std::isinf(silent_level) && silent_level < 0.0f));
+  const auto summary = common::measure_loudness_summary(silence);
+  CHECK((std::isinf(summary.true_peak_dbtp) && summary.true_peak_dbtp < 0.0f));
 }
 
 TEST_CASE("Stage level delta refuses series of differing length", "[mastering]") {

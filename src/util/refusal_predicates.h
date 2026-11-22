@@ -174,6 +174,11 @@ inline constexpr const char* kNonNullPredicate = "must not be NULL";
 /// @brief "must not be empty", for a string or list the call needs at least one element of.
 inline constexpr const char* kNonEmptyPredicate = "must not be empty";
 
+/// @brief "has no measurable loudness" / "has no measurable level", for audio whose measured level
+/// is -inf (silent, or below the absolute gate) or not measured, when a gain is derived from it.
+inline constexpr const char* kNoMeasurableLoudnessPredicate = "has no measurable loudness";
+inline constexpr const char* kNoMeasurableLevelPredicate = "has no measurable level";
+
 /// @brief "must be the id of <thing> in this <owner>"; @p thing carries its article.
 inline std::string known_id_predicate(const std::string& thing, const std::string& owner) {
   return "must be the id of " + thing + " in this " + owner;

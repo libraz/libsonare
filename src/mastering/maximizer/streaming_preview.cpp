@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "mastering/common/loudness_measure.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -21,7 +22,8 @@ std::vector<StreamingPreviewResult> preview_from_measurements(
   for (const auto& platform : platforms) {
     if (platform.name.empty())
       throw SonareException(ErrorCode::InvalidParameter, "platform name must not be empty");
-    const float gain = std::isfinite(integrated) ? platform.target_lufs - integrated : 0.0f;
+    // Silence or a below-gate programme has no gain that reaches the target: not measured.
+    const float gain = std::isfinite(integrated) ? platform.target_lufs - integrated : kNotMeasured;
     results.push_back({platform.name, integrated, true_peak, gain,
                        std::isfinite(true_peak) && true_peak + gain > platform.ceiling_dbtp});
   }
@@ -71,7 +73,9 @@ std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>&
     entry["name"] = result.name;
     entry["integratedLufs"] = static_cast<double>(result.integrated_lufs);
     entry["truePeakDbtp"] = static_cast<double>(result.true_peak_db);
-    entry["normalizationGainDb"] = static_cast<double>(result.normalization_gain_db);
+    if (!std::isnan(result.normalization_gain_db)) {
+      entry["normalizationGainDb"] = static_cast<double>(result.normalization_gain_db);
+    }
     entry["ceilingRisk"] = result.ceiling_risk;
     platforms.push_back(json::Value(std::move(entry)));
   }

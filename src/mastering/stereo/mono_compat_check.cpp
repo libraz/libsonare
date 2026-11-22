@@ -87,7 +87,9 @@ MonoCompatResult mono_compat_check(const float* left, const float* right, size_t
     side_sum += static_cast<double>(side) * side;
   }
   result.side_rms = static_cast<float>(std::sqrt(side_sum / static_cast<double>(length)));
-  result.likely_mono_compatible = result.correlation >= correlation_threshold;
+  // With a silent channel nothing can cancel in the mono sum.
+  result.likely_mono_compatible =
+      std::isnan(result.correlation) || result.correlation >= correlation_threshold;
   return result;
 }
 

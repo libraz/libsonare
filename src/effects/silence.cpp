@@ -160,9 +160,11 @@ SplitReport split_with_report(const float* x, std::size_t n, float top_db, int f
   report.intervals = std::move(intervals);
   if (!rms.empty()) {
     const float peak = *std::max_element(rms.begin(), rms.end());
-    if (peak > 0.0f) {
-      const float quietest = *std::min_element(rms.begin(), rms.end());
-      report.silence_ceiling_db = -linear_to_db(quietest / peak);
+    const float quietest = *std::min_element(rms.begin(), rms.end());
+    // A zero peak or a zero frame under a nonzero peak has no finite depth: not measured.
+    if (peak > 0.0f && quietest > 0.0f) {
+      report.silence_ceiling_db = static_cast<float>(
+          -amplitude_to_level_db(static_cast<double>(quietest) / static_cast<double>(peak)));
     }
   }
   return report;
@@ -204,7 +206,11 @@ CommonSplitReport split_common_with_report(const float* const* signals, const st
       out.max_signal_intervals = count;
       out.min_signal_intervals = count;
     } else {
-      out.silence_ceiling_db = std::min(out.silence_ceiling_db, one.silence_ceiling_db);
+      // One signal with no measurable ceiling leaves the shared ceiling not measured.
+      out.silence_ceiling_db =
+          std::isnan(out.silence_ceiling_db) || std::isnan(one.silence_ceiling_db)
+              ? kNotMeasured
+              : std::min(out.silence_ceiling_db, one.silence_ceiling_db);
       out.max_signal_intervals = std::max(out.max_signal_intervals, count);
       out.min_signal_intervals = std::min(out.min_signal_intervals, count);
     }

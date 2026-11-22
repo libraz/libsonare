@@ -446,12 +446,12 @@ TEST_CASE("Hum detection recovers the corpus fundamental and harmonic levels",
       REQUIRE_THAT(detected.harmonic_dbfs[k],
                    WithinAbs(kPlantedHum50Db[k], kOrthogonalLevelToleranceDb));
     }
-    // Nothing was planted past the fourth, and the slots say so with the dB
-    // floor rather than with the zero a struct starts at -- which would read as
-    // full scale.
+    // Nothing was planted past the fourth: those slots are measured (below Nyquist) and read far
+    // under the planted series, rather than the zero a struct starts at -- full scale.
     for (int k = static_cast<int>(kPlantedHum50Db.size()); k < kDehumMaxHarmonics; ++k) {
       CAPTURE(k);
-      REQUIRE(detected.harmonic_dbfs[k] == constants::kFloorDb);
+      REQUIRE_FALSE(std::isnan(detected.harmonic_dbfs[k]));
+      REQUIRE(detected.harmonic_dbfs[k] < kPlantedHum50Db.back() - 60.0);
     }
   }
 

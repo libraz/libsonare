@@ -959,22 +959,72 @@ TEST_CASE(
   REQUIRE(compressor_reduction < -3.0f);
 }
 
-TEST_CASE("Mono chain leaves silence unchanged when loudness is enabled",
+TEST_CASE("A chain whose loudness stage has nothing to measure applies no gain and carries on",
           "[mastering][chain][loudness]") {
   constexpr int sample_rate = 48000;
-  std::vector<float> silence(static_cast<std::size_t>(sample_rate) * 4, 0.0f);
+  const std::size_t length = static_cast<std::size_t>(sample_rate) * 4;
+  // Exact silence, and a tone whose every block sits under the -70 LUFS absolute gate.
+  std::vector<float> silence(length, 0.0f);
+  std::vector<float> below_gate(length);
+  for (std::size_t i = 0; i < length; ++i) {
+    below_gate[i] = 1.0e-4f * std::sin(sonare::constants::kTwoPi * 997.0f * static_cast<float>(i) /
+                                       static_cast<float>(sample_rate));
+  }
   MasteringChainConfig config;
   config.loudness.enabled = true;
   config.loudness.target_lufs = -14.0f;
+  MasteringChainConfig off = config;
+  off.loudness.enabled = false;
 
-  const auto result =
-      MasteringChain(config).process_mono(silence.data(), silence.size(), sample_rate);
+  for (const auto* input : {&silence, &below_gate}) {
+    INFO((input == &silence ? "silence" : "below the absolute gate"));
+    const auto mono = MasteringChain(config).process_mono(input->data(), length, sample_rate);
+    const auto mono_off = MasteringChain(off).process_mono(input->data(), length, sample_rate);
+    CHECK(std::isnan(mono.loudness_gain_db));
+    CHECK(std::isnan(mono.report.loudness_gain_db));
+    CHECK(mono.applied_gain_db == 0.0f);
+    CHECK_FALSE(mono.loudness_target_limited);
+    CHECK(std::isinf(mono.report.before.integrated_lufs));
+    // The limiter still runs; with no gain in front of it the level is the one the chain had
+    // without the stage (its filtering may move individual samples, never the level).
+    const auto rms_db = [](const std::vector<float>& x) {
+      double sum = 0.0;
+      for (const float v : x) sum += static_cast<double>(v) * static_cast<double>(v);
+      return 10.0 * std::log10(sum / static_cast<double>(x.size()));
+    };
+    if (input == &silence) {
+      CHECK(mono.samples == mono_off.samples);
+    } else {
+      CHECK_THAT(rms_db(mono.samples), Catch::Matchers::WithinAbs(rms_db(mono_off.samples), 0.05));
+    }
 
-  REQUIRE(result.applied_gain_db == 0.0f);
-  REQUIRE_FALSE(result.loudness_target_limited);
-  REQUIRE(result.output_true_peak_dbtp == sonare::constants::kFloorDb);
-  REQUIRE(std::all_of(result.samples.begin(), result.samples.end(),
-                      [](float sample) { return sample == 0.0f; }));
+    const auto stereo =
+        MasteringChain(config).process_stereo(input->data(), input->data(), length, sample_rate);
+    const auto stereo_off =
+        MasteringChain(off).process_stereo(input->data(), input->data(), length, sample_rate);
+    CHECK(std::isnan(stereo.loudness_gain_db));
+    CHECK(std::isnan(stereo.report.loudness_gain_db));
+    if (input == &silence) {
+      CHECK(stereo.left == stereo_off.left);
+      CHECK(stereo.right == stereo_off.right);
+    } else {
+      CHECK_THAT(rms_db(stereo.left), Catch::Matchers::WithinAbs(rms_db(stereo_off.left), 0.05));
+      CHECK_THAT(rms_db(stereo.right), Catch::Matchers::WithinAbs(rms_db(stereo_off.right), 0.05));
+    }
+  }
+
+  const auto silent = MasteringChain(config).process_mono(silence.data(), length, sample_rate);
+  CHECK((std::isinf(silent.output_true_peak_dbtp) && silent.output_true_peak_dbtp < 0.0f));
+  // Silence against silence has no spectral difference in any band.
+  for (const float delta : silent.report.band_energy_delta_db) CHECK(std::isnan(delta));
+
+  // Control: a measurable input reports the gain the stage applied.
+  std::vector<float> tone(length);
+  for (std::size_t i = 0; i < length; ++i) tone[i] = 1000.0f * below_gate[i];
+  const auto measured = MasteringChain(config).process_mono(tone.data(), length, sample_rate);
+  CHECK(std::isfinite(measured.loudness_gain_db));
+  CHECK(measured.loudness_gain_db == measured.report.loudness_gain_db);
+  CHECK(measured.loudness_gain_db > 0.0f);
 }
 
 TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
@@ -1464,13 +1514,16 @@ TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][cha
   REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
 }
 
-TEST_CASE("StreamingMasteringChain options constructor requires finite gain when loudness enabled",
+TEST_CASE("StreamingMasteringChain options constructor reads a NaN gain as not measured",
           "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.loudness.enabled = true;
-  // Default options leave loudness_static_gain_db = NaN -> must still throw.
-  REQUIRE_THROWS_AS(StreamingMasteringChain(config, StreamingMasteringChainOptions{}),
-                    sonare::SonareException);
+  // NaN is the not-measured gain the streaming loudness gain helper returns for silence: the
+  // stage applies none. Only an infinite gain is refused.
+  REQUIRE_NOTHROW(StreamingMasteringChain(config, StreamingMasteringChainOptions{}));
+  StreamingMasteringChainOptions infinite;
+  infinite.loudness_static_gain_db = std::numeric_limits<float>::infinity();
+  REQUIRE_THROWS_AS(StreamingMasteringChain(config, infinite), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain accepts loudness as a precomputed static gain",
@@ -2835,6 +2888,21 @@ TEST_CASE("analyze_named_stereo serializes an out-of-phase pair as valid JSON",
   REQUIRE(value["likelyMonoCompatible"].as_bool() == false);
 }
 
+TEST_CASE("analyze_named_stereo leaves out the readings a silent pair cannot give",
+          "[mastering][chain][json]") {
+  // Correlation against a silent channel and the width of zero mid and side are not measured:
+  // their members are absent, while the energies that are measured stay present.
+  const std::vector<float> silence(static_cast<size_t>(kAnalysisSampleRate) / 4, 0.0f);
+
+  const std::string text =
+      analyze_named_stereo("stereo.monoCompatCheck", silence.data(), silence.data(), silence.size(),
+                           kAnalysisSampleRate, {});
+  const auto value = sonare::util::json::parse_strict(text);
+  REQUIRE_FALSE(value.contains("correlation"));
+  REQUIRE_FALSE(value.contains("width"));
+  REQUIRE(value.contains("sideRms"));
+}
+
 TEST_CASE("analyze_named_pair serializes a silent source as valid JSON",
           "[mastering][chain][json]") {
   // EBU R128 reports -inf LUFS for a signal below the measurement floor, and
@@ -2851,9 +2919,9 @@ TEST_CASE("analyze_named_pair serializes a silent source as valid JSON",
   const auto value = sonare::util::json::parse_strict(text);
   REQUIRE(value["sourceLufs"].is_null());
   REQUIRE(std::isfinite(value["referenceLufs"].as_number()));
-  // reference_loudness() zeroes the match gain when either reading is
-  // non-finite, so this one stays a real number.
-  REQUIRE_THAT(value["gainToMatchDb"].as_number(), WithinAbs(0.0, 1e-6));
+  // No gain brings a silent source to the reference: not measured, so the member is absent
+  // rather than null (a -inf level) or a made-up number.
+  REQUIRE_FALSE(value.contains("gainToMatchDb"));
 }
 
 TEST_CASE("named analysis JSON is locale-independent", "[mastering][chain][json][locale]") {

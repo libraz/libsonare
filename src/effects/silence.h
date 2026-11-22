@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "util/db.h"
 #include "util/parameter_checks.h"
 
 namespace sonare {
@@ -89,9 +90,9 @@ struct SplitReport {
   ///   threshold can find silence here. Above this figure the signal reads as
   ///   continuously sounding, which is why a caller holding one interval cannot
   ///   otherwise tell "no quiet moment exists" from "the threshold was set too
-  ///   loose to see one". 0 for an all-silent signal, where the peak is 0 and
-  ///   the ratio has no value.
-  float silence_ceiling_db = 0.0f;
+  ///   loose to see one". NaN (not measured) when the peak is 0 or a frame is
+  ///   exactly 0, where the ratio has no finite depth.
+  float silence_ceiling_db = kNotMeasured;
 };
 
 /// @brief split() with its report; split() is this without the second field.
@@ -108,8 +109,9 @@ struct CommonSplitReport {
   std::vector<std::pair<int, int>> intervals;
   /// @brief The smallest @ref SplitReport::silence_ceiling_db across the signals.
   /// @details The union needs every signal quiet at the same place, so the signal
-  ///   with the least headroom is the binding constraint.
-  float silence_ceiling_db = 0.0f;
+  ///   with the least headroom is the binding constraint. NaN when any signal's
+  ///   ceiling is not measured.
+  float silence_ceiling_db = kNotMeasured;
   int max_signal_intervals = 0;  ///< Intervals the most fragmented signal produced alone.
   int min_signal_intervals = 0;  ///< Intervals the least fragmented signal produced alone.
 };

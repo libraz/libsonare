@@ -674,7 +674,7 @@ TEST_CASE("the noise floor detector recovers a planted floor", "[repair][stereo]
     double band_power = 0.0;
     int populated = 0;
     for (size_t k = 0; k < repair::kRepairNoiseBandCount; ++k) {
-      if (detection.band_floor_dbfs[k] <= sonare::constants::kFloorDb) continue;
+      if (!std::isfinite(detection.band_floor_dbfs[k])) continue;
       ++populated;
       band_power += std::pow(10.0, 0.1 * detection.band_floor_dbfs[k]);
     }

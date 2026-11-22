@@ -32,8 +32,8 @@ struct ScopeTelemetryRecord {
   int64_t render_frame = 0;
   uint64_t seq = 0;
   uint32_t dropped_records = 0;
-  /// Linear FFT magnitude bands in dBFS, spanning [0, Nyquist]; band i covers a
-  /// contiguous slice of the FFT bins, so its center frequency is
+  /// Linear FFT magnitude bands in dBFS (-inf for a band of exactly zero power), spanning
+  /// [0, Nyquist]; band i covers a contiguous slice of the FFT bins, so its center frequency is
   /// (i + 0.5) / band_count * (sample_rate / 2).
   uint32_t band_count = 0;
   std::array<float, kMaxBands> bands{};

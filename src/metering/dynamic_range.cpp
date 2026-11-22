@@ -14,16 +14,11 @@
 
 namespace sonare::metering {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
+// floor_db is the caller's clamp, applied to the measured level; it never detects silence.
 float rms_db_for_window(const float* data, size_t start, size_t length, float floor_db) {
-  if (length == 0) return floor_db;
-
-  const float window_rms = rms(data + start, length);
-  if (window_rms < kEpsilon) return floor_db;
-  return std::max(floor_db, linear_to_db(window_rms));
+  return std::max(floor_db, amplitude_to_level_db(rms(data + start, length)));
 }
 
 }  // namespace
@@ -37,7 +32,8 @@ void validate_dynamic_range_config(const DynamicRangeConfig& config) {
   if (config.low_percentile > config.high_percentile) {
     check::refuse_relation({"low_percentile", "high_percentile"}, "{0} must be at most {1}");
   }
-  check::finite_float(config.floor_db, "floor_db");
+  // -inf asks for no clamp at all.
+  if (!(config.floor_db == kNoLevelDb)) check::finite_float(config.floor_db, "floor_db");
 }
 
 DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_sec,
@@ -61,11 +57,14 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   validate_dynamic_range_config(config);
 
   DynamicRangeResult result;
-  if (audio.empty()) return result;
+  if (audio.empty()) {
+    result.low_percentile_db = kNotMeasured;
+    result.high_percentile_db = kNotMeasured;
+    result.dynamic_range_db = kNotMeasured;
+    return result;
+  }
 
-  // The per-window fold writes floor_db first, which is the only thing keeping a
-  // non-finite level out of the std::sort below. Refuse here, so that ordering is
-  // a property of the input rather than of an argument order nothing states.
+  // A non-finite sample would put a NaN level into the std::sort below.
   SONARE_CHECK_MSG(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter,
                    "dynamic_range: audio contains a non-finite sample");
 
@@ -101,7 +100,8 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   std::sort(sorted.begin(), sorted.end());
   result.low_percentile_db = static_cast<float>(percentile_sorted(sorted, config.low_percentile));
   result.high_percentile_db = static_cast<float>(percentile_sorted(sorted, config.high_percentile));
-  result.dynamic_range_db = result.high_percentile_db - result.low_percentile_db;
+  result.dynamic_range_db =
+      level_difference_db(result.high_percentile_db, result.low_percentile_db);
   return result;
 }
 

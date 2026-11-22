@@ -669,7 +669,7 @@ TEST_CASE("degenerate dynamics input yields an empty suggestion", "[mixing][assi
     std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal),
                                        make_profile("kick", SourceClass::Kick)};
     for (TrackProfile& profile : profiles) {
-      profile.base.loudness.integrated_lufs = sonare::constants::kFloorDb;
+      profile.base.loudness.integrated_lufs = -std::numeric_limits<float>::infinity();
     }
     CHECK(decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim)
               .empty());

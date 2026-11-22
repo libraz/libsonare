@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 
 #include "core/window.h"
 #include "mastering/eq/equalizer.h"
@@ -10,12 +11,8 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
-#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
-
-using sonare::discard_if_non_finite;
-using sonare::constants::kFloorDb;
 
 namespace {
 
@@ -105,7 +102,7 @@ void EqSpectrumAnalyzer::prepare(double sample_rate) {
 void EqSpectrumAnalyzer::reset() noexcept {
   std::fill(ring_.begin(), ring_.end(), 0.0f);
   ring_pos_ = 0;
-  profile_db_.fill(kFloorDb);
+  profile_db_.fill(kNotMeasured);
   samples_since_transform_ = 0;
   has_profile_ = false;
 }
@@ -113,7 +110,7 @@ void EqSpectrumAnalyzer::reset() noexcept {
 void EqSpectrumAnalyzer::analyze(const float* const* channels, int num_channels, int num_samples,
                                  std::array<float, kSpectrumProfileBands>& out) noexcept {
   if (!ready_) {
-    out.fill(kFloorDb);
+    out.fill(kNotMeasured);
     return;
   }
   append(channels, num_channels, num_samples);
@@ -167,6 +164,11 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
   const float release = static_cast<float>(std::exp(-elapsed_seconds / kProfileReleaseSeconds));
   bool discarded = false;
   for (size_t band = 0; band < kSpectrumProfileBands; ++band) {
+    // A band no bin reaches has no estimate.
+    if (band_bin_begin_[band] == band_bin_end_[band]) {
+      profile_db_[band] = kNotMeasured;
+      continue;
+    }
     double power = 0.0;
     for (int bin = band_bin_begin_[band]; bin < band_bin_end_[band]; ++bin) {
       const std::complex<float>& value = bins_[static_cast<size_t>(bin)];
@@ -177,36 +179,18 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
     // Dividing the summed bin power by the window's equivalent noise bandwidth
     // undoes the spreading of a tone across the window's main lobe, so a
     // full-scale sine reports 0 dB in the band that contains it.
-    const float band_db = power_to_db_scalar(static_cast<float>(power / window_enbw_));
-    // The fold answers with its FIRST argument for a non-finite second, so a
-    // non-finite band reads as silence. That is a substitution on the way in,
-    // not a state discard: the profile below never becomes non-finite, so
-    // nothing is ever returned to a post-reset value here. Counting it on the
-    // discard counter also reports one caller event more than once -- the ring
-    // holds the sample across several transforms, so an overlapping window
-    // meets the same one again in each of them.
-    const float level_db = std::max(kFloorDb, band_db);
-    if (!has_profile_ || level_db >= profile_db_[band]) {
+    const float level_db = static_cast<float>(power_to_level_db(power / window_enbw_));
+    // Zero power is -inf, the limit of the fall law, so it replaces the band at once; a
+    // non-finite bin reads NaN (not measured) and is not a state to rest.
+    if (level_db == std::numeric_limits<float>::infinity()) {
+      profile_db_[band] = kNotMeasured;
+      discarded = true;
+    } else if (std::isnan(level_db) || level_db == kNoLevelDb || !has_profile_ ||
+               !std::isfinite(profile_db_[band]) || level_db >= profile_db_[band]) {
       profile_db_[band] = level_db;
     } else {
       profile_db_[band] = level_db + (profile_db_[band] - level_db) * release;
     }
-  }
-
-  // The fall ballistics carry each band between transforms, and the rise branch
-  // cannot take a band back: a later finite level compares below a stranded one
-  // and is smoothed toward it instead. Each band rests at the floor, alone, so a
-  // stranded band does not take the rest of the profile with it.
-  //
-  // Never seen to fire. Driving NaN, +inf and -inf through the analyser left the
-  // profile finite every time: the transform leaves a NaN somewhere in each
-  // band's bin range, and the level fold above answers std::max(kFloorDb, NaN)
-  // with kFloorDb. That is a consequence of how bands map onto bins rather than a
-  // barrier anyone built, so what this guards is the mapping changing. It is a
-  // measured absence on the signals tried, not a proof no input reaches here,
-  // which is why no test covers it -- a positive control could not be satisfied.
-  for (float& band_db : profile_db_) {
-    discarded |= discard_if_non_finite(band_db, kFloorDb);
   }
   if (discarded) non_finite_discards_.bump();
 }

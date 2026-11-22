@@ -88,6 +88,8 @@ float interpolated_spectrum_db(const mastering::match::ReferenceSpectrum& spectr
   const size_t low = high - 1;
   const float low_frequency = spectrum.frequencies[low];
   const float high_frequency = spectrum.frequencies[high];
+  // Either neighbour with no level leaves the interpolated bin with none.
+  if (std::isinf(spectrum.db[low]) || std::isinf(spectrum.db[high])) return kNoLevelDb;
   const float ratio = (frequency_hz - low_frequency) / (high_frequency - low_frequency);
   return spectrum.db[low] + ratio * (spectrum.db[high] - spectrum.db[low]);
 }
@@ -107,8 +109,8 @@ std::array<float, kMasteringReportBandCount> spectrum_delta(
   std::array<float, kMasteringReportBandCount> delta{};
   for (size_t index = 0; index < delta.size(); ++index) {
     const float frequency_hz = report_band_frequency_hz(index, sample_rate);
-    delta[index] = interpolated_spectrum_db(after, frequency_hz) -
-                   interpolated_spectrum_db(before, frequency_hz);
+    delta[index] = level_difference_db(interpolated_spectrum_db(after, frequency_hz),
+                                       interpolated_spectrum_db(before, frequency_hz));
   }
   return delta;
 }
@@ -117,7 +119,7 @@ float stereo_spectrum_db(const mastering::match::ReferenceSpectrum& left,
                          const mastering::match::ReferenceSpectrum& right, float frequency_hz) {
   const float left_power = db_to_power_scalar(interpolated_spectrum_db(left, frequency_hz));
   const float right_power = db_to_power_scalar(interpolated_spectrum_db(right, frequency_hz));
-  return 10.0f * std::log10(0.5f * (left_power + right_power));
+  return power_to_level_db(0.5f * (left_power + right_power));
 }
 
 // Long-term spectrum of one channel. Audio::from_buffer deep-copies, so the
@@ -139,8 +141,8 @@ std::array<float, kMasteringReportBandCount> stereo_spectrum_delta(
   std::array<float, kMasteringReportBandCount> delta{};
   for (size_t index = 0; index < delta.size(); ++index) {
     const float frequency_hz = report_band_frequency_hz(index, sample_rate);
-    delta[index] = stereo_spectrum_db(after_left, after_right, frequency_hz) -
-                   stereo_spectrum_db(before_left, before_right, frequency_hz);
+    delta[index] = level_difference_db(stereo_spectrum_db(after_left, after_right, frequency_hz),
+                                       stereo_spectrum_db(before_left, before_right, frequency_hz));
   }
   return delta;
 }
@@ -609,8 +611,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   }
 
   // 16. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
-  float loudness_requested_gain_db = 0.0f;
-  float loudness_applied_gain_db = 0.0f;
+  float loudness_requested_gain_db = kNotMeasured;
+  float loudness_applied_gain_db = kNotMeasured;
   if (config_.loudness.enabled) {
     // Bound the static normalization gain to the ceiling headroom plus the depth
     // the limiter below may be driven to (mirrors the mono loudness_optimize()
@@ -623,7 +625,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     const float gain_db = stage_gain.applied_db;
     loudness_requested_gain_db = stage_gain.requested_db;
     loudness_applied_gain_db = gain_db;
-    if (gain_db != 0.0f) {
+    // An input with no measurable loudness gives the stage nothing to act on; the limiter runs.
+    if (std::isfinite(gain_db) && gain_db != 0.0f) {
       detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
     }
@@ -664,6 +667,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
+  result.loudness_gain_db = loudness_applied_gain_db;
+  result.report.loudness_gain_db = loudness_applied_gain_db;
   result.report.band_energy_delta_db = spectrum_delta(before_spectrum, after_spectrum, sample_rate);
   result.samples = std::move(data);
   return result;
@@ -874,8 +879,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   }
 
   // 18. loudness (stereo path: manual gain + TruePeakLimiter pass)
-  float loudness_requested_gain_db = 0.0f;
-  float loudness_applied_gain_db = 0.0f;
+  float loudness_requested_gain_db = kNotMeasured;
+  float loudness_applied_gain_db = kNotMeasured;
   if (config_.loudness.enabled) {
     // One BS.1770 measurement drives both the requested gain and the bounded gain.
     const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
@@ -884,7 +889,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     const float gain_db = stage_gain.applied_db;
     loudness_requested_gain_db = stage_gain.requested_db;
     loudness_applied_gain_db = gain_db;
-    if (gain_db != 0.0f) {
+    // An input with no measurable loudness gives the stage nothing to act on; the limiter runs.
+    if (std::isfinite(gain_db) && gain_db != 0.0f) {
       detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;
     }
@@ -925,6 +931,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
+  result.loudness_gain_db = loudness_applied_gain_db;
+  result.report.loudness_gain_db = loudness_applied_gain_db;
   result.report.band_energy_delta_db =
       stereo_spectrum_delta(before_left_spectrum, before_right_spectrum, after_left_spectrum,
                             after_right_spectrum, sample_rate);
@@ -981,9 +989,10 @@ StreamingLoudnessGain streaming_loudness_gain_mono(const MasteringChainConfig& c
   validate_mastering_chain_config(config);
   MasteringChain chain(without_loudness_stage(config));
   const MonoChainResult stage_input = chain.process_mono(samples, length, sample_rate);
-  return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
+  const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
       stage_input.samples, sample_rate, config.loudness.target_lufs, config.loudness.ceiling_dbtp,
-      config.loudness.true_peak_oversample, config.loudness.max_limiter_gain_reduction_db));
+      config.loudness.true_peak_oversample, config.loudness.max_limiter_gain_reduction_db);
+  return to_streaming_loudness_gain(stage_gain);
 }
 
 StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig& config,
@@ -992,9 +1001,10 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
   validate_mastering_chain_config(config);
   MasteringChain chain(without_loudness_stage(config));
   const StereoChainResult stage_input = chain.process_stereo(left, right, length, sample_rate);
-  return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
+  const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
       stage_input.left, stage_input.right, sample_rate, config.loudness.target_lufs,
       config.loudness.ceiling_dbtp, config.loudness.true_peak_oversample,
-      config.loudness.max_limiter_gain_reduction_db));
+      config.loudness.max_limiter_gain_reduction_db);
+  return to_streaming_loudness_gain(stage_gain);
 }
 }  // namespace sonare::mastering::api

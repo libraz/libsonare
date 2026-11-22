@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "core/spectrum.h"
+#include "mastering/common/noise_profile.h"
 #include "mastering/common/noise_tracker.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
@@ -2240,4 +2241,66 @@ TEST_CASE("Dehum Subtract seeds short clips from the actual reference geometry",
       }
     }
   }
+}
+
+TEST_CASE("Noise floor levels follow the level rule", "[repair][noise-floor]") {
+  constexpr int kBins = 33;
+  constexpr int kFrames = 4;
+  constexpr int kSampleRate = 48000;
+  const std::vector<double> noise_sum(kBins, 1.0);
+  const std::vector<double> power_sum(kBins, 2.0);
+  const auto floor_at = [&](double mean_square) {
+    return mastering::common::noise_floor_dbfs_from_sums(noise_sum.data(), power_sum.data(), kBins,
+                                                         kFrames, mean_square, kSampleRate);
+  };
+
+  // A reading far under any epsilon is its computed level, and moves one for one with the signal.
+  const auto quiet = floor_at(1.0e-24);
+  const auto quieter = floor_at(1.0e-27);
+  CHECK(std::isfinite(quiet.broadband));
+  CHECK(quiet.broadband < -200.0f);
+  CHECK_THAT(quiet.broadband - quieter.broadband, WithinAbs(30.0, 1.0e-3));
+
+  // Zero power is -inf in every band that holds a bin, and no band is read as a floor value.
+  const auto silent = floor_at(0.0);
+  CHECK((std::isinf(silent.broadband) && silent.broadband < 0.0f));
+  int silent_bands = 0;
+  for (const float level : silent.bands) {
+    if (std::isnan(level)) continue;
+    CHECK((std::isinf(level) && level < 0.0f));
+    ++silent_bands;
+  }
+  CHECK(silent_bands > 0);
+
+  // With no frame there is nothing to measure from.
+  const auto none = mastering::common::noise_floor_dbfs_from_sums(
+      noise_sum.data(), power_sum.data(), kBins, 0, 1.0e-3, kSampleRate);
+  CHECK(std::isnan(none.broadband));
+  for (const float level : none.bands) CHECK(std::isnan(level));
+}
+
+TEST_CASE("Hum harmonic levels follow the level rule", "[repair][hum]") {
+  constexpr int kHumRate = 8000;
+  DehumConfig config;
+  config.fundamental_hz = 400.0f;
+  config.harmonics = 3;
+
+  // Silence has no level at a harmonic below Nyquist; one at or past Nyquist is not measured.
+  const std::vector<float> silence(kHumRate, 0.0f);
+  const HumDetection silent = detect_hum(silence.data(), silence.size(), kHumRate, config);
+  CHECK((std::isinf(silent.harmonic_dbfs[0]) && silent.harmonic_dbfs[0] < 0.0f));
+  for (int k = 12; k < kDehumMaxHarmonics; ++k) {
+    CAPTURE(k);
+    CHECK(std::isnan(silent.harmonic_dbfs[k]));
+  }
+
+  // A tone far under any epsilon reads its computed level.
+  std::vector<float> quiet(kHumRate);
+  for (size_t i = 0; i < quiet.size(); ++i) {
+    quiet[i] = 1.0e-12f * static_cast<float>(std::sin(constants::kTwoPiD * 400.0 *
+                                                      static_cast<double>(i) / kHumRate));
+  }
+  const HumDetection detected = detect_hum(quiet.data(), quiet.size(), kHumRate, config);
+  CHECK(std::isfinite(detected.harmonic_dbfs[0]));
+  CHECK(detected.harmonic_dbfs[0] < -200.0f);
 }

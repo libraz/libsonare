@@ -50,7 +50,8 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
 /// @param reports_json Receives `[{ stage, scope, reports }]` in application order: `scope` is
 ///        `"channel"` with one report per channel, or `"linked"` with exactly one for the set.
 /// @return false when @p cancel stopped the application; nothing was written then.
-/// @throws SonareException(InvalidParameter) for a bad channel set or stage list.
+/// @throws SonareException(InvalidParameter) for a bad channel set, and (InvalidFormat) for a
+///         stage list the analysis could not have written as `recommended`.
 bool repair_apply_json(const float* const* channels, std::size_t channel_count, std::size_t length,
                        int sample_rate, const std::string& stages_json, float* const* out_channels,
                        std::string* reports_json, const RepairProgressCallback& progress = {},

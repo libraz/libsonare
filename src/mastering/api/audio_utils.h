@@ -15,6 +15,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -84,14 +85,15 @@ inline constexpr float kLoudnessTargetToleranceLu = 0.5f;
 // The static gain a loudness stage requests and the gain it applies.
 struct LoudnessStageGain {
   // Gain landing the remeasured stage input on the target, re-gated at that gain
-  // (metering::gain_to_integrated_lufs); NaN when the input is below the absolute gate.
+  // (metering::gain_to_integrated_lufs); NaN when the input has no measurable loudness.
   float requested_db = std::numeric_limits<float>::quiet_NaN();
-  // requested_db bounded by the ceiling; 0 when nothing was requested.
-  float applied_db = 0.0f;
-  // Integrated loudness of the stage input; non-finite below the absolute gate.
+  // requested_db bounded by the ceiling; NaN when nothing could be requested.
+  float applied_db = std::numeric_limits<float>::quiet_NaN();
+  // Integrated loudness of the stage input; -inf for silence or input below the absolute gate.
   float measured_lufs = -std::numeric_limits<float>::infinity();
-  // True peak (dBTP) of the stage input the gain was bounded against.
-  float true_peak_db = sonare::constants::kFloorDb;
+  // True peak (dBTP) of the stage input the gain was bounded against; -inf for digital silence,
+  // NaN until measured.
+  float true_peak_db = sonare::kNotMeasured;
 };
 
 // Bounds a static normalization gain. The gain may exceed the peak headroom
@@ -110,8 +112,17 @@ inline float bound_loudness_gain_db(float requested_gain_db, float ceiling_dbtp,
   return std::min(requested_gain_db, headroom_db + std::max(max_limiter_gain_reduction_db, 0.0f));
 }
 
+// Refuses a stage gain solved from an input with no measurable loudness. An operation whose
+// whole request is a loudness target calls this; a composite stage tests measured_lufs and
+// applies nothing instead.
+inline void require_measurable_loudness(const LoudnessStageGain& gain) {
+  ::sonare::util::check::measurable_level(gain.measured_lufs, "audio",
+                                          ::sonare::util::refusal::kNoMeasurableLoudnessPredicate);
+}
+
 // Solves and bounds the gain for an interleaved stage input whose true peak is
-// @p peak_db.
+// @p peak_db. Silence, or a signal no block of which passes the absolute gate, leaves both
+// gains NaN.
 inline LoudnessStageGain loudness_stage_gain(const float* interleaved, std::size_t frames,
                                              int channels, int sample_rate, float target_lufs,
                                              float ceiling_dbtp, float peak_db,
@@ -121,9 +132,7 @@ inline LoudnessStageGain loudness_stage_gain(const float* interleaved, std::size
   LoudnessStageGain gain;
   gain.measured_lufs = solved.measured_lufs;
   gain.true_peak_db = peak_db;
-  if (!std::isfinite(solved.measured_lufs)) {
-    return gain;
-  }
+  if (!std::isfinite(solved.measured_lufs)) return gain;
   gain.requested_db = solved.gain_db;
   gain.applied_db =
       bound_loudness_gain_db(solved.gain_db, ceiling_dbtp, peak_db, max_limiter_gain_reduction_db);

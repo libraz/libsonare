@@ -224,10 +224,11 @@ TEST_CASE("DynamicsAnalyzer handles degenerate sub-sample window", "[dynamics_an
   REQUIRE(std::isfinite(analyzer.peak_db()));
   REQUIRE(std::isfinite(analyzer.rms_db()));
   REQUIRE(std::isfinite(analyzer.crest_factor()));
-  REQUIRE(std::isfinite(analyzer.dynamic_range_db()));
+  // The first window holds an exact zero (-inf): the range against it is not measured, never inf.
+  REQUIRE_FALSE(std::isinf(analyzer.dynamic_range_db()));
 
   for (float rms : analyzer.loudness_curve().rms_db) {
-    REQUIRE(std::isfinite(rms));
+    REQUIRE_FALSE(std::isnan(rms));
   }
 }
 
@@ -242,10 +243,12 @@ TEST_CASE("DynamicsAnalyzer short transient is not forced compressed", "[dynamic
   const int n_samples = static_cast<int>(sr * duration);
   std::vector<float> samples(n_samples, 0.0f);
 
-  // Sharp attack decaying to silence: loud onset followed by near-silent tail.
+  // Sharp attack decaying to a near-silent tail 80 dB down; exact silence has no level to range to.
   const int attack_len = n_samples / 5;
-  for (int i = 0; i < attack_len; ++i) {
-    const float env = std::exp(-6.0f * static_cast<float>(i) / static_cast<float>(attack_len));
+  for (int i = 0; i < n_samples; ++i) {
+    const float env = i < attack_len
+                          ? std::exp(-6.0f * static_cast<float>(i) / static_cast<float>(attack_len))
+                          : 1.0e-4f;
     samples[i] = 0.9f * env *
                  std::sin(2.0f * sonare::constants::kPiD * 440.0f * static_cast<float>(i) /
                           static_cast<float>(sr));
@@ -328,10 +331,10 @@ TEST_CASE("DynamicsAnalyzer preserves ordered block RMS and shared percentiles",
     expected_peak = std::max(expected_peak, std::abs(sample));
     sum_sq += static_cast<double>(sample) * static_cast<double>(sample);
   }
-  const float expected_peak_db = linear_to_db(std::max(expected_peak, constants::kEpsilon));
+  const float expected_peak_db = amplitude_to_level_db(expected_peak);
   const float expected_rms =
       static_cast<float>(std::sqrt(sum_sq / static_cast<double>(samples.size())));
-  const float expected_rms_db = linear_to_db(std::max(expected_rms, constants::kEpsilon));
+  const float expected_rms_db = amplitude_to_level_db(expected_rms);
   REQUIRE_THAT(analyzer.peak_db(), WithinAbs(expected_peak_db, 1e-5f));
   REQUIRE_THAT(analyzer.rms_db(), WithinAbs(expected_rms_db, 1e-5f));
 
@@ -348,7 +351,7 @@ TEST_CASE("DynamicsAnalyzer preserves ordered block RMS and shared percentiles",
     }
     const float block_rms =
         static_cast<float>(std::sqrt(block_sum_sq / static_cast<double>(window)));
-    const float expected_block_db = linear_to_db(std::max(block_rms, constants::kEpsilon));
+    const float expected_block_db = amplitude_to_level_db(block_rms);
     const float expected_time =
         static_cast<float>((static_cast<double>(start) + 0.5 * static_cast<double>(window)) / sr);
     expected_blocks.push_back(expected_block_db);
@@ -414,8 +417,14 @@ TEST_CASE("DynamicsAnalyzer does not call silence compressed", "[dynamics_analyz
   const Audio silence = Audio::from_vector(std::vector<float>(22050 * 2, 0.0f), 22050);
   DynamicsAnalyzer analyzer(silence);
   CHECK_FALSE(analyzer.is_compressed());
-  CHECK(analyzer.crest_factor() == 0.0f);
-  CHECK(analyzer.dynamic_range_db() == 0.0f);
+  // Exact silence has no level (-inf); a crest or range of it is not measured.
+  CHECK((std::isinf(analyzer.peak_db()) && analyzer.peak_db() < 0.0f));
+  CHECK((std::isinf(analyzer.rms_db()) && analyzer.rms_db() < 0.0f));
+  CHECK(std::isnan(analyzer.crest_factor()));
+  CHECK(std::isnan(analyzer.dynamic_range_db()));
+  for (float level : analyzer.loudness_curve().rms_db) {
+    CHECK((std::isinf(level) && level < 0.0f));
+  }
 
   // A non-silent flat signal is still read as compressed.
   const Audio flat = Audio::from_vector(std::vector<float>(22050 * 2, 0.5f), 22050);
@@ -451,4 +460,26 @@ TEST_CASE("DynamicsAnalyzer bounds an oversize window before converting it",
     INFO("window_sec " << window_sec);
     CHECK_THROWS_AS(DynamicsAnalyzer(audio, config), SonareException);
   }
+}
+
+TEST_CASE("DynamicsAnalyzer reads a quiet signal at its computed level", "[dynamics_analyzer]") {
+  // Levels far below any epsilon keep falling with the amplitude instead of stopping at a floor.
+  float previous_peak = 0.0f;
+  float previous_rms = 0.0f;
+  for (const float amplitude : {1.0e-6f, 1.0e-10f, 1.0e-12f, 1.0e-15f}) {
+    const Audio audio = Audio::from_vector(std::vector<float>(22050, amplitude), 22050);
+    const DynamicsAnalyzer analyzer(audio);
+    INFO("amplitude " << amplitude);
+    const float expected = 20.0f * std::log10(amplitude);
+    CHECK_THAT(analyzer.peak_db(), WithinAbs(expected, 1e-3f));
+    CHECK_THAT(analyzer.rms_db(), WithinAbs(expected, 1e-3f));
+    CHECK_THAT(analyzer.crest_factor(), WithinAbs(0.0f, 1e-3f));
+    if (previous_peak != 0.0f) {
+      CHECK(analyzer.peak_db() < previous_peak);
+      CHECK(analyzer.rms_db() < previous_rms);
+    }
+    previous_peak = analyzer.peak_db();
+    previous_rms = analyzer.rms_db();
+  }
+  CHECK(previous_peak < -200.0f);
 }

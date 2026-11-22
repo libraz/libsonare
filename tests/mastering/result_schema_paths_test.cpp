@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -52,7 +53,17 @@ TEST_CASE("the assistant result schema list matches what the writer emits",
   const auto actual = without_descendants(
       sonare::test::schema_paths_of(sonare::mastering::assistant::assistant_result_to_json(result)),
       "chainConfig.params");
-  REQUIRE(actual == as_set(sonare::mastering::assistant::assistant_result_schema_paths()));
+  // A level that was not measured is an absent member; every other listed path is written.
+  auto expected = as_set(sonare::mastering::assistant::assistant_result_schema_paths());
+  const auto& loudness = result.profile.loudness;
+  const std::pair<const char*, float> levels[] = {
+      {"profile.loudnessRangeLu", loudness.lra_lu},
+      {"profile.truePeakDbtp", loudness.true_peak_db},
+      {"profile.crestFactorDb", loudness.crest_factor_db}};
+  for (const auto& [path, level] : levels) {
+    if (std::isnan(level)) expected.erase(path);
+  }
+  REQUIRE(actual == expected);
 }
 
 TEST_CASE("the streaming preview schema list matches what the writer emits",
@@ -64,12 +75,15 @@ TEST_CASE("the streaming preview schema list matches what the writer emits",
   REQUIRE(sonare::test::schema_paths_of(sonare::mastering::maximizer::streaming_preview_to_json(
               sonare::mastering::maximizer::streaming_preview(audio))) == expected);
 
-  // A silent take serializes its non-finite loudness as null under the same keys.
+  // A silent take writes its -inf loudness as null under the same keys, and leaves out the
+  // normalization gain, which has no value to reach a target from.
   const std::vector<float> silence(kLength, 0.0f);
   const sonare::Audio quiet =
       sonare::Audio::from_buffer(silence.data(), silence.size(), kSampleRate);
+  auto silent_expected = expected;
+  silent_expected.erase("platforms[].normalizationGainDb");
   REQUIRE(sonare::test::schema_paths_of(sonare::mastering::maximizer::streaming_preview_to_json(
-              sonare::mastering::maximizer::streaming_preview(quiet))) == expected);
+              sonare::mastering::maximizer::streaming_preview(quiet))) == silent_expected);
 }
 
 TEST_CASE("each pair analysis schema list matches what its writer emits",
@@ -91,11 +105,14 @@ TEST_CASE("each pair analysis schema list matches what its writer emits",
   REQUIRE(paths_of("match.estimateReferenceDelaySamples") ==
           as_set(api::match_reference_delay_schema_paths()));
 
-  // A silent source writes its non-finite measurements as null under the same keys.
+  // A silent source writes its -inf loudness as null and leaves out the gain, which is not
+  // measured.
   const std::vector<float> silence(kLength, 0.0f);
-  REQUIRE(sonare::test::schema_paths_of(api::analyze_named_pair(
-              "match.referenceLoudness", silence.data(), reference.data(), silence.size(),
-              kSampleRate)) == as_set(api::match_reference_loudness_schema_paths()));
+  auto silent_expected = as_set(api::match_reference_loudness_schema_paths());
+  silent_expected.erase("gainToMatchDb");
+  REQUIRE(sonare::test::schema_paths_of(
+              api::analyze_named_pair("match.referenceLoudness", silence.data(), reference.data(),
+                                      silence.size(), kSampleRate)) == silent_expected);
 }
 
 TEST_CASE("each stereo analysis schema list matches what its writer emits",

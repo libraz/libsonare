@@ -7,6 +7,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -225,8 +226,22 @@ TEST_CASE("repair apply reports per channel for channel stages and once for link
     CHECK(reports[i]["scope"].as_string() == (linked ? "linked" : "channel"));
     CHECK(reports[i]["reports"].as_array().size() == (linked ? 1u : 3u));
   }
-  CHECK(reports[2]["reports"][0]["detected"]["bandFloorDbfs"].as_array().size() ==
-        repair::kRepairNoiseBandCount);
+  // The default 1024-point grid at 48 kHz leaves bands no bin reaches, between measured ones too;
+  // the report lists exactly the bands that hold a bin.
+  int edges[repair::kRepairNoiseBandCount + 1] = {};
+  sonare::mastering::common::repair_noise_band_bins(repair::DenoiseClassicalConfig{}.n_fft, kSr,
+                                                    edges);
+  std::vector<int> reached;
+  for (std::size_t k = 0; k < repair::kRepairNoiseBandCount; ++k) {
+    if (edges[k + 1] > edges[k]) reached.push_back(static_cast<int>(k));
+  }
+  REQUIRE(reached.size() < repair::kRepairNoiseBandCount);
+  const json::Value& noise = reports[2]["reports"][0]["detected"];
+  REQUIRE(noise["bandFloorBand"].size() == reached.size());
+  REQUIRE(noise["bandFloorDbfs"].size() == reached.size());
+  for (std::size_t i = 0; i < reached.size(); ++i) {
+    CHECK(noise["bandFloorBand"][i].as_int() == reached[i]);
+  }
 }
 
 TEST_CASE("repair apply refuses a repeated stage, an unknown stage and an unknown setting",
@@ -249,6 +264,39 @@ TEST_CASE("repair apply refuses a repeated stage, an unknown stage and an unknow
   CHECK(refused(R"({"stage":"declick"})"));
   CHECK(refused("[{"));
   CHECK_FALSE(refused(R"([{"stage":"denoise","mode":"logMmse","noiseEstimator":1}])"));
+}
+
+TEST_CASE("repair analysis refuses its request as the call's argument, the stages as a document",
+          "[mastering][assistant]") {
+  const std::vector<std::vector<float>> planes = {material(440.0, 19)};
+  using Form = SonareParameterRefusal::Form;
+  const auto refusal_of = [&](const std::string& request) -> std::pair<ErrorCode, Form> {
+    try {
+      (void)assistant::repair_analyze_json(pointers(planes).data(), planes.size(), kLength, kSr,
+                                           request);
+    } catch (const SonareParameterRefusal& e) {
+      return {e.code(), e.form()};
+    }
+    FAIL("request was accepted: " << request);
+    return {ErrorCode::Ok, Form::Predicate};
+  };
+  CHECK(refusal_of("{") == std::pair{ErrorCode::InvalidParameter, Form::Predicate});
+  CHECK(refusal_of("[]") == std::pair{ErrorCode::InvalidParameter, Form::WrongType});
+  CHECK(refusal_of(R"({"preferStreamingSafe":1})") ==
+        std::pair{ErrorCode::InvalidParameter, Form::WrongType});
+  CHECK(refusal_of(R"({"preferStreamingSaf":true})") ==
+        std::pair{ErrorCode::InvalidParameter, Form::UnknownKey});
+
+  // The stage list the analysis writes as `recommended` is read back as a document.
+  const json::Value analysis = json::parse(assistant::repair_analyze_json(
+      pointers(planes).data(), planes.size(), kLength, kSr, R"({"preferStreamingSafe":true})"));
+  CHECK_NOTHROW(run_apply(planes, json::dump(analysis["recommended"])));
+  try {
+    run_apply(planes, R"([{"stage":"declick","lpcOdrer":8}])");
+    FAIL("an unknown setting was accepted");
+  } catch (const SonareException& e) {
+    CHECK(e.code() == ErrorCode::InvalidFormat);
+  }
 }
 
 TEST_CASE("repair apply reports progress per stage and stops when cancelled",

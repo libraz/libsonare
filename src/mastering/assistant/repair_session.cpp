@@ -88,14 +88,13 @@ std::optional<Stage> stage_from_name(const std::string& name) {
   throw SonareException(ErrorCode::InvalidParameter, message);
 }
 
-/// Refuses the content of a request document (the stages or analysis JSON), as opposed to the
-/// call's own arguments.
+/// Refuses the content of a stages document, the form the analysis writes as `recommended`.
 [[noreturn]] void refuse_document(const std::string& message) {
   throw SonareException(ErrorCode::InvalidFormat, message);
 }
 
-/// Parses @p text, refusing malformed JSON and a repeated key as an invalid request.
-json::Value parse_request(const std::string& text) {
+/// Parses a stages document, refusing malformed JSON and a repeated key as its content.
+json::Value parse_document(const std::string& text) {
   try {
     return json::parse_strict(text);
   } catch (const json::JsonError& e) {
@@ -264,7 +263,7 @@ struct StagePlan {
 };
 
 StagePlan parse_stages(const std::string& stages_json) {
-  const json::Value root = parse_request(stages_json.empty() ? "[]" : stages_json);
+  const json::Value root = parse_document(stages_json.empty() ? "[]" : stages_json);
   if (!root.is_array()) refuse_document(schema::must_be("stages", schema::Kind::Array));
   StagePlan plan;
   std::size_t position = 0;
@@ -434,14 +433,30 @@ json::Value run_stage(Stage stage, const StagePlan& plan, std::vector<Audio>& wo
 AssistantConfig read_analyze_request(const std::string& request_json) {
   AssistantConfig config;
   if (request_json.empty()) return config;
-  const json::Value root = parse_request(request_json);
-  if (!root.is_object()) refuse_document(schema::root_must_be_object());
+  constexpr const char* kRoot = "request";
+  json::Value root;
+  try {
+    root = json::parse_strict(request_json);
+  } catch (const json::JsonError& e) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, kRoot,
+                                            std::string("must be valid JSON: ") + e.what());
+  }
+  if (!root.is_object()) {
+    throw SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidParameter, kRoot,
+        std::string("must be ") + schema::kind_text(schema::Kind::Object));
+  }
   for (const auto& [key, value] : root.as_object()) {
-    const std::string path = schema::child_path("", key);
+    const std::string path = schema::child_path(kRoot, key);
     if (key != "preferStreamingSafe") {
-      refuse_document(schema::unknown_key_expected(path, "preferStreamingSafe"));
+      throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, path, std::string(),
+                                            "preferStreamingSafe");
     }
-    if (!value.is_bool()) refuse_document(schema::must_be(path, schema::Kind::Boolean));
+    if (!value.is_bool()) {
+      throw SonareParameterRefusal::wrong_type(
+          ErrorCode::InvalidParameter, path,
+          std::string("must be ") + schema::kind_text(schema::Kind::Boolean));
+    }
     config.prefer_streaming_safe = value.as_bool();
   }
   return config;
@@ -600,6 +615,7 @@ const std::vector<std::string>& repair_analysis_schema_paths() {
       "channels[].hum.harmonicDbfs",
       "channels[].hum.harmonics",
       "channels[].noise",
+      "channels[].noise.bandFloorBand",
       "channels[].noise.bandFloorDbfs",
       "channels[].noise.floorDbfs",
       "channels[].reverb",
@@ -630,6 +646,7 @@ const std::vector<std::string>& repair_analysis_schema_paths() {
       "defects.hum.harmonicDbfs",
       "defects.hum.harmonics",
       "defects.noise",
+      "defects.noise.bandFloorBand",
       "defects.noise.bandFloorDbfs",
       "defects.noise.floorDbfs",
       "defects.reverb",

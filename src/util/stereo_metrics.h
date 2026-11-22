@@ -17,7 +17,7 @@ namespace sonare::util {
 /// @param left  Pointer to the left channel buffer (length samples).
 /// @param right Pointer to the right channel buffer (length samples).
 /// @param length Number of samples per channel; must be > 0.
-/// @return Correlation in [-1, 1], or 0.0f if either channel has zero energy.
+/// @return Correlation in [-1, 1], or NaN (not measured) if either channel has zero energy.
 /// @throws SonareException(InvalidParameter) if buffers are null or length is 0.
 float stereo_correlation(const float* left, const float* right, size_t length);
 
@@ -26,8 +26,8 @@ float stereo_correlation(const float* left, const float* right, size_t length);
 /// @param left  Pointer to the left channel buffer (length samples).
 /// @param right Pointer to the right channel buffer (length samples).
 /// @param length Number of samples per channel; must be > 0.
-/// @return Width in [0, inf). Returns 0 if both mid and side are silent; returns
-///         +inf if mid is silent but side has energy.
+/// @return Width in [0, inf]. NaN (not measured) if both mid and side have zero energy; +inf if
+///         mid has zero energy but side has some.
 /// @throws SonareException(InvalidParameter) if buffers are null or length is 0.
 float stereo_width(const float* left, const float* right, size_t length);
 

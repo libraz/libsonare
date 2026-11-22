@@ -25,7 +25,9 @@ inline constexpr float kDefaultAbsoluteSilenceDb = -60.0f;
 /// @param target_db Target peak level in dB (default 0 dB = full scale)
 /// @param clip If true (default), the output is hard-clipped to [-1, 1]; pass
 ///        false to leave the signal unclipped.
-/// @return Normalized audio
+/// @return Normalized audio; an empty input comes back empty.
+/// @throws SonareException with ErrorCode::InvalidParameter when the audio is digital silence:
+///         it has no measurable level to scale from.
 Audio normalize(const Audio& audio, float target_db = kDefaultPeakTargetDb, bool clip = true);
 
 /// @brief Normalizes audio using RMS level.
@@ -38,7 +40,9 @@ Audio normalize(const Audio& audio, float target_db = kDefaultPeakTargetDb, bool
 /// @param audio Input audio
 /// @param target_db Target RMS level in dB
 /// @param clip If true (default), hard-clip the output to [-1, 1]
-/// @return Normalized audio
+/// @return Normalized audio; an empty input comes back empty.
+/// @throws SonareException with ErrorCode::InvalidParameter for digital silence, as
+///         @ref normalize does.
 Audio normalize_rms(const Audio& audio, float target_db = kDefaultRmsTargetDb, bool clip = true);
 
 /// @brief A normalized channel pair and the gain that produced it.
@@ -48,7 +52,6 @@ struct NormalizeStereoResult {
   /// One figure rather than one per channel: the level is measured across both
   /// channels and the gain is applied to both, so a per-channel pair would be
   /// two copies of one decision and would read as though the two could differ.
-  /// Silence leaves the pair untouched and reports 0.
   float applied_gain_db;
 };
 
@@ -60,7 +63,7 @@ struct NormalizeStereoResult {
 ///   and the other keeps its level relative to it.
 /// @throws SonareException with ErrorCode::InvalidParameter for a pair that is
 ///   not processable together (see @ref require_stereo_pair), and for the
-///   arguments @ref normalize rejects.
+///   arguments and the silent input @ref normalize rejects.
 NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
                                        float target_db = kDefaultPeakTargetDb, bool clip = true);
 

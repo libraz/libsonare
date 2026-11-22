@@ -31,6 +31,7 @@
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
 
@@ -370,8 +371,10 @@ class MasteringChain {
 /// standalone `maximizer.truePeakLimiter` stage stays off, since limiting on
 /// both sides of the loudness gain pumps transients for no ceiling benefit.
 struct StreamingMasteringChainOptions {
-  /// Precomputed static loudness gain in dB. NaN (the default) means "not
-  /// provided"; in that case an enabled loudness stage still throws.
+  /// Precomputed static loudness gain in dB (@ref StreamingLoudnessGain::loudness_static_gain_db).
+  /// NaN (the default) is the not-measured gain of a stage input with no measurable loudness:
+  /// the stage applies no gain and its limiter still runs, as in the offline chain. An infinite
+  /// value is refused.
   float loudness_static_gain_db = std::numeric_limits<float>::quiet_NaN();
 
   /// True peak (dBTP) of the loudness stage's input, measured offline with the
@@ -396,9 +399,9 @@ class StreamingMasteringChain {
   explicit StreamingMasteringChain(MasteringChainConfig config);
 
   /// @brief Construct with a configuration and streaming options. When the
-  /// configuration enables loudness, @p options.loudness_static_gain_db must be
-  /// finite; the chain then applies that fixed gain per block (see
-  /// @ref StreamingMasteringChainOptions). Repair stages are still rejected.
+  /// configuration enables loudness, the chain applies @p options.loudness_static_gain_db per
+  /// block, or no gain when it is NaN (see @ref StreamingMasteringChainOptions). Repair stages
+  /// are still rejected.
   StreamingMasteringChain(MasteringChainConfig config, StreamingMasteringChainOptions options);
   ~StreamingMasteringChain();
 
@@ -531,11 +534,12 @@ class StreamingMasteringChain {
 ///          loudness_static_gain_peak_dbtp.
 struct StreamingLoudnessGain {
   /// Static gain (dB) the offline loudness stage would apply, ceiling-headroom
-  /// bound included; 0 when the stage input is silent or below the absolute gate.
-  float loudness_static_gain_db = 0.0f;
+  /// bound included; NaN (not measured) when the stage input is silent or below the absolute
+  /// gate, which the streaming chain reads as "apply no gain", as the offline chain does.
+  float loudness_static_gain_db = ::sonare::kNotMeasured;
   /// True peak (dBTP) of the stage input, at `loudness.true_peak_oversample`.
-  /// The meter's silence floor (constants::kFloorDb) for digital silence.
-  float true_peak_db = ::sonare::constants::kFloorDb;
+  /// -inf for digital silence; NaN until measured.
+  float true_peak_db = ::sonare::kNotMeasured;
   /// Integrated loudness (LUFS) of the stage input; -inf below the absolute gate.
   float integrated_lufs = -std::numeric_limits<float>::infinity();
 };

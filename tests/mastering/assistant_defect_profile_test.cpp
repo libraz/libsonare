@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 #include <random>
 #include <set>
 #include <utility>
@@ -133,22 +134,25 @@ assistant::DefectProfile interleaved_profile(const std::vector<float>& samples) 
       .defects;
 }
 
+// Orders a level that was not measured (NaN) below every measured one, so a peak search skips it.
+bool measured_level_less(float a, float b) { return std::isnan(a) || (!std::isnan(b) && a < b); }
+
 // Loudest of the noise detector's bands.
 float band_peak_dbfs(const assistant::DefectProfile& defects) {
   return *std::max_element(std::begin(defects.noise.band_floor_dbfs),
-                           std::end(defects.noise.band_floor_dbfs));
+                           std::end(defects.noise.band_floor_dbfs), measured_level_less);
 }
 
 std::ptrdiff_t band_peak_index(const assistant::DefectProfile& defects) {
   return std::max_element(std::begin(defects.noise.band_floor_dbfs),
-                          std::end(defects.noise.band_floor_dbfs)) -
+                          std::end(defects.noise.band_floor_dbfs), measured_level_less) -
          std::begin(defects.noise.band_floor_dbfs);
 }
 
 // Loudest k*f0 of the hum series.
 float peak_harmonic_dbfs(const assistant::DefectProfile& defects) {
   return *std::max_element(std::begin(defects.hum.harmonic_dbfs),
-                           std::end(defects.hum.harmonic_dbfs));
+                           std::end(defects.hum.harmonic_dbfs), measured_level_less);
 }
 
 }  // namespace
@@ -347,12 +351,69 @@ TEST_CASE("Defect profile JSON leaves the block out when it was not measured",
   REQUIRE_FALSE(unmeasured.contains("defects"));
   REQUIRE(measured.contains("defects"));
   REQUIRE(measured["defects"]["click"]["count"].as_int() >= 8);
-  REQUIRE(measured["defects"]["noise"]["bandFloorDbfs"].size() ==
-          sonare::mastering::repair::kRepairNoiseBandCount);
+  const std::size_t bands = measured["defects"]["noise"]["bandFloorDbfs"].size();
+  REQUIRE(bands > 0);
+  REQUIRE(bands <= sonare::mastering::repair::kRepairNoiseBandCount);
+  REQUIRE(measured["defects"]["noise"]["bandFloorBand"].size() == bands);
+  // Every harmonic of a 50 Hz series sits below Nyquist at this rate, so all are measured.
   REQUIRE(measured["defects"]["hum"]["harmonicDbfs"].size() ==
           static_cast<std::size_t>(sonare::mastering::repair::kDehumMaxHarmonics));
   // The profile path never runs WPE, so the predictability is absent, not 0.
   REQUIRE_FALSE(measured["defects"]["reverb"].contains("latePredictability"));
+}
+
+TEST_CASE("Defect JSON level arrays never spell not measured as a slot",
+          "[mastering][assistant][defects]") {
+  namespace repair = sonare::mastering::repair;
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+
+  SECTION("noise bands travel as measured levels with their grid index") {
+    repair::NoiseDetection detected;
+    std::fill(std::begin(detected.band_floor_dbfs), std::end(detected.band_floor_dbfs), -70.0f);
+    detected.floor_dbfs = -60.0f;
+    detected.band_floor_dbfs[0] = kNaN;   // a band no bin reaches, at the bottom
+    detected.band_floor_dbfs[2] = kNaN;   // and between two measured ones
+    detected.band_floor_dbfs[5] = -kInf;  // a band with no energy is measured
+    const json::Value out =
+        json::parse(json::dump(json::Value(assistant::detection_to_json(detected))));
+    const json::Array& levels = out["bandFloorDbfs"].as_array();
+    const json::Array& index = out["bandFloorBand"].as_array();
+    REQUIRE(levels.size() == repair::kRepairNoiseBandCount - 2);
+    REQUIRE(index.size() == levels.size());
+    CHECK(index[0].as_int() == 1);
+    CHECK(index[1].as_int() == 3);
+    CHECK(index[3].as_int() == 5);
+    CHECK(levels[3].is_null());  // -inf, the level's infinite end
+    CHECK(levels[0].as_number() == -70.0);
+    for (std::size_t i = 1; i < index.size(); ++i) CHECK(index[i].as_int() > index[i - 1].as_int());
+  }
+
+  SECTION("hum harmonics end at the last one below Nyquist") {
+    // 100 Hz at a 1 kHz rate: harmonics 5 and up sit at or past Nyquist.
+    constexpr int kRate = 1000;
+    std::vector<float> hum(static_cast<std::size_t>(kRate) * 4);
+    for (std::size_t i = 0; i < hum.size(); ++i) {
+      hum[i] = 0.1f * std::sin(kTwoPi * 100.0f * static_cast<float>(i) / kRate);
+    }
+    repair::DehumConfig config;
+    config.fundamental_hz = 100.0f;
+    const repair::HumDetection detected = repair::detect_hum(hum.data(), hum.size(), kRate, config);
+    REQUIRE(detected.measured_harmonics == 4);
+    for (int k = 0; k < repair::kDehumMaxHarmonics; ++k) {
+      CAPTURE(k);
+      CHECK(std::isnan(detected.harmonic_dbfs[k]) == (k >= 4));
+    }
+    const json::Value out =
+        json::parse(json::dump(json::Value(assistant::detection_to_json(detected))));
+    CHECK(out["harmonicDbfs"].size() == 4);
+
+    // Nothing to measure: no slot holds a level and the array is empty.
+    const repair::HumDetection empty = repair::detect_hum(nullptr, 0, kRate, config);
+    CHECK(empty.measured_harmonics == 0);
+    CHECK(std::isnan(empty.harmonic_dbfs[0]));
+    CHECK(json::Value(assistant::detection_to_json(empty))["harmonicDbfs"].size() == 0);
+  }
 }
 
 TEST_CASE("Interleaved anti-phase clipping retains flat evidence for the repair suggestion",
@@ -485,7 +546,24 @@ TEST_CASE("the audio profile schema list matches what the writer emits",
 
   const auto actual = sonare::test::schema_paths_of(assistant::audio_profile_to_json(profile));
   const auto& listed = assistant::audio_profile_schema_paths();
-  const std::set<std::string> expected(listed.begin(), listed.end());
+  std::set<std::string> expected(listed.begin(), listed.end());
+  // A level that was not measured is an absent member; every other listed path is written.
+  const auto& spectral = profile.spectral;
+  const std::pair<const char*, float> levels[] = {
+      {"defects.noise.floorDbfs", profile.defects.noise.floor_dbfs},
+      {"loudness.loudnessRangeLu", profile.loudness.lra_lu},
+      {"loudness.truePeakDbtp", profile.loudness.true_peak_db},
+      {"loudness.crestFactorDb", profile.loudness.crest_factor_db},
+      {"spectral.subRmsDb", spectral.sub_rms_db},
+      {"spectral.lowRmsDb", spectral.low_rms_db},
+      {"spectral.lowMidRmsDb", spectral.low_mid_rms_db},
+      {"spectral.midRmsDb", spectral.mid_rms_db},
+      {"spectral.highMidRmsDb", spectral.high_mid_rms_db},
+      {"spectral.highRmsDb", spectral.high_rms_db},
+      {"spectral.airRmsDb", spectral.air_rms_db}};
+  for (const auto& [path, level] : levels) {
+    if (std::isnan(level)) expected.erase(path);
+  }
   REQUIRE_FALSE(actual.empty());
   REQUIRE(actual == expected);
 }

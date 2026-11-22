@@ -3,6 +3,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -189,11 +190,8 @@ TEST_CASE("Meter snapshot exposes mono compatibility fields", "[mixing]") {
   snapshot = meter.snapshot();
 
   REQUIRE_THAT(snapshot.correlation, WithinAbs(-1.0f, 0.0001f));
-  // Anti-phase (mid -> 0, side present) drives the raw width ratio to +Inf; the
-  // meter must clamp it to a large but FINITE sentinel so it stays serializable
-  // through the C ABI / JSON telemetry rather than emitting +Inf.
-  REQUIRE(snapshot.mono_compat_width > 1000.0f);
-  REQUIRE(std::isfinite(snapshot.mono_compat_width));
+  // Anti-phase leaves side over zero mid: an unbounded width, as the offline stereo width reads it.
+  REQUIRE(snapshot.mono_compat_width == std::numeric_limits<float>::infinity());
   REQUIRE_THAT(snapshot.mono_compat_peak, WithinAbs(0.0f, 0.0001f));
   REQUIRE_FALSE(snapshot.likely_mono_compatible);
 }
@@ -607,7 +605,7 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   std::array<float, 512> out_r{};
   // Long enough to fill the momentary LUFS window (400 ms = 19200 frames at
   // 48 kHz), so the fully-metered control reports a real loudness rather than
-  // the floor it would still be at after a few blocks.
+  // the NaN it would still read after a few blocks.
   for (int pass = 0; pass < 48; ++pass) {
     REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 3, out_l.data(), out_r.data(),
                                         block.size()) == SONARE_OK);
@@ -626,10 +624,10 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   CHECK(full_snap.true_peak_dbtp_l > -40.0f);
 
   // Peak / RMS keep working with the loudness and true-peak work switched off,
-  // and those two fields stay at the floor.
+  // and those two fields are not measured (NaN).
   CHECK(peak_snap.peak_db_l > -40.0f);
-  CHECK(peak_snap.momentary_lufs == sonare::constants::kFloorDb);
-  CHECK(peak_snap.true_peak_dbtp_l == sonare::constants::kFloorDb);
+  CHECK(std::isnan(peak_snap.momentary_lufs));
+  CHECK(std::isnan(peak_snap.true_peak_dbtp_l));
 
   // A strip with metering off publishes no snapshot at all.
   CHECK(silent_snap.seq == 0);
@@ -669,19 +667,23 @@ struct MasterMeterRig {
 };
 
 void require_same_meter(const SonareMixMeterSnapshot& a, const sonare::mixing::MeterSnapshot& b) {
+  // Equal within the tolerance, or both the same non-finite reading (NaN: not measured).
+  const auto same_reading = [](float x, float y, float tolerance) {
+    return (std::isnan(x) && std::isnan(y)) || x == y || std::abs(x - y) <= tolerance;
+  };
   SonareMixMeterSnapshot expected{};
   sonare_c_mixing_detail::copy_meter_snapshot(b, &expected);
   CHECK(a.num_channels == expected.num_channels);
   for (int ch = 0; ch < 2; ++ch) {
-    CHECK_THAT(a.peak_db[ch], WithinAbs(expected.peak_db[ch], 1e-4f));
-    CHECK_THAT(a.rms_db[ch], WithinAbs(expected.rms_db[ch], 1e-4f));
-    CHECK_THAT(a.true_peak_dbtp[ch], WithinAbs(expected.true_peak_dbtp[ch], 1e-4f));
+    CHECK(same_reading(a.peak_db[ch], expected.peak_db[ch], 1e-4f));
+    CHECK(same_reading(a.rms_db[ch], expected.rms_db[ch], 1e-4f));
+    CHECK(same_reading(a.true_peak_dbtp[ch], expected.true_peak_dbtp[ch], 1e-4f));
   }
-  CHECK_THAT(a.correlation, WithinAbs(expected.correlation, 1e-5f));
-  CHECK_THAT(a.momentary_lufs, WithinAbs(expected.momentary_lufs, 1e-4f));
-  CHECK_THAT(a.short_term_lufs, WithinAbs(expected.short_term_lufs, 1e-4f));
-  CHECK_THAT(a.integrated_lufs, WithinAbs(expected.integrated_lufs, 1e-4f));
-  CHECK_THAT(a.max_true_peak_dbtp, WithinAbs(expected.max_true_peak_dbtp, 1e-4f));
+  CHECK(same_reading(a.correlation, expected.correlation, 1e-5f));
+  CHECK(same_reading(a.momentary_lufs, expected.momentary_lufs, 1e-4f));
+  CHECK(same_reading(a.short_term_lufs, expected.short_term_lufs, 1e-4f));
+  CHECK(same_reading(a.integrated_lufs, expected.integrated_lufs, 1e-4f));
+  CHECK(same_reading(a.max_true_peak_dbtp, expected.max_true_peak_dbtp, 1e-4f));
 }
 
 }  // namespace
@@ -789,7 +791,7 @@ TEST_CASE("Disabling the master meter freezes its reading and enabling resets it
   CHECK(again.max_true_peak_dbtp < -6.0f);
 }
 
-TEST_CASE("Master meter switches leave their measurements at the floor", "[mixing][capi]") {
+TEST_CASE("Master meter switches leave their measurements unmeasured", "[mixing][capi]") {
   MasterMeterRig rig;
   SonareMixerMasterMeterConfig config{};
   sonare_mixer_master_meter_config_init(&config);
@@ -800,8 +802,8 @@ TEST_CASE("Master meter switches leave their measurements at the floor", "[mixin
   SonareMixMeterSnapshot snap{};
   REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
   CHECK(snap.peak_db_l > -7.0f);
-  CHECK(snap.momentary_lufs == sonare::constants::kFloorDb);
-  CHECK(snap.true_peak_dbtp_l == sonare::constants::kFloorDb);
+  CHECK(std::isnan(snap.momentary_lufs));
+  CHECK(std::isnan(snap.true_peak_dbtp_l));
 }
 
 TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {

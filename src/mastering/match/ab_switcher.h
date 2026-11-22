@@ -17,12 +17,12 @@ Audio ab_crossfade(const Audio& a, const Audio& b, float mix);
 struct LoudnessMatchedPair {
   Audio a;  ///< Returned unchanged; the loudness reference.
   Audio b;  ///< `b` with a gain applied to match `a`'s integrated LUFS.
-  /// `a`'s integrated loudness. Non-finite when `a` is silent or below the
-  /// absolute gate, which is also when `applied_gain_db` falls back to 0.
+  /// `a`'s integrated loudness. Always finite here: a match with a silent or
+  /// below-gate side is refused.
   float reference_lufs = 0.0f;
-  float source_lufs = 0.0f;             ///< `b`'s, before the match. Same non-finite case.
+  float source_lufs = 0.0f;             ///< `b`'s, before the match.
   float applied_gain_db = 0.0f;         ///< Gain applied to `b`, in dB.
-  float matched_true_peak_dbtp = 0.0f;  ///< `b`'s true peak after the gain, in dBTP.
+  float matched_true_peak_dbtp = 0.0f;  ///< `b`'s true peak after the gain; -inf for silence.
 };
 
 /// @brief One planar stereo pair used by the A/B helpers.
@@ -60,10 +60,10 @@ struct StereoLoudnessMatchedPair {
 ///          bound: this API only reports the post-gain true peak rather than
 ///          capping it, because a bare headroom clamp would leave `b` at its
 ///          own loudness whenever it started near full scale, defeating the
-///          only reason this function exists. Returns 0 dB unchanged when
+///          only reason this function exists. Throws NotSupported when
 ///          either integrated loudness is non-finite (silence, or below the
-///          absolute gate). An `a` at another sample rate is resampled onto
-///          `b`'s rate and measured there; equal rates take no resample pass.
+///          absolute gate), since no gain matches them. An `a` at another sample rate is resampled
+///          onto `b`'s rate and measured there; equal rates take no resample pass.
 LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b);
 
 /// @brief Gain-match a stereo source pair to a stereo reference pair.
@@ -72,7 +72,8 @@ LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b);
 ///          planes, preserving their ratio and phase. Each pair must have equal
 ///          per-plane lengths and sample rates; the two pairs may differ in
 ///          length and rate, and an `a` at another rate is resampled onto `b`'s
-///          and measured there.
+///          and measured there. Refuses a silent or below-gate side as
+///          @ref ab_match_loudness does.
 StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
                                                    const StereoAudioPair& b);
 

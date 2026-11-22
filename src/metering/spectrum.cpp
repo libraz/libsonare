@@ -50,7 +50,8 @@ SpectrumResult make_empty_result(const Audio& audio, const SpectrumConfig& confi
   result.frequencies = util::bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
   result.magnitude.assign(n_bins, 0.0f);
   result.power.assign(n_bins, 0.0f);
-  result.db.assign(n_bins, sonare::constants::kFloorDb);
+  // Not measured until a frame is analysed; an empty input leaves it so.
+  result.db.assign(n_bins, kNotMeasured);
   return result;
 }
 
@@ -94,8 +95,9 @@ void finalize_spectrum(SpectrumResult& result, const SpectrumConfig& config) {
   }
 
   for (int i = 0; i < n_bins; ++i) {
+    // db_amin is the caller's clamp; no further floor applies.
     const float amplitude = std::max(config.db_amin, result.magnitude[i]);
-    result.db[i] = std::max(sonare::constants::kFloorDb, linear_to_db(amplitude / config.db_ref));
+    result.db[i] = amplitude_to_level_db(amplitude / config.db_ref);
   }
 }
 

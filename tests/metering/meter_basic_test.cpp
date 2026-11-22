@@ -104,7 +104,7 @@ std::vector<double> reference_k_weighted(const float* samples, size_t frames, in
 }
 
 float reference_energy_to_lufs(double energy) {
-  if (energy < 1e-15) return -std::numeric_limits<float>::infinity();
+  if (energy == 0.0) return -std::numeric_limits<float>::infinity();
   return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
 }
 
@@ -195,7 +195,8 @@ TEST_CASE("meter crest factor across interleaved channels", "[meter]") {
   REQUIRE_THAT(metering::crest_factor_db_interleaved(interleaved.data(), frames, 2),
                WithinAbs(3.0f, 0.5f));
   const Audio downmixed = Audio::from_buffer(downmix.data(), downmix.size(), sample_rate);
-  REQUIRE_THAT(metering::crest_factor_db(downmixed), WithinAbs(0.0f, 0.0f));
+  // The downmix is exact silence: no peak over no RMS is not a measured crest factor.
+  REQUIRE(std::isnan(metering::crest_factor_db(downmixed)));
 
   // A duplicated channel carries the same crest factor as the single channel.
   for (size_t index = 0; index < frames; ++index) {
@@ -205,13 +206,13 @@ TEST_CASE("meter crest factor across interleaved channels", "[meter]") {
                WithinAbs(metering::crest_factor_db(sine), 0.001f));
 }
 
-TEST_CASE("interleaved crest factor reports a neutral value for degenerate input", "[meter]") {
+TEST_CASE("interleaved crest factor is not measured for degenerate input", "[meter]") {
   const std::vector<float> samples(128, 0.5f);
-  REQUIRE(metering::crest_factor_db_interleaved(nullptr, 64, 2) == 0.0f);
-  REQUIRE(metering::crest_factor_db_interleaved(samples.data(), 0, 2) == 0.0f);
-  REQUIRE(metering::crest_factor_db_interleaved(samples.data(), 64, 0) == 0.0f);
+  REQUIRE(std::isnan(metering::crest_factor_db_interleaved(nullptr, 64, 2)));
+  REQUIRE(std::isnan(metering::crest_factor_db_interleaved(samples.data(), 0, 2)));
+  REQUIRE(std::isnan(metering::crest_factor_db_interleaved(samples.data(), 64, 0)));
   const std::vector<float> silence(128, 0.0f);
-  REQUIRE(metering::crest_factor_db_interleaved(silence.data(), 64, 2) == 0.0f);
+  REQUIRE(std::isnan(metering::crest_factor_db_interleaved(silence.data(), 64, 2)));
 }
 
 TEST_CASE("meter clipping ratio", "[meter]") {
@@ -369,17 +370,66 @@ TEST_CASE("meter dc offset", "[meter]") {
   REQUIRE_THAT(metering::dc_offset(audio), WithinAbs(0.25f, 0.001f));
 }
 
-TEST_CASE("meter silence reports the finite dB floor for peak and rms", "[meter]") {
-  const std::vector<float> samples(16, 0.0f);
-  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+namespace {
 
-  // Silence reports the shared finite floor (kFloorDb), not -inf: the true-peak /
-  // spectrum / dynamic-range meters already do, and -inf serializes to null in
-  // JSON (silently dropping the field).
-  REQUIRE(metering::peak_db(audio) == constants::kFloorDb);
-  REQUIRE(metering::rms_db(audio) == constants::kFloorDb);
-  // Crest factor of silence is undefined; reported as a usable 0 dB, not +inf.
-  REQUIRE_THAT(metering::crest_factor_db(audio), WithinAbs(0.0f, 0.0f));
+/// One second of a 1 kHz sine at the given peak level; silence for -inf.
+Audio level_tone(double level_db) {
+  constexpr int kSr = 48000;
+  std::vector<float> samples(kSr, 0.0f);
+  if (std::isfinite(level_db)) {
+    const double amplitude = std::pow(10.0, level_db / 20.0);
+    for (int i = 0; i < kSr; ++i) {
+      samples[static_cast<size_t>(i)] = static_cast<float>(
+          amplitude * std::sin(constants::kTwoPiD * 1000.0 * static_cast<double>(i) / kSr));
+    }
+  }
+  return Audio::from_vector(std::move(samples), kSr);
+}
+
+}  // namespace
+
+TEST_CASE("level meters are monotonic down to silence, which reads -inf", "[meter]") {
+  // Each meter reads what the signal computes to, however quiet; only zero energy is -inf.
+  constexpr double kNoLevel = -std::numeric_limits<double>::infinity();
+  const std::vector<double> levels = {-150.0, -200.0, -300.0, kNoLevel};
+  std::vector<float> peak;
+  std::vector<float> rms;
+  std::vector<float> true_peak;
+  std::vector<float> momentary;
+  for (const double level : levels) {
+    const Audio audio = level_tone(level);
+    peak.push_back(metering::peak_db(audio));
+    rms.push_back(metering::rms_db(audio));
+    true_peak.push_back(metering::true_peak_db(audio));
+    momentary.push_back(metering::lufs(audio).max_momentary_lufs);
+    // Every level sits under the absolute gate, so no block is gated in.
+    CHECK(metering::lufs(audio).integrated_lufs == -std::numeric_limits<float>::infinity());
+  }
+  CAPTURE(peak, rms, true_peak, momentary);
+  for (size_t i = 0; i + 1 < levels.size(); ++i) {
+    const double level = levels[i];
+    CHECK_THAT(peak[i], WithinAbs(level, 0.01));
+    CHECK_THAT(rms[i], WithinAbs(level - 3.0103, 0.01));
+    CHECK_THAT(true_peak[i], WithinAbs(level, 0.05));
+    CHECK(peak[i] > peak[i + 1]);
+    CHECK(rms[i] > rms[i + 1]);
+    CHECK(true_peak[i] > true_peak[i + 1]);
+    CHECK(momentary[i] > momentary[i + 1]);
+  }
+  // Loudness of a tone scales with its level: 50 dB apart, then 100.
+  CHECK_THAT(momentary[0] - momentary[1], WithinAbs(50.0, 0.05));
+  CHECK_THAT(momentary[1] - momentary[2], WithinAbs(100.0, 0.05));
+  CHECK(peak.back() == -std::numeric_limits<float>::infinity());
+  CHECK(rms.back() == -std::numeric_limits<float>::infinity());
+  CHECK(true_peak.back() == -std::numeric_limits<float>::infinity());
+  CHECK(momentary.back() == -std::numeric_limits<float>::infinity());
+}
+
+TEST_CASE("crest factor of silence is not measured", "[meter]") {
+  // Peak minus RMS of zero energy is -inf - -inf: no crest exists, so it reads NaN.
+  CHECK(
+      std::isnan(metering::crest_factor_db(level_tone(-std::numeric_limits<double>::infinity()))));
+  CHECK_THAT(metering::crest_factor_db(level_tone(-300.0)), WithinAbs(3.0103, 0.01));
 }
 
 TEST_CASE("true peak matches sample peak when oversampling is disabled", "[meter]") {
@@ -415,8 +465,8 @@ TEST_CASE("stereo correlation detects polarity relationships", "[meter]") {
                WithinAbs(1.0f, 0.001f));
   REQUIRE_THAT(metering::correlation(left.data(), inverted.data(), left.size()),
                WithinAbs(-1.0f, 0.001f));
-  REQUIRE_THAT(metering::correlation(left.data(), silent.data(), left.size()),
-               WithinAbs(0.0f, 0.001f));
+  // A silent channel leaves nothing to correlate.
+  CHECK(std::isnan(metering::correlation(left.data(), silent.data(), left.size())));
 }
 
 TEST_CASE("stereo width follows the mid side amplitude ratio", "[meter]") {
@@ -559,11 +609,13 @@ TEST_CASE("LUFS returns silence for silent audio", "[meter]") {
   REQUIRE(!std::isfinite(result.integrated_lufs));
   REQUIRE(!std::isfinite(result.momentary_lufs));
   REQUIRE(!std::isfinite(result.short_term_lufs));
-  REQUIRE_THAT(result.loudness_range_lu, WithinAbs(0.0f, 0.001f));
+  // No short-term block passes the gates, so there is no range to measure.
+  REQUIRE(std::isnan(result.loudness_range_lu));
 }
 
 TEST_CASE("LUFS measures a steady tone consistently", "[meter]") {
-  const Audio audio = make_sine(1.0f, 48000, 2.0f);
+  // Long enough for several 3 s short-term blocks, so the range is measured.
+  const Audio audio = make_sine(1.0f, 48000, 5.0f);
 
   const auto result = metering::lufs(audio);
 
@@ -1101,10 +1153,15 @@ TEST_CASE("dynamic range rejects non-finite and overflowing configuration", "[me
     config = {};
     config.low_percentile = value;
     REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
+    // -inf is the floor that clamps nothing; NaN and +inf are refused.
+    if (value == -inf) continue;
     config = {};
     config.floor_db = value;
     REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
   }
+  metering::DynamicRangeConfig unclamped;
+  unclamped.floor_db = -inf;
+  REQUIRE_NOTHROW(metering::dynamic_range(audio, unclamped));
 
   metering::DynamicRangeConfig huge;
   huge.window_sec = std::numeric_limits<float>::max();
@@ -1298,8 +1355,11 @@ TEST_CASE("lra_from_short_term_blocks reflects a genuine wide range", "[meter][l
 
 TEST_CASE("lra_from_short_term_blocks ignores non-finite and gated-out blocks", "[meter][lufs]") {
   std::vector<float> blocks = {-std::numeric_limits<float>::infinity(), -90.0f, -23.0f};
-  // Only one finite block survives the absolute gate => fewer than two => 0.
+  // One finite block survives the absolute gate, and one block spans no range.
   REQUIRE_THAT(metering::lra_from_short_term_blocks(blocks), WithinAbs(0.0f, 1e-6f));
+  // With none surviving there is no range to report.
+  CHECK(std::isnan(
+      metering::lra_from_short_term_blocks({-std::numeric_limits<float>::infinity(), -90.0f})));
 }
 
 TEST_CASE("ebur128 LRA matches independent whole-signal reference blocks", "[meter][lufs]") {
@@ -1526,72 +1586,95 @@ TEST_CASE("true peak supports 16x oversampling without degrading", "[meter]") {
 // Foundations: cross-meter silence floor sentinel + scope decimation parity.
 // ============================================================================
 
-TEST_CASE("level meters share the finite kFloorDb silence sentinel", "[meter][floor]") {
-  // The level-in-dB meters (true_peak / spectrum / dynamic_range) all report the
-  // same finite floor for silence: sonare::constants::kFloorDb (-120 dB). A
-  // finite floor is JSON-safe and gives every level meter the same "silence"
-  // sentinel, instead of the earlier mix of -inf / -120 / -200.
-  const float floor = sonare::constants::kFloorDb;
+TEST_CASE("level meters read silence as -inf and an empty input as not measured",
+          "[meter][floor]") {
+  constexpr float kNoLevel = -std::numeric_limits<float>::infinity();
+  const std::vector<float> silent(48000, 0.0f);
+  const Audio silence = Audio::from_buffer(silent.data(), silent.size(), 48000);
+  const Audio empty;
 
-  SECTION("true_peak_db of silence is kFloorDb (was -inf)") {
-    const std::vector<float> silent(4096, 0.0f);
-    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
-    const float tp_db = metering::true_peak_db(audio);
-    REQUIRE(std::isfinite(tp_db));
-    REQUIRE_THAT(tp_db, WithinAbs(floor, 1e-4f));
+  SECTION("peak, rms and true peak") {
+    CHECK(metering::peak_db(silence) == kNoLevel);
+    CHECK(metering::rms_db(silence) == kNoLevel);
+    CHECK(metering::true_peak_db(silence) == kNoLevel);
+    CHECK(std::isnan(metering::peak_db(empty)));
+    CHECK(std::isnan(metering::rms_db(empty)));
+    CHECK(std::isnan(metering::true_peak_db(empty)));
   }
 
-  SECTION("dynamic_range window floor is kFloorDb") {
-    const std::vector<float> silent(48000, 0.0f);
-    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
+  SECTION("dynamic range windows take the caller's clamp, -inf without one") {
     metering::DynamicRangeConfig config;
     config.window_sec = 0.5f;
     config.hop_sec = 0.5f;
-    const auto result = metering::dynamic_range(audio, config);
+    const auto clamped = metering::dynamic_range(silence, config);
+    REQUIRE(!clamped.window_rms_db.empty());
+    for (float v : clamped.window_rms_db) CHECK(v == constants::kFloorDb);
+    CHECK(clamped.dynamic_range_db == 0.0f);
+    config.floor_db = kNoLevel;
+    const auto unclamped = metering::dynamic_range(silence, config);
+    for (float v : unclamped.window_rms_db) CHECK(v == kNoLevel);
+    // The spread of -inf windows is -inf - -inf: no range to report.
+    CHECK(unclamped.low_percentile_db == kNoLevel);
+    CHECK(std::isnan(unclamped.dynamic_range_db));
+    const auto none = metering::dynamic_range(empty, config);
+    CHECK(none.window_rms_db.empty());
+    CHECK(std::isnan(none.low_percentile_db));
+    CHECK(std::isnan(none.high_percentile_db));
+    CHECK(std::isnan(none.dynamic_range_db));
+  }
+
+  SECTION("a quiet window reads its level under no clamp") {
+    metering::DynamicRangeConfig config;
+    config.floor_db = kNoLevel;
+    const auto result = metering::dynamic_range(level_tone(-250.0), config);
     REQUIRE(!result.window_rms_db.empty());
-    for (float v : result.window_rms_db) {
-      REQUIRE(std::isfinite(v));
-      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
-    }
-    // The default config floor_db is also kFloorDb.
-    REQUIRE_THAT(metering::DynamicRangeConfig{}.floor_db, WithinAbs(floor, 0.0f));
+    CHECK_THAT(result.window_rms_db.front(), WithinAbs(-253.0103, 0.01));
   }
 
-  SECTION("spectrum empty-result db is kFloorDb") {
-    // The empty-audio spectrum result fills its dB array with the shared floor.
-    const Audio audio;  // empty
+  SECTION("spectrum: empty is not measured, silence reads the caller's db_amin clamp") {
     metering::SpectrumConfig config;
     config.n_fft = 1024;
-    const auto result = metering::spectrum(audio, config);
-    REQUIRE(!result.db.empty());
-    for (float v : result.db) {
-      REQUIRE(std::isfinite(v));
-      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
-    }
+    const auto none = metering::spectrum(empty, config);
+    REQUIRE(!none.db.empty());
+    for (float v : none.db) CHECK(std::isnan(v));
+    const auto quiet = metering::spectrum(silence, config);
+    const float clamp_db = 20.0f * std::log10(config.db_amin / config.db_ref);
+    for (float v : quiet.db) CHECK_THAT(v, WithinAbs(clamp_db, 1e-4f));
   }
 
-  SECTION("spectrum non-empty silence db is kFloorDb") {
-    const std::vector<float> silent(4096, 0.0f);
-    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
-    metering::SpectrumConfig config;
-    config.n_fft = 1024;
-    const auto result = metering::spectrum(audio, config);
-    for (float v : result.db) {
-      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
-    }
+  SECTION("LUFS: silence -inf, too short for a block not measured") {
+    const auto loud = metering::lufs(silence);
+    CHECK(loud.integrated_lufs == kNoLevel);
+    CHECK(loud.max_momentary_lufs == kNoLevel);
+    CHECK(std::isnan(loud.loudness_range_lu));
+    const std::vector<float> short_signal(4800, 0.25f);
+    const auto brief =
+        metering::lufs(Audio::from_buffer(short_signal.data(), short_signal.size(), 48000));
+    CHECK(std::isnan(brief.momentary_lufs));
+    CHECK(std::isnan(brief.max_momentary_lufs));
+    CHECK(std::isnan(brief.short_term_lufs));
   }
 }
 
-TEST_CASE("LUFS deliberately keeps -inf as its silence sentinel", "[meter][floor][lufs]") {
-  // Unlike the level meters above, LUFS keeps -inf for silence: it is the
-  // canonical ITU-R BS.1770-4 / EBU R128 "below measurement floor" value and is
-  // also used internally as a gating sentinel. This documents the intentional
-  // difference; JSON serialization of that -inf is made safe in util/json.h.
-  const std::vector<float> silent(48000, 0.0f);
-  const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
-  const auto result = metering::lufs(audio);
-  REQUIRE(!std::isfinite(result.integrated_lufs));
-  REQUIRE(result.integrated_lufs < 0.0f);
+TEST_CASE("gain to an integrated target from silence is not measured", "[meter][floor][lufs]") {
+  const std::vector<float> silent(48000 * 2, 0.0f);
+  const metering::LufsGainToTarget solved =
+      metering::gain_to_integrated_lufs(silent.data(), silent.size(), 1, 48000, -23.0f);
+  CHECK(solved.measured_lufs == -std::numeric_limits<float>::infinity());
+  CHECK(std::isnan(solved.gain_db));
+}
+
+TEST_CASE("stereo ratios of silence are not measured", "[meter][floor]") {
+  const std::vector<float> zeros(64, 0.0f);
+  std::vector<float> tone(64);
+  for (size_t i = 0; i < tone.size(); ++i) tone[i] = 1e-9f * static_cast<float>(i % 7) - 3e-9f;
+  CHECK(std::isnan(metering::correlation(zeros.data(), zeros.data(), zeros.size())));
+  CHECK(std::isnan(metering::correlation(tone.data(), zeros.data(), zeros.size())));
+  CHECK(std::isnan(metering::stereo_width(zeros.data(), zeros.data(), zeros.size())));
+  // A quiet signal is measured however low it sits: one channel only is a width of 1.
+  CHECK_THAT(metering::stereo_width(tone.data(), zeros.data(), tone.size()),
+             WithinAbs(1.0f, 1e-5f));
+  CHECK_THAT(metering::correlation(tone.data(), tone.data(), tone.size()), WithinAbs(1.0f, 1e-5f));
 }
 
 TEST_CASE("vectorscope and phase scope decimate identically", "[meter][decimation]") {

@@ -356,7 +356,7 @@ TEST_CASE("MeterProcessor publishes peak rms and correlation snapshot", "[mixing
   REQUIRE_THAT(snapshot.rms_db[1], WithinAbs(-6.0206f, 0.001f));
   REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
   REQUIRE_THAT(snapshot.gain_reduction_db, WithinAbs(0.0f, 0.0001f));
-  REQUIRE_THAT(snapshot.max_true_peak_db, WithinAbs(sonare::constants::kFloorDb, 0.001f));
+  REQUIRE(std::isnan(snapshot.max_true_peak_db));
 }
 
 TEST_CASE("MeterProcessor optionally publishes true peak", "[mixing]") {
@@ -374,7 +374,8 @@ TEST_CASE("MeterProcessor optionally publishes true peak", "[mixing]") {
 
   REQUIRE(snapshot.max_true_peak_db >= snapshot.peak_db[0]);
   REQUIRE_THAT(snapshot.true_peak_db[0], WithinAbs(snapshot.max_true_peak_db, 0.0001f));
-  REQUIRE_THAT(snapshot.true_peak_db[1], WithinAbs(sonare::constants::kFloorDb, 0.001f));
+  // Plane 1 of a mono input was never written.
+  REQUIRE(std::isnan(snapshot.true_peak_db[1]));
   REQUIRE(snapshot.max_true_peak_db > -3.0f);
 }
 

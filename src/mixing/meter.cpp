@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "metering/bs1770_weighting.h"
 #include "rt/biquad_design.h"
@@ -16,8 +17,6 @@ namespace sonare::mixing {
 using sonare::discard_group_if_non_finite;
 using sonare::resolve_non_finite;
 using sonare::SampleDestination;
-using sonare::constants::kEpsilon;
-using sonare::constants::kFloorDb;
 
 namespace {
 // What a sample contributes to every reading: a non-finite one counts as silence,
@@ -25,6 +24,20 @@ namespace {
 float metered(float sample) noexcept {
   (void)resolve_non_finite(SampleDestination::kBoundedResult, sample);
   return sample;
+}
+
+// NaN-aware running maximum: an unmeasured (NaN) side yields the other value.
+float level_max(float a, float b) noexcept {
+  if (std::isnan(a)) return b;
+  if (std::isnan(b)) return a;
+  return std::max(a, b);
+}
+
+// Mean energy of a window: exactly zero only when no sample in it is nonzero, otherwise the
+// running sum held above zero because its rounding residue can sit at or below it.
+double window_mean_energy(double sum, size_t nonzero, size_t length) noexcept {
+  if (nonzero == 0) return 0.0;
+  return std::max(sum / static_cast<double>(length), std::numeric_limits<double>::min());
 }
 }  // namespace
 
@@ -36,10 +49,13 @@ void validate_realtime_meter_config(const MeterConfig& config) {
 }
 
 float mono_compat_width_from_energy(double mid_energy, double side_energy) noexcept {
-  if (mid_energy > static_cast<double>(kEpsilon)) {
-    return static_cast<float>(std::sqrt(side_energy / mid_energy));
+  // Rounding can leave a zero energy a hair below zero.
+  mid_energy = std::max(mid_energy, 0.0);
+  side_energy = std::max(side_energy, 0.0);
+  if (mid_energy == 0.0) {
+    return side_energy == 0.0 ? kNotMeasured : std::numeric_limits<float>::infinity();
   }
-  return side_energy > static_cast<double>(kEpsilon) ? kMaxMonoCompatWidth : 0.0f;
+  return static_cast<float>(std::sqrt(side_energy / mid_energy));
 }
 
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
@@ -51,8 +67,7 @@ double MeterProcessor::filter_sample(int channel, double x) noexcept {
 }
 
 float MeterProcessor::energy_to_lufs(double energy) const noexcept {
-  // Finite floor instead of -inf so the meter always shows a bounded value.
-  return power_to_offset_db(energy, rt::kLoudnessOffset, static_cast<double>(kEpsilon), kFloorDb);
+  return static_cast<float>(rt::kLoudnessOffset + power_to_level_db(energy));
 }
 
 void MeterProcessor::prepare(double sample_rate, int max_block_size) {
@@ -87,7 +102,7 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
     momentary_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.400 * sample_rate_)));
     short_term_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(3.0 * sample_rate_)));
     gate_hop_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.100 * sample_rate_)));
-    energy_ring_.assign(short_term_len_, 0.0f);  // ring sized to the longer window
+    energy_ring_.assign(short_term_len_, 0.0);  // ring sized to the longer window
   } else {
     energy_ring_.clear();
     momentary_len_ = 0;
@@ -117,18 +132,20 @@ void MeterProcessor::reset() {
 }
 
 void MeterProcessor::reset_loudness_ring() noexcept {
-  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
+  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0);
   ring_pos_ = 0;
   filled_ = 0;
   momentary_sum_ = 0.0;
   short_term_sum_ = 0.0;
+  momentary_nonzero_ = 0;
+  short_term_nonzero_ = 0;
   gate_hop_counter_ = 0;
 }
 
 void MeterProcessor::reset_integrated() noexcept {
   hist_count_.fill(0);
   hist_energy_.fill(0.0);
-  integrated_lufs_ = kFloorDb;
+  integrated_lufs_ = kNotMeasured;
   histogram_dirty_ = false;
 }
 
@@ -185,9 +202,9 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     any_non_finite |= non_finite;
     if (ch < 2) stereo_sum_square[static_cast<size_t>(ch)] = sum_square;
     sample_peaks[static_cast<size_t>(ch)] = peak;
-    next.peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
-    next.rms_db[static_cast<size_t>(ch)] =
-        linear_to_db(std::sqrt(sum_square / static_cast<double>(num_samples)));
+    next.peak_db[static_cast<size_t>(ch)] = amplitude_to_level_db(peak);
+    next.rms_db[static_cast<size_t>(ch)] = static_cast<float>(
+        amplitude_to_level_db(std::sqrt(sum_square / static_cast<double>(num_samples))));
   }
 
   if (config_.measure_true_peak) {
@@ -239,15 +256,17 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       }
     }
     float max_true_peak = 0.0f;
+    bool any_plane = false;
     for (int ch = 0; ch < tp_channels; ++ch) {
       if (channels[ch] == nullptr) continue;
+      any_plane = true;
       const float peak = tp_peaks[static_cast<size_t>(ch)];
       if (ch < static_cast<int>(next.true_peak_db.size())) {
-        next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
+        next.true_peak_db[static_cast<size_t>(ch)] = amplitude_to_level_db(peak);
       }
       max_true_peak = std::max(max_true_peak, peak);
     }
-    next.max_true_peak_db = linear_to_db(max_true_peak);
+    if (any_plane) next.max_true_peak_db = amplitude_to_level_db(max_true_peak);
   }
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
@@ -273,12 +292,13 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       mid_energy += mid * mid;
       side_energy += side_scaled * side_scaled;
     }
-    const double denom = std::sqrt(sum_l * sum_r);
-    next.correlation =
-        denom > static_cast<double>(kEpsilon) ? static_cast<float>(sum_lr / denom) : 0.0f;
+    const double denom = std::sqrt(sum_l) * std::sqrt(sum_r);
+    next.correlation = denom > 0.0 ? static_cast<float>(sum_lr / denom) : kNotMeasured;
     next.mono_compat_side_rms = static_cast<float>(std::sqrt(side_sq_sum / num_samples));
     next.mono_compat_width = mono_compat_width_from_energy(mid_energy, side_energy);
-    next.likely_mono_compatible = next.correlation >= config_.mono_compat_correlation_threshold;
+    // An undefined correlation has nothing that can cancel in the mono sum.
+    next.likely_mono_compatible = std::isnan(next.correlation) ||
+                                  next.correlation >= config_.mono_compat_correlation_threshold;
   }
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
@@ -300,18 +320,22 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       }
 
       // Slide both running sums over the single ring; subtract the value leaving each window.
-      // The sums add the float the ring keeps, so what leaves is exactly what entered.
-      const float stored = static_cast<float>(combined);
-      const double entering = stored;
+      const double entering = combined;
       const double leaving_short = energy_ring_[ring_pos_];
       short_term_sum_ += entering - leaving_short;
+      if (entering != 0.0) ++short_term_nonzero_;
+      if (leaving_short != 0.0) --short_term_nonzero_;
+      if (short_term_nonzero_ == 0) short_term_sum_ = 0.0;
 
       size_t out_pos = ring_pos_ + short_term_len_ - momentary_len_;
       if (out_pos >= short_term_len_) out_pos -= short_term_len_;
       const double leaving_mom = energy_ring_[out_pos];
       momentary_sum_ += entering - leaving_mom;
+      if (entering != 0.0) ++momentary_nonzero_;
+      if (leaving_mom != 0.0) --momentary_nonzero_;
+      if (momentary_nonzero_ == 0) momentary_sum_ = 0.0;
 
-      energy_ring_[ring_pos_] = stored;
+      energy_ring_[ring_pos_] = entering;
       ring_pos_ = (ring_pos_ + 1 == short_term_len_) ? 0 : ring_pos_ + 1;
       if (filled_ < short_term_len_) ++filled_;
 
@@ -319,7 +343,9 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       if (++gate_hop_counter_ >= gate_hop_) {
         gate_hop_counter_ = 0;
         if (filled_ >= momentary_len_) {
-          const double block_energy = momentary_sum_ / static_cast<double>(momentary_len_);
+          const double block_energy =
+              window_mean_energy(momentary_sum_, momentary_nonzero_, momentary_len_);
+          if (std::isnan(integrated_lufs_)) integrated_lufs_ = kNoLevelDb;
           const float block_lufs = energy_to_lufs(block_energy);
           if (block_lufs >= static_cast<float>(kHistLowLufs)) {
             const int bin =
@@ -335,10 +361,12 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     }
 
     if (filled_ >= momentary_len_) {
-      next.momentary_lufs = energy_to_lufs(momentary_sum_ / static_cast<double>(momentary_len_));
+      next.momentary_lufs =
+          energy_to_lufs(window_mean_energy(momentary_sum_, momentary_nonzero_, momentary_len_));
     }
     if (filled_ >= short_term_len_) {
-      next.short_term_lufs = energy_to_lufs(short_term_sum_ / static_cast<double>(short_term_len_));
+      next.short_term_lufs =
+          energy_to_lufs(window_mean_energy(short_term_sum_, short_term_nonzero_, short_term_len_));
     }
 
     // Gated integrated loudness via the bounded histogram (libebur128-style).
@@ -381,7 +409,9 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 void MeterProcessor::flush_true_peak() noexcept {
   if (!config_.measure_true_peak || true_peak_channels_ <= 0) return;
   MeterSnapshot next = snapshot_.load();
-  float max_true_peak = db_to_linear(next.max_true_peak_db);
+  const bool measured = !std::isnan(next.max_true_peak_db);
+  float max_true_peak = measured ? db_to_linear(next.max_true_peak_db) : 0.0f;
+  bool any_live = measured;
   // The pending window can be longer than one prepared block, so drain it in block-sized chunks.
   for (int remaining = true_peak_filter_.latency_samples(); remaining > 0;) {
     const int chunk = std::min(remaining, max_block_size_);
@@ -398,17 +428,18 @@ void MeterProcessor::flush_true_peak() noexcept {
     for (int ch = 0; ch < true_peak_channels_; ++ch) {
       const size_t c = static_cast<size_t>(ch);
       if (!true_peak_live_[c]) continue;
+      any_live = true;
       float peak = 0.0f;
       for (size_t i = 0; i < oversampled; ++i) {
         peak = std::max(peak, std::abs(true_peak_oversampled_[c][i]));
       }
       if (c < next.true_peak_db.size()) {
-        next.true_peak_db[c] = std::max(next.true_peak_db[c], linear_to_db(peak));
+        next.true_peak_db[c] = level_max(next.true_peak_db[c], amplitude_to_level_db(peak));
       }
       max_true_peak = std::max(max_true_peak, peak);
     }
   }
-  next.max_true_peak_db = linear_to_db(max_true_peak);
+  if (any_live) next.max_true_peak_db = amplitude_to_level_db(max_true_peak);
   publish(next);
   // The next process() starts a new signal, so the reconstruction must not read this one's taps.
   true_peak_filter_.reset();

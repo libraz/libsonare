@@ -1,5 +1,5 @@
 /// @file crest_factor_silence_test.cpp
-/// @brief The mono crest factor agrees with the interleaved one wherever the level is unmeasurable.
+/// @brief The mono and interleaved crest factors agree on silence and on very quiet input.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -26,25 +26,22 @@ Audio from_samples(std::vector<float> samples) {
 
 }  // namespace
 
-TEST_CASE("crest factor of all-zero input is 0 dB in both forms", "[meter]") {
+TEST_CASE("crest factor of all-zero input is not measured in both forms", "[meter]") {
   const std::vector<float> zeros(10000, 0.0f);
 
-  REQUIRE_THAT(metering::crest_factor_db(from_samples(zeros)), WithinAbs(0.0f, 1e-6f));
-  REQUIRE_THAT(metering::crest_factor_db_interleaved(zeros.data(), zeros.size(), 1),
-               WithinAbs(0.0f, 1e-6f));
+  CHECK(std::isnan(metering::crest_factor_db(from_samples(zeros))));
+  CHECK(std::isnan(metering::crest_factor_db_interleaved(zeros.data(), zeros.size(), 1)));
+  CHECK(std::isnan(metering::crest_factor_db_interleaved(nullptr, 0, 1)));
 }
 
-TEST_CASE("crest factor of a peak above the floor over an RMS below it is the neutral 0 dB",
-          "[meter]") {
-  // The peak clears kEpsilon but the RMS (peak / 100) does not, so only the
-  // RMS reading is the silence floor. Subtracting a floor from a measured peak
-  // is not a crest factor.
+TEST_CASE("crest factor of a very quiet spike is measured in both forms", "[meter]") {
+  // One sample in 10000 puts the RMS at peak / 100: 40 dB, however low the spike sits.
   std::vector<float> samples(10000, 0.0f);
   samples[5000] = 5.0e-9f;
 
   const float interleaved =
       metering::crest_factor_db_interleaved(samples.data(), samples.size(), 1);
-  REQUIRE_THAT(interleaved, WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(interleaved, WithinAbs(40.0f, 1e-3f));
   REQUIRE_THAT(metering::crest_factor_db(from_samples(samples)), WithinAbs(interleaved, 1e-3f));
 }
 

@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include "util/db.h"
+
 namespace sonare::mastering::api {
 
 /// @brief Common scalar fields populated by every mono mastering operation.
@@ -141,7 +143,8 @@ struct StageGainReduction {
 /// These fields use the same EBU R128 meter as the existing chain loudness
 /// fields. Max-M and Max-S are the maximum 400 ms and 3 s windows,
 /// respectively; they are deliberately not the final momentary / short-term
-/// window values.
+/// window values. A silent input reads -inf for the level fields (true peak
+/// included); loudness range is NaN when no block passed the gates.
 struct MasteringLoudnessSummary {
   float integrated_lufs = 0.0f;
   float max_momentary_lufs = 0.0f;
@@ -153,7 +156,8 @@ struct MasteringLoudnessSummary {
 /// @brief Explanation-oriented measurements for a complete mastering run.
 ///
 /// @c band_energy_delta_db contains 32 logarithmically-spaced long-term
-/// spectral-energy deltas (after minus before) from 20 Hz to Nyquist. The
+/// spectral-energy deltas (after minus before) from 20 Hz to Nyquist; a band
+/// where either spectrum has no level, or both are -inf, is NaN (not measured). The
 /// values are intended for compact host visualizations, not corrective-EQ
 /// decisions. @c max_gain_reduction_db is the most-negative stage-reported
 /// gain reduction, or zero when none ran.
@@ -165,6 +169,10 @@ struct MasteringReport {
   float applied_gain_db = 0.0f;
   float max_gain_reduction_db = 0.0f;
   bool loudness_target_limited = false;
+  /// Static gain the loudness stage applied, in dB. NaN (not measured) when the stage is off or
+  /// its input has no measurable loudness (silence, or nothing above the absolute gate): the
+  /// stage then applies no gain and the chain carries on.
+  float loudness_gain_db = kNotMeasured;
   std::array<float, kMasteringReportBandCount> band_energy_delta_db{};
 };
 
@@ -176,13 +184,15 @@ struct ChainMetrics {
   /// oversample factor of the peak-limiting stage the chain actually applied:
   /// the loudness stage's true-peak oversample (default 4x) when loudness is
   /// enabled, otherwise the maximizer true-peak limiter's own factor when that
-  /// stage ran. See reported_true_peak_oversample() in chain.cpp.
+  /// stage ran. See reported_true_peak_oversample() in chain.cpp. -inf for silence.
   float output_true_peak_dbtp = 0.0f;
   /// EBU Tech 3342 Loudness Range (LU).
   float output_loudness_range_lu = 0.0f;
   /// True when the loudness stage could not apply target-input LUFS gain
   /// because doing so would exceed its true-peak ceiling.
   bool loudness_target_limited = false;
+  /// Mirrors @ref MasteringReport::loudness_gain_db.
+  float loudness_gain_db = kNotMeasured;
   /// Ordered list of stages that ran (e.g. "dynamics.compressor").
   std::vector<std::string> stages;
   /// Per-stage gain reductions for the dynamics / maximizer stages.

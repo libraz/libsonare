@@ -14,18 +14,18 @@ namespace sonare {
 
 /// @brief Dynamics analysis results.
 struct Dynamics {
-  float dynamic_range_db = 0.0f;   ///< Dynamic range in dB
-  float peak_db = 0.0f;            ///< Peak level in dB
-  float rms_db = 0.0f;             ///< RMS level in dB
-  float crest_factor = 0.0f;       ///< Peak to RMS ratio
-  float loudness_range_lu = 0.0f;  ///< Loudness range (LRA) in dB
+  float dynamic_range_db = 0.0f;   ///< Dynamic range in dB; NaN when a percentile level is -inf
+  float peak_db = 0.0f;            ///< Peak level in dB; -inf for exact silence
+  float rms_db = 0.0f;             ///< RMS level in dB; -inf for exact silence
+  float crest_factor = 0.0f;       ///< Peak to RMS ratio in dB; NaN for silence
+  float loudness_range_lu = 0.0f;  ///< Loudness range (LRA) in dB; NaN with no gated block
   bool is_compressed = false;      ///< True if audio appears heavily compressed; false for silence
 };
 
 /// @brief Loudness curve over time.
 struct LoudnessCurve {
   std::vector<float> times;   ///< Time points in seconds
-  std::vector<float> rms_db;  ///< RMS level in dB at each time point
+  std::vector<float> rms_db;  ///< RMS level in dB at each time point; -inf for an all-zero window
 };
 
 /// @brief Configuration for dynamics analysis.

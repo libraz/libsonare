@@ -14,8 +14,6 @@
 
 namespace sonare {
 
-using constants::kEpsilon;
-
 namespace {
 /// @brief Crest factor (dB) below which audio is considered heavily compressed.
 /// @details Uncompressed program material typically exhibits a crest factor well above
@@ -51,14 +49,11 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     peak = std::max(peak, std::abs(sample));
     prefix_sum[i + 1] = prefix_sum[i] + static_cast<double>(sample) * static_cast<double>(sample);
   }
-  const float rms =
-      static_cast<float>(std::sqrt(prefix_sum.back() / static_cast<double>(n_samples)));
-
-  // Convert to dB
-  constexpr float eps = kEpsilon;
-  dynamics_.peak_db = linear_to_db(std::max(peak, eps));
-  dynamics_.rms_db = linear_to_db(std::max(rms, eps));
-  dynamics_.crest_factor = dynamics_.peak_db - dynamics_.rms_db;
+  // Levels are -inf for exact silence and otherwise as computed; crest of silence is not measured.
+  dynamics_.peak_db = amplitude_to_level_db(peak);
+  dynamics_.rms_db =
+      static_cast<float>(power_to_level_db(prefix_sum.back() / static_cast<double>(n_samples)));
+  dynamics_.crest_factor = level_difference_db(dynamics_.peak_db, dynamics_.rms_db);
 
   // Compute loudness curve using prefix sum for O(n) complexity.
   // Sized in double and compared with the buffer before any cast; floored at one sample so a
@@ -94,8 +89,8 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   for (size_t pos = 0; pos + window_samples <= n_samples; pos += hop_length) {
     // Compute RMS for this window using prefix sum: O(1) per window
     double win_sum_sq = prefix_sum[pos + window_samples] - prefix_sum[pos];
-    float win_rms = static_cast<float>(std::sqrt(win_sum_sq / static_cast<double>(window_samples)));
-    float win_rms_db = linear_to_db(std::max(win_rms, eps));
+    const float win_rms_db =
+        static_cast<float>(power_to_level_db(win_sum_sq / static_cast<double>(window_samples)));
 
     const double center_sample = static_cast<double>(pos) + 0.5 * window_samples;
     float time = static_cast<float>(center_sample / static_cast<double>(sr));
@@ -113,9 +108,9 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     const float p10 = static_cast<float>(percentile_sorted(sorted_rms, 0.10));
     const float p95 = static_cast<float>(percentile_sorted(sorted_rms, 0.95));
 
-    dynamics_.dynamic_range_db = p95 - p10;
+    dynamics_.dynamic_range_db = level_difference_db(p95, p10);
   } else {
-    dynamics_.dynamic_range_db = 0.0f;
+    dynamics_.dynamic_range_db = kNotMeasured;
   }
 
   // Loudness range (LRA): full EBU R128 / EBU Tech 3342 algorithm using K-weighted

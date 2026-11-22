@@ -205,6 +205,16 @@ inline void less_than(double value, double bound, const char* subject) {
   within(value, real_domain_below(bound, false), subject);
 }
 
+/// @brief Refuses deriving a gain from @p level_db unless it is finite: -inf (no measurable level)
+///        and NaN (not measured) both leave nothing to scale from.
+/// @param predicate @ref refusal::kNoMeasurableLoudnessPredicate or
+///        @ref refusal::kNoMeasurableLevelPredicate.
+inline void measurable_level(float level_db, const std::string& subject, const char* predicate) {
+  if (!std::isfinite(level_db)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, predicate);
+  }
+}
+
 /// @brief Refuses @p value unless it is finite, for a float member with no narrower domain.
 inline void finite_float(float value, const char* subject) {
   if (!std::isfinite(value)) {

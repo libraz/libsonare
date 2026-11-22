@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,6 @@
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
-using sonare::mixing::kMaxMonoCompatWidth;
 using sonare::mixing::assistant::analyze_image_occupancy;
 using sonare::mixing::assistant::analyze_mono_risks;
 using sonare::mixing::assistant::ImageOccupancy;
@@ -221,9 +221,8 @@ TEST_CASE("A polarity-inverted track is reported as a mono risk", "[mixing][assi
   REQUIRE(risks[0].track_index == 1);
   REQUIRE(risks[0].strip_id == "flipped");
   REQUIRE_THAT(risks[0].correlation, WithinAbs(-1.0f, 1e-4f));
-  // The mid collapses outright, so the reported width is the finite sentinel
-  // standing in for an infinite side/mid ratio.
-  REQUIRE_THAT(risks[0].width, WithinAbs(kMaxMonoCompatWidth, 1.0f));
+  // The mid collapses outright: a pure side signal has an unbounded side/mid ratio.
+  REQUIRE(risks[0].width == std::numeric_limits<float>::infinity());
   // The tone sits in the mid band: the low-end flag is a separate detection and
   // must not ride along with a broadband verdict.
   REQUIRE_FALSE(risks[0].wide_low_end);

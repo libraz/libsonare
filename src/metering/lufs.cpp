@@ -20,11 +20,6 @@ namespace {
 
 using Biquad = rt::BiquadCoeffsD;
 
-// Energies are accumulated in `double`; treat anything below this as silence
-// rather than feeding it to log10(). Smaller than the float `kEpsilon` so we
-// keep the full double dynamic range when the input is genuinely quiet.
-constexpr double kEnergyFloor = 1e-15;
-
 // Frames de-interleaved and K-weighted per pass by the streaming block
 // accumulator. The window is compacted once per chunk, so the chunk has to be
 // large relative to the retained window for that move to disappear against the
@@ -36,17 +31,10 @@ constexpr size_t kChunkFrames = 1u << 17;
 // Upper bound of the block overlap fraction the accumulator accepts.
 constexpr float kMaxBlockOverlap = 0.99f;
 
-// Silence sentinel rationale: unlike the level-in-dB meters (true_peak /
-// spectrum / dynamic_range), which report the finite kFloorDb (-120 dB) for
-// silence, LUFS deliberately keeps -inf. -inf ("below the measurement floor") is
-// the canonical ITU-R BS.1770-4 / EBU R128 convention for an unmeasurable block,
-// and the value doubles as an internal gating sentinel throughout this file
-// (absolute/relative gate comparisons, last_or_silence). Forcing it to -120
-// would silently alter a standardized loudness algorithm, so it is left as-is.
-// JSON serialization safety for this -inf is handled in util/json.h instead.
+// Energies are accumulated in double, so a quiet block keeps its full range; only zero energy
+// has no measurable loudness (-inf), which the gates below then drop as the standard says.
 float energy_to_lufs(double energy) {
-  return power_to_offset_db(energy, rt::kLoudnessOffset, kEnergyFloor,
-                            -std::numeric_limits<float>::infinity());
+  return static_cast<float>(rt::kLoudnessOffset + power_to_level_db(energy));
 }
 
 std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
@@ -262,13 +250,13 @@ std::vector<float> energies_to_lufs(const std::vector<double>& energies) {
   return out;
 }
 
+// A signal too short for one block has no momentary or short-term reading at all.
 float last_or_silence(const std::vector<float>& values) {
-  return values.empty() ? -std::numeric_limits<float>::infinity() : values.back();
+  return values.empty() ? kNotMeasured : values.back();
 }
 
 float max_or_silence(const std::vector<float>& values) {
-  return values.empty() ? -std::numeric_limits<float>::infinity()
-                        : *std::max_element(values.begin(), values.end());
+  return values.empty() ? kNotMeasured : *std::max_element(values.begin(), values.end());
 }
 
 float short_term_overlap_for(int sample_rate, float duration_sec) {
@@ -335,7 +323,11 @@ LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, in
       k_weighted_block_energies(samples, frames, channels, sample_rate, config).integrated;
   LufsGainToTarget result;
   result.measured_lufs = gated_integrated_lufs(energies, config);
-  if (!std::isfinite(result.measured_lufs) || !std::isfinite(target_lufs)) return result;
+  // No gain brings silence (or a block set the gates drop) to a target: not measured.
+  if (!std::isfinite(result.measured_lufs) || !std::isfinite(target_lufs)) {
+    result.gain_db = kNotMeasured;
+    return result;
+  }
 
   // Each pass re-gates at the current gain; the gated set only changes a finite
   // number of times, so the cap is reached only by a set that alternates.
@@ -405,7 +397,7 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
   for (float value : short_term_lufs) {
     if (std::isfinite(value) && value >= kLufsAbsoluteGate) abs_gated.push_back(value);
   }
-  if (abs_gated.size() < 2) return 0.0f;
+  if (abs_gated.empty()) return kNotMeasured;
 
   // Stage 2 — relative gate 20 LU below the mean of the absolute-gated loudness.
   // Average in the linear (energy) domain, then convert back to LUFS.
@@ -421,7 +413,7 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
   for (float value : abs_gated) {
     if (value >= relative_gate) gated.push_back(value);
   }
-  if (gated.size() < 2) return 0.0f;
+  if (gated.empty()) return kNotMeasured;
 
   std::sort(gated.begin(), gated.end());
   // Interpolated, not nearest-rank: with only a handful of gated blocks a

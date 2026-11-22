@@ -755,8 +755,6 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
  private:
-  /// Smoothing time of the fader, pan, bus gain and send ramps.
-  static constexpr float kMixerSmoothingMs = 5.0f;
   /// Smoothing time of the lane gate ramp.
   static constexpr float kLaneGateSmoothingMs = 10.0f;
   /// Ceiling of the retained clip delay in Q8 samples (the lane alignment bank length).
@@ -775,8 +773,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     uint32_t track_id = 0;
     // Linear gain, even though the public parameter is dB. Converting once at
     // control rate matches ChannelStrip's gain ramp and avoids pow() per sample.
-    rt::ParamSmoother fader_gain{1.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
-    rt::ParamSmoother pan{0.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother fader_gain{1.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother pan{0.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
     rt::ParamSmoother gate{1.0f, kLaneGateSmoothingMs, sonare::constants::kDefaultDawSampleRate};
     bool solo = false;
     bool mute = false;
@@ -792,7 +790,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // lane's post-fader telemetry record, so no audio-thread allocation is
     // needed to report both sides of the dynamics stage.
     std::array<float, mixing::kMaxMeterChannels> input_peak_db =
-        mixing::detail::meter_floor_array();
+        mixing::detail::meter_unmeasured_array();
     // Surround placement carried block-to-block so a moving surround pan glides
     // click-free. Unused on the stereo path. Like the stereo lane pan it smooths
     // the parameters with the 5 ms sample-rate time constant and evaluates the
@@ -830,16 +828,16 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   struct BusState {
     uint32_t bus_id = 0;
-    rt::ParamSmoother gain{1.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gain{1.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
     // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
     // run before the insert chain, width after it. At their defaults (0 dB /
     // width 1 / no invert) the per-block processing is skipped entirely, so a
     // bus that never engages them stays bit-identical. The trim smoother holds a
     // linear gain (not dB), smoothing in the linear domain exactly like the
     // strip's GainProcessor, so a bus and a strip ramp identically.
-    rt::ParamSmoother input_trim_gain{1.0f, kMixerSmoothingMs,
+    rt::ParamSmoother input_trim_gain{1.0f, rt::kClickGuardMs,
                                       sonare::constants::kDefaultDawSampleRate};
-    mixing::StereoWidthProcessor width{1.0f, kMixerSmoothingMs};
+    mixing::StereoWidthProcessor width{1.0f, rt::kClickGuardMs};
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};
     // Output pan (after the inserts) and dedicated EQ (before them), kept outside

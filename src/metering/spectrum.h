@@ -15,6 +15,8 @@ struct SpectrumConfig {
   bool apply_octave_smoothing = false;
   int octave_fraction = 3;
   float db_ref = 1.0f;
+  /// Clamp on the magnitude before the dB conversion, max(magnitude, db_amin); silence reads
+  /// 20·log10(db_amin / db_ref) under it.
   float db_amin = constants::kEpsilon;
 };
 

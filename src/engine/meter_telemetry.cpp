@@ -12,7 +12,7 @@ namespace sonare::engine {
 
 void capture_input_peak_db(float* const* channels, int num_channels, int num_samples,
                            std::array<float, mixing::kMaxMeterChannels>& output) noexcept {
-  output = mixing::detail::meter_floor_array();
+  output = mixing::detail::meter_unmeasured_array();
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
   const int channel_count = std::min(num_channels, mixing::kMaxMeterChannels);
   for (int channel = 0; channel < channel_count; ++channel) {
@@ -23,11 +23,9 @@ void capture_input_peak_db(float* const* channels, int num_channels, int num_sam
       const float value = source[sample];
       if (std::isfinite(value)) peak = std::max(peak, std::abs(value));
     }
-    output[static_cast<size_t>(channel)] = linear_to_db(peak);
+    output[static_cast<size_t>(channel)] = amplitude_to_level_db(peak);
   }
 }
-
-using constants::kFloorDb;
 
 namespace {
 // What a sample contributes to a lightweight reading: a non-finite one counts as
@@ -35,6 +33,13 @@ namespace {
 float metered(float sample) noexcept {
   (void)resolve_non_finite(SampleDestination::kBoundedResult, sample);
   return sample;
+}
+
+// NaN-aware maximum: an unmeasured (NaN) side yields the other value.
+float level_max(float a, float b) noexcept {
+  if (std::isnan(a)) return b;
+  if (std::isnan(b)) return a;
+  return std::max(a, b);
 }
 }  // namespace
 
@@ -107,11 +112,8 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   // publish() path, so reusing it here would stamp every lightweight record
   // with a stale/zero seq.
   record.seq = ++lightweight_seq_;
-  // Fields the lightweight path does not measure (true-peak / LUFS / gain
-  // reduction) keep their floor/zero defaults from MeterTelemetryRecord, which
-  // are finite and JSON-safe. Earlier this path stamped NaN, which serialized
-  // to an invalid JSON `NaN` token on the Python host and to a type-violating
-  // `null` on Node/WASM.
+  // Fields the lightweight path does not measure (true-peak / LUFS) keep their
+  // NaN defaults from MeterTelemetryRecord.
 
   // Per-plane peak/RMS up to the surround width. Stereo stays bit-identical
   // (meters == 2); a surround lane/bus now fills all of its planes.
@@ -119,9 +121,11 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   record.channel_count = meters;
   std::array<double, mixing::kMaxMeterChannels> sum_sq{};
   std::array<float, mixing::kMaxMeterChannels> peak{};
+  std::array<bool, mixing::kMaxMeterChannels> written{};
   for (int ch = 0; ch < meters; ++ch) {
     const float* channel = channels[ch];
     if (!channel) continue;
+    written[static_cast<size_t>(ch)] = true;
     for (int i = 0; i < num_frames; ++i) {
       const float value = metered(channel[i]);
       peak[static_cast<size_t>(ch)] = std::max(peak[static_cast<size_t>(ch)], std::abs(value));
@@ -131,9 +135,10 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
 
   for (int ch = 0; ch < meters; ++ch) {
     const size_t c = static_cast<size_t>(ch);
-    const float rms = std::sqrt(sum_sq[c] / static_cast<double>(num_frames));
-    record.peak_db[c] = peak[c] > 0.0f ? 20.0f * std::log10(peak[c]) : kFloorDb;
-    record.rms_db[c] = rms > 0.0f ? 20.0f * std::log10(rms) : kFloorDb;
+    if (!written[c]) continue;
+    record.peak_db[c] = amplitude_to_level_db(peak[c]);
+    record.rms_db[c] = static_cast<float>(
+        amplitude_to_level_db(std::sqrt(sum_sq[c] / static_cast<double>(num_frames))));
   }
   if (num_channels >= 2 && channels[0] && channels[1]) {
     double cross = 0.0;
@@ -141,7 +146,7 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
       cross += static_cast<double>(metered(channels[0][i])) *
                static_cast<double>(metered(channels[1][i]));
     }
-    const double denom = std::sqrt(sum_sq[0] * sum_sq[1]);
+    const double denom = std::sqrt(sum_sq[0]) * std::sqrt(sum_sq[1]);
     if (denom > 0.0) {
       record.correlation = static_cast<float>(std::clamp(cross / denom, -1.0, 1.0));
     }
@@ -226,26 +231,30 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
     MeterTelemetryRecord& staged = staged_records_[i];
     StagedEnergy& energy = staged_energy_[i];
     for (size_t c = 0; c < mixing::kMaxMeterChannels; ++c) {
-      staged.input_peak_db[c] = std::max(staged.input_peak_db[c], record.input_peak_db[c]);
+      staged.input_peak_db[c] = level_max(staged.input_peak_db[c], record.input_peak_db[c]);
     }
     const int channel_count = std::clamp(record.channel_count, 0, mixing::kMaxMeterChannels);
     for (int ch = 0; ch < channel_count; ++ch) {
       const size_t c = static_cast<size_t>(ch);
-      staged.peak_db[c] = std::max(staged.peak_db[c], record.peak_db[c]);
-      staged.true_peak_db[c] = std::max(staged.true_peak_db[c], record.true_peak_db[c]);
-      const double mean_square = db_to_power_scalar(static_cast<double>(record.rms_db[c]));
-      energy.sum_sq[c] += mean_square * static_cast<double>(frames);
+      staged.peak_db[c] = level_max(staged.peak_db[c], record.peak_db[c]);
+      staged.true_peak_db[c] = level_max(staged.true_peak_db[c], record.true_peak_db[c]);
+      if (!std::isnan(record.rms_db[c])) {
+        const double mean_square = db_to_power_scalar(static_cast<double>(record.rms_db[c]));
+        energy.sum_sq[c] += mean_square * static_cast<double>(frames);
+        energy.measured[c] = true;
+      }
     }
     energy.frames += frames;
     if (energy.frames > 0) {
       for (int ch = 0; ch < channel_count; ++ch) {
         const size_t c = static_cast<size_t>(ch);
         const double mean_square = energy.sum_sq[c] / static_cast<double>(energy.frames);
-        staged.rms_db[c] =
-            mean_square > 0.0 ? static_cast<float>(10.0 * std::log10(mean_square)) : kFloorDb;
+        if (energy.measured[c]) {
+          staged.rms_db[c] = static_cast<float>(power_to_level_db(mean_square));
+        }
       }
     }
-    staged.max_true_peak_db = std::max(staged.max_true_peak_db, record.max_true_peak_db);
+    staged.max_true_peak_db = level_max(staged.max_true_peak_db, record.max_true_peak_db);
     // seq/render_frame and the already-integrating fields (LUFS, gain
     // reduction, correlation, mono-compat width) describe the meter's running
     // state as of the most recent sub-block, so the latest value is correct
@@ -266,8 +275,10 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
     StagedEnergy energy{};
     for (int ch = 0; ch < channel_count; ++ch) {
       const size_t c = static_cast<size_t>(ch);
+      if (std::isnan(record.rms_db[c])) continue;
       energy.sum_sq[c] =
           db_to_power_scalar(static_cast<double>(record.rms_db[c])) * static_cast<double>(frames);
+      energy.measured[c] = true;
     }
     energy.frames = frames;
     staged_energy_[staged_count_] = energy;

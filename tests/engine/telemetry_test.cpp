@@ -435,8 +435,8 @@ TEST_CASE("RealtimeEngine master meter telemetry carries a real inter-sample pea
   // The master tap's true_peak_db / max_true_peak_db are published on the C ABI
   // and on every binding. They are only a true peak if the engine prepares its
   // meter with true-peak measurement enabled; with the measurement off the
-  // fields sit at the dB floor for every signal, so this test is what stands
-  // between those names and a permanent -120.
+  // fields are NaN for every signal, so this test is what stands between
+  // those names and a permanent "not measured".
   //
   // A sine at a quarter of the sample rate offset by an eighth of a period puts
   // every sample on +-amplitude/sqrt(2) and the waveform's peak at +-amplitude,
@@ -457,9 +457,9 @@ TEST_CASE("RealtimeEngine master meter telemetry carries a real inter-sample pea
   std::vector<float> left(kBlock, 0.0f);
   std::vector<float> right(kBlock, 0.0f);
   bool saw_master = false;
-  float master_peak_db = sonare::constants::kFloorDb;
-  float master_true_peak_db = sonare::constants::kFloorDb;
-  float master_max_true_peak_db = sonare::constants::kFloorDb;
+  float master_peak_db = sonare::kNotMeasured;
+  float master_true_peak_db = sonare::kNotMeasured;
+  float master_max_true_peak_db = sonare::kNotMeasured;
 
   sonare::engine::MeterTelemetryRecord record{};
   for (int block = 0; block < kBlocks; ++block) {
@@ -486,7 +486,7 @@ TEST_CASE("RealtimeEngine master meter telemetry carries a real inter-sample pea
   REQUIRE(master_true_peak_db > sonare::constants::kFloorDb);
   REQUIRE(master_true_peak_db > master_peak_db + 1.5f);
   REQUIRE(master_max_true_peak_db >= master_true_peak_db);
-  // Finite, never NaN: the record is serialized straight into host JSON.
+  // Measured: neither NaN (not measured) nor -inf (no level).
   REQUIRE(std::isfinite(master_true_peak_db));
   REQUIRE(std::isfinite(master_max_true_peak_db));
 }

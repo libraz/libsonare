@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "metering/basic.h"
@@ -400,20 +401,30 @@ TEST_CASE("the stereo normalizers refuse a pair they cannot process", "[effects]
   REQUIRE_NOTHROW(normalize_stereo(left, left));
 }
 
-TEST_CASE("a silent stereo pair is left alone", "[effects][normalize]") {
+TEST_CASE("normalizing digital silence is refused, however quiet a signal may be",
+          "[effects][normalize]") {
   const Audio silence = Audio::from_vector(std::vector<float>(1024, 0.0f), 22050);
+  const auto refused = [](auto&& call) {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "audio has no measurable level");
+      return true;
+    }
+    return false;
+  };
+  CHECK(refused([&] { (void)normalize(silence, -1.0f); }));
+  CHECK(refused([&] { (void)normalize_rms(silence, -20.0f); }));
+  CHECK(refused([&] { (void)normalize_stereo(silence, silence, -1.0f); }));
+  CHECK(refused([&] { (void)normalize_rms_stereo(silence, silence, -20.0f); }));
 
-  const auto result = normalize_stereo(silence, silence);
-
-  REQUIRE(result.applied_gain_db == 0.0f);
-  REQUIRE(result.left.data()[0] == 0.0f);
-  REQUIRE(result.right.data()[512] == 0.0f);
-
-  // Control: a pair that is not silent does move, so the assertions above are
-  // about the silence short-circuit rather than about normalize_stereo being a
-  // no-op.
-  const Audio quiet = create_audio_with_amplitude(0.01f);
-  REQUIRE(normalize_stereo(quiet, quiet).applied_gain_db > 10.0f);
+  // No epsilon stands in for silence: a -250 dBFS tone has a level and reaches the target.
+  const Audio faint = create_audio_with_amplitude(3.1622777e-13f);
+  const Audio peaked = normalize(faint, -6.0f);
+  CHECK_THAT(peak_db(peaked), WithinAbs(-6.0f, 0.01f));
+  const auto pair = normalize_stereo(faint, faint, -6.0f);
+  CHECK_THAT(pair.applied_gain_db, WithinAbs(244.0f, 0.05f));
 }
 
 TEST_CASE("apply_gain refuses a finite dB value with no finite multiplier", "[normalize]") {

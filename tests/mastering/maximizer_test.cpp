@@ -1202,6 +1202,23 @@ TEST_CASE("StreamingPreview reports platform normalization and ceiling risk",
   REQUIRE(result[0].ceiling_risk);
 }
 
+TEST_CASE("StreamingPreview reads silence as -inf levels and an unmeasured gain",
+          "[mastering][maximizer]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(48000 * 2, 0.0f), 48000);
+  const auto result = streaming_preview(silence);
+
+  REQUIRE_FALSE(result.empty());
+  for (const auto& platform : result) {
+    CHECK((std::isinf(platform.integrated_lufs) && platform.integrated_lufs < 0.0f));
+    CHECK((std::isinf(platform.true_peak_db) && platform.true_peak_db < 0.0f));
+    CHECK(std::isnan(platform.normalization_gain_db));
+    CHECK_FALSE(platform.ceiling_risk);
+  }
+  const std::string text = streaming_preview_to_json(result);
+  CHECK(text.find("normalizationGainDb") == std::string::npos);
+  CHECK(text.find("\"truePeakDbtp\":null") != std::string::npos);
+}
+
 TEST_CASE("StreamingPreview measures a stereo pair with channel summing",
           "[mastering][maximizer]") {
   constexpr int sample_rate = 48000;
@@ -1244,7 +1261,7 @@ TEST_CASE("StreamingPreview keeps a measurement where a downmix cancels",
   const std::vector<float> left = generate_sine_samples(1000.0f, sample_rate, frames, 0.5f);
 
   // Anti-phase pair: the downmix is silence, so the mono path falls below the
-  // absolute gate and reports a non-finite loudness with a zeroed gain, while
+  // absolute gate and reports a non-finite loudness with a gain that is not measured, while
   // the program itself is loud.
   std::vector<float> interleaved(static_cast<size_t>(frames) * 2);
   std::vector<float> downmix(static_cast<size_t>(frames));
@@ -1260,7 +1277,7 @@ TEST_CASE("StreamingPreview keeps a measurement where a downmix cancels",
   const auto mono = streaming_preview(Audio::from_vector(downmix, sample_rate), platforms);
 
   REQUIRE(!std::isfinite(mono[0].integrated_lufs));
-  REQUIRE(mono[0].normalization_gain_db == 0.0f);
+  REQUIRE(std::isnan(mono[0].normalization_gain_db));
   REQUIRE(std::isfinite(stereo[0].integrated_lufs));
   REQUIRE_THAT(
       stereo[0].integrated_lufs,
@@ -1643,4 +1660,43 @@ TEST_CASE("TruePeakLimiter bounds queued output to a lowered ceiling", "[masteri
       }
     }
   }
+}
+
+TEST_CASE("Loudness operations whose request is a target refuse audio with no measurable loudness",
+          "[maximizer][loudness]") {
+  constexpr int kRate = 48000;
+  const std::vector<float> silence(static_cast<std::size_t>(kRate) * 2, 0.0f);
+  std::vector<float> below_gate(silence.size());
+  for (std::size_t i = 0; i < below_gate.size(); ++i) {
+    below_gate[i] = 1.0e-4f * std::sin(constants::kTwoPi * 997.0f * static_cast<float>(i) / kRate);
+  }
+  const std::vector<float>& below_gate_input = below_gate;
+  const auto refused = [](auto&& call) {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "audio has no measurable loudness");
+      return true;
+    }
+    return false;
+  };
+  for (const std::vector<float>* input : {&silence, &below_gate_input}) {
+    INFO((input == &silence ? "silence" : "below the absolute gate"));
+    const Audio audio = Audio::from_buffer(input->data(), input->size(), kRate);
+    CHECK(refused([&] { (void)loudness_optimize(audio); }));
+    CHECK(refused([&] {
+      (void)mastering::api::apply_named_processor("maximizer.loudnessOptimize", input->data(),
+                                                  input->size(), kRate, {});
+    }));
+    CHECK(refused([&] {
+      (void)mastering::api::apply_named_processor_stereo(
+          "maximizer.loudnessOptimize", input->data(), input->data(), input->size(), kRate, {});
+    }));
+  }
+  // Control: a measurable signal of the same shape is normalized.
+  std::vector<float> tone(below_gate);
+  for (float& sample : tone) sample *= 1000.0f;
+  const auto result = loudness_optimize(Audio::from_buffer(tone.data(), tone.size(), kRate));
+  CHECK(std::isfinite(result.applied_gain_db));
 }

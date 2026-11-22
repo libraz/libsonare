@@ -14,6 +14,7 @@
 #include "rt/seqlock_cell.h"
 #include "rt/true_peak_filter.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::mixing {
 
@@ -22,52 +23,52 @@ namespace sonare::mixing {
 /// stereo-only metrics derived from planes 0/1.
 inline constexpr int kMaxMeterChannels = 8;
 
-/// Finite cap for the side/mid width ratio. When the mid (mono) signal collapses
-/// to near-zero while side energy remains (e.g. a fully anti-phase L = -R pair),
-/// the raw sqrt(side/mid) ratio diverges to +Inf, which is non-serializable
-/// through the C ABI into JSON/host telemetry. Clamp to a large but finite
-/// sentinel that still unambiguously signals "extreme width / mono incompatible".
-inline constexpr float kMaxMonoCompatWidth = 1.0e6f;
-
 /// @brief Mono-compatibility width derived from mid/side energy.
 ///
 /// Returns sqrt(side_energy / mid_energy) — the RMS ratio of the difference
 /// (side) signal to the sum (mid) signal: 0 = perfectly mono-compatible, ~1 =
-/// fully decorrelated, large/`kMaxMonoCompatWidth` = anti-phase. Both the
+/// fully decorrelated, +inf = pure side (anti-phase). Both the
 /// realtime MeterProcessor and the lightweight engine telemetry tap derive the
 /// value from this single formula so the two surfaces cannot diverge.
 /// @param mid_energy  Summed squared mid ((L+R)/sqrt2) energy over the block.
 /// @param side_energy Summed squared side ((L-R)/sqrt2) energy over the block.
-/// @return The clamped, finite width metric.
+/// @return The width metric; +inf for zero mid with nonzero side, as the offline
+///         stereo width reports it; NaN (not measured) when both energies are zero.
 float mono_compat_width_from_energy(double mid_energy, double side_energy) noexcept;
 
 namespace detail {
-/// std::array of `kMaxMeterChannels` copies of the dB floor — the per-channel
-/// meter arrays default to the floor on every plane, not just the front pair.
-constexpr std::array<float, kMaxMeterChannels> meter_floor_array() noexcept {
+/// std::array of `kMaxMeterChannels` NaN (not measured) levels — the per-channel
+/// meter arrays default to "not measured" on every plane, not just the front pair.
+constexpr std::array<float, kMaxMeterChannels> meter_unmeasured_array() noexcept {
   std::array<float, kMaxMeterChannels> values{};
   for (float& value : values) {
-    value = constants::kFloorDb;
+    value = kNotMeasured;
   }
   return values;
 }
 }  // namespace detail
 
+/// Every level field is one of three states: finite (however quiet), -inf (zero energy, no
+/// measurable level) or NaN (not measured: unwritten plane, measurement off, window not yet
+/// filled). A default snapshot is all NaN. `correlation` and `mono_compat_width` are NaN when
+/// undefined (a silent channel, or no stereo pair).
 struct MeterSnapshot {
-  std::array<float, kMaxMeterChannels> peak_db = detail::meter_floor_array();
-  std::array<float, kMaxMeterChannels> rms_db = detail::meter_floor_array();
-  float correlation = 0.0f;
-  float mono_compat_width = 0.0f;
+  std::array<float, kMaxMeterChannels> peak_db = detail::meter_unmeasured_array();
+  std::array<float, kMaxMeterChannels> rms_db = detail::meter_unmeasured_array();
+  float correlation = kNotMeasured;
+  float mono_compat_width = kNotMeasured;
   float mono_compat_peak = 0.0f;
   float mono_compat_side_rms = 0.0f;
   bool likely_mono_compatible = true;
-  float momentary_lufs = constants::kFloorDb;
-  float short_term_lufs = constants::kFloorDb;
-  float integrated_lufs = constants::kFloorDb;
+  /// NaN until the 400 ms / 3 s window has filled; integrated is NaN until the first gating block
+  /// and -inf while no block has reached the absolute gate.
+  float momentary_lufs = kNotMeasured;
+  float short_term_lufs = kNotMeasured;
+  float integrated_lufs = kNotMeasured;
   float gain_reduction_db = 0.0f;
   /// Per-plane inter-sample (true) peak in dBFS, and its maximum over every
   /// plane, from the ITU-R BS.1770-4 polyphase reconstruction at
-  /// MeterConfig::true_peak_oversample. Both stay at the dB floor when
+  /// MeterConfig::true_peak_oversample. Both stay NaN when
   /// MeterConfig::measure_true_peak is false.
   ///
   /// @note This is a STREAMING measurement that runs one reconstruction-filter
@@ -75,8 +76,8 @@ struct MeterSnapshot {
   /// reads has its whole centered stencil and the reading does not depend on the
   /// block size. A block's peak therefore covers the input up to that delay
   /// earlier; the offline metering::true_peak covers the whole signal at once.
-  std::array<float, kMaxMeterChannels> true_peak_db = detail::meter_floor_array();
-  float max_true_peak_db = constants::kFloorDb;
+  std::array<float, kMaxMeterChannels> true_peak_db = detail::meter_unmeasured_array();
+  float max_true_peak_db = kNotMeasured;
   // Number of planes carrying valid per-channel meters (1..kMaxMeterChannels).
   // Consumers iterate [0, channel_count); the legacy stereo marshallers read
   // planes 0/1 directly and are unaffected.
@@ -86,7 +87,7 @@ struct MeterSnapshot {
 
 /// @brief Optional configuration for the meter processor.
 struct MeterConfig {
-  /// @brief When false, all LUFS work is skipped and LUFS fields stay at the floor.
+  /// @brief When false, all LUFS work is skipped and LUFS fields stay NaN.
   bool measure_lufs = true;
   bool measure_true_peak = false;
   /// @brief True-peak oversample factor: 4 (the BS.1770-4 minimum) or 8. Any other
@@ -186,16 +187,18 @@ class MeterProcessor : public rt::ProcessorBase {
   std::array<rt::BiquadStateD, kLufsChannels> k_state_rlb_{};
 
   // Ring buffer of per-sample combined K-weighted squared energy (sized to the short-term window).
-  // Float storage halves the dominant per-tap meter allocation. Running sums
-  // remain double precision, so only the retained sample-energy history is
-  // quantized.
-  std::vector<float> energy_ring_;
+  // Double storage so a quiet tail is not quantized to a float subnormal or zero.
+  std::vector<double> energy_ring_;
   size_t ring_pos_ = 0;
   size_t momentary_len_ = 0;
   size_t short_term_len_ = 0;
   size_t filled_ = 0;  // samples written since reset (saturates at ring size)
   double momentary_sum_ = 0.0;
   double short_term_sum_ = 0.0;
+  // Nonzero samples inside each window: zero means the window's energy is exactly zero, which a
+  // running sum's rounding residue cannot say.
+  size_t momentary_nonzero_ = 0;
+  size_t short_term_nonzero_ = 0;
 
   // Integrated gating-block accumulation.
   size_t gate_hop_ = 0;          // 100 ms hop in samples
@@ -210,7 +213,7 @@ class MeterProcessor : public rt::ProcessorBase {
   // Cached gated integrated loudness. The two histogram scans are O(kHistBins)
   // and only change when a new gating block is committed, so the result is
   // recomputed only when the histogram is dirty and otherwise reused.
-  float integrated_lufs_ = constants::kFloorDb;
+  float integrated_lufs_ = kNotMeasured;
   bool histogram_dirty_ = false;
 };
 

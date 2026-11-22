@@ -23,6 +23,8 @@ inline constexpr float kLufsMomentaryOverlap = 0.75f;
 ///          short-term overlap that yields a 100 ms hop. Fixed by spec.
 inline constexpr float kLufsShortTermHopSec = 0.1f;
 
+/// Loudness readings: -inf where the energy is zero or no block passes the gates, NaN (not
+/// measured) where the signal is too short for a block or no gated block yields a range.
 struct LufsResult {
   float integrated_lufs = 0.0f;
   /// Final complete 400 ms measurement window, not Max-M.
@@ -81,9 +83,9 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
 
 /// @brief Integrated loudness of a buffer and the uniform gain that brings it to a target.
 struct LufsGainToTarget {
-  /// Integrated loudness before the gain; non-finite below the absolute gate.
+  /// Integrated loudness before the gain; -inf when no block passes the gates.
   float measured_lufs = 0.0f;
-  /// Gain in dB; 0 when either loudness is non-finite.
+  /// Gain in dB; NaN (not measured) when either loudness is non-finite.
   float gain_db = 0.0f;
 };
 
@@ -124,7 +126,7 @@ float ebur128_loudness_range_lu(const Audio& audio);
 ///          of the gated distribution. This is the single shared implementation used
 ///          by both `lufs_interleaved`'s `loudness_range_lu` field and
 ///          `ebur128_loudness_range_lu`; it is exposed for reuse from the C-API.
-/// @return Loudness range in LU (0 if fewer than two gated blocks remain).
+/// @return Loudness range in LU; NaN (not measured) when no gated block remains.
 float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs);
 
 }  // namespace sonare::metering

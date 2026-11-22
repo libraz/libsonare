@@ -12,6 +12,7 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::match {
 
@@ -21,6 +22,14 @@ void validate_nonempty(const Audio& a, const Audio& b) {
   if (a.empty() || b.empty()) {
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
+}
+
+// A side with no measurable loudness leaves no gain to match by: refuse, naming the side.
+void require_measurable_sides(float reference_lufs, float source_lufs, const char* reference,
+                              const char* source) {
+  util::check::measurable_level(reference_lufs, reference,
+                                util::refusal::kNoMeasurableLoudnessPredicate);
+  util::check::measurable_level(source_lufs, source, util::refusal::kNoMeasurableLoudnessPredicate);
 }
 
 void validate_pair(const Audio& a, const Audio& b) {
@@ -118,6 +127,7 @@ LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b) {
   // No cap: a bare headroom clamp would leave a peak-normalized `b` at its own
   // loudness, which defeats the only reason this function exists. The caller
   // gets the post-gain true peak below instead of a decision made for it.
+  require_measurable_sides(a_lufs, b_lufs, "a", "b");
   const float gain_db = solved.gain_db;
 
   std::vector<float> matched(b.data(), b.data() + b.size());
@@ -145,6 +155,7 @@ StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
   const metering::LufsGainToTarget solved = metering::gain_to_integrated_lufs(
       source_interleaved.data(), b.left.size(), 2, sample_rate, reference_lufs);
   const float source_lufs = solved.measured_lufs;
+  require_measurable_sides(reference_lufs, source_lufs, "reference", "source");
   const float gain_db = solved.gain_db;
 
   std::vector<float> matched_left(b.left.begin(), b.left.end());

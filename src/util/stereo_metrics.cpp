@@ -12,7 +12,6 @@
 
 namespace sonare::util {
 
-using sonare::constants::kEpsilon;
 using sonare::constants::kInvSqrt2;
 
 namespace {
@@ -36,8 +35,9 @@ float stereo_correlation(const float* left, const float* right, size_t length) {
     right_energy += static_cast<double>(right[i]) * static_cast<double>(right[i]);
   }
 
+  // A silent channel leaves no correlation to measure.
   const double denom = std::sqrt(left_energy * right_energy);
-  if (denom < kEpsilon) return 0.0f;
+  if (denom == 0.0) return std::numeric_limits<float>::quiet_NaN();
 
   const double value = dot / denom;
   return static_cast<float>(std::clamp(value, -1.0, 1.0));
@@ -55,8 +55,10 @@ float stereo_width(const float* left, const float* right, size_t length) {
     side_energy += static_cast<double>(side) * static_cast<double>(side);
   }
 
-  if (mid_energy < kEpsilon) {
-    return side_energy < kEpsilon ? 0.0f : std::numeric_limits<float>::infinity();
+  // Silence has no width (not measured); a side over a zero mid is unboundedly wide.
+  if (mid_energy == 0.0) {
+    return side_energy == 0.0 ? std::numeric_limits<float>::quiet_NaN()
+                              : std::numeric_limits<float>::infinity();
   }
 
   return static_cast<float>(std::sqrt(side_energy / mid_energy));

@@ -22,6 +22,8 @@ struct DynamicRangeConfig {
   float hop_sec = 1.0f;
   float low_percentile = 0.10f;
   float high_percentile = 0.95f;
+  /// Clamp applied to each window level, max(level, floor_db); -inf applies none. Silence reads
+  /// this value under the default clamp and -inf without one.
   float floor_db = sonare::constants::kFloorDb;
 };
 

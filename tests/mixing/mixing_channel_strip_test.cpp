@@ -156,8 +156,8 @@ TEST_CASE("ChannelStrip can omit internal meter state", "[mixing]") {
   const auto post = strip.meter_snapshot(sonare::mixing::TapPoint::PostFader);
   REQUIRE(pre.seq == 0);
   REQUIRE(post.seq == 0);
-  REQUIRE(pre.peak_db[0] == sonare::constants::kFloorDb);
-  REQUIRE(post.true_peak_db[0] == sonare::constants::kFloorDb);
+  REQUIRE(std::isnan(pre.peak_db[0]));
+  REQUIRE(std::isnan(post.true_peak_db[0]));
 }
 
 TEST_CASE("surround bus linked dynamics exclude only the LFE plane from detection",
@@ -1197,7 +1197,7 @@ TEST_CASE("ChannelStrip pre-fader meter width is independent of automation",
   constexpr int kFrames = 1024;
   // Long enough to fill the 400 ms momentary and 3 s short-term windows and to
   // put several gated blocks into the integrated histogram; a shorter run
-  // leaves every loudness field at the floor in BOTH variants, which would make
+  // leaves every loudness field NaN in BOTH variants, which would make
   // the comparison below vacuous.
   constexpr int kBlocks = 200;
 

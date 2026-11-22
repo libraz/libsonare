@@ -249,19 +249,22 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
   validate_mastering_chain_config(config_);
   reject_non_streaming_repair(config_);
   if (config_.loudness.enabled) {
-    if (!std::isfinite(options.loudness_static_gain_db)) {
+    if (std::isinf(options.loudness_static_gain_db)) {
       throw SonareException(
           ErrorCode::InvalidParameter,
-          "StreamingMasteringChain: loudness is enabled but loudness_static_gain_db is not finite; "
-          "supply the static gain measured at the loudness stage's input (the streaming loudness "
-          "gain helper returns it)");
+          "StreamingMasteringChain: loudness_static_gain_db must be finite, or NaN when the "
+          "loudness stage's input has no measurable loudness");
     }
     // Bound the caller-supplied static gain by the ceiling headroom plus the
     // configured limiter depth when the stage-input peak is provided, mirroring
     // the offline chain's loudness stage (bound_loudness_gain_db).
-    const float gain_db = detail::bound_loudness_gain_db(
-        options.loudness_static_gain_db, config_.loudness.ceiling_dbtp,
-        options.loudness_static_gain_peak_dbtp, config_.loudness.max_limiter_gain_reduction_db);
+    // A stage input with no measurable loudness: no gain, the limiter still runs.
+    const float gain_db = std::isnan(options.loudness_static_gain_db)
+                              ? 0.0f
+                              : detail::bound_loudness_gain_db(
+                                    options.loudness_static_gain_db, config_.loudness.ceiling_dbtp,
+                                    options.loudness_static_gain_peak_dbtp,
+                                    config_.loudness.max_limiter_gain_reduction_db);
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
     if (!numeric::finite(loudness_static_gain_linear_)) {
       throw SonareException(ErrorCode::InvalidParameter,

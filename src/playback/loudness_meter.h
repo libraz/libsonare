@@ -29,7 +29,8 @@ class PlaybackLoudnessMeter {
   /// @throws SonareException(InvalidParameter) if @p frames is 0, @p samples
   ///         is null, or any sample is non-finite.
   void push_interleaved(const float* samples, size_t frames);
-  /// Integrated loudness of everything pushed so far, in LUFS.
+  /// Integrated loudness of everything pushed so far, in LUFS: NaN before the first 400 ms
+  /// gating block, -inf while no block has reached the absolute gate.
   float integrated_lufs() const;
   int channels() const noexcept;
 

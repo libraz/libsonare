@@ -4,12 +4,11 @@
 #include <cmath>
 #include <vector>
 
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::common {
 namespace {
-
-using sonare::constants::kFloorDb;
 
 // A Hann mainlobe is four bins wide, so a 17-bin median does not land on a tone.
 // Measured over the evaluation corpus's noise items: an unsmoothed sum reported a
@@ -37,16 +36,12 @@ std::vector<double> median_across_bins(const std::vector<double>& psd) {
   return smoothed;
 }
 
-/// The answer for an input nothing could be measured from: every band at the floor.
-NoiseFloorDbfs floor_result() {
+/// The answer for an input nothing could be measured from: every band not measured.
+NoiseFloorDbfs unmeasured_result() {
   NoiseFloorDbfs result;
-  std::fill(std::begin(result.bands), std::end(result.bands), kFloorDb);
+  result.broadband = kNotMeasured;
+  std::fill(std::begin(result.bands), std::end(result.bands), kNotMeasured);
   return result;
-}
-
-float power_to_dbfs(double power) {
-  if (!(power > 0.0)) return kFloorDb;
-  return std::max(kFloorDb, static_cast<float>(10.0 * std::log10(power)));
 }
 
 }  // namespace
@@ -73,7 +68,7 @@ void repair_noise_band_bins(int n_fft, int sample_rate, int* out) {
 NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
                                           int bins, int frames, double signal_mean_square,
                                           int sample_rate) {
-  NoiseFloorDbfs result = floor_result();
+  NoiseFloorDbfs result = unmeasured_result();
   if (noise_psd_sum == nullptr || power_sum == nullptr || bins <= 0 || frames <= 0) return result;
 
   std::vector<double> per_bin(static_cast<size_t>(bins), 0.0);
@@ -83,11 +78,13 @@ NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const dou
         noise_psd_sum[static_cast<size_t>(b)] / static_cast<double>(frames);
     observed += bin_weight(b, bins) * power_sum[static_cast<size_t>(b)];
   }
-  if (!(observed > 0.0) || !(signal_mean_square > 0.0)) return result;
+  if (!(observed >= 0.0) || !(signal_mean_square >= 0.0)) return result;
 
   // The transform's unknown constant cancels in this ratio, so the dBFS below is
   // anchored on a level measured in the time domain rather than on a window sum.
-  const double scale = signal_mean_square / observed * static_cast<double>(frames);
+  // A signal of exact zeros has no power in any band: a zero scale reads -inf.
+  const bool silent = observed == 0.0 || signal_mean_square == 0.0;
+  const double scale = silent ? 0.0 : signal_mean_square / observed * static_cast<double>(frames);
   const std::vector<double> smoothed = median_across_bins(per_bin);
 
   int edges[kRepairNoiseBandCount + 1] = {};
@@ -98,10 +95,11 @@ NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const dou
     for (int b = edges[k]; b < edges[k + 1] && b < bins; ++b) {
       band += bin_weight(b, bins) * smoothed[static_cast<size_t>(b)];
     }
-    if (edges[k + 1] > edges[k]) result.bands[k] = power_to_dbfs(band * scale);
+    if (edges[k + 1] > edges[k])
+      result.bands[k] = static_cast<float>(power_to_level_db(band * scale));
     broadband += band;
   }
-  result.broadband = power_to_dbfs(broadband * scale);
+  result.broadband = static_cast<float>(power_to_level_db(broadband * scale));
   return result;
 }
 

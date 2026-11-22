@@ -1131,9 +1131,9 @@ TEST_CASE("the mixing assistant param builders refuse an unknown key", "[mixing]
                   sonare::SonareException);
 }
 
-// A track excluded before BS.1770 ever ran has no loudness, and reports it the
-// way a measured-silent track does: integratedLufs is null, never a finite 0.
-TEST_CASE("an unmeasured track reports its integrated loudness as null", "[mixing][assistant]") {
+// A track excluded before BS.1770 ever ran has no loudness measurement: integratedLufs is absent,
+// unlike a measured-silent track, whose -inf reads null.
+TEST_CASE("an unmeasured track omits its integrated loudness", "[mixing][assistant]") {
   std::vector<float> samples(4800, 0.1f);
   std::vector<float> poisoned = samples;
   poisoned[100] = std::numeric_limits<float>::quiet_NaN();
@@ -1166,9 +1166,12 @@ TEST_CASE("an unmeasured track reports its integrated loudness as null", "[mixin
     const sonare::util::json::Value* reason = row.find("exclusionReason");
     REQUIRE(reason != nullptr);
     CHECK_FALSE(reason->as_string().empty());
-    const sonare::util::json::Value* lufs = row.find("integratedLufs");
-    REQUIRE(lufs != nullptr);
-    CHECK(lufs->is_null());
+    // A level never measured is an absent member, not a number and not null.
+    CHECK(row.find("integratedLufs") == nullptr);
+    if (id->as_string() != "nonfinite") {
+      CHECK(row.find("truePeakDbtp") == nullptr);
+      CHECK(row.find("crestFactorDb") == nullptr);
+    }
   }
 }
 

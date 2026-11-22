@@ -23,27 +23,29 @@ struct MeterTelemetryRecord {
   // [0, channel_count). This is an internal in-process queue record, not a
   // C-ABI type, so widening it costs only a few KB of queue memory natively.
   // Defaults mirror mixing::MeterSnapshot: every plane and every dB-valued
-  // field starts at the floor, never 0 dBFS, so an unwritten plane (e.g. the
-  // right channel of a mono lane) reports silence rather than full-scale, and
-  // the record is always JSON-safe (no NaN reaches the host).
-  std::array<float, mixing::kMaxMeterChannels> peak_db = mixing::detail::meter_floor_array();
+  // field starts NaN (not measured), never 0 dBFS, so an unwritten plane (e.g.
+  // the right channel of a mono lane) is distinguishable from silence (-inf)
+  // and from full-scale.
+  std::array<float, mixing::kMaxMeterChannels> peak_db = mixing::detail::meter_unmeasured_array();
   // Peak levels captured before the render path's input trim. The render
   // worker supplies this fixed-width dB array; an absent pointer leaves every
-  // plane at the finite floor.
-  std::array<float, mixing::kMaxMeterChannels> input_peak_db = mixing::detail::meter_floor_array();
-  std::array<float, mixing::kMaxMeterChannels> rms_db = mixing::detail::meter_floor_array();
+  // plane NaN.
+  std::array<float, mixing::kMaxMeterChannels> input_peak_db =
+      mixing::detail::meter_unmeasured_array();
+  std::array<float, mixing::kMaxMeterChannels> rms_db = mixing::detail::meter_unmeasured_array();
   // Inter-sample (true) peak per plane and its maximum, measured by the tap's
   // MeterProcessor when the prepare() config enables it. See
   // mixing::MeterSnapshot for the streaming block-edge approximation these
   // values carry; the lightweight (input-monitor) path does not measure true
-  // peak at all and leaves them at the floor.
-  std::array<float, mixing::kMaxMeterChannels> true_peak_db = mixing::detail::meter_floor_array();
-  float max_true_peak_db = constants::kFloorDb;
-  float correlation = 0.0f;
-  float mono_compat_width = 0.0f;
-  float momentary_lufs = constants::kFloorDb;
-  float short_term_lufs = constants::kFloorDb;
-  float integrated_lufs = constants::kFloorDb;
+  // peak or LUFS at all and leaves them NaN.
+  std::array<float, mixing::kMaxMeterChannels> true_peak_db =
+      mixing::detail::meter_unmeasured_array();
+  float max_true_peak_db = kNotMeasured;
+  float correlation = kNotMeasured;
+  float mono_compat_width = kNotMeasured;
+  float momentary_lufs = kNotMeasured;
+  float short_term_lufs = kNotMeasured;
+  float integrated_lufs = kNotMeasured;
   float gain_reduction_db = 0.0f;
   // Number of valid per-plane meters (1..kMaxMeterChannels).
   int channel_count = 0;
@@ -53,8 +55,8 @@ struct MeterTelemetryRecord {
 static_assert(std::is_trivially_copyable_v<MeterTelemetryRecord>,
               "Meter telemetry records must stay trivially copyable");
 
-/// Per-plane block peak in dBFS, ignoring non-finite samples; planes past
-/// @p num_channels (or null) read the floor.
+/// Per-plane block peak in dBFS, ignoring non-finite samples; -inf for an all-zero plane, NaN
+/// for planes past @p num_channels (or null).
 void capture_input_peak_db(float* const* channels, int num_channels, int num_samples,
                            std::array<float, mixing::kMaxMeterChannels>& output) noexcept;
 
@@ -65,8 +67,8 @@ class MeterTelemetryTap {
 
   /// @param config Metering configuration for the underlying MeterProcessor.
   /// Deliberately has no default: a default-constructed MeterConfig leaves
-  /// measure_true_peak false, which once left the master tap publishing the dB
-  /// floor for true_peak_db / max_true_peak_db on every surface. Requiring the
+  /// measure_true_peak false, which once left the master tap publishing NaN
+  /// for true_peak_db / max_true_peak_db on every surface. Requiring the
   /// caller to state it makes that choice visible at the call site.
   void prepare(double sample_rate, int max_block_size, uint32_t target_id,
                size_t telemetry_capacity, const mixing::MeterConfig& config);
@@ -109,6 +111,7 @@ class MeterTelemetryTap {
   // the RMS of the whole block rather than just its last fragment.
   struct StagedEnergy {
     std::array<double, mixing::kMaxMeterChannels> sum_sq{};
+    std::array<bool, mixing::kMaxMeterChannels> measured{};
     int64_t frames = 0;
   };
 

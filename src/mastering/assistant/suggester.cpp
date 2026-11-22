@@ -234,14 +234,18 @@ std::string assistant_result_to_json(const AssistantResult& result) {
 
   // Flat "profile" object: mirrors the previous schema (no nested loudness /
   // spectral / dynamics groups — that nesting only exists in audio_profile_to_json).
+  // A level that was not measured (NaN) is an absent member; -inf stays and writes null.
+  const auto put_level = [](json::Object& object, const char* key, float level) {
+    if (!std::isnan(level)) util::json::put(object, key, level);
+  };
   json::Object profile;
   util::json::put(profile, "durationSec", result.profile.duration_sec);
   util::json::put(profile, "bpm", result.profile.bpm);
   util::json::put(profile, "bpmConfidence", result.profile.bpm_confidence);
   util::json::put(profile, "integratedLufs", result.profile.loudness.integrated_lufs);
-  util::json::put(profile, "loudnessRangeLu", result.profile.loudness.lra_lu);
-  util::json::put(profile, "truePeakDbtp", result.profile.loudness.true_peak_db);
-  util::json::put(profile, "crestFactorDb", result.profile.loudness.crest_factor_db);
+  put_level(profile, "loudnessRangeLu", result.profile.loudness.lra_lu);
+  put_level(profile, "truePeakDbtp", result.profile.loudness.true_peak_db);
+  put_level(profile, "crestFactorDb", result.profile.loudness.crest_factor_db);
   util::json::put(profile, "spectralCentroidHz", result.profile.spectral.centroid_hz);
   util::json::put(profile, "spectralFlatness", result.profile.spectral.flatness);
   util::json::put(profile, "attackPerSecond", result.profile.dynamics.attack_density);

@@ -1,8 +1,11 @@
 /// @file silence_boundaries_test.cpp
 /// @brief Silence-boundary detection sees audio that lives past the last hop-aligned frame.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <limits>
 #include <string>
 #include <vector>
@@ -79,4 +82,31 @@ TEST_CASE("trim and split refusals read as core member names", "[silence]") {
   const std::size_t empty_lengths[2] = {kSamples, 0};
   REQUIRE_THROWS_WITH(split_common_with_report(with_empty, empty_lengths, 2, 60.0f, kFrame, kHop),
                       "signals[1] must not be empty");
+}
+
+TEST_CASE("silence ceiling reads its computed depth, and is not measured without one",
+          "[silence]") {
+  constexpr size_t kHalf = 4096;
+  const auto report_of = [](const std::vector<float>& x) {
+    return split_with_report(x.data(), x.size(), 60.0f, kFrame, kHop);
+  };
+
+  // A quiet middle 240 dB under the loud ends is past any dB floor: the depth is its computed
+  // value. It sits between loud ends so no zero-padded edge frame is the quietest one.
+  std::vector<float> quiet_middle(3 * kHalf, 1.0f);
+  std::fill(quiet_middle.begin() + kHalf, quiet_middle.begin() + 2 * kHalf, 1.0e-12f);
+  CHECK_THAT(report_of(quiet_middle).silence_ceiling_db, Catch::Matchers::WithinAbs(240.0, 0.5));
+
+  // Exact silence has no peak, and an exactly-zero frame under a nonzero peak has no finite depth.
+  CHECK(std::isnan(report_of(std::vector<float>(2 * kHalf, 0.0f)).silence_ceiling_db));
+  std::vector<float> zero_tail(2 * kHalf, 1.0f);
+  std::fill(zero_tail.begin() + kHalf, zero_tail.end(), 0.0f);
+  CHECK(std::isnan(report_of(zero_tail).silence_ceiling_db));
+
+  // One signal without a measurable ceiling leaves the shared ceiling not measured.
+  const std::vector<float> silent(2 * kHalf, 0.0f);
+  const float* signals[2] = {quiet_middle.data(), silent.data()};
+  const std::size_t lengths[2] = {quiet_middle.size(), silent.size()};
+  CHECK(std::isnan(
+      split_common_with_report(signals, lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db));
 }

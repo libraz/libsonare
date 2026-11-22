@@ -81,36 +81,28 @@ TEST_CASE("ABMatchLoudness applies ~0 dB when a and b already match",
   REQUIRE_THAT(matched.b[0], WithinAbs(b[0], 1e-4f));
 }
 
-TEST_CASE("ABMatchLoudness leaves silent b unchanged instead of diverging",
+TEST_CASE("ABMatchLoudness refuses a silent side instead of applying a gain it cannot measure",
           "[mastering][match][ab-match]") {
-  const auto a = generate_sine_audio(1000.0f, 48000, 1.0f, 0.5f);
-  const std::vector<float> zeros(48000, 0.0f);
-  const Audio silent_b = Audio::from_vector(zeros, 48000);
+  const auto tone = generate_sine_audio(1000.0f, 48000, 1.0f, 0.5f);
+  const Audio silence = Audio::from_vector(std::vector<float>(48000, 0.0f), 48000);
 
-  const auto matched = ab_match_loudness(a, silent_b);
-
-  REQUIRE(matched.applied_gain_db == 0.0f);
-  REQUIRE(matched.b.size() == silent_b.size());
-  for (std::size_t i = 0; i < matched.b.size(); ++i) {
-    REQUIRE(matched.b[i] == 0.0f);
+  // Silence is outside the operation's domain: an argument refusal naming the silent side.
+  for (const bool silent_source : {true, false}) {
+    INFO((silent_source ? "silent source" : "silent reference"));
+    try {
+      if (silent_source) {
+        (void)ab_match_loudness(tone, silence);
+      } else {
+        (void)ab_match_loudness(silence, tone);
+      }
+      FAIL("expected a refusal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK_THAT(error.what(),
+                 Catch::Matchers::Equals(silent_source ? "b has no measurable loudness"
+                                                       : "a has no measurable loudness"));
+    }
   }
-  // Pins the finite silence sentinel true_peak_db() reports here instead of
-  // -inf or NaN; no other case in this file is silent, so nothing else checks it.
-  REQUIRE(matched.matched_true_peak_dbtp == sonare::constants::kFloorDb);
-}
-
-TEST_CASE("ABMatchLoudness leaves b unchanged when a is silent", "[mastering][match][ab-match]") {
-  const std::vector<float> zeros(48000, 0.0f);
-  const Audio silent_a = Audio::from_vector(zeros, 48000);
-  const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
-
-  const auto matched = ab_match_loudness(silent_a, b);
-
-  REQUIRE(matched.applied_gain_db == 0.0f);
-  for (std::size_t i = 0; i < matched.b.size(); ++i) {
-    REQUIRE_THAT(matched.b[i], WithinAbs(b[i], 1e-6f));
-  }
-  REQUIRE(matched.matched_true_peak_dbtp > sonare::constants::kFloorDb);
 }
 
 TEST_CASE("ABMatchLoudness matches faithfully even when b is near full scale",
@@ -304,16 +296,25 @@ TEST_CASE("ABMatchLoudnessStereo reports the dominant channel true peak",
   REQUIRE(matched.matched_true_peak_dbtp > left_peak + 10.0f);
 }
 
-TEST_CASE("ABMatchLoudnessStereo keeps silent pairs at unity",
-          "[mastering][match][ab-match][stereo]") {
+TEST_CASE("ABMatchLoudnessStereo refuses silent pairs", "[mastering][match][ab-match][stereo]") {
   constexpr int kSampleRate = 48000;
   const StereoAudioPair silence{Audio::from_vector(std::vector<float>(48000, 0.0f), kSampleRate),
                                 Audio::from_vector(std::vector<float>(48000, 0.0f), kSampleRate)};
-  const auto matched = ab_match_loudness_stereo(silence, silence);
-  REQUIRE(matched.applied_gain_db == 0.0f);
-  REQUIRE(matched.matched_true_peak_dbtp == sonare::constants::kFloorDb);
-  REQUIRE(std::equal(matched.b.left.begin(), matched.b.left.end(), silence.left.begin()));
-  REQUIRE(std::equal(matched.b.right.begin(), matched.b.right.end(), silence.right.begin()));
+  const auto tone = generate_sine_audio(1000.0f, kSampleRate, 1.0f, 0.5f);
+  const StereoAudioPair loud{tone, tone};
+  for (const bool silent_source : {true, false}) {
+    INFO((silent_source ? "silent source" : "silent reference"));
+    try {
+      (void)ab_match_loudness_stereo(silent_source ? loud : silence,
+                                     silent_source ? silence : loud);
+      FAIL("expected a refusal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK_THAT(error.what(),
+                 Catch::Matchers::Equals(silent_source ? "source has no measurable loudness"
+                                                       : "reference has no measurable loudness"));
+    }
+  }
 }
 
 TEST_CASE("ABMatchLoudnessStereo validates pair shape and sample rate",

@@ -40,6 +40,7 @@
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::mixing::assistant::test {
 
@@ -247,7 +248,7 @@ struct MixEvaluation {
   int mono_risk_count = 0;
 
   /// @brief True peak of the rendered master, in dBTP.
-  float master_true_peak_dbtp = constants::kFloorDb;
+  float master_true_peak_dbtp = kNotMeasured;
 
   /// @brief Difference between the rendered master's left and right channel RMS
   ///        levels, in dB. Positive means the left channel is the louder one.

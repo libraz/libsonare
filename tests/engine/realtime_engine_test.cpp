@@ -662,15 +662,12 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
     if (record.target_id == 0xFFFFu) {
       found_input = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-18.0618f).margin(0.05f));
-      // Lightweight targets do not measure loudness: the field stays at the dB
-      // floor (finite, JSON-safe), never NaN.
-      REQUIRE(std::isfinite(record.integrated_lufs));
-      REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
+      // Lightweight targets do not measure loudness: the field is NaN (not measured).
+      REQUIRE(std::isnan(record.integrated_lufs));
     } else if (record.target_id == 1) {
       found_lane_1 = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-6.0206f).margin(0.05f));
-      REQUIRE(std::isfinite(record.integrated_lufs));
-      REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
+      REQUIRE(std::isnan(record.integrated_lufs));
     } else if (record.target_id == 2) {
       found_lane_2 = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-12.0412f).margin(0.05f));
@@ -745,7 +742,7 @@ TEST_CASE("Queued master integrated meter reset starts a new loudness program",
     }
   }
   REQUIRE(found_after_reset);
-  REQUIRE(after_reset.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
+  REQUIRE(std::isnan(after_reset.integrated_lufs));
   // reset_integrated() must retain the short/momentary and true-peak windows.
   REQUIRE(after_reset.momentary_lufs > sonare::constants::kFloorDb + 1.0f);
   REQUIRE(after_reset.short_term_lufs > sonare::constants::kFloorDb + 1.0f);
@@ -3455,6 +3452,135 @@ TEST_CASE("RealtimeEngine track lane smoother survives transport seek", "[engine
   REQUIRE(left.front() < 0.35f);
   REQUIRE(left.back() > 0.20f);
   REQUIRE(left.back() < 0.35f);
+}
+
+namespace {
+
+constexpr double kRampRate = 48000.0;
+constexpr int kRampBlock = 64;
+constexpr float kRampSmoothingMs = 200.0f;
+constexpr float kRampToDb = -20.0f;
+
+/// One track lane playing full-scale DC, its fader set to 0 dB by a step so it has a base.
+struct FaderRig {
+  sonare::engine::RealtimeEngine engine;
+  std::vector<float> clip;
+  std::array<float, kRampBlock> out{};
+  // The schedule keeps a pointer to this table, so it lives as long as the engine.
+  const float* channels[1] = {};
+  uint32_t fader = 0;
+
+  FaderRig() : clip(static_cast<size_t>(kRampRate), 1.0f) {
+    engine.prepare(kRampRate, kRampBlock);
+    engine.set_param_smoothing_ms(kRampSmoothingMs);
+    channels[0] = clip.data();
+    const auto frames = static_cast<int64_t>(clip.size());
+    sonare::engine::ClipSchedule schedule{
+        1, {channels, 1, frames}, 0.0, 0, 0, frames, false, 1.0f, 0, 0};
+    schedule.track_id = 10;
+    engine.set_clips({schedule});
+    REQUIRE(engine.set_track_lanes({{10}}));
+    fader = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
+    push(sonare::rt::CommandType::kTransportPlay, 0, 0.0f);
+    push(sonare::rt::CommandType::kSetParam, fader, 0.0f);
+    run(4);
+    REQUIRE(level_db() == Catch::Approx(0.0).margin(1e-4));
+  }
+
+  void push(sonare::rt::CommandType type, uint32_t target, float value) {
+    sonare::rt::Command command{};
+    command.type = type;
+    command.target_id = target;
+    command.sample_time = -1;
+    command.arg.f = value;
+    REQUIRE(engine.push_command(command));
+  }
+
+  void run(int blocks) {
+    float* io[] = {out.data()};
+    for (int i = 0; i < blocks; ++i) {
+      out.fill(0.0f);
+      engine.process(io, 1, kRampBlock);
+    }
+  }
+
+  double level_db() const { return 20.0 * std::log10(static_cast<double>(out.back())); }
+};
+
+int blocks_for_ms(double ms) {
+  return static_cast<int>(std::lround(ms * kRampRate / 1000.0 / kRampBlock));
+}
+
+}  // namespace
+
+TEST_CASE("A smoothed fader set ramps over the smoothing time; a stepped one settles on its guard",
+          "[engine][realtime]") {
+  // After one time constant a one-pole ramp has covered 1 - 1/e of the move. The 5 ms guard
+  // under it lags by about its own time times the ramp's slope, 0.18 dB here, so the band is
+  // three times that.
+  const double expected_db = kRampToDb * (1.0 - std::exp(-1.0));
+  const double guard_lag_db =
+      -kRampToDb / kRampSmoothingMs * std::exp(-1.0) * sonare::rt::kClickGuardMs;
+  {
+    FaderRig rig;
+    rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.fader, kRampToDb);
+    rig.run(blocks_for_ms(kRampSmoothingMs));
+    CHECK(rig.level_db() == Catch::Approx(expected_db).margin(3.0 * guard_lag_db));
+  }
+  {
+    // Ten guard time constants: a step has settled, a 200 ms ramp has covered under a quarter.
+    FaderRig rig;
+    rig.push(sonare::rt::CommandType::kSetParam, rig.fader, kRampToDb);
+    rig.run(blocks_for_ms(10.0 * sonare::rt::kClickGuardMs));
+    CHECK(rig.level_db() == Catch::Approx(kRampToDb).margin(0.01));
+    FaderRig smoothed;
+    smoothed.push(sonare::rt::CommandType::kSetParamSmoothed, smoothed.fader, kRampToDb);
+    smoothed.run(blocks_for_ms(10.0 * sonare::rt::kClickGuardMs));
+    CHECK(smoothed.level_db() > 0.25 * kRampToDb);
+  }
+  {
+    // A smoothing time of 0 makes a smoothed set a step.
+    FaderRig rig;
+    rig.engine.set_param_smoothing_ms(0.0f);
+    rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.fader, kRampToDb);
+    rig.run(blocks_for_ms(10.0 * sonare::rt::kClickGuardMs));
+    CHECK(rig.level_db() == Catch::Approx(kRampToDb).margin(0.01));
+  }
+}
+
+TEST_CASE("A smoothed fader set with every smoother slot busy steps and reports the capacity",
+          "[engine][realtime][telemetry]") {
+  FaderRig rig;
+  // An unbound id holds a slot while its ramp is in flight: claimed at 0 and retargeted to 1, it
+  // ramps over the 200 ms smoothing time. A block applies at most 64 commands, so the 64 slots
+  // fill over two blocks and the fader arrives in a third.
+  for (uint32_t first = 1; first <= 64; first += 32) {
+    for (uint32_t id = first; id < first + 32; ++id) {
+      rig.push(sonare::rt::CommandType::kSetParamSmoothed, id, 0.0f);
+      rig.push(sonare::rt::CommandType::kSetParamSmoothed, id, 1.0f);
+    }
+    rig.run(1);
+  }
+  rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.fader, kRampToDb);
+  rig.run(blocks_for_ms(10.0 * sonare::rt::kClickGuardMs));
+  CHECK(rig.level_db() == Catch::Approx(kRampToDb).margin(0.01));
+  bool capacity = false;
+  sonare::engine::Telemetry telemetry{};
+  while (rig.engine.pop_telemetry(telemetry)) {
+    capacity = capacity ||
+               (telemetry.type == sonare::engine::TelemetryType::kError &&
+                telemetry.error == sonare::engine::TelemetryErrorCode::kSmoothedParameterCapacity &&
+                telemetry.value == rig.fader);
+  }
+  CHECK(capacity);
+}
+
+TEST_CASE("A smoothed fader ramp allocates nothing on the audio thread", "[engine][realtime]") {
+  FaderRig rig;
+  rig.push(sonare::rt::CommandType::kSetParamSmoothed, rig.fader, kRampToDb);
+  sonare::test::AllocationGuard guard;
+  rig.run(8);
+  CHECK(guard.count() == 0);
 }
 
 TEST_CASE("RealtimeEngine track lane smoother survives loop wrap", "[engine][realtime]") {

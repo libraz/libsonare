@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
-#include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -14,39 +13,17 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
-/// @brief Peak amplitude of @p audio in dB; returns -inf for silence or empty input.
-/// @details Local helper to keep effects/ free of metering/ dependencies, built
-///          from core primitives so the effects layer stays at the `core/`
-///          dependency tier.
-///
-///          It agrees with sonare::metering::peak_db on every input that has
-///          signal in it, and deliberately DISAGREES on silence and on an empty
-///          buffer: this returns -infinity where the meter returns the shared
-///          finite floor (kFloorDb, -120 dB). Each needs its own answer. The
-///          meter's floor is JSON-safe (-inf serializes to null and the field
-///          silently disappears), while normalize() tests this value with
-///          std::isinf to short-circuit and return the input untouched -- given
-///          -120 dB instead, it would compute `target_db - (-120)` and apply a
-///          gain of that size to silence, amplifying denormals and dither by
-///          over a hundred dB. Substituting one for the other is therefore not
-///          a refactor.
+/// @brief Peak amplitude of @p audio in dB: -inf only for exact silence, no floor.
+/// @details Built from core primitives so effects/ stays at the `core/` dependency tier.
 float audio_peak_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
-  const float peak = peak_abs(audio.data(), audio.size());
-  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return linear_to_db(peak);
+  return amplitude_to_level_db(peak_abs(audio.data(), audio.size()));
 }
 
-/// @brief RMS level of @p audio in dB; returns -inf for silence or empty input.
+/// @brief RMS level of @p audio in dB, on the same terms as @ref audio_peak_db.
 float audio_rms_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
-  const float r = rms(audio.data(), audio.size());
-  if (r < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return linear_to_db(r);
+  return amplitude_to_level_db(rms(audio.data(), audio.size()));
 }
 
 /// @brief Peak of a channel pair in dB, on the same scale as @ref audio_peak_db.
@@ -55,10 +32,8 @@ float audio_rms_db(const Audio& audio) {
 ///          the two sides may be compared without the fold being sensitive to
 ///          which channel is which.
 float pair_peak_db(const Audio& left, const Audio& right) {
-  const float peak =
-      std::max(peak_abs(left.data(), left.size()), peak_abs(right.data(), right.size()));
-  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return linear_to_db(peak);
+  return amplitude_to_level_db(
+      std::max(peak_abs(left.data(), left.size()), peak_abs(right.data(), right.size())));
 }
 
 /// @brief RMS of a channel pair in dB, on the same scale as @ref audio_rms_db.
@@ -68,9 +43,7 @@ float pair_peak_db(const Audio& left, const Audio& right) {
 float pair_rms_db(const Audio& left, const Audio& right) {
   const double l = rms(left.data(), left.size());
   const double r = rms(right.data(), right.size());
-  const float joint = static_cast<float>(std::sqrt((l * l + r * r) / 2.0));
-  if (joint < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return linear_to_db(joint);
+  return static_cast<float>(amplitude_to_level_db(std::sqrt((l * l + r * r) / 2.0)));
 }
 
 /// @brief The argument refusals the two stereo entries share with their mono
@@ -85,8 +58,7 @@ void check_normalize_target(float target_db, bool clip) {
 /// @brief Moves a validated pair by one gain, given the level it sits at now.
 NormalizeStereoResult gain_pair_to(const Audio& left, const Audio& right, float current_db,
                                    float target_db, bool clip) {
-  if (std::isinf(current_db)) return {left, right, 0.0f};  ///< Silent pair, nothing to normalize
-
+  util::check::measurable_level(current_db, "audio", util::refusal::kNoMeasurableLevelPredicate);
   const float gain = target_db - current_db;
   return {apply_gain(left, gain, clip), apply_gain(right, gain, clip), gain};
 }
@@ -128,13 +100,9 @@ Audio normalize(const Audio& audio, float target_db, bool clip) {
   check_normalize_target(target_db, clip);
   if (audio.empty()) return audio;
 
-  float current_peak = audio_peak_db(audio);
-
-  if (std::isinf(current_peak)) {
-    return audio;  ///< Silent audio, nothing to normalize
-  }
-
-  float gain = target_db - current_peak;
+  const float current_peak = audio_peak_db(audio);
+  util::check::measurable_level(current_peak, "audio", util::refusal::kNoMeasurableLevelPredicate);
+  const float gain = target_db - current_peak;
   return apply_gain(audio, gain, clip);
 }
 
@@ -142,13 +110,9 @@ Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
   check_normalize_target(target_db, clip);
   if (audio.empty()) return audio;
 
-  float current_rms = audio_rms_db(audio);
-
-  if (std::isinf(current_rms)) {
-    return audio;  ///< Silent audio
-  }
-
-  float gain = target_db - current_rms;
+  const float current_rms = audio_rms_db(audio);
+  util::check::measurable_level(current_rms, "audio", util::refusal::kNoMeasurableLevelPredicate);
+  const float gain = target_db - current_rms;
   return apply_gain(audio, gain, clip);
 }
 

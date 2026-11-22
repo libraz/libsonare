@@ -1,6 +1,5 @@
 #include "mastering/match/reference_spectrum.h"
 
-#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -8,7 +7,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/fractional_octave.h"
 #include "util/frequency_bins.h"
@@ -57,10 +56,9 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
     magnitude = util::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
   }
 
-  std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);
-  Eigen::Map<const Eigen::ArrayXf> mag_map(magnitude.data(), n_bins);
-  Eigen::Map<Eigen::ArrayXf> db_map(db.data(), n_bins);
-  db_map = (mag_map.cwiseMax(sonare::constants::kEpsilon)).log10() * 20.0f;
+  // A bin of exact zero reads -inf; there is no floor.
+  std::vector<float> db(static_cast<size_t>(n_bins), kNotMeasured);
+  for (size_t bin = 0; bin < db.size(); ++bin) db[bin] = amplitude_to_level_db(magnitude[bin]);
   return {std::move(frequencies), std::move(db), audio.sample_rate()};
 }
 

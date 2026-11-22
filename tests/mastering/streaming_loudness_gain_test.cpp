@@ -216,27 +216,50 @@ TEST_CASE("streaming loudness gain equals the gain the offline chain applies (st
   }
 }
 
-TEST_CASE("streaming loudness gain of silence is 0 dB, as offline",
+TEST_CASE("a stage input with no measurable loudness masters the same streaming and offline",
           "[mastering][chain][streaming]") {
   const MasteringChainConfig config = staged_config();
   const std::vector<float> silence(kLength, 0.0f);
+  // Every block under the -70 LUFS absolute gate.
+  const std::vector<float> below_gate = normalized_to_peak(make_program(1.0f, 0.0f), 1.0e-4f);
 
-  MasteringChain offline(config);
-  const auto rendered = offline.process_mono(silence.data(), silence.size(), kSampleRate);
-  const StreamingLoudnessGain mono = sonare::mastering::api::streaming_loudness_gain_mono(
-      config, silence.data(), silence.size(), kSampleRate);
-  CHECK(mono.loudness_static_gain_db == 0.0f);
-  CHECK(rendered.applied_gain_db == 0.0f);
-  CHECK_FALSE(std::isfinite(mono.integrated_lufs));
-  CHECK(mono.true_peak_db == sonare::constants::kFloorDb);
+  for (const auto* input : {&silence, &below_gate}) {
+    const bool silent = input == &silence;
+    INFO((silent ? "silence" : "below the absolute gate"));
+    MasteringChain offline(config);
+    const auto rendered = offline.process_mono(input->data(), input->size(), kSampleRate);
+    const StreamingLoudnessGain mono = sonare::mastering::api::streaming_loudness_gain_mono(
+        config, input->data(), input->size(), kSampleRate);
+    // Not measured on both forms, never 0 dB, which would read as measured and on target.
+    CHECK(std::isnan(mono.loudness_static_gain_db));
+    CHECK(std::isnan(rendered.loudness_gain_db));
+    CHECK((std::isinf(mono.integrated_lufs) && mono.integrated_lufs < 0.0f));
+    if (silent) CHECK((std::isinf(mono.true_peak_db) && mono.true_peak_db < 0.0f));
 
-  const StreamingLoudnessGain stereo = sonare::mastering::api::streaming_loudness_gain_stereo(
-      config, silence.data(), silence.data(), silence.size(), kSampleRate);
-  CHECK(stereo.loudness_static_gain_db == 0.0f);
-  CHECK_FALSE(std::isfinite(stereo.integrated_lufs));
+    const StreamingLoudnessGain stereo = sonare::mastering::api::streaming_loudness_gain_stereo(
+        config, input->data(), input->data(), input->size(), kSampleRate);
+    CHECK(std::isnan(stereo.loudness_static_gain_db));
 
-  // The helper's numbers construct a streaming chain without the not-finite throw.
-  CHECK_NOTHROW(render_streaming(config, mono, {silence}));
+    // The not-measured gain builds a streaming chain that applies none, as offline.
+    const auto streamed = render_streaming(config, mono, {*input});
+    if (silent) {
+      CHECK(streamed[0] == rendered.samples);
+    } else {
+      CHECK(max_abs_difference(streamed[0], rendered.samples) <=
+            kRenderToleranceOfPeak * peak_of({rendered.samples}));
+    }
+  }
+}
+
+TEST_CASE("the streaming chain refuses an infinite static loudness gain",
+          "[mastering][chain][streaming]") {
+  const MasteringChainConfig config = staged_config();
+  for (const float gain :
+       {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()}) {
+    StreamingMasteringChainOptions options;
+    options.loudness_static_gain_db = gain;
+    CHECK_THROWS_AS(StreamingMasteringChain(config, options), sonare::SonareException);
+  }
 }
 
 TEST_CASE("streaming loudness gain rejects an invalid configuration",

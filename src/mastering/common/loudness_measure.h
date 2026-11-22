@@ -121,7 +121,7 @@ float measure_true_peak_dbtp(const Audio& audio,
 ///          the two channels, without the two track-length `Audio` copies that
 ///          wrapping them would cost. The maximum is taken in the linear domain
 ///          and converted once, which is equivalent because the conversion is
-///          monotonic and both channels share the same silence floor.
+///          monotonic. Exact silence is `-inf`.
 /// @param left Pointer to the left channel (must not be null when @p frames > 0).
 /// @param right Pointer to the right channel (must not be null when @p frames > 0).
 /// @param frames Number of sample frames per channel.
@@ -186,10 +186,9 @@ void measure_loudness_series_stereo_planar(const float* left, const float* right
 /// @details This measures the signal, NOT a processor's internal gain reduction.
 ///          For a stage that reshapes the spectrum the two differ, and for a
 ///          stage with no gain element at all this is still defined - which is
-///          why it is spelled as a level delta and names no stage. Silent
-///          blocks (`-inf`) are floored to the shared dB floor on both sides
-///          before subtracting, so the result is finite and two silent blocks
-///          report no change rather than a NaN.
+///          why it is spelled as a level delta and names no stage. The
+///          difference follows the level rule: NaN (not measured) where both
+///          blocks are silent (`-inf`) or only the `before` block is.
 /// @param before Series measured at the stage's input.
 /// @param after Series measured at the stage's output. Must match @p before in
 ///        length, which holds whenever the stage preserved the frame count.

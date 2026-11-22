@@ -25,6 +25,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::mastering::common {
 
@@ -44,7 +45,7 @@ void repair_noise_band_bins(int n_fft, int sample_rate, int* out);
 
 /// @brief A noise floor in dBFS, broadband and band by band.
 struct NoiseFloorDbfs {
-  float broadband = sonare::constants::kFloorDb;
+  float broadband = kNotMeasured;
   float bands[kRepairNoiseBandCount] = {};
 };
 
@@ -67,7 +68,8 @@ struct NoiseFloorDbfs {
 /// @param frames Number of frames the sums span.
 /// @param signal_mean_square Mean square of the time-domain signal the STFT came from.
 /// @param sample_rate Sample rate, for the band edges.
-/// @return Levels in dBFS; a band holding no bin reports @ref sonare::constants::kFloorDb.
+/// @return Levels in dBFS: -inf for zero power, NaN (not measured) for a band holding no bin or
+///   when there is nothing to measure from.
 NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
                                           int bins, int frames, double signal_mean_square,
                                           int sample_rate);

@@ -18,6 +18,7 @@
 #include "support/rate_material.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/json.h"
 
 namespace assistant = sonare::mastering::assistant;
 
@@ -1010,4 +1011,52 @@ TEST_CASE("Assistant summary references set nothing aside below ten seconds",
   // At 6 s the burst is the reference: only its own frames and onset clear the threshold.
   CHECK(burst_6.sustain_ratio < 0.2f * plain_6.sustain_ratio);
   CHECK(burst_6.attack_density < 0.2f * plain_6.attack_density);
+}
+
+TEST_CASE("Assistant AudioProfile reads quiet bands at their computed level, silence at -inf",
+          "[mastering][assistant]") {
+  constexpr int sr = 48000;
+  float previous = 0.0f;
+  for (float amplitude : {1.0e-6f, 1.0e-10f, 1.0e-12f, 1.0e-15f}) {
+    std::vector<float> samples(static_cast<size_t>(sr));
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] = amplitude * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                                           static_cast<double>(i) / sr));
+    }
+    const auto profile = assistant::analyze_audio_profile(samples.data(), samples.size(), sr);
+    CAPTURE(amplitude, profile.spectral.mid_rms_db);
+    CHECK(std::isfinite(profile.spectral.mid_rms_db));
+    CHECK(profile.spectral.mid_rms_db < previous - 1.0f);
+    previous = profile.spectral.mid_rms_db;
+  }
+  CHECK(previous < -200.0f);
+
+  const std::vector<float> silence(sr, 0.0f);
+  const auto silent = assistant::analyze_audio_profile(silence.data(), silence.size(), sr);
+  for (float level :
+       {silent.spectral.sub_rms_db, silent.spectral.low_rms_db, silent.spectral.low_mid_rms_db,
+        silent.spectral.mid_rms_db, silent.spectral.high_mid_rms_db, silent.spectral.high_rms_db,
+        silent.spectral.air_rms_db, silent.loudness.true_peak_db}) {
+    CHECK((std::isinf(level) && level < 0.0f));
+  }
+  CHECK(std::isnan(silent.loudness.crest_factor_db));
+
+  // -inf writes null; a level that was not measured is an absent member.
+  const auto json = sonare::util::json::parse_strict(assistant::audio_profile_to_json(silent));
+  CHECK(json["loudness"]["truePeakDbtp"].is_null());
+  CHECK_FALSE(json["loudness"].contains("crestFactorDb"));
+  CHECK(json["spectral"]["midRmsDb"].is_null());
+}
+
+TEST_CASE("Assistant AudioProfile band holding no bin is not measured", "[mastering][assistant]") {
+  // At 16 kHz Nyquist is 8 kHz, so the 12 kHz-Nyquist band has nothing to measure.
+  constexpr int sr = 16000;
+  std::vector<float> samples(static_cast<size_t>(sr));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.25f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                                     static_cast<double>(i) / sr));
+  }
+  const auto profile = assistant::analyze_audio_profile(samples.data(), samples.size(), sr);
+  CHECK(std::isnan(profile.spectral.air_rms_db));
+  CHECK(std::isfinite(profile.spectral.mid_rms_db));
 }

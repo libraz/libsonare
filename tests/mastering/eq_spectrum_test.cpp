@@ -227,3 +227,52 @@ TEST_CASE("eq.equalizer runs through the offline named-processor path", "[master
   // half of it so the assertion tracks the band actually being applied.
   REQUIRE(peak_abs(boosted.samples) > peak_abs(flat.samples) * 1.5f);
 }
+
+TEST_CASE("EqSpectrumAnalyzer bands fall to no level at once, rise back, and NaN when unreachable",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = EqSpectrumAnalyzer::kHopSamples;
+  constexpr int window_blocks = EqSpectrumAnalyzer::kFftSize / block;
+  const size_t tone_band = profile_band_of(1000.0);
+
+  EqSpectrumAnalyzer analyzer;
+  analyzer.prepare(sample_rate);
+  std::array<float, kSpectrumProfileBands> profile{};
+
+  const auto tone = sine(1000.0f, sample_rate, block * window_blocks, 0.5f);
+  const std::vector<float> silence(static_cast<size_t>(block), 0.0f);
+  const float* tone_channel[] = {tone.data()};
+  const float* silence_channel[] = {silence.data()};
+
+  for (int i = 0; i < window_blocks; ++i) {
+    const float* chunk[] = {tone.data() + i * block};
+    analyzer.analyze(chunk, 1, block, profile);
+  }
+  REQUIRE(std::isfinite(profile[tone_band]));
+  REQUIRE(profile[tone_band] > -20.0f);
+
+  // Part of the window still holds the tone, so the band is falling, not gone.
+  for (int i = 0; i < window_blocks - 1; ++i) analyzer.analyze(silence_channel, 1, block, profile);
+  REQUIRE(std::isfinite(profile[tone_band]));
+  // The first window of exact silence is no level in every band, with no smoothing tail.
+  analyzer.analyze(silence_channel, 1, block, profile);
+  for (const float db : profile) REQUIRE((std::isinf(db) && db < 0.0f));
+
+  // Signal returning replaces -inf with a finite level at once.
+  analyzer.analyze(tone_channel, 1, block, profile);
+  REQUIRE(std::isfinite(profile[tone_band]));
+
+  // Above Nyquist no FFT bin reaches the band: not measured, and silence does not change that.
+  EqSpectrumAnalyzer narrow;
+  narrow.prepare(8000);
+  const size_t above_nyquist = profile_band_of(15000.0);
+  const size_t audible = profile_band_of(1000.0);
+  const auto narrow_tone = sine(1000.0f, 8000, block, 0.5f);
+  const float* narrow_channel[] = {narrow_tone.data()};
+  narrow.analyze(narrow_channel, 1, block, profile);
+  REQUIRE(std::isnan(profile[above_nyquist]));
+  REQUIRE(std::isfinite(profile[audible]));
+  for (int i = 0; i <= window_blocks; ++i) narrow.analyze(silence_channel, 1, block, profile);
+  REQUIRE(std::isnan(profile[above_nyquist]));
+  REQUIRE((std::isinf(profile[audible]) && profile[audible] < 0.0f));
+}

@@ -22,7 +22,9 @@ namespace sonare::mastering::eq {
 /// logarithmically spaced bands spanning the audible range, so the published
 /// values are frequency-domain magnitudes rather than a decimation of the input
 /// waveform. Levels are amplitude-referenced: a full-scale sine centred in a
-/// band reads roughly 0 dB there.
+/// band reads roughly 0 dB there. A band of exactly zero power reads -inf at once (the
+/// fall ballistics are in dB, whose limit is -inf); a band no FFT bin reaches, and every band
+/// before the first transform, reads NaN (not measured).
 ///
 /// Realtime contract: the FFT plan, the analysis window, the scratch buffers and
 /// the band-to-bin map are all built in prepare(). analyze() only reads and
@@ -49,9 +51,8 @@ class EqSpectrumAnalyzer {
   /// hop has elapsed, otherwise with the profile of the latest transform.
   void analyze(const float* const* channels, int num_channels, int num_samples,
                std::array<float, kSpectrumProfileBands>& out) noexcept;
-  /// @brief How many transforms rested a band a non-finite level had reached.
-  /// @details Nothing else clears the fall ballistics, so the discard is the only
-  ///   recovery. This class is outside rt::ProcessorBase, so it carries the
+  /// @brief How many transforms met a +inf band level, which no input measures, and dropped it.
+  /// @details This class is outside rt::ProcessorBase, so it carries the
   ///   counter the base gives every processor and its owner folds the difference
   ///   into one bump per block.
   uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }

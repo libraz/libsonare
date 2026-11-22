@@ -18,22 +18,11 @@
 
 namespace sonare::mixing::assistant {
 
-using sonare::constants::kFloorDb;
-
 namespace {
 
 namespace json = sonare::util::json;
 
 // --- Eligibility -----------------------------------------------------------
-
-// A silent track's integrated loudness arrives either as -inf (the BS.1770
-// convention for a program with no gated block) or pinned at the numerical dB
-// floor. Every threshold on this stage is an offset from that measurement, so a
-// track without one has nothing to offset from. The headroom mirrors the gain
-// stage's: comparing against the floor with == would miss a value that landed a
-// hair above it after gating and averaging.
-constexpr float kSilenceFloorHeadroomDb = 1.0f;
-constexpr float kSilenceLufsThreshold = kFloorDb + kSilenceFloorHeadroomDb;
 
 // Classifier confidence below which the class is a guess rather than a reading.
 // Every decision on this stage is selected by class, so acting on a guess means
@@ -503,7 +492,8 @@ bool is_treatable(const TrackProfile& profile) noexcept {
     return false;
   }
   const float measured_lufs = profile.base.loudness.integrated_lufs;
-  return std::isfinite(measured_lufs) && measured_lufs > kSilenceLufsThreshold;
+  // Every threshold on this stage offsets from the integrated loudness; silence reads -inf.
+  return std::isfinite(measured_lufs);
 }
 
 /// @brief Share of the track's energy sitting in the sibilant bands.

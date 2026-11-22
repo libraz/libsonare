@@ -1,5 +1,7 @@
 #include "analysis/analysis_json.h"
 
+#include <cmath>
+
 #include "util/constants.h"
 #include "util/json.h"
 
@@ -269,11 +271,15 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   // Dynamics fields shared by native and WASM unified results.
   {
     Object d;
-    d["dynamicRangeDb"] = Value(result.dynamics.dynamic_range_db);
-    d["peakDb"] = Value(result.dynamics.peak_db);
-    d["rmsDb"] = Value(result.dynamics.rms_db);
-    d["crestFactor"] = Value(result.dynamics.crest_factor);
-    d["loudnessRangeLu"] = Value(result.dynamics.loudness_range_lu);
+    // A level that was not measured (NaN) is an absent member; -inf stays and writes null.
+    const auto put_measured = [&d](const char* key, float level) {
+      if (!std::isnan(level)) d[key] = Value(level);
+    };
+    put_measured("dynamicRangeDb", result.dynamics.dynamic_range_db);
+    put_measured("peakDb", result.dynamics.peak_db);
+    put_measured("rmsDb", result.dynamics.rms_db);
+    put_measured("crestFactor", result.dynamics.crest_factor);
+    put_measured("loudnessRangeLu", result.dynamics.loudness_range_lu);
     d["isCompressed"] = Value(result.dynamics.is_compressed);
     root["dynamics"] = Value(std::move(d));
   }

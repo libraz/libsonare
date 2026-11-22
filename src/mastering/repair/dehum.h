@@ -85,11 +85,13 @@ struct HumDetection {
   int harmonics = 0;  ///< Harmonics found above the floor; 0 whenever
                       ///  fundamental_prominence is 1.0. Not necessarily a
                       ///  contiguous run from the first.
-  /// Input level at each k*f0, k ascending, floored at the library dB floor.
-  /// Measured for every k the sample rate can carry, not only the ones the
-  /// cascade notches; a k*f0 at or past Nyquist reads the floor because nothing
-  /// is there to measure.
+  /// Input level at each k*f0, k ascending. Measured for every k the sample rate
+  /// can carry, not only the ones the cascade notches; a harmonic with no energy
+  /// is -inf. Slots from @ref measured_harmonics on are NaN (not measured): a k*f0
+  /// at or past Nyquist has nothing to measure, and those slots are always a suffix.
   float harmonic_dbfs[kDehumMaxHarmonics] = {};
+  /// Leading slots of @ref harmonic_dbfs that hold a measured level.
+  int measured_harmonics = 0;
 };
 
 /// @brief Measures hum without filtering.

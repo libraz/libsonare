@@ -36,6 +36,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   const api::detail::LoudnessStageGain stage = api::detail::loudness_stage_gain(
       audio.data(), audio.size(), 1, audio.sample_rate(), config.target_lufs, config.ceiling_dbtp,
       peak_db, config.max_limiter_gain_reduction_db);
+  api::detail::require_measurable_loudness(stage);
   const float gain = db_to_linear(stage.applied_db);
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {

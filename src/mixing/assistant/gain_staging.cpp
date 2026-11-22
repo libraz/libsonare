@@ -14,17 +14,7 @@
 
 namespace sonare::mixing::assistant {
 
-using sonare::constants::kFloorDb;
-
 namespace {
-
-// A silent track's integrated loudness arrives either as -inf (the BS.1770
-// convention for a program with no gated block) or pinned at the numerical dB
-// floor. Comparing against the floor with == would miss a value that landed a
-// hair above it after gating and averaging, so the test carries this much
-// headroom above the floor instead.
-constexpr float kSilenceFloorHeadroomDb = 1.0f;
-constexpr float kSilenceLufsThreshold = kFloorDb + kSilenceFloorHeadroomDb;
 
 // BS.1770 integrates over 400 ms gating blocks, so a track shorter than one
 // block has no gated measurement to stage against — whatever number comes back
@@ -81,7 +71,8 @@ const char* staging_exclusion(const TrackProfile& profile) {
     return "the profiler marked the track unusable";
   }
   const float measured_lufs = profile.base.loudness.integrated_lufs;
-  if (!std::isfinite(measured_lufs) || measured_lufs <= kSilenceLufsThreshold) {
+  // A silent track reads -inf (no gated block): there is no level to stage.
+  if (!std::isfinite(measured_lufs)) {
     return "the track is silent, so there is no level to stage";
   }
   if (profile.duration_sec < kMinMeasurableDurationSec) {

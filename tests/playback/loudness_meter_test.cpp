@@ -191,9 +191,12 @@ TEST_CASE("playback loudness meter rejects an empty, null, or non-finite push",
 
   // Still usable afterwards: a refused push must not corrupt the running state.
   std::fill(samples.begin(), samples.end(), 0.0f);
-  using sonare::constants::kFloorDb;
   meter.push_interleaved(samples.data(), 4096);
-  CHECK(meter.integrated_lufs() <= kFloorDb + 1.0f);
+  // Under 400 ms pushed: no gating block yet, so nothing is measured.
+  CHECK(std::isnan(meter.integrated_lufs()));
+  // Gating blocks of exact silence sit below the absolute gate: no level.
+  for (int i = 0; i < 8; ++i) meter.push_interleaved(samples.data(), 4096);
+  CHECK((std::isinf(meter.integrated_lufs()) && meter.integrated_lufs() < 0.0f));
 }
 
 TEST_CASE("playback loudness meter measures the frames after the last internal block",
