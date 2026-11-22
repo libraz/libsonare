@@ -51,7 +51,6 @@ struct AssistBudget {
   /// Iteration / candidate cap (0 = no iteration cap). Cooperative.
   uint32_t max_iterations = 0;
 
-  bool has_time_cap() const noexcept { return max_time_ms != 0; }
   bool has_iteration_cap() const noexcept { return max_iterations != 0; }
 };
 

@@ -65,12 +65,4 @@ struct ChannelVoiceEvent {
 /// On with velocity 0 stays NoteOn with raw 0 preserved.
 bool decode_channel_voice(const Ump& ump, ChannelVoiceEvent* out) noexcept;
 
-/// True for the registered controllers a synth reads straight from the decoded event: 0/0 (pitch
-/// bend sensitivity), 0/1 (fine tuning), 0/2 (coarse tuning) and 0/7 (per-note pitch bend
-/// sensitivity). Every other registered/assignable controller is lowered by the caller through
-/// midi2_to_midi1_messages; lowering is not the decoder's job.
-inline bool is_directly_held_registered_controller(uint8_t bank, uint8_t index) {
-  return bank == 0 && (index == 0 || index == 1 || index == 2 || index == 7);
-}
-
 }  // namespace sonare::midi

@@ -1145,7 +1145,6 @@ if(BUILD_ARRANGEMENT)
   # unaffected.
   if(BUILD_ASSIST)
     add_library(sonare_assist STATIC
-      midi/assist/assist_registry.cpp
       midi/assist/composition_assist.cpp
       midi/assist/modules/music_theory.cpp
       midi/assist/modules/harmony_context.cpp

@@ -8,22 +8,10 @@
 /// EditCommands. It NEVER mutates the project. Same-build C++ abstract class.
 /// Control/offline thread only.
 
-#include <vector>
-
 #include "arrangement/project_view.h"
 #include "midi/assist/assist_request.h"
 
 namespace sonare::midi::assist {
-
-/// @brief A single rhythmic onset (position + accent weight).
-struct RhythmOnset {
-  double ppq = 0.0;         ///< Onset position (PPQ).
-  double length_ppq = 0.0;  ///< Duration (PPQ); 0 = unspecified.
-  float accent = 1.0f;      ///< Relative accent weight in [0, 1].
-};
-
-/// @brief A produced rhythmic pattern (plain value data).
-using RhythmPattern = std::vector<RhythmOnset>;
 
 /// @brief Generates rhythmic onset patterns over the requested scope.
 class IRhythmGenerator {

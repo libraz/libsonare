@@ -247,15 +247,6 @@ TEST_CASE("channel voice decode: rejected messages", "[midi][midi1][midi2]") {
   CHECK(ev.channel == 9);
 }
 
-TEST_CASE("channel voice decode: directly held registered controllers", "[midi][midi2]") {
-  for (uint8_t bank : {0, 1}) {
-    for (uint8_t index : {0, 1, 2, 3, 6, 7, 8}) {
-      const bool expected = bank == 0 && (index <= 2 || index == 7);
-      CHECK(is_directly_held_registered_controller(bank, index) == expected);
-    }
-  }
-}
-
 TEST_CASE("channel voice decode: MIDI 1.0 values read back exactly", "[midi][midi1]") {
   for (uint32_t v = 0; v < 128; ++v) {
     const auto v7 = static_cast<uint8_t>(v);
