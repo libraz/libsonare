@@ -45,6 +45,16 @@ using namespace sonare_c_bounce_detail;
 
 namespace {
 
+// The refusal for a render length the release tail pushes past a 64-bit count.
+constexpr const char* kTailOverflow =
+    "the arrangement's end plus the instruments' release tail must fit in a 64-bit sample count";
+
+// An INVALID_STATE return that says what the project state could not support.
+SonareError refuse_state(const char* message) {
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, message);
+  return SONARE_ERROR_INVALID_STATE;
+}
+
 // The subject naming one hosted instrument as the caller's array spells it.
 std::string instrument_subject(size_t index) {
   return "options.instruments[" + std::to_string(index) + "]";
@@ -67,7 +77,7 @@ SonareError hosted_instrument_bind_error(const sonare::engine::RealtimeEngine& p
       check::refuse(instrument_subject(index).c_str(),
                     "must be preparable at the bounce's sample rate and block size");
     case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
-      return SONARE_ERROR_INVALID_STATE;
+      return refuse_state("the hosted instruments could not be prepared for the bounce");
     default:
       return SONARE_ERROR_OUT_OF_MEMORY;
   }
@@ -265,7 +275,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       project->history.project(), project->history.midi_content(), project->audio, config);
   project->last_bounce_diagnostics = compiled.diagnostics;
   project->last_bounce_has_timeline = compiled.timeline.has_value();
-  if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
+  if (!compiled.timeline.has_value()) {
+    return refuse_state("the project does not compile; its bounce diagnostics name the cause");
+  }
 
 #if defined(SONARE_WITH_MIXING)
   const MixerRouting routing = resolve_mixer_routing(*compiled.timeline);
@@ -327,12 +339,13 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // arrangement (musical end + the longest instrument release tail).
   int64_t arrangement_frames = 0;
   if (!arrangement_end_frames(*compiled.timeline, &arrangement_frames)) {
-    return SONARE_ERROR_INVALID_STATE;
+    return refuse_state(
+        "the arrangement's end must fit in a 64-bit sample count at the bounce's sample rate");
   }
   int64_t mixer_input_frames = arrangement_frames;
   if (mixer_input_frames > 0 &&
       !checked_nonnegative_add(mixer_input_frames, instrument_tail, &mixer_input_frames)) {
-    return SONARE_ERROR_INVALID_STATE;
+    return refuse_state(kTailOverflow);
   }
   int64_t frames = opts.total_frames;
   if (derive_length) {
@@ -343,7 +356,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     }
     frames = arrangement_frames;
     if (frames > 0 && !checked_nonnegative_add(frames, instrument_tail, &frames)) {
-      return SONARE_ERROR_INVALID_STATE;
+      return refuse_state(kTailOverflow);
     }
 #if defined(SONARE_WITH_MIXING)
     if (frames > 0 && mixer_required) {
@@ -354,12 +367,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       // This mixer already scheduled the automation lanes, so an over-capacity
       // lane is known before the render window is even fixed.
       if (has_error_diagnostic(project->last_bounce_diagnostics)) {
-        return SONARE_ERROR_INVALID_STATE;
+        return refuse_state("the mix does not schedule; its bounce diagnostics name the cause");
       }
       if (!mixer_delay.valid ||
           !checked_nonnegative_add(frames, static_cast<int64_t>(mixer_delay.tail_samples),
                                    &frames)) {
-        return SONARE_ERROR_INVALID_STATE;
+        return refuse_state("the mix's latency and tail must fit in a 64-bit sample count");
       }
     }
 #endif
@@ -423,7 +436,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   std::vector<std::vector<float>> channels;
   if (!render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
                        /*num_channels=*/2, render_frames, &channels)) {
-    return SONARE_ERROR_INVALID_STATE;
+    return refuse_state("the timeline could not be rendered");
   }
 
   std::unique_ptr<float[]> interleaved(new float[total]);
