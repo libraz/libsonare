@@ -25,8 +25,7 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  if (const SonareError err = validate_audio_params("mastering_streaming_preview", "samples",
-                                                    samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -74,8 +73,7 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
                                            SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = undefined_streaming_loudness_gain();
-  SonareError err =
-      validate_audio_params("streaming_loudness_gain", "samples", samples, length, sample_rate);
+  SonareError err = validate_audio_params("samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -93,8 +91,7 @@ SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float
                                                   SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = undefined_streaming_loudness_gain();
-  SonareError err = validate_stereo_audio_params("streaming_loudness_gain_stereo", "left", "right",
-                                                 left, right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -111,8 +108,7 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  SonareError err =
-      validate_audio_params("mastering_assistant_suggest", "samples", samples, length, sample_rate);
+  SonareError err = validate_audio_params("samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
@@ -131,8 +127,7 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  SonareError err =
-      validate_audio_params("mastering_audio_profile", "samples", samples, length, sample_rate);
+  SonareError err = validate_audio_params("samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
@@ -151,12 +146,11 @@ namespace {
 // The analysis entry points take an interleaved buffer so BS.1770 channel
 // summing sees the program rather than a downmix, while the C ABI keeps the
 // planar left/right shape the rest of the stereo mastering surface uses.
-SonareError validate_stereo_params(const char* fn, const char* left_name, const char* right_name,
-                                   const float* left, const float* right, size_t length,
-                                   int sample_rate) {
-  SonareError err = validate_audio_params(fn, left_name, left, length, sample_rate);
+SonareError validate_stereo_params(const char* left_name, const char* right_name, const float* left,
+                                   const float* right, size_t length, int sample_rate) {
+  SonareError err = validate_audio_params(left_name, left, length, sample_rate);
   if (err != SONARE_OK) return err;
-  return validate_audio_params(fn, right_name, right, length, sample_rate);
+  return validate_audio_params(right_name, right, length, sample_rate);
 }
 
 std::vector<float> interleave_pair(const float* left, const float* right, size_t length) {
@@ -200,8 +194,7 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  SonareError err = validate_stereo_params("mastering_streaming_preview_stereo", "left", "right",
-                                           left, right, length, sample_rate);
+  SonareError err = validate_stereo_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(platforms, platform_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
@@ -235,8 +228,7 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  SonareError err = validate_stereo_params("mastering_assistant_suggest_stereo", "left", "right",
-                                           left, right, length, sample_rate);
+  SonareError err = validate_stereo_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
@@ -257,8 +249,7 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
-  SonareError err = validate_stereo_params("mastering_audio_profile_stereo", "left", "right", left,
-                                           right, length, sample_rate);
+  SonareError err = validate_stereo_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(json_out);

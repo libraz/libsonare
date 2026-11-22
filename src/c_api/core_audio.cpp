@@ -10,7 +10,7 @@ SonareError sonare_audio_from_buffer(const float* data, size_t length, int sampl
                                      SonareAudio** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_audio_params("audio_from_buffer", "data", data, length, sample_rate);
+  SonareError err = validate_audio_params("data", data, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 

@@ -104,8 +104,7 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err =
-      validate_audio_params("project_analyze_tempo", "audio", audio, len, sample_rate);
+  SonareError err = validate_audio_params("audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SonareProjectTempoOptions resolved;
   if (options) {
@@ -139,7 +138,7 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
   SONARE_C_REQUIRE_NONNULL(project);
-  SonareError err = validate_audio_params("project_auto_tempo", "audio", audio, len, sample_rate);
+  SonareError err = validate_audio_params("audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SonareProjectTempoOptions resolved;
   if (options) {

@@ -78,8 +78,7 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
                               float bpm_max, float* out_bpm) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_bpm);
-  if (const SonareError err =
-          validate_audio_params("detect_bpm", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -138,8 +137,7 @@ SonareError sonare_detect_key(const float* samples, size_t length, int sample_ra
                               float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_key, out_tuning_cents);
-  if (const SonareError err =
-          validate_audio_params("detect_key", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -181,8 +179,7 @@ SonareError sonare_detect_key_candidates(const float* samples, size_t length, in
                                          float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_candidates, out_count, out_tuning_cents);
-  if (const SonareError err =
-          validate_audio_params("detect_key_candidates", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -237,8 +234,7 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
                                 float bpm_max, float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_times, out_count);
-  if (const SonareError err =
-          validate_audio_params("detect_beats", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -267,8 +263,7 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
                                     float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_times, out_count);
-  if (const SonareError err =
-          validate_audio_params("detect_downbeats", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -306,8 +301,7 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
                                  size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_times, out_count);
-  if (const SonareError err =
-          validate_audio_params("detect_onsets", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -467,8 +461,7 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
   // applies below; this entry point only checks what the core cannot see (the
   // pointers, the layout version and the length of the flat candidate array).
   SONARE_C_ZERO_OUTS(out_json);
-  if (const SonareError err =
-          validate_audio_params("analyze_json", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }

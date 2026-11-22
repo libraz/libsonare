@@ -84,8 +84,7 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
                                      int n_fft, size_t hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("spectral_centroid", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -122,8 +121,7 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
     return err;
   }
   const float p = resolved.p;
-  if (const SonareError err =
-          validate_audio_params("spectral_bandwidth", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -149,8 +147,7 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("spectral_rolloff", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -171,8 +168,7 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
                                      int n_fft, size_t hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("spectral_flatness", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -193,8 +189,7 @@ SonareError sonare_spectral_flux(const float* samples, size_t length, int sample
                                  size_t hop_length, int lag, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("spectral_flux", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -220,8 +215,7 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
                                       size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("zero_crossing_rate", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -240,8 +234,7 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
                               size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("rms_energy", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -260,8 +253,7 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
                                      float quantile, float** out, int* out_rows, int* out_cols) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
-  if (const SonareError err =
-          validate_audio_params("spectral_contrast", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -294,8 +286,7 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
                                  int* out_cols) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
-  if (const SonareError err =
-          validate_audio_params("poly_features", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -426,8 +417,7 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
                                    float* out_tuning) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_tuning);
-  if (const SonareError err =
-          validate_audio_params("estimate_tuning", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -482,8 +472,7 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
                             float** out_magnitudes) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_n_bins, out_n_frames, out_pitches, out_magnitudes);
-  if (const SonareError err =
-          validate_audio_params("piptrack", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -522,8 +511,7 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
   // input always leaves a NULL owned pointer and sonare_free_reassigned_spectrogram_result(&r)
   // never delete[]s an uninitialised pointer.
   SONARE_C_ZERO_OUTS(out);
-  if (const SonareError err =
-          validate_audio_params("reassigned_spectrogram", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -587,11 +575,10 @@ void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult
 namespace {
 
 template <typename PitchFn>
-SonareError run_pitch_track(const char* fn, const char* name, const float* samples, size_t length,
-                            int sample_rate, size_t frame_length, size_t hop_length, float fmin,
-                            float fmax, float threshold, int fill_na, SonarePitchResult* out,
-                            PitchFn pitch) {
-  if (const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
+SonareError run_pitch_track(const char* name, const float* samples, size_t length, int sample_rate,
+                            size_t frame_length, size_t hop_length, float fmin, float fmax,
+                            float threshold, int fill_na, SonarePitchResult* out, PitchFn pitch) {
+  if (const SonareError err = validate_audio_params(name, samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -621,8 +608,8 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 
-  return run_pitch_track("pitch_yin", "samples", samples, length, sample_rate, frame_length,
-                         hop_length, f0_min_hz, f0_max_hz, threshold,
+  return run_pitch_track("samples", samples, length, sample_rate, frame_length, hop_length,
+                         f0_min_hz, f0_max_hz, threshold,
                          /*fill_na=*/0, out, [](const Audio& audio, const PitchConfig& config) {
                            return yin_track(audio, config);
                          });
@@ -636,8 +623,8 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   SONARE_C_ZERO_OUTS(out);
 
   return run_pitch_track(
-      "pitch_pyin", "samples", samples, length, sample_rate, frame_length, hop_length, f0_min_hz,
-      f0_max_hz, threshold, fill_na, out,
+      "samples", samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz,
+      threshold, fill_na, out,
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 

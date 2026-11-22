@@ -327,8 +327,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
-      "estimate_room", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         sonare::RoomEstimateConfig cfg;
         cfg.aspect_hint_lw = config->aspect_hint_lw;
         cfg.aspect_hint_lh = config->aspect_hint_lh;
@@ -453,8 +452,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_offline(
-      "room_morph", "samples", samples, length, sample_rate, out, out_length,
-      [&](const Audio& audio) -> Audio {
+      "samples", samples, length, sample_rate, out, out_length, [&](const Audio& audio) -> Audio {
         sonare::effects::acoustic::RoomMorphResult result = with_c_names(kRoomMorphNames, [&] {
           return sonare::effects::acoustic::room_morph(audio, room_morph_config_from(*config));
         });
@@ -479,11 +477,9 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   SONARE_C_ZERO_OUTS(out_left, out_right, out_length);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
-  SonareError err = sonare_c_detail::validate_audio_params("room_morph_stereo", "left", left,
-                                                           length, sample_rate);
+  SonareError err = sonare_c_detail::validate_audio_params("left", left, length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = sonare_c_detail::validate_audio_params("room_morph_stereo", "right", right, length,
-                                               sample_rate);
+  err = sonare_c_detail::validate_audio_params("right", right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(config);

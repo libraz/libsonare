@@ -267,8 +267,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
   // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell
   // apart from silence.
-  const SonareError audio_error =
-      validate_audio_params("transcribe", "samples", samples, length, sample_rate);
+  const SonareError audio_error = validate_audio_params("samples", samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
   ntm::TranscribeConfig core_config;
   uint8_t group = 0;
@@ -318,8 +317,7 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   SONARE_C_ZERO_OUTS(out_note_count);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(project);
-  const SonareError audio_error =
-      validate_audio_params("project_transcribe_to_clip", "samples", samples, length, sample_rate);
+  const SonareError audio_error = validate_audio_params("samples", samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
   ntm::TranscribeConfig core_config;
   uint8_t group = 0;

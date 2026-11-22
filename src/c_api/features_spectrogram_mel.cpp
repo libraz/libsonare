@@ -43,7 +43,7 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("stft", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        StftConfig config;
                        config.n_fft = n_fft;
@@ -104,8 +104,7 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
-      "mel_spectrogram", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
                                                  resolved.fmax_hz, resolved.htk);
         MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,
@@ -157,7 +156,7 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
-      "mfcc", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, resolved.fmin_hz,
                                                  resolved.fmax_hz, resolved.htk);
         MelSpectrogram mel = with_c_names(kMelOptionsRangeNames,

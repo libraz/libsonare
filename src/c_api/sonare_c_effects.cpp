@@ -130,8 +130,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
                         SonareHpssResult* out, float** out_residual) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_residual);
-  if (const SonareError err =
-          validate_audio_params("hpss", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -202,8 +201,7 @@ SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate
                             size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("harmonic", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -217,8 +215,7 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("percussive", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -240,8 +237,7 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("time_stretch", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -282,8 +278,7 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
                                float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("pitch_shift", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -322,8 +317,7 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("normalize", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -337,8 +331,7 @@ SonareError sonare_normalize_rms(const float* samples, size_t length, int sample
                                  float target_db, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("normalize_rms", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -353,8 +346,7 @@ SonareError sonare_fade(const float* samples, size_t length, int sample_rate, fl
                         float fade_out_sec, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("fade", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -460,8 +452,7 @@ SonareError sonare_biquad_filter(const float* samples, size_t length, int sample
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("biquad_filter", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -486,14 +477,14 @@ namespace {
 /// @details Both differ only in which level they hand the core, so the
 ///          validation, the heap hand-off and the failure shape live here once.
 template <typename Fn>
-SonareError run_normalize_stereo(const char* fn, const char* left_name, const char* right_name,
-                                 const float* left, const float* right, size_t length,
-                                 int sample_rate, float** out_left, float** out_right,
-                                 size_t* out_length, Fn&& normalize_pair) {
+SonareError run_normalize_stereo(const char* left_name, const char* right_name, const float* left,
+                                 const float* right, size_t length, int sample_rate,
+                                 float** out_left, float** out_right, size_t* out_length,
+                                 Fn&& normalize_pair) {
   SONARE_C_ZERO_OUTS(out_left, out_right, out_length);
 
   SonareError err =
-      validate_stereo_audio_params(fn, left_name, right_name, left, right, length, sample_rate);
+      validate_stereo_audio_params(left_name, right_name, left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_left);
   SONARE_C_REQUIRE_NONNULL(out_right);
@@ -515,8 +506,7 @@ SonareError sonare_normalize_stereo(const float* left, const float* right, size_
                                     float** out_right, size_t* out_length) {
   SONARE_C_API_ENTRY;
   return run_normalize_stereo(
-      "normalize_stereo", "left", "right", left, right, length, sample_rate, out_left, out_right,
-      out_length,
+      "left", "right", left, right, length, sample_rate, out_left, out_right, out_length,
       [target_db](const Audio& l, const Audio& r) { return normalize_stereo(l, r, target_db); });
 }
 
@@ -524,9 +514,8 @@ SonareError sonare_normalize_rms_stereo(const float* left, const float* right, s
                                         int sample_rate, float target_db, float** out_left,
                                         float** out_right, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return run_normalize_stereo("normalize_rms_stereo", "left", "right", left, right, length,
-                              sample_rate, out_left, out_right, out_length,
-                              [target_db](const Audio& l, const Audio& r) {
+  return run_normalize_stereo("left", "right", left, right, length, sample_rate, out_left,
+                              out_right, out_length, [target_db](const Audio& l, const Audio& r) {
                                 return normalize_rms_stereo(l, r, target_db, true);
                               });
 }
@@ -543,8 +532,7 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
                         const SonareTrimOptions* options, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("trim", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -670,8 +658,7 @@ SonareError sonare_remix(const float* samples, size_t length, int sample_rate, c
                          size_t interval_count, int align_zeros, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("remix", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -714,8 +701,7 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_component_count, out_component_length, out_w, out_w_length, out_h,
                      out_h_length);
-  if (const SonareError err =
-          validate_audio_params("decompose_stems", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -783,8 +769,7 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
     return err;
   }
   for (size_t c = 0; c < num_channels; ++c) {
-    SonareError err = validate_audio_params("decompose_stems_linked", "channels", channels[c],
-                                            length, sample_rate);
+    SonareError err = validate_audio_params("channels", channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
   }
 
@@ -850,8 +835,7 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
                                            int align_zeros, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
-  if (const SonareError err =
-          validate_audio_params("remix_aligned_intervals", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -885,8 +869,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("phase_vocoder", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -955,8 +938,7 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_TRY
-  if (const SonareError err =
-          validate_audio_params("spectral_edit", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }

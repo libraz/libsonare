@@ -122,8 +122,8 @@ SonareError validate_interleaved_lufs_input(const float* samples, size_t frames,
       err != SONARE_OK) {
     return err;
   }
-  return validate_audio_params("lufs", "samples", samples,
-                               frames * static_cast<size_t>(num_channels), sample_rate);
+  return validate_audio_params("samples", samples, frames * static_cast<size_t>(num_channels),
+                               sample_rate);
 }
 
 // SonareNormType carries the NormType ordinal itself.
@@ -535,7 +535,7 @@ SonareError sonare_lufs(const float* samples, size_t length, int sample_rate,
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(out);
-  return run_offline("lufs", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        metering::LufsResult result = metering::lufs(audio);
                        out->integrated_lufs = result.integrated_lufs;
@@ -554,7 +554,7 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sampl
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  return run_offline("momentary_lufs", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return copy_vector(metering::momentary_lufs(audio), out, out_length);
                      });
@@ -566,7 +566,7 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int samp
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  return run_offline("short_term_lufs", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return copy_vector(metering::short_term_lufs(audio), out, out_length);
                      });
@@ -650,7 +650,7 @@ SonareError sonare_ebur128_loudness_range_lu(const float* samples, size_t length
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_loudness_range_lu);
   SONARE_C_REQUIRE_NONNULL(out_loudness_range_lu);
-  return run_offline("ebur128_loudness_range_lu", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_loudness_range_lu = metering::ebur128_loudness_range_lu(audio);
                        return SONARE_OK;

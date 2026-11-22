@@ -279,8 +279,8 @@ SonareError refuse_null_when_count(const char* param, const char* count) noexcep
   }
 }
 
-SonareError validate_audio_params([[maybe_unused]] const char* fn, const char* name,
-                                  const float* samples, size_t length, int sample_rate) noexcept {
+SonareError validate_audio_params(const char* name, const float* samples, size_t length,
+                                  int sample_rate) noexcept {
   clear_last_error();
   // Delegate to the shared core policy so the C ABI and the WASM bindings (which
   // bypass this translation unit) enforce identical empty/range/finite rules.
@@ -292,9 +292,9 @@ SonareError validate_audio_params([[maybe_unused]] const char* fn, const char* n
   return SONARE_OK;
 }
 
-SonareError validate_audio_params_window([[maybe_unused]] const char* fn, const char* name,
-                                         const float* samples, size_t length, int sample_rate,
-                                         size_t scan_offset, size_t scan_count) noexcept {
+SonareError validate_audio_params_window(const char* name, const float* samples, size_t length,
+                                         int sample_rate, size_t scan_offset,
+                                         size_t scan_count) noexcept {
   clear_last_error();
   try {
     sonare::validate_offline_audio_window(name, samples, length, sample_rate, scan_offset,

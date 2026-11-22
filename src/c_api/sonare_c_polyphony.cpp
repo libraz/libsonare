@@ -240,8 +240,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (const SonareError err =
-          validate_audio_params("polyphonic_analyze", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }

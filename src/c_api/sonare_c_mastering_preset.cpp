@@ -79,14 +79,13 @@ int sonare_mastering_preset_from_name(const char* name) {
 
 namespace {
 
-SonareError master_mono(const char* entry, const char* preset, const float* samples, size_t length,
-                        int sample_rate, const char* overrides_json,
-                        SonareMasteringProgressCallback callback, void* user_data,
-                        SonareMasteringChainResult* out, SonareCancelCallback cancel_cb,
-                        void* cancel_user_data) {
+SonareError master_mono(const char* preset, const float* samples, size_t length, int sample_rate,
+                        const char* overrides_json, SonareMasteringProgressCallback callback,
+                        void* user_data, SonareMasteringChainResult* out,
+                        SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
-  SonareError err = validate_audio_params(entry, "samples", samples, length, sample_rate);
+  SonareError err = validate_audio_params("samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -97,15 +96,14 @@ SonareError master_mono(const char* entry, const char* preset, const float* samp
   SONARE_C_CATCH
 }
 
-SonareError master_stereo(const char* entry, const char* preset, const float* left,
-                          const float* right, size_t length, int sample_rate,
-                          const char* overrides_json, SonareMasteringProgressCallback callback,
-                          void* user_data, SonareMasteringChainStereoResult* out,
-                          SonareCancelCallback cancel_cb, void* cancel_user_data) {
+SonareError master_stereo(const char* preset, const float* left, const float* right, size_t length,
+                          int sample_rate, const char* overrides_json,
+                          SonareMasteringProgressCallback callback, void* user_data,
+                          SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb,
+                          void* cancel_user_data) {
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
-  SonareError err =
-      validate_stereo_audio_params(entry, "left", "right", left, right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -136,7 +134,7 @@ SonareError sonare_master_audio(const char* preset, const float* samples, size_t
       err != SONARE_OK) {
     return err;
   }
-  return master_mono("master_audio", preset, samples, length, sample_rate, overrides_json,
+  return master_mono(preset, samples, length, sample_rate, overrides_json,
                      resolved.progress_callback, resolved.progress_user_data, out,
                      resolved.cancel_callback, resolved.cancel_user_data);
 }
@@ -153,7 +151,7 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
       err != SONARE_OK) {
     return err;
   }
-  return master_stereo("master_audio_stereo", preset, left, right, length, sample_rate,
-                       overrides_json, resolved.progress_callback, resolved.progress_user_data, out,
+  return master_stereo(preset, left, right, length, sample_rate, overrides_json,
+                       resolved.progress_callback, resolved.progress_user_data, out,
                        resolved.cancel_callback, resolved.cancel_user_data);
 }

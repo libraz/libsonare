@@ -100,10 +100,9 @@ SonareError sonare_eq_match(SonareEq* eq, const float* source, size_t source_len
                             int reference_sample_rate, int max_bands) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
-  SonareError err = validate_audio_params("eq_match", "source", source, source_length, sample_rate);
+  SonareError err = validate_audio_params("source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params("eq_match", "reference", reference, reference_length,
-                              reference_sample_rate);
+  err = validate_audio_params("reference", reference, reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
   err = run_validation([&] {
     util::check::integer_within(max_bands, sonare_c_detail::kEqMatchMaxBandsDomain, "max_bands");

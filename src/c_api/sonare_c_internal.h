@@ -239,9 +239,8 @@ SonareError refuse_null_when_count(const char* param, const char* count) noexcep
 ///
 ///          @p name is the entry's parameter; the refusal is recorded as
 ///          "<name> <predicate>" with @p name as its subject, and the entry beside it.
-///          @p fn is no longer read: sonare_last_refusal_entry names the entry.
-SonareError validate_audio_params(const char* fn, const char* name, const float* samples,
-                                  size_t length, int sample_rate) noexcept;
+SonareError validate_audio_params(const char* name, const float* samples, size_t length,
+                                  int sample_rate) noexcept;
 
 /// @brief validate_audio_params for an entry point that reads one window of the buffer.
 /// @details Same policy, except that the non-finite scan covers only
@@ -249,8 +248,8 @@ SonareError validate_audio_params(const char* fn, const char* name, const float*
 ///          actually reads -- so its cost is the window's, not the buffer's. For a
 ///          per-frame entry point polled over a long buffer that is the difference
 ///          between O(window) and O(length) per call.
-SonareError validate_audio_params_window(const char* fn, const char* name, const float* samples,
-                                         size_t length, int sample_rate, size_t scan_offset,
+SonareError validate_audio_params_window(const char* name, const float* samples, size_t length,
+                                         int sample_rate, size_t scan_offset,
                                          size_t scan_count) noexcept;
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
@@ -395,6 +394,57 @@ inline float* copy_float_vector_padded(const std::vector<float>& values, size_t 
 ///        to per-parameter (void) casts.
 template <typename... T>
 inline void ignore_args(const T&...) noexcept {}
+
+/// @brief An optional subsystem an entry needs, named after its BUILD_* option.
+enum class Feature {
+  kAcousticSim,
+  kArrangement,
+  kAssist,
+  kGraph,
+  kMastering,
+  kMixing,
+  kMixingAssistant,
+  kPitchEditor,
+  kPlayback,
+  kVoiceChanger,
+};
+
+/// @brief The "<feature> support is not compiled in" message for @p feature.
+constexpr const char* not_compiled_in_message(Feature feature) noexcept {
+  switch (feature) {
+    case Feature::kAcousticSim:
+      return "acoustic simulation support is not compiled in";
+    case Feature::kArrangement:
+      return "arrangement support is not compiled in";
+    case Feature::kAssist:
+      return "composition assist support is not compiled in";
+    case Feature::kGraph:
+      return "graph support is not compiled in";
+    case Feature::kMastering:
+      return "mastering support is not compiled in";
+    case Feature::kMixing:
+      return "mixing support is not compiled in";
+    case Feature::kMixingAssistant:
+      return "mixing assistant support is not compiled in";
+    case Feature::kPitchEditor:
+      return "pitch editor support is not compiled in";
+    case Feature::kPlayback:
+      return "playback support is not compiled in";
+    case Feature::kVoiceChanger:
+      return "voice changer support is not compiled in";
+  }
+  return "support is not compiled in";
+}
+
+/// @brief The one refusal of an entry whose subsystem is compiled out: records
+///        @p feature's message and returns SONARE_ERROR_NOT_SUPPORTED.
+/// @details @p unused are the entry's parameters, swallowed in place of (void) casts.
+template <typename... T>
+[[nodiscard]] SonareError refuse_not_compiled_in(Feature feature, const T&... unused) noexcept {
+  ignore_args(unused...);
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
 
 /// @brief Allocates a NUL-terminated heap copy of @p value (caller frees via
 ///        sonare_free_string). Canonical owner of the C-string copy helper
@@ -571,7 +621,6 @@ namespace sonare_c_detail {
 ///          every offline effects wrapper shares, inside the entry guard. The
 ///          callable receives the wrapped Audio and returns an Audio whose samples
 ///          are copied into a fresh array the caller frees with sonare_free_floats.
-/// @param fn            Not read; sonare_last_refusal_entry names the entry.
 /// @param name          The entry's name for @p samples.
 /// @param samples       Caller-owned input buffer (validated for null / NaN /
 ///                      Inf / sample_rate by validate_audio_params).
@@ -582,11 +631,11 @@ namespace sonare_c_detail {
 /// @param out_length    Receives the output array length.
 /// @param process       Callable taking a const Audio& and returning an Audio.
 template <typename Fn>
-SonareError run_mono_offline(const char* fn, const char* name, const float* samples, size_t length,
-                             int sample_rate, float** out, size_t* out_length, Fn process) {
+SonareError run_mono_offline(const char* name, const float* samples, size_t length, int sample_rate,
+                             float** out, size_t* out_length, Fn process) {
   SONARE_C_TRY
   SONARE_C_ZERO_OUTS(out, out_length);
-  const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
+  const SonareError err = validate_audio_params(name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
@@ -620,10 +669,10 @@ SonareError run_prevalidated_offline(const float* samples, size_t length, int sa
 ///          still happen at the call site BEFORE invoking this (they early-return
 ///          without constructing an Audio). @p body must return SonareError.
 template <typename Fn>
-SonareError run_offline(const char* fn, const char* name, const float* samples, size_t length,
-                        int sample_rate, Fn body) {
+SonareError run_offline(const char* name, const float* samples, size_t length, int sample_rate,
+                        Fn body) {
   SONARE_C_TRY
-  const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
+  const SonareError err = validate_audio_params(name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   return body(audio);

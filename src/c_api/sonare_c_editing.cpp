@@ -90,7 +90,7 @@ SonareError sonare_metering_peak_db(const float* samples, size_t length, int sam
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_db);
   SONARE_C_REQUIRE_NONNULL(out_db);
-  return run_offline("metering_peak_db", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::peak_db(audio);
                        return SONARE_OK;
@@ -102,7 +102,7 @@ SonareError sonare_metering_rms_db(const float* samples, size_t length, int samp
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_db);
   SONARE_C_REQUIRE_NONNULL(out_db);
-  return run_offline("metering_rms_db", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::rms_db(audio);
                        return SONARE_OK;
@@ -133,13 +133,12 @@ SonareError sonare_metering_silence_ratio(const float* samples, size_t length, i
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_ratio);
-  return run_offline("metering_silence_ratio", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       *out_ratio = metering::silence_ratio(audio, threshold_db,
-                                                            static_cast<int>(frame_length),
-                                                            static_cast<int>(hop_length));
-                       return SONARE_OK;
-                     });
+  return run_offline(
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        *out_ratio = metering::silence_ratio(audio, threshold_db, static_cast<int>(frame_length),
+                                             static_cast<int>(hop_length));
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
@@ -147,7 +146,7 @@ SonareError sonare_metering_crest_factor_db(const float* samples, size_t length,
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_db);
   SONARE_C_REQUIRE_NONNULL(out_db);
-  return run_offline("metering_crest_factor_db", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::crest_factor_db(audio);
                        return SONARE_OK;
@@ -158,8 +157,7 @@ SonareError sonare_metering_crest_factor_db_stereo(const float* left, const floa
                                                    size_t length, int sample_rate, float* out_db) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_db);
-  SonareError err = validate_stereo_audio_params("metering_crest_factor_db_stereo", "left", "right",
-                                                 left, right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_db);
 
@@ -179,7 +177,7 @@ SonareError sonare_metering_dc_offset(const float* samples, size_t length, int s
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_value);
   SONARE_C_REQUIRE_NONNULL(out_value);
-  return run_offline("metering_dc_offset", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_value = metering::dc_offset(audio);
                        return SONARE_OK;
@@ -193,7 +191,7 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
   SONARE_C_TRY
   const int factor = true_peak_factor(oversample_factor);
   SONARE_C_REQUIRE_NONNULL(out_db);
-  return run_offline("metering_true_peak_dbtp", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::true_peak_db(audio, factor);
                        return SONARE_OK;
@@ -208,8 +206,7 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(out);
   return run_offline(
-      "metering_detect_clipping", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         return fill_clipping_result(
             metering::detect_clipping(audio, metering::clipping_threshold_from_db(threshold_db),
                                       min_region_samples),
@@ -237,7 +234,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
   const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
       window_sec, hop_sec, low_percentile, high_percentile);
   SONARE_C_REQUIRE_NONNULL(out);
-  return run_offline("metering_dynamic_range", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return fill_dynamic_range_result(metering::dynamic_range(audio, cfg), out);
                      });
@@ -252,17 +249,16 @@ void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result) {
 
 namespace {
 
-SonareError validate_stereo_pair(const char* fn, const char* left_name, const char* right_name,
-                                 const float* left, const float* right, size_t length,
-                                 int sample_rate) {
+SonareError validate_stereo_pair(const char* left_name, const char* right_name, const float* left,
+                                 const float* right, size_t length, int sample_rate) {
   if (!left) return refuse_null(left_name);
   if (!right) return refuse_null(right_name);
   // Validate both channels symmetrically: validate_audio_params checks the
   // pointer, length bounds, sample rate, and NaN/Inf samples. Checking only the
   // left channel would let bad right-channel data reach the metering callers.
-  SonareError err = validate_audio_params(fn, left_name, left, length, sample_rate);
+  SonareError err = validate_audio_params(left_name, left, length, sample_rate);
   if (err != SONARE_OK) return err;
-  return validate_audio_params(fn, right_name, right, length, sample_rate);
+  return validate_audio_params(right_name, right, length, sample_rate);
 }
 
 }  // namespace
@@ -271,8 +267,7 @@ SonareError sonare_metering_stereo_correlation(const float* left, const float* r
                                                int sample_rate, float* out_value) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_value);
-  SonareError err = validate_stereo_pair("metering_stereo_correlation", "left", "right", left,
-                                         right, length, sample_rate);
+  SonareError err = validate_stereo_pair("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_value);
   SONARE_C_TRY
@@ -285,8 +280,7 @@ SonareError sonare_metering_stereo_width(const float* left, const float* right, 
                                          int sample_rate, float* out_value) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_value);
-  SonareError err = validate_stereo_pair("metering_stereo_width", "left", "right", left, right,
-                                         length, sample_rate);
+  SonareError err = validate_stereo_pair("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_value);
   SONARE_C_TRY
@@ -318,8 +312,7 @@ SonareError sonare_metering_vectorscope(const float* left, const float* right, s
                                         SonareVectorscopeResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_stereo_pair("metering_vectorscope", "left", "right", left, right,
-                                         length, sample_rate);
+  SonareError err = validate_stereo_pair("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -362,8 +355,7 @@ SonareError sonare_metering_phase_scope(const float* left, const float* right, s
                                         SonarePhaseScopeResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_stereo_pair("metering_phase_scope", "left", "right", left, right,
-                                         length, sample_rate);
+  SonareError err = validate_stereo_pair("left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -433,7 +425,7 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  return run_offline("metering_spectrum", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return fill_spectrum_result(metering::spectrum(audio, cfg), out);
                      });
@@ -458,8 +450,7 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
   // size_t when frame_offset is caller-supplied garbage.
   const size_t start = std::min(frame_offset, length);
   const size_t count = std::min(static_cast<size_t>(cfg.n_fft), length - start);
-  err = validate_audio_params_window("metering_spectrum_frame", "samples", samples, length,
-                                     sample_rate, start, count);
+  err = validate_audio_params_window("samples", samples, length, sample_rate, start, count);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 

@@ -125,14 +125,12 @@ inline void zero_chain_metrics(ChainResultT* out) {
 }
 
 // Validate both channels of a stereo pair, left first.
-inline SonareError validate_stereo_audio_params(const char* fn, const char* left_name,
-                                                const char* right_name, const float* left,
-                                                const float* right, size_t length,
-                                                int sample_rate) {
-  SonareError err =
-      sonare_c_detail::validate_audio_params(fn, left_name, left, length, sample_rate);
+inline SonareError validate_stereo_audio_params(const char* left_name, const char* right_name,
+                                                const float* left, const float* right,
+                                                size_t length, int sample_rate) {
+  SonareError err = sonare_c_detail::validate_audio_params(left_name, left, length, sample_rate);
   if (err != SONARE_OK) return err;
-  return sonare_c_detail::validate_audio_params(fn, right_name, right, length, sample_rate);
+  return sonare_c_detail::validate_audio_params(right_name, right, length, sample_rate);
 }
 
 // Copy a stereo pair into two freshly allocated arrays and release them to the

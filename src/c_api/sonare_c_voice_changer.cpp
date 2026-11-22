@@ -178,8 +178,7 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (const SonareError err =
-          validate_audio_params("voice_change", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -227,8 +226,7 @@ SonareError sonare_realtime_voice_changer_render(const float* samples, size_t le
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SonareError err = validate_audio_params("realtime_voice_changer_render", "samples", samples,
-                                          length, sample_rate);
+  SonareError err = validate_audio_params("samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   err = run_validation([&] {
     util::check::integer_within(channels, kVoiceChangerChannelsDomain, "channels");

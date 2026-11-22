@@ -97,8 +97,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
-      "analyze_bpm", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         BpmAnalyzer analyzer(audio, config);
         StagedOutput<SonareBpmAnalysisResult, &sonare_free_bpm_analysis_result> staged;
         staged->bpm = analyzer.bpm();
@@ -169,7 +168,7 @@ SonareError sonare_analyze_impulse_response(const float* samples, size_t length,
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_impulse_response", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
                        return SONARE_OK;
@@ -202,7 +201,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("detect_acoustic", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        fill_acoustic_result(sonare::detect_acoustic(audio, config), out);
                        return SONARE_OK;
@@ -230,7 +229,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_rhythm", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        RhythmAnalyzer analyzer(audio, make_config());
                        RhythmFeatures features = analyzer.features();
@@ -267,7 +266,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_dynamics", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        DynamicsAnalyzer analyzer(audio, config);
                        const Dynamics& dynamics = analyzer.dynamics();
@@ -311,8 +310,7 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
-      "analyze_timbre", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         TimbreAnalyzer analyzer(audio, config);
         const Timbre& timbre = analyzer.timbre();
         StagedOutput<SonareTimbreResult, &sonare_free_timbre_result> staged;
@@ -396,7 +394,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("detect_chords", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        const ChordConfig config = chord_config_from_options(resolved);
 
@@ -485,7 +483,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   SONARE_C_REQUIRE_NONNULL(roman);
   SONARE_C_REQUIRE_NONNULL(functions);
 
-  return run_offline("chord_functional_analysis", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        PitchClass label_root = PitchClass::C;
                        Mode label_mode = Mode::Major;
@@ -609,7 +607,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_sections", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        SectionAnalyzer analyzer(audio, config);
                        const std::vector<Section>& sections = analyzer.sections();
@@ -679,7 +677,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("detect_boundaries", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        BoundaryDetector detector(audio, config);
                        const std::vector<Boundary>& boundaries = detector.boundaries();
@@ -756,7 +754,7 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("analyze_melody", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        MelodyAnalyzer analyzer(audio, config);
                        const MelodyContour& contour = analyzer.contour();

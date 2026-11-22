@@ -446,7 +446,7 @@ SonareError fill_note_objects_result(const std::vector<editing::note_model::Note
 /// same arguments, rebuild the same note set, and return the same result shape.
 /// @p out must already be non-null and cleared.
 template <typename Fn>
-SonareError run_note_set_edit(const char* fn, const char* name, const float* samples, size_t length,
+SonareError run_note_set_edit(const char* name, const float* samples, size_t length,
                               int sample_rate, const float* f0_hz, const float* voiced_prob,
                               const int32_t* voiced, size_t n_frames, float frame_rate,
                               const SonareNoteExtractorConfig* config,
@@ -472,25 +472,24 @@ SonareError run_note_set_edit(const char* fn, const char* name, const float* sam
     if (edit_error != SONARE_OK) return edit_error;
   }
 
-  return run_offline(
-      fn, name, samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        const editing::pitch_editor::F0Track track =
-            make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
-                       extractor_config.voiced_threshold);
-        // SonareNoteObject carries no curves, so every note is re-derived from the
-        // audio and the track the way extraction derived it; make_note validates the
-        // frame span, which is what these two cut on.
-        std::vector<editing::note_model::NoteObject> core_notes;
-        core_notes.reserve(note_count);
-        for (size_t i = 0; i < note_count; ++i) {
-          core_notes.push_back(editing::note_model::make_note(
-              audio, track, notes[i].frame_start, notes[i].frame_end, extractor_config));
-          core_notes.back().edit = std::move(edits[i]);
-        }
-        editing::note_model::repair_rederived_note_set_bounds(audio, track, core_notes,
-                                                              extractor_config);
-        return fill_note_objects_result(apply(audio, track, core_notes, extractor_config), out);
-      });
+  return run_offline(name, samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    const editing::pitch_editor::F0Track track =
+        make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
+                   extractor_config.voiced_threshold);
+    // SonareNoteObject carries no curves, so every note is re-derived from the
+    // audio and the track the way extraction derived it; make_note validates the
+    // frame span, which is what these two cut on.
+    std::vector<editing::note_model::NoteObject> core_notes;
+    core_notes.reserve(note_count);
+    for (size_t i = 0; i < note_count; ++i) {
+      core_notes.push_back(editing::note_model::make_note(audio, track, notes[i].frame_start,
+                                                          notes[i].frame_end, extractor_config));
+      core_notes.back().edit = std::move(edits[i]);
+    }
+    editing::note_model::repair_rederived_note_set_bounds(audio, track, core_notes,
+                                                          extractor_config);
+    return fill_note_objects_result(apply(audio, track, core_notes, extractor_config), out);
+  });
 }
 
 // The C ordinals are the core enumeration's, so the two cannot drift apart
@@ -556,7 +555,7 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
   *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
-  return run_offline("pitch_correct_to_midi", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        editing::pitch_editor::PitchCorrector corrector;
                        Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
@@ -596,15 +595,14 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
     return err;
   }
 
-  return run_offline("pitch_correct_to_midi_timevarying", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       editing::pitch_editor::PitchCorrector corrector;
-                       const editing::pitch_editor::F0Track track = build_pitch_track(
-                           f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
-                       Audio result =
-                           corrector.correct_to_midi_timevarying(audio, track, target_midi);
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_offline(
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        editing::pitch_editor::PitchCorrector corrector;
+        const editing::pitch_editor::F0Track track =
+            build_pitch_track(f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
+        Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
+        return copy_audio_result(result, out, out_length);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
                               hop_length, target_midi, out, out_length);
@@ -685,17 +683,16 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     return err;
   }
 
-  return run_offline("pitch_correct_timevarying", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       editing::pitch_editor::PitchCorrector corrector(core_config);
-                       const editing::pitch_editor::F0Track track = build_pitch_track(
-                           f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
-                       Audio result =
-                           scale_mode
-                               ? corrector.correct_to_scale_timevarying(audio, track)
-                               : corrector.correct_to_midi_timevarying(audio, track, target_midi);
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_offline(
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        editing::pitch_editor::PitchCorrector corrector(core_config);
+        const editing::pitch_editor::F0Track track =
+            build_pitch_track(f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
+        Audio result = scale_mode
+                           ? corrector.correct_to_scale_timevarying(audio, track)
+                           : corrector.correct_to_midi_timevarying(audio, track, target_midi);
+        return copy_audio_result(result, out, out_length);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
                               hop_length, config, out, out_length);
@@ -735,7 +732,7 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
     }
   }
 
-  return run_offline("auto_tune", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        const editing::pitch_editor::AutoTuneResult result =
                            editing::pitch_editor::auto_tune(audio, named, core_config);
@@ -755,8 +752,7 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
   SONARE_C_API_ENTRY;
   // Validated before the gate, so the stub below refuses and zeroes the same way.
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("note_stretch", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -771,7 +767,7 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
   SONARE_C_REQUIRE_NONNULL(out_length);
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
-  return run_offline("note_stretch", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        editing::pitch_editor::NoteRegion region;
                        region.onset_sample = static_cast<int>(onset_sample);
@@ -805,7 +801,7 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
   const SonareError config_error = resolve_extractor_config(config, extractor_config);
   if (config_error != SONARE_OK) return config_error;
 
-  return run_offline("extract_notes", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        const editing::pitch_editor::F0Track track =
                            make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
@@ -862,8 +858,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   if (config_error != SONARE_OK) return config_error;
 
   return run_offline(
-      "render_notes", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         std::vector<editing::note_model::NoteObject> core_notes(note_count);
         for (size_t i = 0; i < note_count; ++i) {
           // The metrics and the amplitude offset are not carried: the renderer never
@@ -1004,9 +999,9 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
     });
   }
 
-  return run_note_set_edit("split_note", "samples", samples, length, sample_rate, f0_hz,
-                           voiced_prob, voiced, n_frames, frame_rate, config, notes, note_count,
-                           envelopes, envelope_count, out,
+  return run_note_set_edit("samples", samples, length, sample_rate, f0_hz, voiced_prob, voiced,
+                           n_frames, frame_rate, config, notes, note_count, envelopes,
+                           envelope_count, out,
                            [&](const Audio& audio, const editing::pitch_editor::F0Track& track,
                                const std::vector<editing::note_model::NoteObject>& core_notes,
                                const editing::note_model::NoteExtractorConfig& extractor_config) {
@@ -1043,9 +1038,9 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
         [&] { util::check::refuse_relation({"last", "note_count"}, "{0} must be less than {1}"); });
   }
 
-  return run_note_set_edit("merge_notes", "samples", samples, length, sample_rate, f0_hz,
-                           voiced_prob, voiced, n_frames, frame_rate, config, notes, note_count,
-                           envelopes, envelope_count, out,
+  return run_note_set_edit("samples", samples, length, sample_rate, f0_hz, voiced_prob, voiced,
+                           n_frames, frame_rate, config, notes, note_count, envelopes,
+                           envelope_count, out,
                            [&](const Audio& audio, const editing::pitch_editor::F0Track& track,
                                const std::vector<editing::note_model::NoteObject>& core_notes,
                                const editing::note_model::NoteExtractorConfig& extractor_config) {
@@ -1278,7 +1273,7 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
     extractor_config.min_percussive_ratio = config->min_percussive_ratio;
   }
 
-  return run_offline("extract_percussive_events", "samples", samples, length, sample_rate,
+  return run_offline("samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return fill_percussive_events_result(
                            with_c_names(kPercussiveEventNames,
@@ -1342,14 +1337,13 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
     core_events[i].edit.muted = events[i].edit.muted != 0;
   }
 
-  return run_offline("render_percussive_events", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       Audio result = with_c_names(kPercussiveRenderNames, [&] {
-                         return editing::event_model::render_percussive_events(audio, core_events,
-                                                                               render_config);
-                       });
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_offline(
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        Audio result = with_c_names(kPercussiveRenderNames, [&] {
+          return editing::event_model::render_percussive_events(audio, core_events, render_config);
+        });
+        return copy_audio_result(result, out, out_length);
+      });
   SONARE_C_CATCH
 }
 
@@ -1359,8 +1353,7 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
   SONARE_C_API_ENTRY;
   // Validated before the gate, so the stub below refuses and zeroes the same way.
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (const SonareError err =
-          validate_audio_params("note_move", "samples", samples, length, sample_rate);
+  if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
@@ -1380,7 +1373,7 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(
-      "note_move", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         editing::pitch_editor::NoteRegion region;
         region.onset_sample = static_cast<int>(onset_sample);
         region.offset_sample = static_cast<int>(offset_sample);
