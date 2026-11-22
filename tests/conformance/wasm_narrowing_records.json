@@ -1,8 +1,8 @@
 {
   "floor": {
-    "files": 6,
+    "files": 1,
     "containers": 411,
-    "narrowings": 10,
+    "narrowings": 1,
     "readers": 29
   },
   "shapes": [
@@ -68,7 +68,7 @@
           {
             "file": "bindings/wasm/dist/sonare.js",
             "built": true,
-            "contains": "if(typeof value==\"number\"){value=BigInt(value)}",
+            "contains": "if(typeof value===\"number\")value=BigInt(value)",
             "note": "The shipped embind glue, where the 64-bit toWireType lives. It is the build's output and no committed file carries it, so the citation is marked built: an absent dist is not a failure, a dist whose glue no longer reads this way is. The other half of the claim -- that this population is the 64-bit one at all -- is derived from the declared types rather than cited."
           }
         ],

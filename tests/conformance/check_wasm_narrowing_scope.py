@@ -108,6 +108,10 @@ therefore rests on ``registrations`` and ``declarations``, which are two orders
 of magnitude larger and are untouched by any conversion, and on the injection
 ablation -- one added embind function taking one narrow integer parameter is
 reported as ungraded no matter how small the graded population has become.
+The inline ``.as<int>`` population went the same way: caller-supplied array
+lengths now read through ``wasmArrayLikeLength``, so its ``files`` and
+``narrowings`` floors guard only against an empty scan, and ``containers`` and
+``readers`` carry the evidence.
 
 The positional population is counted twice on the same principle, by the two
 directions of one relation:
@@ -476,9 +480,7 @@ class Scan:
 
     def _files(self) -> list[Path]:
         return sorted(
-            p
-            for p in self.tree.rglob("*")
-            if p.suffix in _SOURCE_SUFFIXES and p.is_file()
+            p for p in self.tree.rglob("*") if p.suffix in _SOURCE_SUFFIXES and p.is_file()
         )
 
     def _run(self) -> None:
@@ -522,9 +524,7 @@ class Scan:
                     for i in range(max(lo, 0), max(hi, 0)):
                         if body[i] != "\n":
                             body[i] = " "
-                self.declared_counts[id(container)] = len(
-                    _CAST.findall("".join(body))
-                )
+                self.declared_counts[id(container)] = len(_CAST.findall("".join(body)))
 
             # Scan B: each cast by absolute offset, then innermost container.
             for match in _CAST.finditer(code):
@@ -576,8 +576,21 @@ _LOOKBACK = 200
 _DECL_NAME = re.compile(r"([A-Za-z_]\w*(?:\s*::\s*[A-Za-z_]\w*)*)\s*$")
 _NOT_A_RETURN_TYPE = re.compile(r"\b(?:return|new|delete|throw|case|else|co_return)$")
 _STATEMENT_HEADS = frozenset(
-    {"if", "for", "while", "switch", "return", "catch", "sizeof", "else", "do",
-     "case", "new", "delete", "throw"}
+    {
+        "if",
+        "for",
+        "while",
+        "switch",
+        "return",
+        "catch",
+        "sizeof",
+        "else",
+        "do",
+        "case",
+        "new",
+        "delete",
+        "throw",
+    }
 )
 
 
@@ -665,8 +678,9 @@ def parameter_name(parameter: str) -> str:
 class Declaration:
     """One function or method declaration, wherever it was written."""
 
-    def __init__(self, path: Path, line: int, cls: str | None, name: str,
-                 params: list[str]) -> None:
+    def __init__(
+        self, path: Path, line: int, cls: str | None, name: str, params: list[str]
+    ) -> None:
         self.path, self.line, self.cls, self.name = path, line, cls, name
         self.params = params
         self.types = tuple(parameter_type(p) for p in params)
@@ -723,7 +737,9 @@ def class_spans(code: str, braces: dict[int, int] | None = None) -> list[tuple[s
     if braces is None:
         braces = bracket_map(code, "{", "}")
     spans = []
-    for match in re.finditer(r"\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^{;]*)?\{", code):
+    for match in re.finditer(
+        r"\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^{;]*)?\{", code
+    ):
         brace = code.index("{", match.end() - 1)
         end = braces.get(brace, -1)
         if end > 0:
@@ -751,12 +767,12 @@ def declarations_of(path: Path, readable: str, code: str) -> list[Declaration]:
         if stop >= len(code) or code[stop] not in "{;:":
             continue
         name_at = window + match.start()
-        before = readable[max(0, name_at - _LOOKBACK):name_at].rstrip()
+        before = readable[max(0, name_at - _LOOKBACK) : name_at].rstrip()
         # A declaration has a return type; a call has a statement head or an
         # operator where the return type would be.
         if not re.search(r"[\w>\]&*]$", before) or _NOT_A_RETURN_TYPE.search(before):
             continue
-        params = split_top_level(readable[open_paren + 1:close - 1])
+        params = split_top_level(readable[open_paren + 1 : close - 1])
         if params and not all(declarator_like(p) for p in params):
             continue
         cls = None
@@ -767,9 +783,7 @@ def declarations_of(path: Path, readable: str, code: str) -> list[Declaration]:
             enclosing = [c for c, begin, end in spans if begin <= open_paren < end]
             if enclosing:
                 cls = enclosing[-1]
-        found.append(
-            Declaration(path, readable.count("\n", 0, name_at) + 1, cls, name, params)
-        )
+        found.append(Declaration(path, readable.count("\n", 0, name_at) + 1, cls, name, params))
     return found
 
 
@@ -940,9 +954,7 @@ class Records:
     def pending_count(self) -> int:
         """Records that enumerate a site without grading what it does."""
         return sum(
-            1
-            for entry in self.narrowings + self.readers
-            if entry.get("triage") == "pending"
+            1 for entry in self.narrowings + self.readers if entry.get("triage") == "pending"
         )
 
     def unused(self) -> list[str]:
@@ -1266,9 +1278,7 @@ class FloatRecords:
 
     def unused(self) -> list[str]:
         return sorted(
-            self.label(entry)
-            for entry in self.passthroughs
-            if self.label(entry) not in self.used
+            self.label(entry) for entry in self.passthroughs if self.label(entry) not in self.used
         )
 
     def miscounted(self, parameters: list[Positional]) -> list[str]:
@@ -1362,8 +1372,10 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if missing_reasons:
         failures.append(
             (
-                ("These passthroughs carry no reason, so they allow a saturated "
-                "value through without saying on what grounds"),
+                (
+                    "These passthroughs carry no reason, so they allow a saturated "
+                    "value through without saying on what grounds"
+                ),
                 [f"  {name}" for name in missing_reasons],
             )
         )
@@ -1372,10 +1384,12 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if unsupported:
         failures.append(
             (
-                ("These passthroughs claim a contract that cannot be read where "
-                "they say it is. Letting a value through unrefused is the "
-                "expensive verdict on purpose: it points at the text, and the "
-                "text has to be there"),
+                (
+                    "These passthroughs claim a contract that cannot be read where "
+                    "they say it is. Letting a value through unrefused is the "
+                    "expensive verdict on purpose: it points at the text, and the "
+                    "text has to be there"
+                ),
                 [f"  {line}" for line in unsupported],
             )
         )
@@ -1384,10 +1398,12 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if counts:
         failures.append(
             (
-                ("These files no longer hold the float parameters the "
-                "distribution records. The count moving either way is the "
-                "report: a parameter landing needs its triage in this change, "
-                "and one leaving needs its record deleted in the same one"),
+                (
+                    "These files no longer hold the float parameters the "
+                    "distribution records. The count moving either way is the "
+                    "report: a parameter landing needs its triage in this change, "
+                    "and one leaving needs its record deleted in the same one"
+                ),
                 [f"  {line}" for line in counts],
             )
         )
@@ -1400,10 +1416,12 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if counted_floats:
         failures.append(
             (
-                ("These float parameters are named like a count or an index, "
-                "which is the one float shape the wrapping question reaches; the "
-                "float exclusion from the positional population was written on "
-                "there being none"),
+                (
+                    "These float parameters are named like a count or an index, "
+                    "which is the one float shape the wrapping question reaches; the "
+                    "float exclusion from the positional population was written on "
+                    "there being none"
+                ),
                 [f"  {p.display}" for p in sorted(counted_floats, key=lambda p: p.display)],
             )
         )
@@ -1412,9 +1430,11 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if stale:
         failures.append(
             (
-                ("These passthroughs matched no parameter. A record that allows "
-                "nothing still asserts a contract about a spelling, so the next "
-                "parameter to take it inherits permission unexamined"),
+                (
+                    "These passthroughs matched no parameter. A record that allows "
+                    "nothing still asserts a contract about a spelling, so the next "
+                    "parameter to take it inherits permission unexamined"
+                ),
                 [f"  {name}" for name in stale],
             )
         )
@@ -1451,8 +1471,10 @@ def evaluate_positional(
     if ungraded:
         failures.append(
             (
-                ("These positional records carry no verdict, so they suppress a "
-                "site on no stated mechanism and on no stated defect"),
+                (
+                    "These positional records carry no verdict, so they suppress a "
+                    "site on no stated mechanism and on no stated defect"
+                ),
                 [f"  {line}" for line in ungraded],
             )
         )
@@ -1461,8 +1483,10 @@ def evaluate_positional(
     if missing_reasons:
         failures.append(
             (
-                ("These positional records carry no reason, so they suppress a "
-                "site without saying on what grounds"),
+                (
+                    "These positional records carry no reason, so they suppress a "
+                    "site without saying on what grounds"
+                ),
                 [f"  {name}" for name in missing_reasons],
             )
         )
@@ -1471,9 +1495,11 @@ def evaluate_positional(
     if unsupported_open:
         failures.append(
             (
-                ("These records are open without saying what a wrapped value "
-                "selects, which is the whole content of the claim -- an open "
-                "record that names no consequence is a pending one renamed"),
+                (
+                    "These records are open without saying what a wrapped value "
+                    "selects, which is the whole content of the claim -- an open "
+                    "record that names no consequence is a pending one renamed"
+                ),
                 [f"  {name}" for name in unsupported_open],
             )
         )
@@ -1482,9 +1508,11 @@ def evaluate_positional(
     if unsupported_benign:
         failures.append(
             (
-                ("These records claim a mechanism that cannot be read where they "
-                "say it is. Benign is the expensive verdict on purpose: it points "
-                "at the text, and the text has to be there"),
+                (
+                    "These records claim a mechanism that cannot be read where they "
+                    "say it is. Benign is the expensive verdict on purpose: it points "
+                    "at the text, and the text has to be there"
+                ),
                 [f"  {line}" for line in unsupported_benign],
             )
         )
@@ -1498,8 +1526,10 @@ def evaluate_positional(
     if scan.unresolved:
         failures.append(
             (
-                ("These registrations bind a symbol no declaration in the tree "
-                "matches, so nothing can say what their parameters are"),
+                (
+                    "These registrations bind a symbol no declaration in the tree "
+                    "matches, so nothing can say what their parameters are"
+                ),
                 [f"  {r.display}  {r.js_name} -> {r.symbol}" for r in scan.unresolved],
             )
         )
@@ -1507,8 +1537,10 @@ def evaluate_positional(
     if scan.conflicting:
         failures.append(
             (
-                ("These registrations resolve to declarations that disagree on a "
-                "signature, so the parameter list read here is one of several"),
+                (
+                    "These registrations resolve to declarations that disagree on a "
+                    "signature, so the parameter list read here is one of several"
+                ),
                 [
                     f"  {r.display}  {r.js_name} -> "
                     + " | ".join(sorted({d.signature for d in candidates}))
@@ -1521,8 +1553,10 @@ def evaluate_positional(
     if disagreements:
         failures.append(
             (
-                ("The two routes disagree on these parameters, so a registration "
-                "resolved to a declaration the other route did not reach"),
+                (
+                    "The two routes disagree on these parameters, so a registration "
+                    "resolved to a declaration the other route did not reach"
+                ),
                 [f"  {line}" for line in disagreements],
             )
         )
@@ -1531,9 +1565,11 @@ def evaluate_positional(
     if unrecorded:
         failures.append(
             (
-                ("These positional parameters are declared as a narrow integer and "
-                "are not recorded, so embind converts them by a rule -- wrapping "
-                "modulo 2^32 -- that nothing here has graded"),
+                (
+                    "These positional parameters are declared as a narrow integer and "
+                    "are not recorded, so embind converts them by a rule -- wrapping "
+                    "modulo 2^32 -- that nothing here has graded"
+                ),
                 [f"  {p.display}" for p in sorted(unrecorded, key=lambda p: p.display)],
             )
         )
@@ -1542,9 +1578,11 @@ def evaluate_positional(
     if counts:
         failures.append(
             (
-                ("These shapes no longer cover the population they record. A shape "
-                "is a pattern AND a count, because a pattern alone absorbs the "
-                "next parameter to take a covered name"),
+                (
+                    "These shapes no longer cover the population they record. A shape "
+                    "is a pattern AND a count, because a pattern alone absorbs the "
+                    "next parameter to take a covered name"
+                ),
                 [f"  {line}" for line in counts],
             )
         )
@@ -1552,16 +1590,16 @@ def evaluate_positional(
     unrecorded_constructors = [
         f"  {_display(path)}:{line}  constructor<{arity}> narrow at {indices}"
         for path, line, arity, indices, types in scan.constructor_parameters()
-        if not records.covers_constructor(
-            str(path.relative_to(scan.tree)), arity, indices, types
-        )
+        if not records.covers_constructor(str(path.relative_to(scan.tree)), arity, indices, types)
     ]
     if unrecorded_constructors:
         failures.append(
             (
-                ("These embind constructors take a narrow integer positionally and "
-                "the record does not match. They name their types in place rather "
-                "than pointing at a declaration, so the arity is the only key"),
+                (
+                    "These embind constructors take a narrow integer positionally and "
+                    "the record does not match. They name their types in place rather "
+                    "than pointing at a declaration, so the arity is the only key"
+                ),
                 unrecorded_constructors,
             )
         )
@@ -1571,9 +1609,11 @@ def evaluate_positional(
     if misdeclared:
         failures.append(
             (
-                ("These records state a conversion rule their parameters' types do "
-                "not have. embind picks its glue by the C++ type, so the rule is "
-                "derived here rather than believed"),
+                (
+                    "These records state a conversion rule their parameters' types do "
+                    "not have. embind picks its glue by the C++ type, so the rule is "
+                    "derived here rather than believed"
+                ),
                 [f"  {line}" for line in misdeclared],
             )
         )
@@ -1582,9 +1622,11 @@ def evaluate_positional(
     if stale:
         failures.append(
             (
-                ("These positional records matched nothing. A record that "
-                "suppresses nothing still asserts a reviewed decision about a "
-                "spelling, so the next parameter to take it inherits the verdict"),
+                (
+                    "These positional records matched nothing. A record that "
+                    "suppresses nothing still asserts a reviewed decision about a "
+                    "spelling, so the next parameter to take it inherits the verdict"
+                ),
                 [f"  {name}" for name in stale],
             )
         )
@@ -1612,8 +1654,10 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if ungraded:
         failures.append(
             (
-                ("These records enumerate a site without grading what it does, so "
-                "they suppress it on no stated mechanism"),
+                (
+                    "These records enumerate a site without grading what it does, so "
+                    "they suppress it on no stated mechanism"
+                ),
                 sorted(ungraded),
             )
         )
@@ -1626,8 +1670,10 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if orphans:
         failures.append(
             (
-                ("These narrowings sit in no val-taking body, so the declaration "
-                "pattern is too narrow to see the function they are in"),
+                (
+                    "These narrowings sit in no val-taking body, so the declaration "
+                    "pattern is too narrow to see the function they are in"
+                ),
                 [f"  {site.display}  {site.receiver}.as<{site.type}>()" for site in orphans],
             )
         )
@@ -1636,8 +1682,10 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if disagreements:
         failures.append(
             (
-                ("The two scans disagree on these bodies, so a body span was "
-                "mis-measured and one of the counts is wrong"),
+                (
+                    "The two scans disagree on these bodies, so a body span was "
+                    "mis-measured and one of the counts is wrong"
+                ),
                 [f"  {line}" for line in disagreements],
             )
         )
@@ -1651,9 +1699,11 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if local_readers:
         failures.append(
             (
-                ("These file-local readers convert a JS value outside the shared "
-                "reader family, so a change to the conversion contract does not "
-                "reach their call sites"),
+                (
+                    "These file-local readers convert a JS value outside the shared "
+                    "reader family, so a change to the conversion contract does not "
+                    "reach their call sites"
+                ),
                 [
                     f"  {_display(c.path)}  {c.returns} {c.name}(val)"
                     for c in sorted(local_readers, key=lambda c: (str(c.path), c.name))
@@ -1665,12 +1715,11 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if unrecorded:
         failures.append(
             (
-                ("These narrowings are neither performed by the shared reader nor "
-                "recorded with the mechanism that makes them harmless"),
-                [
-                    f"  {site.display}  {site.receiver}.as<{site.type}>()"
-                    for site in unrecorded
-                ],
+                (
+                    "These narrowings are neither performed by the shared reader nor "
+                    "recorded with the mechanism that makes them harmless"
+                ),
+                [f"  {site.display}  {site.receiver}.as<{site.type}>()" for site in unrecorded],
             )
         )
 
@@ -1678,9 +1727,11 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if stale:
         failures.append(
             (
-                ("These records matched nothing. A record that suppresses nothing "
-                "still asserts a reviewed decision about a spelling, so the next "
-                "narrowing to take it inherits the blessing unexamined"),
+                (
+                    "These records matched nothing. A record that suppresses nothing "
+                    "still asserts a reviewed decision about a spelling, so the next "
+                    "narrowing to take it inherits the blessing unexamined"
+                ),
                 [f"  {name}" for name in stale],
             )
         )
@@ -1701,8 +1752,7 @@ def main() -> int:
     parser.add_argument(
         "--no-qualified-val",
         action="store_true",
-        help="stop matching an `emscripten::val` parameter, to show what the "
-        "orphan check catches",
+        help="stop matching an `emscripten::val` parameter, to show what the orphan check catches",
     )
     parser.add_argument(
         "--short-name-only",

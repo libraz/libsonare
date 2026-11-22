@@ -25,9 +25,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER_PATH = ROOT / "tests" / "conformance" / "check_wasm_narrowing_scope.py"
-SPEC = importlib.util.spec_from_file_location(
-    "libsonare_wasm_narrowing_checker", CHECKER_PATH
-)
+SPEC = importlib.util.spec_from_file_location("libsonare_wasm_narrowing_checker", CHECKER_PATH)
 assert SPEC is not None and SPEC.loader is not None
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
@@ -48,9 +46,7 @@ class ReceiverTest(unittest.TestCase):
         return CHECKER.receiver_of(readable, code, match.start())
 
     def test_a_field_read_keeps_its_key(self) -> None:
-        self.assertEqual(
-            self._receiver('int n = options["nFft"].as<int>();'), 'options["nFft"]'
-        )
+        self.assertEqual(self._receiver('int n = options["nFft"].as<int>();'), 'options["nFft"]')
 
     def test_a_call_result_keeps_its_arguments(self) -> None:
         self.assertEqual(
@@ -71,12 +67,7 @@ class LexicalTest(unittest.TestCase):
         self.assertIsNone(CHECKER._CAST.search(code))
 
     def test_a_brace_inside_a_literal_does_not_move_a_body_span(self) -> None:
-        source = (
-            'void f(val v) {\n'
-            '  log("} not a closing brace {");\n'
-            '  int n = v.as<int>();\n'
-            '}\n'
-        )
+        source = 'void f(val v) {\n  log("} not a closing brace {");\n  int n = v.as<int>();\n}\n'
         readable, code = CHECKER.prepare(source)
         containers = CHECKER.containers_of(Path("f.cpp"), readable, code)
         self.assertEqual(len(containers), 1)
@@ -143,9 +134,7 @@ val entryPoint(val options) {
             self.assertEqual(scan.orphans, [], "every cast must have a container")
             self.assertEqual(scan.reconcile(), [])
             self.assertEqual(len(scan.sites), 5)
-            owners = sorted(
-                site.container.name for site in scan.sites if site.container
-            )
+            owners = sorted(site.container.name for site in scan.sites if site.container)
             self.assertEqual(
                 owners,
                 ["<lambda>", "entryPoint", "entryPoint", "localIntOption", "qualifiedReader"],
@@ -162,9 +151,7 @@ val entryPoint(val options) {
             narrower = re.compile(r"\bval\b(?<!::val)")
             with self._rooted(root), mock.patch.object(CHECKER, "_VAL_PARAM", narrower):
                 scan = CHECKER.Scan(tree)
-            self.assertEqual(
-                [site.receiver for site in scan.orphans], ['object[key]']
-            )
+            self.assertEqual([site.receiver for site in scan.orphans], ["object[key]"])
 
     def test_a_fixed_body_window_makes_the_two_counts_disagree(self) -> None:
         """The second revert. A body measured short, caught by reconciliation."""
@@ -208,7 +195,7 @@ class FailureClassTest(unittest.TestCase):
     leave either class free to be the one that did nothing.
     """
 
-    SHARED = 'int sharedReader(val v) { return 1; }\n'
+    SHARED = "int sharedReader(val v) { return 1; }\n"
     LOCAL = """
 #include <emscripten/val.h>
 using emscripten::val;
@@ -331,7 +318,11 @@ EMSCRIPTEN_BINDINGS(unit) {
 """
 
     FLOOR: ClassVar[dict[str, int]] = {
-        "registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1,
+        "registrations": 1,
+        "declarations": 1,
+        "parameters": 1,
+        "functions": 1,
+        "files": 1,
     }
 
     def _records(self, **overrides) -> dict:
@@ -425,9 +416,7 @@ EMSCRIPTEN_BINDINGS(unit) {
         """Direction three. The one that makes the other two mean something."""
         with tempfile.TemporaryDirectory() as tmp:
             scan, failures = self._run(Path(tmp), self._records())
-            self.assertEqual(
-                sorted(p.name for p in scan.route_r), ["sample_rate", "strip_index"]
-            )
+            self.assertEqual(sorted(p.name for p in scan.route_r), ["sample_rate", "strip_index"])
             self.assertEqual(failures, [])
 
     def test_a_record_without_a_verdict_is_reported(self) -> None:
@@ -566,7 +555,9 @@ EMSCRIPTEN_BINDINGS(unit) {
         )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            records = self._records(root, distribution=[{"file": "bindings/domain/unit.cpp", "count": 1}])
+            records = self._records(
+                root, distribution=[{"file": "bindings/domain/unit.cpp", "count": 1}]
+            )
             _, failures = self._run(root, records, routed)
             headings = [heading for heading, _ in failures]
             self.assertEqual(len(failures), 1, failures)
@@ -662,7 +653,11 @@ EMSCRIPTEN_BINDINGS(unit) {
 """
 
     FLOOR: ClassVar[dict[str, int]] = {
-        "registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1,
+        "registrations": 1,
+        "declarations": 1,
+        "parameters": 1,
+        "functions": 1,
+        "files": 1,
     }
     QUOTE = "the mechanism, readable here"
 
@@ -702,9 +697,7 @@ EMSCRIPTEN_BINDINGS(unit) {
         _write(root / "glue.js", f"// {self.QUOTE}\n")
         with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
             scan = CHECKER.PositionalScan(tree)
-            return CHECKER.evaluate_positional(
-                scan, CHECKER.PositionalRecords(records, root=root)
-            )
+            return CHECKER.evaluate_positional(scan, CHECKER.PositionalRecords(records, root=root))
 
     def _only(self, mutate) -> tuple[str, list[str]]:
         with tempfile.TemporaryDirectory() as tmp:
@@ -785,10 +778,14 @@ EMSCRIPTEN_BINDINGS(unit) {
         self.assertEqual(
             lines,
             [
-                ("  slot_index: benign is only reachable where the conversion "
-                "refuses, and ['unsigned int'] wraps"),
-                ("  slot_index: states defect 'refuses', but ['unsigned int'] is "
-                "converted by the 'wraps' rule"),
+                (
+                    "  slot_index: benign is only reachable where the conversion "
+                    "refuses, and ['unsigned int'] wraps"
+                ),
+                (
+                    "  slot_index: states defect 'refuses', but ['unsigned int'] is "
+                    "converted by the 'wraps' rule"
+                ),
             ],
         )
 
@@ -963,14 +960,13 @@ class RealTreeTest(unittest.TestCase):
     def test_the_population_is_the_size_it_is_pinned_for(self) -> None:
         self.assertEqual(CHECKER._self_check(self.scan, self.data["floor"]), [])
 
-    def test_both_integer_and_size_narrowings_are_in_the_population(self) -> None:
+    def test_the_remaining_int_narrowing_is_in_the_population(self) -> None:
         # A type list that lost an entry would shrink the population without
-        # emptying it, which the floor alone could survive. Signed, unsigned and
-        # size are each named so no one kind can drop out unnoticed; the spelling
-        # a kind arrives under is the other test's subject, not this one's.
+        # emptying it, which the floor alone could survive. Only signed int is
+        # left in the tree; size and unsigned moved to the shared length reader
+        # and are guarded by the type-list test below instead.
         types = {site.type for site in self.scan.sites}
-        for name in ("int", "size_t", "unsigned"):
-            self.assertIn(name, types)
+        self.assertIn("int", types)
 
     def test_the_type_list_still_names_the_widths_the_tree_has_no_instance_of(self) -> None:
         # The tree currently narrows to none of these, so the population check
@@ -988,6 +984,8 @@ class RealTreeTest(unittest.TestCase):
             "int64_t",
             "uint64_t",
             "uint32_t",
+            "size_t",
+            "unsigned",
         ):
             self.assertIn(name, CHECKER.INTEGER_TYPES)
 
