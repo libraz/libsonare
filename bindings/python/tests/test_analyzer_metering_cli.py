@@ -12,6 +12,7 @@ import numpy as np
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
+from ._analyzer_helpers import _run_cli, _write_test_wav
 from ._helpers import patch_mono_decode
 
 
@@ -154,31 +155,6 @@ def test_audio_momentary_and_short_term_lufs() -> None:
     assert len(short_term) > 0
     assert _all_finite(momentary)
     assert _all_finite(short_term)
-
-
-def _write_test_wav(path: str, samples: list[float], sample_rate: int) -> None:
-    """Write mono 16-bit PCM WAV using only the standard library."""
-    frames = bytearray()
-    for s in samples:
-        clamped = max(-1.0, min(1.0, s))
-        frames += struct.pack("<h", int(round(clamped * 32767.0)))
-    with wave.open(path, "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(int(sample_rate))
-        wav.writeframes(bytes(frames))
-
-
-def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
-    src_dir = str(Path(__file__).parent.parent / "src")
-    env = dict(os.environ)
-    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
-    return subprocess.run(
-        [sys.executable, "-m", "libsonare.cli", *args],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
 
 
 @pytest.mark.parametrize("command", ["lufs", "onset-strength", "nnls-chroma", "tempogram"])

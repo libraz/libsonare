@@ -95,7 +95,7 @@ def patch_mono_decode(monkeypatch, loader) -> None:
     """Route the CLI's mono decode through ``loader(path) -> (samples, rate)``.
 
     The one seam under both the downmixing and the channel-preserving loaders:
-    a mono or downmixed source reaches ``_load_audio_known_channels``, so a test
+    a mono or downmixed source reaches ``_decode_mono``, so a test
     replaces the decode itself rather than a loader the production path
     selects between.
     """
@@ -103,8 +103,8 @@ def patch_mono_decode(monkeypatch, loader) -> None:
 
     monkeypatch.setattr(
         _cli_common,
-        "_load_audio_known_channels",
-        lambda path, channels, *, emit_warning=False: loader(path),
+        "_decode_mono",
+        loader,
     )
 
 

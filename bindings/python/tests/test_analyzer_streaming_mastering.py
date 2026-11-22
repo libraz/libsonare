@@ -720,10 +720,6 @@ def test_color_saturation_stages_engage_only_when_meaningful() -> None:
 # ============================================================================
 
 
-def _all_finite(values: list[float]) -> bool:
-    return all(math.isfinite(v) for v in values)
-
-
 def test_stream_analyzer_counts_a_call_whose_input_it_scrubbed() -> None:
     """One process() call adds one, however many samples in it were bad.
 
