@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install analysis-link-check test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -97,6 +97,16 @@ test-install:
 analysis-link-check:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
 	$(CMAKE) --build $(BUILD_DIR) --target sonare_analysis_link_check $(BUILD_PARALLEL)
+
+# The same link under the analysis WASM module's own option set, read from its
+# build:wasm:analysis script, so a core symbol from a subsystem that configure
+# switches off (mastering, mixing) fails too. Private tree; not in ci-local.
+ANALYSIS_LINK_DIR ?= /tmp/sonare-analysis-link-check
+analysis-link-check-wasm-options:
+	@flags=$$(python3 -c 'import json,re,sys; s=json.load(open("bindings/wasm/package.json"))["scripts"]["build:wasm:analysis"]; f=re.findall(r"-D(BUILD_[A-Z_]+=OFF)",s); sys.exit("no -DBUILD_*=OFF flags in build:wasm:analysis") if not f else print(" ".join("-D"+x for x in f))') || exit 1; \
+	echo "analysis WASM options: $$flags"; \
+	$(CMAKE) -S . -B $(ANALYSIS_LINK_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF $$flags && \
+	$(CMAKE) --build $(ANALYSIS_LINK_DIR) --target sonare_analysis_link_check $(BUILD_PARALLEL)
 
 # Delegates instead of configuring a tree of its own, because the feature
 # flags, the output name and the analysis-only switch that decide WHICH module
