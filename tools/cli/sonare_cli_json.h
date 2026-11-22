@@ -8,6 +8,10 @@
 #include <string>
 #include <vector>
 
+/// Non-finite numbers follow the level convention: a NaN (not measured) is never written — a
+/// keyed value drops its key, and an array value is refused, so a document array holding one
+/// goes through measured_array() — while -inf / +inf are written as null, the end the
+/// field's schema declares with `x-nullMeans`.
 class JsonBuilder {
  public:
   /// Pins the output stream to the classic locale, so that a real number is
@@ -35,6 +39,10 @@ class JsonBuilder {
   JsonBuilder& kv(const std::string& k, double v);
   JsonBuilder& kv(const std::string& k, bool v);
   JsonBuilder& float_array(const std::vector<float>& arr);
+  /// Writes the measured (non-NaN) entries of @p values under @p values_key and their
+  /// ascending indices under @p index_key.
+  JsonBuilder& measured_array(const std::string& values_key, const std::string& index_key,
+                              const float* values, size_t count);
   std::string build() const;
   void print() const;
 

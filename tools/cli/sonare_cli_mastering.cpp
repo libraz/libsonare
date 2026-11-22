@@ -149,10 +149,10 @@ std::string mastering_report_json(const mastering::api::MasteringReport& report)
   json.kv("applied_gain_db", report.applied_gain_db)
       .kv("max_gain_reduction_db", report.max_gain_reduction_db)
       .kv("loudness_target_limited", report.loudness_target_limited)
-      .key("band_energy_delta_db")
-      .begin_array();
-  for (float value : report.band_energy_delta_db) json.value(value);
-  json.end_array().end_object();
+      .kv("loudness_gain_db", report.loudness_gain_db)
+      .measured_array("band_energy_delta_db", "band_energy_delta_band",
+                      report.band_energy_delta_db.data(), report.band_energy_delta_db.size())
+      .end_object();
   return json.build();
 }
 

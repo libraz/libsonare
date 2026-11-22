@@ -758,7 +758,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
 
 TEST_CASE("CLI pitch --frames adds the per-frame contour", "[cli][pitch]") {
   // A tone followed by silence, so the contour holds both voiced and unvoiced
-  // frames and the null encoding of a non-finite f0 is exercised.
+  // frames and the voiced-only f0 list with its frame indices is exercised.
   const std::string wav = unique_temp_path("_pitch_frames.wav");
   {
     std::vector<float> samples(22050 * 2, 0.0f);
@@ -777,27 +777,31 @@ TEST_CASE("CLI pitch --frames adds the per-frame contour", "[cli][pitch]") {
   INFO(text);
   REQUIRE(code == 0);
   const auto payload = sonare::util::json::parse_strict(text);
-  REQUIRE(payload.size() == 10);
+  REQUIRE(payload.size() == 11);
   const size_t n_frames = static_cast<size_t>(payload["n_frames"].as_int());
   REQUIRE(n_frames > 0);
-  for (const char* key : {"times", "f0", "voiced_flag", "voiced_prob"}) {
+  for (const char* key : {"times", "voiced_flag", "voiced_prob"}) {
     REQUIRE(payload[key].as_array().size() == n_frames);
   }
   // Frame i sits i * hop / sr seconds in; the default hop is 512.
   REQUIRE(payload["times"][1].as_number() == Catch::Approx(512.0 / 22050.0));
+  const auto& f0 = payload["f0"].as_array();
+  const auto& f0_frame = payload["f0_frame"].as_array();
+  REQUIRE(f0.size() == f0_frame.size());
   size_t voiced = 0;
-  size_t unvoiced_null = 0;
-  for (size_t i = 0; i < n_frames; ++i) {
-    if (payload["voiced_flag"][i].as_bool()) {
-      ++voiced;
-      REQUIRE(payload["f0"][i].as_number() == Catch::Approx(440.0).margin(5.0));
-    } else if (payload["f0"][i].is_null()) {
-      ++unvoiced_null;
-    }
-  }
+  for (size_t i = 0; i < n_frames; ++i) voiced += payload["voiced_flag"][i].as_bool() ? 1 : 0;
   REQUIRE(voiced == static_cast<size_t>(payload["voiced_count"].as_int()));
   REQUIRE(voiced > 0);
-  REQUIRE(unvoiced_null > 0);
+  // Only voiced frames carry an f0, in ascending frame order; the silent half has none.
+  REQUIRE(f0.size() == voiced);
+  REQUIRE(f0.size() < n_frames);
+  for (size_t j = 0; j < f0.size(); ++j) {
+    const auto frame = static_cast<size_t>(f0_frame[j].as_int());
+    REQUIRE(frame < n_frames);
+    if (j > 0) REQUIRE(frame > static_cast<size_t>(f0_frame[j - 1].as_int()));
+    REQUIRE(payload["voiced_flag"][frame].as_bool());
+    REQUIRE(f0[j].as_number() == Catch::Approx(440.0).margin(5.0));
+  }
 
   // Text mode has no per-frame form, so the flag changes nothing there.
   const auto [text_code, text_output] = exec_command(CLI + " pitch " + wav + " --frames -q");

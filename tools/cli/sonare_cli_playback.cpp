@@ -107,10 +107,9 @@ std::string diagnostics_json_for_cli(const std::string& core_json) {
 // --program-lufs, or (since this is an offline batch tool) a fresh measure of
 // the whole input, matching the design's "measure the input, then render"
 // contract for the flag's own absence. Returns nullopt when there is nothing
-// to overlay -- an input too short or too quiet for BS.1770 gating to report
-// anything measures at the library's generic dB floor, well outside the
-// schema's accepted range, and the schema's own null already means exactly
-// this case ("program = target, gain 0").
+// to overlay -- an input too short or too quiet for BS.1770 gating has no
+// integrated loudness (NaN or -inf), and the schema's own null already means
+// exactly this case ("program = target, gain 0").
 std::optional<float> resolved_program_lufs(const CliArgs& args,
                                            const std::vector<float>& interleaved, int in_channels,
                                            int sample_rate, size_t frames) {

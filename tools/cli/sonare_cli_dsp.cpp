@@ -141,14 +141,9 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
   if (args.json_output) {
     JsonBuilder json;
     json.begin_object().kv("output", args.output_file).kv("type", type).kv("order", config.order);
-    // A frequency the type does not read is null, so every type prints the same keys.
+    // A frequency the type does not read is absent, as every record field without a value is.
     const auto frequency = [&](const char* key, const char* option, float value) {
-      json.key(key);
-      if (args.has(option)) {
-        json.value(value);
-      } else {
-        json.null_value();
-      }
+      if (args.has(option)) json.kv(key, value);
     };
     frequency("cutoff_hz", "cutoff-hz", config.cutoff_hz);
     frequency("center_hz", "center-hz", config.center_hz);

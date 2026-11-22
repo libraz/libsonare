@@ -5,6 +5,7 @@
 #include <iostream>
 #include <limits>
 #include <locale>
+#include <stdexcept>
 
 JsonBuilder::JsonBuilder() {
   // A std::ostringstream formats through the global C++ locale, not through
@@ -74,10 +75,9 @@ JsonBuilder& JsonBuilder::value(size_t v) {
 }
 
 JsonBuilder& JsonBuilder::value(float v) {
+  if (std::isnan(v)) throw std::logic_error("a JSON array cannot carry a not-measured value");
   append_separator();
-  // RFC 8259 forbids NaN/Infinity as JSON numbers; emit `null` (as util/json.h
-  // does) so a non-finite reading -- e.g. a -inf LUFS/true-peak for a fully
-  // silent input -- yields valid JSON that json.loads/jq/JSON.parse can read.
+  // RFC 8259 has no infinities; null stands for the end the field's schema declares.
   if (std::isfinite(v)) {
     ss_ << std::setprecision(std::numeric_limits<float>::max_digits10) << v;
   } else {
@@ -88,8 +88,9 @@ JsonBuilder& JsonBuilder::value(float v) {
 }
 
 JsonBuilder& JsonBuilder::value(double v) {
+  if (std::isnan(v)) throw std::logic_error("a JSON array cannot carry a not-measured value");
   append_separator();
-  // See value(float): non-finite numbers serialize as JSON null, not "nan"/"inf".
+  // See value(float).
   if (std::isfinite(v)) {
     ss_ << std::setprecision(std::numeric_limits<double>::max_digits10) << v;
   } else {
@@ -121,9 +122,15 @@ JsonBuilder& JsonBuilder::kv(const std::string& k, int v) { return key(k).value(
 
 JsonBuilder& JsonBuilder::kv(const std::string& k, size_t v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, float v) { return key(k).value(v); }
+JsonBuilder& JsonBuilder::kv(const std::string& k, float v) {
+  if (std::isnan(v)) return *this;
+  return key(k).value(v);
+}
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, double v) { return key(k).value(v); }
+JsonBuilder& JsonBuilder::kv(const std::string& k, double v) {
+  if (std::isnan(v)) return *this;
+  return key(k).value(v);
+}
 
 JsonBuilder& JsonBuilder::kv(const std::string& k, bool v) { return key(k).value(v); }
 
@@ -132,6 +139,20 @@ JsonBuilder& JsonBuilder::float_array(const std::vector<float>& arr) {
   for (float v : arr) value(v);
   end_array();
   return *this;
+}
+
+JsonBuilder& JsonBuilder::measured_array(const std::string& values_key,
+                                         const std::string& index_key, const float* values,
+                                         size_t count) {
+  key(values_key).begin_array();
+  for (size_t i = 0; i < count; ++i) {
+    if (!std::isnan(values[i])) value(values[i]);
+  }
+  end_array().key(index_key).begin_array();
+  for (size_t i = 0; i < count; ++i) {
+    if (!std::isnan(values[i])) value(i);
+  }
+  return end_array();
 }
 
 std::string JsonBuilder::build() const { return ss_.str(); }

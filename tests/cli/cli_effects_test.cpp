@@ -448,12 +448,16 @@ TEST_CASE("CLI room-morph keeps a two-channel input stereo", "[cli][acoustic]") 
 #endif
 
 TEST_CASE("CLI lufs --json stays valid JSON on a silent input", "[cli]") {
-  // A fully silent input drives LUFS/true-peak to -inf; the JSON builder must
-  // emit `null` (not "-inf"/"nan", which no JSON parser accepts) for those fields.
+  // Silence has no level: -inf is written as null. A reading the input is too short for
+  // (short-term over 1 s, the loudness range) is not measured, so its key is absent.
   create_test_wav(TEST_WAV, 1.0f, 0.0f);  // frequency 0 => all-zero samples
   auto [code, output] = exec_command(CLI + " lufs " + TEST_WAV + " --json -q");
   REQUIRE(code == 0);
-  REQUIRE_THAT(output, ContainsSubstring("\"integrated_lufs\""));
+  const auto payload = sonare::util::json::parse_strict(output);
+  REQUIRE(payload["integrated_lufs"].is_null());
+  REQUIRE(payload["momentary_lufs"].is_null());
+  REQUIRE_FALSE(payload.contains("short_term_lufs"));
+  REQUIRE_FALSE(payload.contains("loudness_range_lu"));
   // No non-finite tokens leaked into the JSON.
   REQUIRE_THAT(output, !ContainsSubstring("inf"));
   REQUIRE_THAT(output, !ContainsSubstring("nan"));
@@ -741,7 +745,7 @@ TEST_CASE("CLI filter requires the frequencies its type reads and refuses the ot
   auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
                                      " --type notch --center-hz 1000 --bandwidth-hz 100 --json -q");
   REQUIRE(code == 0);
-  REQUIRE_THAT(output, ContainsSubstring("\"cutoff_hz\": null"));
+  REQUIRE_THAT(output, !ContainsSubstring("cutoff_hz"));
   REQUIRE_THAT(output, ContainsSubstring("\"center_hz\": 1000"));
   std::remove(out.c_str());
 }
@@ -988,12 +992,19 @@ TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contrac
   REQUIRE_THAT(absolute_output, ContainsSubstring("\"formant_mode\": \"absolute\""));
   REQUIRE_THAT(absolute_output, ContainsSubstring("\"formant_factor\": 1"));
 
-  // 2^(5/12) = 1.3348, so the warp range [0.55, 1.65] reaches [0.7342, 2.202] at +5 semitones.
+  // The factor's own range holds in both modes, whatever the shift could carry.
   auto [refused_code, refused_output] = exec_command(
       CLI + " voice-change --pitch-semitones 5 --formant-factor 3 --formant-mode absolute " + wav +
       " -o " + out + " 2>&1");
   REQUIRE(refused_code == 3);
-  REQUIRE_THAT(refused_output, ContainsSubstring("[0.7342, 2.202]"));
+  REQUIRE_THAT(refused_output,
+               ContainsSubstring("formant_factor must be finite and in [0.55, 1.65]"));
+  // 2^(5/12) = 1.3348, so a warp in [0.55, 1.65] needs a factor in [0.7342, 1.65] at +5 semitones.
+  auto [warp_code, warp_output] = exec_command(
+      CLI + " voice-change --pitch-semitones 5 --formant-factor 0.6 --formant-mode absolute " +
+      wav + " -o " + out + " 2>&1");
+  REQUIRE(warp_code == 3);
+  REQUIRE_THAT(warp_output, ContainsSubstring("[0.7342, 1.65]"));
 
   auto [unknown_code, unknown_output] =
       exec_command(CLI + " voice-change --formant-mode sideways " + wav + " -o " + out + " 2>&1");

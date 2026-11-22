@@ -1191,8 +1191,12 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     for (const char* group : {"click", "clip", "crackle", "noise", "hum", "reverb"}) {
       REQUIRE(defects.contains(group));
     }
-    REQUIRE(defects["noise"]["band_floor_dbfs"].size() == 32);
-    REQUIRE(defects["hum"]["harmonic_dbfs"].size() == 16);
+    // Measured bands only, beside their grid indices; harmonics end at the last measured one.
+    REQUIRE(defects["noise"]["band_floor_dbfs"].size() > 0);
+    REQUIRE(defects["noise"]["band_floor_dbfs"].size() ==
+            defects["noise"]["band_floor_band"].size());
+    REQUIRE(defects["noise"]["band_floor_band"].size() <= 32);
+    REQUIRE(defects["hum"]["harmonic_dbfs"].size() <= 16);
     // The fixed cross-surface shape carries no loudness fields: applied_gain_db
     // is structurally always 0 (repair never touches loudness) and the LUFS
     // pair would otherwise be the only numbers here that vary with the field

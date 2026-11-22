@@ -221,9 +221,7 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
 
   int voiced = std::count(result.voiced_flag.begin(), result.voiced_flag.end(), true);
   const int n_frames = result.n_frames();
-  // A zero-frame analysis has no meaningful voiced fraction. JsonBuilder
-  // serializes this non-finite sentinel as JSON null, matching the Python
-  // CLI's nullable contract without performing an invalid 0/0 division.
+  // A zero-frame analysis has no voiced fraction: NaN (not measured), so the key is omitted.
   const float ratio = n_frames > 0 ? static_cast<float>(voiced) / static_cast<float>(n_frames)
                                    : std::numeric_limits<float>::quiet_NaN();
 
@@ -237,7 +235,8 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
         .kv("median_f0", result.median_f0())
         .kv("mean_f0", result.mean_f0());
     // The contour is opt-in: it is one value per frame, so the summary stays the
-    // default. A non-finite f0 (an unvoiced frame) serializes as null.
+    // default. An unvoiced frame has no f0, so f0 lists the voiced frames' values beside
+    // their frame indices.
     if (args.has("frames")) {
       std::vector<double> times(result.f0.size());
       for (size_t i = 0; i < times.size(); ++i) {
@@ -246,7 +245,7 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
       json.key("times").begin_array();
       for (double time : times) json.value(time);
       json.end_array();
-      json.key("f0").float_array(result.f0);
+      json.measured_array("f0", "f0_frame", result.f0.data(), result.f0.size());
       json.key("voiced_flag").begin_array();
       for (bool flag : result.voiced_flag) json.value(flag);
       json.end_array();
@@ -502,14 +501,13 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
     if (!p.is_blind) {
       json.kv("edt", p.edt).kv("c50", p.c50).kv("c80", p.c80).kv("d50", p.d50);
     }
-    json.kv("confidence", p.confidence).key("rt60_bands").float_array(p.rt60_bands);
+    // A band that could not be measured is left out; each list carries its band indices.
+    json.kv("confidence", p.confidence)
+        .measured_array("rt60_bands", "rt60_band", p.rt60_bands.data(), p.rt60_bands.size());
     if (!p.is_blind) {
-      json.key("edt_bands")
-          .float_array(p.edt_bands)
-          .key("c50_bands")
-          .float_array(p.c50_bands)
-          .key("c80_bands")
-          .float_array(p.c80_bands);
+      json.measured_array("edt_bands", "edt_band", p.edt_bands.data(), p.edt_bands.size())
+          .measured_array("c50_bands", "c50_band", p.c50_bands.data(), p.c50_bands.size())
+          .measured_array("c80_bands", "c80_band", p.c80_bands.data(), p.c80_bands.size());
     }
     json.end_object().print();
   } else {
@@ -635,15 +633,8 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   if (args.json_output) {
-    // The two band vectors are independent estimates and either can come back
-    // empty on its own. The C ABI publishes both at one band count, padding the
-    // shorter with NaN, so match it here: reading the core struct directly
-    // otherwise gives a script a shorter array from this CLI than from the other.
-    const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
-    auto pad_with_nan = [band_count](std::vector<float> values) {
-      values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
-      return values;
-    };
+    // The two band vectors are independent estimates and either can come back short or empty
+    // on its own; each list carries the indices of the bands it measured.
     JsonBuilder()
         .begin_object()
         .kv("volume", est.volume)
@@ -652,10 +643,9 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
         .kv("height", est.dims.height)
         .kv("drr_db", est.drr_db)
         .kv("confidence", est.confidence)
-        .key("rt60_bands")
-        .float_array(pad_with_nan(est.rt60_bands))
-        .key("band_absorption")
-        .float_array(pad_with_nan(est.absorption_bands))
+        .measured_array("rt60_bands", "rt60_band", est.rt60_bands.data(), est.rt60_bands.size())
+        .measured_array("band_absorption", "band_absorption_band", est.absorption_bands.data(),
+                        est.absorption_bands.size())
         .end_object()
         .print();
   } else {

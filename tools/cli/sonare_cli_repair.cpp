@@ -59,16 +59,19 @@ void append_defect_profile_json(JsonBuilder& json,
       .kv("per_second", defects.crackle.per_second)
       .end_object();
   json.key("noise").begin_object().kv("floor_dbfs", defects.noise.floor_dbfs);
-  json.key("band_floor_dbfs").begin_array();
-  for (const float level : defects.noise.band_floor_dbfs) json.value(level);
-  json.end_array().end_object();
+  json.measured_array("band_floor_dbfs", "band_floor_band", defects.noise.band_floor_dbfs,
+                      mastering::repair::kRepairNoiseBandCount);
+  json.end_object();
   json.key("hum")
       .begin_object()
       .kv("fundamental_hz", defects.hum.fundamental_hz)
       .kv("fundamental_prominence", defects.hum.fundamental_prominence)
       .kv("harmonics", defects.hum.harmonics);
+  // Unmeasured harmonics are a suffix, so the array ends at the last measured one.
   json.key("harmonic_dbfs").begin_array();
-  for (const float level : defects.hum.harmonic_dbfs) json.value(level);
+  for (int k = 0; k < defects.hum.measured_harmonics; ++k) {
+    json.value(defects.hum.harmonic_dbfs[static_cast<size_t>(k)]);
+  }
   json.end_array().end_object();
   json.key("reverb")
       .begin_object()
