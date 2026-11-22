@@ -48,6 +48,7 @@ const METHOD_SHAPES = [
   ...(Object.keys(REQUEST_SHAPES) as RequestFn[]).filter((name) => name.startsWith('Project.')),
   'RealtimeEngine',
   'SonareEngine.renderOffline',
+  'SonareEngine.setParam',
   'addSend',
   'applyBusInsertParamNow',
   'applyProjectVocalEdit',
