@@ -861,7 +861,6 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_within(num_channels, kEngineRenderChannelsDomain, "num_channels");
         util::check::integer_within(block_size, kEngineRenderBlockSizeDomain, "block_size");
       });
       err != SONARE_OK) {
@@ -873,8 +872,7 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
   }
   block_size = resolve_offline_block(engine->engine, block_size);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(num_channels, 1, engine->engine.prepared_channels(),
-                                      "num_channels");
+        sonare_c_engine_detail::check_render_channels(engine->engine, num_channels, "num_channels");
         util::check::integer_in_range(block_size, 1, engine->engine.max_block_size(), "block_size");
       });
       err != SONARE_OK) {

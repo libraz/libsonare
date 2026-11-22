@@ -133,7 +133,7 @@ TEST_CASE("a bounce with no channels or no frames is refused by name", "[c_api][
   CHECK(sonare_engine_bounce_offline(prepared.engine, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(),
-             Catch::Matchers::Equals("options.num_channels must be an integer in [1, 2147483647]"));
+             Catch::Matchers::Equals("options.num_channels must be an integer in [1, 64]"));
 
   options.num_channels = 2;
   options.total_frames = 0;

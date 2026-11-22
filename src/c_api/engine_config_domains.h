@@ -117,9 +117,11 @@ inline constexpr sonare::util::check::NumericDomain kEngineLaneCountDomain =
 inline constexpr sonare::util::check::NumericDomain kEngineAlignmentDelayDomain =
     sonare::util::check::integer_domain(0, sonare::mixing::kMaxAlignmentDelaySamples);
 
-/// @brief What an offline render's num_channels accepts.
+/// @brief What an offline render's num_channels accepts on an engine prepared at the most
+///        channels; a render refuses past the prepared count.
 inline constexpr sonare::util::check::NumericDomain kEngineRenderChannelsDomain =
-    sonare::util::check::integer_domain_of<int>(1);
+    sonare::util::check::integer_domain(
+        1, static_cast<long long>(sonare::engine::RealtimeEngine::kMaxAudioChannels));
 /// @brief What the total_frames argument of a render accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineRenderFramesDomain =
     sonare::util::check::integer_domain_of<int64_t>(0);

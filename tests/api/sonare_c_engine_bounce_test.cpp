@@ -352,27 +352,29 @@ TEST_CASE("the shipped bounce budget refuses a stereo span past its documented l
 
 TEST_CASE("the C bounce entry point charges the budget for the dither request", "[c_api][engine]") {
   // A span between the two ceilings: the undithered count admits it and the
-  // dithered one does not, so the two branches must answer differently. The
-  // engine is deliberately left unprepared, which makes the admitted branch stop
-  // at the never-prepared check instead of rendering 40M frames -- a wiring
-  // regression then reads as INVALID_STATE in under a millisecond.
+  // dithered one does not, so the two branches must answer differently. A NULL
+  // result makes the admitted branch stop at the first check after the budget
+  // instead of rendering 40M frames, so each branch is told apart by its subject.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 2, 2, 0) == SONARE_OK);
 
   SonareEngineBounceOptions options;
   sonare_engine_bounce_options_init(&options);
   options.num_channels = 2;
   options.total_frames = 40'000'000;
 
-  SonareEngineBounceResult result{};
   options.dither = 1;
-  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(result.interleaved == nullptr);
+  CHECK(std::string(sonare_last_error_message()).find("larger than the supported size") !=
+        std::string::npos);
 
   options.dither = 0;
-  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("out must not be NULL") != std::string::npos);
 
   sonare_engine_destroy(engine);
 }

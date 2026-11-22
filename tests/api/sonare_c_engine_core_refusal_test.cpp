@@ -384,12 +384,12 @@ TEST_CASE("engine metronome, monitor and offline priming refusals", "[c_api][eng
   CHECK(last_message() == refused("mode", refusal::one_of_predicate(std::array<int, 3>{0, 1, 2})));
 
   CHECK(sonare_engine_prime_offline_parameters(engine, 0, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("num_channels", int_at_least_1()));
+  CHECK(last_message() == "num_channels must be an integer in [1, 64]");
   CHECK(sonare_engine_prime_offline_parameters(engine, 1, -1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == refused("block_size", refusal::integer_range_predicate(
                                                     0, std::numeric_limits<int>::max())));
   CHECK(sonare_engine_prime_offline_parameters(engine, 1000, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message().rfind("num_channels must be an integer in [1, ", 0) == 0);
+  CHECK(last_message() == "num_channels must be an integer in [1, 64]");
   CHECK(sonare_engine_prime_offline_parameters(engine, 1, 1 << 20) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message().rfind("block_size must be an integer in [1, ", 0) == 0);

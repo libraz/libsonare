@@ -27,6 +27,12 @@ inline int resolve_offline_block(const sonare::engine::RealtimeEngine& engine, i
                          : block_size;
 }
 
+/// @brief Refuses a channel count outside [1, prepared_channels()], the one range a render runs.
+inline void check_render_channels(const sonare::engine::RealtimeEngine& engine, int num_channels,
+                                  const char* subject) {
+  sonare::util::check::integer_in_range(num_channels, 1, engine.prepared_channels(), subject);
+}
+
 /// @brief Refuses an offline block that is neither positive nor @ref SONARE_ENGINE_BLOCK_SIZE_AUTO.
 inline void check_offline_block(int block_size, const char* subject) {
   if (block_size != SONARE_ENGINE_BLOCK_SIZE_AUTO) {

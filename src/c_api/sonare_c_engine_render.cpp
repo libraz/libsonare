@@ -132,12 +132,6 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
     finalize = options->finalize;
   }
   if (const SonareError err = run_validation([&] {
-        util::check::integer_within(num_channels, kEngineRenderChannelsDomain, "num_channels");
-      });
-      err != SONARE_OK) {
-    return err;
-  }
-  if (const SonareError err = run_validation([&] {
         util::check::integer_within(total_frames, kEngineRenderFramesDomain, "total_frames");
       });
       err != SONARE_OK) {
@@ -162,11 +156,11 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
   // silently write zeros to every plane past the bound instead of erroring, so
   // the host reads a "successful" render that is actually silence for the
   // channels it asked for beyond the prepared maximum.
-  if (num_channels > engine->engine.prepared_channels()) {
-    return run_validation([&] {
-      util::check::integer_in_range(num_channels, 1, engine->engine.prepared_channels(),
-                                    "num_channels");
-    });
+  if (const SonareError err = run_validation([&] {
+        sonare_c_engine_detail::check_render_channels(engine->engine, num_channels, "num_channels");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   // A block larger than the prepared one cannot be rendered as asked; refuse it
   // rather than render at the smaller block the engine would clamp to.
@@ -234,8 +228,20 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
         util::check::integer_within(options->total_frames, kEngineBounceFramesDomain,
                                     "options.total_frames");
         sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
-        util::check::integer_within(options->num_channels, kEngineRenderChannelsDomain,
-                                    "options.num_channels");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  // A never-prepared engine renders only silence and cannot report through the (unreserved)
+  // telemetry ring, so it fails closed before any channel count is read against it.
+  if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the engine has not been prepared");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  // Planes past the prepared count would be written as silence rather than refused.
+  if (const SonareError err = run_validation([&] {
+        sonare_c_engine_detail::check_render_channels(engine->engine, options->num_channels,
+                                                      "options.num_channels");
       });
       err != SONARE_OK) {
     return err;
@@ -308,24 +314,8 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     });
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  // A never-prepared engine renders only silence and cannot report through the
-  // (unreserved) telemetry ring, so fail closed instead of returning a bounce
-  // result the caller would read as a valid silent render.
-  if (engine->engine.max_block_size() <= 0) {
-    set_last_error(SONARE_ERROR_INVALID_STATE, "the engine has not been prepared");
-    return SONARE_ERROR_INVALID_STATE;
-  }
-  // See sonare_engine_render_offline: bouncing more channels than the engine
-  // was prepared for would silently write zeros for every plane past the
-  // bound instead of erroring.
   const int block_size = sonare_c_engine_detail::resolve_offline_block(
       engine->engine, sonare_c_engine_detail::offline_block_from_c(options->block_size));
-  if (options->num_channels > engine->engine.prepared_channels()) {
-    return run_validation([&] {
-      util::check::integer_in_range(options->num_channels, 1, engine->engine.prepared_channels(),
-                                    "options.num_channels");
-    });
-  }
   if (block_size > engine->engine.max_block_size()) {
     return run_validation([&] {
       util::check::integer_in_range(block_size, 1, engine->engine.max_block_size(),
@@ -400,8 +390,20 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
         util::check::integer_within(options->total_frames, kEngineBounceFramesDomain,
                                     "options.total_frames");
         sonare_c_engine_detail::check_offline_block(options->block_size, "options.block_size");
-        util::check::integer_within(options->num_channels, kEngineRenderChannelsDomain,
-                                    "options.num_channels");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  // A never-prepared engine renders only silence and cannot report through the (unreserved)
+  // telemetry ring, so it fails closed before any channel count is read against it.
+  if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the engine has not been prepared");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  // Planes past the prepared count would be written as silence rather than refused.
+  if (const SonareError err = run_validation([&] {
+        sonare_c_engine_detail::check_render_channels(engine->engine, options->num_channels,
+                                                      "options.num_channels");
       });
       err != SONARE_OK) {
     return err;
@@ -420,23 +422,8 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
     });
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  // Freezing a never-prepared engine would capture pure silence with no error
-  // channel (telemetry is unreserved before prepare()); fail closed instead.
-  if (engine->engine.max_block_size() <= 0) {
-    set_last_error(SONARE_ERROR_INVALID_STATE, "the engine has not been prepared");
-    return SONARE_ERROR_INVALID_STATE;
-  }
-  // See sonare_engine_render_offline: freezing more channels than the engine
-  // was prepared for would silently write zeros for every plane past the
-  // bound instead of erroring.
   const int block_size = sonare_c_engine_detail::resolve_offline_block(
       engine->engine, sonare_c_engine_detail::offline_block_from_c(options->block_size));
-  if (options->num_channels > engine->engine.prepared_channels()) {
-    return run_validation([&] {
-      util::check::integer_in_range(options->num_channels, 1, engine->engine.prepared_channels(),
-                                    "options.num_channels");
-    });
-  }
   if (block_size > engine->engine.max_block_size()) {
     return run_validation([&] {
       util::check::integer_in_range(block_size, 1, engine->engine.max_block_size(),

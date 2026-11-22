@@ -4,12 +4,14 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "host/midi_io.h"
 #include "sonare_c_engine_test_helpers.h"
@@ -65,7 +67,7 @@ TEST_CASE("engine offline render refuses a NULL argument and an out-of-domain co
   CHECK(last_error() == "out must not be NULL");
   CHECK(sonare_engine_render_offline(engine, planes, 0, 16, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "num_channels must be an integer in [1, 2147483647]");
+  CHECK(last_error() == "num_channels must be an integer in [1, 2]");
   CHECK(sonare_engine_render_offline(engine, planes, 2, -1, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "total_frames must be an integer of at least 0");
@@ -86,6 +88,98 @@ TEST_CASE("engine offline render refuses a NULL argument and an out-of-domain co
   sonare_engine_freeze_options_init(nullptr);
 
   sonare_engine_destroy(engine);
+}
+
+namespace {
+
+SonareEngine* engine_with_channels(int max_channels) {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, max_channels) == SONARE_OK);
+  return engine;
+}
+
+// The text each offline entry refuses @p num_channels with, or "" when it is accepted.
+std::vector<std::string> channel_refusals(SonareEngine* engine, int num_channels) {
+  std::vector<std::string> texts;
+  const auto record = [&texts](SonareError err) {
+    texts.push_back(err == SONARE_OK ? "" : last_error());
+  };
+  record(sonare_engine_prime_offline_parameters(engine, num_channels, 0));
+  std::vector<float> plane(16, 0.0f);
+  std::vector<float*> planes(static_cast<size_t>(std::max(num_channels, 1)), plane.data());
+  record(sonare_engine_render_offline(engine, planes.data(), num_channels, 16, 0, nullptr));
+  SonareEngineBounceOptions bounce = bounce_options();
+  bounce.num_channels = num_channels;
+  SonareEngineBounceResult bounced{};
+  record(sonare_engine_bounce_offline(engine, &bounce, &bounced));
+  sonare_free_engine_bounce_result(&bounced);
+  SonareEngineFreezeOptions freeze = freeze_options();
+  freeze.num_channels = num_channels;
+  SonareEngineFreezeResult frozen{};
+  record(sonare_engine_freeze_offline(engine, &freeze, &frozen));
+  return texts;
+}
+
+}  // namespace
+
+TEST_CASE("engine offline entries refuse a channel count once, against the prepared count",
+          "[c_api][engine_refusal]") {
+  SECTION("an engine prepared at the default reads every count outside [1, 64] alike") {
+    SonareEngine* engine = engine_with_channels(0);
+    for (const int count : {0, 65, 1000}) {
+      INFO(count);
+      const std::vector<std::string> texts = channel_refusals(engine, count);
+      CHECK(texts[0] == "num_channels must be an integer in [1, 64]");
+      CHECK(texts[1] == "num_channels must be an integer in [1, 64]");
+      CHECK(texts[2] == "options.num_channels must be an integer in [1, 64]");
+      CHECK(texts[3] == "options.num_channels must be an integer in [1, 64]");
+    }
+    sonare_engine_destroy(engine);
+  }
+  SECTION("an engine prepared with two channels states [1, 2] for 0 and for 3") {
+    SonareEngine* engine = engine_with_channels(2);
+    for (const int count : {0, 3}) {
+      INFO(count);
+      const std::vector<std::string> texts = channel_refusals(engine, count);
+      CHECK(texts[0] == "num_channels must be an integer in [1, 2]");
+      CHECK(texts[1] == "num_channels must be an integer in [1, 2]");
+      CHECK(texts[2] == "options.num_channels must be an integer in [1, 2]");
+      CHECK(texts[3] == "options.num_channels must be an integer in [1, 2]");
+    }
+    sonare_engine_destroy(engine);
+  }
+  SECTION("a bounce count inside the prepared range is then held to the speaker layouts") {
+    SonareEngine* engine = engine_with_channels(8);
+    SonareEngineBounceOptions bounce = bounce_options();
+    bounce.num_channels = 3;
+    SonareEngineBounceResult bounced{};
+    CHECK(sonare_engine_bounce_offline(engine, &bounce, &bounced) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error() == "options.num_channels must be one of 1, 2, 6, 8");
+    sonare_engine_destroy(engine);
+  }
+  SECTION("an unprepared engine refuses its state before any channel range") {
+    SonareEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    for (const int count : {0, 65}) {
+      INFO(count);
+      CHECK(sonare_engine_prime_offline_parameters(engine, count, 0) == SONARE_ERROR_INVALID_STATE);
+      std::vector<float> plane(16, 0.0f);
+      float* planes[] = {plane.data()};
+      CHECK(sonare_engine_render_offline(engine, planes, count, 16, 0, nullptr) ==
+            SONARE_ERROR_INVALID_STATE);
+      SonareEngineBounceOptions bounce = bounce_options();
+      bounce.num_channels = count;
+      SonareEngineBounceResult bounced{};
+      CHECK(sonare_engine_bounce_offline(engine, &bounce, &bounced) == SONARE_ERROR_INVALID_STATE);
+      SonareEngineFreezeOptions freeze = freeze_options();
+      freeze.num_channels = count;
+      SonareEngineFreezeResult frozen{};
+      CHECK(sonare_engine_freeze_offline(engine, &freeze, &frozen) == SONARE_ERROR_INVALID_STATE);
+    }
+    sonare_engine_destroy(engine);
+  }
 }
 
 TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engine_refusal]") {
@@ -117,7 +211,7 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
   CHECK(refused([](auto& o) { o.block_size = -2; }) ==
         "options.block_size must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.num_channels = 0; }) ==
-        "options.num_channels must be an integer in [1, 2147483647]");
+        "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) { o.target_sample_rate = 0; }) ==
         "options.target_sample_rate must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.target_sample_rate = -2; }) ==
@@ -134,7 +228,7 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
         "larger than the supported size");
   CHECK(refused([](auto& o) { o.dither = 4; }) == "options.dither must be one of 0, 1, 2, 3");
   CHECK(refused([](auto& o) { o.num_channels = 3; }) ==
-        "options.num_channels must be one of 1, 2, 6, 8");
+        "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) { o.num_channels = 6; }) ==
         "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) { o.block_size = 256; }) ==
@@ -145,7 +239,7 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
   CHECK(refused([](auto& o) {
           o.num_channels = 3;
           o.dither = 4;
-        }) == "options.num_channels must be one of 1, 2, 6, 8");
+        }) == "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) {
           o.dither = 4;
           o.dither_bits = 0;
@@ -204,7 +298,7 @@ TEST_CASE("engine freeze refuses each option by its member name", "[c_api][engin
   CHECK(refused([](auto& o) { o.block_size = -2; }) ==
         "options.block_size must be an integer in [1, 2147483647]");
   CHECK(refused([](auto& o) { o.num_channels = 0; }) ==
-        "options.num_channels must be an integer in [1, 2147483647]");
+        "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) { o.start_ppq = std::nan(""); }) ==
         "options.start_ppq must be finite and at least 0");
   CHECK(refused([](auto& o) { o.gain = -1.0f; }) == "options.gain must be finite and at least 0");
