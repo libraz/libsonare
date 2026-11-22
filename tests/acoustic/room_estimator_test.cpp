@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "acoustic/late_reverb.h"
@@ -262,6 +263,31 @@ TEST_CASE("estimate_room rejects invalid priors before analysis",
 
   aspect.aspect_hint_lw = -1.0f;
   REQUIRE_THROWS_AS(estimate_room(audio, aspect), SonareException);
+
+  // Each refusal names its own field; a band count of 0 is refused rather than read as a default.
+  const auto refused_subject = [&](const RoomEstimateConfig& config) -> std::string {
+    try {
+      estimate_room(audio, config);
+    } catch (const SonareException& e) {
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+      const std::string text = e.what();
+      return text.substr(0, text.find(' '));
+    }
+    return "<accepted>";
+  };
+  RoomEstimateConfig lh;
+  lh.aspect_hint_lh = 0.0f;
+  CHECK(refused_subject(lh) == "aspect_hint_lh");
+  CHECK(refused_subject(aspect) == "aspect_hint_lw");
+  RoomEstimateConfig bands;
+  bands.acoustic.n_octave_bands = 0;
+  CHECK(refused_subject(bands) == "n_octave_bands");
+  RoomEstimateConfig decay;
+  decay.acoustic.min_decay_db = 0.0f;
+  CHECK(refused_subject(decay) == "min_decay_db");
+  RoomEstimateConfig margin;
+  margin.acoustic.noise_floor_margin_db = -1.0f;
+  CHECK(refused_subject(margin) == "noise_floor_margin_db");
 }
 
 TEST_CASE("estimate_room volume follows the absorption-prior scaling law",
@@ -288,42 +314,35 @@ TEST_CASE("estimate_room volume follows the absorption-prior scaling law",
   REQUIRE_THAT(static_cast<double>(b.volume / a.volume), WithinRel(ratio, 1e-3));
 }
 
-TEST_CASE("estimate_room clamps the absorption prior instead of refusing it",
+TEST_CASE("estimate_room refuses an absorption prior outside its interval",
           "[acoustic][room_estimator]") {
-  // A clamp, not a refusal, so the property is a substitution: an out-of-range
-  // prior returns a successful estimate computed from the bound. "It did not
-  // throw" would hold just as well if the value were passed through, so each
-  // side is pinned against the estimate at its own bound, and the floor against
-  // an in-range prior so the substituted answer is visibly a different one.
   const int sr = 48000;
   const ShoeboxRoom room = uniform_room(7.0f, 5.0f, 3.0f, 0.15f);
   const SourceListener pl{{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
   const Audio rir = synthesize_rir(room, pl, sr).rir;
 
-  const auto volume_for = [&](float absorption) {
+  const auto estimate_with = [&](float absorption) {
     RoomEstimateConfig config;
     config.reference_absorption = absorption;
-    return estimate_room(rir, config).volume;
+    return estimate_room(rir, config);
   };
 
-  const float at_floor = volume_for(0.01f);
-  const float at_ceiling = volume_for(0.99f);
-  const float in_range = volume_for(0.15f);
+  // Both bounds are accepted and answer differently.
+  const float at_floor = estimate_with(0.01f).volume;
+  const float at_ceiling = estimate_with(0.99f).volume;
   REQUIRE(at_floor > 0.0f);
   REQUIRE(at_ceiling > at_floor);
 
-  // Below the floor, including the literal 0 that only the C ABI reads as unset.
-  REQUIRE(volume_for(0.0f) == at_floor);
-  REQUIRE(volume_for(-1.0f) == at_floor);
-  // And above the ceiling, including the 1.0 an unclamped -ln(1 - a0) would
-  // divide by zero on.
-  REQUIRE(volume_for(1.0f) == at_ceiling);
-  REQUIRE(volume_for(5.0f) == at_ceiling);
-
-  // Direction and size, because the cost of the substitution is the point: the
-  // volume scales with the cube of -ln(1 - a0), so a prior clamped up to the
-  // floor reports a room three orders of magnitude smaller than a plausible one.
-  const double ratio = std::pow(std::log(1.0 - 0.15) / std::log(1.0 - 0.01), 3.0);
-  REQUIRE(ratio > 1000.0);
-  REQUIRE_THAT(static_cast<double>(in_range / at_floor), WithinRel(ratio, 1e-3));
+  // Below the floor, including the literal 0, and above the ceiling, including the 1.0 that
+  // -ln(1 - a0) would divide by zero on.
+  for (const float refused : {0.0f, 0.005f, -1.0f, 1.0f, 1.5f, 5.0f}) {
+    INFO("reference_absorption " << refused);
+    try {
+      estimate_with(refused);
+      FAIL("accepted");
+    } catch (const SonareException& e) {
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(e.what()) == "reference_absorption must be finite and in [0.01, 0.99]");
+    }
+  }
 }

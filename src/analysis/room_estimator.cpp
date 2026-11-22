@@ -7,8 +7,7 @@
 
 #include "acoustic/late_reverb.h"
 #include "util/db.h"
-#include "util/exception.h"
-#include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 namespace {
@@ -63,15 +62,15 @@ float estimate_drr_db(const Audio& x) {
 }  // namespace
 
 void validate_room_estimate_config(const RoomEstimateConfig& config) {
-  SONARE_CHECK_MSG(numeric::finite_positive(config.aspect_hint_lw) &&
-                       numeric::finite_positive(config.aspect_hint_lh),
-                   ErrorCode::InvalidParameter, "room aspect priors must be finite and positive");
-  SONARE_CHECK_MSG(numeric::finite(config.reference_absorption), ErrorCode::InvalidParameter,
-                   "room absorption prior must be finite");
-  SONARE_CHECK_MSG(config.acoustic.n_octave_bands >= 0 &&
-                       numeric::finite_positive(config.acoustic.min_decay_db) &&
-                       numeric::finite_non_negative(config.acoustic.noise_floor_margin_db),
-                   ErrorCode::InvalidParameter, "room acoustic analysis settings are invalid");
+  namespace check = util::check;
+  check::greater_than(config.aspect_hint_lw, 0.0, "aspect_hint_lw");
+  check::greater_than(config.aspect_hint_lh, 0.0, "aspect_hint_lh");
+  check::in_range(config.reference_absorption, kRoomReferenceAbsorptionMin,
+                  kRoomReferenceAbsorptionMax, "reference_absorption");
+  check::within(config.acoustic.n_octave_bands, kRoomEstimateOctaveBandsDomain, "n_octave_bands");
+  check::within(config.acoustic.min_decay_db, kAcousticMinDecayDbDomain, "min_decay_db");
+  check::within(config.acoustic.noise_floor_margin_db, kAcousticNoiseFloorMarginDbDomain,
+                "noise_floor_margin_db");
 }
 
 RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& config) {
@@ -104,11 +103,9 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   // The inverse Sabine/Eyring problem fixes only V / A (L / alpha_eff here), so anchor the volume
   // scale with the absorption prior. Use the same statistical model the forward
   // synthesis path uses (Eyring by default) so the round-trip is consistent.
-  // Clamped silently; the interval's width is a budget. See RoomEstimateConfig.
+  // The prior was refused outside its interval above. See RoomEstimateConfig.
   const bool use_eyring = config.prefer_eyring;
-  const double a0 = std::clamp(static_cast<double>(config.reference_absorption),
-                               static_cast<double>(kRoomReferenceAbsorptionMin),
-                               static_cast<double>(kRoomReferenceAbsorptionMax));
+  const double a0 = static_cast<double>(config.reference_absorption);
   const double absn0 = use_eyring ? -std::log(1.0 - a0) : a0;
   // The air term the synthesis adds by default (ISO reference climate) is part of every decay.
   const acoustic::AirAbsorption reference_air{};

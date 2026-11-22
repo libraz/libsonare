@@ -31,6 +31,7 @@
 #include "acoustic/room_types.h"         // sonare::RoomDimensions
 #include "analysis/acoustic_analyzer.h"  // AcousticConfig
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -45,9 +46,12 @@ struct RoomEstimate {
   float confidence = 0.0f;              ///< honest [0,1] support for the estimate
 };
 
-/// Bounds `estimate_room` clamps the absorption prior into.
+/// Interval `estimate_room` accepts the absorption prior in; a prior outside it is refused.
 inline constexpr float kRoomReferenceAbsorptionMin = 0.01f;
 inline constexpr float kRoomReferenceAbsorptionMax = 0.99f;
+/// Octave-band count `estimate_room` accepts; a room estimate reports at least one band.
+inline constexpr util::check::NumericDomain kRoomEstimateOctaveBandsDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Priors and analysis settings for `estimate_room`.
 struct RoomEstimateConfig {
@@ -62,8 +66,8 @@ struct RoomEstimateConfig {
 
   /// Mean-absorption prior that anchors the otherwise rank-deficient volume
   /// scale (see the file header). A value matching the true room recovers the
-  /// true volume; mismatch scales the estimate. Silently clamped to [0.01, 0.99]
-  /// -- an out-of-range prior is answered from the bound, not refused -- and the
+  /// true volume; mismatch scales the estimate. Refused outside [0.01, 0.99]
+  /// with InvalidParameter naming `reference_absorption`; the
   /// interval only has to sit inside (0, 1), where 0 collapses the recovered
   /// length and 1 diverges. The floor sits within the range hard surfaces
   /// (glass, polished concrete) themselves measure (~0.01-0.02), and above
