@@ -1212,6 +1212,66 @@ TEST_CASE("sonare_engine_set_capture_punch refuses an enabled empty window",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_capture_timing checks the offset and punch it produces together",
+          "[c_api][engine][capture]") {
+  constexpr int kRate = 48000;
+  constexpr int64_t kLoopSamples = 100;
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kRate, 64, 8, 8, 0) == SONARE_OK);
+  // At 60 bpm one quarter note is one second, so the loop is kLoopSamples long.
+  REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, static_cast<double>(kLoopSamples) / kRate, 1) ==
+          SONARE_OK);
+  std::vector<float> plane(1000, 0.0f);
+  float* channels[1] = {plane.data()};
+  const SonareEngineCaptureBuffer buffer{channels, 1, static_cast<int64_t>(plane.size())};
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, kLoopSamples, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  // With the punch off the offset has no effect, so a long one is kept.
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, kLoopSamples + 1) == SONARE_OK);
+  SonareEngineCaptureStatus status{};
+
+  SECTION("a setup valid as a whole is accepted whatever the separate setters would refuse") {
+    REQUIRE(sonare_engine_set_capture_punch(engine, 0, kLoopSamples, 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_set_capture_timing(engine, 40, 0, kLoopSamples, 1) == SONARE_OK);
+    REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+    CHECK(status.record_offset_samples == 40);
+    CHECK(status.punch_enabled == 1);
+    CHECK(status.armed == 1);
+  }
+
+  SECTION("a refused setup changes neither half") {
+    REQUIRE(sonare_engine_set_capture_timing(engine, kLoopSamples + 1, 10, kLoopSamples, 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message())
+              .find("record_offset_samples must be at most the loop length, 100 samples, while "
+                    "capture is armed with punch on") != std::string::npos);
+    REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+    CHECK(status.record_offset_samples == kLoopSamples + 1);
+    CHECK(status.punch_enabled == 0);
+    CHECK(status.armed == 1);
+  }
+
+  SECTION("the punch window is refused by its own names") {
+    CHECK(sonare_engine_set_capture_timing(engine, 0, -1, kLoopSamples, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("punch_start_sample") != std::string::npos);
+    CHECK(sonare_engine_set_capture_timing(engine, 0, 50, 40, 0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message())
+              .find("punch_end_sample must not be before punch_start_sample") != std::string::npos);
+    CHECK(sonare_engine_set_capture_timing(engine, 0, 50, 50, 1) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message())
+              .find("punch_end_sample must not equal punch_start_sample") != std::string::npos);
+    CHECK(sonare_engine_set_capture_timing(nullptr, 0, 0, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  sonare_engine_destroy(engine);
+}
+
 #if defined(SONARE_WITH_GRAPH)
 TEST_CASE("sonare_engine_set_graph refuses a connection mix outside 0 and 1", "[c_api][engine]") {
   SonareEngine* engine = nullptr;

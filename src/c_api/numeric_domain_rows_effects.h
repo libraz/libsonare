@@ -72,6 +72,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
      nullptr},
     {"engine_set_capture_buffer", "buffer.num_channels", kEngineCaptureChannelsDomain, nullptr},
     {"engine_set_capture_punch", "start_sample", kEngineCapturePunchStartDomain, nullptr},
+    {"engine_set_capture_timing", "punch_start_sample", kEngineCapturePunchStartDomain, nullptr},
     {"engine_set_clip_page_prefetch_frames", "frames", kEnginePrefetchFramesDomain, nullptr},
     {"engine_set_clips", "clips[].fade_in_samples", kEngineClipFadeDomain, nullptr},
     {"engine_set_clips", "clips[].fade_out_samples", kEngineClipFadeDomain, nullptr},

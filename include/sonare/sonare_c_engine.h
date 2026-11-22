@@ -50,6 +50,7 @@ extern "C" {
 ///   answers what was set, including a change not yet adopted.
 /// - Capture control: `sonare_engine_set_capture_buffer`,
 ///   `sonare_engine_arm_capture`, `sonare_engine_set_capture_punch`,
+///   `sonare_engine_set_record_offset_samples`, `sonare_engine_set_capture_timing`,
 ///   `sonare_engine_reset_capture`. The buffer given to `set_capture_buffer`
 ///   must outlive capture and must not be freed while armed, and
 ///   `reset_capture` clears the frame counter, so issue it while not capturing.
@@ -927,6 +928,20 @@ SonareError sonare_engine_set_capture_source(SonareEngine* engine,
  * may span at most one loop pass, and an edit that would break that is refused
  * with SONARE_ERROR_INVALID_PARAMETER. */
 SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_t offset_samples);
+/// @brief Sets the record offset and the capture punch window together, checking the state they
+///        produce once and applying both or neither.
+/// @details The window and the offset mean what they do in @ref sonare_engine_set_capture_punch
+///          and @ref sonare_engine_set_record_offset_samples: the offset may be negative and has
+///          effect only with @p punch_enabled non-zero. Setting them here does not depend on
+///          which half is set first, so a looped punch setup cannot be refused halfway; the two
+///          single setters stay for an edit of one half.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p punch_start_sample, a
+///         @p punch_end_sample before it, an enabled window with no frames in it, or, while an
+///         armed punch capture loops, a @p record_offset_samples longer than one loop pass; the
+///         engine is left as it was.
+SonareError sonare_engine_set_capture_timing(SonareEngine* engine, int64_t record_offset_samples,
+                                             int64_t punch_start_sample, int64_t punch_end_sample,
+                                             int punch_enabled);
 /// @brief Turns the live input monitor on (@p enabled non-zero) or off with the given @p gain.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a non-finite @p gain.
 SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, float gain);

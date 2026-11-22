@@ -166,6 +166,10 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "engine_set_master_strip_insert_param_by_name": _insert_param(
         "set_strip_insert_param", "master"
     ),
+    "engine_set_capture_timing": lambda: (
+        _engine().configure_capture,
+        {"capacity_frames": 1024},
+    ),
     "engine_set_record_offset_samples": lambda: (
         _engine().configure_capture,
         {"capacity_frames": 1024},

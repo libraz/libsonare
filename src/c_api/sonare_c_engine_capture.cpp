@@ -149,26 +149,52 @@ SonareError sonare_engine_arm_capture(SonareEngine* engine, int armed) {
   SONARE_C_CATCH
 }
 
+namespace {
+
+// An enabled empty window would read as "no punch" and record everything.
+void check_punch_window(int64_t start, int64_t end, bool enabled, const char* start_name,
+                        const char* end_name) {
+  util::check::integer_within(start, kEngineCapturePunchStartDomain, start_name);
+  if (end < start)
+    util::check::refuse_relation({end_name, start_name}, "{0} must not be before {1}");
+  if (enabled && end == start) {
+    util::check::refuse_relation({end_name, start_name}, "{0} must not equal {1}");
+  }
+}
+
+}  // namespace
+
 SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled) {
   SONARE_C_API_ENTRY;
-  // An enabled empty window would read as "no punch" and record everything.
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_within(start_sample, kEngineCapturePunchStartDomain, "start_sample");
-        if (end_sample < start_sample) {
-          util::check::refuse_relation({"end_sample", "start_sample"},
-                                       "{0} must not be before {1}");
-        }
-        if (enabled != 0 && end_sample == start_sample) {
-          util::check::refuse_relation({"end_sample", "start_sample"}, "{0} must not equal {1}");
-        }
+        check_punch_window(start_sample, end_sample, enabled != 0, "start_sample", "end_sample");
       });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_TRY
   engine->engine.set_capture_punch(start_sample, end_sample, enabled != 0);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_set_capture_timing(SonareEngine* engine, int64_t record_offset_samples,
+                                             int64_t punch_start_sample, int64_t punch_end_sample,
+                                             int punch_enabled) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = run_validation([&] {
+        check_punch_window(punch_start_sample, punch_end_sample, punch_enabled != 0,
+                           "punch_start_sample", "punch_end_sample");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_TRY
+  engine->engine.set_capture_timing(record_offset_samples, punch_start_sample, punch_end_sample,
+                                    punch_enabled != 0);
   return SONARE_OK;
   SONARE_C_CATCH
 }

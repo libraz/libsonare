@@ -514,3 +514,34 @@ def test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarme
                 engine.configure_capture(capacity_frames=bad)
         with pytest.raises(TypeError, match="CapturePunch"):
             engine.configure_capture(capacity_frames=128, punch={"start_sample": 0})  # type: ignore[arg-type]
+
+
+def test_configure_capture_checks_a_looped_offset_and_punch_together() -> None:
+    loop = 100  # samples: at 60 bpm one quarter note is one second
+    with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
+        engine.set_tempo(60.0)
+        engine.set_loop(0.0, loop / 48000)
+        engine.configure_capture(capacity_frames=1000, record_offset_samples=loop + 1)
+        engine.arm_capture()
+        punch = CapturePunch(start_sample=0, end_sample=loop)
+        # Valid as a whole however the halves would be ordered, so it is accepted.
+        engine.configure_capture(capacity_frames=1000, record_offset_samples=40, punch=punch)
+        status = engine.capture_status()
+        assert status.record_offset_samples == 40
+        assert status.punch_enabled
+        with pytest.raises(
+            SonareValueError,
+            match="record_offset_samples must be at most the loop length, 100 samples",
+        ):
+            engine.configure_capture(
+                capacity_frames=1000, record_offset_samples=loop + 1, punch=punch
+            )
+        status = engine.capture_status()
+        assert status.record_offset_samples == 40
+        assert status.punch_enabled
+        with pytest.raises(
+            SonareValueError, match="punch.end_sample must not equal punch.start_sample"
+        ):
+            engine.configure_capture(
+                capacity_frames=1000, punch=CapturePunch(start_sample=50, end_sample=50)
+            )

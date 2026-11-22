@@ -1541,6 +1541,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_capture_timing",
+      "param": "punch_start_sample",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_clip_page_prefetch_frames",
       "param": "frames",
       "kind": "integer",

@@ -517,6 +517,7 @@
 "engine_set_capture_buffer": {"domain": "engine", "surfaces": ["c"]},
 "engine_set_capture_punch": {"domain": "engine", "surfaces": ["c"]},
 "engine_set_capture_source": {"domain": "engine", "surfaces": ["c"]},
+"engine_set_capture_timing": {"domain": "engine", "surfaces": ["c"]},
 "engine_set_clip_page_prefetch_frames": {"domain": "engine", "surfaces": ["c"]},
 "engine_set_clips": {"domain": "engine", "surfaces": ["c"]},
 "engine_set_controller_note_tracking": {"domain": "engine", "surfaces": ["c"]},

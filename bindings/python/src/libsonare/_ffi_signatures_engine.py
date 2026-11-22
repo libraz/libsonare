@@ -642,6 +642,14 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int64,
         ctypes.c_int,
     ]
+    lib.sonare_engine_set_capture_timing.restype = ctypes.c_int32
+    lib.sonare_engine_set_capture_timing.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.c_int,
+    ]
     lib.sonare_engine_set_capture_source.restype = ctypes.c_int32
     lib.sonare_engine_set_capture_source.argtypes = [
         ctypes.c_void_p,

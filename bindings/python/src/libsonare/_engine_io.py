@@ -153,8 +153,10 @@ class _EngineIoMixin:
         ``source`` is ``"output"`` or ``"input"``. A positive ``record_offset_samples`` delays
         capture relative to the punch window; input arriving within the offset after a loop wrap
         belongs to the end of the pass played before it, so every pass captures the whole loop
-        range. An omitted ``input_monitor`` is enabled at gain 1 and an omitted ``punch`` leaves
-        capture ungated. The buffer is reallocated only when ``num_channels`` or
+        range. The offset has effect only with a ``punch``; while an armed punch capture loops it
+        may span at most one loop pass, and a setup that would break that is refused whole. An
+        omitted ``input_monitor`` is enabled at gain 1 and an omitted ``punch`` leaves capture
+        ungated. The buffer is reallocated only when ``num_channels`` or
         ``capacity_frames`` changes, and reallocating while armed raises ``INVALID_STATE``.
         """
         # Narrowed, not int()-coerced: int(1024.5) is a buffer one frame short.
@@ -180,11 +182,6 @@ class _EngineIoMixin:
         lib = _get_lib()
         _check(lib.sonare_engine_set_capture_source(handle, _to_c_int(source_value, "source")))
         _check(
-            lib.sonare_engine_set_record_offset_samples(
-                handle, _to_c_int64(offset, "record_offset_samples")
-            )
-        )
-        _check(
             lib.sonare_engine_set_input_monitor(
                 handle,
                 1 if monitor.enabled else 0,
@@ -196,14 +193,16 @@ class _EngineIoMixin:
             if bounds is not None
             else ((0, _Respelling("start_sample")), (0, _Respelling("end_sample")))
         )
+        # Offset and punch go together, so a looped setup is checked as the state it produces.
         _check(
-            lib.sonare_engine_set_capture_punch(
+            lib.sonare_engine_set_capture_timing(
                 handle,
+                _to_c_int64(offset, "record_offset_samples"),
                 _to_c_int64(start, start_given.name),
                 _to_c_int64(end, end_given.name),
                 0 if bounds is None else 1,
             ),
-            respelled={"start_sample": start_given, "end_sample": end_given},
+            respelled={"punch_start_sample": start_given, "punch_end_sample": end_given},
         )
 
     @_entry("RealtimeEngine.arm_capture")

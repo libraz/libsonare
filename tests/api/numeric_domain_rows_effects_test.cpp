@@ -309,6 +309,12 @@ SonareError probe_engine_set_capture_punch(const std::string& param, double valu
   return sonare_engine_set_capture_punch(engine.get(), start, 1000, 0);
 }
 
+SonareError probe_engine_set_capture_timing(const std::string& param, double value) {
+  PreparedEngine engine;
+  const std::int64_t start = is_param(param, "punch_start_sample") ? as_i64(value) : 0;
+  return sonare_engine_set_capture_timing(engine.get(), 0, start, 1000, 0);
+}
+
 template <typename C>
 void set_clip_field(C* clip, const std::string& field, double value) {
   if (field == "num_channels") clip->num_channels = static_cast<int>(value);
@@ -938,6 +944,7 @@ const std::map<std::string, Probe>& probes() {
       {"engine_set_automation_lane", probe_engine_set_automation_lane},
       {"engine_set_capture_buffer", probe_engine_set_capture_buffer},
       {"engine_set_capture_punch", probe_engine_set_capture_punch},
+      {"engine_set_capture_timing", probe_engine_set_capture_timing},
       {"engine_set_clip_page_prefetch_frames", probe_engine_set_clip_page_prefetch_frames},
       {"engine_set_clips", probe_engine_set_clips},
       {"engine_set_loop", probe_engine_set_loop},

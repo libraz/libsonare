@@ -453,6 +453,7 @@ _ALIAS_COVERAGE = {
     "engine_set_capture_source": ("configure_capture",),
     "engine_set_input_monitor": ("configure_capture",),
     "engine_set_record_offset_samples": ("configure_capture",),
+    "engine_set_capture_timing": ("configure_capture",),
     # A mixer scene is the mixer's document: the facades read and load it as JSON.
     "mixer_to_scene_json": ("to_json",),
     "mixer_from_scene_json": ("from_json",),
