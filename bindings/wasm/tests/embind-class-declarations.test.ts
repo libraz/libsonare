@@ -1,7 +1,7 @@
 /**
  * Every embind class handle the TypeScript sources declare is a class the module
- * registers, with every declared method on its prototype, and every registered
- * class and method is declared.
+ * registers, with every declared method and property on its prototype, and every
+ * registered class, method and property is declared.
  *
  * A handle is declared as `interface Wasm<Name>` carrying `delete`, and the module
  * registers it as `<Name>`. A declared method the binary lacks type-checks and then
@@ -14,17 +14,16 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
 
-/** Registered methods no TypeScript caller reaches, so no handle declares them. */
+/** Registered members no TypeScript caller reaches, so no handle declares them. */
 const UNDECLARED: Readonly<Record<string, string>> = {
-  'SampleBank#id': 'registered beside the facade, which keeps its own id',
-  'ProjectTimeline#id': 'registered beside the facade, which keeps its own id',
   'Project#setMidiFx': 'MIDI FX are set through the realtime engine',
-  'PolyphonicAnalysis#noteCount': 'the facade reads the note list whole',
-  'PolyphonicAnalysis#frameCount': 'the facade reads the frame list whole',
 };
 
-/** Callable member names of every `Wasm<Name>` handle interface under `src/`, keyed by `<Name>`. */
-function declaredHandles(root: string): Map<string, string[]> {
+/** Members of a handle interface: callable ones are methods, the rest embind properties. */
+type Handle = { methods: string[]; properties: string[] };
+
+/** Every `Wasm<Name>` handle interface under `src/`, keyed by `<Name>`. */
+function declaredHandles(root: string): Map<string, Handle> {
   const config = ts.parseJsonConfigFileContent(
     ts.readConfigFile(`${root}/tsconfig.json`, ts.sys.readFile).config,
     ts.sys,
@@ -32,7 +31,7 @@ function declaredHandles(root: string): Map<string, string[]> {
   );
   const program = ts.createProgram(config.fileNames, { ...config.options, noEmit: true });
   const checker = program.getTypeChecker();
-  const handles = new Map<string, string[]>();
+  const handles = new Map<string, Handle>();
   for (const file of program.getSourceFiles()) {
     if (!file.fileName.startsWith(`${root}/src/`)) continue;
     for (const statement of file.statements) {
@@ -41,23 +40,32 @@ function declaredHandles(root: string): Map<string, string[]> {
       }
       const symbol = checker.getSymbolAtLocation(statement.name);
       if (!symbol) continue;
-      const methods = checker
-        .getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))
-        .filter(
-          (member) =>
-            checker.getNonNullableType(checker.getTypeOfSymbol(member)).getCallSignatures().length >
-            0,
-        )
-        .map((member) => member.name);
-      if (methods.includes('delete')) handles.set(statement.name.text.slice(4), methods);
+      const handle: Handle = { methods: [], properties: [] };
+      for (const member of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
+        const type = checker.getNonNullableType(checker.getTypeOfSymbol(member));
+        (type.getCallSignatures().length > 0 ? handle.methods : handle.properties).push(
+          member.name,
+        );
+      }
+      if (handle.methods.includes('delete')) handles.set(statement.name.text.slice(4), handle);
     }
   }
   return handles;
 }
 
-type EmbindClass = { prototype: Record<string, unknown> };
+type EmbindClass = { prototype: object };
 const isEmbindClass = (value: unknown): value is EmbindClass =>
-  typeof value === 'function' && typeof (value as EmbindClass).prototype?.isAliasOf === 'function';
+  typeof value === 'function' &&
+  typeof (value as { prototype?: { isAliasOf?: unknown } }).prototype?.isAliasOf === 'function';
+
+/** The descriptor of @p key on @p prototype or the chain above it; reading a getter here would throw. */
+function descriptor(prototype: object | null, key: string): PropertyDescriptor | undefined {
+  for (let at = prototype; at; at = Object.getPrototypeOf(at)) {
+    const found = Object.getOwnPropertyDescriptor(at, key);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 async function registeredClasses(): Promise<Map<string, EmbindClass>> {
   const createModule = (await import('../dist/sonare.js')).default;
@@ -79,20 +87,23 @@ describe('embind class handles', async () => {
     expect([...handles.keys()].sort()).toEqual([...classes.keys()].sort());
   });
 
-  it.each([...handles.keys()].sort())('%s: every declared method is registered', (name) => {
+  it.each([...handles.keys()].sort())('%s: every declared member is registered', (name) => {
     const prototype = classes.get(name)?.prototype;
     if (!prototype) throw new Error(`${name} is not registered`);
+    const { methods, properties } = handles.get(name) ?? { methods: [], properties: [] };
     expect(
-      (handles.get(name) ?? []).filter((method) => typeof prototype[method] !== 'function'),
+      methods.filter((method) => typeof descriptor(prototype, method)?.value !== 'function'),
     ).toEqual([]);
+    expect(properties.filter((property) => !descriptor(prototype, property)?.get)).toEqual([]);
   });
 
-  it.each([...classes.keys()].sort())('%s: every registered method is declared', (name) => {
-    const declared = new Set(handles.get(name) ?? []);
+  it.each([...classes.keys()].sort())('%s: every registered member is declared', (name) => {
+    const handle = handles.get(name);
+    const declared = new Set([...(handle?.methods ?? []), ...(handle?.properties ?? [])]);
     const prototype = classes.get(name)?.prototype ?? {};
     const missing = Object.getOwnPropertyNames(prototype)
-      .filter((method) => method !== 'constructor' && !declared.has(method))
-      .map((method) => `${name}#${method}`)
+      .filter((member) => member !== 'constructor' && !declared.has(member))
+      .map((member) => `${name}#${member}`)
       .filter((key) => {
         if (!(key in UNDECLARED)) return true;
         undeclaredUsed.add(key);
@@ -101,7 +112,7 @@ describe('embind class handles', async () => {
     expect(missing).toEqual([]);
   });
 
-  it('excuses no method a handle now declares', () => {
+  it('excuses no member a handle now declares', () => {
     expect(Object.keys(UNDECLARED).filter((key) => !undeclaredUsed.has(key))).toEqual([]);
   });
 });
