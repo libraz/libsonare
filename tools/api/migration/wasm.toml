@@ -35509,3 +35509,11 @@ changed = "a channel list that is not array-like is refused with TypeError namin
 domain = "project"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/caller-length-refusal.test.ts::refuses a channel list that is not an array instead of counting it as empty"
+
+[[entry]]
+kind = "field"
+old = "EstimateMeterRequest.compoundSubdivisionThreshold"
+changed = "the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the core defaults"

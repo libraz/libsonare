@@ -5012,3 +5012,11 @@ changed = "size_t* out_frames (sample frames per component) then int* out_n_comp
 domain = "effects"
 rule = "c-matrix-shape"
 test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_decompose_stems"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterOptions.compound_subdivision_threshold"
+changed = "the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the core defaults"

@@ -434,7 +434,7 @@ def estimate_meter(
     downbeat_weight: float = 1.0,
     measure_weight: float = 0.5,
     subdivision_weight: float = 0.15,
-    compound_subdivision_threshold: float = 0.85,
+    compound_subdivision_threshold: float = 0.5,
 ) -> MeterEstimate: ...
 def analyze_bpm(
     samples: FloatSamples,

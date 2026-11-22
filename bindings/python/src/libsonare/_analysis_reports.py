@@ -365,7 +365,7 @@ def estimate_meter(
     downbeat_weight: float = 1.0,
     measure_weight: float = 0.5,
     subdivision_weight: float = 0.15,
-    compound_subdivision_threshold: float = 0.85,
+    compound_subdivision_threshold: float = 0.5,
 ) -> MeterEstimate:
     """Estimate meter over a beat series, without audio and without re-analyzing.
 
@@ -407,8 +407,11 @@ def estimate_meter(
         downbeat_weight: Weight of the downbeat term in the multi-comb score.
         measure_weight: Weight of the measure-level term.
         subdivision_weight: Weight of the subdivision term.
-        compound_subdivision_threshold: Subdivision support at which a meter is
-            resolved as compound rather than simple.
+        compound_subdivision_threshold: Mean accent between the beats, as a
+            fraction of the mean accent on them, at and above which a six (or a
+            three) is read as compound. Only a midpoint holding an attack
+            contributes, so a subdivision masked by a sustained bed does not
+            count.
 
     Returns:
         :class:`libsonare.MeterEstimate`. ``candidate_scores`` is parallel to

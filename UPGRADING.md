@@ -127,6 +127,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced_flags, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced_flags is non-NULL, and voiced flags read as 0/1 probabilities |
 | `sonare_vqt` | gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0' |
 
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareMeterOptions.compound_subdivision_threshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -1476,6 +1482,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `estimate_meter(compound_subdivision_threshold)` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `griffin_lim(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
 | `griffin_lim(n_fft)` | omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError |
 | `mel_to_audio(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
@@ -4132,6 +4139,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EstimateMeterRequest.compoundSubdivisionThreshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
@@ -7714,6 +7722,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EstimateMeterRequest.compoundSubdivisionThreshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 | `GriffinLimRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `GriffinLimRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MelToAudioRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |

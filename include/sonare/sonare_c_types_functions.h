@@ -411,9 +411,10 @@ typedef struct {
   float measure_weight;
   /// Weight of the subdivision support in a candidate's score. Default 0.15.
   float subdivision_weight;
-  /// Subdivision support at which a meter is resolved as compound. Default 0.85. Consulted
-  /// only where there is a subdivision to measure, so it has no effect on
-  /// sonare_estimate_meter_json.
+  /// Mean accent between the beats, as a fraction of the mean accent on them, at and above
+  /// which a six (or a three) is read as compound; only a midpoint holding an attack
+  /// contributes. Default 0.5. Consulted only where there is a subdivision to measure, so it
+  /// has no effect on sonare_estimate_meter_json.
   float compound_subdivision_threshold;
 } SonareMeterOptions;
 

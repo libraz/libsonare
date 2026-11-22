@@ -13658,3 +13658,11 @@ old = "dev"
 removed = "the development tools are dependency groups; contributors run `uv sync` in bindings/python"
 domain = "core"
 rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "estimate_meter(compound_subdivision_threshold)"
+changed = "the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_binding_consistency.py::test_estimate_meter_keyword_defaults_match_the_core"
