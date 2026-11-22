@@ -30,8 +30,6 @@
 
 namespace sonare::arrangement {
 
-using constants::kDefaultBpm;
-
 namespace {
 
 engine::FadeCurve to_engine_fade_curve(FadeCurve curve) noexcept {
@@ -184,25 +182,13 @@ void fold_midi_track_controls_into_lane(const Track& track, float pan,
 }
 #endif
 
-// Fills a deterministic transport::TempoMap from the project's plain segment
-// data. When the project has no tempo segments a single 120 BPM segment is used
-// so PPQ->sample conversion is always well defined (mirrors RealtimeEngine's
-// default). No clock / random; pure value transform. TempoMap is non-copyable
-// (it owns an rt::RtSnapshot), so it is filled in place rather than returned.
+// Fills a deterministic transport::TempoMap from the project's plain segment data; a project
+// stating no tempo or meter gets the map's own defaults. TempoMap is non-copyable (it owns an
+// rt::RtSnapshot), so it is filled in place rather than returned.
 void fill_tempo_map(const Project& project, transport::TempoMap* map) {
   map->prepare(project.sample_rate());
-
-  std::vector<transport::TempoSegment> segments = project.tempo_segments();
-  if (segments.empty()) {
-    segments.push_back(transport::TempoSegment{0.0, kDefaultBpm, 0.0});
-  }
-  map->set_segments(std::move(segments));
-
-  std::vector<transport::TimeSignatureSegment> sigs = project.time_signatures();
-  if (sigs.empty()) {
-    sigs.push_back(transport::TimeSignatureSegment{0.0, transport::TimeSignature{}});
-  }
-  map->set_time_signatures(std::move(sigs));
+  map->set_segments(project.tempo_segments());
+  map->set_time_signatures(project.time_signatures());
 }
 
 // Resamples one channel from src_sr to dst_sr using the fixed, build-
@@ -439,7 +425,7 @@ double effective_loop_length_ppq(const EditClip& clip) noexcept {
 bool fixed_period_loop_is_exact(const Project& project, const EditClip& clip, double loop_ppq,
                                 int64_t period_samples) {
   const std::vector<transport::TempoSegment>& segments = project.tempo_segments();
-  double bpm = kDefaultBpm;
+  double bpm = transport::kDefaultTempoSegment.bpm;
   if (!segments.empty()) {
     size_t i = 0;
     while (i + 1 < segments.size() && segments[i + 1].start_ppq <= clip.start_ppq) ++i;

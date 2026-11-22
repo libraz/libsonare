@@ -70,6 +70,11 @@ struct TimeSignature {
   int denominator = 4;
 };
 
+/// The tempo of a timeline that states none: kDefaultBpm from ppq 0.
+inline constexpr TempoSegment kDefaultTempoSegment{0.0, constants::kDefaultBpm, 0.0};
+/// The meter of a timeline that states none.
+inline constexpr TimeSignature kDefaultTimeSignature{};
+
 /// Length of one bar of `sig` in quarter-note PPQ; numerator and denominator clamp to at least 1.
 double bar_length_ppq(TimeSignature sig) noexcept;
 

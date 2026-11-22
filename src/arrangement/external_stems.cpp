@@ -12,7 +12,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "util/constants.h"
 #include "util/resource_limits.h"
 
 namespace sonare::arrangement {
@@ -72,11 +71,7 @@ size_t channel_count(ExternalSeparatedStemLayout layout) noexcept {
 void prepare_tempo_map(const Project& project, transport::TempoMap* map) {
   if (map == nullptr) return;
   map->prepare(project.sample_rate());
-  std::vector<transport::TempoSegment> segments = project.tempo_segments();
-  if (segments.empty()) {
-    segments.push_back({0.0, constants::kDefaultBpm, 0.0});
-  }
-  map->set_segments(std::move(segments));
+  map->set_segments(project.tempo_segments());
 }
 
 bool frame_round_trips(const transport::TempoMap& map, int64_t frame) noexcept {

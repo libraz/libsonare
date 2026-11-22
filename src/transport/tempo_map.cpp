@@ -127,7 +127,7 @@ std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
                                 }),
                  segments.end());
   if (segments.empty()) {
-    segments.push_back({0.0, constants::kDefaultBpm, 0.0});
+    segments.push_back(kDefaultTempoSegment);
   }
   keep_last_per_start(&segments);
   if (segments.front().start_ppq > 0.0) {
@@ -159,7 +159,7 @@ std::vector<TimeSignatureSegment> normalize_time_signatures(
                                        }),
                         time_signatures.end());
   if (time_signatures.empty()) {
-    time_signatures.push_back({0.0, {4, 4}});
+    time_signatures.push_back({0.0, kDefaultTimeSignature});
   }
   keep_last_per_start(&time_signatures);
   if (time_signatures.front().start_ppq > 0.0) {
@@ -188,12 +188,12 @@ void TempoMap::prepare(double sample_rate) {
   }
 
   // Copy out under a pin released before publishing, so the copied snapshot can be reclaimed.
-  std::vector<TempoSegment> seg_values{{0.0, constants::kDefaultBpm, 0.0}};
+  std::vector<TempoSegment> seg_values{kDefaultTempoSegment};
   if (const auto segments = segments_.read()) seg_values = *segments;
   segments_.publish(std::make_shared<const std::vector<TempoSegment>>(
       normalize_segments(std::move(seg_values), sample_rate_)));
 
-  std::vector<TimeSignatureSegment> sig_values{{0.0, {4, 4}}};
+  std::vector<TimeSignatureSegment> sig_values{{0.0, kDefaultTimeSignature}};
   if (const auto time_signatures = time_signatures_.read()) sig_values = *time_signatures;
   time_signatures_.publish(std::make_shared<const std::vector<TimeSignatureSegment>>(
       normalize_time_signatures(std::move(sig_values))));
