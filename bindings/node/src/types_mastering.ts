@@ -13177,7 +13177,7 @@ export interface MasteringProcessorParamMap {
     /** Range: [-1, 1]. Default: 0. */
     characterTone?: number;
     /** Default: 'reverb'. */
-    reverbVariationVariation?: 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
+    reverbVariation?: 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
     /** Unit: ms. Range: [1, 3000]. Default: 250. */
     reverbVariationDelayMs?: number;
     /** Range: [0, 0.95]. Default: 0.35. */
@@ -13201,7 +13201,7 @@ export interface MasteringProcessorParamMap {
     /** Default: 'internal'. */
     vocoderCarrierSource?: 'internal';
     /** Default: 'psola'. */
-    voiceEngineEngine?: 'grain' | 'psola';
+    voiceEngine?: 'grain' | 'psola';
     /** Unit: Hz. Range: [50, 200]. Default: 70. */
     voiceEngineF0MinHz?: number;
   };

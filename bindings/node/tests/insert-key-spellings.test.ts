@@ -23,6 +23,8 @@ const RENAMED: readonly (readonly [MasteringInsertName, string, string])[] = [
   ['voice.changer', 'eqHighpassHz', 'eqHighPassHz'],
   ['voice.changer', 'retuneSemitones', 'retunePitchSemitones'],
   ['voice.changer', 'retuneGrainSize', 'retuneGrainSizeSamples'],
+  ['voice.changer', 'voiceEngineEngine', 'voiceEngine'],
+  ['voice.changer', 'reverbVariationVariation', 'reverbVariation'],
   ['effects.modulation.pitchShifter', 'semitones', 'pitchSemitones'],
   ['effects.modulation.pitchShifter', 'semitones2', 'pitchSemitones2'],
   ['effects.modulation.pitchShifter', 'cents', 'pitchCents'],
