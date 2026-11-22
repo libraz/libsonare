@@ -579,7 +579,7 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
 /// @param processor Processor id (an insert or a repair stage) whose parameter @p key is, or
 ///   NULL or "" when @p key is a flat mastering chain key (`repair.denoise.noiseEstimator`,
 ///   `repair.dehum.mode`, `dynamics.compressor.detector`,
-///   `dynamics.multibandComp.slope`, `dynamics.multibandComp.bands.<i>.detector`,
+///   `dynamics.multibandComp.crossover.slope`, `dynamics.multibandComp.bands.<i>.detector`,
 ///   in any spelling the chain accepts).
 /// @param key Parameter key, as published by the parameter info or the chain schema.
 /// @param name The choice name, matched exactly.
