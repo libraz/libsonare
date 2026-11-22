@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "acoustic/rir_synthesizer.h"
 #include "support/c_diagnostics.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
@@ -238,7 +239,8 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   CHECK(morph.air_absorption_enabled == 1);
   CHECK(morph.air_temperature_c == 20.0f);
   CHECK(morph.air_humidity_percent == 50.0f);
-  CHECK(morph.receiver_spacing_m == 0.5f);
+  // Not given: fitted to the room and placement at use.
+  CHECK(std::isnan(morph.receiver_spacing_m));
 
   // The initialized default room synthesizes as it stands.
   SonareRirSynthResult result{};
@@ -1460,10 +1462,11 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
                                  &out_left, &out_right,
                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
-  // A listener 0.1 m from the side wall puts one receiver outside the room.
+  // A listener 0.1 m from the side wall puts one receiver of a given 0.5 m pair outside.
   SonareRoomMorphConfig wall = stereo_morph_config();
   wall.listener.y = 0.1f;
   wall.source.y = 0.1f;
+  wall.receiver_spacing_m = 0.5f;
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &wall, &out_left,
                                  &out_right, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   // The mono morph does not read the spacing, so the same placement still renders.
@@ -1485,6 +1488,45 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
                                  nullptr, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out_left,
                                  &out_right, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare acoustic C API fits an omitted receiver spacing to the room",
+          "[c_api][acoustic]") {
+  std::vector<float> input(4800, 0.0f);
+  input[0] = 1.0f;
+  // The same wall-hugging placement: no 0.5 m pair fits, but a narrower one does.
+  SonareRoomMorphConfig omitted = stereo_morph_config();
+  omitted.listener.y = 0.1f;
+  omitted.source.y = 0.1f;
+  REQUIRE(std::isnan(omitted.receiver_spacing_m));
+  const float spacing = sonare::acoustic::default_receiver_spacing(
+      {omitted.length_m, omitted.width_m, omitted.height_m},
+      {{omitted.source.x, omitted.source.y, omitted.source.z},
+       {omitted.listener.x, omitted.listener.y, omitted.listener.z}});
+  REQUIRE(spacing > 0.0f);
+  REQUIRE(spacing < 0.5f);
+  SonareRoomMorphConfig fitted = omitted;
+  fitted.receiver_spacing_m = spacing;
+
+  auto render = [&](const SonareRoomMorphConfig& cfg) {
+    float* left = nullptr;
+    float* right = nullptr;
+    size_t length = 0;
+    REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &left,
+                                     &right, &length) == SONARE_OK);
+    std::vector<float> both(left, left + length);
+    both.insert(both.end(), right, right + length);
+    sonare_free_floats(left);
+    sonare_free_floats(right);
+    return both;
+  };
+  const std::vector<float> from_omitted = render(omitted);
+  const std::vector<float> from_fitted = render(fitted);
+  REQUIRE(from_omitted.size() == from_fitted.size());
+  for (size_t i = 0; i < from_omitted.size(); ++i) {
+    INFO(i);
+    REQUIRE(from_omitted[i] == Catch::Approx(from_fitted[i]).margin(1e-6));
+  }
 }
 
 TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",

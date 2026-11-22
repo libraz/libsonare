@@ -15,7 +15,9 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -125,11 +127,10 @@ void init_room_fields(Config* config) {
   config->air_humidity_percent = air.humidity_percent;
 }
 
-// A position left all-NaN takes @p fallback; any other non-finite component is refused by name.
-sonare::acoustic::Vec3 resolve_position(const SonareRoomPlacement& p,
-                                        const sonare::acoustic::Vec3& fallback,
-                                        const std::string& subject) {
-  if (std::isnan(p.x) && std::isnan(p.y) && std::isnan(p.z)) return fallback;
+// A position left all-NaN is not given; any other non-finite component is refused by name.
+std::array<std::optional<float>, 3> requested_position(const SonareRoomPlacement& p,
+                                                       const std::string& subject) {
+  if (std::isnan(p.x) && std::isnan(p.y) && std::isnan(p.z)) return {};
   namespace check = sonare::util::check;
   check::finite_float(p.x, (subject + ".x").c_str());
   check::finite_float(p.y, (subject + ".y").c_str());
@@ -137,13 +138,20 @@ sonare::acoustic::Vec3 resolve_position(const SonareRoomPlacement& p,
   return {p.x, p.y, p.z};
 }
 
-// The source and listener a room config asks for, with unset positions scaled to its room.
+// The source, listener and (for a morph config) receiver spacing a room config asks for,
+// resolved against its room; NaN is the C spelling of "not given".
 template <typename Config>
-sonare::acoustic::SourceListener resolve_placement(const Config& config) {
-  const sonare::acoustic::SourceListener fallback =
-      sonare::acoustic::scaled_default_placement(config.length_m, config.width_m, config.height_m);
-  return {resolve_position(config.source, fallback.source, "config.source"),
-          resolve_position(config.listener, fallback.listener, "config.listener")};
+sonare::acoustic::ResolvedRoomPlacement resolve_placement(const Config& config) {
+  sonare::acoustic::RoomPlacementRequest request;
+  request.source = requested_position(config.source, "config.source");
+  request.listener = requested_position(config.listener, "config.listener");
+  if constexpr (std::is_same_v<Config, SonareRoomMorphConfig>) {
+    if (!std::isnan(config.receiver_spacing_m)) {
+      request.receiver_spacing_m = config.receiver_spacing_m;
+    }
+  }
+  return sonare::acoustic::resolve_room_placement(
+      sonare::RoomDimensions{config.length_m, config.width_m, config.height_m}, request);
 }
 
 template <size_t N>
@@ -181,7 +189,8 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config) {
   config->crossfade_ms = defaults.crossfade_ms;
   config->ism_order = defaults.ism_order;
   config->seed = defaults.seed;
-  config->receiver_spacing_m = defaults.receiver_spacing_m;
+  // Not given: fitted to the room and placement at use.
+  config->receiver_spacing_m = std::numeric_limits<float>::quiet_NaN();
   config->prefer_eyring = defaults.late_model == sonare::acoustic::ReverbModel::Eyring ? 1 : 0;
   config->air_absorption_enabled = defaults.air_absorption_enabled ? 1 : 0;
 }
@@ -218,8 +227,10 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
   out->length_m = estimate->length_m;
   out->width_m = estimate->width_m;
   out->height_m = estimate->height_m;
-  const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
-      estimate->length_m, estimate->width_m, estimate->height_m);
+  const sonare::acoustic::SourceListener placement =
+      sonare::acoustic::resolve_room_placement(
+          sonare::RoomDimensions{estimate->length_m, estimate->width_m, estimate->height_m}, {})
+          .placement;
   out->source = {placement.source.x, placement.source.y, placement.source.z};
   out->listener = {placement.listener.x, placement.listener.y, placement.listener.z};
   return SONARE_OK;
@@ -260,7 +271,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   check::finite_float(config->length_m, "config.length_m");
   check::finite_float(config->width_m, "config.width_m");
   check::finite_float(config->height_m, "config.height_m");
-  const sonare::acoustic::SourceListener placement = resolve_placement(*config);
+  const sonare::acoustic::SourceListener placement = resolve_placement(*config).placement;
   check::integer_within(config->ism_order, sonare::effects::common::kRirIsmOrderDomain,
                         "config.ism_order");
   check::in_range(config->max_sec, 0.0, sonare::acoustic::kMaxRirSeconds, "config.max_sec");
@@ -412,7 +423,9 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
       make_room(config.length_m, config.width_m, config.height_m, config.absorption,
                 config.band_absorption, config.band_absorption_count, config.band_scattering,
                 config.band_scattering_count, config.material_preset);
-  cfg.placement = resolve_placement(config);
+  const sonare::acoustic::ResolvedRoomPlacement resolved = resolve_placement(config);
+  cfg.placement = resolved.placement;
+  cfg.supplied = resolved.supplied;
   cfg.source_tail_suppression = config.source_tail_suppression;
   cfg.wet = config.wet;
   cfg.ism_order = config.ism_order;
@@ -427,7 +440,7 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   cfg.air.temperature_c = config.air_temperature_c;
   cfg.air.humidity_percent = config.air_humidity_percent;
   // Read by the stereo entry only; the mono morph neither validates nor uses it.
-  cfg.receiver_spacing_m = config.receiver_spacing_m;
+  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
   return cfg;
 }
 

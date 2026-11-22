@@ -880,4 +880,15 @@ def test_room_morph_stereo_reports_the_target_synthesis_warnings() -> None:
 def test_room_morph_stereo_refuses_a_listener_too_close_to_a_wall() -> None:
     samples = _impulse(100)
     with pytest.raises(libsonare.SonareError):
-        libsonare.room_morph_stereo(samples, samples, listener=(0.1, 4.0, 1.7), **_STEREO_ROOM)
+        libsonare.room_morph_stereo(
+            samples, samples, receiver_spacing_m=0.5, listener=(0.1, 4.0, 1.7), **_STEREO_ROOM
+        )
+
+
+@acoustic
+def test_room_morph_stereo_fits_an_omitted_spacing_beside_a_wall() -> None:
+    # No 0.5 m pair fits this listener, so the omitted spacing narrows to one that does.
+    samples = _impulse(100)
+    result = libsonare.room_morph_stereo(samples, samples, listener=(0.1, 4.0, 1.7), **_STEREO_ROOM)
+    assert len(result.left) == len(result.right) > len(samples)
+    assert not np.array_equal(result.left, result.right)

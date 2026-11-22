@@ -230,8 +230,9 @@ typedef struct {
   int air_absorption_enabled;
   float air_temperature_c;     ///< Air temperature in degrees Celsius.
   float air_humidity_percent;  ///< Relative humidity in percent.
-  /// Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. Ignored and not
-  /// validated by sonare_room_morph.
+  /// Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. NaN means not given:
+  /// 0.5 where that pair fits the room around the listener, else the largest spacing that
+  /// fits. Ignored and not validated by sonare_room_morph.
   float receiver_spacing_m;
 } SonareRoomMorphConfig;
 
@@ -297,7 +298,8 @@ void sonare_rir_synth_config_init(SonareRirSynthConfig* config);
 
 /// @brief Fill @p config with struct_size and the library default of every field: the
 ///   sonare_rir_synth_config_init room and placement, source_tail_suppression 0.5, wet
-///   0.5, receiver_spacing_m 0.5, and the same synthesis defaults. No-op on NULL.
+///   0.5, receiver_spacing_m NaN (fitted to the room), and the same synthesis defaults. No-op
+///   on NULL.
 void sonare_room_morph_config_init(SonareRoomMorphConfig* config);
 
 /// @brief Synthesize a room impulse response from shoebox geometry.

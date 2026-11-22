@@ -690,7 +690,8 @@ def room_morph_stereo(
     Args:
         left: Left channel samples.
         right: Right channel samples, same length as ``left``.
-        receiver_spacing_m: Receiver spacing in metres, in (0, 4]; None = 0.5.
+        receiver_spacing_m: Receiver spacing in metres, in (0, 4]; None fits it to the
+            room: 0.5 where that pair fits around ``listener``, else the largest that fits.
             Both receivers must lie inside the room, so a ``listener`` closer to
             a wall than half the spacing raises :class:`SonareError`.
 
@@ -702,6 +703,9 @@ def room_morph_stereo(
         if receiver_spacing_m is None
         else _domain_float(receiver_spacing_m, "receiver_spacing_m")
     )
+    # The C struct reads NaN as not given; a given NaN is refused as the infinity it also is not.
+    if spacing is not None and math.isnan(spacing.value):
+        spacing = ctypes.c_float(math.inf)
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:
