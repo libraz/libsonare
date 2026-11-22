@@ -5038,7 +5038,7 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the 
 [[entry]]
 kind = "function"
 old = "sonare_project_set_part_rig"
-changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
+changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
 domain = "project"
 rule = "error-class-by-cause"
 test = "tests/conformance/core_validation_refusals_test.cpp::part-rig inserts are a call's argument on both setters and a document inside a project"
@@ -5046,7 +5046,7 @@ test = "tests/conformance/core_validation_refusals_test.cpp::part-rig inserts ar
 [[entry]]
 kind = "function"
 old = "sonare_engine_set_part_rig"
-changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
+changed = "refuses malformed inserts_json, a wrong shape and an invalid chain with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the place under the root inserts ('inserts must hold 1 to 8 entries for a chain rig', 'inserts[0].processor must name a processor that can be built'); a key an insert does not take is refused instead of ignored ('unknown key inserts[0].parmas (expected processor, params)'); the project document's partRigs still refuse a wrong type with SONARE_ERROR_INVALID_FORMAT"
 domain = "engine"
 rule = "error-class-by-cause"
 test = "tests/conformance/core_validation_refusals_test.cpp::part-rig inserts are a call's argument on both setters and a document inside a project"

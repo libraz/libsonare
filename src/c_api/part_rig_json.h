@@ -6,7 +6,9 @@
 /// @details inserts_json is a per-call argument, not a document the library writes and
 ///          reads back, so every refusal here is a SonareParameterRefusal under
 ///          InvalidParameter rooted at @c inserts, the name every surface gives the
-///          argument; a wrong type is a shape refusal. The project document's own
+///          argument; a wrong type, a missing processor and an unknown key are shape
+///          refusals. Subjects are already in the
+///          caller's spelling and marked so. The project document's own
 ///          part-rig reader lives in the serializer. Each function throws, so it is
 ///          called inside an entry's exception translation.
 
@@ -31,14 +33,16 @@ inline constexpr const char* kPartRigInsertsSubject = "inserts";
 
 [[noreturn]] inline void refuse_part_rig(const std::string& subject, const std::string& predicate) {
   throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter, subject,
-                                                  predicate);
+                                                  predicate)
+      .as_caller_spelled();
 }
 
 [[noreturn]] inline void refuse_part_rig_type(const std::string& subject,
                                               sonare::util::json::schema::Kind kind) {
   throw sonare::SonareParameterRefusal::wrong_type(
       sonare::ErrorCode::InvalidParameter, subject,
-      std::string("must be ") + sonare::util::json::schema::kind_text(kind));
+      std::string("must be ") + sonare::util::json::schema::kind_text(kind))
+      .as_caller_spelled();
 }
 
 /// Reads the inserts array into chain stages. Shape only; names are resolved by
@@ -58,9 +62,21 @@ inline std::vector<sonare::midi::PartRigStage> read_part_rig_inserts(const char*
   for (const json::Value& item : root.as_array()) {
     const std::string at = schema::index_path(kPartRigInsertsSubject, index++);
     if (!item.is_object()) refuse_part_rig_type(at, schema::Kind::Object);
+    for (const auto& entry : item.as_object()) {
+      const std::string& key = entry.first;
+      if (key == "processor" || key == "params" || json::is_annotation_key(key)) continue;
+      throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter,
+                                                    schema::child_path(at, key), std::string(),
+                                                    "processor, params")
+          .as_caller_spelled();
+    }
     const std::string processor_at = schema::child_path(at, "processor");
     const json::Value* processor = item.find("processor");
-    if (processor == nullptr) refuse_part_rig(processor_at, "must be given");
+    if (processor == nullptr) {
+      throw sonare::SonareParameterRefusal::wrong_type(sonare::ErrorCode::InvalidParameter,
+                                                       processor_at, "must be given")
+          .as_caller_spelled();
+    }
     if (!processor->is_string()) refuse_part_rig_type(processor_at, schema::Kind::String);
     if (processor->as_string().empty()) refuse_part_rig(processor_at, "must not be empty");
     sonare::midi::PartRigStage stage;
@@ -101,8 +117,9 @@ inline void validate_part_rig_chain(const std::vector<sonare::midi::PartRigStage
       insert = sonare::mastering::api::make_insert(stage.processor, stage.params_json);
       if (insert) insert->prepare(kValidationSampleRate, kValidationBlockSize);
     } catch (const sonare::SonareParameterRefusal& ex) {
-      schema::rethrow_under(ex, schema::child_path(at, "params"),
-                            sonare::ErrorCode::InvalidParameter);
+      throw schema::relabel_under(ex, schema::child_path(at, "params"),
+                                  sonare::ErrorCode::InvalidParameter)
+          .as_caller_spelled();
     } catch (const sonare::SonareException& ex) {
       refuse_part_rig(at, std::string("is refused: ") + ex.what());
     }

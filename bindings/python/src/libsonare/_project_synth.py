@@ -27,7 +27,6 @@ from ._runtime import (
     _check,
     _get_lib,
     _joined_names,
-    _mapping_keys,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -119,16 +118,17 @@ def _part_rig_mode_name(value: int) -> PartRigMode:
 def _part_rig_inserts_arg(
     mode_value: int, inserts: Sequence[Mapping[str, object]] | None
 ) -> bytes | None:
-    """Serialize a chain's inserts to the C JSON form; None unless the mode is a chain."""
+    """Serialize a chain's inserts to the C JSON form; None unless the mode is a chain.
+
+    Each insert is forwarded as given: the core refuses a wrong shape, a missing
+    processor or an unknown key by its place under ``inserts``.
+    """
     if inserts is None:
         return None
-    entries = []
-    for i, raw_insert in enumerate(inserts):
-        insert = _mapping_keys(raw_insert, ("processor", "params"), f"inserts[{i}]")
-        if "processor" not in insert:
-            raise _refuse(f"inserts[{i}] needs a 'processor' key")
-        entries.append({"processor": insert["processor"], "params": insert.get("params", {})})
-    return _utf8_arg(json.dumps(entries), "entries")
+    if isinstance(inserts, (str, bytes, Mapping)) or not isinstance(inserts, Sequence):
+        raise _refuse_type("inserts must be a sequence of insert mappings")
+    entries = [dict(item) if isinstance(item, Mapping) else item for item in inserts]
+    return _utf8_arg(json.dumps(entries), "inserts")
 
 
 _SYNTH_OSC_WAVEFORMS = {

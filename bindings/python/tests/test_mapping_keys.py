@@ -15,7 +15,6 @@ import pytest
 
 from libsonare import SonareValueError
 from libsonare._analysis_music import _key_pair
-from libsonare._project_synth import _part_rig_inserts_arg
 from libsonare._runtime import _mapping_keys
 
 from ._helpers import LIB_AVAILABLE
@@ -35,11 +34,9 @@ def _refuses(
     ("call", "good", "key"),
     [
         (_key_pair, {"root": 0, "mode": "major"}, "tonic"),
-        (lambda m: _part_rig_inserts_arg(2, [m]), {"processor": "eq", "params": {}}, "parameters"),
     ],
     ids=[
         "key",
-        "part_rig_insert",
     ],
 )
 def test_a_helper_mapping_refuses_an_unknown_key(

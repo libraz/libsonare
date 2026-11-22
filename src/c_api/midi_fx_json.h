@@ -26,13 +26,15 @@ namespace schema = sonare::util::json::schema;
 
 // config_json is a per-call argument, so its refusals are InvalidParameter rooted at
 // `config`, the name every surface gives it, and a wrong type is a shape refusal.
+// The keys are already the caller's, so each refusal is marked caller-spelled.
 inline constexpr const char* kConfigSubject = "config";
 
 inline std::string at(std::string_view key) { return schema::child_path(kConfigSubject, key); }
 
 [[noreturn]] inline void refuse(const std::string& subject, const std::string& predicate) {
   throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter, subject,
-                                                  predicate);
+                                                  predicate)
+      .as_caller_spelled();
 }
 
 [[noreturn]] inline void refuse_at(std::string_view key, const std::string& predicate) {
@@ -42,7 +44,8 @@ inline std::string at(std::string_view key) { return schema::child_path(kConfigS
 [[noreturn]] inline void refuse_type(const std::string& subject, schema::Kind kind) {
   throw sonare::SonareParameterRefusal::wrong_type(
       sonare::ErrorCode::InvalidParameter, subject,
-      std::string("must be ") + schema::kind_text(kind));
+      std::string("must be ") + schema::kind_text(kind))
+      .as_caller_spelled();
 }
 
 inline double number_or(const json::Value& obj, const char* key, double fallback) {
@@ -111,7 +114,8 @@ inline void refuse_unknown_keys(const json::Value& root) {
     if (known) continue;
     throw sonare::SonareParameterRefusal::unknown(
         sonare::ErrorCode::InvalidParameter, at(key),
-        earlier != nullptr ? at(earlier->current) : std::string());
+        earlier != nullptr ? at(earlier->current) : std::string())
+        .as_caller_spelled();
   }
 }
 
