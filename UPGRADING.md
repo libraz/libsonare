@@ -2083,18 +2083,24 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `room_morph(air_humidity_percent)` | None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference |
 | `room_morph(air_temperature_c)` | None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference |
 | `room_morph(crossfade_ms)` | None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default |
+| `room_morph(listener)` | None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 | `room_morph(mixing_time_ms)` | None derives the mixing time and an explicit 0 raises SonareValueError |
 | `room_morph(seed)` | None means 1; 0 is a seed rather than the library default |
+| `room_morph(source)` | None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 | `room_morph_stereo(air_humidity_percent)` | None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference |
 | `room_morph_stereo(air_temperature_c)` | None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference |
 | `room_morph_stereo(crossfade_ms)` | None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default |
+| `room_morph_stereo(listener)` | None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 | `room_morph_stereo(mixing_time_ms)` | None derives the mixing time and an explicit 0 raises SonareValueError |
 | `room_morph_stereo(seed)` | None means 1; 0 is a seed rather than the library default |
+| `room_morph_stereo(source)` | None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 | `synthesize_rir(air_humidity_percent)` | None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference |
 | `synthesize_rir(air_temperature_c)` | None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference |
 | `synthesize_rir(crossfade_ms)` | None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default |
+| `synthesize_rir(listener)` | None (the default) is the default placement scaled to the room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 | `synthesize_rir(mixing_time_ms)` | None derives the mixing time and an explicit 0 raises SonareValueError |
 | `synthesize_rir(seed)` | None means 1; 0 is a seed rather than the library default |
+| `synthesize_rir(source)` | None (the default) is the default placement scaled to the room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it |
 
 #### An option left out takes the library's default
 

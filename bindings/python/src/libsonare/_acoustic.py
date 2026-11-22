@@ -17,7 +17,8 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _domain_float, _float_data, _narrow_double
+from ._ffi_types_analysis import SonareRoomPlacement
+from ._narrowing import _domain_float, _float_data, _narrow_double, _narrow_float
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -128,11 +129,18 @@ def _band_array_args(
 _RoomConfig = TypeVar("_RoomConfig", SonareRirSynthConfig, SonareRoomMorphConfig)
 
 
+def _place(placement: SonareRoomPlacement, point: tuple[float, float, float], name: str) -> None:
+    """Write ``point`` into ``placement``, refusing a component by its index in ``name``."""
+    placement.x, placement.y, placement.z = (
+        _narrow_float(value, f"{name}[{i}]") for i, value in enumerate(point)
+    )
+
+
 def _fill_room_config(
     config: _RoomConfig,
     *,
-    source: tuple[float, float, float],
-    listener: tuple[float, float, float],
+    source: tuple[float, float, float] | None,
+    listener: tuple[float, float, float] | None,
     band_ptr: object,
     band_count: int,
     scatter_ptr: object,
@@ -148,9 +156,13 @@ def _fill_room_config(
 
     A ``None`` keyword leaves the ``_init`` value; every other value is written
     literally, so a 0 seed, a 0 ms crossfade and a 0 degC climate are honoured.
+    A ``None`` placement stays all-NaN, which the library resolves to the default
+    placement scaled to the room.
     """
-    config.source.x, config.source.y, config.source.z = source
-    config.listener.x, config.listener.y, config.listener.z = listener
+    if source is not None:
+        _place(config.source, source, "source")
+    if listener is not None:
+        _place(config.listener, listener, "listener")
     config.band_absorption = band_ptr
     config.band_absorption_count = band_count
     config.band_scattering = scatter_ptr
@@ -176,8 +188,8 @@ def synthesize_rir(
     width_m: float = 5.0,
     height_m: float = 3.0,
     *,
-    source: tuple[float, float, float] = (1.0, 1.0, 1.2),
-    listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
+    source: tuple[float, float, float] | None = None,
+    listener: tuple[float, float, float] | None = None,
     absorption: float = 0.2,
     band_absorption: Sequence[float] | None = None,
     band_scattering: Sequence[float] | None = None,
@@ -198,7 +210,8 @@ def synthesize_rir(
     Args:
         length_m, width_m, height_m: Room dimensions in metres (default
             7 x 5 x 3, matching the other bindings).
-        source, listener: (x, y, z) positions inside the room, in metres.
+        source, listener: (x, y, z) positions inside the room, in metres;
+            None = the default placement scaled to the room.
         absorption: Uniform wall absorption, clamped to [0, 0.999].
         band_absorption: Optional per-octave-band wall absorption
             (125/250/500/1k/2k/4k.. Hz). When given it overrides ``absorption``
@@ -400,7 +413,7 @@ def room_geometry_from_estimate(
     names, so this merges the placement in and drops what the estimate did not
     converge on::
 
-        geometry = libsonare.room_geometry_from_estimate(estimate, source=(1, 1, 1.2),
+        geometry = libsonare.room_geometry_from_estimate(estimate, source=(2, 1, 1.2),
                                                          listener=(3, 2, 1.7))
         rir = libsonare.synthesize_rir(**geometry)
 
@@ -466,8 +479,8 @@ def _room_morph_config(
     width_m: float,
     height_m: float,
     *,
-    source: tuple[float, float, float],
-    listener: tuple[float, float, float],
+    source: tuple[float, float, float] | None,
+    listener: tuple[float, float, float] | None,
     absorption: float,
     band_absorption: Sequence[float] | None,
     band_scattering: Sequence[float] | None,
@@ -535,8 +548,8 @@ def room_morph(
     width_m: float,
     height_m: float,
     *,
-    source: tuple[float, float, float] = (1.0, 1.0, 1.2),
-    listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
+    source: tuple[float, float, float] | None = None,
+    listener: tuple[float, float, float] | None = None,
     absorption: float = 0.2,
     band_absorption: Sequence[float] | None = None,
     band_scattering: Sequence[float] | None = None,
@@ -562,6 +575,8 @@ def room_morph(
     target room is added.
 
     Args:
+        source, listener: (x, y, z) positions inside the target room, in
+            metres; None = the default placement scaled to the target room.
         band_absorption: Optional per-octave-band target-wall absorption; when
             given it overrides ``absorption`` unless ``material_preset`` is set.
         band_scattering: Optional per-octave-band target-wall scattering;
@@ -645,8 +660,8 @@ def room_morph_stereo(
     height_m: float,
     *,
     receiver_spacing_m: float | None = None,
-    source: tuple[float, float, float] = (1.0, 1.0, 1.2),
-    listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
+    source: tuple[float, float, float] | None = None,
+    listener: tuple[float, float, float] | None = None,
     absorption: float = 0.2,
     band_absorption: Sequence[float] | None = None,
     band_scattering: Sequence[float] | None = None,

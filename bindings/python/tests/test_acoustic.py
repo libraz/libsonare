@@ -71,6 +71,59 @@ def test_synthesize_rir_produces_decaying_response() -> None:
     assert any(abs(s) > 0.0 for s in result.rir)
 
 
+def _scaled_default(
+    length: float, width: float, height: float
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """The default placement scaled per axis from the 7 x 5 x 3 m room, in float32."""
+    f = np.float32
+    sx, sy, sz = f(length) / f(7.0), f(width) / f(5.0), f(height) / f(3.0)
+    return (
+        (float(f(1.0) * sx), float(f(1.0) * sy), float(f(1.2) * sz)),
+        (float(f(5.0) * sx), float(f(4.0) * sy), float(f(1.7) * sz)),
+    )
+
+
+@acoustic
+def test_an_unset_placement_is_the_default_scaled_to_the_room() -> None:
+    default_room = libsonare.synthesize_rir(sample_rate=48000, max_sec=0.1).rir
+    source, listener = _scaled_default(7.0, 5.0, 3.0)
+    given = libsonare.synthesize_rir(
+        sample_rate=48000, max_sec=0.1, source=source, listener=listener
+    ).rir
+    assert len(default_room) > 0
+    assert list(default_room) == list(given)
+
+    source, listener = _scaled_default(4.0, 3.0, 2.6)
+    for point in (source, listener):
+        assert all(0.0 < c < extent for c, extent in zip(point, (4.0, 3.0, 2.6), strict=True))
+    small = libsonare.synthesize_rir(4.0, 3.0, 2.6, sample_rate=48000, max_sec=0.1).rir
+    small_given = libsonare.synthesize_rir(
+        4.0, 3.0, 2.6, sample_rate=48000, max_sec=0.1, source=source, listener=listener
+    ).rir
+    assert len(small) > 0
+    assert list(small) == list(small_given)
+
+    samples = [0.0] * 2000
+    samples[0] = 1.0
+    morphed = libsonare.room_morph(samples, 48000, 4.0, 3.0, 2.6, max_sec=0.1).audio
+    morphed_given = libsonare.room_morph(
+        samples, 48000, 4.0, 3.0, 2.6, max_sec=0.1, source=source, listener=listener
+    ).audio
+    assert list(morphed) == list(morphed_given)
+
+
+@acoustic
+def test_a_nan_placement_component_is_refused_by_index() -> None:
+    # Not given is None; NaN is never read as the default placement, even in all three.
+    nan = float("nan")
+    with pytest.raises(libsonare.SonareValueError, match=r"source\[0\] must be finite"):
+        libsonare.synthesize_rir(sample_rate=48000, source=(nan, nan, nan))
+    with pytest.raises(libsonare.SonareValueError, match=r"source\[1\] must be finite"):
+        libsonare.synthesize_rir(sample_rate=48000, source=(2.0, nan, 1.0))
+    with pytest.raises(libsonare.SonareValueError, match=r"listener\[0\] must be finite"):
+        libsonare.room_morph([0.0] * 64, 48000, 7.0, 5.0, 3.0, listener=(nan, nan, 1.0))
+
+
 @acoustic
 def test_synthesize_rir_raises_for_invalid_geometry() -> None:
     # Source outside the room => geometry validation error => coded SonareError.

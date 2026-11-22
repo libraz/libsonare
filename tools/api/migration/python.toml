@@ -4124,6 +4124,54 @@ test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_t
 
 [[entry]]
 kind = "option"
+old = "synthesize_rir(source)"
+changed = "None (the default) is the default placement scaled to the room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(listener)"
+changed = "None (the default) is the default placement scaled to the room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
+old = "room_morph(source)"
+changed = "None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
+old = "room_morph(listener)"
+changed = "None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(source)"
+changed = "None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(listener)"
+changed = "None (the default) is the default placement scaled to the target room rather than the fixed 1.x position, which lay outside any room smaller than it; pass the 1.x position to keep it"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unset_placement_is_the_default_scaled_to_the_room"
+
+[[entry]]
+kind = "option"
 old = "synthesize_rir(seed)"
 changed = "None means 1; 0 is a seed rather than the library default"
 domain = "effects"
