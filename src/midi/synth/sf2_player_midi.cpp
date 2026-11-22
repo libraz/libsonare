@@ -652,14 +652,7 @@ void Sf2Player::sostenuto_pedal(uint8_t channel, bool down) noexcept {
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch && v.sostenuto) {
       v.sostenuto = false;
-      if (!v.key_down && !v.releasing) {
-        if (!st.sustain) {
-          v.release();
-        } else if (v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
-          const float strength = half_pedal_strength(st.sustain_level);
-          v.piano.damp(strength);
-        }
-      }
+      if (!v.key_down && !v.releasing) release_or_damp(v, st.sustain, st.sustain_level);
     }
   }
 }
