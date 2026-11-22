@@ -2180,9 +2180,9 @@ export interface SonareModule {
     lowPercentile: number,
     highPercentile: number,
   ) => {
-    dynamicRangeDb: number;
-    lowPercentileDb: number;
-    highPercentileDb: number;
+    dynamicRangeDb?: number;
+    lowPercentileDb?: number;
+    highPercentileDb?: number;
     windowRmsDb: Float32Array;
   };
 

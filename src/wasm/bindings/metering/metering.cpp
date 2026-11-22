@@ -209,9 +209,9 @@ val js_metering_dynamic_range(val samples, const val& sample_rate_val, const val
       window_sec, hop_sec, low_percentile, high_percentile);
   metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
   val out = val::object();
-  out.set("dynamicRangeDb", result.dynamic_range_db);
-  out.set("lowPercentileDb", result.low_percentile_db);
-  out.set("highPercentileDb", result.high_percentile_db);
+  setMeasured(out, "dynamicRangeDb", result.dynamic_range_db);
+  setMeasured(out, "lowPercentileDb", result.low_percentile_db);
+  setMeasured(out, "highPercentileDb", result.high_percentile_db);
   out.set("windowRmsDb", vectorToFloat32Array(result.window_rms_db));
   return out;
 }

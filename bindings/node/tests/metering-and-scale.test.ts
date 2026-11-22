@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
   meteringCrestFactorDb,
   meteringDcOffset,
   meteringDetectClipping,
@@ -105,6 +106,24 @@ describe('Offline metering wrappers', () => {
     expect(report.windowRmsDb).toBeInstanceOf(Float32Array);
     expect(report.windowRmsDb.length).toBeGreaterThanOrEqual(2);
     expect(report.dynamicRangeDb).toBeGreaterThan(0);
+  });
+
+  it('dynamic range keeps a silent low end infinite and leaves an unmeasured range absent', () => {
+    const tone = sine(440, 2);
+    const gapped = new Float32Array(tone.length + SR * 2);
+    gapped.set(tone, 0);
+    const report = meteringDynamicRange(gapped, SR, { windowSec: 0.4, hopSec: 0.2 });
+    expect(report.lowPercentileDb).toBe(Number.NEGATIVE_INFINITY);
+    expect(Number.isFinite(report.highPercentileDb)).toBe(true);
+    expect(report.dynamicRangeDb).toBe(Number.POSITIVE_INFINITY);
+
+    const silent = meteringDynamicRange(new Float32Array(SR * 2), SR);
+    expect('dynamicRangeDb' in silent).toBe(false);
+    expect(silent.lowPercentileDb).toBe(Number.NEGATIVE_INFINITY);
+    expect(silent.highPercentileDb).toBe(Number.NEGATIVE_INFINITY);
+    expect(Audio.fromBuffer(new Float32Array(SR * 2), SR).dynamicRange()).not.toHaveProperty(
+      'dynamicRangeDb',
+    );
   });
 
   it('dynamic range rejects inverted percentiles', () => {

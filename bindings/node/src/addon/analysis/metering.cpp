@@ -400,9 +400,9 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   CResultGuard<SonareDynamicRangeResult, sonare_free_dynamic_range_result> guard(&result);
   auto windows = Float32ArrayFrom(env, result.window_rms_db, result.window_count);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("dynamicRangeDb", Napi::Number::New(env, result.dynamic_range_db));
-  out.Set("lowPercentileDb", Napi::Number::New(env, result.low_percentile_db));
-  out.Set("highPercentileDb", Napi::Number::New(env, result.high_percentile_db));
+  SetMeasured(out, "dynamicRangeDb", result.dynamic_range_db);
+  SetMeasured(out, "lowPercentileDb", result.low_percentile_db);
+  SetMeasured(out, "highPercentileDb", result.high_percentile_db);
   out.Set("windowRmsDb", windows);
   return out;
   SONARE_NODE_CATCH(env)
@@ -904,9 +904,9 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
   CResultGuard<SonareDynamicRangeResult, sonare_free_dynamic_range_result> guard(&result);
   auto windows = Float32ArrayFrom(env, result.window_rms_db, result.window_count);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("dynamicRangeDb", Napi::Number::New(env, result.dynamic_range_db));
-  out.Set("lowPercentileDb", Napi::Number::New(env, result.low_percentile_db));
-  out.Set("highPercentileDb", Napi::Number::New(env, result.high_percentile_db));
+  SetMeasured(out, "dynamicRangeDb", result.dynamic_range_db);
+  SetMeasured(out, "lowPercentileDb", result.low_percentile_db);
+  SetMeasured(out, "highPercentileDb", result.high_percentile_db);
   out.Set("windowRmsDb", windows);
   return out;
   SONARE_NODE_CATCH(env)

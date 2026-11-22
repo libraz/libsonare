@@ -73,13 +73,13 @@ export interface ClippingReport {
 
 /** Sliding-window dynamic range report. */
 export interface DynamicRangeReport {
-  /** High percentile minus low percentile of the window levels, in dB. */
-  dynamicRangeDb: number;
-  /** Window RMS level at the low percentile, in dBFS. */
-  lowPercentileDb: number;
-  /** Window RMS level at the high percentile, in dBFS. */
-  highPercentileDb: number;
-  /** RMS level of each analysis window, in dBFS. */
+  /** High percentile minus low percentile of the window levels, in dB. `Infinity` when the low percentile lands on a silent window; absent when the high percentile is silent too (silent input) or the input is empty. */
+  dynamicRangeDb?: number;
+  /** Window RMS level at the low percentile, in dBFS. `-Infinity` on a silent window, absent for empty input. */
+  lowPercentileDb?: number;
+  /** Window RMS level at the high percentile, in dBFS. `-Infinity` on a silent window, absent for empty input. */
+  highPercentileDb?: number;
+  /** RMS level of each analysis window, in dBFS; a silent window is `-Infinity`. */
   windowRmsDb: Float32Array;
 }
 

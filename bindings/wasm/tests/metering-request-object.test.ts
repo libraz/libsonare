@@ -74,9 +74,9 @@ describe('metering request object compatibility (WASM)', () => {
     };
     const requested = meteringDynamicRange({ samples, sampleRate, ...rangeOptions });
     const positional = meteringDynamicRange(samples, sampleRate, rangeOptions);
-    expect(requested.dynamicRangeDb).toBeCloseTo(positional.dynamicRangeDb, 6);
-    expect(requested.lowPercentileDb).toBeCloseTo(positional.lowPercentileDb, 6);
-    expect(requested.highPercentileDb).toBeCloseTo(positional.highPercentileDb, 6);
+    expect(requested.dynamicRangeDb).toBeCloseTo(positional.dynamicRangeDb as number, 6);
+    expect(requested.lowPercentileDb).toBeCloseTo(positional.lowPercentileDb as number, 6);
+    expect(requested.highPercentileDb).toBeCloseTo(positional.highPercentileDb as number, 6);
     expectFloatArraysEqual(requested.windowRmsDb, positional.windowRmsDb);
   });
 

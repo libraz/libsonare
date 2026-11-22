@@ -157,7 +157,7 @@ describe('Audio handle-form metering', () => {
       // Positive control: 0 is a real 0th percentile request here, not the
       // library default.
       const zeroLow = audio.dynamicRange({ lowPercentile: 0 });
-      expect(zeroLow.lowPercentileDb).not.toBeCloseTo(report.lowPercentileDb, 1);
+      expect(zeroLow.lowPercentileDb).not.toBeCloseTo(report.lowPercentileDb as number, 1);
       expect(zeroLow).toEqual(meteringDynamicRange(combined, SR, { lowPercentile: 0 }));
     } finally {
       audio.destroy();
