@@ -578,8 +578,112 @@ describe('Web MIDI helper', () => {
     later.state = 'disconnected';
     access.stateChange(later);
     later.emit([0x91, 64, 80]);
-    expect(engine.messages).toHaveLength(1);
+    // The note the port still held is released when it goes away; nothing after that arrives.
+    expect(engine.messages).toEqual([
+      { kind: 'on', group: 0, channel: 1, a: 62, b: 80, time: 0 },
+      { kind: 'off', group: 0, channel: 1, a: 62, b: 0, time: 0 },
+    ]);
     binding.destroy();
+  });
+
+  it('releases only the notes and pedals of the port that goes away', async () => {
+    const access = new FakeAccess();
+    const inputA = new FakeInput('a');
+    const inputB = new FakeInput('b');
+    access.inputs.set(inputA.id, inputA);
+    access.inputs.set(inputB.id, inputB);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never, { group: 2 });
+
+    inputA.emit([0x90, 60, 100]);
+    inputA.emit([0x90, 64, 100]);
+    inputA.emit([0x80, 64, 0]); // released normally: not released again
+    inputA.emit([0xb0, 64, 127]); // sustain down on channel 0
+    inputA.emit([0x93, 67, 90]);
+    inputA.emit([0xb3, 66, 100]); // sostenuto down on channel 3
+    inputA.emit([0xb3, 64, 127]);
+    inputA.emit([0xb3, 64, 0]); // sustain back up on channel 3: no pedal-up owed there
+    inputB.emit([0x90, 60, 100]);
+    inputB.emit([0xb0, 64, 127]);
+
+    engine.messages.length = 0;
+    inputA.state = 'disconnected';
+    access.stateChange(inputA);
+    expect(engine.messages).toEqual([
+      { kind: 'off', group: 2, channel: 0, a: 60, b: 0, time: 0 },
+      { kind: 'off', group: 2, channel: 3, a: 67, b: 0, time: 0 },
+      { kind: 'cc', group: 2, channel: 0, a: 64, b: 0, time: 0 },
+      { kind: 'cc', group: 2, channel: 3, a: 66, b: 0, time: 0 },
+    ]);
+
+    // Port B keeps what it holds until the binding goes away.
+    engine.messages.length = 0;
+    binding.destroy();
+    expect(engine.messages).toEqual([
+      { kind: 'off', group: 2, channel: 0, a: 60, b: 0, time: 0 },
+      { kind: 'cc', group: 2, channel: 0, a: 64, b: 0, time: 0 },
+    ]);
+    expect(engine.sourceDestination).toBeNull();
+  });
+
+  it('tracks UMP notes and pedals per group, and forgets what all-notes-off and reset-all-controllers ended', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('ump');
+    access.inputs.set(input.id, input);
+    const engine = new RawUmpEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    const midi2 = (
+      group: number,
+      status: number,
+      channel: number,
+      index: number,
+      word1: number,
+    ) => [
+      ((0x4 << 28) | (group << 24) | (status << 20) | (channel << 16) | (index << 8)) >>> 0,
+      word1 >>> 0,
+    ];
+    input.emit([0x25903c64]); // MIDI 1.0 UMP note-on, group 5 channel 0 note 60
+    input.emit(midi2(6, 0x9, 1, 62, 0)); // MIDI 2.0 note-on with velocity 0 is still a note-on
+    input.emit(midi2(6, 0xb, 1, 64, 0x80000000)); // sustain down
+    input.emit([0x25923e64]); // group 5 channel 2 note 62
+    input.emit([0x25b27b00]); // all notes off on group 5 channel 2
+    input.emit([0x25b14064]); // sustain down on group 5 channel 1
+    input.emit([0x25b17900]); // reset all controllers on group 5 channel 1
+
+    engine.messages.length = 0;
+    binding.destroy();
+    expect(engine.messages).toEqual([
+      { kind: 'off', group: 5, channel: 0, a: 60, b: 0, time: 0 },
+      { kind: 'off', group: 6, channel: 1, a: 62, b: 0, time: 0 },
+      { kind: 'cc', group: 6, channel: 1, a: 64, b: 0, time: 0 },
+    ]);
+  });
+
+  it('does not track a note the filter dropped, and leaves a replaced source to its new owner', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('a');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const first = await bindWebMidi(engine as never);
+    input.emit([0x90, 60, 100]);
+    engine.messages.length = 0;
+    // A later binding owns the input source now; releasing what the first one held is the
+    // engine's business when the source changes, not this binding's.
+    const second = await bindWebMidi(engine as never, {
+      filter: (message) => (message.data as Uint8Array)[1] !== 61,
+    });
+    first.destroy();
+    expect(engine.messages).toEqual([]);
+
+    input.emit([0x90, 61, 100]);
+    input.emit([0x90, 62, 100]);
+    engine.messages.length = 0;
+    second.destroy();
+    expect(engine.messages).toEqual([{ kind: 'off', group: 0, channel: 0, a: 62, b: 0, time: 0 }]);
   });
 
   it('routes MIDI 1.0 and MIDI 2.0 UMP channel voice words when browsers provide UMP data', async () => {

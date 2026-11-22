@@ -249,7 +249,7 @@ export interface WebMidiBinding {
   access: MidiAccessLike;
   /** Current snapshot of every input port, bound or not. */
   inputs(): WebMidiInputInfo[];
-  /** Stops listening on every bound input and for hot-plug changes, and clears the engine's MIDI input source unless a newer binding has replaced it. Safe to call more than once. */
+  /** Stops listening on every bound input and for hot-plug changes, releases what each input still held, and clears the engine's MIDI input source; both last steps are skipped when a newer binding has replaced the source. Safe to call more than once. */
   destroy(): void;
   /** Same as {@link destroy}, so the binding works with `using`. */
   [Symbol.dispose](): void;
@@ -259,7 +259,67 @@ type BoundInput = {
   input: MidiInputLike;
   listener: (event: MidiMessageEventLike) => void;
   runningStatus: number;
+  held: HeldState;
 };
+
+const SUSTAIN = 64;
+const SOSTENUTO = 66;
+const RESET_ALL_CONTROLLERS = 121;
+/** All Notes Off, and the four mode messages that imply it. */
+const FIRST_ALL_NOTES_OFF = 123;
+
+/** Notes a port started and has not ended, and the pedals it holds down, per group and channel. */
+class HeldState {
+  private readonly notes = new Set<number>();
+  private readonly pedals = new Set<number>();
+
+  noteOn(group: number, channel: number, note: number): void {
+    this.notes.add(heldKey(group, channel, note));
+  }
+
+  noteOff(group: number, channel: number, note: number): void {
+    this.notes.delete(heldKey(group, channel, note));
+  }
+
+  controller(group: number, channel: number, controller: number, down: boolean): void {
+    if (controller === SUSTAIN || controller === SOSTENUTO) {
+      const key = heldKey(group, channel, controller);
+      if (down) {
+        this.pedals.add(key);
+      } else {
+        this.pedals.delete(key);
+      }
+    } else if (controller >= FIRST_ALL_NOTES_OFF) {
+      forgetChannel(this.notes, group, channel);
+    } else if (controller === RESET_ALL_CONTROLLERS) {
+      forgetChannel(this.pedals, group, channel);
+    }
+  }
+
+  /** Ends every held note, then lifts every held pedal, and forgets them. */
+  release(engine: WebMidiEngine): void {
+    for (const key of this.notes) {
+      engine.pushMidiInputNoteOff(key >>> 11, (key >>> 7) & 0x0f, key & 0x7f, 0);
+    }
+    for (const key of this.pedals) {
+      engine.pushMidiInputCc(key >>> 11, (key >>> 7) & 0x0f, key & 0x7f, 0);
+    }
+    this.notes.clear();
+    this.pedals.clear();
+  }
+}
+
+function heldKey(group: number, channel: number, index: number): number {
+  return (group << 11) | (channel << 7) | index;
+}
+
+function forgetChannel(keys: Set<number>, group: number, channel: number): void {
+  for (const key of keys) {
+    if (key >>> 7 === ((group << 4) | channel)) {
+      keys.delete(key);
+    }
+  }
+}
 
 // Owner of each engine's single MIDI input source: the binding that installed it
 // last. A replaced binding's destroy leaves its successor's source in place.
@@ -285,6 +345,10 @@ export function isWebMidiAvailable(): boolean {
  * Routes Web MIDI input ports into a realtime engine's live MIDI input source and tracks hot-plugged
  * ports until the binding is destroyed. Only one binding per engine owns the input source; a later one
  * replaces it.
+ *
+ * Each input's held notes and its held sustain and sostenuto pedals are tracked, so when the input
+ * disconnects or the binding is destroyed, the binding sends that input's note-offs and pedal-ups,
+ * and only that input's.
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
  * @throws TypeError when `options` is not an object or holds an undeclared key.
@@ -371,9 +435,11 @@ export async function bindWebMidi(
             entry.runningStatus,
             timing,
             offer,
+            entry.held,
           );
         },
         runningStatus: 0,
+        held: new HeldState(),
       };
       const listener = entry.listener;
       if (input.addEventListener) {
@@ -395,6 +461,10 @@ export async function bindWebMidi(
         entry.input.onmidimessage = null;
       }
       bound.delete(input.id);
+      // A replaced input source is its new owner's; the engine releases live notes on a change.
+      if (sourceOwner.isCurrent(sourceToken)) {
+        entry.held.release(engine);
+      }
     };
 
     // Does not call notify() itself: both call sites below (the initial sync
@@ -591,6 +661,7 @@ function dispatchMidiMessage(
   runningStatus: number,
   timing: EventTiming,
   offer: MessageOffer | undefined,
+  held: HeldState,
 ): number {
   const data = event.data;
   if (data.length === 0) {
@@ -599,7 +670,7 @@ function dispatchMidiMessage(
   const eventTimeMs = event.receivedTime ?? event.timeStamp ?? 0;
   const first = data[0];
   if (first > 0xff || data instanceof Uint32Array) {
-    dispatchUmpMessages(engine, data, eventTimeMs, timing, offer);
+    dispatchUmpMessages(engine, data, eventTimeMs, timing, offer, held);
     return 0;
   }
 
@@ -640,14 +711,18 @@ function dispatchMidiMessage(
 
   if (message === 0x80) {
     engine.pushMidiInputNoteOff(group, channel, a, b, ...at);
+    held.noteOff(group, channel, a);
   } else if (message === 0x90) {
     if (b === 0) {
       engine.pushMidiInputNoteOff(group, channel, a, 0, ...at);
+      held.noteOff(group, channel, a);
     } else {
       engine.pushMidiInputNoteOn(group, channel, a, b, ...at);
+      held.noteOn(group, channel, a);
     }
   } else if (message === 0xb0 && b >= 0) {
     engine.pushMidiInputCc(group, channel, a, b, ...at);
+    held.controller(group, channel, a, b >= SUSTAIN);
   } else if (message === 0xa0 && b >= 0) {
     engine.pushMidiInputPolyPressure?.(group, channel, a, b, ...at);
   } else if (message === 0xd0) {
@@ -667,6 +742,7 @@ function dispatchUmpMessages(
   eventTimeMs: number,
   timing: EventTiming,
   offer: MessageOffer | undefined,
+  held: HeldState,
 ): void {
   let at: EventAt | undefined;
   let offset = 0;
@@ -685,6 +761,7 @@ function dispatchUmpMessages(
     if (messageType !== 0x3 && messageType !== 0x5 && (!offer || offer(packet, eventTimeMs))) {
       at ??= timing(eventTimeMs);
       dispatchUmpMessage(engine, packet, at);
+      trackUmpMessage(held, packet);
     }
     offset += wordCount;
   }
@@ -752,6 +829,35 @@ function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: Event
     } else if (status === 0xc) {
       const bank = (word0 & 1) === 1 ? { msb: (word1 >>> 8) & 0x7f, lsb: word1 & 0x7f } : undefined;
       engine.pushMidiInputProgram?.(group, channel, (word1 >>> 24) & 0x7f, bank, ...at);
+    }
+  }
+}
+
+/** Records the notes and pedals one pushed UMP channel voice packet starts or ends. */
+function trackUmpMessage(held: HeldState, words: Uint32Array): void {
+  const word0 = words[0] >>> 0;
+  const messageType = word0 >>> 28;
+  const group = (word0 >>> 24) & 0x0f;
+  const status = (word0 >>> 20) & 0x0f;
+  const channel = (word0 >>> 16) & 0x0f;
+  const index = (word0 >>> 8) & 0x7f;
+  if (messageType === 0x2) {
+    const value = word0 & 0x7f;
+    if (status === 0x8 || (status === 0x9 && value === 0)) {
+      held.noteOff(group, channel, index);
+    } else if (status === 0x9) {
+      held.noteOn(group, channel, index);
+    } else if (status === 0xb) {
+      held.controller(group, channel, index, value >= SUSTAIN);
+    }
+  } else if (messageType === 0x4 && words.length >= 2) {
+    // A MIDI 2.0 note-on with velocity 0 is still a note-on.
+    if (status === 0x8) {
+      held.noteOff(group, channel, index);
+    } else if (status === 0x9) {
+      held.noteOn(group, channel, index);
+    } else if (status === 0xb) {
+      held.controller(group, channel, index, words[1] >>> 25 >= SUSTAIN);
     }
   }
 }
