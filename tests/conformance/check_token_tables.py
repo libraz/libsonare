@@ -402,6 +402,106 @@ ROWS: tuple[TokenSet, ...] = (
             _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectMidiCcBindingKind"),
         ),
     ),
+    TokenSet(
+        name="project source kind",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::SourceKind", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectSourceKind"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectSourceKind"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectSourceKind"),
+        ),
+    ),
+    TokenSet(
+        name="project track kind",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::Track::Kind", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectTrackKind"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectTrackKind"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectTrackKind"),
+        ),
+    ),
+    TokenSet(
+        name="project warp mode",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::WarpMode", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectWarpMode"),
+            _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "ProjectWarpMode"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectWarpMode"),
+        ),
+    ),
+    TokenSet(
+        name="project fade curve",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::FadeCurve", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectFadeCurve"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectFadeCurve"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectFadeCurve"),
+        ),
+    ),
+    TokenSet(
+        name="project loop mode",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::LoopMode", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectLoopMode"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectLoopMode"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectLoopMode"),
+        ),
+    ),
+    TokenSet(
+        name="project overlap policy",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::OverlapPolicy", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectOverlapPolicy"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectOverlapPolicy"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectOverlapPolicy"),
+        ),
+    ),
+    TokenSet(
+        name="project marker kind",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::MarkerKind", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectMarkerKind"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectMarkerKind"),
+            _src("node", "bindings/node/src/types_engine.ts", "ts_union", "MarkerKind"),
+            _src("python", "bindings/python/src/libsonare/_types_engine.py", "py_literal", "MarkerKind"),
+            _src("wasm", "bindings/wasm/src/public_types_engine.ts", "ts_union", "MarkerKind"),
+        ),
+    ),
+    TokenSet(
+        name="project chord quality",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::ChordQuality", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectChordQuality"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectChordQuality"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectChordQuality"),
+        ),
+    ),
+    TokenSet(
+        name="project key mode",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "arrangement::KeyMode", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectKeyMode"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectKeyMode"),
+        ),
+    ),
+    TokenSet(
+        name="project automation target kind",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "automation::AutomationTargetKind", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectAutomationTargetKind"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectAutomationTargetKind"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectAutomationTargetKind"),
+        ),
+    ),
+    TokenSet(
+        name="automation curve",
+        core=CoreTable("src/serialize/serialized_enum_bounds.h", "AutomationCurve", None, "name"),
+        sources=(
+            _src("node", "bindings/node/src/types_mixing.ts", "ts_union", "AutomationCurve"),
+            _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "AutomationCurve"),
+            _src("wasm", "bindings/wasm/src/public_types_mixing.ts", "ts_union", "AutomationCurve"),
+        ),
+    ),
 )
 
 
@@ -535,10 +635,32 @@ def _returned_tokens(body: str) -> list[str]:
     return [t for r in returns for _q, t in _STR.findall(r)]
 
 
+# A traits specialization spells its writer over a member alias (``name(Enum value)``).
+_TRAITS_HEAD = re.compile(r"\bstruct\s+\w+<\s*([\w:]+)\s*>\s*\{")
+_TRAITS_ALIAS = "Enum"
+
+
+def _traits_enum(text: str, pos: int) -> str | None:
+    """The enum the traits specialization enclosing ``pos`` is written for."""
+    last = None
+    for m in _TRAITS_HEAD.finditer(text, 0, pos):
+        last = m
+    if last is None:
+        return None
+    body = _balanced(text, last.end() - 1, "{", "}") or ""
+    return last.group(1) if pos < last.end() - 1 + len(body) else None
+
+
 def written_tokens(text: str, enum: str, writer: str = "to_string") -> list[str] | None:
     """Tokens the ``writer`` overload for ``enum`` returns, in source order."""
     head = re.compile(rf"\b{re.escape(writer)}\s*\(\s*(?:const\s+)?{re.escape(enum)}\b")
     body = _function_body(text, head)
+    if not body:
+        alias = re.compile(rf"\b{re.escape(writer)}\s*\(\s*(?:const\s+)?{_TRAITS_ALIAS}\b")
+        for m in alias.finditer(text):
+            if _traits_enum(text, m.start()) == enum:
+                body = _balanced(text, text.find("{", m.end()), "{", "}")
+                break
     if not body:
         return None
     return _returned_tokens(body) or None
@@ -813,11 +935,15 @@ NOT_COMPARED: typing.Mapping[tuple[str, str, str], str] = types.MappingProxyType
         ("src/mastering/saturation/amp_presets.cpp", "amp_preset_to_string", "AmpPreset"): (
             "no facade set: amp presets are reached through the run-time preset catalogue"
         ),
-        ("src/arrangement/harmonic_timeline.h", "", "KeyMode"): (
-            "ProjectKeyMode: the core has no string writer; the C ABI carries the ordinal"
-        ),
-        ("src/arrangement/harmonic_timeline.h", "", "ChordQuality"): (
-            "ProjectChordQuality: the core has no string writer; the C ABI carries the ordinal"
+    }
+)
+
+# Facade sets whose declaration composes another type with literals, which no reader expands.
+# Each is printed under "not compared"; an entry fails once its declaration is a plain list.
+UNEXPANDED: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
+    {
+        ("bindings/wasm/src/project_types.ts", "ProjectKeyMode"): (
+            "composed as KeyMode | 'unknown'; no reader resolves the KeyMode it names"
         ),
     }
 )
@@ -851,8 +977,11 @@ def core_writers(root: Path) -> dict[tuple[str, str, str], set[str]]:
             for m in _WRITER_HEAD.finditer(text):
                 body = _balanced(text, m.end() - 1, "{", "}") or ""
                 toks = set(_returned_tokens(body))
+                enum = m.group(2)
+                if enum == _TRAITS_ALIAS:
+                    enum = _traits_enum(text, m.start()) or enum
                 if len(toks) >= 2:
-                    found[(f.relative_to(root).as_posix(), m.group(1), m.group(2))] = toks
+                    found[(f.relative_to(root).as_posix(), m.group(1), enum)] = toks
     return found
 
 
@@ -1052,6 +1181,48 @@ def evaluate_family(
     return problems, compared, len(drawn)
 
 
+_TYPE_NAME = r"[A-Z]\w*"
+_COMPOSED_UNION = re.compile(
+    rf"^\s*\|?\s*(?:{_LIT}|{_TYPE_NAME})(?:\s*\|\s*(?:{_LIT}|{_TYPE_NAME}))+\s*$"
+)
+
+
+def composed_sets(root: Path) -> set[tuple[str, str]]:
+    """(path, symbol) for every TS alias uniting string literals with a named type."""
+    found: set[tuple[str, str]] = set()
+    for base in POPULATION_ROOTS["ts"]:
+        for f in sorted((root / base).rglob("*.ts")):
+            if f.name.endswith(".d.ts"):
+                continue
+            text = _GENERATED_BLOCK.sub("", f.read_text(encoding="utf-8", errors="replace"))
+            for m in re.finditer(r"\btype\s+(\w+)\s*=([^;]*);", text):
+                body = m.group(2).replace("\n", " ")
+                if _COMPOSED_UNION.match(body) and _STR.search(body) and not _LITERAL_UNION.match(body):
+                    found.add((f.relative_to(root).as_posix(), m.group(1)))
+    return found
+
+
+def evaluate_unexpanded(
+    root: Path,
+    rows: tuple[TokenSet, ...] = ROWS,
+    declared: typing.Mapping[tuple[str, str], str] = UNEXPANDED,
+) -> tuple[list[str], list[str]]:
+    """Problems (a composed set neither pinned nor declared, a stale entry) and lines to print."""
+    composed = composed_sets(root)
+    pinned = {(s.path, s.symbol) for row in rows for s in row.sources}
+    problems = [
+        f"{symbol} ({path}) composes literals with a named type, which no reader expands; "
+        "pin it through a plain list or declare it in UNEXPANDED"
+        for path, symbol in sorted(composed - pinned - set(declared))
+    ]
+    problems += [
+        f"UNEXPANDED entry for {symbol} ({path}) names no composed declaration"
+        for path, symbol in sorted(set(declared) - composed)
+    ]
+    lines = [f"{symbol} in {path}: {why}" for (path, symbol), why in sorted(declared.items())]
+    return problems, lines
+
+
 def not_compared(
     root: Path,
     rows: tuple[TokenSet, ...] = ROWS,
@@ -1089,6 +1260,9 @@ def main() -> int:
     problems += fam_problems
     nc_problems, nc_lines = not_compared(ROOT)
     problems += nc_problems
+    ux_problems, ux_lines = evaluate_unexpanded(ROOT)
+    problems += ux_problems
+    nc_lines += ux_lines
     for line in nc_lines:
         print(f"not compared: {line}")
     for p in problems:

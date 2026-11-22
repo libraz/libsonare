@@ -765,5 +765,102 @@ class EnumOnlyRowTests(unittest.TestCase):
         self.assertEqual((pinned, sets, writers), ([], 0, 0))
 
 
+_TRAITS_HEADER = """
+template <>
+struct Traits<Room> {
+  using Enum = Room;
+  static constexpr const char* name(Enum value) noexcept {
+    switch (value) {
+      case Enum::Hall: return "hall";
+      case Enum::Plate: return "plate";
+    }
+    return nullptr;
+  }
+};
+
+template <>
+struct Traits<Law> {
+  using Enum = Law;
+  static constexpr const char* name(Enum value) noexcept {
+    switch (value) {
+      case Enum::Soft: return "soft";
+      case Enum::Hard: return "hard";
+    }
+    return nullptr;
+  }
+};
+"""
+
+
+class TraitsAliasTests(unittest.TestCase):
+    """A writer spelled over a specialization's member alias is keyed by the specialized enum."""
+
+    def test_each_specialization_is_its_own_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "src").mkdir()
+            (root / "src/traits.h").write_text(_TRAITS_HEADER)
+            (root / "bindings/node/src").mkdir(parents=True)
+            (root / "bindings/node/src/t.ts").write_text(
+                "export type Room = 'hall' | 'plate';\nexport type Law = 'soft' | 'hard';\n"
+            )
+            self.assertEqual(
+                check.core_writers(root),
+                {
+                    ("src/traits.h", "name", "Room"): {"hall", "plate"},
+                    ("src/traits.h", "name", "Law"): {"soft", "hard"},
+                },
+            )
+            room = check.TokenSet(
+                name="room",
+                core=check.CoreTable("src/traits.h", "Room", None, "name"),
+                sources=(check.Source("node", "bindings/node/src/t.ts", "ts_union", "Room"),),
+            )
+            problems, _, _ = check.evaluate_population(root, (room,), {})
+        self.assertEqual(check.written_tokens(_TRAITS_HEADER, "Law", "name"), ["soft", "hard"])
+        self.assertEqual(
+            problems,
+            [
+                "Law (bindings/node/src/t.ts) spells the tokens of name(Law) in src/traits.h and no row pins it",
+                "name(Law) in src/traits.h writes a set a facade spells and no row names it",
+            ],
+        )
+
+
+class UnexpandedTests(unittest.TestCase):
+    """A union composing literals with a named type is pinned, declared, or a failure."""
+
+    def run_with(self, text: str, declared: dict[tuple[str, str], str]) -> list[str]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "bindings/node/src").mkdir(parents=True)
+            (root / "bindings/node/src/t.ts").write_text(text)
+            problems, _ = check.evaluate_unexpanded(root, (), declared)
+        return problems
+
+    _COMPOSED = "export type Mode = Major | 'unknown';\nexport type Plain = 'a' | 'b';\n"
+    _KEY = ("bindings/node/src/t.ts", "Mode")
+
+    def test_an_undeclared_composed_set_is_named(self) -> None:
+        self.assertEqual(
+            self.run_with(self._COMPOSED, {}),
+            [
+                (
+                    "Mode (bindings/node/src/t.ts) composes literals with a named type, which no reader "
+                    "expands; pin it through a plain list or declare it in UNEXPANDED"
+                )
+            ],
+        )
+
+    def test_a_declared_composed_set_passes(self) -> None:
+        self.assertEqual(self.run_with(self._COMPOSED, {self._KEY: "why"}), [])
+
+    def test_an_entry_outliving_its_composition_is_named(self) -> None:
+        self.assertEqual(
+            self.run_with("export type Mode = 'major' | 'unknown';\n", {self._KEY: "why"}),
+            ["UNEXPANDED entry for Mode (bindings/node/src/t.ts) names no composed declaration"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
