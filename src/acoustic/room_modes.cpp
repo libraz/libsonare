@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "acoustic/image_source.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 
@@ -14,6 +13,7 @@ namespace {
 using sonare::constants::kLn1000D;
 using sonare::constants::kLn10D;
 using sonare::constants::kPiD;
+using sonare::constants::kSoundSpeedMps;
 using sonare::constants::kTwoPiD;
 
 // Schroeder's constant: f_s = 2000 sqrt(T60 / V) with T60 in s and V in m^3.
@@ -41,7 +41,7 @@ constexpr int kMaxCrossoverSteps = 64;
 
 // Leading terms of the shoebox mode-count asymptote below f: volume, surface and edge terms.
 double estimated_mode_count(const RoomDimensions& d, double f) noexcept {
-  const double c = kSoundSpeed;
+  const double c = kSoundSpeedMps;
   const double v = static_cast<double>(d.length) * d.width * d.height;
   const double s =
       2.0 * (static_cast<double>(d.length) * d.width + static_cast<double>(d.length) * d.height +
@@ -55,7 +55,7 @@ double mode_frequency(const RoomDimensions& d, int nx, int ny, int nz) noexcept 
   const double x = nx / static_cast<double>(d.length);
   const double y = ny / static_cast<double>(d.width);
   const double z = nz / static_cast<double>(d.height);
-  return 0.5 * kSoundSpeed * std::sqrt(x * x + y * y + z * z);
+  return 0.5 * kSoundSpeedMps * std::sqrt(x * x + y * y + z * z);
 }
 
 // Samples a mode is rendered for: until -140 dB, never past the tail.
@@ -103,9 +103,9 @@ ModalPlan plan_room_modes(const ShoeboxRoom& room, const ReverbTime& rt, int sam
 
   for (int step = 0; step < kMaxCrossoverSteps; ++step) {
     const double ceiling = kModalCeilingRatio * crossover;
-    const int max_x = static_cast<int>(2.0 * d.length * ceiling / kSoundSpeed);
-    const int max_y = static_cast<int>(2.0 * d.width * ceiling / kSoundSpeed);
-    const int max_z = static_cast<int>(2.0 * d.height * ceiling / kSoundSpeed);
+    const int max_x = static_cast<int>(2.0 * d.length * ceiling / kSoundSpeedMps);
+    const int max_y = static_cast<int>(2.0 * d.width * ceiling / kSoundSpeedMps);
+    const int max_z = static_cast<int>(2.0 * d.height * ceiling / kSoundSpeedMps);
     std::vector<RoomMode> modes;
     for (int nx = 0; nx <= max_x; ++nx) {
       for (int ny = 0; ny <= max_y; ++ny) {

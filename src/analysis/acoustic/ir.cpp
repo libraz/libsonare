@@ -25,7 +25,6 @@ constexpr int kOctaveBandOrder = 8;
 constexpr size_t kTailTrendBlocks = 16;
 constexpr double kTailTrendMinDropDb = 1.0;
 constexpr double kTailTrendSigmas = 3.0;
-constexpr double kLn10 = 2.302585092994046;
 
 // Margin (dB) a cut-on-signal level must sit below a fit's lower limit, the ISO 3382-1
 // noise-floor margin; the truncated curve is then within 0.5 dB of the true one at that limit.
@@ -84,7 +83,7 @@ size_t lundeby_truncation_index(const std::vector<double>& energy, size_t origin
     const double slope_error = std::sqrt(residual / (count - 2.0) / sxx);
     if (slope * (count - 1.0) < -kTailTrendMinDropDb && slope < -kTailTrendSigmas * slope_error) {
       const double decay_per_sample =
-          -slope * kLn10 / 10.0 / static_cast<double>(block);  // energy e-folding rate
+          -slope * constants::kLn10D / 10.0 / static_cast<double>(block);  // energy e-folding rate
       const double last_mean = sum_range(energy, n - block, n) / static_cast<double>(block);
       missing_energy = last_mean / decay_per_sample;
       return n;

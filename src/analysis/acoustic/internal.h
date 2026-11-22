@@ -17,6 +17,19 @@ using sonare::constants::kSqrt2;
 // sonare::constants::kEpsilon (1e-10); used to guard log/division of energies.
 constexpr float kEnergyEpsilon = 1e-20f;
 
+// Centre of octave band 0 (and of the first third-octave band), in Hz.
+constexpr float kOctaveBaseHz = 125.0f;
+
+// Accepted ratio of a sub-estimate to its reference RT60 when pooling estimates.
+constexpr float kRt60AgreementMinRatio = 0.65f;
+constexpr float kRt60AgreementMaxRatio = 1.55f;
+
+// Longest blind RT60 (seconds) the estimators report.
+constexpr float kMaxBlindRt60Sec = 20.0f;
+
+// Hop (seconds) between the short-time energy frames of compute_frame_energy.
+constexpr float kFrameEnergyHopSec = 0.01f;
+
 float nan_value();
 
 struct LinearFit {
@@ -57,10 +70,8 @@ struct DecayRegion {
   size_t last = 0;
 };
 
-struct SampleDecayRegion {
-  size_t first = 0;
-  size_t last = 0;
-};
+/// Region in samples rather than frames; same layout as DecayRegion.
+using SampleDecayRegion = DecayRegion;
 
 std::vector<double> squared_energy(const float* samples, size_t size);
 std::optional<LinearFit> fit_line(const std::vector<float>& x, const std::vector<float>& y,

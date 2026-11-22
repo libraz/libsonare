@@ -289,8 +289,8 @@ float level_match_scale(const RirPlan& plan, const Audio& late_audio) {
     }
   }
   float scale = 1.0f;
-  if (late_ref > 1e-9f) {
-    if (window_has_arrival && early_ref > 1e-9f) {
+  if (late_ref > sonare::constants::kAmpEpsilon) {
+    if (window_has_arrival && early_ref > sonare::constants::kAmpEpsilon) {
       scale = early_ref / late_ref;
     } else {
       // Sparse/absent early energy at the crossover: fall back to the physical

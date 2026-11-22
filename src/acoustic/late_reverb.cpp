@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <limits>
 
-#include "acoustic/image_source.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 #include "util/splitmix64.h"
@@ -16,8 +15,12 @@ namespace {
 
 using sonare::constants::kLn1000D;
 using sonare::constants::kLn10D;
+using sonare::constants::kSoundSpeedMps;
 using sonare::constants::kSqrt2;
 using sonare::constants::kTwoPiD;
+
+// Centre of octave band 0 (and of third-octave band 0), in Hz.
+constexpr float kOctaveBaseHz = 125.0f;
 
 // kSabineCoeff and kMaxAutoSamples are shared via late_reverb.h.
 
@@ -43,9 +46,9 @@ float octave_upper_edge_hz(int band) noexcept { return octave_center_hz(band) * 
 // The late tail decays on a third-octave grid whose every third band is an octave centre.
 constexpr int kThirdsPerOctave = 3;
 
-// Crossover above third-octave band @p k (centre 125 * 2^(k/3)).
+// Crossover above third-octave band @p k (centre kOctaveBaseHz * 2^(k/3)).
 float third_octave_upper_edge_hz(int k) noexcept {
-  return 125.0f * std::pow(2.0f, (static_cast<float>(k) + 0.5f) / kThirdsPerOctave);
+  return kOctaveBaseHz * std::pow(2.0f, (static_cast<float>(k) + 0.5f) / kThirdsPerOctave);
 }
 
 // RT60 a fraction @p frac of the way from octave band @p lower to the next, log-log; when either
@@ -172,7 +175,7 @@ float rt60_at_hz(const ReverbTime& rt, float hz) noexcept {
 }
 
 float octave_center_hz(int band) noexcept {
-  return 125.0f * std::pow(2.0f, static_cast<float>(band));
+  return kOctaveBaseHz * std::pow(2.0f, static_cast<float>(band));
 }
 
 int octave_split_band_count(std::size_t bands, int sample_rate) noexcept {
@@ -291,22 +294,14 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model,
       const float alpha = material_alpha_at(room.walls[w], b);
       absorption_area += wall_area[w] * alpha;
     }
-    if (air == nullptr) {
-      // Geometry-only path: byte-identical to the pre-air-absorption result.
-      if (model == ReverbModel::Sabine) {
-        rt.rt60_bands[b] = sabine_rt60(volume, absorption_area);
-      } else {
-        const float mean_alpha = surface > 0.0f ? absorption_area / surface : 0.0f;
-        rt.rt60_bands[b] = eyring_rt60(volume, surface, mean_alpha);
-      }
-      continue;
+    // The classic 4 m V atmospheric absorption term joins the denominator so high bands in
+    // large rooms stop over-predicting RT60; without air data it is zero.
+    float air_term = 0.0f;
+    if (air != nullptr) {
+      const float m = air_absorption_m_per_meter(octave_center_hz(static_cast<int>(b)),
+                                                 air->temperature_c, air->humidity_percent);
+      air_term = 4.0f * m * volume;
     }
-
-    // Add the classic 4 m V atmospheric absorption term to the denominator so
-    // high bands in large rooms stop over-predicting RT60.
-    const float m = air_absorption_m_per_meter(octave_center_hz(static_cast<int>(b)),
-                                               air->temperature_c, air->humidity_percent);
-    const float air_term = 4.0f * m * volume;
     if (model == ReverbModel::Sabine) {
       rt.rt60_bands[b] = sabine_rt60(volume, absorption_area + air_term);
     } else {
@@ -360,7 +355,7 @@ float late_tail_pair_coherence(int band, float spacing_m, int sample_rate,
   const double hi_hz =
       band + 1 == thirds ? nyquist : static_cast<double>(third_octave_upper_edge_hz(band));
   const double hz_to_x =
-      kTwoPiD * std::fabs(static_cast<double>(spacing_m)) / static_cast<double>(kSoundSpeed);
+      kTwoPiD * std::fabs(static_cast<double>(spacing_m)) / static_cast<double>(kSoundSpeedMps);
   const double x_lo = lo_hz * hz_to_x;
   const double x_hi = hi_hz * hz_to_x;
   // Coincident receivers (or a non-finite spacing) leave no interval to average over.

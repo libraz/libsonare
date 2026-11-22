@@ -20,17 +20,6 @@ volatile float g_sink = 0.0f;
 
 using sonare::bench_utils::bench;
 
-std::vector<float> make_signal(int samples, float gain = 0.8f) {
-  std::vector<float> out(static_cast<size_t>(samples), 0.0f);
-  for (int i = 0; i < samples; ++i) {
-    const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
-    out[static_cast<size_t>(i)] =
-        gain * (0.7f * std::sin(2.0f * sonare::constants::kPi * 440.0f * t) +
-                0.3f * std::sin(2.0f * sonare::constants::kPi * 2800.0f * t));
-  }
-  return out;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -39,9 +28,11 @@ int main(int argc, char** argv) {
 
   // Pristine source signals (per channel, slightly different gains so the channels are not
   // identical and mid/side encode + balance + mono blending actually do work).
-  std::vector<std::vector<float>> block(kChannels, make_signal(kBlockSamples, 1.2f));
+  std::vector<std::vector<float>> block(
+      kChannels, sonare::bench_utils::make_two_tone_signal(kBlockSamples, kSampleRate, 1.2f));
   for (int ch = 1; ch < kChannels; ++ch) {
-    block[static_cast<size_t>(ch)] = make_signal(kBlockSamples, 1.0f - ch * 0.1f);
+    block[static_cast<size_t>(ch)] =
+        sonare::bench_utils::make_two_tone_signal(kBlockSamples, kSampleRate, 1.0f - ch * 0.1f);
   }
 
   // Mid/side buffers: non-aliasing input vs output.
@@ -53,20 +44,10 @@ int main(int argc, char** argv) {
   std::vector<float> right_out(static_cast<size_t>(kBlockSamples), 0.0f);
 
   // Pre-encoded mid/side as input to decode_buffer.
-  const std::vector<float> mid_src = [&] {
-    std::vector<float> m(static_cast<size_t>(kBlockSamples), 0.0f);
-    std::vector<float> s(static_cast<size_t>(kBlockSamples), 0.0f);
-    sonare::mastering::stereo::encode_buffer(left_src.data(), right_src.data(), m.data(), s.data(),
-                                             static_cast<size_t>(kBlockSamples));
-    return m;
-  }();
-  const std::vector<float> side_src = [&] {
-    std::vector<float> m(static_cast<size_t>(kBlockSamples), 0.0f);
-    std::vector<float> s(static_cast<size_t>(kBlockSamples), 0.0f);
-    sonare::mastering::stereo::encode_buffer(left_src.data(), right_src.data(), m.data(), s.data(),
-                                             static_cast<size_t>(kBlockSamples));
-    return s;
-  }();
+  std::vector<float> mid_src(static_cast<size_t>(kBlockSamples), 0.0f);
+  std::vector<float> side_src(static_cast<size_t>(kBlockSamples), 0.0f);
+  sonare::mastering::stereo::encode_buffer(left_src.data(), right_src.data(), mid_src.data(),
+                                           side_src.data(), static_cast<size_t>(kBlockSamples));
 
   const double encode_ms = bench(
       [&] {

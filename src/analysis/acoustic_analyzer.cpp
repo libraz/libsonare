@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "acoustic/late_reverb.h"
 #include "analysis/acoustic/internal.h"
 #include "util/exception.h"
 #include "util/resource_limits.h"
@@ -11,8 +12,6 @@
 namespace sonare {
 
 using namespace acoustic_detail;
-
-namespace {
 
 // Octave-band centre frequency for band index i, matching the synthesizer's
 // convention in src/acoustic/late_reverb.cpp (octave_center_hz): band 0 = 125
@@ -22,11 +21,7 @@ namespace {
 // exceeds Nyquist fall out as NaN inside filter_octave_band, which is reported
 // rather than dropped. This keeps analyzer and synth band axes aligned so an
 // estimate->synthesize round-trip does not lose high bands.
-}  // namespace
-
-float octave_band_center_hz(int band) noexcept {
-  return 125.0f * std::pow(2.0f, static_cast<float>(band));
-}
+float octave_band_center_hz(int band) noexcept { return acoustic::octave_center_hz(band); }
 
 float mid_frequency_rt60(const std::vector<float>& rt60_bands) noexcept {
   // Bands 2 and 3 are the 500 Hz and 1 kHz octaves under the layout above.

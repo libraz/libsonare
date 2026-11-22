@@ -140,10 +140,7 @@ std::vector<SampleDecayRegion> detect_lollmann_subframe_regions(const float* sam
     }
   }
 
-  insertion_sort(regions.begin(), regions.end(),
-                 [](const SampleDecayRegion& a, const SampleDecayRegion& b) {
-                   return a.first < b.first || (a.first == b.first && a.last < b.last);
-                 });
+  insertion_sort(regions.begin(), regions.end(), decay_region_before);
   std::vector<SampleDecayRegion> merged;
   for (const auto& region : regions) {
     if (region.last <= region.first) {
@@ -216,7 +213,7 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
   double best_noise = 0.0;
   double best_sse = std::numeric_limits<double>::infinity();
   const float min_rt60 = std::max(0.05f, seed_rt60 * 0.35f);
-  const float max_rt60 = std::min(20.0f, seed_rt60 * 2.25f);
+  const float max_rt60 = std::min(kMaxBlindRt60Sec, seed_rt60 * 2.25f);
   const double noise_candidates[] = {0.0,
                                      tail_noise * 0.10,
                                      tail_noise * 0.25,
@@ -302,7 +299,7 @@ BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate>
             });
 
   constexpr float kHistogramBinSeconds = 0.10f;
-  const int n_bins = static_cast<int>(std::ceil(20.0f / kHistogramBinSeconds)) + 1;
+  const int n_bins = static_cast<int>(std::ceil(kMaxBlindRt60Sec / kHistogramBinSeconds)) + 1;
   std::vector<double> histogram(static_cast<size_t>(n_bins), 0.0);
   for (const auto& candidate : candidates) {
     const int bin =
@@ -321,7 +318,7 @@ BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate>
   int accepted = 0;
   for (const auto& candidate : candidates) {
     const float ratio = candidate.estimate.rt60 / reference;
-    if (ratio < 0.65f || ratio > 1.55f) {
+    if (ratio < kRt60AgreementMinRatio || ratio > kRt60AgreementMaxRatio) {
       continue;
     }
     const double weight =
@@ -364,13 +361,12 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
   const float required_drop = std::clamp(min_decay_db, 10.0f, 30.0f);
   const size_t start_stride = frames.db.size() > 200 ? 8 : 4;
   const size_t last_stride = frames.db.size() > 200 ? 3 : 1;
-  const size_t max_window_frames = static_cast<size_t>(std::round(12.0f / 0.01f));
+  const size_t max_window_frames = static_cast<size_t>(std::round(12.0f / kFrameEnergyHopSec));
   auto decay_regions = detect_free_decay_regions(frames, required_drop, noise_floor_margin_db);
   auto lollmann_regions = map_sample_regions_to_frames(
       detect_lollmann_subframe_regions(analysis_samples, size, sample_rate), frames, sample_rate);
   decay_regions.insert(decay_regions.end(), lollmann_regions.begin(), lollmann_regions.end());
   insertion_sort(decay_regions.begin(), decay_regions.end(), decay_region_before);
-  float best_score = -1.0f;
   BlindRt60Estimate best;
   std::vector<DecayEstimateCandidate> candidates;
 
@@ -393,7 +389,7 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
         }
 
         const float rt60 = -60.0f / fit->slope;
-        if (!std::isfinite(rt60) || rt60 <= 0.05f || rt60 > 20.0f) {
+        if (!std::isfinite(rt60) || rt60 <= 0.05f || rt60 > kMaxBlindRt60Sec) {
           continue;
         }
 
@@ -405,7 +401,8 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
         const auto ml_estimate = estimate_exponential_decay_ml(frames, first, last, rt60);
         if (ml_estimate) {
           const float rt60_ratio = ml_estimate->rt60 / rt60;
-          const bool close_to_regression = rt60_ratio >= 0.65f && rt60_ratio <= 1.55f;
+          const bool close_to_regression =
+              rt60_ratio >= kRt60AgreementMinRatio && rt60_ratio <= kRt60AgreementMaxRatio;
           const bool enough_decay_window =
               window_duration >= std::max(0.08f, std::min(rt60, ml_estimate->rt60) / 8.0f);
           if (close_to_regression && enough_decay_window) {
@@ -421,11 +418,6 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
         chosen_confidence *= duration_score;
         const float score = chosen_confidence + (chosen_from_ml ? 0.03f : 0.0f) +
                             0.001f * std::min(chosen_rt60, 5.0f);
-        if (score > best_score) {
-          best_score = score;
-          best.rt60 = chosen_rt60;
-          best.confidence = std::clamp(chosen_confidence, 0.0f, 1.0f);
-        }
         candidates.push_back(
             {BlindRt60Estimate{chosen_rt60, std::clamp(chosen_confidence, 0.0f, 1.0f), 0.0, 0.0f},
              score, chosen_from_ml});

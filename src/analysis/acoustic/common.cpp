@@ -69,7 +69,7 @@ std::optional<LinearFit> fit_line(const std::vector<float>& x, const std::vector
 
 FrameEnergy compute_frame_energy(const float* samples, size_t size, int sample_rate) {
   const int frame_size = std::max(32, static_cast<int>(std::round(0.03f * sample_rate)));
-  const int hop_size = std::max(1, static_cast<int>(std::round(0.01f * sample_rate)));
+  const int hop_size = std::max(1, static_cast<int>(std::round(kFrameEnergyHopSec * sample_rate)));
   if (size < static_cast<size_t>(frame_size)) {
     return {};
   }

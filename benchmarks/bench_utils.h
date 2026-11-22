@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare::bench_utils {
 
 struct KernelComparisonResult {
@@ -37,6 +39,17 @@ double bench(Fn&& fn, int runs, int iterations) {
     times.push_back(total_ms / static_cast<double>(iterations));
   }
   return median_ms(std::move(times));
+}
+
+/// Two-tone (440 Hz and 2.8 kHz) test signal of @p samples samples.
+inline std::vector<float> make_two_tone_signal(int samples, int sample_rate, float gain = 0.8f) {
+  std::vector<float> out(static_cast<size_t>(samples), 0.0f);
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    out[static_cast<size_t>(i)] = gain * (0.7f * std::sin(sonare::constants::kTwoPi * 440.0f * t) +
+                                          0.3f * std::sin(sonare::constants::kTwoPi * 2800.0f * t));
+  }
+  return out;
 }
 
 template <typename Input, typename VectorizedFn, typename ScalarFn>

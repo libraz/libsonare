@@ -423,6 +423,20 @@ int early_kernel_half_width(const EarlyIrConfig& config) noexcept {
 float early_sound_speed(const EarlyIrConfig& config) noexcept {
   return config.sound_speed > 0.0f ? config.sound_speed : kSoundSpeed;
 }
+
+// Arrival time of an image in samples; false for a non-positive, non-finite or overflowing one.
+bool image_delay_samples(const ImageSource& im, float c, float sr, float* delay) noexcept {
+  if (!(im.distance > 1e-6f)) return false;
+  *delay = im.distance / c * sr;
+  return std::isfinite(*delay);
+}
+
+// Normalized sinc sin(pi x) / (pi x), 1 at the origin.
+float sinc_pi(float x) noexcept {
+  if (std::fabs(x) < 1e-7f) return 1.0f;
+  const float px = kPi * x;
+  return std::sin(px) / px;
+}
 }  // namespace
 
 int early_ir_natural_length(const std::vector<ImageSource>& images, int sample_rate,
@@ -433,10 +447,8 @@ int early_ir_natural_length(const std::vector<ImageSource>& images, int sample_r
 
   float max_delay = 0.0f;
   for (const auto& im : images) {
-    if (im.distance > 1e-6f) {
-      const float delay = im.distance / c * sr;
-      if (std::isfinite(delay)) max_delay = std::max(max_delay, delay);
-    }
+    float delay;
+    if (image_delay_samples(im, c, sr, &delay)) max_delay = std::max(max_delay, delay);
   }
   // Auto-size to the farthest image arrival, clamped to the same ceiling
   // synthesize_late_tail uses (kMaxAutoSamples): without a cap, a pathological
@@ -481,10 +493,8 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   };
 
   for (const auto& im : images) {
-    // Use the negated >-form so non-finite distances are skipped consistently.
-    if (!(im.distance > 1e-6f)) continue;
-    const float delay = im.distance / c * sr;
-    if (!std::isfinite(delay)) continue;
+    float delay;
+    if (!image_delay_samples(im, c, sr, &delay)) continue;
     const double delay_d = static_cast<double>(delay);
     if (delay_d <= -static_cast<double>(half64) - 0.5 ||
         delay_d >= static_cast<double>(length64 - 1) + static_cast<double>(half64) + 0.5) {
@@ -499,13 +509,7 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
       const std::int64_t idx64 = n0 + k;
       const size_t idx = static_cast<size_t>(idx64);
       const float x = static_cast<float>(k) - frac;  // continuous offset from the true delay
-      float h;
-      if (std::fabs(x) < 1e-7f) {
-        h = 1.0f;
-      } else {
-        const float px = kPi * x;
-        h = std::sin(px) / px;
-      }
+      const float h = sinc_pi(x);
       // Lanczos window on the *continuous* offset x (not the integer tap k), so
       // the window is centred on the sinc peak and the rendered amplitude is
       // independent of the fractional delay. (fdl=1 -> half=0 -> passthrough.)
@@ -514,9 +518,8 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
         const float xn = x / static_cast<float>(half + 1);
         if (std::fabs(xn) >= 1.0f) {
           w = 0.0f;
-        } else if (std::fabs(xn) > 1e-7f) {
-          const float pxn = kPi * xn;
-          w = std::sin(pxn) / pxn;
+        } else {
+          w = sinc_pi(xn);
         }
       }
       ir[idx] += gain * h * w;

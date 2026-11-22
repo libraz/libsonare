@@ -24,15 +24,7 @@ std::vector<float> third_octave_centers(int count, int sample_rate) {
   const float nyquist = static_cast<float>(sample_rate) * 0.5f;
   const float edge_ratio = std::pow(2.0f, 1.0f / 6.0f);
   const float step_ratio = std::pow(2.0f, 1.0f / 3.0f);
-  std::size_t reachable = 0;
-  float reserve_center = 125.0f;
-  while (reachable < static_cast<std::size_t>(std::max(0, count)) &&
-         reserve_center * edge_ratio < nyquist) {
-    ++reachable;
-    reserve_center *= step_ratio;
-  }
-  centers.reserve(reachable);
-  float center = 125.0f;
+  float center = kOctaveBaseHz;
   for (int i = 0; i < count; ++i) {
     if (center * edge_ratio >= nyquist) {
       break;
@@ -101,7 +93,7 @@ BlindRt60Estimate weighted_subband_average(const std::vector<BlindRt60Estimate>&
     }
     if (std::isfinite(median_rt60) && median_rt60 > 0.0f) {
       const float ratio = estimate.rt60 / median_rt60;
-      if (ratio < 0.65f || ratio > 1.55f) {
+      if (ratio < kRt60AgreementMinRatio || ratio > kRt60AgreementMaxRatio) {
         continue;
       }
     }
@@ -240,7 +232,7 @@ BlindRt60Estimate extrapolate_low_frequency_rt60(const BlindRt60Estimate& high_b
     return result;
   }
 
-  const float clamped_hz = std::clamp(center_hz, 125.0f, 1000.0f);
+  const float clamped_hz = std::clamp(center_hz, kOctaveBaseHz, 1000.0f);
   const float octave_distance = std::log2(1000.0f / clamped_hz);
   const float multiplier = std::clamp(1.0f + 0.06f * octave_distance, 1.0f, 1.18f);
   result.rt60 = high_band.rt60 * multiplier;
