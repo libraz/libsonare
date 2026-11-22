@@ -44,11 +44,6 @@ from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RA
 from ._project_instruments import SynthPatch
 from ._runtime import _UINT32_MAX, ErrorCode, SonareError
 
-# A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
-# audio source carries a `uri`, so the kind decides which entries are addressable
-# by --audio at all.
-_SOURCE_KIND_AUDIO = 0
-
 # The only URI scheme --resolve-audio opens. The core never opens a URI itself,
 # so resolving one is this front-end's own file I/O, and it has no business
 # fetching over a network to feed a render.
@@ -109,20 +104,20 @@ def _parse_audio_binding(assignment: str) -> tuple[int, str]:
     return source_id, path
 
 
-def _audio_source_uris(document: bytes) -> dict[int, str]:
-    """Map each audio source id in the document to the URI it references.
+def _audio_source_uris(project: Any, document: bytes) -> dict[int, str]:
+    """Map each audio source id of the loaded project to the URI it references.
 
-    Read from the document rather than from the loaded handle: the flat source
-    descriptor carries the URI in a fixed-width field, so anything longer arrives
-    truncated, and a truncated URI is one ``--resolve-audio`` would then try to
-    open. The document is the only place the whole string survives.
+    Which sources are audio comes from the loaded project, so the library's
+    document reader is the only one that interprets a source kind. The URI is
+    read from the document: the flat source descriptor carries it in a
+    fixed-width field, so anything longer arrives truncated, and a truncated URI
+    is one ``--resolve-audio`` would then try to open.
     """
-    sources = json.loads(document).get("sources", [])
-    uris: dict[int, str] = {}
-    for source in sources:
-        if int(source.get("kind", 0)) != _SOURCE_KIND_AUDIO:
-            continue
-        uris[int(source.get("id", 0))] = str(source.get("uri", ""))
+    uris = {source.id: "" for source in project.sources() if source.kind == "audio"}
+    for source in json.loads(document).get("sources", []):
+        source_id, uri = source.get("id"), source.get("uri")
+        if isinstance(source_id, int) and source_id in uris and isinstance(uri, str):
+            uris[source_id] = uri
     return uris
 
 
@@ -171,7 +166,7 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
         and not cast(Any, project).unresolved_audio_source_ids().size
     ):
         return
-    uris = _audio_source_uris(_read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES))
+    uris = _audio_source_uris(project, _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES))
     for assignment in assignments:
         source_id, path = _parse_audio_binding(assignment)
         if source_id not in uris:
@@ -375,7 +370,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         # The clip -> source map has no C-ABI getter, so it is read from the
         # document, which is also where the untruncated source URIs live.
         shape = json.loads(document)
-        uris = _audio_source_uris(document)
+        uris = _audio_source_uris(project, document)
         clips_by_source: dict[int, list[int]] = {}
         for clip in shape.get("clips", []):
             clips_by_source.setdefault(int(clip.get("sourceId", 0)), []).append(

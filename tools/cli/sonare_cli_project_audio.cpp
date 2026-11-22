@@ -5,15 +5,16 @@
 #include <string>
 #include <vector>
 
+#include "arrangement/edit_source.h"
 #include "sonare_cli_project.h"
 #include "util/refusal_predicates.h"
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
-// A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
-// audio source carries a `uri`, so the kind decides which entries are
-// addressable by --audio at all.
-constexpr int kProjectSourceKindAudio = 0;
+// The C ABI's source kind ordinal for an audio source. Only an audio source
+// carries a `uri`, so the kind decides which entries are addressable by --audio.
+constexpr uint32_t kProjectSourceKindAudio =
+    static_cast<uint32_t>(sonare::arrangement::SourceKind::kAudio);
 
 // The only URI scheme --resolve-audio opens. The core never opens a URI itself,
 // so resolving one is this front-end's own file I/O, and it has no business
@@ -60,26 +61,32 @@ bool path_from_file_uri(const std::string& uri, std::string* out) {
   return true;
 }
 
-// Maps each audio source id in the document to the URI it references.
+// Maps each audio source id of the loaded project to the URI it references.
 //
-// Read from the document rather than from the loaded handle: the flat source
-// descriptor carries the URI in a fixed-width field, so anything longer arrives
-// truncated, and a truncated URI is one --resolve-audio would then try to open.
-// The document is the only place the whole string survives.
-std::map<uint32_t, std::string> project_audio_source_uris(const std::string& document) {
+// Which sources are audio comes from the loaded handle, so the library's
+// document reader is the only one that interprets a source kind. The URI is
+// read from the document: the flat source descriptor carries it in a
+// fixed-width field, so anything longer arrives truncated, and a truncated URI
+// is one --resolve-audio would then try to open.
+std::map<uint32_t, std::string> project_audio_source_uris(const SonareProject* project,
+                                                          const std::string& document) {
   std::map<uint32_t, std::string> uris;
+  size_t count = 0;
+  if (sonare_project_source_count(project, &count) != SONARE_OK) return uris;
+  for (size_t index = 0; index < count; ++index) {
+    SonareProjectSource source{};
+    if (sonare_project_source_by_index(project, index, &source) != SONARE_OK) continue;
+    if (source.kind == kProjectSourceKindAudio) uris.emplace(source.id, std::string());
+  }
   const auto root = sonare::util::json::parse(document);
   const auto* sources = root.find("sources");
   if (sources == nullptr || !sources->is_array()) return uris;
   for (const auto& source : sources->as_array()) {
-    const auto* kind = source.find("kind");
     const auto* id = source.find("id");
     const auto* uri = source.find("uri");
-    if (kind == nullptr || !kind->is_number() || kind->as_int() != kProjectSourceKindAudio)
-      continue;
-    if (id == nullptr || !id->is_number()) continue;
-    uris.emplace(static_cast<uint32_t>(id->as_number()),
-                 uri != nullptr && uri->is_string() ? uri->as_string() : std::string());
+    if (id == nullptr || !id->is_number() || uri == nullptr || !uri->is_string()) continue;
+    const auto entry = uris.find(static_cast<uint32_t>(id->as_number()));
+    if (entry != uris.end()) entry->second = uri->as_string();
   }
   return uris;
 }
@@ -199,7 +206,7 @@ int resolve_bounce_audio_sources(const CliArgs& args, SonareProject* project) {
     return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
   }
   const std::map<uint32_t, std::string> uris =
-      project_audio_source_uris(std::string(document.begin(), document.end()));
+      project_audio_source_uris(project, std::string(document.begin(), document.end()));
 
   for (const auto& assignment : assignments) {
     uint32_t source_id = 0;
@@ -489,7 +496,7 @@ int cmd_project_align_takes(const CliArgs& args) {
     return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
   }
   const std::string document(document_bytes.begin(), document_bytes.end());
-  const std::map<uint32_t, std::string> uris = project_audio_source_uris(document);
+  const std::map<uint32_t, std::string> uris = project_audio_source_uris(handle.ptr, document);
   const ProjectAlignDocumentFacts facts = project_align_document_facts(document);
 
   const uint32_t reference_source = args.get_uint32("reference-source", 0);

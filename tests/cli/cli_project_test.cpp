@@ -1138,3 +1138,43 @@ TEST_CASE("CLI project commands refuse synth, audio bindings and outputs from ar
   }
 }
 #endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("CLI project align-takes reads source kinds through the loaded project",
+          "[cli][project]") {
+  const std::string takes = unique_temp_path("_kinds_takes.json");
+  const std::string project = unique_temp_path("_kinds_project.json");
+  const std::string wav = unique_temp_path("_kinds_take.wav");
+  const std::string out = unique_temp_path("_kinds_out.json");
+  create_takes_project(takes);
+  create_test_wav(wav, 2.0f, 22050);
+  std::string document;
+  {
+    std::ifstream in(takes);
+    document.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
+  const std::string sources = R"("sources":[)";
+  const size_t at = document.find(sources);
+  REQUIRE(at != std::string::npos);
+  document.insert(at + sources.size(), R"({"kind":"midi","id":3,"name":"","channelHint":0},)");
+  {
+    std::ofstream file(project);
+    file << document;
+  }
+  const std::string audio = " --audio 1=" + wav + " --audio 2=" + wav + " -o " + out + " -q";
+
+  SECTION("an audio source in its token spelling is a usable reference") {
+    auto [code, output] =
+        exec_command(CLI + " project align-takes " + project + " --reference-source 1" + audio);
+    INFO(output);
+    CHECK(code == 0);
+  }
+  SECTION("a MIDI source is refused as a reference") {
+    auto [code, output] =
+        exec_command(CLI + " project align-takes " + project + " --reference-source 3" + audio);
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring("that source is not an audio source"));
+  }
+  for (const std::string& path : {takes, project, wav, out}) std::remove(path.c_str());
+}
+#endif
