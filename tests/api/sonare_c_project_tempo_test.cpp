@@ -84,7 +84,8 @@ TEST_CASE("project tempo estimation reads the meter the full analysis reads at a
 
   for (const auto& [samples, rate, reading] :
        {std::tuple{&at_44100, 44100, a}, std::tuple{&at_48000, 48000, b}}) {
-    sonare::MusicAnalyzer analyzer(sonare::Audio::from_buffer(samples->data(), samples->size(), rate));
+    sonare::MusicAnalyzer analyzer(
+        sonare::Audio::from_buffer(samples->data(), samples->size(), rate));
     const sonare::TimeSignature analyzed = analyzer.analyze().time_signature;
     CHECK(reading.numerator == analyzed.numerator);
     CHECK(reading.denominator == analyzed.denominator);
