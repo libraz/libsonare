@@ -219,7 +219,7 @@ TEST_CASE("sonare_free_declip_result leaves the result zeroed", "[c_api][c_free]
       static_cast<decltype(r.report.detected.flat_sample_count)>(1);
   r.report.detected.flat_level = static_cast<decltype(r.report.detected.flat_level)>(1);
   r.report.lpc_reconstructed_runs = static_cast<decltype(r.report.lpc_reconstructed_runs)>(1);
-  r.report.interpolated_runs = static_cast<decltype(r.report.interpolated_runs)>(1);
+  r.report.unreconstructed_runs = static_cast<decltype(r.report.unreconstructed_runs)>(1);
   r.report.repaired_samples = static_cast<decltype(r.report.repaired_samples)>(1);
   r.report.linked_runs = static_cast<decltype(r.report.linked_runs)>(1);
   sonare_free_declip_result(&r);
@@ -241,7 +241,7 @@ TEST_CASE("sonare_free_declip_result leaves the result zeroed", "[c_api][c_free]
   CHECK(r.report.detected.flat_level == static_cast<decltype(r.report.detected.flat_level)>(0));
   CHECK(r.report.lpc_reconstructed_runs ==
         static_cast<decltype(r.report.lpc_reconstructed_runs)>(0));
-  CHECK(r.report.interpolated_runs == static_cast<decltype(r.report.interpolated_runs)>(0));
+  CHECK(r.report.unreconstructed_runs == static_cast<decltype(r.report.unreconstructed_runs)>(0));
   CHECK(r.report.repaired_samples == static_cast<decltype(r.report.repaired_samples)>(0));
   CHECK(r.report.linked_runs == static_cast<decltype(r.report.linked_runs)>(0));
 }
@@ -265,7 +265,7 @@ TEST_CASE("sonare_free_declip_stereo_result leaves the result zeroed", "[c_api][
   r.left_report.detected.flat_level = static_cast<decltype(r.left_report.detected.flat_level)>(1);
   r.left_report.lpc_reconstructed_runs =
       static_cast<decltype(r.left_report.lpc_reconstructed_runs)>(1);
-  r.left_report.interpolated_runs = static_cast<decltype(r.left_report.interpolated_runs)>(1);
+  r.left_report.unreconstructed_runs = static_cast<decltype(r.left_report.unreconstructed_runs)>(1);
   r.left_report.repaired_samples = static_cast<decltype(r.left_report.repaired_samples)>(1);
   r.left_report.linked_runs = static_cast<decltype(r.left_report.linked_runs)>(1);
   r.right_report.detected.clipped_samples =
@@ -284,7 +284,8 @@ TEST_CASE("sonare_free_declip_stereo_result leaves the result zeroed", "[c_api][
   r.right_report.detected.flat_level = static_cast<decltype(r.right_report.detected.flat_level)>(1);
   r.right_report.lpc_reconstructed_runs =
       static_cast<decltype(r.right_report.lpc_reconstructed_runs)>(1);
-  r.right_report.interpolated_runs = static_cast<decltype(r.right_report.interpolated_runs)>(1);
+  r.right_report.unreconstructed_runs =
+      static_cast<decltype(r.right_report.unreconstructed_runs)>(1);
   r.right_report.repaired_samples = static_cast<decltype(r.right_report.repaired_samples)>(1);
   r.right_report.linked_runs = static_cast<decltype(r.right_report.linked_runs)>(1);
   sonare_free_declip_stereo_result(&r);
@@ -309,8 +310,8 @@ TEST_CASE("sonare_free_declip_stereo_result leaves the result zeroed", "[c_api][
         static_cast<decltype(r.left_report.detected.flat_level)>(0));
   CHECK(r.left_report.lpc_reconstructed_runs ==
         static_cast<decltype(r.left_report.lpc_reconstructed_runs)>(0));
-  CHECK(r.left_report.interpolated_runs ==
-        static_cast<decltype(r.left_report.interpolated_runs)>(0));
+  CHECK(r.left_report.unreconstructed_runs ==
+        static_cast<decltype(r.left_report.unreconstructed_runs)>(0));
   CHECK(r.left_report.repaired_samples == static_cast<decltype(r.left_report.repaired_samples)>(0));
   CHECK(r.left_report.linked_runs == static_cast<decltype(r.left_report.linked_runs)>(0));
   CHECK(r.right_report.detected.clipped_samples ==
@@ -331,8 +332,8 @@ TEST_CASE("sonare_free_declip_stereo_result leaves the result zeroed", "[c_api][
         static_cast<decltype(r.right_report.detected.flat_level)>(0));
   CHECK(r.right_report.lpc_reconstructed_runs ==
         static_cast<decltype(r.right_report.lpc_reconstructed_runs)>(0));
-  CHECK(r.right_report.interpolated_runs ==
-        static_cast<decltype(r.right_report.interpolated_runs)>(0));
+  CHECK(r.right_report.unreconstructed_runs ==
+        static_cast<decltype(r.right_report.unreconstructed_runs)>(0));
   CHECK(r.right_report.repaired_samples ==
         static_cast<decltype(r.right_report.repaired_samples)>(0));
   CHECK(r.right_report.linked_runs == static_cast<decltype(r.right_report.linked_runs)>(0));

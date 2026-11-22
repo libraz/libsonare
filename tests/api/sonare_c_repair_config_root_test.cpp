@@ -51,7 +51,6 @@ TEST_CASE("config struct members are refused under the config parameter", "[c_ap
     config.clip_threshold_db = 1.0f;
     config.lpc_order = 36;
     config.iterations = 2;
-    config.lpc_blend = 0.65f;
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSampleRate,
                                                     &config,

@@ -32,7 +32,6 @@ SonareDeclipConfig default_declip_config() {
   config.clip_threshold_db = sonare::linear_to_db(0.98f);
   config.lpc_order = 36;
   config.iterations = 2;
-  config.lpc_blend = 0.65f;
   return config;
 }
 

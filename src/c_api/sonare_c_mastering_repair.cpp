@@ -118,7 +118,6 @@ sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipC
                                                                          "clip_threshold_db");
   cpp.lpc_order = config->lpc_order;
   cpp.iterations = config->iterations;
-  cpp.lpc_blend = config->lpc_blend;
   return cpp;
 }
 
@@ -292,7 +291,7 @@ SonareDeclipReport to_c_declip_report(const sonare::mastering::repair::DeclipRep
   SonareDeclipReport c{};
   c.detected = to_c_clip_detection(cpp.detected);
   c.lpc_reconstructed_runs = cpp.lpc_reconstructed_runs;
-  c.interpolated_runs = cpp.interpolated_runs;
+  c.unreconstructed_runs = cpp.unreconstructed_runs;
   c.repaired_samples = cpp.repaired_samples;
   c.linked_runs = cpp.linked_runs;
   return c;
@@ -634,7 +633,6 @@ void sonare_declip_config_init(SonareDeclipConfig* config) {
   config->clip_threshold_db = sonare::linear_to_db(cpp.clip_threshold);
   config->lpc_order = cpp.lpc_order;
   config->iterations = cpp.iterations;
-  config->lpc_blend = cpp.lpc_blend;
 }
 
 void sonare_decrackle_config_init(SonareDecrackleConfig* config) {

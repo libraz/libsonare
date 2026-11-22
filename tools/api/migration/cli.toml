@@ -797,7 +797,7 @@ frontend = "python"
 [[entry]]
 kind = "command"
 old = "declip"
-removed = "use repair --stages declip; its four options are the --params keys repair.declip.clipThresholdDb, lpcOrder, iterations and lpcBlend"
+removed = "use repair --stages declip; its options are the --params keys repair.declip.clipThresholdDb, lpcOrder and iterations"
 domain = "effects"
 rule = "cli-front-end-parity"
 frontend = "python"

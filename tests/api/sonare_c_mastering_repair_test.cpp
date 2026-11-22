@@ -2,6 +2,7 @@
 /// @brief Mastering repair and dynamics C API tests.
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 #include "c_api/sonare_c_last_refusal.h"
@@ -825,6 +826,31 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_declip leaves a run past the gap cap clipped",
+          "[c_api][mastering]") {
+  // 30 Hz clipped at half its amplitude: every plateau spans about 533 samples at
+  // 48 kHz, past the 512-sample cap, so none is reconstructed and nothing moves.
+  constexpr int kRate = 48000;
+  std::vector<float> samples(static_cast<size_t>(kRate / 5));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float phase = sonare::constants::kTwoPi * 30.0f * static_cast<float>(i) / kRate;
+    samples[i] = std::clamp(std::sin(phase), -0.5f, 0.5f);
+  }
+  SonareDeclipConfig config;
+  sonare_declip_config_init(&config);
+  config.clip_threshold_db = 20.0f * std::log10(0.5f);
+  SonareDeclipResult result{};
+  REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), kRate, &config, &result) ==
+          SONARE_OK);
+  CHECK(result.report.detected.longest_run_samples > 512);
+  CHECK(result.report.lpc_reconstructed_runs == 0);
+  CHECK(result.report.unreconstructed_runs == result.report.detected.run_count);
+  CHECK(result.report.repaired_samples == 0);
+  REQUIRE(result.length == samples.size());
+  CHECK(std::equal(samples.begin(), samples.end(), result.samples));
+  sonare_free_declip_result(&result);
+}
+
 TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 0.5f);
@@ -849,7 +875,6 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
     config.clip_threshold_db = 20.0f * std::log10(0.85f);
     config.lpc_order = 24;
     config.iterations = 1;
-    config.lpc_blend = 0.5f;
     SonareDeclipResult result{};
     REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &result) ==
             SONARE_OK);
@@ -862,7 +887,6 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
     config.clip_threshold_db = 6.0f;  // above full scale
     config.lpc_order = 24;
     config.iterations = 1;
-    config.lpc_blend = 0.5f;
     SonareDeclipResult result{};
     result.samples = non_null_sentinel_float_ptr();
     result.length = 123;

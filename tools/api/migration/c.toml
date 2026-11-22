@@ -1153,9 +1153,19 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "SonareStreamingLoudnessGain.true_peak_db"
-new = "SonareStreamingLoudnessGain.true_peak_dbtp"
+to = "SonareStreamingLoudnessGain.true_peak_dbtp"
+changed = "-inf for digital silence instead of -120"
 domain = "mastering"
-rule = "loudness-names"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::a silent input's streaming loudness gain feeds the chain as no gain"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamingLoudnessGain.loudness_static_gain_db"
+changed = "NaN for a silent or below-gate stage input instead of 0; sonare_streaming_mastering_chain_create reads a NaN static gain as no gain"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::a silent input's streaming loudness gain feeds the chain as no gain"
 
 [[entry]]
 kind = "function"
@@ -1665,7 +1675,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create r
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create"
-changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields, NaN when not given"
+changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure); takes const SonareStreamingMasteringChainOptions* options (NULL = defaults; sonare_streaming_mastering_chain_options_init) after config_json; the loudness static gain and its peak are options fields; a NaN static gain is no gain, so a loudness-enabled config is accepted without one and takes sonare_streaming_loudness_gain's result for a silent input as it is"
 domain = "mastering"
 rule = "c-create"
 test = "tests/api/sonare_c_mastering_streaming_test.cpp::streaming"
@@ -5066,3 +5076,20 @@ changed = "refuses malformed config_json, an unknown or renamed key and an inval
 domain = "project"
 rule = "error-class-by-cause"
 test = "tests/conformance/core_validation_refusals_test.cpp::a MIDI-FX config is a call's argument on every entry that takes one"
+
+[[entry]]
+kind = "field"
+old = "SonareDeclipConfig.lpc_blend"
+removed = true
+no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareDeclipReport.interpolated_runs"
+changed = "counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs"
+to = "SonareDeclipReport.unreconstructed_runs"
+domain = "effects"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::leaves a run past the gap cap clipped"

@@ -3,6 +3,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -99,6 +100,50 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
   // Silence has no loudness to derive a gain from, so the gain is not measured.
   CHECK(std::isnan(quiet.loudness_static_gain_db));
   CHECK_FALSE(std::isfinite(quiet.integrated_lufs));
+}
+
+TEST_CASE("a silent input's streaming loudness gain feeds the chain as no gain",
+          "[c_api][mastering][streaming]") {
+  constexpr int kRate = 48000;
+  constexpr size_t kBlock = 256;
+  const char* config = R"({"loudness.enabled":1,"loudness.targetLufs":-14})";
+  const std::vector<float> silence(kRate, 0.0f);
+  SonareStreamingLoudnessGain quiet{};
+  REQUIRE(sonare_streaming_loudness_gain(silence.data(), silence.size(), kRate, config, &quiet) ==
+          SONARE_OK);
+  REQUIRE(std::isnan(quiet.loudness_static_gain_db));
+  REQUIRE(quiet.true_peak_dbtp == -std::numeric_limits<float>::infinity());
+
+  // The result goes in as it is; an explicit 0 dB gain is the reference it must equal.
+  auto render = [&](float gain_db, float peak_dbtp) {
+    SonareStreamingMasteringChainOptions options;
+    sonare_streaming_mastering_chain_options_init(&options);
+    options.loudness_static_gain_db = gain_db;
+    options.loudness_static_gain_peak_dbtp = peak_dbtp;
+    SonareStreamingMasteringChain* chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(config, &options, &chain) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kRate, kBlock, 1) == SONARE_OK);
+    std::vector<float> block(kBlock);
+    for (size_t i = 0; i < kBlock; ++i) {
+      block[i] = 0.2f * std::sin(6.2831853f * 440.0f * static_cast<float>(i) / kRate);
+    }
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, block.data(), block.size()) ==
+            SONARE_OK);
+    sonare_streaming_mastering_chain_destroy(chain);
+    return block;
+  };
+  const std::vector<float> fed = render(quiet.loudness_static_gain_db, quiet.true_peak_dbtp);
+  const std::vector<float> unity = render(0.0f, std::numeric_limits<float>::quiet_NaN());
+  for (size_t i = 0; i < kBlock; ++i) {
+    CHECK(std::abs(fed[i] - unity[i]) <= 1e-6f);
+  }
+  // The gain is read: 6 dB lifts the same block.
+  const std::vector<float> lifted = render(6.0f, std::numeric_limits<float>::quiet_NaN());
+  float largest_lift = 0.0f;
+  for (size_t i = 0; i < kBlock; ++i) {
+    largest_lift = std::max(largest_lift, std::abs(lifted[i]) - std::abs(unity[i]));
+  }
+  CHECK(largest_lift > 0.05f);
 }
 
 TEST_CASE("streaming mastering chain prepare resolves a zero block size to its default",

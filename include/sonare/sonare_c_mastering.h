@@ -704,9 +704,10 @@ typedef struct {
 ///        measured the way the offline chain measures them.
 typedef struct {
   /// Static gain (dB) the offline loudness stage applies, ceiling-headroom bound
-  /// included. 0 for a silent or below-gate stage input.
+  /// included. NaN for a silent or below-gate stage input, which has no loudness to
+  /// derive a gain from; the chain reads NaN as no gain.
   float loudness_static_gain_db;
-  /// True peak (dBTP) of the loudness stage's input; -120 for digital silence.
+  /// True peak (dBTP) of the loudness stage's input; -inf for digital silence.
   float true_peak_dbtp;
   /// Integrated loudness (LUFS) of the loudness stage's input; -inf below the
   /// absolute gate.
@@ -1016,8 +1017,8 @@ typedef struct {
   uint32_t struct_size;
   /// Static gain (dB) applied per block before the loudness stage's true-peak limiter, measured
   /// at the loudness stage's input (@ref sonare_streaming_loudness_gain returns it). NaN (the
-  /// default) is not given: a config enabling the loudness stage is then refused, because the
-  /// streaming chain cannot measure whole-signal integrated LUFS.
+  /// default) is no gain: the loudness stage's limiter still runs. The streaming chain cannot
+  /// measure whole-signal integrated LUFS, so a loudness target takes effect only through this.
   float loudness_static_gain_db;
   /// True peak (dBTP) of the loudness stage's input the static gain was computed for. When
   /// given, the static gain is clamped to `(ceiling_dbtp - peak_dbtp) +
@@ -1034,8 +1035,8 @@ void sonare_streaming_mastering_chain_options_init(SonareStreamingMasteringChain
 /// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
 ///   the keys @ref sonare_master_audio takes as overrides; a refusal names the key under the
 ///   root `config` and returns @c SONARE_ERROR_INVALID_PARAMETER.
-/// @details Fails on an unknown key or a non-streaming stage, and on a config enabling the
-///   loudness stage unless @p options gives its static gain.
+/// @details Fails on an unknown key or a non-streaming stage. A config enabling the loudness
+///   stage applies the static gain @p options gives, and none when it is NaN.
 /// @param options NULL for the defaults (@ref sonare_streaming_mastering_chain_options_init).
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy, which must be called exactly once.
@@ -1489,7 +1490,6 @@ typedef struct {
                             ///< (default 20*log10(0.98), about -0.175 dBFS)
   int lpc_order;            ///< LPC order used for prediction (default 36)
   int iterations;           ///< LPC reconstruction iterations (default 2)
-  float lpc_blend;          ///< LPC vs interpolation blend (default 0.65)
 } SonareDeclipConfig;
 
 /// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
@@ -1500,8 +1500,7 @@ typedef struct {
   size_t clipped_samples;      ///< samples at or past clip_threshold_db
   float clipped_ratio;         ///< clipped_samples divided by the input length
   size_t run_count;            ///< runs of consecutive clipped samples
-  size_t longest_run_samples;  ///< a run past the 512-sample cap takes the
-                               ///< interpolation fallback instead of the solver
+  size_t longest_run_samples;  ///< a run past the 512-sample cap is left clipped
   /// Flat tops: runs of bit-identical samples at the channel's flat level (the
   /// largest run level once the two highest runs are set aside; candidates are
   /// at least -40 dBFS). These answer
@@ -1538,10 +1537,10 @@ SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t
 typedef struct {
   SonareClipDetection detected;   ///< this channel's own analysis of the input
   size_t lpc_reconstructed_runs;  ///< runs the solver filled
-  size_t interpolated_runs;       ///< runs past the cap, filled by interpolation:
-                                  ///< for these lpc_order, iterations and
-                                  ///< lpc_blend had no effect
-  size_t repaired_samples;        ///< samples overwritten by either fill
+  size_t unreconstructed_runs;    ///< runs left as they were: past the 512-sample
+                                  ///< gap cap, without a usable solve, or
+                                  ///< reconstructed past threshold +20 dB
+  size_t repaired_samples;        ///< samples of the reconstructed runs
   size_t linked_runs;             ///< of the repaired runs, those reaching past
                                   ///< this channel's own clipped samples because
                                   ///< the other channel's run was wider; always 0
@@ -1592,11 +1591,10 @@ typedef struct {
 /// Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC
 /// solver. The cap is a fixed sample count: it is not derived from @c lpc_order, from
 /// @c sample_rate, or from any other field, so its duration depends on the rate
-/// (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
-/// instead, which keeps the solver's dense matrices bounded by the cap rather than by
-/// the input. Exceeding the cap silently changes the reconstruction method rather than
-/// failing: the call still returns @c SONARE_OK, and @c lpc_order, @c iterations and
-/// @c lpc_blend have no effect on the interpolated run.
+/// (~10.7 ms at 48 kHz), and it keeps the solver's dense matrices bounded by the cap
+/// rather than by the input. A longer run, a run with no usable solve, and a run whose
+/// reconstruction would rise more than 20 dB above the threshold are left clipped and
+/// counted in @c unreconstructed_runs; the call still returns @c SONARE_OK.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
                                            const SonareDeclipConfig* config,
