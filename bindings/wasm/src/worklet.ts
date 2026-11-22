@@ -12,12 +12,24 @@ export { attachOpfsClipStream } from './clip_page_streamer.js';
 // thread `init()` through this entry or `index` loads the same instance, and the
 // AudioWorklet realm initialises its own.
 export { init, isInitialized } from './index.js';
+export type { MixerConfig, MixerRealtimeBuffer } from './mixer.js';
+export { Mixer } from './mixer.js';
 export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
 export type { StreamingMasteringChainConfig } from './public_types.js';
 export type { CaptureOptions } from './public_types_engine.js';
+export type { MixerProcessResult, StripMeteringOptions } from './public_types_mixing.js';
+export type {
+  EqBandInput,
+  EqMatchOptions,
+  EqSpectrumSnapshot,
+  EqStereoPlacement,
+  StreamingEqualizerConfig,
+  StreamingRetuneAppliedConfig,
+  StreamingRetuneConfig,
+} from './public_types_realtime.js';
 export type {
   EngineClipPageRequestMessage,
   EngineSyncErrorMessage,
@@ -38,7 +50,33 @@ export type {
   WorkletPort,
   WorkletTransport,
 } from './public_types_worklet.js';
-export { type StereoBlock, StreamingMasteringChain } from './streaming_processors.js';
+export type {
+  RealtimeVoiceChangerInterleavedBuffer,
+  RealtimeVoiceChangerMonoBuffer,
+  RealtimeVoiceChangerOptions,
+  RealtimeVoiceChangerPlanarBuffer,
+} from './realtime_voice_changer.js';
+export { RealtimeVoiceChanger } from './realtime_voice_changer.js';
+export { StreamAnalyzer } from './stream_analyzer.js';
+export type {
+  StreamBarChord,
+  StreamChordChange,
+  StreamConfig,
+  StreamFrames,
+  StreamFramesI16,
+  StreamFramesU8,
+  StreamPatternScore,
+  StreamProgressiveEstimate,
+  StreamQuantizeConfig,
+  StreamStats,
+} from './stream_types.js';
+export {
+  type EqPhaseMode,
+  type StereoBlock,
+  StreamingEqualizer,
+  StreamingMasteringChain,
+  StreamingRetune,
+} from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
