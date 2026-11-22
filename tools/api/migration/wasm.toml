@@ -35696,6 +35696,30 @@ test = "bindings/wasm/tests/result-absence-types.test.ts::a level silence leaves
 
 [[entry]]
 kind = "field"
+old = "DynamicRangeReport.dynamicRangeDb"
+changed = "optional: `Infinity` when the low percentile lands on a silent window, absent when the high percentile is silent too or the input is empty"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/metering-and-scale.test.ts::dynamic range keeps a silent low end infinite and leaves an unmeasured range absent"
+
+[[entry]]
+kind = "field"
+old = "DynamicRangeReport.lowPercentileDb"
+changed = "optional: `-Infinity` on a silent window, absent for empty input"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/metering-and-scale.test.ts::dynamic range keeps a silent low end infinite and leaves an unmeasured range absent"
+
+[[entry]]
+kind = "field"
+old = "DynamicRangeReport.highPercentileDb"
+changed = "optional: `-Infinity` on a silent window, absent for empty input"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/metering-and-scale.test.ts::dynamic range keeps a silent low end infinite and leaves an unmeasured range absent"
+
+[[entry]]
+kind = "field"
 old = "DeclipOptions.lpcBlend"
 removed = true
 no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
