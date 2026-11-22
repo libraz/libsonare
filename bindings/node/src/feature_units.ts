@@ -1,12 +1,14 @@
-import { refuse, withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { assertMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
-import { assertFloat32Array, assertPositiveInteger, requestOnly } from './validation.js';
+import type { Matrix2D } from './types_analysis.js';
+import { assertPositiveInteger, requestOnly } from './validation.js';
 
 /** Request for {@link powerToDb}. */
-export interface PowerToDbRequest {
-  /** Power values to convert. */
-  values: Float32Array;
+export interface PowerToDbRequest<T extends Float32Array | Matrix2D = Float32Array | Matrix2D> {
+  /** Power values to convert, as a flat array or a matrix; the result takes the same form. */
+  values: T;
   /** Reference power. Default 1. */
   ref?: number;
   /** Floor under which a power is clamped. Default 1e-10. */
@@ -16,9 +18,9 @@ export interface PowerToDbRequest {
 }
 
 /** Request for {@link amplitudeToDb}. */
-export interface AmplitudeToDbRequest {
-  /** Amplitude values to convert. */
-  values: Float32Array;
+export interface AmplitudeToDbRequest<T extends Float32Array | Matrix2D = Float32Array | Matrix2D> {
+  /** Amplitude values to convert, as a flat array or a matrix; the result takes the same form. */
+  values: T;
   /** Reference amplitude. Default 1. */
   ref?: number;
   /** Floor under which an amplitude is clamped. Default 1e-5. */
@@ -28,17 +30,17 @@ export interface AmplitudeToDbRequest {
 }
 
 /** Request for {@link dbToPower}. */
-export interface DbToPowerRequest {
-  /** Decibel values to convert to power. */
-  values: Float32Array;
+export interface DbToPowerRequest<T extends Float32Array | Matrix2D = Float32Array | Matrix2D> {
+  /** Decibel values to convert to power, as a flat array or a matrix; the result takes the same form. */
+  values: T;
   /** Reference power. Default 1. */
   ref?: number;
 }
 
 /** Request for {@link dbToAmplitude}. */
-export interface DbToAmplitudeRequest {
-  /** Decibel values to convert to amplitude. */
-  values: Float32Array;
+export interface DbToAmplitudeRequest<T extends Float32Array | Matrix2D = Float32Array | Matrix2D> {
+  /** Decibel values to convert to amplitude, as a flat array or a matrix; the result takes the same form. */
+  values: T;
   /** Reference amplitude. Default 1. */
   ref?: number;
 }
@@ -175,40 +177,64 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
   });
 }
 
+/**
+ * Applies an elementwise conversion to a flat array or to a matrix's data,
+ * returning the same form.
+ */
+function convertElementwise(
+  values: unknown,
+  convert: (data: Float32Array) => Float32Array,
+): Float32Array | Matrix2D {
+  if (values instanceof Float32Array) {
+    return convert(values);
+  }
+  if (typeof values !== 'object' || values === null || Array.isArray(values)) {
+    throw refuseType('values must be a Float32Array or a Matrix2D');
+  }
+  assertMatrix2D(values, 'values', false);
+  return { data: convert(values.data), rows: values.rows, cols: values.cols };
+}
+
 /** Power to dB. Request-only; `values` is a power spectrogram or series. */
-export function powerToDb(request: PowerToDbRequest): Float32Array;
-export function powerToDb(...args: unknown[]): Float32Array {
+export function powerToDb<T extends Float32Array | Matrix2D>(request: PowerToDbRequest<T>): T;
+export function powerToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('powerToDb', () => {
     const r = requestOnly<PowerToDbRequest>('powerToDb', args);
-    assertFloat32Array(r.values, 'values');
-    return addon.powerToDb(r.values, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80);
+    return convertElementwise(r.values, (data) =>
+      addon.powerToDb(data, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80),
+    );
   });
 }
 
 /** Amplitude to dB. Request-only; `values` is a magnitude spectrogram or series. */
-export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
-export function amplitudeToDb(...args: unknown[]): Float32Array {
+export function amplitudeToDb<T extends Float32Array | Matrix2D>(
+  request: AmplitudeToDbRequest<T>,
+): T;
+export function amplitudeToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('amplitudeToDb', () => {
     const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
-    assertFloat32Array(r.values, 'values');
-    return addon.amplitudeToDb(r.values, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80);
+    return convertElementwise(r.values, (data) =>
+      addon.amplitudeToDb(data, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80),
+    );
   });
 }
 
 /** dB to power. Request-only. */
-export function dbToPower(request: DbToPowerRequest): Float32Array;
-export function dbToPower(...args: unknown[]): Float32Array {
+export function dbToPower<T extends Float32Array | Matrix2D>(request: DbToPowerRequest<T>): T;
+export function dbToPower(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('dbToPower', () => {
     const r = requestOnly<DbToPowerRequest>('dbToPower', args);
-    return addon.dbToPower(r.values, r.ref ?? 1);
+    return convertElementwise(r.values, (data) => addon.dbToPower(data, r.ref ?? 1));
   });
 }
 
 /** dB to amplitude. Request-only. */
-export function dbToAmplitude(request: DbToAmplitudeRequest): Float32Array;
-export function dbToAmplitude(...args: unknown[]): Float32Array {
+export function dbToAmplitude<T extends Float32Array | Matrix2D>(
+  request: DbToAmplitudeRequest<T>,
+): T;
+export function dbToAmplitude(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('dbToAmplitude', () => {
     const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
-    return addon.dbToAmplitude(r.values, r.ref ?? 1);
+    return convertElementwise(r.values, (data) => addon.dbToAmplitude(data, r.ref ?? 1));
   });
 }
