@@ -76,6 +76,25 @@ describe('streamingLoudnessGain', () => {
     expect(chain.processMono(new Float32Array(512)).length).toBe(512);
   });
 
+  it.each([
+    ['loudnessStaticGainDb', Number.NaN],
+    ['loudnessStaticGainDb', Number.POSITIVE_INFINITY],
+    ['loudnessStaticGainPeakDbtp', Number.NaN],
+    ['loudnessStaticGainPeakDbtp', Number.NEGATIVE_INFINITY],
+  ])('refuses a written non-finite %s (%s) by name', (key, value) => {
+    const construct = () =>
+      new StreamingMasteringChain({
+        ...STAGED,
+        sampleRate: SR,
+        numChannels: 1,
+        maxBlockSize: 512,
+        loudnessStaticGainDb: 0,
+        [key]: value,
+      });
+    expect(construct).toThrow(RangeError);
+    expect(construct).toThrow(new RegExp(`\\b${key} must be finite`));
+  });
+
   it('rejects mismatched channels and an unknown config key', () => {
     expect(() =>
       streamingLoudnessGainStereo({
