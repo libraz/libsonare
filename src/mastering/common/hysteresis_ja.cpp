@@ -188,8 +188,6 @@ namespace jiles_atherton_presets {
 
 JilesAthertonConfig oxide_tape() { return {1.0f, 0.3f, 0.1f, 1.6e-3f, 0.4f}; }
 
-JilesAthertonConfig tape() { return oxide_tape(); }
-
 JilesAthertonConfig silicon_steel() {
   // A conservative audio transformer core preset: higher coercivity than the
   // tape default for a wider low-level loop, with a mostly reversible curve to

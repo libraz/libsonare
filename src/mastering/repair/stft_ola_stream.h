@@ -41,10 +41,9 @@ class StftOlaStream {
         samples_to_next_frame_(n_fft - prefix_),
         fft_(n_fft) {}
 
-  int n_bins() const noexcept { return n_bins_; }
   int active_channels() const noexcept { return active_channels_; }
 
-  /// Spectra of the frame being processed, n_bins() values per active channel.
+  /// Spectra of the frame being processed, n_fft / 2 + 1 values per active channel.
   std::complex<float>* spectra() noexcept { return spectra_.data(); }
   std::vector<std::complex<float>>& spectra_storage() noexcept { return spectra_; }
 
@@ -170,7 +169,7 @@ class StftOlaStream {
   }
 
   /// @brief Masks @p source by the real @p gains, overlap-adds it and finalizes one hop.
-  /// @param source n_bins() values per active channel, laid out as spectra().
+  /// @param source n_fft / 2 + 1 values per active channel, laid out as spectra().
   void emit_frame(const double* gains, const std::complex<float>* source) {
     const auto fft = static_cast<std::size_t>(n_fft_);
     const auto bins = static_cast<std::size_t>(n_bins_);

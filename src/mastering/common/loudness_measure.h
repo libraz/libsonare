@@ -97,14 +97,10 @@ float measure_lufs(const float* samples, std::size_t length, int sample_rate);
 float measure_lufs_interleaved(const float* samples, std::size_t frames, int channels,
                                int sample_rate);
 
-/// @brief Loudness range (LRA) in LU. Forwards to
-///        `metering::lufs(audio).loudness_range_lu`.
-float measure_lra(const Audio& audio);
-
 /// @brief Loudness range (LRA) in LU of an interleaved multi-channel buffer.
 /// @details Forwards to `metering::lufs_interleaved(...).loudness_range_lu`, which
 ///          applies BS.1770 channel summing. Prefer this over downmixing to mono
-///          and calling `measure_lra`: a phase-cancelling `0.5*(L+R)` downmix
+///          and calling `measure_lra_interleaved`: a phase-cancelling `0.5*(L+R)` downmix
 ///          collapses the loudness range of wide / out-of-phase stereo material.
 /// @param samples Pointer to `frames * channels` interleaved samples.
 /// @param frames Number of sample frames.

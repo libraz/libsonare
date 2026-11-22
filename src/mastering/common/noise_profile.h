@@ -48,7 +48,7 @@ struct NoiseFloorDbfs {
   float bands[kRepairNoiseBandCount] = {};
 };
 
-/// @brief Expresses a per-bin noise PSD as a level in dBFS.
+/// @brief Expresses a per-bin noise PSD, summed over frames, as a level in dBFS.
 /// @details The STFT carries an unknown constant (window power, centring, the
 ///   transform's own normalization), so nothing here assumes one: the noise PSD
 ///   and the observed power go through the same one-sided sum and the ratio is
@@ -61,25 +61,13 @@ struct NoiseFloorDbfs {
 ///   noise, because the tone is in the quiet frames too; a noise floor is smooth
 ///   in frequency and a tone is a few bins wide, so a median over a bin
 ///   neighbourhood keeps the first and drops the second.
-/// @param noise_psd Per-bin, per-frame noise PSD, [bins x frames] bin-major.
-/// @param power Observed power over the same grid, [bins x frames] bin-major.
+/// @param noise_psd_sum Sum over frames of the noise PSD, one per bin.
+/// @param power_sum Sum over frames of the observed power, one per bin.
 /// @param bins Number of one-sided bins.
-/// @param frames Number of frames.
+/// @param frames Number of frames the sums span.
 /// @param signal_mean_square Mean square of the time-domain signal the STFT came from.
 /// @param sample_rate Sample rate, for the band edges.
 /// @return Levels in dBFS; a band holding no bin reports @ref sonare::constants::kFloorDb.
-NoiseFloorDbfs noise_floor_dbfs(const double* noise_psd, const float* power, int bins, int frames,
-                                double signal_mean_square, int sample_rate);
-
-/// @brief @ref noise_floor_dbfs from per-bin sums instead of the two planes.
-/// @details The plane entry folds both inputs to one sum per bin before it does
-///   anything else, so a caller walking the STFT frame by frame accumulates the
-///   same two arrays and never holds a [bins x frames] plane. Each bin sums its
-///   frames in ascending order either way, which is what makes the two entries
-///   agree bit for bit rather than merely closely.
-/// @param noise_psd_sum Sum over frames of the noise PSD, one per bin.
-/// @param power_sum Sum over frames of the observed power, one per bin.
-/// @param frames Number of frames the sums span.
 NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
                                           int bins, int frames, double signal_mean_square,
                                           int sample_rate);

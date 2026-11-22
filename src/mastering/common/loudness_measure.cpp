@@ -158,8 +158,6 @@ float measure_lufs_interleaved(const float* samples, std::size_t frames, int cha
   return metering::lufs_interleaved(samples, frames, channels, sample_rate).integrated_lufs;
 }
 
-float measure_lra(const Audio& audio) { return metering::lufs(audio).loudness_range_lu; }
-
 float measure_lra_interleaved(const float* samples, std::size_t frames, int channels,
                               int sample_rate) {
   if (frames == 0) {

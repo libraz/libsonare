@@ -825,13 +825,11 @@ TEST_CASE("Jiles-Atherton presets expose tape, steel, and mu-metal cores",
   namespace presets = sonare::mastering::common::jiles_atherton_presets;
 
   const auto oxide = presets::oxide_tape();
-  const auto tape = presets::tape();
   const auto steel = presets::silicon_steel();
   const auto mu_metal = presets::mu_metal();
   sonare::mastering::common::JilesAtherton plan_engine(oxide);
   sonare::mastering::common::JilesAthertonState plan_state;
 
-  REQUIRE_THAT(tape.coercivity, WithinAbs(oxide.coercivity, 0.0f));
   REQUIRE(std::isfinite(plan_engine.process(plan_state, 0.1f)));
   REQUIRE(steel.coercivity > mu_metal.coercivity);
   REQUIRE(mu_metal.reversibility > steel.reversibility);

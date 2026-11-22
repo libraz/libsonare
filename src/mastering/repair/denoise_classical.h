@@ -134,7 +134,7 @@ struct DenoiseReport {
 ///
 ///   The broadband and per-band levels are the estimator's own PSD smoothed
 ///   across bins and referred to the input's measured mean square; see
-///   @ref common::noise_floor_dbfs for why neither step assumes a window
+///   @ref common::noise_floor_dbfs_from_sums for why neither step assumes a window
 ///   constant and why the smoothing is there.
 /// @param samples Input samples; must hold at least `config.n_fft` of them.
 /// @param size Number of samples.

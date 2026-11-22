@@ -70,27 +70,6 @@ void repair_noise_band_bins(int n_fft, int sample_rate, int* out) {
   out[kRepairNoiseBandCount] = bins;
 }
 
-NoiseFloorDbfs noise_floor_dbfs(const double* noise_psd, const float* power, int bins, int frames,
-                                double signal_mean_square, int sample_rate) {
-  if (noise_psd == nullptr || power == nullptr || bins <= 0 || frames <= 0) return floor_result();
-
-  std::vector<double> noise_sum(static_cast<size_t>(bins), 0.0);
-  std::vector<double> power_sum(static_cast<size_t>(bins), 0.0);
-  for (int b = 0; b < bins; ++b) {
-    const size_t row = static_cast<size_t>(b) * static_cast<size_t>(frames);
-    double noise = 0.0;
-    double observed = 0.0;
-    for (int t = 0; t < frames; ++t) {
-      noise += noise_psd[row + static_cast<size_t>(t)];
-      observed += static_cast<double>(power[row + static_cast<size_t>(t)]);
-    }
-    noise_sum[static_cast<size_t>(b)] = noise;
-    power_sum[static_cast<size_t>(b)] = observed;
-  }
-  return noise_floor_dbfs_from_sums(noise_sum.data(), power_sum.data(), bins, frames,
-                                    signal_mean_square, sample_rate);
-}
-
 NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
                                           int bins, int frames, double signal_mean_square,
                                           int sample_rate) {

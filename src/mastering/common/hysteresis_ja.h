@@ -76,7 +76,6 @@ class JilesAtherton {
 namespace jiles_atherton_presets {
 
 JilesAthertonConfig oxide_tape();
-JilesAthertonConfig tape();
 JilesAthertonConfig silicon_steel();
 JilesAthertonConfig mu_metal();
 

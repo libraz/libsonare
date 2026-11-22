@@ -149,12 +149,6 @@ struct ParamMeta {
   double ui_max = std::numeric_limits<double>::quiet_NaN();
 };
 
-/// @brief @p meta drawn on a logarithmic axis.
-constexpr ParamMeta logarithmic(ParamMeta meta) {
-  meta.scale = Scale::Log;
-  return meta;
-}
-
 /// @brief Lowest display value of a logarithmic axis in @p unit: a log axis cannot start at zero.
 constexpr double log_axis_floor(Unit unit) {
   switch (unit) {
