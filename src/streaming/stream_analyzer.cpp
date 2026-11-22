@@ -110,9 +110,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     stream_resampler_ = std::make_unique<streaming_detail::StreamResampler>(config_.sample_rate,
                                                                             internal_sample_rate_);
   } else {
-    needs_resampling_ = false;
     internal_sample_rate_ = config_.sample_rate;
-    resample_ratio_ = 1.0f;
   }
 
   // n_fft is a duration in samples at 44100 Hz; the window never drops below the hop so no
@@ -133,13 +131,13 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// the retained frame count. Floor it at a few times the maximum
   /// autocorrelation lag (tempo_evidence_lag(kBpmMin), half of kBpmMin) so the
   /// BPM estimator always has enough lags even for unusually large hop lengths.
+  const int max_tempo_lag =
+      tempo_evidence_lag(internal_sample_rate_, config_.hop_length, streaming_detail::kBpmMin);
   {
     const int hop = std::max(config_.hop_length, 1);
     const size_t window_from_seconds = static_cast<size_t>(
         kOnsetWindowSeconds * static_cast<float>(internal_sample_rate_) / static_cast<float>(hop));
-    const int max_lag =
-        tempo_evidence_lag(internal_sample_rate_, config_.hop_length, streaming_detail::kBpmMin);
-    const size_t min_window = static_cast<size_t>(std::max(max_lag, 1)) * 4;
+    const size_t min_window = static_cast<size_t>(std::max(max_tempo_lag, 1)) * 4;
     onset_window_frames_ = std::max(window_from_seconds, min_window);
   }
 
@@ -148,8 +146,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   // separate counters and begin at zero.
   onset_accumulator_.resize(onset_window_frames_);
   onset_window_scratch_.reserve(onset_window_frames_);
-  const int prepared_max_lag = std::max(
-      1, tempo_evidence_lag(internal_sample_rate_, config_.hop_length, streaming_detail::kBpmMin));
+  const int prepared_max_lag = std::max(1, max_tempo_lag);
   bpm_autocorr_scratch_.reserve(static_cast<size_t>(prepared_max_lag));
   chroma_history_.resize(static_cast<size_t>(kChordSmoothingFrames));
   full_chroma_history_.resize(kMaxChromaHistoryFrames);

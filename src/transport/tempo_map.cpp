@@ -324,7 +324,6 @@ double TempoMap::bar_start_ppq_in(const std::vector<TimeSignatureSegment>& time_
   const size_t sig_index = time_signature_index_for_ppq(time_signatures, ppq);
   const TimeSignature sig = time_signatures[sig_index].time_sig;
   const double len = bar_length_ppq(sig);
-  if (len <= 0.0) return 0.0;
   const double sig_start = time_signatures[sig_index].start_ppq;
   return sig_start + std::floor(std::max(0.0, ppq - sig_start) / len) * len;
 }

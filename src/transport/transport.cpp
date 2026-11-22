@@ -50,6 +50,19 @@ TransportState make_snapshot(const TempoMap& map, double sample_rate, bool playi
           bar_beat.beat_fraction};
 }
 
+// The loop region in samples under @p map.
+struct LoopSamples {
+  int64_t start;
+  int64_t end;
+  int64_t length;
+};
+
+LoopSamples loop_samples(const TempoMap& map, double start_ppq, double end_ppq) noexcept {
+  const int64_t start = map.ppq_to_sample(start_ppq);
+  const int64_t end = map.ppq_to_sample(end_ppq);
+  return {start, end, numeric::saturating_sub(end, start)};
+}
+
 }  // namespace
 
 bool BoundaryList::add(Boundary boundary) noexcept {
@@ -89,15 +102,15 @@ void Transport::set_tempo_map(const TempoMap* tempo_map) noexcept {
 }
 
 TransportState Transport::snapshot() const noexcept {
-  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const LoopState loop = loop_reader_.try_load();
-  return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
-                       render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
+  return snapshot_with_loop(loop_reader_.try_load());
 }
 
 TransportState Transport::snapshot_control() const noexcept {
+  return snapshot_with_loop(loop_state_.load());
+}
+
+TransportState Transport::snapshot_with_loop(const LoopState& loop) const noexcept {
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const LoopState loop = loop_state_.load();
   return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
                        render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
 }
@@ -124,9 +137,7 @@ int64_t Transport::loop_folded(int64_t position) const noexcept {
   const LoopState loop = loop_reader_.try_load();
   if (!loop.enabled || loop.end_ppq <= loop.start_ppq) return position;
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
-  const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
-  const int64_t loop_len = numeric::saturating_sub(loop_end, loop_start);
+  const auto [loop_start, loop_end, loop_len] = loop_samples(map, loop.start_ppq, loop.end_ppq);
   if (loop_len <= 0 || position < loop_end) return position;
   return numeric::saturating_add(loop_start,
                                  numeric::saturating_sub(position, loop_start) % loop_len);
@@ -184,9 +195,7 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   }
 
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
-  const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
-  const int64_t loop_len = numeric::saturating_sub(loop_end, loop_start);
+  const auto [loop_start, loop_end, loop_len] = loop_samples(map, loop.start_ppq, loop.end_ppq);
   if (loop_len <= 0) return false;
 
   // Report every loop wrap that falls inside this block, not just the first.
@@ -210,7 +219,6 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
     }
     added = true;
     next_wrap_offset = loop_len - overshoot;
-    if (next_wrap_offset == 0) next_wrap_offset = loop_len;
   }
   while (next_wrap_offset <= num_frames) {
     const int offset = static_cast<int>(next_wrap_offset);

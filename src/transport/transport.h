@@ -94,6 +94,7 @@ class Transport {
   };
 
   int64_t loop_folded(int64_t position) const noexcept;
+  TransportState snapshot_with_loop(const LoopState& loop) const noexcept;
 
   // Prepared at the transport's rate in prepare(); before prepare() a null map
   // uses the shared 48 kHz fallback.

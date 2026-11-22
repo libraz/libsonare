@@ -11,12 +11,10 @@
 #include "analysis/progression_patterns.h"
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
-#include "util/constants.h"
 #include "util/numeric_validation.h"
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
 using namespace streaming_detail;
 
 /// Seconds over which progressive key/BPM confidence ramps to full.
@@ -49,6 +47,25 @@ WinningChord winning_chord(const std::array<int, StreamAnalyzer::kBarVoteSlots>&
   return {best_idx / kNumChordQualities, best_idx % kNumChordQualities, confidence};
 }
 
+/// Vote slot of a chord, or -1 when root/quality fall outside the vote table.
+int bar_vote_index(int root, int quality) {
+  const int idx = root * kNumChordQualities + quality;
+  return (idx >= 0 && idx < StreamAnalyzer::kBarVoteSlots) ? idx : -1;
+}
+
+/// Appends @p entry, dropping the oldest once @p max_entries is reached and counting the drop.
+template <typename Entry>
+void append_bounded(std::vector<Entry>& progression, const Entry& entry, size_t max_entries,
+                    size_t& dropped) {
+  if (progression.size() < max_entries) {
+    progression.push_back(entry);
+    return;
+  }
+  std::move(progression.begin() + 1, progression.end(), progression.begin());
+  progression.back() = entry;
+  ++dropped;
+}
+
 }  // namespace
 
 void StreamAnalyzer::current_frame_chord(int& root, int& quality, float& corr) {
@@ -66,25 +83,13 @@ void StreamAnalyzer::current_frame_chord(int& root, int& quality, float& corr) {
 }
 
 void StreamAnalyzer::append_chord_progression(const ChordChange& change) {
-  auto& progression = current_estimate_.chord_progression;
-  if (progression.size() < config_.max_progression_entries) {
-    progression.push_back(change);
-    return;
-  }
-  std::move(progression.begin() + 1, progression.end(), progression.begin());
-  progression.back() = change;
-  ++dropped_chord_progression_entries_;
+  append_bounded(current_estimate_.chord_progression, change, config_.max_progression_entries,
+                 dropped_chord_progression_entries_);
 }
 
 void StreamAnalyzer::append_bar_progression(const BarChord& chord) {
-  auto& progression = current_estimate_.bar_chord_progression;
-  if (progression.size() < config_.max_progression_entries) {
-    progression.push_back(chord);
-    return;
-  }
-  std::move(progression.begin() + 1, progression.end(), progression.begin());
-  progression.back() = chord;
-  ++dropped_bar_progression_entries_;
+  append_bounded(current_estimate_.bar_chord_progression, chord, config_.max_progression_entries,
+                 dropped_bar_progression_entries_);
 }
 
 void StreamAnalyzer::flush_pending_chord() {
@@ -204,7 +209,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
           current_chord_start_time_ = current_time;
         } else {
           /// Chord changed - check if previous chord was stable long enough
-          if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
+          if (chord_stable_time_ >= kChordMinDuration) {
             /// Find the start time of the previous chord
             float chord_start = current_time - chord_stable_time_;
 
@@ -347,8 +352,8 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       /// Sized to cover every ChordQuality enumerator so 7ths / sus / extended
       /// chords are no longer silently dropped when the underlying template
       /// set grows beyond simple triads.
-      int vote_idx = root * kNumChordQualities + quality;
-      if (vote_idx >= 0 && vote_idx < StreamAnalyzer::kBarVoteSlots) {
+      const int vote_idx = bar_vote_index(root, quality);
+      if (vote_idx >= 0) {
         ++bar_chord_votes_[vote_idx];
         ++bar_vote_count_;
       }
@@ -433,7 +438,7 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     /// Vote for chord using frames in this bar.
     /// Sized to (12 pitch classes * kNumChordQualities) — see kBarVoteSlots
     /// in stream_analyzer.h. Must stay in lockstep with the live-tracking
-    /// table above; the static_assert near the top of this file enforces it.
+    /// table above; the static_assert in stream_analyzer.cpp enforces it.
     std::array<int, StreamAnalyzer::kBarVoteSlots> votes = {};
     int vote_count = 0;
 
@@ -453,9 +458,9 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
       /// Detect chord
       auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
       if (has_chord_evidence(corr)) {
-        int idx =
-            static_cast<int>(chord.root) * kNumChordQualities + static_cast<int>(chord.quality);
-        if (idx >= 0 && idx < StreamAnalyzer::kBarVoteSlots) {
+        const int idx =
+            bar_vote_index(static_cast<int>(chord.root), static_cast<int>(chord.quality));
+        if (idx >= 0) {
           ++votes[idx];
           ++vote_count;
         }
@@ -520,8 +525,8 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     for (const auto& bar : bars) {
       if (bar.bar_index < 0) continue;
       if (floor_mod(bar.bar_index, pattern_length) != pos) continue;
-      int chord_idx = bar.root * kNumChordQualities + bar.quality;
-      if (chord_idx >= 0 && chord_idx < StreamAnalyzer::kBarVoteSlots) {
+      const int chord_idx = bar_vote_index(bar.root, bar.quality);
+      if (chord_idx >= 0) {
         confidence_sum[chord_idx] += bar.confidence;
         ++vote_count[chord_idx];
       }
@@ -625,7 +630,6 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
   const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
-  int pattern_length = static_cast<int>(voted.size());
 
   /// Find best matching known pattern. The name and both correction lists are
   /// reserved members rather than locals: this runs on the audio thread, and a
@@ -640,14 +644,14 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
   for (const auto& pattern : patterns) {
     int known_len = static_cast<int>(pattern.chords.size());
-    if (known_len != pattern_length) continue;  // Only match same-length patterns
+    if (known_len != pattern_len) continue;  // Only match same-length patterns
 
     int exact_matches = 0;
     int confusable_matches = 0;
     auto& corrections = pattern_corrections_;
     corrections.clear();
 
-    for (int pos = 0; pos < pattern_length; ++pos) {
+    for (int pos = 0; pos < pattern_len; ++pos) {
       int voted_root = voted[pos].root;
       int voted_quality = voted[pos].quality;
 
@@ -666,12 +670,12 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
     }
 
     // Score: exact matches count fully, confusable matches count partially
-    float score = (exact_matches + confusable_matches * 0.7f) / pattern_length;
+    float score = (exact_matches + confusable_matches * 0.7f) / pattern_len;
 
     // Require at least (n-1) positions to match (exact or confusable)
     // For 4-chord pattern: need 3+ matches
     int total_matches = exact_matches + confusable_matches;
-    if (total_matches >= pattern_length - 1 && score > best_match_score) {
+    if (total_matches >= pattern_len - 1 && score > best_match_score) {
       best_match_score = score;
       best_pattern_name.assign(pattern.name);
       // clear() + insert rather than assignment: insert is specified to
