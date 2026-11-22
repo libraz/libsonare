@@ -497,8 +497,9 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   std::vector<SonareProjectTempoSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
-    segments.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
+    const uint32_t input_count = sonare_node::node_list_length(input, "segments");
+    segments.reserve(input_count);
+    for (uint32_t i = 0; i < input_count; ++i) {
       Napi::Value entry = input.Get(i);
       if (!entry.IsObject()) {
         Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
@@ -529,8 +530,9 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
   std::vector<SonareProjectTimeSignatureSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
-    segments.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
+    const uint32_t input_count = sonare_node::node_list_length(input, "segments");
+    segments.reserve(input_count);
+    for (uint32_t i = 0; i < input_count; ++i) {
       Napi::Value entry = input.Get(i);
       if (!entry.IsObject()) {
         Napi::TypeError::New(env, "time-signature segment must be an object")

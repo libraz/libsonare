@@ -28,8 +28,9 @@ namespace {
 void ReadStreamingPlatforms(const Napi::Array& input,
                             std::vector<sonare::mastering::maximizer::StreamingPlatform>* out) {
   const Napi::Env env = input.Env();
-  out->reserve(input.Length());
-  for (uint32_t index = 0; index < input.Length(); ++index) {
+  const uint32_t input_count = node_list_length(input, "platforms");
+  out->reserve(input_count);
+  for (uint32_t index = 0; index < input_count; ++index) {
     const std::string subject = "platforms[" + std::to_string(index) + "]";
     const Napi::Value value = input.Get(index);
     if (!value.IsObject()) throw Napi::TypeError::New(env, subject + " must be an object");

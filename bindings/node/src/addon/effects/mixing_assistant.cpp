@@ -58,8 +58,8 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
 
   Napi::Array left_input = info[0].As<Napi::Array>();
   Napi::Array id_input = info[2].As<Napi::Array>();
-  const uint32_t count = left_input.Length();
-  if (id_input.Length() != count) {
+  const uint32_t count = node_list_length(left_input, "leftChannels");
+  if (node_list_length(id_input, "trackIds") != count) {
     Napi::TypeError::New(env, "trackIds must have one entry per track")
         .ThrowAsJavaScriptException();
     return false;
@@ -67,21 +67,21 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
 
   const bool has_right_array = info[1].IsArray();
   Napi::Array right_input = has_right_array ? info[1].As<Napi::Array>() : Napi::Array::New(env, 0);
-  if (has_right_array && right_input.Length() != count) {
+  if (has_right_array && node_list_length(right_input, "rightChannels") != count) {
     Napi::TypeError::New(env, "rightChannels must have one entry per track")
         .ThrowAsJavaScriptException();
     return false;
   }
   const bool has_name_array = info[3].IsArray();
   Napi::Array name_input = has_name_array ? info[3].As<Napi::Array>() : Napi::Array::New(env, 0);
-  if (has_name_array && name_input.Length() != count) {
+  if (has_name_array && node_list_length(name_input, "trackNames") != count) {
     Napi::TypeError::New(env, "trackNames must have one entry per track")
         .ThrowAsJavaScriptException();
     return false;
   }
   if (info[4].IsArray()) {
     Napi::Array rate_input = info[4].As<Napi::Array>();
-    if (rate_input.Length() != count) {
+    if (node_list_length(rate_input, "trackSampleRates") != count) {
       Napi::TypeError::New(env, "trackSampleRates must have one entry per track")
           .ThrowAsJavaScriptException();
       return false;

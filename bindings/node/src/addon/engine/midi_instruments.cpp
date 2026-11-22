@@ -46,8 +46,9 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     return {};
   }
   Napi::Array input = value.As<Napi::Array>();
-  std::vector<SonareEngineMidiEvent> events(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "MIDI clip events");
+  std::vector<SonareEngineMidiEvent> events(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value item = input.Get(i);
     if (!item.IsObject()) {
       Napi::TypeError::New(env, "MIDI clip events must be objects").ThrowAsJavaScriptException();
@@ -86,9 +87,10 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array input = info[0].As<Napi::Array>();
-  std::vector<std::vector<SonareEngineMidiEvent>> event_storage(input.Length());
-  std::vector<SonareEngineMidiClipSchedule> clips(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "clips");
+  std::vector<std::vector<SonareEngineMidiEvent>> event_storage(input_count);
+  std::vector<SonareEngineMidiClipSchedule> clips(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value item = input.Get(i);
     if (!item.IsObject()) {
       Napi::TypeError::New(env, "MIDI clips must be objects").ThrowAsJavaScriptException();
@@ -191,7 +193,7 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
     bytes = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
     Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
     bytes = arr.Data();

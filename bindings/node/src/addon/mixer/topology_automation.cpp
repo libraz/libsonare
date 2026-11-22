@@ -145,9 +145,10 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
   std::vector<const char*> member_ptrs;
   if (info.Length() >= 3 && info[2].IsArray()) {
     Napi::Array members = info[2].As<Napi::Array>();
-    member_storage.reserve(members.Length());
-    member_ptrs.reserve(members.Length());
-    for (uint32_t i = 0; i < members.Length(); ++i) {
+    const uint32_t member_count = node_list_length(members, "members");
+    member_storage.reserve(member_count);
+    member_ptrs.reserve(member_count);
+    for (uint32_t i = 0; i < member_count; ++i) {
       Napi::Value value = members.Get(i);
       if (!value.IsString()) {
         Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();
@@ -225,9 +226,10 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   const Napi::Array members = info[1].As<Napi::Array>();
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
-  member_storage.reserve(members.Length());
-  member_ptrs.reserve(members.Length());
-  for (uint32_t i = 0; i < members.Length(); ++i) {
+  const uint32_t member_count = node_list_length(members, "members");
+  member_storage.reserve(member_count);
+  member_ptrs.reserve(member_count);
+  for (uint32_t i = 0; i < member_count; ++i) {
     const Napi::Value value = members.Get(i);
     if (!value.IsString()) {
       Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();

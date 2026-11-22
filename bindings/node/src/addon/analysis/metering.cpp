@@ -1088,8 +1088,9 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   }
   Napi::Array js_levels = info[2].As<Napi::Array>();
   std::vector<size_t> levels;
-  levels.reserve(js_levels.Length());
-  for (uint32_t i = 0; i < js_levels.Length(); ++i) {
+  const uint32_t level_count = node_list_length(js_levels, "levels");
+  levels.reserve(level_count);
+  for (uint32_t i = 0; i < level_count; ++i) {
     Napi::Value item = js_levels.Get(i);
     if (!item.IsNumber()) {
       Napi::TypeError::New(env, "levels must be numbers").ThrowAsJavaScriptException();

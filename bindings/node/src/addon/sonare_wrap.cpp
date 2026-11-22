@@ -754,7 +754,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   if (info[0].IsBuffer()) {
     auto buf = info[0].As<Napi::Buffer<uint8_t>>();
     data = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (IsUint8Array(info[0])) {
     auto arr = info[0].As<Napi::Uint8Array>();
     data = arr.Data();
@@ -789,7 +789,7 @@ Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
   if (info.Length() >= 1 && info[0].IsBuffer()) {
     auto buf = info[0].As<Napi::Buffer<uint8_t>>();
     data = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() >= 1 && IsUint8Array(info[0])) {
     auto arr = info[0].As<Napi::Uint8Array>();
     data = arr.Data();

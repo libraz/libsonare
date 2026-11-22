@@ -133,8 +133,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
 
   Napi::Array left_input = info[0].As<Napi::Array>();
   Napi::Array right_input = info[1].As<Napi::Array>();
-  const size_t count = left_input.Length();
-  if (count == 0 || right_input.Length() != count) {
+  const size_t count = node_list_length(left_input, "leftChannels");
+  if (count == 0 || node_list_length(right_input, "rightChannels") != count) {
     Napi::TypeError::New(env, "leftChannels and rightChannels must have the same non-zero length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
@@ -190,7 +190,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   // defaults) but never longer: the surplus entries would belong to no strip.
   for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
     const Napi::Value value = options.Get(key);
-    if (value.IsArray() && value.As<Napi::Array>().Length() > count) {
+    if (value.IsArray() && node_list_length(value.As<Napi::Array>(), key) > count) {
       throw Napi::RangeError::New(env, std::string("'") + key + "' has more entries than strips (" +
                                            std::to_string(count) + ")");
     }

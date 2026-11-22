@@ -227,8 +227,9 @@ bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* 
 }
 
 bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMidiCcBinding>* out) {
-  out->assign(array.Length(), SonareMidiCcBinding{});
-  for (uint32_t i = 0; i < array.Length(); ++i) {
+  const uint32_t array_count = sonare_node::node_list_length(array, "bindings");
+  out->assign(array_count, SonareMidiCcBinding{});
+  for (uint32_t i = 0; i < array_count; ++i) {
     const Napi::Value item = array.Get(i);
     if (!item.IsObject()) {
       Napi::TypeError::New(env, "MIDI CC bindings must be objects").ThrowAsJavaScriptException();
@@ -251,8 +252,9 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array array = info[0].As<Napi::Array>();
-  std::vector<SonareMidiEventPod> events(array.Length());
-  for (uint32_t i = 0; i < array.Length(); ++i) {
+  const uint32_t array_count = sonare_node::node_list_length(array, "events");
+  std::vector<SonareMidiEventPod> events(array_count);
+  for (uint32_t i = 0; i < array_count; ++i) {
     const Napi::Value item = array.Get(i);
     if (!item.IsObject() || !MidiEventFromObject(env, item.As<Napi::Object>(), &events[i])) {
       if (!env.IsExceptionPending()) {
@@ -371,7 +373,7 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array input_array = info[0].As<Napi::Array>();
-  const uint32_t length = input_array.Length();
+  const uint32_t length = sonare_node::node_list_length(input_array, "events");
   std::vector<SonareMidiEventPod> input(length);
   for (uint32_t i = 0; i < length; ++i) {
     Napi::Value value = input_array.Get(i);

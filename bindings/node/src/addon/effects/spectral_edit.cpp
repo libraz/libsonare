@@ -94,7 +94,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
 
   // Build ops array from the JS array of plain objects.
   auto js_ops = info[2].As<Napi::Array>();
-  const uint32_t n_ops = js_ops.Length();
+  const uint32_t n_ops = node_list_length(js_ops, "ops");
   std::vector<SonareSpectralRegionOp> ops(n_ops);
   for (uint32_t i = 0; i < n_ops; ++i) {
     Napi::Value item = js_ops.Get(i);

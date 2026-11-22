@@ -33,6 +33,20 @@ void ThrowCurrentException(Napi::Env env);
 /// @brief Number.MAX_SAFE_INTEGER, the largest integer a JS number holds exactly.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
+/// @brief Elements a caller-supplied JS array may hold; the WASM surface applies the same budget.
+constexpr uint32_t kNodeListBudget = 64u * 1024u * 1024u;
+
+/// @brief The length of a caller-supplied @p array, checked before anything is sized or walked
+///        from it. A sparse array can claim billions of elements while holding none.
+/// @throws Napi::RangeError "<subject> exceeds the input length budget".
+inline uint32_t node_list_length(const Napi::Array& array, const std::string& subject) {
+  const uint32_t length = array.Length();
+  if (length > kNodeListBudget) {
+    throw Napi::RangeError::New(array.Env(), subject + " exceeds the input length budget");
+  }
+  return length;
+}
+
 /// @brief The one narrowing every integer reader below performs.
 /// @details Int32Value(), Uint32Value() and Int64Value() are the ECMAScript
 ///   ToInt32 / ToUint32 / ToBigInt64 conversions, which WRAP: 2^32 arrives as 0
@@ -607,8 +621,9 @@ inline std::vector<std::pair<std::string, double>> NumberMapProperty(const Napi:
   const Napi::Object map = value.As<Napi::Object>();
   const Napi::Array names = map.GetPropertyNames();
   std::vector<std::pair<std::string, double>> entries;
-  entries.reserve(names.Length());
-  for (uint32_t i = 0; i < names.Length(); ++i) {
+  const uint32_t name_count = node_list_length(names, std::string(key));
+  entries.reserve(name_count);
+  for (uint32_t i = 0; i < name_count; ++i) {
     const std::string entry_key =
         node_narrow_string(obj.Env(), names.Get(i), std::string(key) + " key");
     const std::string label = std::string(key) + "." + entry_key;
@@ -740,8 +755,9 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
   }
   auto array = value.As<Napi::Array>();
   std::vector<float> values;
-  values.reserve(array.Length());
-  for (uint32_t i = 0; i < array.Length(); ++i) {
+  const uint32_t array_count = node_list_length(array, key);
+  values.reserve(array_count);
+  for (uint32_t i = 0; i < array_count; ++i) {
     Napi::Value item = array.Get(i);
     if (!item.IsNumber()) {
       values.push_back(std::numeric_limits<float>::quiet_NaN());

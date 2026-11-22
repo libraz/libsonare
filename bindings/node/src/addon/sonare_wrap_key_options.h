@@ -64,8 +64,9 @@ inline std::vector<SonareMode> node_modes_option(const Napi::Object& object) {
   }
   Napi::Array arr = value.As<Napi::Array>();
   std::vector<SonareMode> modes;
-  modes.reserve(arr.Length());
-  for (uint32_t i = 0; i < arr.Length(); ++i) {
+  const uint32_t arr_count = node_list_length(arr, "modes");
+  modes.reserve(arr_count);
+  for (uint32_t i = 0; i < arr_count; ++i) {
     modes.push_back(node_mode_from_value(arr.Get(i)));
   }
   return modes;

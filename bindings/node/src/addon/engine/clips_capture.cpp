@@ -60,8 +60,9 @@ const char* CaptureSourceName(int source) {
 // exception on a malformed entry.
 bool ReadSends(Napi::Env env, const Napi::Array& sends,
                std::vector<SonareEngineTrackSend>* out_sends) {
-  out_sends->reserve(sends.Length());
-  for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
+  const uint32_t send_count = sonare_node::node_list_length(sends, "sends");
+  out_sends->reserve(send_count);
+  for (uint32_t send_index = 0; send_index < send_count; ++send_index) {
     const Napi::Value send_value = sends.Get(send_index);
     if (!send_value.IsObject()) {
       Napi::TypeError::New(env, "send must be an object").ThrowAsJavaScriptException();
@@ -120,7 +121,8 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   Napi::Array channels = Napi::Array::New(env);
   if (!has_page_provider) {
     const Napi::Value channel_value = obj.Get("channels");
-    if (!channel_value.IsArray() || channel_value.As<Napi::Array>().Length() == 0) {
+    if (!channel_value.IsArray() ||
+        sonare_node::node_list_length(channel_value.As<Napi::Array>(), "channels") == 0) {
       Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
           .ThrowAsJavaScriptException();
       return false;
@@ -130,10 +132,11 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   auto& clip_storage = out_storage->samples;
   auto& clip_ptrs = out_storage->pointers;
   auto& clip_warp_anchors = out_storage->warp_anchors;
-  clip_storage.reserve(channels.Length());
-  clip_ptrs.reserve(channels.Length());
+  const uint32_t channel_count = sonare_node::node_list_length(channels, "channels");
+  clip_storage.reserve(channel_count);
+  clip_ptrs.reserve(channel_count);
   size_t num_samples = 0;
-  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
+  for (uint32_t ch = 0; ch < channel_count; ++ch) {
     Napi::Value value = channels.Get(ch);
     if (!sonare_node::IsFloat32Array(value)) {
       Napi::TypeError::New(env, "clip channel must be a Float32Array").ThrowAsJavaScriptException();
@@ -188,8 +191,9 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
       return false;
     }
     Napi::Array anchors = anchors_value.As<Napi::Array>();
-    clip_warp_anchors.reserve(anchors.Length());
-    for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
+    const uint32_t anchor_count = sonare_node::node_list_length(anchors, "warpAnchors");
+    clip_warp_anchors.reserve(anchor_count);
+    for (uint32_t anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
       Napi::Value anchor_value = anchors.Get(anchor_index);
       if (!anchor_value.IsObject()) {
         Napi::TypeError::New(env, "warp anchor must be an object").ThrowAsJavaScriptException();
@@ -222,9 +226,10 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array input = info[0].As<Napi::Array>();
-  std::vector<ClipStorage> storage(input.Length());
-  std::vector<SonareEngineClip> clips(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "clips");
+  std::vector<ClipStorage> storage(input_count);
+  std::vector<SonareEngineClip> clips(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!ReadClip(env, input.Get(i), &storage[i], &clips[i])) {
       return env.Undefined();
     }
@@ -272,9 +277,10 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
   Napi::Array input = info[0].As<Napi::Array>();
   std::vector<SonareEngineTrackLane> lanes;
   std::vector<std::vector<SonareEngineTrackSend>> send_storage;
-  lanes.reserve(input.Length());
-  send_storage.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "track lanes");
+  lanes.reserve(input_count);
+  send_storage.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value value = input.Get(i);
     SonareEngineTrackLane lane{};
     // Zero-init leaves source_channel_layout at 0 (mono); default to stereo so
@@ -408,9 +414,10 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
   Napi::Array input = info[0].As<Napi::Array>();
   std::vector<SonareEngineBus> buses;
   std::vector<std::vector<SonareEngineTrackSend>> send_storage;
-  buses.reserve(input.Length());
-  send_storage.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "track buses");
+  buses.reserve(input_count);
+  send_storage.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "track bus must be an object").ThrowAsJavaScriptException();
       return env.Undefined();
@@ -677,15 +684,16 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
   if (!info[0].IsArray()) return SetCaptureBufferExtent(info);
 
   Napi::Array channels = info[0].As<Napi::Array>();
-  if (channels.Length() == 0) {
+  const uint32_t channel_count = sonare_node::node_list_length(channels, "capture channels");
+  if (channel_count == 0) {
     Napi::TypeError::New(env, "capture channels must not be empty").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   std::vector<std::vector<float>> buffers;
-  buffers.reserve(channels.Length());
+  buffers.reserve(channel_count);
   int64_t frames = 0;
-  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
+  for (uint32_t ch = 0; ch < channel_count; ++ch) {
     Napi::Value value = channels.Get(ch);
     if (!sonare_node::IsFloat32Array(value)) {
       Napi::TypeError::New(env, "capture channel must be a Float32Array")

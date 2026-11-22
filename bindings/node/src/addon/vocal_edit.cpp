@@ -30,8 +30,9 @@ bool ReadArrayNumber(Napi::Env env, const Napi::Value& value, const char* field,
     out->assign(array.Data(), array.Data() + array.ElementLength());
   } else if (value.IsArray()) {
     const auto array = value.As<Napi::Array>();
-    out->reserve(array.Length());
-    for (uint32_t i = 0; i < array.Length(); ++i) {
+    const uint32_t array_count = node_list_length(array, field);
+    out->reserve(array_count);
+    for (uint32_t i = 0; i < array_count; ++i) {
       double number = 0.0;
       const std::string name = std::string(field) + "[" + std::to_string(i) + "]";
       if (!RequiredFiniteDoubleValue(env, array.Get(i), name.c_str(), &number, 0.0,
@@ -141,9 +142,10 @@ bool ReadVocalNoteEdit(Napi::Env env, const Napi::Value& value, SonareVocalNoteE
     }
     const Napi::Array points = points_value.As<Napi::Array>();
     storage->points.clear();
-    storage->points.reserve(points.Length());
+    const uint32_t point_count = node_list_length(points, "edit.pitch.target.points");
+    storage->points.reserve(point_count);
     double previous = -std::numeric_limits<double>::infinity();
-    for (uint32_t i = 0; i < points.Length(); ++i) {
+    for (uint32_t i = 0; i < point_count; ++i) {
       Napi::Object point;
       if (!RequiredObjectValue(env, points.Get(i), "edit.pitch.target.points[]", &point))
         return false;
@@ -282,8 +284,9 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
   }
   const Napi::Array array = value.As<Napi::Array>();
   parsed->clear();
-  parsed->reserve(array.Length());
-  for (uint32_t i = 0; i < array.Length(); ++i) {
+  const uint32_t array_count = node_list_length(array, "operations");
+  parsed->reserve(array_count);
+  for (uint32_t i = 0; i < array_count; ++i) {
     Napi::Object object;
     if (!RequiredObjectValue(env, array.Get(i), "operations[]", &object)) return false;
     const Napi::Value kind_value = object.Get("kind");
@@ -332,8 +335,9 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
         return false;
       }
       const Napi::Array ids = ids_value.As<Napi::Array>();
-      item.note_ids.reserve(ids.Length());
-      for (uint32_t j = 0; j < ids.Length(); ++j) {
+      const uint32_t id_count = node_list_length(ids, "operation.noteIds");
+      item.note_ids.reserve(id_count);
+      for (uint32_t j = 0; j < id_count; ++j) {
         uint32_t id = 0;
         if (!ReadNoteId(env, ids.Get(j), "operation.noteIds[]", &id)) return false;
         item.note_ids.push_back(id);
@@ -369,8 +373,9 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
         return false;
       }
       const Napi::Array ids = ids_value.As<Napi::Array>();
-      item.note_ids.reserve(ids.Length());
-      for (uint32_t j = 0; j < ids.Length(); ++j) {
+      const uint32_t id_count = node_list_length(ids, "operation.noteIds");
+      item.note_ids.reserve(id_count);
+      for (uint32_t j = 0; j < id_count; ++j) {
         uint32_t id = 0;
         if (!ReadNoteId(env, ids.Get(j), "operation.noteIds[]", &id)) return false;
         item.note_ids.push_back(id);

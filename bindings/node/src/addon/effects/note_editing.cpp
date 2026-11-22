@@ -138,7 +138,7 @@ void RequireSpanKey(const char* subject, const Napi::Object& row, const char* ke
 /// and merge take do not declare the bounds at all, so they keep the default.
 void ReadNotes(const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes,
                std::vector<float>* envelopes, bool require_span = false) {
-  const uint32_t count = js_notes.Length();
+  const uint32_t count = node_list_length(js_notes, "notes");
   notes->assign(count, SonareNoteObject{});
   for (uint32_t i = 0; i < count; ++i) {
     sonare_note_edit_init(&(*notes)[i].edit);
@@ -200,7 +200,7 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const SonareNoteObjectsResult& result
 /// the omission from a choice.
 bool ReadNoteTargets(Napi::Env env, const Napi::Array& js_targets,
                      std::vector<SonareNoteTarget>* targets) {
-  const uint32_t count = js_targets.Length();
+  const uint32_t count = node_list_length(js_targets, "targets");
   targets->assign(count, SonareNoteTarget{});
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_targets.Get(i);
@@ -315,7 +315,7 @@ void ReadPercussiveEventEdit(const Napi::Object& event, SonarePercussiveEventEdi
 /// 0, and a zero-length span renders the event's edit as nothing.
 void ReadPercussiveEvents(const Napi::Array& js_events,
                           std::vector<SonarePercussiveEvent>* events) {
-  const uint32_t count = js_events.Length();
+  const uint32_t count = node_list_length(js_events, "events");
   events->assign(count, SonarePercussiveEvent{});
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_events.Get(i);
@@ -657,7 +657,7 @@ Napi::Value SonareWrap::NoteTargetsFromSmf(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
     bytes = buffer.Data();
-    len = buffer.Length();
+    len = buffer.ElementLength();
   } else if (info.Length() > 0 && IsUint8Array(info[0])) {
     Napi::Uint8Array typed = info[0].As<Napi::Uint8Array>();
     bytes = typed.Data();

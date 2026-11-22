@@ -640,8 +640,9 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTempoSegment> segments;
-  segments.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "segments");
+  segments.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
       return env.Undefined();
@@ -668,8 +669,9 @@ Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInf
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTimeSignatureSegment> segments;
-  segments.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "segments");
+  segments.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "time signature segment must be an object")
           .ThrowAsJavaScriptException();
@@ -781,8 +783,9 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
   if (!OptionalUint32Arg(env, info, 0, "paramId", 0, &param_id)) return env.Undefined();
   Napi::Array input = info[1].As<Napi::Array>();
   std::vector<SonareAutomationPoint> points;
-  points.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "points");
+  points.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "automation point must be an object").ThrowAsJavaScriptException();
       return env.Undefined();
@@ -826,8 +829,9 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
   }
   Napi::Array input = info[0].As<Napi::Array>();
   std::vector<SonareEngineMarker> markers;
-  markers.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "markers");
+  markers.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "marker must be an object").ThrowAsJavaScriptException();
       return env.Undefined();

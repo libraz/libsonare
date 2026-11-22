@@ -73,7 +73,7 @@ Napi::Value HrtfSetWrap::FromBytes(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     auto buffer = info[0].As<Napi::Buffer<uint8_t>>();
     data = buffer.Data();
-    size = buffer.Length();
+    size = buffer.ElementLength();
   } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
     auto array = info[0].As<Napi::Uint8Array>();
     data = array.Data();

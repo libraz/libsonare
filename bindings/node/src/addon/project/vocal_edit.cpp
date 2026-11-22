@@ -221,11 +221,12 @@ struct OriginalStorage {
 bool ReadOriginals(Napi::Env env, const Napi::Value& value, OriginalStorage* storage) {
   Napi::Array originals;
   if (!RequiredArrayValue(env, value, "originals", &originals)) return false;
-  storage->rows.resize(originals.Length());
-  storage->buffers.reserve(originals.Length());
+  const uint32_t original_count = sonare_node::node_list_length(originals, "originals");
+  storage->rows.resize(original_count);
+  storage->buffers.reserve(original_count);
   std::vector<uint32_t> ids;
-  ids.reserve(originals.Length());
-  for (uint32_t index = 0; index < originals.Length(); ++index) {
+  ids.reserve(original_count);
+  for (uint32_t index = 0; index < original_count; ++index) {
     Napi::Object source;
     if (!RequiredObjectValue(env, originals.Get(index), "originals entry", &source)) return false;
     auto& row = storage->rows[index];

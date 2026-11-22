@@ -167,7 +167,7 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array signals_input = info[0].As<Napi::Array>();
-  const size_t count = signals_input.Length();
+  const size_t count = node_list_length(signals_input, "signals");
   if (count == 0) {
     Napi::TypeError::New(env, "signals must not be empty").ThrowAsJavaScriptException();
     return env.Undefined();

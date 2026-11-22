@@ -95,10 +95,11 @@ Napi::Value ClipPageProviderWrap::Supply(const Napi::CallbackInfo& info) {
   }
   std::vector<std::vector<float>> storage;
   std::vector<const float*> ptrs;
-  storage.reserve(channels.Length());
-  ptrs.reserve(channels.Length());
+  const uint32_t channel_count = sonare_node::node_list_length(channels, "channels");
+  storage.reserve(channel_count);
+  ptrs.reserve(channel_count);
   size_t frames = 0;
-  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
+  for (uint32_t ch = 0; ch < channel_count; ++ch) {
     Napi::Float32Array channel;
     if (!RequiredFloat32ArrayValue(env, channels.Get(ch), "channels[" + std::to_string(ch) + "]",
                                    &channel)) {

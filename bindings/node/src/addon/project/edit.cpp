@@ -45,9 +45,10 @@ bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
     return false;
   }
   Napi::Array input = value.As<Napi::Array>();
-  takes->reserve(input.Length());
-  name_storage->reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "clip takes");
+  takes->reserve(input_count);
+  name_storage->reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (env.IsExceptionPending()) return false;
     if (!entry.IsObject()) {
@@ -78,8 +79,9 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
     return false;
   }
   Napi::Array input = value.As<Napi::Array>();
-  segments->reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "clip comp segments");
+  segments->reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (env.IsExceptionPending()) return false;
     if (!entry.IsObject()) {
@@ -111,8 +113,9 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
     return false;
   }
   Napi::Array input = value.As<Napi::Array>();
-  points->reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "automation lane points");
+  points->reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "automation point must be an object").ThrowAsJavaScriptException();
@@ -216,8 +219,9 @@ bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
     return false;
   }
   Napi::Array input = value.As<Napi::Array>();
-  anchors->reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "warp map anchors");
+  anchors->reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "warp map anchor must be an object").ThrowAsJavaScriptException();

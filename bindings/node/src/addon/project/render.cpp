@@ -407,8 +407,9 @@ bool ReadBuiltinBindings(Napi::Env env, const Napi::Value& value,
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::Array arr;
   if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
-  bindings->reserve(arr.Length());
-  for (uint32_t i = 0; i < arr.Length(); ++i) {
+  const uint32_t arr_count = sonare_node::node_list_length(arr, "instruments");
+  bindings->reserve(arr_count);
+  for (uint32_t i = 0; i < arr_count; ++i) {
     Napi::Value element = arr.Get(i);
     if (!element.IsObject()) {
       Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
@@ -433,9 +434,10 @@ bool ReadSynthBindings(Napi::Env env, const Napi::Value& value,
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::Array arr;
   if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
-  bindings->reserve(arr.Length());
-  storages->reserve(arr.Length());
-  for (uint32_t i = 0; i < arr.Length(); ++i) {
+  const uint32_t arr_count = sonare_node::node_list_length(arr, "instruments");
+  bindings->reserve(arr_count);
+  storages->reserve(arr_count);
+  for (uint32_t i = 0; i < arr_count; ++i) {
     Napi::Value element = arr.Get(i);
     SonareSynthInstrumentBinding binding{};
     if (element.IsObject() && !element.IsArray()) {
@@ -466,8 +468,9 @@ bool ReadSf2Bindings(Napi::Env env, const Napi::Value& value,
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::Array arr;
   if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
-  bindings->reserve(arr.Length());
-  for (uint32_t i = 0; i < arr.Length(); ++i) {
+  const uint32_t arr_count = sonare_node::node_list_length(arr, "instruments");
+  bindings->reserve(arr_count);
+  for (uint32_t i = 0; i < arr_count; ++i) {
     Napi::Value element = arr.Get(i);
     if (!element.IsObject()) {
       Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
@@ -500,9 +503,10 @@ bool ReadCallbackBindings(Napi::Env env, const Napi::Value& value, JsThreadBridg
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::Array arr;
   if (!RequiredArrayValue(env, value, "instruments", &arr)) return false;
-  slots->reserve(arr.Length());
-  bindings->reserve(arr.Length());
-  for (uint32_t i = 0; i < arr.Length(); ++i) {
+  const uint32_t arr_count = sonare_node::node_list_length(arr, "instruments");
+  slots->reserve(arr_count);
+  bindings->reserve(arr_count);
+  for (uint32_t i = 0; i < arr_count; ++i) {
     const Napi::Value element = arr.Get(i);
     if (!element.IsObject()) {
       Napi::TypeError::New(env, "instrument bindings must be objects").ThrowAsJavaScriptException();
@@ -661,7 +665,7 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
     bytes = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
     Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
     bytes = arr.Data();

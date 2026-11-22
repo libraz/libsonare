@@ -47,8 +47,9 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
   std::vector<SonareMidiEventPod> events;
   if (info.Length() > 1 && info[1].IsArray()) {
     Napi::Array input = info[1].As<Napi::Array>();
-    events.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
+    const uint32_t input_count = sonare_node::node_list_length(input, "events");
+    events.reserve(input_count);
+    for (uint32_t i = 0; i < input_count; ++i) {
       Napi::Value entry = input.Get(i);
       SonareMidiEventPod ev{};
       if (entry.IsArray()) {
@@ -92,7 +93,7 @@ Napi::Value ProjectWrap::ImportSmf(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
     bytes = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
     Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
     bytes = arr.Data();
@@ -132,7 +133,7 @@ Napi::Value ProjectWrap::ImportClipFile(const Napi::CallbackInfo& info) {
   if (info.Length() > 0 && info[0].IsBuffer()) {
     Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
     bytes = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
     Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
     bytes = arr.Data();
@@ -390,8 +391,9 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "keys", &input)) return env.Undefined();
   std::vector<SonareProjectKeySegment> keys;
-  keys.reserve(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "keys");
+  keys.reserve(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "key segment must be an object").ThrowAsJavaScriptException();
@@ -425,10 +427,11 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
   std::vector<std::string> roman;
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "chords", &input)) return env.Undefined();
-  chords.reserve(input.Length());
-  extensions.resize(input.Length());
-  roman.resize(input.Length());
-  for (uint32_t i = 0; i < input.Length(); ++i) {
+  const uint32_t input_count = sonare_node::node_list_length(input, "chords");
+  chords.reserve(input_count);
+  extensions.resize(input_count);
+  roman.resize(input_count);
+  for (uint32_t i = 0; i < input_count; ++i) {
     Napi::Value entry = input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "chord symbol must be an object").ThrowAsJavaScriptException();
@@ -447,8 +450,9 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     if (!ext.IsUndefined() && !ext.IsNull()) {
       Napi::Array arr;
       if (!RequiredArrayValue(env, ext, "extensions", &arr)) return env.Undefined();
-      extensions[i].reserve(arr.Length());
-      for (uint32_t j = 0; j < arr.Length(); ++j) {
+      const uint32_t arr_count = sonare_node::node_list_length(arr, "extensions");
+      extensions[i].reserve(arr_count);
+      for (uint32_t j = 0; j < arr_count; ++j) {
         uint8_t extension = 0;
         if (!RequiredMidiByteValue(env, arr.Get(j), "extensions[" + std::to_string(j) + "]",
                                    &extension)) {
@@ -504,7 +508,7 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
     payload.assign(arr.Data(), arr.Data() + arr.ByteLength());
   } else if (payload_value.IsBuffer()) {
     Napi::Buffer<uint8_t> buf = payload_value.As<Napi::Buffer<uint8_t>>();
-    payload.assign(buf.Data(), buf.Data() + buf.Length());
+    payload.assign(buf.Data(), buf.Data() + buf.ElementLength());
   } else if (!payload_value.IsUndefined() && !payload_value.IsNull()) {
     Napi::TypeError::New(env, "payload must be a Uint8Array or Buffer")
         .ThrowAsJavaScriptException();

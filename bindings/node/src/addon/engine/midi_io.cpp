@@ -46,7 +46,7 @@ bool ReadUmpWords(Napi::Env env, const Napi::Value& value, const char* name,
     length = value.As<Napi::TypedArray>().ElementLength();
   } else if (value.IsArray()) {
     array = value.As<Napi::Object>();
-    length = value.As<Napi::Array>().Length();
+    length = sonare_node::node_list_length(value.As<Napi::Array>(), std::string(name));
   } else {
     Napi::TypeError::New(env, std::string(name) + " must be a Uint32Array or a number array")
         .ThrowAsJavaScriptException();
@@ -388,7 +388,7 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   if (info.Length() > 1 && info[1].IsBuffer()) {
     Napi::Buffer<uint8_t> buf = info[1].As<Napi::Buffer<uint8_t>>();
     bytes = buf.Data();
-    len = buf.Length();
+    len = buf.ElementLength();
   } else if (info.Length() > 1 && sonare_node::IsUint8Array(info[1])) {
     Napi::Uint8Array arr = info[1].As<Napi::Uint8Array>();
     bytes = arr.Data();

@@ -85,8 +85,9 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
   if (value.IsArray()) {
     auto arr = value.As<Napi::Array>();
     std::vector<float> out;
-    out.reserve(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
+    const uint32_t arr_count = node_list_length(arr, key);
+    out.reserve(arr_count);
+    for (uint32_t i = 0; i < arr_count; ++i) {
       out.push_back(node_narrow_float_element(opts.Env(), arr.Get(i), key, i));
     }
     return out;

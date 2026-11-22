@@ -98,7 +98,8 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
     return false;
   }
   parts->code = static_cast<sonare::ErrorCode>(code);
-  for (uint32_t i = 0; i < subjects.Length(); ++i) {
+  const uint32_t subject_count = node_list_length(subjects, "subjects");
+  for (uint32_t i = 0; i < subject_count; ++i) {
     std::string subject;
     if (!RequiredStringValue(env, subjects.Get(i), "subjects", &subject)) return false;
     parts->subjects.push_back(std::move(subject));
@@ -147,7 +148,8 @@ Napi::Value RenderRefusal(const Napi::CallbackInfo& info) {
   }
   const sonare::SonareParameterRefusal refusal = sonare_c_detail::refusal_from_parts(parts);
   std::vector<std::string> subjects;
-  for (uint32_t i = 0; i < names.Length(); ++i) {
+  const uint32_t name_count = node_list_length(names, "subjects");
+  for (uint32_t i = 0; i < name_count; ++i) {
     std::string subject;
     if (!RequiredStringValue(env, names.Get(i), "subjects", &subject)) return env.Undefined();
     subjects.push_back(std::move(subject));
@@ -157,7 +159,8 @@ Napi::Value RenderRefusal(const Napi::CallbackInfo& info) {
   std::vector<double> scales;
   Napi::Array factors;
   if (!RequiredArrayValue(env, info[2], "scales", &factors)) return env.Undefined();
-  for (uint32_t i = 0; i < factors.Length(); ++i) {
+  const uint32_t factor_count = node_list_length(factors, "scales");
+  for (uint32_t i = 0; i < factor_count; ++i) {
     double scale = 0.0;
     if (!RequiredDoubleValue(env, factors.Get(i), "scales", &scale)) return env.Undefined();
     scales.push_back(scale);
@@ -400,7 +403,7 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
   }
 
   const Napi::Array array = value.As<Napi::Array>();
-  const uint32_t length = array.Length();
+  const uint32_t length = node_list_length(array, std::string(key));
   if (length > static_cast<uint32_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS)) {
     Napi::RangeError::New(env, std::string(key) + " must hold at most " +
                                    std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) +
@@ -677,7 +680,8 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
   std::vector<sonare::mastering::api::Param> params;
   Napi::Env env = object.Env();
   Napi::Array names = object.GetPropertyNames();
-  for (uint32_t index = 0; index < names.Length(); ++index) {
+  const uint32_t name_count = node_list_length(names, "params");
+  for (uint32_t index = 0; index < name_count; ++index) {
     Napi::Value key_value = names.Get(index);
     Napi::Value value = object.Get(key_value);
     const std::string key = node_narrow_string(env, key_value, "parameter key");
@@ -712,7 +716,8 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
   Napi::Value chords_val = result.Get("chords");
   if (chords_val.IsArray()) {
     Napi::Array chords = chords_val.As<Napi::Array>();
-    for (uint32_t i = 0; i < chords.Length(); ++i) {
+    const uint32_t chord_count = node_list_length(chords, "chords");
+    for (uint32_t i = 0; i < chord_count; ++i) {
       Napi::Value entry = chords.Get(i);
       if (!entry.IsObject()) continue;
       Napi::Object chord = entry.As<Napi::Object>();
@@ -797,7 +802,7 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
 bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* inputs) {
   Napi::Array channels;
   if (!RequiredPlaneListValue(env, value, "channels", &channels)) return false;
-  const uint32_t count = channels.Length();
+  const uint32_t count = node_list_length(channels, "channels");
   inputs->arrays.reserve(count);
   inputs->ptrs.reserve(count);
   for (uint32_t index = 0; index < count; ++index) {

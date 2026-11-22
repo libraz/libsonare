@@ -86,8 +86,9 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
 
   std::string text;
   std::vector<SonareEngineGraphNode> nodes;
-  nodes.reserve(node_input.Length());
-  for (uint32_t i = 0; i < node_input.Length(); ++i) {
+  const uint32_t node_count = sonare_node::node_list_length(node_input, "spec.nodes");
+  nodes.reserve(node_count);
+  for (uint32_t i = 0; i < node_count; ++i) {
     Napi::Value entry = node_input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "graph node must be an object").ThrowAsJavaScriptException();
@@ -114,8 +115,10 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   }
 
   std::vector<SonareEngineGraphConnection> connections;
-  connections.reserve(connection_input.Length());
-  for (uint32_t i = 0; i < connection_input.Length(); ++i) {
+  const uint32_t connection_count =
+      sonare_node::node_list_length(connection_input, "spec.connections");
+  connections.reserve(connection_count);
+  for (uint32_t i = 0; i < connection_count; ++i) {
     Napi::Value entry = connection_input.Get(i);
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "graph connection must be an object").ThrowAsJavaScriptException();
@@ -151,8 +154,10 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Array binding_input = bindings_value.As<Napi::Array>();
-    parameter_bindings.reserve(binding_input.Length());
-    for (uint32_t i = 0; i < binding_input.Length(); ++i) {
+    const uint32_t binding_count =
+        sonare_node::node_list_length(binding_input, "spec.parameterBindings");
+    parameter_bindings.reserve(binding_count);
+    for (uint32_t i = 0; i < binding_count; ++i) {
       Napi::Value entry = binding_input.Get(i);
       if (!entry.IsObject()) {
         Napi::TypeError::New(env, "graph parameter binding must be an object")

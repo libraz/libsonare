@@ -93,7 +93,7 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
   }
   SONARE_NODE_TRY
   Napi::Array planes = info[0].As<Napi::Array>();
-  const uint32_t in_channels = planes.Length();
+  const uint32_t in_channels = sonare_node::node_list_length(planes, "planes");
   if (in_channels == 0) {
     Napi::RangeError::New(env, "planes must not be empty").ThrowAsJavaScriptException();
     return env.Undefined();

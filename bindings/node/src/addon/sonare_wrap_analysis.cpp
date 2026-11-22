@@ -1291,8 +1291,9 @@ Napi::Value SonareWrap::ChordFunctions(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const Napi::Array entries = info[0].As<Napi::Array>();
-  std::vector<SonareChord> chords(entries.Length());
-  for (uint32_t i = 0; i < entries.Length(); ++i) {
+  const uint32_t entry_count = node_list_length(entries, "chords");
+  std::vector<SonareChord> chords(entry_count);
+  for (uint32_t i = 0; i < entry_count; ++i) {
     const Napi::Value entry = entries.Get(i);
     if (!entry.IsObject()) {
       throw Napi::TypeError::New(env, "chords[" + std::to_string(i) + "] must be an object");

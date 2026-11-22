@@ -193,7 +193,7 @@ inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
           env, info.Length() > index ? info[index] : env.Undefined(), "channels", &channels)) {
     return {};
   }
-  const uint32_t count = channels.Length();
+  const uint32_t count = node_list_length(channels, "channels");
   if (count == 0) {
     Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
     return {};

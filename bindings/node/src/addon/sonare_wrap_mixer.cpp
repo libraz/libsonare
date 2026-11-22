@@ -140,8 +140,8 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
       !sonare_node::RequiredPlaneListValue(env, info[1], "rightInputs", &right_input)) {
     return env.Undefined();
   }
-  const size_t count = left_input.Length();
-  if (right_input.Length() != count) {
+  const size_t count = node_list_length(left_input, "leftInputs");
+  if (node_list_length(right_input, "rightInputs") != count) {
     Napi::RangeError::New(env, "leftInputs and rightInputs must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();

@@ -240,7 +240,7 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   Napi::Value routings = obj.Get("modRoutings");
   if (routings.IsArray()) {
     Napi::Array arr = routings.As<Napi::Array>();
-    const uint32_t count = arr.Length();
+    const uint32_t count = node_list_length(arr, "modRoutings");
     if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
       Napi::RangeError::New(env, "a synth patch supports at most 8 mod routings")
           .ThrowAsJavaScriptException();

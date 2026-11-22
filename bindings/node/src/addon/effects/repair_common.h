@@ -104,7 +104,7 @@ struct LinkedPlanes {
 ///   carry. An empty list goes through to the C entry, which owns that rejection.
 inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, LinkedPlanes* planes) {
   Napi::Array channels = value.As<Napi::Array>();
-  const size_t count = channels.Length();
+  const size_t count = node_list_length(channels, "channels");
   planes->inputs.reserve(count);
   planes->in_ptrs.reserve(count);
   planes->outputs.reserve(count);

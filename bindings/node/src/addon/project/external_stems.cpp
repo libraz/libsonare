@@ -40,13 +40,14 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   std::vector<std::string> roles;
   std::vector<std::vector<Napi::Float32Array>> buffers;
   std::vector<std::vector<const float*>> planes;
-  descriptors.reserve(stem_values.Length());
-  names.reserve(stem_values.Length());
-  roles.reserve(stem_values.Length());
-  buffers.reserve(stem_values.Length());
-  planes.reserve(stem_values.Length());
+  const uint32_t stem_count = sonare_node::node_list_length(stem_values, "request.stems");
+  descriptors.reserve(stem_count);
+  names.reserve(stem_count);
+  roles.reserve(stem_count);
+  buffers.reserve(stem_count);
+  planes.reserve(stem_count);
 
-  for (uint32_t i = 0; i < stem_values.Length(); ++i) {
+  for (uint32_t i = 0; i < stem_count; ++i) {
     const Napi::Value value = stem_values.Get(i);
     if (!value.IsObject()) {
       Napi::TypeError::New(env, "external stem must be an object").ThrowAsJavaScriptException();
@@ -64,7 +65,8 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     if (!RequiredUint32Property(env, stem, "layout", &layout)) return env.Undefined();
     const size_t channels = channel_count(layout);
     const Napi::Array source_planes = samples.As<Napi::Array>();
-    if (channels == 0 || source_planes.Length() != channels) {
+    if (channels == 0 ||
+        sonare_node::node_list_length(source_planes, "planarSamples") != channels) {
       Napi::RangeError::New(env, "planarSamples must match mono or stereo layout")
           .ThrowAsJavaScriptException();
       return env.Undefined();

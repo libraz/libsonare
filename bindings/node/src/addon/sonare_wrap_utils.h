@@ -321,8 +321,9 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char*
   }
   if (value.IsArray()) {
     auto arr = value.As<Napi::Array>();
-    std::vector<int> out(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
+    const uint32_t arr_count = node_list_length(arr, name);
+    std::vector<int> out(arr_count);
+    for (uint32_t i = 0; i < arr_count; ++i) {
       out[i] = node_narrow_int_element(value.Env(), arr.Get(i), name, i);
     }
     return out;
@@ -342,8 +343,9 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const c
   }
   if (value.IsArray()) {
     auto arr = value.As<Napi::Array>();
-    std::vector<float> out(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
+    const uint32_t arr_count = node_list_length(arr, name);
+    std::vector<float> out(arr_count);
+    for (uint32_t i = 0; i < arr_count; ++i) {
       out[i] = node_narrow_float_element(value.Env(), arr.Get(i), name, i);
     }
     return out;
