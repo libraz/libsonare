@@ -54,7 +54,7 @@ RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_v
         throw WasmRangeError("channels must not be empty");
       }
     } else if (static_cast<int>(channel.size()) != block.frames) {
-      throw WasmRangeError("all channels must have the same length");
+      throw WasmRangeError(channel_name + " must have the same length as channels[0]");
     }
     block.storage.push_back(std::move(channel));
   }

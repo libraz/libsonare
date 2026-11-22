@@ -188,37 +188,21 @@ struct ChannelBlock {
 
 inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
   Napi::Env env = info.Env();
-  Napi::Array channels;
-  if (!sonare_node::RequiredPlaneListValue(
-          env, info.Length() > index ? info[index] : env.Undefined(), "channels", &channels)) {
+  ChannelInputs inputs;
+  if (!sonare_node::ReadChannelInputs(env, info.Length() > index ? info[index] : env.Undefined(),
+                                      &inputs)) {
     return {};
   }
-  const uint32_t count = node_list_length(channels, "channels");
-  if (count == 0) {
+  if (inputs.ptrs.empty() || inputs.length == 0) {
     Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
     return {};
   }
   ChannelBlock block;
-  block.storage.reserve(count);
-  block.pointers.reserve(count);
-  for (uint32_t i = 0; i < count; ++i) {
-    Napi::Float32Array channel;
-    if (!sonare_node::RequiredFloat32ArrayValue(env, channels.Get(i),
-                                                "channels[" + std::to_string(i) + "]", &channel)) {
-      return {};
-    }
-    if (i == 0) {
-      block.frames = static_cast<int>(channel.ElementLength());
-      if (block.frames <= 0) {
-        Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
-        return {};
-      }
-    } else if (static_cast<int>(channel.ElementLength()) != block.frames) {
-      Napi::RangeError::New(env, "all channels must have the same length")
-          .ThrowAsJavaScriptException();
-      return {};
-    }
-    block.storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+  block.frames = static_cast<int>(inputs.length);
+  block.storage.reserve(inputs.ptrs.size());
+  block.pointers.reserve(inputs.ptrs.size());
+  for (const float* channel : inputs.ptrs) {
+    block.storage.emplace_back(channel, channel + inputs.length);
   }
   for (auto& channel : block.storage) {
     block.pointers.push_back(channel.data());

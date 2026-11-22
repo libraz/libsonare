@@ -91,42 +91,19 @@ inline Napi::Object EmitMonoResult(Napi::Env env, const sonare::Audio& audio,
 ///   the Float32Arrays handed back to JS are allocated up front and passed in
 ///   rather than copied out of a library allocation.
 struct LinkedPlanes {
-  std::vector<Napi::Float32Array> inputs;
-  std::vector<const float*> in_ptrs;
+  ChannelInputs in;
   std::vector<Napi::Float32Array> outputs;
   std::vector<float*> out_ptrs;
-  size_t length = 0;
 };
 
-/// @brief Reads N Float32Array channels and allocates the matching output planes.
-/// @details Refuses what the C form cannot express: a non-Float32Array element,
-///   and a length disagreement, which the single @c length argument has no way to
-///   carry. An empty list goes through to the C entry, which owns that rejection.
+/// @brief Reads the channels through ReadChannelInputs and allocates the matching output planes.
 inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, LinkedPlanes* planes) {
-  Napi::Array channels = value.As<Napi::Array>();
-  const size_t count = node_list_length(channels, "channels");
-  planes->inputs.reserve(count);
-  planes->in_ptrs.reserve(count);
+  if (!ReadChannelInputs(env, value, &planes->in)) return false;
+  const size_t count = planes->in.arrays.size();
   planes->outputs.reserve(count);
   planes->out_ptrs.reserve(count);
   for (size_t index = 0; index < count; ++index) {
-    Napi::Value channel = channels.Get(index);
-    if (!IsFloat32Array(channel)) {
-      Napi::TypeError::New(env, "every channel must be a Float32Array")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    planes->inputs.push_back(channel.As<Napi::Float32Array>());
-    const size_t length = planes->inputs.back().ElementLength();
-    if (index == 0) {
-      planes->length = length;
-    } else if (length != planes->length) {
-      Napi::RangeError::New(env, "every channel must have the same length")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    planes->in_ptrs.push_back(planes->inputs.back().Data());
-    planes->outputs.push_back(Napi::Float32Array::New(env, planes->length));
+    planes->outputs.push_back(Napi::Float32Array::New(env, planes->in.length));
     planes->out_ptrs.push_back(planes->outputs.back().Data());
   }
   return true;

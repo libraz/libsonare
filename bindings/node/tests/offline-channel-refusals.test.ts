@@ -51,6 +51,13 @@ const CASES: Case[] = [
   ]),
   { prepared: 64, label: 'render 65', run: render(65), refusal: range(64) },
   { prepared: 64, label: 'render 0', run: render(0), refusal: 'channels must not be empty' },
+  {
+    prepared: 64,
+    label: 'render ragged',
+    run: (engine) =>
+      engine.renderOffline({ channels: [new Float32Array(16), new Float32Array(15)] }),
+    refusal: 'channels[1] must have the same length as channels[0]',
+  },
   ...[0, 3].flatMap((n): Case[] => [
     { prepared: 2, label: `prime ${n}`, run: prime(n), refusal: range(2) },
     { prepared: 2, label: `bounce ${n}`, run: bounce({ numChannels: n }), refusal: range(2) },

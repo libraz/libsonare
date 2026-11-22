@@ -172,3 +172,15 @@ describe('masteringRepairApply', () => {
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
   });
 });
+
+describe('a channel list whose lengths disagree', () => {
+  const ragged = (): Float32Array[] => [material(440, 1), material(550, 2).slice(1)];
+  const refusal = /channels\[1\] must have the same length as channels\[0\]$/;
+
+  it('is refused by index on analysis and on apply', () => {
+    expect(() => masteringRepairAnalyze({ channels: ragged(), sampleRate: SR })).toThrow(refusal);
+    expect(() =>
+      masteringRepairApply({ channels: ragged(), sampleRate: SR, stages: [{ stage: 'declick' }] }),
+    ).toThrow(refusal);
+  });
+});

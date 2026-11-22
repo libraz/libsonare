@@ -806,7 +806,8 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* i
     if (index == 0) {
       inputs->length = length;
     } else if (length != inputs->length) {
-      Napi::RangeError::New(env, "every channel must have the same length")
+      Napi::RangeError::New(
+          env, "channels[" + std::to_string(index) + "] must have the same length as channels[0]")
           .ThrowAsJavaScriptException();
       return false;
     }

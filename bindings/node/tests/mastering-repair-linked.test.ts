@@ -365,3 +365,17 @@ describe('the two linked entries on an input shorter than nFft', () => {
     expect(peak(padded.channels[0])).toBeGreaterThan(0.01);
   });
 });
+
+describe('the linked entries on channels whose lengths disagree', () => {
+  const ragged = (): Float32Array[] => [tone(440, 0.2), tone(660, 0.2, LENGTH - 1)];
+  const refusal = /channels\[1\] must have the same length as channels\[0\]$/;
+
+  it('refuses them by index', () => {
+    expect(() =>
+      masteringRepairDenoiseClassicalLinked({ channels: ragged(), sampleRate: SR }),
+    ).toThrow(refusal);
+    expect(() =>
+      masteringRepairDereverbClassicalLinked({ channels: ragged(), sampleRate: SR }),
+    ).toThrow(refusal);
+  });
+});

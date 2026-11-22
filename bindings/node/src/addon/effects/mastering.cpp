@@ -919,7 +919,7 @@ Napi::Value SonareWrap::MasteringRepairAnalyze(const Napi::CallbackInfo& info) {
   const std::string request = node_narrow_string(env, info[2], "requestJson");
   char* json = nullptr;
   const SonareError err = sonare_mastering_repair_analyze(
-      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, request.c_str(), &json);
+      planes.in.ptrs.data(), planes.in.ptrs.size(), planes.in.length, sr, request.c_str(), &json);
   if (err != SONARE_OK) {
     ThrowSonareError(env, err);
     return env.Undefined();
@@ -964,7 +964,7 @@ Napi::Value SonareWrap::MasteringRepairApply(const Napi::CallbackInfo& info) {
                            std::optional<Napi::Function>(info[4].As<Napi::Function>())};
   char* reports = nullptr;
   const SonareError err = sonare_mastering_repair_apply(
-      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, stages.c_str(),
+      planes.in.ptrs.data(), planes.in.ptrs.size(), planes.in.length, sr, stages.c_str(),
       ReportProgress, &progress, planes.out_ptrs.data(), &reports, CancellationRequested,
       &progress);
   // A callback's pending exception wins over the error code it caused.
