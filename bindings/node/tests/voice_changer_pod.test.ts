@@ -89,7 +89,16 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     // A live update keeps the mode; one that changes it is refused.
     absolute.setConfig({ ...pod, formantMode: 'absolute', formantFactor: 1.2 });
     expect(() => absolute.setConfig({ ...pod, formantMode: 'relative' })).toThrow(RangeError);
+    expect(() => absolute.setConfig({ ...pod, formantMode: 'relative' })).toThrow(
+      /: formantMode is fixed at construction; it cannot change on a live chain$/,
+    );
     expect(() => relative.setConfig({ ...pod, formantMode: 'absolute' })).toThrow(RangeError);
+    // A preset document is answered in its own spelling.
+    const document = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
+    document.dsp.formant.mode = 'absolute';
+    expect(() => relative.setConfig(document)).toThrow(
+      /: dsp\.formant\.mode is fixed at construction/,
+    );
     relative.destroy();
     absolute.destroy();
   });

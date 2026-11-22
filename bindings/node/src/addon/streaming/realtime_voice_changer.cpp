@@ -31,6 +31,11 @@ std::string JsonTextFromJs(const Napi::Value& value) {
   return node_narrow_string(env, stringify.Call(json, {value}), "config");
 }
 
+/// @brief The flat POD is recognised by its `retunePitchSemitones` key.
+bool IsFlatPodConfig(const Napi::Value& value) {
+  return value.IsObject() && !value.As<Napi::Object>().Get("retunePitchSemitones").IsUndefined();
+}
+
 /// @brief The one place a refused preset-or-config document is coded.
 /// @details A preset id or nested document is InvalidFormat; the flat POD (recognised by its
 ///   `retunePitchSemitones` key) is a per-call parameter bag and stays InvalidParameter.
@@ -39,12 +44,20 @@ sonare::editing::voice_changer::RealtimeVoiceChangerConfig ConfigFromJs(const Na
   std::string error;
   if (!sonare::editing::voice_changer::realtime_voice_changer_config_from_input(
           JsonTextFromJs(value), &config, &error)) {
-    const bool flat_pod =
-        value.IsObject() && !value.As<Napi::Object>().Get("retunePitchSemitones").IsUndefined();
-    throw sonare::SonareException(
-        flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
+    throw sonare::SonareException(IsFlatPodConfig(value) ? sonare::ErrorCode::InvalidParameter
+                                                         : sonare::ErrorCode::InvalidFormat,
+                                  error);
   }
   return config;
+}
+
+/// @brief The spelling a live-config refusal names a field in: the caller's flat POD keys,
+///   otherwise the preset document's, which a preset id stands for.
+sonare::editing::voice_changer::ConfigFieldSpelling ConfigFieldSpellingOf(
+    const Napi::Value& value) {
+  using sonare::editing::voice_changer::ConfigFieldSpelling;
+  return IsFlatPodConfig(value) ? ConfigFieldSpelling::FlatPod
+                                : ConfigFieldSpelling::PresetDocument;
 }
 
 }  // namespace
@@ -177,7 +190,7 @@ Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  changer_->set_config(ConfigFromJs(info[0]));
+  changer_->set_config(ConfigFromJs(info[0]), ConfigFieldSpellingOf(info[0]));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

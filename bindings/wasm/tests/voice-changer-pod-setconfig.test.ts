@@ -255,8 +255,16 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       // One analysis frame (1024 samples at 48 kHz) more than the relative chain.
       expect(absolute.latencySamples).toBe(relative.latencySamples + 1024);
       absolute.setConfig({ ...grain, formantMode: 'absolute', formantFactor: 1.2 });
-      expect(() => absolute.setConfig({ ...grain, formantMode: 'relative' })).toThrow();
-      expect(() => relative.setConfig({ ...grain, formantMode: 'absolute' })).toThrow();
+      expect(() => absolute.setConfig({ ...grain, formantMode: 'relative' })).toThrow(
+        /: formantMode is fixed at construction; it cannot change on a live chain$/,
+      );
+      expect(() => relative.setConfig({ ...grain, formantMode: 'absolute' })).toThrow(RangeError);
+      // A preset document is answered in its own spelling.
+      const document = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
+      document.dsp.formant.mode = 'absolute';
+      expect(() => relative.setConfig(document)).toThrow(
+        /: dsp\.formant\.mode is fixed at construction/,
+      );
     } finally {
       relative.destroy();
       absolute.destroy();

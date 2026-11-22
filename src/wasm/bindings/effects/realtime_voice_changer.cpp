@@ -235,17 +235,34 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
   return parsed;
 }
 
-// A refused preset id or nested document is InvalidFormat; the flat POD (recognised by its
-// `retunePitchSemitones` key) is a per-call parameter bag and stays InvalidParameter.
+namespace {
+
+// The flat POD is recognised by its `retunePitchSemitones` key.
+bool isFlatPodConfigVal(const val& config) {
+  return config.typeOf().as<std::string>() == "object" && !config.isNull() &&
+         !config["retunePitchSemitones"].isUndefined();
+}
+
+// The spelling a live-config refusal names a field in: the caller's flat POD keys, otherwise the
+// preset document's, which a preset id stands for.
+editing::voice_changer::ConfigFieldSpelling configFieldSpellingOfVal(const val& config) {
+  using editing::voice_changer::ConfigFieldSpelling;
+  return isFlatPodConfigVal(config) ? ConfigFieldSpelling::FlatPod
+                                    : ConfigFieldSpelling::PresetDocument;
+}
+
+}  // namespace
+
+// A refused preset id or nested document is InvalidFormat; the flat POD is a per-call parameter
+// bag and stays InvalidParameter.
 editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromVal(val config) {
   editing::voice_changer::RealtimeVoiceChangerConfig parsed;
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(
           realtimeVoiceChangerConfigTextFromVal(config), &parsed, &error)) {
-    const bool flat_pod = config.typeOf().as<std::string>() == "object" && !config.isNull() &&
-                          !config["retunePitchSemitones"].isUndefined();
-    throw sonare::SonareException(
-        flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
+    throw sonare::SonareException(isFlatPodConfigVal(config) ? sonare::ErrorCode::InvalidParameter
+                                                             : sonare::ErrorCode::InvalidFormat,
+                                  error);
   }
   return parsed;
 }
@@ -278,10 +295,14 @@ class RealtimeVoiceChangerWrapper {
 
   void reset() { changer_.reset(); }
 
-  void setConfig(val config) { changer_.set_config(realtimeVoiceChangerConfigFromVal(config)); }
+  void setConfig(val config) {
+    changer_.set_config(realtimeVoiceChangerConfigFromVal(config),
+                        configFieldSpellingOfVal(config));
+  }
 
   void setPodConfig(val config) {
-    changer_.set_config(realtimeVoiceChangerConfigFromPodVal(config));
+    changer_.set_config(realtimeVoiceChangerConfigFromPodVal(config),
+                        editing::voice_changer::ConfigFieldSpelling::FlatPod);
   }
 
   val config() const { return realtimeVoiceChangerPodVal(changer_.config()); }
