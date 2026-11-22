@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <optional>
 
 #include "sonare_cli.h"
 #include "util/constants.h"
@@ -551,17 +552,17 @@ sonare::acoustic::ShoeboxRoom cli_room(const CliArgs& args) {
       args.get_float("absorption", sonare::acoustic::kDefaultWallAbsorption));
 }
 
-// A role left out takes the default placement scaled to @p room; the validator has refused a
-// partly given one.
-sonare::acoustic::SourceListener cli_placement(const CliArgs& args,
-                                               const sonare::acoustic::ShoeboxRoom& room) {
-  const sonare::acoustic::SourceListener place = sonare::acoustic::scaled_default_placement(
-      room.dims.length, room.dims.width, room.dims.height);
-  return {{args.get_float("source-x", place.source.x), args.get_float("source-y", place.source.y),
-           args.get_float("source-z", place.source.z)},
-          {args.get_float("listener-x", place.listener.x),
-           args.get_float("listener-y", place.listener.y),
-           args.get_float("listener-z", place.listener.z)}};
+// The source and listener coordinates the caller gave; the validator has refused a partly given
+// role, so a role left out is left out whole and takes the placement scaled to the room.
+sonare::acoustic::RoomPlacementRequest cli_placement_request(const CliArgs& args) {
+  const auto given = [&](const char* name) -> std::optional<float> {
+    if (!args.has(name)) return std::nullopt;
+    return args.get_float(name, 0.0f);
+  };
+  sonare::acoustic::RoomPlacementRequest request;
+  request.source = {given("source-x"), given("source-y"), given("source-z")};
+  request.listener = {given("listener-x"), given("listener-y"), given("listener-z")};
+  return request;
 }
 
 }  // namespace
@@ -581,17 +582,14 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
                                       : sonare::acoustic::ReverbModel::Eyring;
 
   const sonare::acoustic::ShoeboxRoom room = cli_room(args);
-  const auto result =
-      sonare::acoustic::synthesize_rir(room, cli_placement(args, room), sample_rate, cfg);
+  const auto result = sonare::acoustic::synthesize_rir(
+      room,
+      sonare::acoustic::resolve_room_placement(room.dims, cli_placement_request(args)).placement,
+      sample_rate, cfg);
+  // Reported like every other refusal: the message alone, exiting with the invalid-parameter code.
   if (sonare::has_error(result.diagnostics)) {
-    for (const sonare::Diagnostic& diagnostic : result.diagnostics) {
-      if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
-        std::cerr << color::red << "Error: " << diagnostic.code << ": " << diagnostic.message
-                  << color::reset << "\n";
-        return 1;
-      }
-    }
-    return 1;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  sonare::acoustic::first_error_text(result.diagnostics));
   }
   // Warnings survive a successful synthesis and describe a RIR the caller did
   // not ask for -- a tail cut against --max-sec, a cap raised to fit the
@@ -677,7 +675,15 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = cli_room(args);
-  cfg.placement = cli_placement(args, cfg.target);
+  // An omitted spacing is fitted to the room and placement, as the room insert fits it.
+  sonare::acoustic::RoomPlacementRequest request = cli_placement_request(args);
+  if (args.has("receiver-spacing"))
+    request.receiver_spacing_m = args.get_float("receiver-spacing", 0.0f);
+  const sonare::acoustic::ResolvedRoomPlacement resolved =
+      sonare::acoustic::resolve_room_placement(cfg.target.dims, request);
+  cfg.placement = resolved.placement;
+  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
+  cfg.supplied = resolved.supplied;
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
@@ -690,8 +696,6 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
                                       : sonare::acoustic::ReverbModel::Eyring;
-
-  cfg.receiver_spacing_m = args.get_float("receiver-spacing", cfg.receiver_spacing_m);
 
   // A two-channel source is morphed as a pair heard by two receivers, so the
   // written file keeps the image; a mono source takes the single-receiver path.

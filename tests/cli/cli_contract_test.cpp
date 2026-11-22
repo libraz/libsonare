@@ -2016,27 +2016,13 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"synthesize-rir", "--max-sec 0.3" + to_out, "width", "8"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "height", "4"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "absorption", "0.5"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-x", "2"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-y", "2"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-z", "1.5"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-x", "4"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-y", "3"},
-      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-z", "1.2"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "ism-order", "1"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "seed", "7"},
       {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "absorption", "0.5"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-x", "2"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-y", "2"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-z", "1.5"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-x", "4"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-y", "3"},
-      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-z", "1.2"},
       {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "suppression", "1"},
       {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "wet", "0"},
       {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "ism-order", "1"},
       {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "seed", "7"},
-      // Only a stereo input is heard through the receiver pair; it shows in the written WAV.
-      {"room-morph", p.stereo_wav + " --max-sec 0.3" + to_out, "receiver-spacing", "2.0"},
 #endif
       // The spectral geometry. key reads the FFT size only with --hpss, chords only with STFT
       // chroma, and sections moves only when the minimum lets more than one section survive.
@@ -2214,6 +2200,28 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #ifdef SONARE_WITH_ACOUSTIC_SIM
       {"synthesize-rir", "max-sec", "the synthesized tail runs to its own end"},
       {"room-morph", "max-sec", "the synthesized tail runs to its own end"},
+      {"synthesize-rir", "source-x",
+       "a role left out takes the default placement scaled to the room"},
+      {"synthesize-rir", "source-y",
+       "a role left out takes the default placement scaled to the room"},
+      {"synthesize-rir", "source-z",
+       "a role left out takes the default placement scaled to the room"},
+      {"synthesize-rir", "listener-x",
+       "a role left out takes the default placement scaled to the room"},
+      {"synthesize-rir", "listener-y",
+       "a role left out takes the default placement scaled to the room"},
+      {"synthesize-rir", "listener-z",
+       "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "source-x", "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "source-y", "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "source-z", "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "listener-x",
+       "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "listener-y",
+       "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "listener-z",
+       "a role left out takes the default placement scaled to the room"},
+      {"room-morph", "receiver-spacing", "the widest spacing up to 0.5 m that fits the room"},
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
       {"project new", "sample-rate", "the new project's own rate"},
@@ -2436,6 +2444,78 @@ class StatedDefaultInvoker final : public Catch::ITestInvoker {
 }();
 
 }  // namespace
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+// What a room command wrote: its exit code, then the output file's bytes.
+std::pair<int, std::string> room_render(const std::string& invocation, const std::string& out) {
+  std::remove(out.c_str());
+  const int code = exec_command(CLI + " " + invocation + " -o " + out + " -q").first;
+  std::ifstream file(out, std::ios::binary);
+  return {code, std::string(std::istreambuf_iterator<char>(file), {})};
+}
+
+TEST_CASE("CLI room placement left out is the default placement scaled to the room",
+          "[cli][defaults][acoustic]") {
+  const std::string out = unique_temp_path("_placement_out.wav");
+  const std::string tone = unique_temp_path("_placement_tone.wav");
+  create_test_wav(tone, 0.25f);
+  // The default room, and one twice its size: the scaled placement doubles with it.
+  struct Room {
+    std::string dims;
+    std::string source;
+    std::string listener;
+  };
+  const Room rooms[] = {
+      {"", "--source-x 1 --source-y 1 --source-z 1.2",
+       "--listener-x 5 --listener-y 4 --listener-z 1.7"},
+      {"--length 14 --width 10 --height 6", "--source-x 2 --source-y 2 --source-z 2.4",
+       "--listener-x 10 --listener-y 8 --listener-z 3.4"}};
+  for (const std::string& command : {std::string("synthesize-rir"), "room-morph " + tone}) {
+    for (const Room& room : rooms) {
+      CAPTURE(command, room.dims);
+      const std::string base = command + " --max-sec 0.3 " + room.dims;
+      const auto omitted = room_render(base, out);
+      REQUIRE(omitted.first == 0);
+      CHECK(room_render(base + " " + room.source, out) == omitted);
+      CHECK(room_render(base + " " + room.listener, out) == omitted);
+      // Each coordinate moves the result once its role is given whole.
+      for (const char* moved : {"--source-x 1.5 --source-y 1 --source-z 1.2",
+                                "--source-x 1 --source-y 1.5 --source-z 1.2",
+                                "--source-x 1 --source-y 1 --source-z 1.5",
+                                "--listener-x 4 --listener-y 4 --listener-z 1.7",
+                                "--listener-x 5 --listener-y 3 --listener-z 1.7",
+                                "--listener-x 5 --listener-y 4 --listener-z 1.2"}) {
+        CAPTURE(moved);
+        CHECK(room_render(base + " " + std::string(moved), out) != omitted);
+      }
+    }
+  }
+  std::remove(tone.c_str());
+  std::remove(out.c_str());
+}
+
+TEST_CASE("CLI room-morph receiver spacing left out is fitted to the room",
+          "[cli][defaults][acoustic]") {
+  const std::string out = unique_temp_path("_spacing_out.wav");
+  const std::string stereo = unique_temp_path("_spacing_stereo.wav");
+  create_stereo_delayed_wav(stereo);
+  // 0.5 m fits the default room; in a corner it is narrowed to what fits there.
+  const std::string base = "room-morph " + stereo + " --max-sec 0.3";
+  const auto omitted = room_render(base, out);
+  REQUIRE(omitted.first == 0);
+  CHECK(room_render(base + " --receiver-spacing 0.5", out) == omitted);
+  CHECK(room_render(base + " --receiver-spacing 2.0", out) != omitted);
+  const std::string walled =
+      base +
+      " --listener-x 6.9 --listener-y 4.9 --listener-z 1.7 --source-x 1 --source-y 1"
+      " --source-z 1.2";
+  const auto fitted = room_render(walled, out);
+  REQUIRE(fitted.first == 0);
+  CHECK(room_render(walled + " --receiver-spacing 0.5", out).first != 0);
+  std::remove(stereo.c_str());
+  std::remove(out.c_str());
+}
+#endif
 
 TEST_CASE("CLI options left to the library each have a stated-default row", "[cli][defaults]") {
   const StatedDefaultTables& tables = stated_default_tables();

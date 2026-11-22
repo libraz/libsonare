@@ -420,8 +420,8 @@ TEST_CASE("CLI room-morph keeps a two-channel input stereo", "[cli][acoustic]") 
   save_wav_multichannel(input, interleaved.data(), frames, 2, ChannelLayout::Stereo, sample_rate);
   const std::string output = unique_temp_path("_morph_stereo_output.wav");
   const std::string room =
-      " --length 6 --width 4 --height 3 --source-x 1.5 --source-y 1.5"
-      " --listener-x 4 --listener-y 2 --max-sec 0.3 ";
+      " --length 6 --width 4 --height 3 --source-x 1.5 --source-y 1.5 --source-z 1.2"
+      " --listener-x 4 --listener-y 2 --listener-z 1.7 --max-sec 0.3 ";
 
   auto [code, command_output] = exec_command(CLI + " room-morph " + input + " -o " + output + room +
                                              "--receiver-spacing 0.4 --json");

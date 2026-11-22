@@ -1578,8 +1578,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          library_default(with_domain(int_value("seed"), between(0.0, kMaxCliSeed)), "1"),
          with_stated_default(with_domain(number_value("max-sec"), greater_than(0.0)),
                              "natural length"),
-         library_default(with_domain(number_value("receiver-spacing"), above_zero_up_to(4.0)),
-                         "0.5"),
+         with_stated_default(with_domain(number_value("receiver-spacing"), above_zero_up_to(4.0)),
+                             "fitted to the room"),
          required_output(), flag("sabine")},
         {}, &validate_room_placement, 0, /*preserves_stereo_input=*/true);
 #endif
