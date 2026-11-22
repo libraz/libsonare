@@ -7003,7 +7003,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `FrameResult` | removed: frameSignal returns a Matrix2D (samples on rows, frames on columns); read its rows, cols and data |
-| `SonareModule` | removed: an Emscripten module type, no longer exported; pass the opaque ModuleHandle as the moduleFactory option of init() |
+| `SonareModule` | removed: an Emscripten module type, no longer exported; the moduleFactory option of init() takes a ModuleFactory, which resolves the opaque ModuleHandle and is the default export of @libraz/libsonare/module |
 
 #### Cancellation uses signal for promises and cancel for sync calls
 
@@ -13324,7 +13324,7 @@ const v = magnitude.data[bin * magnitude.cols + frame];
 
 ### Public types never expose Wasm* names
 
-WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `ModuleHandle`.
+WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as `ModuleFactory`, which resolves the opaque `ModuleHandle`; `@libraz/libsonare/module` exports one as its default.
 
 WASM, 1.x:
 

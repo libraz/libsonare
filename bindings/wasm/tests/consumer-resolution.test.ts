@@ -15,7 +15,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const tsc = join(root, 'node_modules', '.bin', 'tsc');
-const subpaths = ['', '/analysis', '/worklet', '/worker', '/vocal-edit-worker'];
+const subpaths = [
+  '',
+  '/analysis',
+  '/worklet',
+  '/worker',
+  '/vocal-edit-worker',
+  '/module',
+  '/module/analysis',
+];
 
 let scratch = '';
 
@@ -84,6 +92,28 @@ describe('published declarations from a consumer project', () => {
         moduleResolution: 'node10',
         ignoreDeprecations: '6.0',
       },
+    );
+    expect(output).toBe('');
+  });
+
+  it("accept each module factory as its entry's moduleFactory option", { timeout: 60000 }, () => {
+    const output = typeCheck(
+      {
+        'factory.mts': [
+          "import moduleFactory from '@libraz/libsonare/module';",
+          "import analysisFactory from '@libraz/libsonare/module/analysis';",
+          "import { init, type ModuleFactory } from '@libraz/libsonare/worklet';",
+          "import { init as initAnalysis } from '@libraz/libsonare/analysis';",
+          'declare const wasmBinary: ArrayBuffer;',
+          'export const factory: ModuleFactory = moduleFactory;',
+          'export const loads = [',
+          '  init({ moduleFactory, wasmBinary }),',
+          '  initAnalysis({ moduleFactory: analysisFactory, wasmBinary }),',
+          '];',
+          '',
+        ].join('\n'),
+      },
+      { module: 'esnext', moduleResolution: 'bundler' },
     );
     expect(output).toBe('');
   });

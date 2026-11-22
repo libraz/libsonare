@@ -519,7 +519,7 @@ rule = "matrix-2d"
 [[entry]]
 kind = "type"
 old = "SonareModule"
-removed = "an Emscripten module type, no longer exported; pass the opaque ModuleHandle as the moduleFactory option of init()"
+removed = "an Emscripten module type, no longer exported; the moduleFactory option of init() takes a ModuleFactory, which resolves the opaque ModuleHandle and is the default export of @libraz/libsonare/module"
 domain = "core"
 rule = "no-internal-types"
 

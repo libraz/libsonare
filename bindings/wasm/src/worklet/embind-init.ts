@@ -1,15 +1,10 @@
-import { init as initSonareModule, isInitialized, type ModuleHandle } from '../index.js';
+import { init as initSonareModule, isInitialized } from '../index.js';
 import { invalidState } from '../internal/entry.js';
-import type { SonareModule } from '../sonare.js';
-
-type EmbindModuleFactory = (options?: {
-  locateFile?: (path: string, prefix: string) => string;
-  wasmBinary?: ArrayBuffer | Uint8Array;
-}) => Promise<SonareModule>;
+import type { ModuleFactory } from '../public_types.js';
 
 type EmbindGlobals = typeof globalThis & {
   SonareEmbindInitPromise?: Promise<void>;
-  SonareEmbindModuleFactory?: EmbindModuleFactory;
+  SonareEmbindModuleFactory?: ModuleFactory;
 };
 
 /**
@@ -41,12 +36,11 @@ export async function initializeEmbindInWorklet(
   }
   const moduleFactory = scope.SonareEmbindModuleFactory;
   if (!moduleFactory) {
-    throw invalidState('embind realtime engine module is not initialized.');
+    throw invalidState(
+      'the AudioWorklet realm has no module; set globalThis.SonareEmbindModuleFactory to the ' +
+        "default export of '@libraz/libsonare/module' before the processor is constructed, " +
+        'and pass wasmBinary in its processorOptions',
+    );
   }
-  await initSonareModule({
-    locateFile: (path) => path,
-    wasmBinary,
-    // The embind factory is the module the public handle brand stands for.
-    moduleFactory: moduleFactory as unknown as () => Promise<ModuleHandle>,
-  });
+  await initSonareModule({ locateFile: (path) => path, wasmBinary, moduleFactory });
 }

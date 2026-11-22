@@ -22,7 +22,7 @@ import { ErrorCode } from './errors.js';
 import { codedError, withEntry } from './internal/entry.js';
 import './lifetime.js';
 import { initModule, loadedModule, notInitializedError } from './module_state.js';
-import type { Capabilities, CapabilityCatalog, ModuleHandle, SystemInfo } from './public_types.js';
+import type { Capabilities, CapabilityCatalog, ModuleFactory, SystemInfo } from './public_types.js';
 
 export { alignTakeToReference } from './align_take.js';
 export type {
@@ -927,6 +927,7 @@ export type {
   MixSceneVcaGroupInput,
   MixSourceClass,
   MixTrackAlignment,
+  ModuleFactory,
   ModuleHandle,
   MultibandCompressorBand,
   NoiseDetection,
@@ -1288,10 +1289,7 @@ export { OfflineWorkerClient } from './worker_client.js';
 export async function init(options?: {
   locateFile?: (path: string, prefix: string) => string;
   wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: (options?: {
-    locateFile?: (path: string, prefix: string) => string;
-    wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<ModuleHandle>;
+  moduleFactory?: ModuleFactory;
 }): Promise<void> {
   return withEntry('init', () =>
     initModule('full', options, async () => {
@@ -1299,10 +1297,11 @@ export async function init(options?: {
       if ('AudioWorkletGlobalScope' in globalThis) {
         throw codedError(
           ErrorCode.NotSupported,
-          'the module cannot be loaded inside an AudioWorkletGlobalScope; set ' +
-            'globalThis.SonareEmbindModuleFactory and pass wasmBinary in the processorOptions ' +
-            'of a processor registered with registerSonareWorkletProcessor, or call ' +
-            'init({ moduleFactory, wasmBinary })',
+          'the module cannot be loaded inside an AudioWorkletGlobalScope; call ' +
+            'init({ moduleFactory, wasmBinary }) with the default export of ' +
+            "'@libraz/libsonare/module' as moduleFactory, or, for a processor registered from " +
+            "'@libraz/libsonare/worklet', set globalThis.SonareEmbindModuleFactory to that " +
+            'export and pass wasmBinary in its processorOptions',
         );
       }
       return (await import('./sonare.js')).default;

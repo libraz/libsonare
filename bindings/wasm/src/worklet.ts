@@ -6,8 +6,10 @@
  * from one entry is not an `instanceof` the other entry's class. Pass plain data between realms.
  *
  * Inside an AudioWorkletGlobalScope, `init()` without a `moduleFactory` is refused with
- * `NotSupported`, because the realm cannot fetch; a processor initialises through
- * `globalThis.SonareEmbindModuleFactory` and the `wasmBinary` in its `processorOptions`.
+ * `NotSupported`, because the realm cannot fetch. The factory is the default export of
+ * `@libraz/libsonare/module`: pass it as `init({ moduleFactory, wasmBinary })`, or, for a
+ * processor registered from this entry, set it as `globalThis.SonareEmbindModuleFactory` and
+ * pass `wasmBinary` in the processor's `processorOptions`.
  */
 
 // tsup bundles ./worklet/* into one dist/worklet.js; a real AudioWorkletGlobalScope cannot
@@ -27,7 +29,7 @@ export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
-export type { StreamingMasteringChainConfig } from './public_types.js';
+export type { ModuleFactory, StreamingMasteringChainConfig } from './public_types.js';
 export type { CaptureOptions } from './public_types_engine.js';
 export type { MixerProcessResult, StripMeteringOptions } from './public_types_mixing.js';
 export type {

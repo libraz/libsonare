@@ -37,8 +37,58 @@ describe('init() in an AudioWorkletGlobalScope', () => {
       (error: unknown) => error,
     );
     expect(failure).toMatchObject({ code: ErrorCode.NotSupported });
-    expect((failure as Error).message).toMatch(
-      /^init: the module cannot be loaded inside an AudioWorkletGlobalScope; set globalThis\.SonareEmbindModuleFactory .*registerSonareWorkletProcessor/,
+    expect((failure as Error).message).toBe(
+      'init: the module cannot be loaded inside an AudioWorkletGlobalScope; call ' +
+        "init({ moduleFactory, wasmBinary }) with the default export of '@libraz/libsonare/module' " +
+        "as moduleFactory, or, for a processor registered from '@libraz/libsonare/worklet', set " +
+        'globalThis.SonareEmbindModuleFactory to that export and pass wasmBinary in its ' +
+        'processorOptions',
+    );
+    expect(worklet.isInitialized()).toBe(false);
+  });
+
+  it("refuses the analysis entry's bundled loader too, naming its own factory", async () => {
+    const analysis = await import('../dist/analysis.js');
+    const failure = await analysis.init().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({ code: ErrorCode.NotSupported });
+    expect((failure as Error).message).toBe(
+      'init: the module cannot be loaded inside an AudioWorkletGlobalScope; call ' +
+        "init({ moduleFactory, wasmBinary }) with the default export of '@libraz/libsonare/module/analysis' " +
+        'as moduleFactory',
+    );
+    expect(analysis.isInitialized()).toBe(false);
+  });
+
+  it('has a processor with no factory post a refusal naming where the factory comes from', async () => {
+    const posted: Posted[] = [];
+    type Ctor = new (options: unknown) => unknown;
+    const registered: { ctor?: Ctor } = {};
+    Object.assign(scope, {
+      AudioWorkletProcessor: class {
+        port = { postMessage: (message: Posted) => posted.push(message) };
+      },
+      registerProcessor: (_name: string, ctor: unknown) => {
+        registered.ctor = ctor as Ctor;
+      },
+    });
+    worklet.registerSonareWorkletProcessor('sonare-test-realm-no-factory');
+    new (registered.ctor as Ctor)({
+      processorOptions: { sceneJson: '{}', sampleRate: 48000, maxBlockSize: 128 },
+    });
+    const start = Date.now();
+    while (!posted.some((message) => message.type === 'error')) {
+      if (Date.now() - start > 10000) {
+        throw new Error(`processor never refused: ${JSON.stringify(posted)}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(posted.find((message) => message.type === 'error')?.message).toBe(
+      'the AudioWorklet realm has no module; set globalThis.SonareEmbindModuleFactory to ' +
+        "the default export of '@libraz/libsonare/module' before the processor is constructed, " +
+        'and pass wasmBinary in its processorOptions',
     );
     expect(worklet.isInitialized()).toBe(false);
   });

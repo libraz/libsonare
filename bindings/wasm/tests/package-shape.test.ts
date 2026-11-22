@@ -17,6 +17,13 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
   engines: { node: string };
 };
 
+/** Every file under @p dir ending in @p suffix. */
+function listFiles(dir: string, suffix: string): string[] {
+  return readdirSync(dir, { withFileTypes: true, recursive: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+    .map((entry) => join(entry.parentPath, entry.name));
+}
+
 const jsSubpaths = Object.entries(pkg.exports).filter(
   (entry): entry is [string, Record<string, string>] => typeof entry[1] === 'object',
 );
@@ -41,6 +48,8 @@ describe('package.json shape', () => {
       './worklet',
       './worker',
       './vocal-edit-worker',
+      './module',
+      './module/analysis',
     ]);
     for (const [, conditions] of jsSubpaths) {
       expect(conditions.types).toMatch(/\.d\.ts$/);
@@ -82,6 +91,56 @@ describe('package.json shape', () => {
     }
     for (const file of distFiles) {
       expect(targets).toContain(`./dist/${file}`);
+    }
+  });
+
+  it('exports each module factory beside the binary it builds, typed as the moduleFactory option', () => {
+    expect(pkg.exports['./module']).toEqual({
+      types: './dist/module.d.ts',
+      import: './dist/sonare.js',
+      default: './dist/sonare.js',
+    });
+    expect(pkg.exports['./module/analysis']).toEqual({
+      types: './dist/module_analysis.d.ts',
+      import: './dist/sonare-analysis.js',
+      default: './dist/sonare-analysis.js',
+    });
+    for (const source of ['module.ts', 'module_analysis.ts']) {
+      expect(readFileSync(join(root, 'src', source), 'utf8')).toContain(
+        'const moduleFactory: ModuleFactory =',
+      );
+    }
+  });
+
+  it('reaches every package file the docs and refusals tell a consumer to load', () => {
+    const exportKeys = new Set(Object.keys(pkg.exports));
+    const targets = new Set(
+      Object.values(pkg.exports).flatMap((value) =>
+        typeof value === 'string' ? [value] : Object.values(value),
+      ),
+    );
+    const sources = [join(root, 'README.md'), ...listFiles(join(root, 'src'), '.ts')];
+    const specifiers = new Set<string>();
+    const files = new Set<string>();
+    for (const file of sources) {
+      const text = readFileSync(file, 'utf8');
+      for (const match of text.matchAll(/@libraz\/libsonare((?:\/[\w.-]+)*)/g)) {
+        specifiers.add(`.${match[1]}`);
+      }
+      for (const match of text.matchAll(
+        /\b(sonare(?:-analysis)?\.(?:js|wasm)|(?:vocal_edit_)?worker\.js|[\w-]+\.shrf|[\w-]+\.schema\.json)\b/g,
+      )) {
+        files.add(match[1]);
+      }
+    }
+    expect(specifiers.size).toBeGreaterThan(4);
+    for (const specifier of specifiers) {
+      expect(exportKeys, `${specifier} is named but not exported`).toContain(specifier);
+    }
+    expect(files.size).toBeGreaterThan(4);
+    const targetNames = new Set([...targets].map((target) => target.split('/').pop()));
+    for (const name of files) {
+      expect(targetNames, `${name} is named but no export reaches it`).toContain(name);
     }
   });
 

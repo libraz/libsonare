@@ -12,7 +12,7 @@
  * expect.
  */
 
-import type { ModuleHandle } from '../public_types.js';
+import type { ModuleFactory } from '../public_types.js';
 import type { SonareModule } from '../sonare.js';
 
 /**
@@ -31,10 +31,7 @@ export type ModuleFlavour = 'full' | 'analysis';
 export interface ModuleInitOptions {
   locateFile?: (path: string, prefix: string) => string;
   wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: (options?: {
-    locateFile?: (path: string, prefix: string) => string;
-    wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<ModuleHandle>;
+  moduleFactory?: ModuleFactory;
 }
 
 /** One realm's module state for one build and flavour. */

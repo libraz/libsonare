@@ -32,6 +32,16 @@
       "import": "./dist/vocal_edit_worker.js",
       "default": "./dist/vocal_edit_worker.js"
     },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "import": "./dist/sonare.js",
+      "default": "./dist/sonare.js"
+    },
+    "./module/analysis": {
+      "types": "./dist/module_analysis.d.ts",
+      "import": "./dist/sonare-analysis.js",
+      "default": "./dist/sonare-analysis.js"
+    },
     "./wasm": "./dist/sonare.wasm",
     "./wasm/analysis": "./dist/sonare-analysis.wasm",
     "./schemas/realtime-voice-changer-preset.schema.json": "./dist/schemas/realtime-voice-changer-preset.schema.json",
@@ -55,6 +65,12 @@
       ],
       "vocal-edit-worker": [
         "dist/vocal_edit_worker.d.ts"
+      ],
+      "module": [
+        "dist/module.d.ts"
+      ],
+      "module/analysis": [
+        "dist/module_analysis.d.ts"
       ]
     }
   },

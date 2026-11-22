@@ -21,8 +21,9 @@ export interface SonareWorkletProcessorOptions {
   /**
    * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not
    * initialized yet. Same recipe as {@link SonareRealtimeEngineWorkletProcessorOptions}:
-   * `globalThis.SonareEmbindModuleFactory` builds the module from these bytes,
-   * and the processor posts `{ type: 'ready' }` once it is up.
+   * `globalThis.SonareEmbindModuleFactory`, set to the default export of
+   * `@libraz/libsonare/module`, builds the module from these bytes, and the
+   * processor posts `{ type: 'ready' }` once it is up.
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
   /** Mixer scene document as JSON. Required: a missing scene is a TypeError. */
@@ -64,6 +65,35 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not initialized yet; the
    * processor posts `{ type: 'ready' }` once it is up. Omitted: the module must already be
    * initialized in the realm, or built from the host's `SonareEmbindModuleFactory`.
+   *
+   * A bundled app imports the factory and the bytes through package specifiers. The processor
+   * module, the one passed to `audioWorklet.addModule()`:
+   *
+   * @example
+   * ```ts
+   * import moduleFactory from '@libraz/libsonare/module';
+   * import { type ModuleFactory, registerSonareRealtimeEngineWorkletProcessor } from '@libraz/libsonare/worklet';
+   * (globalThis as { SonareEmbindModuleFactory?: ModuleFactory }).SonareEmbindModuleFactory =
+   *   moduleFactory;
+   * registerSonareRealtimeEngineWorkletProcessor();
+   * ```
+   *
+   * The main thread, with the URLs the bundler gives the processor module and
+   * `@libraz/libsonare/wasm`:
+   *
+   * @example
+   * ```ts
+   * import { SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
+   * declare const context: AudioContext;
+   * declare const processorUrl: string;
+   * declare const wasmUrl: string;
+   * const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
+   * const engine = await SonareRealtimeEngineNode.create(context, {
+   *   moduleUrl: processorUrl,
+   *   wasmBinary,
+   *   numChannels: 2,
+   * });
+   * ```
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
   /** Control-plane syncs applied in order once the module is up, before any queued port message. */
@@ -247,7 +277,8 @@ export interface SonarePlaybackWorkletProcessorOptions {
   sampleRate?: number;
   /**
    * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not
-   * initialized yet. Used with `globalThis.SonareEmbindModuleFactory` (and
+   * initialized yet. Used with `globalThis.SonareEmbindModuleFactory`, set to the
+   * default export of `@libraz/libsonare/module` (and
    * `SonareEmbindInitPromise` when the host starts the init itself), exactly as
    * for the realtime engine processor; the processor posts `{ type: 'ready' }`
    * once the module is up and renders silence until then.

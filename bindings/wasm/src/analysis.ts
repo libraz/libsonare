@@ -6,7 +6,8 @@
  * required.
  */
 
-import { withEntry } from './internal/entry.js';
+import { ErrorCode } from './errors.js';
+import { codedError, withEntry } from './internal/entry.js';
 import './lifetime.js';
 import {
   bindModuleFlavour,
@@ -14,7 +15,7 @@ import {
   loadedModule,
   notInitializedError,
 } from './module_state.js';
-import type { Capabilities, ModuleHandle } from './public_types.js';
+import type { Capabilities, ModuleFactory } from './public_types.js';
 
 bindModuleFlavour('analysis');
 
@@ -126,13 +127,21 @@ export {
 export async function init(options?: {
   locateFile?: (path: string, prefix: string) => string;
   wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: (options?: {
-    locateFile?: (path: string, prefix: string) => string;
-    wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<ModuleHandle>;
+  moduleFactory?: ModuleFactory;
 }): Promise<void> {
   return withEntry('init', () =>
-    initModule('analysis', options, async () => (await import('./sonare-analysis.js')).default),
+    initModule('analysis', options, async () => {
+      // A worklet realm has no fetch, so the bundled loader could only fail later and obscurely.
+      if ('AudioWorkletGlobalScope' in globalThis) {
+        throw codedError(
+          ErrorCode.NotSupported,
+          'the module cannot be loaded inside an AudioWorkletGlobalScope; call ' +
+            'init({ moduleFactory, wasmBinary }) with the default export of ' +
+            "'@libraz/libsonare/module/analysis' as moduleFactory",
+        );
+      }
+      return (await import('./sonare-analysis.js')).default;
+    }),
   );
 }
 

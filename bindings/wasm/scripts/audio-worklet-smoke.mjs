@@ -2,10 +2,12 @@ import http from 'node:http';
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import * as esbuild from 'esbuild';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const chromeCandidates = [
@@ -27,32 +29,15 @@ async function findChrome() {
   );
 }
 
-function headers(contentType) {
-  return {
-    'Content-Type': contentType,
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
-  };
-}
+// The page and the processor import the package only through its specifiers, resolved
+// from the packed tarball installed into a scratch project, so a file a consumer cannot
+// reach through the exports map fails here exactly as it would in a bundled app.
+const pageSource = `import { init, SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
 
-function contentType(file) {
-  if (file.endsWith('.js')) return 'text/javascript';
-  if (file.endsWith('.wasm')) return 'application/wasm';
-  if (file.endsWith('.html')) return 'text/html';
-  return 'application/octet-stream';
-}
-
-function startServer() {
-  const server = http.createServer(async (req, res) => {
-    try {
-      const url = new URL(req.url ?? '/', 'http://localhost');
-      if (url.pathname === '/smoke.html') {
-        res.writeHead(200, headers('text/html'));
-        res.end(`<!doctype html>
-<meta charset="utf-8">
-<script type="module">
-import { init, SonareEngineCommandType, SonareRealtimeEngineNode } from '/dist/worklet.js';
-import { init as initCore, RealtimeEngine } from '/dist/index.js';
+// The command ring's enum is internal; a command record takes its ordinal.
+const Command = { SetParamSmoothed: 1, TransportPlay: 2, ArmRecord: 13 };
+import { init as initCore, RealtimeEngine } from '@libraz/libsonare';
+import wasmUrl from '@libraz/libsonare/wasm';
 
 window.runSonareSmoke = async () => {
   const progress = [];
@@ -73,25 +58,25 @@ window.runSonareSmoke = async () => {
   let instrumentEngine;
   let captureEngine;
   try {
-    const sonareWasmBinary = await fetch('/dist/sonare.wasm').then((response) => {
+    const sonareWasmBinary = await fetch(wasmUrl).then((response) => {
       if (!response.ok) throw new Error('failed to fetch sonare.wasm: ' + response.status);
       return response.arrayBuffer();
     });
-    await init({ locateFile: (path) => '/dist/' + path, wasmBinary: sonareWasmBinary });
-    await initCore({ locateFile: (path) => '/dist/' + path, wasmBinary: sonareWasmBinary });
+    await init({ wasmBinary: sonareWasmBinary });
+    await initCore({ wasmBinary: sonareWasmBinary });
 
     mark('mixer-context');
     const mixerContext = new OfflineAudioContext(1, 4096, 48000);
     const clip = new Float32Array(4096).fill(1);
     // An engine given the same lanes numbers track 10's fader as the worklet engine does.
-    const laneMirror = new RealtimeEngine(48000, 128);
-    laneMirror.setTrackLanes([10]);
-    const track10Fader = laneMirror.resolveTrackLaneAutomationId(10, 'faderDb');
+    const laneMirror = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    laneMirror.setTrackLanes([{ trackId: 10 }]);
+    const track10Fader = laneMirror.resolveStripAutomationId(10, 'faderDb');
     laneMirror.destroy();
     mark('mixer-create-node');
     mixerEngine = await SonareRealtimeEngineNode.create(mixerContext, {
       mode: 'sab',
-      moduleUrl: '/sonare-embind-engine-worklet.js',
+      moduleUrl: '/processor.js',
       wasmBinary: sonareWasmBinary.slice(0),
       initialSyncMessages: [
         {
@@ -106,18 +91,18 @@ window.runSonareSmoke = async () => {
       ],
       initialCommands: [
         {
-          type: SonareEngineCommandType.SetParamSmoothed,
+          type: Command.SetParamSmoothed,
           targetId: track10Fader,
-          sampleTime: -1,
+          renderFrame: -1,
           argFloat: -12,
         },
         {
-          type: SonareEngineCommandType.TransportPlay,
-          sampleTime: -1,
+          type: Command.TransportPlay,
+          renderFrame: -1,
         },
       ],
-      blockSize: 128,
-      channelCount: 1,
+      maxBlockSize: 128,
+      numChannels: 1,
       commandRingCapacity: 16,
       telemetryRingCapacity: 16,
       meterRingCapacity: 16,
@@ -146,7 +131,7 @@ window.runSonareSmoke = async () => {
     mark('instrument-create-node');
     instrumentEngine = await SonareRealtimeEngineNode.create(instrumentContext, {
       mode: 'sab',
-      moduleUrl: '/sonare-embind-engine-worklet.js',
+      moduleUrl: '/processor.js',
       wasmBinary: sonareWasmBinary.slice(0),
       initialSyncMessages: [
         {
@@ -172,12 +157,12 @@ window.runSonareSmoke = async () => {
       ],
       initialCommands: [
         {
-          type: SonareEngineCommandType.TransportPlay,
-          sampleTime: -1,
+          type: Command.TransportPlay,
+          renderFrame: -1,
         },
       ],
-      blockSize: 128,
-      channelCount: 2,
+      maxBlockSize: 128,
+      numChannels: 2,
       commandRingCapacity: 16,
       telemetryRingCapacity: 16,
       meterRingCapacity: 16,
@@ -204,7 +189,7 @@ window.runSonareSmoke = async () => {
     mark('capture-create-node');
     captureEngine = await SonareRealtimeEngineNode.create(captureContext, {
       mode: 'sab',
-      moduleUrl: '/sonare-embind-engine-worklet.js',
+      moduleUrl: '/processor.js',
       wasmBinary: sonareWasmBinary.slice(0),
       initialSyncMessages: [
         {
@@ -216,8 +201,8 @@ window.runSonareSmoke = async () => {
           inputMonitor: { enabled: false, gain: 1 },
         },
       ],
-      blockSize: 128,
-      channelCount: 1,
+      maxBlockSize: 128,
+      numChannels: 1,
       commandRingCapacity: 16,
       telemetryRingCapacity: 16,
     });
@@ -226,8 +211,8 @@ window.runSonareSmoke = async () => {
     captureSource.connect(captureEngine.node);
     captureEngine.node.connect(captureContext.destination);
     captureEngine.sendCommand({
-      type: SonareEngineCommandType.ArmRecord,
-      sampleTime: -1,
+      type: Command.ArmRecord,
+      renderFrame: -1,
       argInt: 1,
     });
     await tick();
@@ -267,25 +252,91 @@ window.runSonareSmoke = async () => {
       stack: error instanceof Error ? error.stack : '',
     };
   }
-};
-</script>`);
-        return;
-      }
-      if (url.pathname === '/sonare-embind-engine-worklet.js') {
-        res.writeHead(200, headers('text/javascript'));
-        res.end(`import createSonare from '/dist/sonare.js';
-import { registerSonareRealtimeEngineWorkletProcessor } from '/dist/worklet.js';
-globalThis.SonareEmbindModuleFactory = createSonare;
+};`;
+
+// The processor follows the recipe the docs give a bundled app.
+const processorSource = `import moduleFactory from '@libraz/libsonare/module';
+import { registerSonareRealtimeEngineWorkletProcessor } from '@libraz/libsonare/worklet';
+globalThis.SonareEmbindModuleFactory = moduleFactory;
 registerSonareRealtimeEngineWorkletProcessor();
-`);
+`;
+
+/** Installs the packed package into @p scratch and bundles the page and the processor into `out/`. */
+async function prepareConsumer(scratch) {
+  let tarball = process.env.SONARE_SMOKE_TARBALL;
+  if (!tarball) {
+    tarball = path.join(scratch, 'package.tgz');
+    execFileSync('yarn', ['pack', '--out', tarball], { cwd: root, stdio: 'inherit' });
+  }
+  const installed = path.join(scratch, 'node_modules', '@libraz', 'libsonare');
+  await mkdir(installed, { recursive: true });
+  execFileSync('tar', ['xzf', path.resolve(tarball), '-C', installed, '--strip-components', '1']);
+  const manifest = JSON.parse(await readFile(path.join(installed, 'package.json'), 'utf8'));
+  const resolveFrom = createRequire(path.join(scratch, 'consumer.cjs'));
+  const unresolved = [];
+  for (const key of Object.keys(manifest.exports)) {
+    const specifier = `@libraz/libsonare${key.slice(1)}`;
+    try {
+      await access(resolveFrom.resolve(specifier), constants.R_OK);
+    } catch (error) {
+      unresolved.push(`${specifier}: ${error.message}`);
+    }
+  }
+  if (unresolved.length > 0) {
+    throw new Error(`exports keys the installed package does not resolve:\n${unresolved.join('\n')}`);
+  }
+  await writeFile(path.join(scratch, 'page.mjs'), pageSource);
+  await writeFile(path.join(scratch, 'processor.mjs'), processorSource);
+  const outDir = path.join(scratch, 'out');
+  await esbuild.build({
+    absWorkingDir: scratch,
+    entryPoints: { page: path.join(scratch, 'page.mjs'), processor: path.join(scratch, 'processor.mjs') },
+    bundle: true,
+    splitting: false,
+    platform: 'browser',
+    format: 'esm',
+    target: 'es2022',
+    outdir: outDir,
+    loader: { '.wasm': 'file' },
+    assetNames: '[name]-[hash]',
+    publicPath: '/',
+    logLevel: 'error',
+  });
+  return { outDir, keys: Object.keys(manifest.exports).length };
+}
+
+function headers(contentType) {
+  return {
+    'Content-Type': contentType,
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+  };
+}
+
+function contentType(file) {
+  if (file.endsWith('.js')) return 'text/javascript';
+  if (file.endsWith('.wasm')) return 'application/wasm';
+  if (file.endsWith('.html')) return 'text/html';
+  return 'application/octet-stream';
+}
+
+function startServer(outDir) {
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      if (url.pathname === '/smoke.html') {
+        res.writeHead(200, headers('text/html'));
+        res.end('<!doctype html>\n<meta charset="utf-8">\n<script type="module" src="/page.js"></script>\n');
         return;
       }
-      if (url.pathname.startsWith('/dist/')) {
-        const file = path.join(root, url.pathname);
-        const data = await readFile(file);
-        res.writeHead(200, headers(contentType(file)));
-        res.end(data);
-        return;
+      const file = path.join(outDir, path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, ''));
+      if (file.startsWith(outDir + path.sep)) {
+        const data = await readFile(file).catch(() => null);
+        if (data) {
+          res.writeHead(200, headers(contentType(file)));
+          res.end(data);
+          return;
+        }
       }
       res.writeHead(404, headers('text/plain'));
       res.end('not found');
@@ -382,7 +433,10 @@ function withTimeout(promise, timeoutMs, label) {
 
 async function main() {
   const chromePath = await findChrome();
-  const server = await startServer();
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'sonare-worklet-consumer-'));
+  const { outDir, keys } = await prepareConsumer(scratch);
+  console.log(`installed package resolves all ${keys} exports keys`);
+  const server = await startServer(outDir);
   const port = server.address().port;
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sonare-chrome-'));
   const defaultChromeArgs =
@@ -469,6 +523,7 @@ async function main() {
     chrome.kill('SIGTERM');
     server.close();
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await rm(scratch, { recursive: true, force: true });
   }
 }
 

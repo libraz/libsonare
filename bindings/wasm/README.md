@@ -57,6 +57,29 @@ try {
 }
 ```
 
+An AudioWorklet realm cannot fetch, so a processor module takes the module factory from `@libraz/libsonare/module` and the main thread passes the `.wasm` bytes. The same recipe serves every processor registered from `@libraz/libsonare/worklet`:
+
+```typescript
+// processor.ts — the module given to audioWorklet.addModule()
+import moduleFactory from '@libraz/libsonare/module';
+import { type ModuleFactory, registerSonareRealtimeEngineWorkletProcessor } from '@libraz/libsonare/worklet';
+
+(globalThis as { SonareEmbindModuleFactory?: ModuleFactory }).SonareEmbindModuleFactory = moduleFactory;
+registerSonareRealtimeEngineWorkletProcessor();
+```
+
+```typescript
+// main thread; the `?url` suffix is how Vite imports an asset URL — use your bundler's equivalent
+import { SonareRealtimeEngineNode } from '@libraz/libsonare/worklet';
+import wasmUrl from '@libraz/libsonare/wasm?url';
+import processorUrl from './processor.ts?worker&url';
+
+const wasmBinary = await (await fetch(wasmUrl)).arrayBuffer();
+const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: processorUrl, wasmBinary });
+```
+
+Code that calls `init()` itself inside the worklet passes the same two values: `init({ moduleFactory, wasmBinary })`.
+
 ## Capabilities
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/wasm)
