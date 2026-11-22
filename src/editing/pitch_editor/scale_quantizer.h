@@ -27,10 +27,6 @@ struct ScaleQuantizerConfig {
   float reference_midi = constants::kMidiA4;
 };
 
-inline bool valid_scale_args(int root, uint16_t mode_mask) noexcept {
-  return root >= 0 && root <= 11 && mode_mask != 0 && (mode_mask & ~uint16_t{0x0FFF}) == 0;
-}
-
 class ScaleQuantizer {
  public:
   explicit ScaleQuantizer(ScaleQuantizerConfig config = {});
