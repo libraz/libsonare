@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,51 +20,6 @@ function diagnosticErrors(diagnostics: readonly ts.Diagnostic[]): string[] {
   return diagnostics
     .filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
     .map(formatDiagnostic);
-}
-
-function emitNodeDeclarations(outputDirectory: string): string {
-  const configPath = ts.findConfigFile(nodeRoot, ts.sys.fileExists, 'tsconfig.json');
-  if (!configPath) {
-    throw new Error(`Could not find the Node tsconfig below ${nodeRoot}`);
-  }
-
-  const config = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (config.error) {
-    throw new Error(formatDiagnostic(config.error));
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, nodeRoot, {
-    declaration: true,
-    declarationMap: false,
-    emitDeclarationOnly: true,
-    noEmit: false,
-    outDir: outputDirectory,
-    sourceMap: false,
-  });
-  const program = ts.createProgram(parsed.fileNames, {
-    ...parsed.options,
-    declaration: true,
-    declarationMap: false,
-    emitDeclarationOnly: true,
-    noEmit: false,
-    outDir: outputDirectory,
-    sourceMap: false,
-  });
-  const diagnostics = [
-    ...ts.getPreEmitDiagnostics(program),
-    ...program.emit().diagnostics,
-    ...parsed.errors,
-  ];
-  const errors = diagnosticErrors(diagnostics);
-  if (errors.length > 0) {
-    throw new Error(`Node declaration emit failed:\n${errors.join('\n')}`);
-  }
-
-  const entryPath = join(outputDirectory, 'index.d.ts');
-  if (!existsSync(entryPath)) {
-    throw new Error(`Node declaration emit did not produce ${entryPath}`);
-  }
-  return entryPath;
 }
 
 function fullyUnaliasedSymbol(checker: ts.TypeChecker, symbol: ts.Symbol): ts.Symbol {
@@ -432,11 +387,12 @@ export type { FixtureBox, FixtureNested } from './type-export-fixture.js';
 
 describe('Node entrypoint type exports', () => {
   it('covers types reachable from emitted public callable and class declarations', () => {
+    // The declarations `yarn build:ts` emitted; the global setup refuses a dist/ older than src/.
+    const distDirectory = join(nodeRoot, 'dist');
+    expect(checkPublicTypeExports(join(distDirectory, 'index.d.ts'), distDirectory)).toEqual([]);
+
     const outputDirectory = mkdtempSync(join(tmpdir(), 'libsonare-node-type-exports-'));
     try {
-      const entryPath = emitNodeDeclarations(outputDirectory);
-      expect(checkPublicTypeExports(entryPath, outputDirectory)).toEqual([]);
-
       const fixtureEntryPath = writeSyntheticFixture(outputDirectory);
       expect(checkPublicTypeExports(fixtureEntryPath, outputDirectory)).toEqual([]);
     } finally {
