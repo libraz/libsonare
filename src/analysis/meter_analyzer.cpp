@@ -541,26 +541,30 @@ MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,
   validate_meter_config(config);
   // Mismatched lengths mean the caller paired the wrong two arrays. Scoring the
   // shorter prefix would answer a question nobody asked, so reject instead.
-  SONARE_CHECK_MSG(beat_times.size() == beat_strengths.size(), ErrorCode::InvalidParameter,
-                   "estimateMeter: beatTimes and beatStrengths must be the same length");
+  if (beat_times.size() != beat_strengths.size()) {
+    util::check::refuse_relation({"beat_strengths", "beat_times"},
+                                 "{0} must have the same length as {1}");
+  }
   // No beats is not a short search, it is nothing to search. The estimator
   // would answer with its fixed low-confidence 4/4, which reads as a detection
   // result — the same objection validate_meter_config makes to an empty
   // candidate set, reached through the same code path. A series that holds at
   // least one beat still gets that default, because there the caller did supply
   // something to score and the confidence is the honest report on it.
-  SONARE_CHECK_MSG(!beat_times.empty(), ErrorCode::InvalidParameter,
-                   "estimateMeter: beatTimes must not be empty");
+  if (beat_times.empty()) util::check::refuse("beat_times", util::refusal::kNonEmptyPredicate);
 
   std::vector<Beat> beats;
   beats.reserve(beat_times.size());
   for (size_t i = 0; i < beat_times.size(); ++i) {
-    SONARE_CHECK_MSG(numeric::finite_non_negative(beat_times[i]), ErrorCode::InvalidParameter,
-                     "estimateMeter: beatTimes entries must be finite and non-negative");
-    SONARE_CHECK_MSG(i == 0 || beat_times[i] >= beat_times[i - 1], ErrorCode::InvalidParameter,
-                     "estimateMeter: beatTimes must be non-decreasing");
-    SONARE_CHECK_MSG(numeric::finite(beat_strengths[i]), ErrorCode::InvalidParameter,
-                     "estimateMeter: beatStrengths entries must be finite");
+    if (!numeric::finite_non_negative(beat_times[i])) {
+      util::check::refuse("beat_times", "must hold only finite values of at least 0");
+    }
+    if (i > 0 && beat_times[i] < beat_times[i - 1]) {
+      util::check::refuse("beat_times", "must be non-decreasing");
+    }
+    if (!numeric::finite(beat_strengths[i])) {
+      util::check::refuse("beat_strengths", "must hold only finite values");
+    }
     // The frame index is never read here; it is filled positionally so a beat
     // still round-trips as an ordered series.
     beats.push_back({beat_times[i], static_cast<int>(i), beat_strengths[i]});

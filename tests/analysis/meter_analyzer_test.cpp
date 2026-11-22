@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -423,26 +425,33 @@ TEST_CASE("estimate_meter_from_beats rejects an unusable beat series", "[meter_a
 
   // Mismatched lengths mean the caller paired the wrong two arrays; scoring the
   // shorter prefix would answer a question nobody asked.
+  // Every refusal is the bare structured form, naming the core member and no function.
   const std::vector<float> short_strengths(series.strengths.begin(), series.strengths.end() - 1);
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(series.times, short_strengths), SonareException);
+  REQUIRE_THROWS_WITH(estimate_meter_from_beats(series.times, short_strengths),
+                      "beat_strengths must have the same length as beat_times");
   const std::vector<float> short_times(series.times.begin(), series.times.end() - 1);
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(short_times, series.strengths), SonareException);
+  REQUIRE_THROWS_WITH(estimate_meter_from_beats(short_times, series.strengths),
+                      "beat_strengths must have the same length as beat_times");
 
-  const auto rejects_times = [&series](void (*mutate)(std::vector<float>&)) {
+  const auto rejects_times = [&series](void (*mutate)(std::vector<float>&), const char* text) {
     std::vector<float> times = series.times;
     mutate(times);
-    REQUIRE_THROWS_AS(estimate_meter_from_beats(times, series.strengths), SonareException);
+    REQUIRE_THROWS_WITH(estimate_meter_from_beats(times, series.strengths), text);
   };
   const auto rejects_strengths = [&series](void (*mutate)(std::vector<float>&)) {
     std::vector<float> strengths = series.strengths;
     mutate(strengths);
-    REQUIRE_THROWS_AS(estimate_meter_from_beats(series.times, strengths), SonareException);
+    REQUIRE_THROWS_WITH(estimate_meter_from_beats(series.times, strengths),
+                        "beat_strengths must hold only finite values");
   };
 
-  rejects_times([](std::vector<float>& t) { t[5] = t[4] - 0.25f; });
-  rejects_times([](std::vector<float>& t) { t[3] = -0.5f; });
-  rejects_times([](std::vector<float>& t) { t[3] = std::nanf(""); });
-  rejects_times([](std::vector<float>& t) { t[3] = std::numeric_limits<float>::infinity(); });
+  constexpr const char* kTimeDomain = "beat_times must hold only finite values of at least 0";
+  rejects_times([](std::vector<float>& t) { t[5] = t[4] - 0.25f; },
+                "beat_times must be non-decreasing");
+  rejects_times([](std::vector<float>& t) { t[3] = -0.5f; }, kTimeDomain);
+  rejects_times([](std::vector<float>& t) { t[3] = std::nanf(""); }, kTimeDomain);
+  rejects_times([](std::vector<float>& t) { t[3] = std::numeric_limits<float>::infinity(); },
+                kTimeDomain);
   rejects_strengths([](std::vector<float>& s) { s[2] = std::nanf(""); });
   rejects_strengths([](std::vector<float>& s) { s[2] = std::numeric_limits<float>::infinity(); });
   rejects_strengths([](std::vector<float>& s) { s[2] = -std::numeric_limits<float>::infinity(); });
@@ -458,7 +467,14 @@ TEST_CASE("estimate_meter_from_beats rejects an unusable beat series", "[meter_a
 
   // No beats is not a short search but nothing to search, so it is rejected
   // rather than answered with the fixed low-confidence default.
-  REQUIRE_THROWS_AS(estimate_meter_from_beats({}, {}), SonareException);
+  try {
+    (void)estimate_meter_from_beats({}, {});
+    FAIL("expected a refusal");
+  } catch (const SonareParameterRefusal& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(e.subject() == "beat_times");
+    REQUIRE(std::string(e.what()) == "beat_times must not be empty");
+  }
 }
 
 TEST_CASE("estimate_meter_from_beats draws the line at empty, not at short", "[meter_analyzer]") {
