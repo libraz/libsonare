@@ -13,28 +13,15 @@ constexpr uint32_t kTypeShift = 28u;
 constexpr uint32_t kStatusShift = 20u;
 constexpr uint32_t kChannelShift = 16u;
 
-uint32_t midi1_word0(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
-                     uint8_t data2) noexcept {
-  return (static_cast<uint32_t>(UmpMessageType::kMidi1ChannelVoice) << kTypeShift) |
-         (static_cast<uint32_t>(group & 0x0Fu) << 24u) |
-         (static_cast<uint32_t>(status) << kStatusShift) |
-         (static_cast<uint32_t>(channel & 0x0Fu) << kChannelShift) |
-         (static_cast<uint32_t>(data1 & 0x7Fu) << 8u) | static_cast<uint32_t>(data2 & 0x7Fu);
-}
-
-uint32_t midi2_word0(uint8_t group, uint8_t status_nibble, uint8_t channel, uint8_t byte2,
-                     uint8_t byte3) noexcept {
-  return (static_cast<uint32_t>(UmpMessageType::kMidi2ChannelVoice) << kTypeShift) |
-         (static_cast<uint32_t>(group & 0x0Fu) << 24u) |
-         (static_cast<uint32_t>(status_nibble & 0x0Fu) << kStatusShift) |
-         (static_cast<uint32_t>(channel & 0x0Fu) << kChannelShift) |
-         (static_cast<uint32_t>(byte2) << 8u) | static_cast<uint32_t>(byte3);
-}
-
 Ump make_midi1(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
                uint8_t data2) noexcept {
   Ump ump;
-  ump.words[0] = midi1_word0(group, status, channel, data1, data2);
+  ump.words[0] = (static_cast<uint32_t>(UmpMessageType::kMidi1ChannelVoice) << kTypeShift) |
+                 (static_cast<uint32_t>(group & 0x0Fu) << 24u) |
+                 (static_cast<uint32_t>(status) << kStatusShift) |
+                 (static_cast<uint32_t>(channel & 0x0Fu) << kChannelShift) |
+                 (static_cast<uint32_t>(data1 & 0x7Fu) << 8u) |
+                 static_cast<uint32_t>(data2 & 0x7Fu);
   ump.word_count = 1;
   ump.group = static_cast<uint8_t>(group & 0x0Fu);
   return ump;
@@ -43,7 +30,11 @@ Ump make_midi1(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
 Ump make_midi2(uint8_t group, UmpStatus status, uint8_t channel, uint8_t byte2, uint8_t byte3,
                uint32_t word1 = 0) noexcept {
   Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(status), channel, byte2, byte3);
+  ump.words[0] = (static_cast<uint32_t>(UmpMessageType::kMidi2ChannelVoice) << kTypeShift) |
+                 (static_cast<uint32_t>(group & 0x0Fu) << 24u) |
+                 (static_cast<uint32_t>(static_cast<uint8_t>(status) & 0x0Fu) << kStatusShift) |
+                 (static_cast<uint32_t>(channel & 0x0Fu) << kChannelShift) |
+                 (static_cast<uint32_t>(byte2) << 8u) | static_cast<uint32_t>(byte3);
   ump.words[1] = word1;
   ump.word_count = 2;
   ump.group = static_cast<uint8_t>(group & 0x0Fu);
@@ -581,7 +572,7 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
   const uint8_t group = ump_group_from_word0(ump.words[0]);
   const uint8_t status = ump.status_nibble();
   const uint8_t channel = ump.channel();
-  const uint8_t note = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
+  const uint8_t note = ump.note_number();
   switch (static_cast<UmpStatus>(status)) {
     case UmpStatus::kNoteOn: {
       const uint16_t velocity16 = static_cast<uint16_t>(ump.words[1] >> 16u);

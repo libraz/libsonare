@@ -1,6 +1,7 @@
 #include "midi/builtin_synth.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "midi/controller_numbers.h"
@@ -140,7 +141,6 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                            uint8_t attribute_type, uint16_t attribute_data,
                            uint32_t source_track_id) noexcept {
   if (!prepared_) return;
-  if (voices_.empty()) return;
   // Pick a free voice; else steal the oldest (smallest age) voice deterministically.
   Voice* target = nullptr;
   for (auto& v : voices_) {
@@ -654,13 +654,17 @@ bool BuiltinSynth::process_source_tracks(const MidiInstrumentSourceOutput* outpu
     return outputs[0].channels;
   };
 
+  std::array<float* const*, kMaxSynthVoices> voice_outputs{};
+  for (size_t v = 0; v < voices_.size(); ++v)
+    voice_outputs[v] = output_for(voices_[v].source_track_id);
+
   for (int i = 0; i < num_samples; ++i) {
-    for (auto& voice : voices_) {
+    for (size_t v = 0; v < voices_.size(); ++v) {
+      Voice& voice = voices_[v];
       if (!voice.active) continue;
       const rt::PanGains& pan = channel_controls_[voice.channel & 0x0Fu].pan_gains;
       const float sample = render_voice_sample(voice) * config_.gain;
-      add_frame(output_for(voice.source_track_id), num_channels, i, sample * pan.left,
-                sample * pan.right);
+      add_frame(voice_outputs[v], num_channels, i, sample * pan.left, sample * pan.right);
     }
   }
   return true;

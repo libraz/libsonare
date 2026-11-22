@@ -666,10 +666,8 @@ Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& c
     const int64_t source_end = clamped_source_position(b.source_sample, audio.size());
     SONARE_CHECK(source_end > source_start, ErrorCode::InvalidState);
 
-    std::vector<float> segment(static_cast<size_t>(source_end - source_start));
-    for (size_t n = 0; n < segment.size(); ++n) {
-      segment[n] = audio[static_cast<size_t>(source_start) + n];
-    }
+    const float* source_begin = audio.begin() + source_start;
+    std::vector<float> segment(source_begin, source_begin + (source_end - source_start));
     Audio segment_audio = Audio::from_vector(std::move(segment), audio.sample_rate());
     Audio warped =
         tsm_rate(segment_audio, static_cast<float>(segment_source_span / segment_warp_span),
@@ -677,11 +675,7 @@ Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& c
     out.insert(out.end(), warped.begin(), warped.end());
   }
 
-  if (out.size() > target_length) {
-    out.resize(target_length);
-  } else if (out.size() < target_length) {
-    out.resize(target_length, 0.0f);
-  }
+  out.resize(target_length, 0.0f);
   return Audio::from_vector(std::move(out), audio.sample_rate());
 }
 

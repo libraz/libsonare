@@ -44,10 +44,13 @@ double activation_at(const BeatAnalysisInput& input, double frame) {
   return onset_activation_at(input.onset_strength, input.sample_rate, input.hop_length, envelope_s);
 }
 
+double ppq_per_detected_beat_of(const TempoEstimatorConfig& config, double bpm_scale) {
+  return (config.ppq_per_beat > 0.0 ? config.ppq_per_beat : 1.0) * bpm_scale;
+}
+
 double downbeat_origin_ppq(const BeatAnalysisInput& input, const TempoEstimatorConfig& config,
                            double bpm_scale) {
-  const double ppq_per_detected_beat =
-      (config.ppq_per_beat > 0.0 ? config.ppq_per_beat : 1.0) * bpm_scale;
+  const double ppq_per_detected_beat = ppq_per_detected_beat_of(config, bpm_scale);
   for (int index : input.downbeat_indices) {
     if (index >= 0 && static_cast<size_t>(index) < input.beats.size()) {
       return static_cast<double>(index) * ppq_per_detected_beat;
@@ -89,8 +92,7 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
                                                     double bpm_scale,
                                                     const TempoEstimatorConfig& config) {
   std::vector<transport::TempoSegment> segments;
-  const double ppq_per_detected_beat =
-      (config.ppq_per_beat > 0.0 ? config.ppq_per_beat : 1.0) * bpm_scale;
+  const double ppq_per_detected_beat = ppq_per_detected_beat_of(config, bpm_scale);
 
   // Fallback: no usable beat grid -> a single constant segment from global BPM.
   if (decoded_bpm.empty() || decoded_bpm.size() != obs.size()) {
@@ -193,7 +195,6 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
     seg.bpm = 0.5 * (lo + hi);
   }
 
-  if (!segments.empty()) segments.front().start_sample = 0.0;
   return segments;
 }
 
@@ -308,40 +309,27 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
   const std::vector<BeatIntervalObservation> obs = build_observations(input);
   const std::vector<double> decoded = decode_beat_tempo_curve(obs, curve_config(config));
 
-  // Primary estimate (scale = 1).
-  {
+  const auto make_candidate = [&](double scale, float confidence, const char* label) {
     TempoEstimate est;
-    est.segments = build_segments(input, obs, decoded, 1.0, config);
-    est.time_sigs = build_time_sigs(input, config, 1.0);
-    est.confidence = estimate_confidence(obs, decoded);
-    est.label = "primary";
+    est.segments = build_segments(input, obs, decoded, scale, config);
+    est.time_sigs = build_time_sigs(input, config, scale);
+    est.confidence = confidence;
+    est.label = label;
     apply_lead_in(input, est);
-    candidates.push_back(std::move(est));
-  }
+    return est;
+  };
+
+  // Primary estimate (scale = 1).
+  candidates.push_back(make_candidate(1.0, estimate_confidence(obs, decoded), "primary"));
 
   if (config.include_octave_candidates && !decoded.empty()) {
-    // Double-tempo variant: bpm *2, bar length halved in quarters is preserved
-    // by keeping the same numerator/denominator (the listener-relative meter is
-    // a separate choice; we keep the analysis meter). Discount confidence.
+    // Double- and half-tempo variants keep the analysis meter (the
+    // listener-relative meter is a separate choice) with discounted confidence.
     const float primary_conf = candidates.front().confidence;
-    {
-      TempoEstimate est;
-      est.segments = build_segments(input, obs, decoded, 2.0, config);
-      est.time_sigs = build_time_sigs(input, config, 2.0);
-      est.confidence = scaled_octave_confidence(primary_conf, input, 2.0);
-      est.label = "double";
-      apply_lead_in(input, est);
-      candidates.push_back(std::move(est));
-    }
-    {
-      TempoEstimate est;
-      est.segments = build_segments(input, obs, decoded, 0.5, config);
-      est.time_sigs = build_time_sigs(input, config, 0.5);
-      est.confidence = scaled_octave_confidence(primary_conf, input, 0.5);
-      est.label = "half";
-      apply_lead_in(input, est);
-      candidates.push_back(std::move(est));
-    }
+    candidates.push_back(
+        make_candidate(2.0, scaled_octave_confidence(primary_conf, input, 2.0), "double"));
+    candidates.push_back(
+        make_candidate(0.5, scaled_octave_confidence(primary_conf, input, 0.5), "half"));
   }
 
   // Stable sort by confidence descending; the primary stays first on ties

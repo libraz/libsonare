@@ -6,6 +6,7 @@
 #include <new>
 
 #include "midi/channel_voice_decode.h"
+#include "midi/controller_numbers.h"
 #include "midi/note_fx_shared.h"
 #include "midi/source_residual.h"
 #include "midi/ump.h"
@@ -17,13 +18,6 @@
 namespace sonare::midi {
 
 namespace {
-
-/// 7-bit velocity of a note-on in either protocol.
-uint8_t velocity7(const Ump& u) noexcept {
-  ChannelVoiceEvent ev;
-  if (!decode_channel_voice(u, &ev)) return 0;
-  return ev.velocity.u7();
-}
 
 bool is_note_addressed(ChannelVoiceKind kind) noexcept {
   switch (kind) {
@@ -172,7 +166,8 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
   const bool is_channel_voice = decode_channel_voice(u, &decoded);
   if (!note_on && !note_off) {
     if (is_channel_voice && decoded.kind == ChannelVoiceKind::ControlChange &&
-        (decoded.note == 120u || (decoded.note >= 123u && decoded.note <= 125u))) {
+        (decoded.note == cc::kAllSoundOff ||
+         (decoded.note >= cc::kAllNotesOff && decoded.note <= cc::kOmniModeOn))) {
       retire_note_ledger_channel(destination_id, ump_group_from_word0(u.words[0]), u.channel());
     }
     if (is_channel_voice && is_note_addressed(decoded.kind)) {
@@ -204,7 +199,7 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
 
   if (note_on) {
     const uint8_t note = u.note_number();
-    const uint8_t vel = velocity7(u);
+    const uint8_t vel = decoded.velocity.u7();
     size_t entry = find_note_ledger_entry(destination_id, event);
     if (entry == kNoNoteLedgerEntry) {
       for (size_t i = 0; i < note_ledger_.size(); ++i) {
@@ -261,8 +256,8 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
   }
 }
 
-void LayeredInstrument::add_layer_output(float* const* target, int num_channels, int legs,
-                                         const float* left, const float* right, const Layer& layer,
+void LayeredInstrument::add_layer_output(float* const* target, int num_channels, const float* left,
+                                         const float* right, const Layer& layer,
                                          int num_samples) noexcept {
   // A mono target averages the panned pair, so mirrored pans give the same level
   // and a centred layer keeps its own.
@@ -276,7 +271,7 @@ void LayeredInstrument::add_layer_output(float* const* target, int num_channels,
   if (target[0] != nullptr) {
     for (int i = 0; i < num_samples; ++i) target[0][i] += left[i] * layer.gain_left;
   }
-  if (legs > 1 && target[1] != nullptr) {
+  if (target[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) target[1][i] += right[i] * layer.gain_right;
   }
   // Anything past the stereo pair takes a mono fold-down, as every built-in
@@ -308,7 +303,7 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
     std::fill_n(scratch_left, num_samples, 0.0f);
     std::fill_n(scratch_right, num_samples, 0.0f);
     layer.instrument->process(scratch_chans, legs, num_samples);
-    add_layer_output(channels, num_channels, legs, scratch_left, scratch_right, layer, num_samples);
+    add_layer_output(channels, num_channels, scratch_left, scratch_right, layer, num_samples);
   }
   if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
 }
@@ -359,8 +354,8 @@ bool LayeredInstrument::process_source_tracks(const MidiInstrumentSourceOutput* 
     for (size_t s = 0; s < output_count; ++s) {
       float* const* target = outputs[s].channels;
       if (target == nullptr) continue;
-      add_layer_output(target, num_channels, legs, scratch_channel(s, 0), scratch_channel(s, 1),
-                       layer, num_samples);
+      add_layer_output(target, num_channels, scratch_channel(s, 0), scratch_channel(s, 1), layer,
+                       num_samples);
     }
   }
   if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
@@ -395,7 +390,6 @@ bool LayeredInstrument::prepare_sysex(const uint8_t* data, size_t size,
     for (const Layer& layer : layers_) {
       std::shared_ptr<const PreparedMidiSysEx> child;
       if (!layer.instrument->prepare_sysex(data, size, child)) {
-        out.reset();
         return false;
       }
       // Keep one slot per layer even when a child deliberately accepts the
@@ -407,10 +401,8 @@ bool LayeredInstrument::prepare_sysex(const uint8_t* data, size_t size,
     if (prepared_identity_.get() == nullptr) prepared_identity_ = std::move(identity);
     return true;
   } catch (const std::bad_alloc&) {
-    out.reset();
     throw;
   } catch (...) {
-    out.reset();
     return false;
   }
 }

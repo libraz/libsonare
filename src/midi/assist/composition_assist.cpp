@@ -589,12 +589,6 @@ bool commands_apply_cleanly(arrangement::Project* scratch,
     arrangement::Project accepted_project = candidate;
     arrangement::MidiContentStore accepted_store = candidate_store;
     rollback.rollback_now();
-    static_assert(noexcept(std::swap(std::declval<arrangement::Project&>(),
-                                     std::declval<arrangement::Project&>())),
-                  "Project swap must remain noexcept for preview commit");
-    static_assert(noexcept(std::swap(std::declval<arrangement::MidiContentStore&>(),
-                                     std::declval<arrangement::MidiContentStore&>())),
-                  "MIDI store swap must remain noexcept for preview commit");
     std::swap(*scratch, accepted_project);
     std::swap(*scratch_store, accepted_store);
     return true;

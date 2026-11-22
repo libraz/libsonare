@@ -138,7 +138,6 @@ NotePairValidation MidiClip::validate_note_pairs() const {
     const uint8_t group = ump_group_from_word0(ev.ump.words[0]);
     const uint8_t channel = ev.ump.channel();
     const uint8_t note = ev.ump.note_number();
-    if (group >= 16 || channel >= 16 || note >= 128) continue;
     if (ev.ump.is_note_on()) {
       open[group][channel][note]++;
     } else if (ev.ump.is_note_off()) {
@@ -192,6 +191,20 @@ const char* describe(MidiSysExPayloadError error) noexcept {
   return "unknown MIDI SysEx payload error";
 }
 
+namespace {
+
+bool carries_sysex_payload(const MidiEvent& event) noexcept {
+  return is_sysex_event(event) && event.sysex_payload_size != 0;
+}
+
+void clear_sysex_view(MidiEvent& event) noexcept {
+  event.sysex_payload = nullptr;
+  event.sysex_payload_size = 0;
+  event.prepared_sysex = nullptr;
+}
+
+}  // namespace
+
 bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPayloadError* error,
                         const MidiSysExPreparer& prepare) {
   if (error != nullptr) *error = MidiSysExPayloadError::kNone;
@@ -199,8 +212,7 @@ bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPaylo
   size_t payload_count = 0;
   for (const MidiClipSchedule& schedule : schedules) {
     for (const MidiEvent& event : schedule.events) {
-      if (!is_sysex_event(event)) continue;
-      if (event.sysex_payload_size == 0) continue;
+      if (!carries_sysex_payload(event)) continue;
       if (event.sysex_payload == nullptr) {
         if (error != nullptr) *error = MidiSysExPayloadError::kNullPayload;
         return false;
@@ -212,11 +224,7 @@ bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPaylo
   if (payload_count == 0) {
     for (MidiClipSchedule& schedule : schedules) {
       schedule.sysex_payload_bank.reset();
-      for (MidiEvent& event : schedule.events) {
-        event.sysex_payload = nullptr;
-        event.sysex_payload_size = 0;
-        event.prepared_sysex = nullptr;
-      }
+      for (MidiEvent& event : schedule.events) clear_sysex_view(event);
     }
     return true;
   }
@@ -230,7 +238,7 @@ bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPaylo
     bank->prepared_operations.reserve(payload_count);
     for (const MidiClipSchedule& schedule : schedules) {
       for (const MidiEvent& event : schedule.events) {
-        if (!is_sysex_event(event) || event.sysex_payload_size == 0) continue;
+        if (!carries_sysex_payload(event)) continue;
         bank->payloads.emplace_back(event.sysex_payload,
                                     event.sysex_payload + event.sysex_payload_size);
 
@@ -254,10 +262,8 @@ bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPaylo
     size_t payload_index = 0;
     for (MidiClipSchedule& schedule : schedules) {
       for (MidiEvent& event : schedule.events) {
-        if (!is_sysex_event(event) || event.sysex_payload_size == 0) {
-          event.sysex_payload = nullptr;
-          event.sysex_payload_size = 0;
-          event.prepared_sysex = nullptr;
+        if (!carries_sysex_payload(event)) {
+          clear_sysex_view(event);
           continue;
         }
         event.sysex_payload = bank->payloads[payload_index].data();

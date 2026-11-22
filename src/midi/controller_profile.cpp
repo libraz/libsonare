@@ -5,6 +5,7 @@
 
 #include "midi/channel_voice_decode.h"
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 
 namespace sonare::midi {
 namespace {
@@ -13,20 +14,20 @@ namespace {
 constexpr float kControllerMax = 127.0f;
 constexpr float kBendMax = static_cast<float>(kValue14Max);
 
-constexpr uint8_t kBreathCc = 2;
-constexpr uint8_t kTimbreCc = 74;
-
 /// CC74 reaches both spellings of the second axis. They never coexist — a bowed
 /// string has no bell and nothing else has a contact point — so one gesture
 /// filling both is unambiguous rather than a guess.
 bool bind_second_axis(ControllerProfile* out) noexcept {
-  return out->bind({ControllerInput::kControlChange, kTimbreCc, ControllerAxis::kBrightness}) &&
-         out->bind({ControllerInput::kControlChange, kTimbreCc, ControllerAxis::kPosition});
+  return out->bind({ControllerInput::kControlChange, cc::kSoundController5,
+                    ControllerAxis::kBrightness}) &&
+         out->bind(
+             {ControllerInput::kControlChange, cc::kSoundController5, ControllerAxis::kPosition});
 }
 
 bool build_gm(ControllerProfile* out) noexcept {
   out->velocity_meaningful = true;
-  return out->bind({ControllerInput::kControlChange, kBreathCc, ControllerAxis::kExcitation}) &&
+  return out->bind({ControllerInput::kControlChange, cc::kBreathController,
+                    ControllerAxis::kExcitation}) &&
          bind_second_axis(out);
 }
 
@@ -38,8 +39,10 @@ bool build_gm(ControllerProfile* out) noexcept {
 /// stops buzzing when overdriven, not a convention.
 bool build_breath(ControllerProfile* out) noexcept {
   out->velocity_meaningful = false;
-  return out->bind({ControllerInput::kControlChange, kBreathCc, ControllerAxis::kExcitation}) &&
-         out->bind({ControllerInput::kControlChange, kBreathCc, ControllerAxis::kLoudness}) &&
+  return out->bind({ControllerInput::kControlChange, cc::kBreathController,
+                    ControllerAxis::kExcitation}) &&
+         out->bind(
+             {ControllerInput::kControlChange, cc::kBreathController, ControllerAxis::kLoudness}) &&
          bind_second_axis(out);
 }
 

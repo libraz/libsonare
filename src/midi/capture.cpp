@@ -183,12 +183,8 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
     *shift = existing->shifts.front();
     existing->shifts.erase(existing->shifts.begin());
     if (existing->shifts.empty()) {
-      for (size_t i = 0; i < active_note_shifts_.size(); ++i) {
-        if (&active_note_shifts_[i] == existing) {
-          active_note_shifts_.erase(active_note_shifts_.begin() + i);
-          break;
-        }
-      }
+      active_note_shifts_.erase(active_note_shifts_.begin() +
+                                (existing - active_note_shifts_.data()));
     }
     return true;
   };

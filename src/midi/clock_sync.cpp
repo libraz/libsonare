@@ -69,7 +69,7 @@ size_t encode_spp(uint16_t midi_beats, uint8_t* out, size_t cap) noexcept {
   if (out == nullptr || cap < 3) {
     return 0;
   }
-  const uint16_t value = static_cast<uint16_t>(midi_beats & 0x3FFFu);
+  const uint16_t value = static_cast<uint16_t>(midi_beats & kValue14Max);
   out[0] = kStatusSongPosition;
   out[1] = static_cast<uint8_t>(value & 0x7Fu);          // LSB (7 bits)
   out[2] = static_cast<uint8_t>((value >> 7u) & 0x7Fu);  // MSB (7 bits)
@@ -88,7 +88,7 @@ uint16_t ppq_to_spp_beats(double ppq) noexcept {
 }
 
 double spp_beats_to_ppq(uint16_t midi_beats) noexcept {
-  return static_cast<double>(midi_beats & 0x3FFFu) * kSppBeatToPpq;
+  return static_cast<double>(midi_beats & kValue14Max) * kSppBeatToPpq;
 }
 
 size_t encode_mtc_quarter_frame(const MtcTime& time, int piece, uint8_t* out, size_t cap) noexcept {
@@ -266,8 +266,9 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
   const int64_t block_end_frame =
       numeric::saturating_add(block_start_frame, static_cast<int64_t>(num_frames));
   size_t ticks_emitted = 0;
-  for (int64_t tick = first_tick_at_or_after(block_start_frame);
-       frame_of_tick(tick) < block_end_frame; ++tick) {
+  for (int64_t tick = first_tick_at_or_after(block_start_frame);; ++tick) {
+    const int64_t frame = frame_of_tick(tick);
+    if (frame >= block_end_frame) break;
     if (ticks_emitted >= ClockByteOutput::kCapacity) {
       if (overflowed != nullptr) *overflowed = true;
       overflow_count_.bump();
@@ -276,7 +277,7 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
       // occurrence; surplus ticks in this block are intentionally dropped.
       break;
     }
-    sink(context, frame_of_tick(tick));
+    sink(context, frame);
     ++ticks_emitted;
   }
   return ticks_emitted;
