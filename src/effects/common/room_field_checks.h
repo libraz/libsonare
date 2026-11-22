@@ -5,8 +5,11 @@
 /// @details Each check has the acceptance of the matching diagnostic in acoustic/room_model.cpp and
 ///          acoustic/rir_synthesizer.cpp, and runs ahead of it so a refusal names the member.
 
+#include <array>
 #include <limits>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "acoustic/late_reverb.h"
 #include "acoustic/rir_synthesizer.h"
@@ -70,21 +73,42 @@ inline void check_rir_synth_config(const ::sonare::acoustic::RirSynthConfig& con
 }
 
 /// Refuses a receiver spacing outside (0, kMaxReceiverSpacingM], then a spacing that puts either
-/// receiver outside the room.
+/// receiver outside the room, naming the plan-view coordinates of @p supplied beside the room.
 inline void check_receiver_pair(const ::sonare::acoustic::ShoeboxRoom& room,
                                 const ::sonare::acoustic::SourceListener& placement,
-                                float spacing_m, const RoomMemberPaths& paths) {
+                                float spacing_m, const RoomMemberPaths& paths,
+                                const ::sonare::acoustic::SuppliedPlacement& supplied = {}) {
   namespace check = ::sonare::util::check;
+  if (!supplied.receiver_spacing && !(spacing_m > 0.0f)) {
+    // A chosen spacing is 0 only when the listener sits on a wall the pair axis crosses.
+    const bool x = ::sonare::acoustic::pair_blocking_wall_axis(room.dims, placement) == 0;
+    check::in_interval(x ? placement.listener.x : placement.listener.y, 0.0, false,
+                       x ? room.dims.length : room.dims.width, false,
+                       (paths.listener + (x ? ".x" : ".y")).c_str());
+  }
   check::in_interval(spacing_m, 0.0, false, ::sonare::acoustic::kMaxReceiverSpacingM, true,
                      "receiver_spacing_m");
   const ::sonare::acoustic::ReceiverPair pair =
       ::sonare::acoustic::receiver_pair(placement, spacing_m);
   if (!::sonare::acoustic::point_inside_shoebox(room, pair.left) ||
       !::sonare::acoustic::point_inside_shoebox(room, pair.right)) {
-    check::refuse_relation(
-        {"receiver_spacing_m", paths.listener + ".x", paths.listener + ".y", paths.source + ".x",
-         paths.source + ".y", paths.dims + ".length", paths.dims + ".width"},
-        "{0} must place both receivers inside the room for {1}, {2}, {3}, {4}, {5} and {6}");
+    std::vector<std::string> subjects = {"receiver_spacing_m"};
+    const struct {
+      const std::string* path;
+      const std::array<bool, 3>* given;
+    } points[2] = {{&paths.listener, &supplied.listener}, {&paths.source, &supplied.source}};
+    for (const auto& point : points) {
+      if ((*point.given)[0]) subjects.push_back(*point.path + ".x");
+      if ((*point.given)[1]) subjects.push_back(*point.path + ".y");
+    }
+    subjects.push_back(paths.dims + ".length");
+    subjects.push_back(paths.dims + ".width");
+    std::string text = "{0} must place both receivers inside the room for ";
+    for (size_t i = 1; i < subjects.size(); ++i) {
+      text += (i == 1 ? "" : i + 1 == subjects.size() ? " and " : ", ");
+      text += "{" + std::to_string(i) + "}";
+    }
+    check::refuse_relation(std::move(subjects), text);
   }
 }
 

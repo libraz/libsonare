@@ -1,6 +1,7 @@
 #include "mastering/api/insert_factory.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -640,8 +641,9 @@ SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::FdnReverbConfig, 3);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::VelvetReverbConfig, 5);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::ConvolutionReverbConfig, 4);
 #ifdef SONARE_HAVE_ACOUSTIC
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::RoomReverbConfig, 11);
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::acoustic::RoomMorphConfig, 13);
+// Each counts `supplied`, which records which source and listener keys were given.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::RoomReverbConfig, 12);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::acoustic::RoomMorphConfig, 14);
 // Reached through a room's own keys: three each for the box and the two
 // endpoints, two for the climate pair.
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::RoomDimensions, 3);
@@ -705,6 +707,11 @@ V read_vec3(const ParamMap& params, const std::string& prefix, const V& defaults
   return {f(params, (prefix + "X").c_str(), defaults.x, kMeters),
           f(params, (prefix + "Y").c_str(), defaults.y, kMeters),
           f(params, (prefix + "Z").c_str(), defaults.z, kMeters)};
+}
+
+// Which of a point's three keys the caller gave.
+std::array<bool, 3> supplied_point(const ParamMap& params, const std::string& prefix) {
+  return {{params.has(prefix + "X"), params.has(prefix + "Y"), params.has(prefix + "Z")}};
 }
 
 // Climate pair and receiver spacing; an absent key keeps the config's value. A given 0 is the
@@ -921,6 +928,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         config.dims.length, config.dims.width, config.dims.height);
     config.source = read_vec3(params, "source", placement.source);
     config.listener = read_vec3(params, "listener", placement.listener);
+    config.supplied = {supplied_point(params, "source"), supplied_point(params, "listener")};
     note_room_members(params, "dims", "source", "listener");
     note_room_containment(params);
     note_room_coupling(params);
@@ -939,6 +947,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.receiver_spacing_m =
         sonare::acoustic::default_receiver_spacing(config.dims, {config.source, config.listener});
     read_air_and_spacing(params, config);
+    config.supplied.receiver_spacing = params.has("receiverSpacingM");
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
   if (name == "effects.acoustic.roomMorph") {
@@ -955,6 +964,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         config.target.dims.length, config.target.dims.width, config.target.dims.height);
     config.placement.source = read_vec3(params, "source", placement.source);
     config.placement.listener = read_vec3(params, "listener", placement.listener);
+    config.supplied = {supplied_point(params, "source"), supplied_point(params, "listener")};
     note_room_members(params, "target.dims", "placement.source", "placement.listener");
     note_room_containment(params);
     note_room_coupling(params);
@@ -976,6 +986,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.receiver_spacing_m =
         sonare::acoustic::default_receiver_spacing(config.target.dims, config.placement);
     read_air_and_spacing(params, config);
+    config.supplied.receiver_spacing = params.has("receiverSpacingM");
     return make<effects::acoustic::RoomMorphProcessor>(
         config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }

@@ -2262,4 +2262,41 @@ TEST_CASE("a room insert given only its dimensions places source and listener in
     }
   }
 }
+
+TEST_CASE("a room insert's receiver-pair refusal names only the placement the caller gave",
+          "[mastering][insert_factory]") {
+  const auto refusal = [](const std::string& name, const std::string& placement) {
+    try {
+      sonare::mastering::api::make_insert(
+          name, R"({"lengthM":8,"widthM":6,"heightM":3,"receiverSpacingM":4)" + placement + "}");
+    } catch (const std::exception& error) {
+      return std::string(error.what());
+    }
+    return std::string("no refusal");
+  };
+  for (const std::string name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    INFO(name);
+    const std::string omitted = refusal(name, "");
+    CHECK_THAT(omitted, Catch::Matchers::ContainsSubstring(
+                            "receiverSpacingM must place both receivers inside the room for "
+                            "lengthM and widthM"));
+    CHECK_THAT(omitted, !Catch::Matchers::ContainsSubstring("listener") &&
+                            !Catch::Matchers::ContainsSubstring("source"));
+    CHECK_THAT(refusal(name, R"(,"listenerX":5.7,"listenerY":4.8)"),
+               Catch::Matchers::ContainsSubstring("for listenerX, listenerY, lengthM and widthM"));
+    CHECK_THAT(refusal(name, R"(,"sourceX":1,"sourceY":1.2,"listenerX":5.7,"listenerY":4.8)"),
+               Catch::Matchers::ContainsSubstring(
+                   "for listenerX, listenerY, sourceX, sourceY, lengthM and widthM"));
+    // No spacing fits a listener on the side wall, and the caller gave none to refuse.
+    std::string on_wall = "no refusal";
+    try {
+      sonare::mastering::api::make_insert(
+          name, R"({"lengthM":8,"widthM":6,"heightM":3,"listenerX":5.7,"listenerY":0})");
+    } catch (const std::exception& error) {
+      on_wall = error.what();
+    }
+    CHECK_THAT(on_wall,
+               Catch::Matchers::ContainsSubstring("listenerY must be finite and in (0, 6)"));
+  }
+}
 #endif  // SONARE_WITH_ACOUSTIC_SIM

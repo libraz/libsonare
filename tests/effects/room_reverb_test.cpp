@@ -264,7 +264,7 @@ TEST_CASE("RoomReverb::prepare reports a refused synthesis instead of going iner
     REQUIRE(error.code() == ErrorCode::InvalidParameter);
     // The refusal carries the synthesizer's own diagnostic rather than a
     // generic message, which is the point of not discarding the diagnostics.
-    REQUIRE(std::string(error.what()).find("acoustic.invalid_sample_rate") != std::string::npos);
+    REQUIRE(std::string(error.what()) == "sample_rate must be an integer in [8000, 384000]");
   }
 
   // A supported rate still prepares normally.

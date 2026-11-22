@@ -69,7 +69,7 @@ void validate_room_morph_config(const RoomMorphConfig& config,
   const std::vector<Diagnostic> geometry =
       sonare::acoustic::validate_shoebox(config.target, config.placement, room_names);
   SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
-                   "room morph target is invalid: " + sonare::acoustic::first_error_text(geometry));
+                   sonare::acoustic::first_error_text(geometry));
   util::check::in_range(config.source_tail_suppression, 0.0, 1.0, "source_tail_suppression");
   util::check::in_range(config.wet, 0.0, 1.0, "wet");
   // Everything synthesize_rir would refuse, refused here instead: a refused
@@ -78,9 +78,8 @@ void validate_room_morph_config(const RoomMorphConfig& config,
   common::check_rir_synth_config(rir_config_from(config));
   const std::vector<Diagnostic> synthesis =
       sonare::acoustic::validate_rir_synth_config(rir_config_from(config), rir_names);
-  SONARE_CHECK_MSG(
-      !has_error(synthesis), ErrorCode::InvalidParameter,
-      "room morph synthesis is invalid: " + sonare::acoustic::first_error_text(synthesis));
+  SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
+                   sonare::acoustic::first_error_text(synthesis));
 }
 
 RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
@@ -89,12 +88,11 @@ RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
   validate_room_morph_config(config_);
   if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
     common::check_receiver_pair(config_.target, config_.placement, config_.receiver_spacing_m,
-                                kMorphPaths);
+                                kMorphPaths, config_.supplied);
     const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
         config_.target, config_.placement, config_.receiver_spacing_m);
-    SONARE_CHECK_MSG(
-        !has_error(pair), ErrorCode::InvalidParameter,
-        "room morph receiver pair is invalid: " + sonare::acoustic::first_error_text(pair));
+    SONARE_CHECK_MSG(!has_error(pair), ErrorCode::InvalidParameter,
+                     sonare::acoustic::first_error_text(pair));
   }
 }
 
@@ -113,7 +111,7 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   // target RIR, which the convolution path would render as an inert insert, so
   // the diagnostics are read rather than dropped.
   SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
-                   "room morph target RIR synthesis failed: " + first_error_text(res.diagnostics));
+                   first_error_text(res.diagnostics));
   // Kept rather than dropped: the surviving diagnostics are Warnings, and each
   // one says the target room differs from the requested one.
   diagnostics_ = res.diagnostics;
@@ -123,9 +121,8 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   if (with_pair) {
     pair =
         synthesize_rir_pair(config_.target, config_.placement, config_.receiver_spacing_m, sr, rc);
-    SONARE_CHECK_MSG(
-        !has_error(pair.diagnostics), ErrorCode::InvalidParameter,
-        "room morph target RIR pair synthesis failed: " + first_error_text(pair.diagnostics));
+    SONARE_CHECK_MSG(!has_error(pair.diagnostics), ErrorCode::InvalidParameter,
+                     first_error_text(pair.diagnostics));
     append_new_diagnostic_codes(diagnostics_, pair.diagnostics);
   }
 

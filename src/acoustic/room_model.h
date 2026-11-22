@@ -7,6 +7,7 @@
 ///        throws).
 
 #include <array>
+#include <string>
 #include <vector>
 
 #include "acoustic/geometry.h"
@@ -39,6 +40,14 @@ inline SourceListener scaled_default_placement(float length, float width, float 
   const auto scale = [&](const Vec3& p) { return Vec3{p.x * sx, p.y * sy, p.z * sz}; };
   return {scale(kDefaultPlacement.source), scale(kDefaultPlacement.listener)};
 }
+
+/// @brief Which source and listener coordinates (x, y, z) and whether the receiver spacing the
+///        caller gave; the library chose the rest, so a refusal names only the given ones.
+struct SuppliedPlacement {
+  std::array<bool, 3> source{{true, true, true}};
+  std::array<bool, 3> listener{{true, true, true}};
+  bool receiver_spacing = true;
+};
 
 /// @brief Default uniform wall absorption of a synthesized or morph-target room.
 inline constexpr float kDefaultWallAbsorption = 0.2f;
@@ -230,6 +239,11 @@ constexpr ShoeboxFieldNames kShoeboxFieldNames{"length_m", "width_m", "height_m"
 
 /// @brief Dimension names as the JavaScript surfaces (Node, WASM) spell them.
 constexpr ShoeboxFieldNames kShoeboxJsFieldNames{"lengthM", "widthM", "heightM"};
+
+/// @brief The refusal of a point outside the room: "<point>.<axis> must be finite and in [0,
+/// extent]"
+///        for the first axis @p p leaves the room on. @p p must lie outside the room.
+std::string placement_refusal(const char* point, const Vec3& p, const RoomDimensions& dims);
 
 /// @brief Validate shoebox geometry and placement; never throws.
 ///

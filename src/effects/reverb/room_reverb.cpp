@@ -44,7 +44,7 @@ RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout
   const std::vector<Diagnostic> geometry = sonare::acoustic::validate_shoebox(
       room, sonare::acoustic::SourceListener{config_.source, config_.listener});
   SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
-                   "room reverb target geometry, placement, or material is invalid");
+                   sonare::acoustic::first_error_text(geometry));
   // Every input synthesize_rir would reject is rejected here instead: an Error
   // from it yields an empty RIR, which the convolution path treats as dry
   // passthrough, so accepting these values would produce a silently inert insert.
@@ -52,17 +52,16 @@ RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout
   const std::vector<Diagnostic> synthesis =
       sonare::acoustic::validate_rir_synth_config(rir_config_from(config_));
   SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
-                   "room reverb image-source order, RIR length cap, or air absorption is invalid");
+                   sonare::acoustic::first_error_text(synthesis));
   if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
     common::check_receiver_pair(room,
                                 sonare::acoustic::SourceListener{config_.source, config_.listener},
-                                config_.receiver_spacing_m, paths);
+                                config_.receiver_spacing_m, paths, config_.supplied);
     const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
         room, sonare::acoustic::SourceListener{config_.source, config_.listener},
         config_.receiver_spacing_m);
-    SONARE_CHECK_MSG(
-        !has_error(pair), ErrorCode::InvalidParameter,
-        "room reverb receiver pair is invalid: " + sonare::acoustic::first_error_text(pair));
+    SONARE_CHECK_MSG(!has_error(pair), ErrorCode::InvalidParameter,
+                     sonare::acoustic::first_error_text(pair));
   }
 
   // Honour the configured mix at construction (sibling reverbs do the same).
@@ -87,14 +86,13 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   // inaudible insert, so the diagnostics are read rather than dropped and the
   // refusal is raised with the reason the synthesizer gave.
   SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
-                   "room reverb RIR synthesis failed: " + first_error_text(res.diagnostics));
+                   first_error_text(res.diagnostics));
   RirPairResult pair;
   const bool with_pair = layout_ == ReceiverLayout::MonoAndPair;
   if (with_pair) {
     pair = synthesize_rir_pair(room, placement, config_.receiver_spacing_m, sr, rc);
-    SONARE_CHECK_MSG(
-        !has_error(pair.diagnostics), ErrorCode::InvalidParameter,
-        "room reverb RIR pair synthesis failed: " + first_error_text(pair.diagnostics));
+    SONARE_CHECK_MSG(!has_error(pair.diagnostics), ErrorCode::InvalidParameter,
+                     first_error_text(pair.diagnostics));
   }
 
   // Establish partition size and per-channel buffers, then load the synthesized

@@ -351,7 +351,7 @@ TEST_CASE("RoomMorphProcessor::prepare reports a refused target synthesis",
     processor.prepare(100.0, 256);
   } catch (const SonareException& error) {
     REQUIRE(error.code() == ErrorCode::InvalidParameter);
-    REQUIRE(std::string(error.what()).find("acoustic.invalid_sample_rate") != std::string::npos);
+    REQUIRE(std::string(error.what()) == "sample_rate must be an integer in [8000, 384000]");
   }
   REQUIRE_NOTHROW(processor.prepare(48000.0, 256));
 }
@@ -653,4 +653,21 @@ TEST_CASE("a room morph geometry refusal renders in the JS request's flat keys",
   CHECK(pair_text ==
         "receiverSpacingM must place both receivers inside the room for listener.x, listener.y, "
         "source.x, source.y, lengthM and widthM");
+
+  // Coordinates the library chose are left out of the relation.
+  const auto pair_refusal = [&](const sonare::acoustic::SuppliedPlacement& supplied) {
+    RoomMorphConfig given = cfg;
+    given.supplied = supplied;
+    try {
+      RoomMorphProcessor processor(given, sonare::acoustic::ReceiverLayout::MonoAndPair);
+    } catch (const SonareParameterRefusal& refusal) {
+      return std::string(util::check::camel_spelled(refusal, kRoomMorphRenamedKeys).what());
+    }
+    return std::string("no refusal");
+  };
+  CHECK(pair_refusal({{{false, false, false}}, {{false, false, false}}}) ==
+        "receiverSpacingM must place both receivers inside the room for lengthM and widthM");
+  CHECK(pair_refusal({{{false, false, false}}, {{true, true, true}}}) ==
+        "receiverSpacingM must place both receivers inside the room for listener.x, listener.y, "
+        "lengthM and widthM");
 }

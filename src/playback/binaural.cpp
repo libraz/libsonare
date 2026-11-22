@@ -186,7 +186,7 @@ LateTailIr synthesize_late_tail(const RoomPresetSpec& spec, int sample_rate, int
       acoustic::synthesize_rir(shoebox, {centre, listener}, sample_rate, config);
   if (result.rir.empty()) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "binaural: " + acoustic::first_error_text(result.diagnostics));
+                          acoustic::first_error_text(result.diagnostics));
   }
 
   LateTailIr ir;

@@ -89,8 +89,8 @@ struct RirSynthResult {
   std::vector<Diagnostic> diagnostics;  ///< geometry validation + length-clamp telemetry
 };
 
-/// @brief The first Error diagnostic rendered as "code: message", empty when
-///        the list carries no Error.
+/// @brief The first Error diagnostic's message, empty when the list carries no Error.
+/// @details The message reads "<subject> <predicate>"; the code stays on the diagnostic.
 ///
 /// `synthesize_rir` reports a refused synthesis as an Error diagnostic plus an
 /// empty RIR rather than by throwing, so a caller that cannot continue without a
@@ -147,11 +147,18 @@ ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noe
 float default_receiver_spacing(const RoomDimensions& dims,
                                const SourceListener& placement) noexcept;
 
+/// @brief The plan axis (0 = x, 1 = y) of the side wall the listener sits on when no receiver
+///        spacing fits the room, the wall the pair axis crosses.
+int pair_blocking_wall_axis(const RoomDimensions& dims, const SourceListener& placement) noexcept;
+
 /// @brief Validate a receiver pair: `acoustic.receiver_spacing_out_of_range` when the spacing
-///        is not finite or outside (0, 4] m, `acoustic.receiver_outside_room` naming the
-///        receiver (left/right) and its coordinates when it leaves the room. Empty when usable.
+///        is not finite or outside (0, 4] m, `acoustic.receiver_outside_room` when a receiver
+///        leaves the room. Empty when usable.
+/// @details The second names the largest spacing that fits, or the listener coordinate on the
+///          side wall that leaves none. @p spacing_name is the spacing as the caller spells it.
 std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
-                                               const SourceListener& placement, float spacing_m);
+                                               const SourceListener& placement, float spacing_m,
+                                               const char* spacing_name = "receiver_spacing_m");
 
 /// @brief A synthesized receiver-pair RIR plus the diagnostics gathered producing it.
 struct RirPairResult {

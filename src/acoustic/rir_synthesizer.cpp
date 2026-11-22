@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +14,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 namespace sonare::acoustic {
@@ -129,7 +130,8 @@ std::vector<Diagnostic> validate_rir_request(const ShoeboxRoom& room,
   diagnostics.insert(diagnostics.end(), config_diagnostics.begin(), config_diagnostics.end());
   if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
     diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
-                           "sample rate is outside supported bounds"});
+                           "sample_rate " + util::refusal::integer_range_predicate(
+                                                kMinAudioSampleRate, kMaxAudioSampleRate)});
   }
   return diagnostics;
 }
@@ -440,29 +442,20 @@ float room_mode_level(const Audio& late_audio, const ModalPlan& modes, int sampl
   return modal_level(modes, band_energy, late.size(), sample_rate);
 }
 
-// Fixed-point coordinates for a receiver diagnostic message.
-std::string format_point(const Vec3& p) {
-  char buffer[96];
-  std::snprintf(buffer, sizeof(buffer), "(%.3f, %.3f, %.3f)", static_cast<double>(p.x),
-                static_cast<double>(p.y), static_cast<double>(p.z));
-  return buffer;
-}
-
 }  // namespace
 
 std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config,
                                                   const RirSynthFieldNames& names) {
   std::vector<Diagnostic> diagnostics;
-  const auto refuse = [&](const char* code, const char* name, const std::string& rule) {
-    diagnostics.push_back({Diagnostic::Severity::Error, code, std::string(name) + rule});
+  namespace refusal = util::refusal;
+  const auto refuse = [&](const char* code, const char* name, const std::string& predicate) {
+    diagnostics.push_back({Diagnostic::Severity::Error, code, std::string(name) + " " + predicate});
   };
-  const auto bounded = [](float maximum) {
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), " must be finite and within [0, %g]",
-                  static_cast<double>(maximum));
-    return std::string(buffer);
-  };
-  if (config.ism_order < 0) refuse("acoustic.invalid_rir_config", names.ism_order, " must be >= 0");
+  const auto bounded = [](float maximum) { return refusal::range_predicate(0.0, maximum); };
+  if (config.ism_order < 0) {
+    refuse("acoustic.invalid_rir_config", names.ism_order,
+           refusal::integer_range_predicate(0, std::numeric_limits<int>::max()));
+  }
   if (!numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds)) {
     refuse("acoustic.invalid_rir_config", names.max_seconds, bounded(kMaxRirSeconds));
   }
@@ -476,11 +469,11 @@ std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config,
     if (!numeric::finite(config.air.temperature_c) ||
         config.air.temperature_c <= kAbsoluteZeroCelsius) {
       refuse("acoustic.invalid_air_absorption", names.air_temperature_c,
-             " must be finite and above absolute zero");
+             refusal::greater_than_predicate(kAbsoluteZeroCelsius));
     }
     if (!numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f)) {
       refuse("acoustic.invalid_air_absorption", names.air_humidity_percent,
-             " must be finite and within [0, 100]");
+             refusal::range_predicate(0.0, 100.0));
     }
   }
   return diagnostics;
@@ -489,7 +482,7 @@ std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config,
 std::string first_error_text(const std::vector<Diagnostic>& diagnostics) {
   for (const Diagnostic& diagnostic : diagnostics) {
     if (diagnostic.severity == Diagnostic::Severity::Error) {
-      return diagnostic.code + ": " + diagnostic.message;
+      return diagnostic.message;
     }
   }
   return {};
@@ -527,22 +520,27 @@ ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noe
   return {placement.listener + offset, placement.listener - offset};
 }
 
-float default_receiver_spacing(const RoomDimensions& dims,
-                               const SourceListener& placement) noexcept {
-  const auto fits = [&](float spacing_m) {
-    const ReceiverPair pair = receiver_pair(placement, spacing_m);
-    for (const Vec3& p : {pair.left, pair.right}) {
-      if (!(p.x >= 0.0f && p.x <= dims.length && p.y >= 0.0f && p.y <= dims.width)) return false;
-    }
-    return true;
-  };
-  if (fits(kDefaultReceiverSpacingM)) return kDefaultReceiverSpacingM;
+namespace {
+
+// Whether both receivers of the pair @p spacing_m apart lie inside the plan view of @p dims.
+bool pair_fits(const RoomDimensions& dims, const SourceListener& placement,
+               float spacing_m) noexcept {
+  const ReceiverPair pair = receiver_pair(placement, spacing_m);
+  for (const Vec3& p : {pair.left, pair.right}) {
+    if (!(p.x >= 0.0f && p.x <= dims.length && p.y >= 0.0f && p.y <= dims.width)) return false;
+  }
+  return true;
+}
+
+// The largest spacing below @p cap whose pair lies inside the plan view; 0 when none does.
+float largest_receiver_spacing(const RoomDimensions& dims, const SourceListener& placement,
+                               float cap) noexcept {
   // A listener outside the plan view leaves no spacing for the validator to accept.
-  if (!fits(0.0f)) return 0.0f;
+  if (!pair_fits(dims, placement, 0.0f)) return 0.0f;
   // Half the spacing reaches the nearer wall along the pair axis on each horizontal extent.
   const ReceiverPair unit = receiver_pair(placement, 2.0f);
   const Vec3 axis = unit.left - placement.listener;
-  float half = kDefaultReceiverSpacingM;
+  float half = 0.5f * cap;
   const std::pair<float, float> extents[] = {{placement.listener.x, dims.length},
                                              {placement.listener.y, dims.width}};
   const float components[] = {axis.x, axis.y};
@@ -555,26 +553,60 @@ float default_receiver_spacing(const RoomDimensions& dims,
   }
   float spacing = std::max(0.0f, 2.0f * half);
   // Rounding in the pair's positions can land a receiver one ulp past the wall.
-  while (spacing > 0.0f && !fits(spacing)) spacing = std::nextafter(spacing, 0.0f);
+  while (spacing > 0.0f && !pair_fits(dims, placement, spacing)) {
+    spacing = std::nextafter(spacing, 0.0f);
+  }
   return spacing;
 }
 
+// The refusal of a pair with a receiver outside the room: the largest spacing that fits, or the
+// listener coordinate that leaves no spacing at all.
+std::string receiver_outside_refusal(const ShoeboxRoom& room, const SourceListener& placement,
+                                     const char* spacing_name) {
+  namespace refusal = util::refusal;
+  if (!point_inside_shoebox(room, placement.listener)) {
+    return placement_refusal("listener", placement.listener, room.dims);
+  }
+  const float largest = largest_receiver_spacing(room.dims, placement, kMaxReceiverSpacingM);
+  if (largest > 0.0f) {
+    return std::string(spacing_name) + " must be finite and in (0, " +
+           refusal::bound_text(largest, refusal::Inward::Down) + "]";
+  }
+  return pair_blocking_wall_axis(room.dims, placement) == 0
+             ? "listener.x " + refusal::interval_predicate(0.0, false, room.dims.length, false)
+             : "listener.y " + refusal::interval_predicate(0.0, false, room.dims.width, false);
+}
+
+}  // namespace
+
+int pair_blocking_wall_axis(const RoomDimensions& dims, const SourceListener& placement) noexcept {
+  const Vec3 axis = receiver_pair(placement, 2.0f).left - placement.listener;
+  const bool on_x_wall =
+      axis.x != 0.0f && (placement.listener.x <= 0.0f || placement.listener.x >= dims.length);
+  return on_x_wall ? 0 : 1;
+}
+
+float default_receiver_spacing(const RoomDimensions& dims,
+                               const SourceListener& placement) noexcept {
+  if (pair_fits(dims, placement, kDefaultReceiverSpacingM)) return kDefaultReceiverSpacingM;
+  return largest_receiver_spacing(dims, placement, kMaxReceiverSpacingM);
+}
+
 std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
-                                               const SourceListener& placement, float spacing_m) {
+                                               const SourceListener& placement, float spacing_m,
+                                               const char* spacing_name) {
   std::vector<Diagnostic> diagnostics;
   if (!numeric::finite(spacing_m) || !(spacing_m > 0.0f) || spacing_m > kMaxReceiverSpacingM) {
-    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.receiver_spacing_out_of_range",
-                           "receiver spacing must be finite and in (0, 4] m"});
+    diagnostics.push_back(
+        {Diagnostic::Severity::Error, "acoustic.receiver_spacing_out_of_range",
+         std::string(spacing_name) + " " +
+             util::refusal::interval_predicate(0.0, false, kMaxReceiverSpacingM, true)});
     return diagnostics;
   }
   const ReceiverPair pair = receiver_pair(placement, spacing_m);
-  const std::pair<const char*, Vec3> receivers[] = {{"left", pair.left}, {"right", pair.right}};
-  for (const auto& [name, position] : receivers) {
-    if (!point_inside_shoebox(room, position)) {
-      diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.receiver_outside_room",
-                             std::string(name) + " receiver at " + format_point(position) +
-                                 " lies outside the room"});
-    }
+  if (!point_inside_shoebox(room, pair.left) || !point_inside_shoebox(room, pair.right)) {
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.receiver_outside_room",
+                           receiver_outside_refusal(room, placement, spacing_name)});
   }
   return diagnostics;
 }

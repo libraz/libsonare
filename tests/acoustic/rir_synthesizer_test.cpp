@@ -854,13 +854,62 @@ TEST_CASE("receiver pair validation refuses bad spacing and receivers outside th
   REQUIRE(diags.size() == 1);
   REQUIRE(diags[0].severity == Diagnostic::Severity::Error);
   REQUIRE(diags[0].code == "acoustic.receiver_outside_room");
-  REQUIRE(diags[0].message.find("left") != std::string::npos);
-  REQUIRE(diags[0].message.find("-0.150") != std::string::npos);
+  REQUIRE(diags[0].message == "receiver_spacing_m must be finite and in (0, 0.2]");
 
   const RirPairResult res = synthesize_rir_pair(room, wall, 0.5f, 48000);
   REQUIRE(has_code(res.diagnostics, "acoustic.receiver_outside_room"));
   REQUIRE(res.left.size() == 0);
   REQUIRE(res.right.size() == 0);
+}
+
+TEST_CASE("RIR refusals read as the subject the caller spelled and its predicate",
+          "[acoustic][rir]") {
+  const ShoeboxRoom room = pair_reference_room(0.15f);
+  const SourceListener inside{{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+
+  ShoeboxRoom flat = room;
+  flat.dims.length = 0.0f;
+  CHECK(first_error_text(validate_shoebox(flat, inside)) ==
+        "length_m must be finite and in (0, 10000]");
+  CHECK(first_error_text(validate_shoebox(flat, inside, kShoeboxJsFieldNames)) ==
+        "lengthM must be finite and in (0, 10000]");
+  CHECK(first_error_text(validate_shoebox(room, {{-1.0f, 3.0f, 1.2f}, inside.listener})) ==
+        "source.x must be finite and in [0, 8]");
+  CHECK(first_error_text(validate_shoebox(room, {inside.source, {6.0f, 3.0f, 4.0f}})) ==
+        "listener.z must be finite and in [0, 3.5]");
+
+  const auto config_text = [](void (*edit)(RirSynthConfig&), const RirSynthFieldNames& names) {
+    RirSynthConfig config;
+    edit(config);
+    return first_error_text(validate_rir_synth_config(config, names));
+  };
+  CHECK(config_text([](RirSynthConfig& c) { c.ism_order = -1; }, kRirSynthFieldNames) ==
+        "ism_order must be an integer in [0, 2147483647]");
+  CHECK(config_text([](RirSynthConfig& c) { c.max_seconds = 700.0f; }, kRirSynthFieldNames) ==
+        "max_sec must be finite and in [0, 600]");
+  CHECK(config_text([](RirSynthConfig& c) { c.max_seconds = 700.0f; }, kRirSynthJsFieldNames) ==
+        "maxSec must be finite and in [0, 600]");
+  CHECK(config_text([](RirSynthConfig& c) { c.mixing_time_ms = -1.0f; }, kRirSynthFieldNames) ==
+        "mixing_time_ms must be finite and in [0, 10000]");
+  CHECK(config_text([](RirSynthConfig& c) { c.crossfade_ms = 2000.0f; }, kRirSynthFieldNames) ==
+        "crossfade_ms must be finite and in [0, 1000]");
+  CHECK(
+      config_text([](RirSynthConfig& c) { c.air.temperature_c = -300.0f; }, kRirSynthFieldNames) ==
+      "air_temperature_c must be finite and greater than -273.15");
+  CHECK(config_text([](RirSynthConfig& c) { c.air.humidity_percent = 101.0f; },
+                    kRirSynthFieldNames) == "air_humidity_percent must be finite and in [0, 100]");
+
+  CHECK(first_error_text(synthesize_rir(room, inside, 100).diagnostics) ==
+        "sample_rate must be an integer in [8000, 384000]");
+
+  CHECK(first_error_text(validate_receiver_pair(room, inside, 5.0f)) ==
+        "receiver_spacing_m must be finite and in (0, 4]");
+  CHECK(first_error_text(validate_receiver_pair(room, inside, 5.0f, "receiverSpacingM")) ==
+        "receiverSpacingM must be finite and in (0, 4]");
+  // On the y = 0 wall the pair axis crosses, no spacing keeps both receivers inside.
+  const SourceListener on_wall{{2.0f, 0.0f, 1.2f}, {6.0f, 0.0f, 1.5f}};
+  CHECK(first_error_text(validate_receiver_pair(room, on_wall, 0.5f)) ==
+        "listener.y must be finite and in (0, 6)");
 }
 
 TEST_CASE("receiver-pair RIRs match each receiver's mono RIR before the crossover",

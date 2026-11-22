@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "util/exception.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::acoustic {
 
@@ -409,6 +410,16 @@ bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexce
   return (crossings & 1) != 0;
 }
 
+std::string placement_refusal(const char* point, const Vec3& p, const RoomDimensions& dims) {
+  const std::pair<float, float> axes[] = {
+      {p.x, dims.length}, {p.y, dims.width}, {p.z, dims.height}};
+  const char* names[] = {".x", ".y", ".z"};
+  int axis = 0;
+  while (axis < 2 && axes[axis].first >= 0.0f && axes[axis].first <= axes[axis].second) ++axis;
+  return std::string(point) + names[axis] + " " +
+         util::refusal::range_predicate(0.0, axes[axis].second);
+}
+
 std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement,
                                          const ShoeboxFieldNames& names) {
   std::vector<Diagnostic> diags;
@@ -417,18 +428,20 @@ std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceLi
                                                 {room.dims.height, names.height}};
   for (const auto& [value, name] : dims) {
     if (!finite_bounded(value)) {
-      diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_dimensions",
-                       std::string(name) + " must be finite, positive and within bounds"});
+      diags.push_back(
+          {Diagnostic::Severity::Error, "acoustic.invalid_dimensions",
+           std::string(name) + " " +
+               util::refusal::interval_predicate(0.0, false, kMaxRoomDimensionM, true)});
     }
   }
   if (!diags.empty()) return diags;  // further placement checks are meaningless
   if (!point_inside_shoebox(room, placement.source)) {
     diags.push_back({Diagnostic::Severity::Error, "acoustic.source_outside_room",
-                     "source position lies outside the room"});
+                     placement_refusal("source", placement.source, room.dims)});
   }
   if (!point_inside_shoebox(room, placement.listener)) {
     diags.push_back({Diagnostic::Severity::Error, "acoustic.listener_outside_room",
-                     "listener position lies outside the room"});
+                     placement_refusal("listener", placement.listener, room.dims)});
   }
   const Vec3 sep = placement.source - placement.listener;
   if (length(sep) < 1e-4f) {
