@@ -775,6 +775,11 @@ CliValidationError validate_midi_render_arguments(const CliArgs& args) {
   return {project_synth_refusal(args, false)};
 }
 
+CliValidationError validate_project_align_takes(const CliArgs& args) {
+  return {project_audio_binding_refusal(args)};
+}
+#endif
+
 #ifdef SONARE_WITH_ACOUSTIC_SIM
 // A source or listener is given whole or left to the room's scaled default, never filled in.
 CliValidationError validate_room_placement(const CliArgs& args) {
@@ -788,11 +793,6 @@ CliValidationError validate_room_placement(const CliArgs& args) {
     }
   }
   return {};
-}
-#endif
-
-CliValidationError validate_project_align_takes(const CliArgs& args) {
-  return {project_audio_binding_refusal(args)};
 }
 #endif
 
