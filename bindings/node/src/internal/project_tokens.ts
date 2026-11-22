@@ -119,7 +119,10 @@ export function tokenName<T extends string>(
 ): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
-    throw codedError(ErrorCode.Unknown, `unknown ${what} ordinal ${ordinal} from the project`);
+    throw codedError(
+      ErrorCode.Unknown,
+      `unknown ${what} ordinal ${ordinal} from the native library`,
+    );
   }
   return name;
 }

@@ -37,7 +37,7 @@ import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
-import { MARKER_KINDS, WARP_MODES } from './internal/project_tokens.js';
+import { MARKER_KINDS, tokenName, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { assertUmpWordCount } from './internal/ump_events.js';
@@ -259,14 +259,6 @@ const TELEMETRY_ERRORS: readonly EngineTelemetryError[] = [
   'parameterBaseOverflow',
 ];
 
-function tokenName<T extends string>(table: Readonly<Record<T, number>>, ordinal: number): T {
-  const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
-  if (name === undefined) {
-    throw refuse(`unknown ordinal ${ordinal}`);
-  }
-  return name;
-}
-
 /** Runs an existing token resolver after refusing an ordinal, which is never a public spelling. */
 function noOrdinal(argName: string, value: unknown): void {
   if (typeof value === 'number') {
@@ -487,7 +479,7 @@ function markerFromNative(marker: {
   return {
     ...rest,
     ...(name === undefined || name === '' ? {} : { name }),
-    kind: tokenName(MARKER_KINDS, marker.kind ?? 0),
+    kind: tokenName(MARKER_KINDS, marker.kind ?? 0, 'marker kind'),
   };
 }
 

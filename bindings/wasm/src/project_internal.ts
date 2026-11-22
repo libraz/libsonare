@@ -37,6 +37,7 @@ import {
   SOURCE_KINDS,
   STEM_LAYOUTS,
   TRACK_KINDS,
+  tokenName,
   WARP_MODES,
 } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
@@ -736,17 +737,6 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
 }
 
 /** A native ordinal back to its token; an ordinal outside the table is a binding defect. */
-function tokenName<T extends string>(
-  table: Readonly<Record<T, number>>,
-  ordinal: number,
-  what: string,
-): T {
-  const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
-  if (name === undefined) {
-    throw refuse(`unknown native ${what} ordinal ${String(ordinal)}`);
-  }
-  return name;
-}
 
 /**
  * An optional id: absent (`undefined` / `null`) is `undefined`, an explicit `0`

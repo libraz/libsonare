@@ -20,7 +20,7 @@ import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene
 import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
-import { tokenOrdinal } from './internal/project_tokens.js';
+import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
@@ -197,18 +197,6 @@ function graphName(path: string, value: unknown): void {
   if (value === '') {
     throw refuse(`${path} must not be empty`);
   }
-}
-
-function tokenOf<T extends string>(
-  table: Readonly<Record<T, number>>,
-  ordinal: number,
-  what: string,
-): T {
-  const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
-  if (name === undefined) {
-    throw codedError(ErrorCode.Unknown, `unknown ${what} ordinal ${ordinal} from the engine`);
-  }
-  return name;
 }
 
 const SIDECHAIN_SOURCE_KIND = { track: 0, bus: 1 } as const;
@@ -488,7 +476,7 @@ function panModeOf(panMode: PanMode): number {
 }
 
 function curveName(ordinal: number): AutomationCurve {
-  return tokenOf(AUTOMATION_CURVE_VALUES, ordinal, 'automation curve') as AutomationCurve;
+  return tokenName(AUTOMATION_CURVE_VALUES, ordinal, 'automation curve') as AutomationCurve;
 }
 
 function automationPointToNative(point: EngineAutomationPoint, i: number): EngineAutomationPoint {
@@ -534,7 +522,7 @@ function markerFromNative(native: Record<string, unknown>): EngineMarker {
   return {
     ...rest,
     ...(name === '' ? {} : { name }),
-    kind: tokenOf(MARKER_KIND, native.kind as number, 'marker kind'),
+    kind: tokenName(MARKER_KIND, native.kind as number, 'marker kind'),
   } as EngineMarker;
 }
 
@@ -546,8 +534,8 @@ function telemetryFromNative(native: Record<string, unknown>): EngineTelemetry {
   } & Record<string, unknown>;
   return {
     ...rest,
-    type: tokenOf(TELEMETRY_TYPE, type, 'telemetry type'),
-    error: tokenOf(TELEMETRY_ERROR, error, 'telemetry error'),
+    type: tokenName(TELEMETRY_TYPE, type, 'telemetry type'),
+    error: tokenName(TELEMETRY_ERROR, error, 'telemetry error'),
     graphLatencySamples: graphLatencySamplesQ8 / LATENCY_Q8_SCALE,
   } as unknown as EngineTelemetry;
 }
