@@ -1,7 +1,9 @@
-"""Measure and enforce deterministic size budgets for shipped WASM files.
+"""Measure and enforce deterministic size budgets for shipped WASM modules and their JS glue.
 
 Only ``raw`` and ``gzip`` are compared against the baseline. ``code``, ``data``
-and ``sha256`` are recorded for provenance and printed, never asserted: the
+and ``sha256`` are recorded for provenance and printed, never asserted, and a
+glue file (any artifact not named ``*.wasm``) has no sections, so it records only
+``raw``, ``gzip`` and ``sha256``. Nothing is asserted beyond the two sizes: the
 emscripten output is not byte-reproducible across machines or toolchain patch
 releases, so a hash comparison would fail on every runner that is not the one
 that wrote the baseline. Do not promote sha256 to a gate without first making
@@ -97,22 +99,23 @@ def forbidden_bindings(name: str, data: bytes) -> list[str]:
 
 def measure(path: Path) -> dict[str, int | str]:
     data = path.read_bytes()
-    sections = wasm_sections(data)
-    return {
+    result: dict[str, int | str] = {
         "raw": len(data),
         "gzip": len(gzip.compress(data, compresslevel=9, mtime=0)),
-        "code": sections["code"],
-        "data": sections["data"],
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+    # A module named .wasm that is not one is refused; any other file is glue with no sections.
+    if path.suffix == ".wasm":
+        result.update(wasm_sections(data))
+    return result
 
 
 def emsdk_version() -> str:
     """Return the release number of the ``emcc`` on PATH, the one the build scripts invoke.
 
-    A ``-git`` suffix is dropped, so a development build of a release records
-    that release. Raises SystemExit rather than guessing when emcc is missing or
-    its banner has no version.
+    The token is recorded as printed, ``-git`` suffix included, so it says what
+    the build:wasm guard reads. Raises SystemExit rather than guessing when emcc
+    is missing or its banner has no version.
     """
     emcc = shutil.which("emcc")
     if emcc is None:
@@ -123,7 +126,7 @@ def emsdk_version() -> str:
         ).stdout
     except (OSError, subprocess.CalledProcessError) as error:
         raise SystemExit(f"cannot record a WASM size baseline: {emcc} --version failed") from error
-    match = re.search(r"\)\s+(\d+\.\d+\.\d+)", banner.splitlines()[0] if banner else "")
+    match = re.search(r"\)\s+(\d+\.\d+\.\d+\S*)", banner.splitlines()[0] if banner else "")
     if match is None:
         raise SystemExit(f"cannot record a WASM size baseline: no version in {emcc} --version")
     return match.group(1)
@@ -202,7 +205,8 @@ def main() -> int:
                 failures.append(
                     f"{name}: {metric} {now} exceeds {limit:.0f} (+{args.max_increase:.0%})"
                 )
-        print(f"{name} code={result['code']} data={result['data']} sha256={result['sha256']}")
+        sections = "".join(f"{key}={result[key]} " for key in ("code", "data") if key in result)
+        print(f"{name} {sections}sha256={result['sha256']}")
 
     if failures:
         print("WASM size budget failed:", *failures, sep="\n  ", file=sys.stderr)

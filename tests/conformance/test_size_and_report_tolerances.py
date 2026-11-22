@@ -124,6 +124,66 @@ class WasmForbiddenBindingGuardTest(unittest.TestCase):
         self.assertEqual(self.run_check("sonare-analysis.wasm", b"\0systemInfoJson\0"), 0)
 
 
+class WasmGlueArtifactTest(unittest.TestCase):
+    def test_a_glue_file_records_sizes_and_hash_without_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            glue = Path(directory) / "sonare.js"
+            glue.write_bytes(b"var Module = {};\n" * 64)
+            result = check_wasm_size.measure(glue)
+        self.assertEqual(set(result), {"raw", "gzip", "sha256"})
+        self.assertEqual(result["raw"], 17 * 64)
+
+    def test_a_module_records_its_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wasm = Path(directory) / "tiny.wasm"
+            wasm.write_bytes(b"\0asm\1\0\0\0")
+            result = check_wasm_size.measure(wasm)
+        self.assertEqual(set(result), {"raw", "gzip", "sha256", "code", "data"})
+
+    def test_a_file_named_wasm_that_is_not_one_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "sonare.wasm"
+            fake.write_bytes(b"var Module = {};\n")
+            with self.assertRaises(ValueError):
+                check_wasm_size.measure(fake)
+
+    def test_a_glue_file_is_held_to_the_same_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            glue = root / "sonare.js"
+            glue.write_bytes(b"x" * 1000)
+            baseline = root / "baseline.json"
+            artifact = {"sonare.js": {"raw": 980, "gzip": 4096}}
+            baseline.write_text(json.dumps({"format": 1, "artifacts": artifact}))
+            argv = [
+                "check_wasm_size.py",
+                "--baseline",
+                str(baseline),
+                "--artifact",
+                f"sonare.js={glue}",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                self.assertEqual(check_wasm_size.main(), 1)
+
+
+class EmsdkVersionTest(unittest.TestCase):
+    def version_from(self, banner: str) -> str:
+        completed = mock.Mock(stdout=banner)
+        with (
+            mock.patch.object(check_wasm_size.shutil, "which", return_value="/usr/bin/emcc"),
+            mock.patch.object(check_wasm_size.subprocess, "run", return_value=completed),
+        ):
+            return check_wasm_size.emsdk_version()
+
+    def test_a_release_records_its_number(self) -> None:
+        banner = "emcc (Emscripten gcc/clang-like replacement) 7.0.1 (abc)\n"
+        self.assertEqual(self.version_from(banner), "7.0.1")
+
+    def test_a_development_build_records_the_token_as_printed(self) -> None:
+        banner = "emcc (Emscripten gcc/clang-like replacement) 7.0.1-git\n"
+        self.assertEqual(self.version_from(banner), "7.0.1-git")
+
+
 class ReportToleranceTest(unittest.TestCase):
     @staticmethod
     def report(value: float) -> dict:
