@@ -206,10 +206,10 @@ _KNOWN_BLIND = {
     ("bindings/node/src/addon/features/rhythm.cpp", "OnsetStrengthMulti", "nBands"): (
         "value passed to several calls whose defaults differ or are missing"
     ),
-    ("bindings/node/src/addon/sonare_wrap_analysis.cpp", "DetectChords", "chromaMethod"): (
+    ("bindings/node/src/addon/sonare_wrap_harmony.cpp", "DetectChords", "chromaMethod"): (
         native_defaults.C_FIELD_SWITCHED
     ),
-    ("bindings/node/src/addon/sonare_wrap_analysis.cpp", "FunctionalAnalysis", "chromaMethod"): (
+    ("bindings/node/src/addon/sonare_wrap_harmony.cpp", "FunctionalAnalysis", "chromaMethod"): (
         native_defaults.C_FIELD_SWITCHED
     ),
 }

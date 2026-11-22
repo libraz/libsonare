@@ -64,6 +64,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_engine.cpp
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
+  src/addon/engine/transport.cpp
   src/addon/engine/strip_controls.cpp
   src/addon/engine/midi_instruments.cpp
   src/addon/engine/midi_control.cpp
@@ -80,6 +81,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
+  src/addon/sonare_wrap_harmony.cpp
   src/addon/analysis/metering.cpp
   src/addon/analysis/progress.cpp
   src/addon/sonare_wrap_effects.cpp
