@@ -19,6 +19,11 @@
 namespace sonare::editing::polyphony {
 namespace {
 
+/// Frequency of harmonic @p h of @p f0 under stretch coefficient @p stretch.
+double stretched_partial_hz(double h, double f0, double stretch) {
+  return h * f0 * std::sqrt(1.0 + stretch * h * h);
+}
+
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kSpectrumEpsilon;
 
@@ -169,7 +174,7 @@ void rival_partials(const Spectrogram& spec, const MultiF0Track& track, const No
     if (fitted >= 0.0f) {
       for (int k = 1; k <= n_harmonics; ++k) {
         const double kd = k;
-        const double centre = kd * f0 * std::sqrt(1.0 + static_cast<double>(fitted) * kd * kd);
+        const double centre = stretched_partial_hz(kd, f0, static_cast<double>(fitted));
         if (centre > nyquist_hz) break;
         push(centre);
       }
@@ -261,18 +266,17 @@ float estimate_one(const Spectrogram& spec, const MultiF0Track& track, const Not
   std::vector<double> y;
   for (int h = 1; h <= n_harmonics; ++h) {
     const double hd = h;
-    const double lo_hz = hd * f0_hz * std::sqrt(1.0 + bracket_lo * hd * hd) - margin_hz;
-    const double hi_hz = hd * f0_hz * std::sqrt(1.0 + bracket_hi * hd * hd) + margin_hz;
+    const double lo_hz = stretched_partial_hz(hd, f0_hz, bracket_lo) - margin_hz;
+    const double hi_hz = stretched_partial_hz(hd, f0_hz, bracket_hi) + margin_hz;
     const double above = hd + 1.0;
     const double below = hd - 1.0;
     // Where the neighbouring partials may be under the same bracket. Both sides
     // are checked: the window above is the one that looks binding, but a bracket
     // wide enough stretches the partial below past this one's own position, and
     // that is the side that fires first on a low note.
-    const double above_lo_hz =
-        above * f0_hz * std::sqrt(1.0 + bracket_lo * above * above) - margin_hz;
+    const double above_lo_hz = stretched_partial_hz(above, f0_hz, bracket_lo) - margin_hz;
     const double below_hi_hz =
-        below > 0.0 ? below * f0_hz * std::sqrt(1.0 + bracket_hi * below * below) + margin_hz : 0.0;
+        below > 0.0 ? stretched_partial_hz(below, f0_hz, bracket_hi) + margin_hz : 0.0;
     // Once the window holds a position a neighbour may stand at, that neighbour
     // can be read as this partial, and the windows only widen from here.
     if (!(hi_hz < above_lo_hz) || !(lo_hz > below_hi_hz) || !(hi_hz < nyquist_hz)) break;

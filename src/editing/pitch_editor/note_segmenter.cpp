@@ -189,6 +189,7 @@ float NoteSegmenter::hz_to_cents(float hz, float reference_hz) {
 
 NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) const {
   std::vector<float> cents;
+  if (end > start) cents.reserve(static_cast<size_t>(end - start));
   for (int frame = start; frame < end; ++frame) {
     if (usable_pitch(track, frame)) {
       cents.push_back(hz_to_cents(track.f0_hz[static_cast<size_t>(frame)], config_.reference_hz));

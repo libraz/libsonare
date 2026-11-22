@@ -35,6 +35,7 @@ float ScaleQuantizer::quantize_midi(float midi) const noexcept {
   }
 
   const float reference = config_.reference_midi;
+  const int normalized_root = ((config_.root % 12) + 12) % 12;
   const int reference_note = static_cast<int>(std::lround(reference));
   const int center_step = static_cast<int>(std::lround(midi - reference));
   float best = reference + static_cast<float>(center_step);
@@ -42,7 +43,7 @@ float ScaleQuantizer::quantize_midi(float midi) const noexcept {
   for (int step = center_step - 12; step <= center_step + 12; ++step) {
     const int nominal_note = reference_note + step;
     const int pc = ((nominal_note % 12) + 12) % 12;
-    if (!pitch_class_enabled(pc)) {
+    if ((config_.mode_mask & (1U << ((pc - normalized_root + 12) % 12))) == 0) {
       continue;
     }
     const float candidate = reference + static_cast<float>(step);

@@ -1,6 +1,7 @@
 #include "editing/polyphony/f0_salience.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -322,14 +323,9 @@ float SalienceKernel::partial_weight(int f0_bin, int harmonic) const {
 
 void SalienceKernel::evaluate(const float* column, float* out) const {
   for (int f0_bin = 0; f0_bin < f0_axis_.n_bins; ++f0_bin) {
-    const size_t base = static_cast<size_t>(f0_bin) * n_harmonics_;
     float sum = 0.0f;
     for (int harmonic = 0; harmonic < n_harmonics_; ++harmonic) {
-      const BinSplit split = split_at(spectrum_axis_, partial_bins_[base + harmonic]);
-      if (!split.inside) continue;
-      const float value =
-          column[split.lo] * (1.0f - split.frac) + column[split.lo + 1] * split.frac;
-      sum += partial_weights_[base + harmonic] * value;
+      sum += partial_term(column, f0_bin, harmonic + 1);
     }
     out[f0_bin] = sum;
   }
@@ -359,7 +355,7 @@ float SalienceKernel::subtract(float* column, int f0_bin, float factor) const {
   // Every partial is read before any is written, so two landing in one bin read
   // the column as it stood.
   const size_t base = static_cast<size_t>(f0_bin) * n_harmonics_;
-  std::vector<float> amounts(static_cast<size_t>(n_harmonics_), 0.0f);
+  std::array<float, kMaxSalienceHarmonics> amounts{};
   for (int harmonic = 0; harmonic < n_harmonics_; ++harmonic) {
     const BinSplit split = split_at(spectrum_axis_, partial_bins_[base + harmonic]);
     if (!split.inside) continue;

@@ -521,10 +521,10 @@ class MagnitudeHistory {
 ///          of the level halfway between its lowest and highest column is
 ///          interpolated between the two frames it falls between.
 float attack_frames(const MagnitudeHistory& history, float f0_hz, float bin_hz, int n_harmonics,
-                    int n_bins) {
+                    int n_bins, std::vector<float>& summed) {
   const int count = history.count();
   if (count < 2) return 0.0f;
-  std::vector<float> summed(static_cast<size_t>(count), 0.0f);
+  summed.assign(static_cast<size_t>(count), 0.0f);
   for (int back = 0; back < count; ++back) {
     const float* column = history.at(back);
     for (int harmonic = 1; harmonic <= n_harmonics; ++harmonic) {
@@ -557,12 +557,13 @@ constexpr int kAttackPartials = 8;
 /// events and raised octave-below ghosts on rendered repertoire.
 constexpr int kAttackHistoryWindows = 2;
 
-/// Reads the attack of every candidate in @p frame against @p history.
+/// Reads the attack of every candidate against @p history.
 void read_attacks(std::vector<F0Candidate>& candidates, const MagnitudeHistory& history,
                   float bin_hz, int n_bins) {
+  std::vector<float> summed;
   for (F0Candidate& candidate : candidates) {
     candidate.attack_frames =
-        attack_frames(history, candidate.f0_hz, bin_hz, kAttackPartials, n_bins);
+        attack_frames(history, candidate.f0_hz, bin_hz, kAttackPartials, n_bins, summed);
   }
 }
 

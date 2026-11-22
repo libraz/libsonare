@@ -380,14 +380,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   };
 
   auto nearest_frame = [&](double sample_pos) -> int {
-    const double frame_position = frame_at(sample_pos);
-    if (!(frame_position > 0.0)) return 0;
-    if (frame_position >= static_cast<double>(n_frames - 1)) return n_frames - 1;
-    const double rounded = std::round(frame_position);
-    if (!(rounded > 0.0)) return 0;
-    if (rounded >= static_cast<double>(n_frames - 1)) return n_frames - 1;
-    // The range checks above keep this conversion within [0, n_frames - 1].
-    return static_cast<int>(rounded);
+    return rounded_sample(frame_at(sample_pos), n_frames);
   };
 
   // Hold an active frame at a dry boundary instead of tapering its correction through dry audio.
@@ -632,9 +625,6 @@ Audio resynthesize_validated(const Audio& audio, const F0Track& track,
   Audio working = audio;
   F0Track working_track = track;
   std::vector<float> pass_deltas(static_cast<size_t>(n_frames), 0.0f);
-  for (int frame = 0; frame < n_frames; ++frame) {
-    working_track.voiced[static_cast<size_t>(frame)] = eligible[static_cast<size_t>(frame)];
-  }
   for (int pass = 0; pass < passes; ++pass) {
     const double progress = static_cast<double>(pass) * pass_scale;
     for (int frame = 0; frame < n_frames; ++frame) {

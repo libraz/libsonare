@@ -120,7 +120,7 @@ std::vector<std::complex<float>> accumulate_total(const NoteMaskSet& masks) {
 /// @p spec scaled bin by bin, carrying its framing so the result reconstructs
 /// with the same normalization as its source.
 Spectrogram scaled_like(const Spectrogram& spec, std::vector<std::complex<float>> data) {
-  return Spectrogram::from_complex(data.data(), spec.n_bins(), spec.n_frames(), spec.n_fft(),
+  return Spectrogram::from_complex(std::move(data), spec.n_bins(), spec.n_frames(), spec.n_fft(),
                                    spec.hop_length(), spec.sample_rate(), spec.window(),
                                    spec.center(), spec.win_length());
 }
