@@ -348,16 +348,16 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     // kGsReverbMacros[4] in gs_system_effects.h say the same thing.
     //
     // kState from here to 40 01 5A marks a byte GsSystemEffects holds and the
-    // effect bus never asks for: the bus takes ten fields off GsEffectsConfig,
-    // and a parameter outside that set reaches the struct and stops. Raising one
-    // to kAudible means giving the engine the control, not editing the row.
+    // effect bus never asks for under the default macro: a parameter outside the
+    // fields the bus reads reaches the struct and stops. Raising one to kAudible
+    // means giving the engine the control, not editing the row.
     {0x400130, 0, GsParam::kReverbMacro, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
     {0x400131, 0, GsParam::kReverbCharacter, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
     {0x400132, 0, GsParam::kReverbPreLpf, GsLevel::kState, 1, 0x00, 0x07, 0x00, nullptr},
     {0x400133, 0, GsParam::kReverbLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x400134, 0, GsParam::kReverbTime, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    // Reaches GsEffectsConfig through gs_reverb_delay_feedback_coefficient, but only
-    // the delay characters (6 and 7) read it.
+    // Delay feedback and predelay are read only by the delay characters (6 and 7),
+    // so under the default Hall 2 macro neither moves the audio.
     {0x400135, 0, GsParam::kReverbDelayFeedback, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400137, 0, GsParam::kReverbPredelay, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
 
