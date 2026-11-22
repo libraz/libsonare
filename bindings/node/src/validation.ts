@@ -190,19 +190,6 @@ const MIN_AUDIO_SAMPLE_RATE = 8000;
 const MAX_AUDIO_SAMPLE_RATE = 384000;
 
 /**
- * The integrality half of {@link assertSampleRate}, for an entry point whose
- * core carries no range at all.
- *
- * A fraction is still refused, because the addon narrowing truncates it onto a
- * rate the core accepts: `44100.7` renders at `44100` with nothing anywhere
- * reporting the substitution. What is deliberately not refused is a rate
- * outside `[8000, 384000]`, which the signal generators do accept.
- */
-export function assertIntegralSampleRate(sampleRate: unknown, argName = 'sampleRate'): void {
-  assertBoundedInteger(sampleRate, argName, C_INT_MIN, C_INT_MAX);
-}
-
-/**
  * A sample rate: `TypeError` unless a number, `RangeError` unless an integer
  * inside the supported range (NaN, infinities, fractions, zero and negatives
  * included), stated as the interval either way.
@@ -403,18 +390,6 @@ export function assertEvenIntegerAtLeast(
   assertBoundedInteger(value, argName, min, max);
   if (value % 2 !== 0) {
     throw refuse(`${argName} must be an even integer in [${min}, ${max}]`);
-  }
-}
-
-/** Reject anything but one specific accepted integer, for a field that presently has a single legal value. */
-export function assertExactInteger(
-  value: number,
-  argName: string,
-  expected: number,
-  note: string,
-): void {
-  if (!Number.isInteger(value) || value !== expected) {
-    throw refuseType(`${argName} must be the integer ${expected} (${note})`);
   }
 }
 
