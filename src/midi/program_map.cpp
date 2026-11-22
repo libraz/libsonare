@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #include "midi/controller_numbers.h"
+#include "midi/note_fx_shared.h"
 
 namespace sonare::midi {
 namespace {
@@ -802,9 +803,7 @@ Ump remap_drum_note(const Ump& ump, const DrumMapOverride& map) noexcept {
   const uint8_t mapped = map.map_note(note);
   if (mapped == note) return ump;
   // Rewrite the note number (word[0] bits 8..14); identical field for 1.0 / 2.0.
-  Ump out = ump;
-  out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(mapped & 0x7Fu) << 8u);
-  return out;
+  return fx_shared::with_note_number(ump, mapped);
 }
 
 std::string_view cc_name(uint8_t controller) noexcept {
@@ -828,8 +827,10 @@ std::string_view per_note_controller_name(uint8_t index) noexcept {
 BankProgramMessages program_to_messages(uint8_t group, uint8_t channel,
                                         const ProgramSelection& selection) noexcept {
   BankProgramMessages out;
-  out.messages[0] = make_midi1_control_change(group, channel, 0, selection.bank_msb);
-  out.messages[1] = make_midi1_control_change(group, channel, 32, selection.bank_lsb);
+  out.messages[0] =
+      make_midi1_control_change(group, channel, cc::kBankSelectMsb, selection.bank_msb);
+  out.messages[1] =
+      make_midi1_control_change(group, channel, cc::kBankSelectLsb, selection.bank_lsb);
   out.messages[2] = make_midi1_program_change(group, channel, selection.program);
   out.count = 3;
   return out;

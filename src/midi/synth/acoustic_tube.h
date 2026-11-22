@@ -90,7 +90,7 @@ class AcousticTube {
     const int active =
         std::clamp(static_cast<int>(std::floor(round_trip)) - 2, kMinActive, kSections);
     const float mouth_delay = round_trip - 1.0f - static_cast<float>(active);
-    mouth_delay_q8_ = static_cast<int>(std::lround(mouth_delay * 256.0f));
+    mouth_delay_q8_ = static_cast<int>(std::lround(mouth_delay * kQ8Scale));
     const int previous = active_;
     for (int i = active; i < kSections; ++i) back_[i] = 0.0f;
     for (int i = previous; i < active && previous > 0; ++i) {
@@ -151,7 +151,7 @@ class AcousticTube {
   float stored_energy() const noexcept {
     float energy = 0.0f;
     for (int i = 0; i < kSections; ++i) energy += back_[i] * back_[i];
-    const float delay = static_cast<float>(mouth_delay_q8_) / 256.0f;
+    const float delay = static_cast<float>(mouth_delay_q8_) / kQ8Scale;
     for (int age = 0; static_cast<float>(age) < delay; ++age) {
       const float s = mouth_history(static_cast<float>(age));
       energy += std::min(1.0f, delay - static_cast<float>(age)) * s * s;
@@ -173,6 +173,8 @@ class AcousticTube {
   float section_length() const noexcept { return section_m_; }
 
  private:
+  // Fixed-point scale of the mouth delay (Q8: 1/256 sample).
+  static constexpr float kQ8Scale = 256.0f;
   static constexpr int kMinActive = 2;
   static constexpr float kMouthMinDelay = 1.0f;
   static constexpr float kMouthMaxDelay = 3.0f;
@@ -227,7 +229,7 @@ class AcousticTube {
   float loss_[kSections] = {};
   float length_m_ = 0.0f;
   int active_ = kSections;
-  int mouth_delay_q8_ = 256;
+  int mouth_delay_q8_ = static_cast<int>(kQ8Scale);
   float constriction_position_ = 0.0f;
   float constriction_degree_ = 0.0f;
   float profile_[kSections] = {};

@@ -7,7 +7,7 @@ namespace sonare::midi {
 using sonare::constants::kCentsPerSemitone;
 
 namespace {
-constexpr uint32_t kBendCenter = 0x80000000u;
+constexpr uint32_t kBendCenter = Bend32::center().raw;
 }  // namespace
 
 double per_note_bend_units(Bend32 bend) noexcept {

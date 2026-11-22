@@ -108,13 +108,12 @@ TimelineFrame device_to_timeline(DeviceFrame frame, const SequencerClock& clock)
       clock.timeline.value, numeric::saturating_sub(frame.value, clock.device.value))};
 }
 
-void MidiSequencer::prepare(double sample_rate) {
+void MidiSequencer::prepare(double /*sample_rate*/) {
   // Allocated once before any state changes, so a failure leaves the sequencer intact.
   if (runtime_storage_ == nullptr) {
     auto next_storage = std::make_unique<RuntimeStorage>();
     runtime_storage_ = std::move(next_storage);
   }
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   reset();
 }
 
@@ -784,12 +783,13 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
     if (runtime_storage_ == nullptr) return;
     size_t i = 0;
     while (i < pending_fx_count_) {
-      const PendingFxEvent pending = runtime_storage_->pending_fx[i];
-      if (pending.dead || std::max(pending.event.render_frame, now) != frame ||
-          same_time_rank(pending.event.ump) != rank) {
+      const PendingFxEvent& slot = runtime_storage_->pending_fx[i];
+      if (slot.dead || std::max(slot.event.render_frame, now) != frame ||
+          same_time_rank(slot.event.ump) != rank) {
         ++i;
         continue;
       }
+      const PendingFxEvent pending = slot;
       // Retire before dispatch, since a channel-mode reset may clear other pending slots.
       cancel_pending(i++);
       MidiEvent event = pending.event;
@@ -810,12 +810,13 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
       for (int rank = 0; rank <= kMaxSameTimeRank; ++rank) {
         size_t i = 0;
         while (i < pending_fx_count_) {
-          const PendingFxEvent pending = runtime_storage_->pending_fx[i];
-          if (pending.dead || pending.event.render_frame != earliest ||
-              same_time_rank(pending.event.ump) != rank) {
+          const PendingFxEvent& slot = runtime_storage_->pending_fx[i];
+          if (slot.dead || slot.event.render_frame != earliest ||
+              same_time_rank(slot.event.ump) != rank) {
             ++i;
             continue;
           }
+          const PendingFxEvent pending = slot;
           cancel_pending(i++);
           MidiEvent event = pending.event;
           event.render_frame = now;

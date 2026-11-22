@@ -54,7 +54,6 @@ std::string key_signature_name(int8_t fifths, bool minor) {
 // quarter note, so BPM = (us-per-minute) / (us-per-quarter). This is an SMF
 // domain constant, not a universal numeric constant.
 constexpr double kMicrosPerMinute = 60000000.0;
-constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
 
 // SMF text meta events are byte strings and older files often contain a local
 // code page rather than UTF-8. Project serialization exposes these values as
@@ -221,6 +220,15 @@ struct ClampedDelta {
 ClampedDelta clamp_delta(int64_t delta_ticks) noexcept {
   const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
   return {static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks), clamped};
+}
+
+// Delta from @p prev_tick to @p tick, counting a clamp and advancing @p prev_tick by the
+// encoded delta (not the item's own tick), so the stream position stays consistent.
+uint32_t take_delta(int64_t tick, int64_t* prev_tick, uint32_t* clamped_events) noexcept {
+  const ClampedDelta cd = clamp_delta(std::max<int64_t>(0, tick - *prev_tick));
+  if (cd.clamped) ++*clamped_events;
+  *prev_tick += static_cast<int64_t>(cd.delta);
+  return cd.delta;
 }
 
 void put_vlq(std::vector<uint8_t>* out, uint32_t value) {
@@ -869,7 +877,7 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
     transport::TempoSegment seg;
     seg.start_ppq = 0.0;
-    seg.bpm = kDefaultBpm;
+    seg.bpm = sonare::constants::kDefaultBpm;
     result.tempo_segments.insert(result.tempo_segments.begin(), seg);
   }
   if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
@@ -937,7 +945,7 @@ std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSe
   const double ticks_per_ppq = static_cast<double>(ppqn);
   for (size_t i = 0; i < sorted.size(); ++i) {
     const transport::TempoSegment& seg = sorted[i];
-    const double bpm = seg.bpm > 0.0 ? seg.bpm : kDefaultBpm;
+    const double bpm = seg.bpm > 0.0 ? seg.bpm : sonare::constants::kDefaultBpm;
     const int64_t start = smf_ppq_to_ticks(seg.start_ppq, ppqn);
     // The map holds the first tempo back to ppq 0, where a reader would assume 120 BPM.
     const int64_t hold = i == 0 ? 0 : start;
@@ -1034,14 +1042,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     std::vector<uint8_t> body;
     int64_t prev_tick = 0;
     for (const auto& item : items) {
-      const int64_t delta_ticks = std::max<int64_t>(0, item.tick - prev_tick);
-      const ClampedDelta cd = clamp_delta(delta_ticks);
-      if (cd.clamped) ++result.clamped_delta_events;
-      const uint32_t delta = cd.delta;
-      // Advance by what was encoded, not by the item's own tick: the stream sits
-      // where the delta put it, so a later item measured from anywhere else
-      // would land off by the amount the clamp ate.
-      prev_tick += static_cast<int64_t>(delta);
+      // The stream sits where the encoded delta put it, so a later item measured
+      // from anywhere else would land off by the amount the clamp ate.
+      const uint32_t delta = take_delta(item.tick, &prev_tick, &result.clamped_delta_events);
       if (item.kind == 0) {
         // SMF stores tempo as a 24-bit microseconds-per-quarter field; clamp so
         // an extremely slow tempo (bpm < ~3.576) does not wrap to an unrelated
@@ -1137,11 +1140,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
           ++result.skipped_events;
           continue;
         }
-        const int64_t delta_ticks = std::max<int64_t>(0, tick - prev_tick);
-        const ClampedDelta cd = clamp_delta(delta_ticks);
-        if (cd.clamped) ++result.clamped_delta_events;
-        const uint32_t delta = cd.delta;
-        prev_tick += static_cast<int64_t>(delta);
+        const uint32_t delta = take_delta(tick, &prev_tick, &result.clamped_delta_events);
         put_sysex(&body, delta, sysex);
         continue;
       }

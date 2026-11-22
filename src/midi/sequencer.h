@@ -438,7 +438,6 @@ class MidiSequencer {
   void chase_clip_state(const std::vector<MidiClipSchedule>& clips,
                         const SequencerClock& clock) noexcept;
 
-  double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;
   mutable rt::RtPublisher<std::vector<MidiClipSchedule>> clips_;
   std::atomic<size_t> clip_count_{0};

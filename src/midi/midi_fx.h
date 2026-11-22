@@ -160,10 +160,7 @@ struct HumanizeConfig {
 /// humanize act on the final event set.)
 class MidiFxChain {
  public:
-  void prepare() noexcept {
-    overflow_count_.reset();
-    clear_note_timings();
-  }
+  void prepare() noexcept { reset(); }
   void reset() noexcept {
     overflow_count_.reset();
     clear_note_timings();
@@ -239,8 +236,8 @@ class MidiFxChain {
   };
   static constexpr size_t kMaxActiveNoteTimings = 256;
 
-  // Stage helpers. Each reads `out` in place? No: stages that fan out write into
-  // `out`; pure transforms mutate the single event before it is pushed.
+  // Stage helpers. Stages that fan out write into `out`; pure transforms mutate the
+  // single event before it is pushed.
   void push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexcept;
   void clear_note_timings() noexcept;
   void push_note_timing(const MidiEvent& event, int64_t frame_shift, int64_t shaped_on_frame,

@@ -1,5 +1,6 @@
 #include "midi/midi_fx.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -166,11 +167,7 @@ Ump make_midi2_note_on_velocity16(const Ump& src, uint8_t note, uint16_t velocit
 Ump make_note(const Ump& src, bool note_on, uint8_t note, Velocity16 velocity) noexcept {
   if (src.message_type() == UmpMessageType::kMidi2ChannelVoice) {
     const uint16_t velocity16 = velocity.raw;
-    if (note_on) {
-      const uint8_t attr_type = static_cast<uint8_t>(src.words[0] & 0xFFu);
-      const uint16_t attr_data = static_cast<uint16_t>(src.words[1] & 0xFFFFu);
-      return make_midi2_note_on(src.group, src.channel(), note, velocity16, attr_type, attr_data);
-    }
+    if (note_on) return make_midi2_note_on_velocity16(src, note, velocity16);
     return make_midi2_note_off(src.group, src.channel(), note, velocity16);
   }
   // u7() floors at 1, but a MIDI 1.0 note-off may carry velocity 0.
@@ -179,6 +176,13 @@ Ump make_note(const Ump& src, bool note_on, uint8_t note, Velocity16 velocity) n
     return make_midi1_note_on(src.group, src.channel(), note, velocity7);
   }
   return make_midi1_note_off(src.group, src.channel(), note, velocity7);
+}
+
+/// Drops, in order, the leading @p count entries of @p entries for which @p drop is true.
+template <typename Array, typename Pred>
+size_t erase_if_prefix(Array& entries, size_t count, Pred drop) noexcept {
+  return static_cast<size_t>(std::remove_if(entries.begin(), entries.begin() + count, drop) -
+                             entries.begin());
 }
 
 }  // namespace
@@ -195,42 +199,27 @@ void MidiFxChain::clear_note_timings() noexcept {
 }
 
 void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel) noexcept {
-  size_t write = 0;
-  for (size_t read = 0; read < active_note_timing_count_; ++read) {
-    const ActiveNoteTiming& timing = active_note_timings_[read];
-    if (timing.group == group && timing.channel == channel) continue;
-    if (write != read) active_note_timings_[write] = timing;
-    ++write;
-  }
-  active_note_timing_count_ = write;
+  active_note_timing_count_ = erase_if_prefix(
+      active_note_timings_, active_note_timing_count_, [&](const ActiveNoteTiming& timing) {
+        return timing.group == group && timing.channel == channel;
+      });
 }
 
 void MidiFxChain::clear_clip_note_tracking() noexcept {
-  size_t write = 0;
-  for (size_t read = 0; read < active_note_timing_count_; ++read) {
-    const ActiveNoteTiming& timing = active_note_timings_[read];
-    if (timing.from_clip) continue;
-    if (write != read) active_note_timings_[write] = timing;
-    ++write;
-  }
-  active_note_timing_count_ = write;
+  active_note_timing_count_ =
+      erase_if_prefix(active_note_timings_, active_note_timing_count_,
+                      [](const ActiveNoteTiming& timing) { return timing.from_clip; });
 }
 
 void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel, uint8_t note,
                                       uint32_t source_track_id, bool from_clip,
                                       uint32_t clip_id) noexcept {
-  size_t write = 0;
-  for (size_t read = 0; read < active_note_timing_count_; ++read) {
-    const ActiveNoteTiming& timing = active_note_timings_[read];
-    if (timing.group == group && timing.channel == channel && timing.note == note &&
-        timing.source_track_id == source_track_id && timing.from_clip == from_clip &&
-        timing.clip_id == clip_id) {
-      continue;
-    }
-    if (write != read) active_note_timings_[write] = timing;
-    ++write;
-  }
-  active_note_timing_count_ = write;
+  active_note_timing_count_ = erase_if_prefix(
+      active_note_timings_, active_note_timing_count_, [&](const ActiveNoteTiming& timing) {
+        return timing.group == group && timing.channel == channel && timing.note == note &&
+               timing.source_track_id == source_track_id && timing.from_clip == from_clip &&
+               timing.clip_id == clip_id;
+      });
 }
 
 size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_clip,

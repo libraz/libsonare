@@ -18,13 +18,13 @@ namespace {
 constexpr char kFileHeader[8] = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
 
 // UMP message type nibbles (word[0] bits 28..31).
-constexpr uint32_t kMtUtility = 0x0u;
-constexpr uint32_t kMtMidi1 = 0x2u;
-constexpr uint32_t kMtData64 = 0x3u;   // SysEx7.
-constexpr uint32_t kMtData128 = 0x5u;  // SysEx8 / Mixed Data Set.
-constexpr uint32_t kMtMidi2 = 0x4u;
-constexpr uint32_t kMtFlexData = 0xDu;
-constexpr uint32_t kMtStream = 0xFu;
+constexpr uint32_t kMtUtility = static_cast<uint32_t>(UmpMessageType::kUtility);
+constexpr uint32_t kMtMidi1 = static_cast<uint32_t>(UmpMessageType::kMidi1ChannelVoice);
+constexpr uint32_t kMtData64 = static_cast<uint32_t>(UmpMessageType::kData64);    // SysEx7.
+constexpr uint32_t kMtData128 = static_cast<uint32_t>(UmpMessageType::kData128);  // SysEx8 / Mixed.
+constexpr uint32_t kMtMidi2 = static_cast<uint32_t>(UmpMessageType::kMidi2ChannelVoice);
+constexpr uint32_t kMtFlexData = static_cast<uint32_t>(UmpMessageType::kFlexData);
+constexpr uint32_t kMtStream = static_cast<uint32_t>(UmpMessageType::kStream);
 
 // Utility message status nibbles (word[0] bits 20..23).
 constexpr uint8_t kUtilityDctpq = 0x3u;            // Delta Clockstamp Ticks Per Quarter.
@@ -51,7 +51,20 @@ constexpr uint8_t kMinClipFileTimeSignatureExponent = 1;
 // QN(ns) = tempo * 10, so BPM = 60e9 / (tempo*10) = 6e9 / tempo. This is a Flex
 // Data domain constant, not a universal numeric constant.
 constexpr double kTenNanosPerQuarterToBpm = 6.0e9;
-constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
+
+/// Swap-removes the entry @p lookup maps @p key to and repoints the moved entry's slot.
+template <typename Pending, typename Lookup, typename KeyOf>
+void swap_remove_pending(std::vector<Pending>& pending, Lookup& lookup, size_t key, KeyOf key_of) {
+  const int index = lookup[key];
+  if (index < 0) return;
+  const size_t last = pending.size() - 1u;
+  if (static_cast<size_t>(index) != last) {
+    pending[static_cast<size_t>(index)] = std::move(pending[last]);
+    lookup[key_of(pending[static_cast<size_t>(index)])] = index;
+  }
+  pending.pop_back();
+  lookup[key] = -1;
+}
 
 /// Set Time Signature data word for @p seg; a numerator or denominator it cannot
 /// store exactly is clamped/rounded as SMF export does and counted in
@@ -72,7 +85,7 @@ uint32_t time_signature_word(const transport::TimeSignatureSegment& seg,
 }
 
 uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
-  const double safe_bpm = bpm > 0.0 ? bpm : kDefaultBpm;
+  const double safe_bpm = bpm > 0.0 ? bpm : sonare::constants::kDefaultBpm;
   const double tempo = std::clamp(kTenNanosPerQuarterToBpm / safe_bpm, 1.0,
                                   static_cast<double>(std::numeric_limits<uint32_t>::max()));
   return static_cast<uint32_t>(std::llround(tempo));
@@ -362,16 +375,9 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     return pending_lookup[pending_key(sysex8, group, stream_id)];
   };
   const auto remove_pending = [&](size_t key) {
-    const int index = pending_lookup[key];
-    if (index < 0) return;
-    const size_t last = pending_sysex.size() - 1u;
-    if (static_cast<size_t>(index) != last) {
-      pending_sysex[static_cast<size_t>(index)] = std::move(pending_sysex[last]);
-      const PendingSysex& moved = pending_sysex[static_cast<size_t>(index)];
-      pending_lookup[pending_key(moved.sysex8, moved.group, moved.stream_id)] = index;
-    }
-    pending_sysex.pop_back();
-    pending_lookup[key] = -1;
+    swap_remove_pending(pending_sysex, pending_lookup, key, [&](const PendingSysex& moved) {
+      return pending_key(moved.sysex8, moved.group, moved.stream_id);
+    });
   };
 
   struct PendingName {
@@ -402,17 +408,9 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
            kind;
   };
   const auto remove_pending_name = [&](size_t key) {
-    const int index = pending_name_lookup[key];
-    if (index < 0) return;
-    const size_t last = pending_names.size() - 1u;
-    if (static_cast<size_t>(index) != last) {
-      pending_names[static_cast<size_t>(index)] = std::move(pending_names[last]);
-      const PendingName& moved = pending_names[static_cast<size_t>(index)];
-      pending_name_lookup[name_key(moved.group, moved.address, moved.channel, moved.status)] =
-          index;
-    }
-    pending_names.pop_back();
-    pending_name_lookup[key] = -1;
+    swap_remove_pending(pending_names, pending_name_lookup, key, [&](const PendingName& moved) {
+      return name_key(moved.group, moved.address, moved.channel, moved.status);
+    });
   };
 
   const auto clear_transaction = [&]() {
@@ -927,7 +925,8 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   // 120 BPM and 4/4 hold until the first tempo / time-signature message, which
   // arrive in tick order.
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
-    result.tempo_segments.insert(result.tempo_segments.begin(), {0.0, kDefaultBpm, 0.0});
+    result.tempo_segments.insert(result.tempo_segments.begin(),
+                                 {0.0, sonare::constants::kDefaultBpm, 0.0});
   }
   if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
     result.time_signatures.insert(result.time_signatures.begin(), {0.0, {4, 4}});
