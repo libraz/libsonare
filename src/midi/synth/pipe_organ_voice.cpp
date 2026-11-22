@@ -357,7 +357,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // stops at the bottom of the compass: a stopped 16' is pinned over its whole
     // brightness range at and below C#4, which is the register that rank is played in.
     const float alpha =
-        std::max(rt::one_pole_lowpass_alpha_matched(corner, sr), loss_alpha_at_rate(0.05f, sr));
+        std::clamp(1.0f - std::exp(-kTwoPi * corner / srf), loss_alpha_at_rate(0.05f, sr), 1.0f);
     const float a = 1.0f - alpha;
     pipe.lp_alpha = alpha;
     pipe.lp_state = 0.0f;
@@ -426,8 +426,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     pipe.chiff_coeff = std::exp(
         -1.0f / std::max(1.0f, static_cast<float>(std::max(0.5f, params.chiff_ms) * 0.001 * sr)));
     const float chiff_corner = std::min(kChiffCornerMult * base_f0, kChiffCornerMaxHz);
-    pipe.chiff_lp_alpha = std::max(rt::one_pole_lowpass_alpha_matched(chiff_corner, sr),
-                                   loss_alpha_at_rate(0.01f, sr));
+    pipe.chiff_lp_alpha = std::clamp(1.0f - std::exp(-kTwoPi * chiff_corner / srf),
+                                     loss_alpha_at_rate(0.01f, sr), 1.0f);
     pipe.chiff_lp_state = 0.0f;
     // Keep the burst's energy roughly constant as the band narrows (one-pole
     // filtered unit noise has RMS ~ sqrt(alpha / (2 - alpha))): the low pipes'
@@ -461,8 +461,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // Jet turbulence band: the wind hiss lives around this pipe's speaking
     // partials.
     const float turb_corner = std::min(kTurbCornerMult * f0, kTurbCornerMaxHz);
-    pipe.turb_alpha = std::max(rt::one_pole_lowpass_alpha_matched(turb_corner, sr),
-                               loss_alpha_at_rate(0.01f, sr));
+    pipe.turb_alpha = std::clamp(1.0f - std::exp(-kTwoPi * turb_corner / srf),
+                                 loss_alpha_at_rate(0.01f, sr), 1.0f);
     pipe.turb_state = 0.0f;
 
     // Post-loop tone filter: this pipe radiates a fairly pure tone; the top

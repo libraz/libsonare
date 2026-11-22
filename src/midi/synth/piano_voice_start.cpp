@@ -544,14 +544,16 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
       kHammerWidthHarmonics * std::exp2(kWidthBassOct * std::max(0.0f, -octaves_from_c4) +
                                         kWidthTrebleOct * std::max(0.0f, octaves_from_c4));
   const float width_cutoff = std::min(exc_cutoff, width_harm * f0 * dyn_bright);
-  exc_alpha_ = std::max(rt::one_pole_lowpass_alpha_matched(width_cutoff, sr), kOnePoleAlphaFloor);
+  exc_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * width_cutoff / static_cast<float>(sr)),
+                          kOnePoleAlphaFloor, 1.0f);
   // The noise cutoff keytracks DOWN into the bass: the bass hammer is a
   // massive deep-felt head whose scrub spectrum is far darker than the small
   // hard treble hammer's — without this the bass attack carries the same
   // 2 kHz-wide burst as the treble and reads as a jack click.
   const float noise_cutoff = kStrikeNoiseCutoffScale * exc_cutoff *
                              std::exp2(-kNoiseCutoffBassOct * std::max(0.0f, -octaves_from_c4));
-  noise_alpha_ = std::max(rt::one_pole_lowpass_alpha_matched(noise_cutoff, sr), kOnePoleAlphaFloor);
+  noise_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * noise_cutoff / static_cast<float>(sr)),
+                            kOnePoleAlphaFloor, 1.0f);
   noise_alpha3_ = std::clamp(
       1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)),
       kOnePoleAlphaFloor, 1.0f);
@@ -599,7 +601,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // bass onset is a jack pluck, not a hammer landing.
   const float thud_hz =
       kKnockThudHz * std::exp2(-kKnockThudBassOct * std::max(0.0f, -octaves_from_c4));
-  knock_lp_a_ = rt::one_pole_lowpass_alpha_matched(thud_hz, sr);
+  knock_lp_a_ = std::clamp(1.0f - std::exp(-kTwoPi * thud_hz / static_cast<float>(sr)), 0.0f, 1.0f);
   knock_lp3_a_ = std::clamp(
       1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * thud_hz / static_cast<float>(sr)), 0.0f, 1.0f);
   bloom_ = 0.0f;
