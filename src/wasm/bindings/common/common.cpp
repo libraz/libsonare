@@ -452,10 +452,14 @@ float floatProperty(val object, const char* key, float default_value) {
   return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
 
+float domainFloatFromVal(const val& value, const char* key) {
+  return sonare::util::check::saturated_float(numberFromVal(value, key));
+}
+
 float domainFloatProperty(val object, const char* key, float default_value) {
   val value = typedPropertyValue(object, key, "number");
   if (value.isUndefined()) return default_value;
-  return sonare::util::check::saturated_float(numberFromVal(value, key));
+  return domainFloatFromVal(value, key);
 }
 
 float floatOption(val object, const char* key, float default_value) {
@@ -781,7 +785,7 @@ double domainCheckedNumber(const val& value, const char* key,
 
 std::optional<float> optionalDomainNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
-  return sonare::util::check::saturated_float(numberFromVal(v, key));
+  return domainFloatFromVal(v, key);
 }
 
 std::optional<bool> optionalBool(const val& v, const char* key) {

@@ -527,6 +527,11 @@ int64_t renderFrameFromVal(const val& value);
 ///          accepted result.
 /// @throws WasmArgumentError naming @p key.
 float checkedFloatFromVal(const val& value, const char* key);
+/// @brief Reads a JS number for a float field whose consumer states the domain: type-checked only.
+/// @details NaN and the infinities travel on, and a finite value past the float range saturates
+///          to an infinity, so the consumer's "<key> must be finite and in [lo, hi]" refuses all.
+/// @throws WasmArgumentError naming @p key when @p value is not a number.
+float domainFloatFromVal(const val& value, const char* key);
 /// @brief Refuses a non-finite double. No narrowing to do -- a JS number is a
 ///        double already -- so finiteness is the whole check.
 /// @details Every field reading through this today is also checked by the site
@@ -587,9 +592,8 @@ std::string stringFromVal(const val& value, const char* key);
 /// @throws WasmArgumentError naming @p key when @p v is not a
 ///         number, or is one the 32-bit float cannot hold.
 std::optional<float> optionalNumber(const val& v, const char* key);
-/// @brief Optional number reader for a field whose consumer states the domain: type-checked only.
-/// @details NaN and the infinities travel on, and a finite value past the float range saturates
-///          to an infinity, so the consumer's "<key> must be finite and in [lo, hi]" refuses all.
+/// @brief Optional sibling of @ref domainFloatFromVal: std::nullopt only when @p v is undefined
+///        or null.
 /// @throws WasmArgumentError naming @p key when @p v is present and not a number.
 std::optional<float> optionalDomainNumber(const val& v, const char* key);
 /// @brief Reads a JS number and checks it against the core's statement of its domain, so a

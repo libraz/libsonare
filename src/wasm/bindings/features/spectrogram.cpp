@@ -211,11 +211,6 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   return out;
 }
 
-/// A number whose domain the core states: NaN and the infinities pass through to its refusal.
-static float coreCheckedFloatFromVal(const val& value, const char* key) {
-  return sonare::util::check::saturated_float(numberFromVal(value, key));
-}
-
 /// Copies a C-owned float array into a Float32Array and frees the C copy.
 static val takeCFloats(float* data, size_t length) {
   val out = vectorToFloat32Array(data, length);
@@ -230,8 +225,8 @@ val js_mel_filterbank(const val& sample_rate_val, const val& n_fft_val, const va
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   SonareMelFilterbankOptions options;
   sonare_mel_filterbank_options_init(&options);
-  options.fmin_hz = coreCheckedFloatFromVal(fmin_val, "fminHz");
-  options.fmax_hz = coreCheckedFloatFromVal(fmax_val, "fmaxHz");
+  options.fmin_hz = domainFloatFromVal(fmin_val, "fminHz");
+  options.fmax_hz = domainFloatFromVal(fmax_val, "fmaxHz");
   options.htk = htk ? 1 : 0;
   options.norm = checkedIntFromVal(norm_val, "norm");
   float* data = nullptr;
@@ -252,8 +247,8 @@ val js_mel_filterbank(const val& sample_rate_val, const val& n_fft_val, const va
 
 val js_mel_frequencies(const val& n_mels_val, const val& fmin_val, const val& fmax_val, bool htk) {
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  const float fmin_hz = coreCheckedFloatFromVal(fmin_val, "fminHz");
-  const float fmax_hz = coreCheckedFloatFromVal(fmax_val, "fmaxHz");
+  const float fmin_hz = domainFloatFromVal(fmin_val, "fminHz");
+  const float fmax_hz = domainFloatFromVal(fmax_val, "fmaxHz");
   float* data = nullptr;
   size_t length = 0;
   const SonareError err =
