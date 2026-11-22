@@ -1,0 +1,108 @@
+/**
+ * Each project closed set the facade spells holds the core's tokens in the
+ * core's order.
+ *
+ * The core's list is read off the refusal a document with an unknown token at
+ * that field earns ("<path> must be one of <tokens>"), so the comparison is
+ * against the table the serializer actually uses. The facade's token→ordinal map
+ * is sorted by ordinal, so a member out of place reads as a drift too.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { Project } from '../src/index.js';
+import {
+  AUTOMATION_TARGET_KIND,
+  CHORD_QUALITY,
+  FADE_CURVE,
+  KEY_MODE,
+  LOOP_MODE,
+  MARKER_KIND,
+  OVERLAP_POLICY,
+  SOURCE_KIND,
+  TRACK_KIND,
+  WARP_MODE,
+} from '../src/internal/project_tokens.js';
+import { AUTOMATION_CURVE_VALUES } from '../src/value_coercion.js';
+
+/** A document carrying a value at every enum field the tables cover. */
+function richDocument(): Record<string, unknown> {
+  const project = new Project();
+  try {
+    const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+    project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
+    project.setMarker({ ppq: 1, kind: 'text', name: 'cue' });
+    project.addAutomationLane(trackId, {
+      targetParamId: 1,
+      targetKind: 'trackFaderDb',
+      points: [{ ppq: 0, value: -3, curveToNext: 'hold' }],
+    });
+    project.annotateKeys([{ startPpq: 0, endPpq: 4, tonicPc: 0, mode: 'major' }]);
+    project.annotateChords([{ startPpq: 0, endPpq: 4, rootPc: 0, quality: 'major' }]);
+    return JSON.parse(project.toJson()) as Record<string, unknown>;
+  } finally {
+    project.destroy();
+  }
+}
+
+/** The tokens the core lists when the field at @p path holds an unknown one. */
+function coreTokens(
+  document: Record<string, unknown>,
+  path: readonly (string | number)[],
+): string[] {
+  const copy = structuredClone(document);
+  let at = copy as Record<string | number, unknown>;
+  for (const step of path.slice(0, -1)) {
+    at = at[step] as Record<string | number, unknown>;
+  }
+  const last = path[path.length - 1] as string | number;
+  expect(at[last], path.join('.')).toBeTypeOf('string');
+  at[last] = 'notAToken';
+  let message = '';
+  try {
+    Project.fromJson(JSON.stringify(copy)).destroy();
+  } catch (error) {
+    message = (error as Error).message;
+  }
+  const listed = message.match(/must be one of (.+)$/);
+  if (!listed) {
+    throw new Error(`${path.join('.')}: no token list in ${JSON.stringify(message)}`);
+  }
+  return listed[1].split(', ');
+}
+
+/** The facade's tokens in ordinal order. */
+const inOrdinalOrder = (map: Readonly<Record<string, number>>): string[] =>
+  Object.entries(map)
+    .sort(([, a], [, b]) => a - b)
+    .map(([token]) => token);
+
+const TABLES: readonly [string, Readonly<Record<string, number>>, readonly (string | number)[]][] =
+  [
+    ['warp mode', WARP_MODE, ['clips', 0, 'warpMode']],
+    ['fade curve', FADE_CURVE, ['clips', 0, 'fadeIn', 'curve']],
+    ['loop mode', LOOP_MODE, ['clips', 0, 'loopMode']],
+    ['overlap policy', OVERLAP_POLICY, ['overlapPolicy']],
+    ['marker kind', MARKER_KIND, ['markers', 0, 'kind']],
+    ['track kind', TRACK_KIND, ['tracks', 0, 'kind']],
+    ['source kind', SOURCE_KIND, ['sources', 0, 'kind']],
+    ['chord quality', CHORD_QUALITY, ['annotation', 'chords', 0, 'quality']],
+    ['key mode', KEY_MODE, ['annotation', 'keys', 0, 'mode']],
+    [
+      'automation target kind',
+      AUTOMATION_TARGET_KIND,
+      ['tracks', 0, 'automationLanes', 0, 'targetKind'],
+    ],
+    [
+      'automation curve',
+      AUTOMATION_CURVE_VALUES,
+      ['tracks', 0, 'automationLanes', 0, 'points', 0, 'curveToNext'],
+    ],
+  ];
+
+describe('project token tables', () => {
+  const document = richDocument();
+
+  it.each(TABLES)('the %s list is the core table in order', (_name, map, path) => {
+    expect(inOrdinalOrder(map)).toEqual(coreTokens(document, path));
+  });
+});
