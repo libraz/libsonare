@@ -17,6 +17,7 @@ import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { requireOneOf } from './internal/one_of.js';
+import { optionalCount, optionalId } from './internal/optional_ints.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
@@ -91,7 +92,6 @@ import type {
 import {
   assertClosedToken,
   assertFiniteSamples,
-  C_INT_MAX,
   requestObject,
   requireBoolean,
   resolveRenderFrame,
@@ -150,43 +150,8 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
-/**
- * An optional uint32 id whose `0` would mean "none": absent stays `undefined`, and an explicit `0`
- * is refused. `hint` finishes "omit it ...".
- */
-function optionalId(argName: string, value: unknown, hint = 'for the default'): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value === 0) {
-    throw refuse(`${argName} must not be 0; omit it ${hint}`);
-  }
-  if (!Number.isInteger(value) || value < 1 || value > 0xffffffff) {
-    throw refuse(`${argName} must be an integer in [1, 4294967295]`);
-  }
-  return value;
-}
-
 /** What omitting an output bus id does, for its `0` refusal. */
 const MASTER_MIX_HINT = 'to route to the master mix';
-
-/** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
-function optionalCount(argName: string, value: unknown): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  const number = requireFiniteInteger(value, argName);
-  if (number === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
-  }
-  if (number < 0 || number > C_INT_MAX || !Number.isInteger(number)) {
-    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
-  }
-  return number;
-}
 
 /** A graph node name: a string, and never empty. */
 function graphName(path: string, value: unknown): void {

@@ -9,6 +9,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
 import {
@@ -155,37 +156,6 @@ function requireInteger(value: unknown, argName: string): number {
   return value;
 }
 
-/** An optional field where `0` would mean "the default": absent stays absent, `0` is refused. */
-function optionalNonZero(value: unknown, argName: string, max: number): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  const number = requireInteger(value, argName);
-  if (number === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
-  }
-  if (!Number.isInteger(number) || number < 1 || number > max) {
-    throw refuse(`${argName} must be an integer in [1, ${max}]`);
-  }
-  return number;
-}
-
-/**
- * An optional id whose `0` would read as "not given": absent (`undefined` or `null`) stays
- * absent, and an explicit `0` is refused by name.
- */
-function optionalId(argName: string, value: unknown, hint = 'for the default'): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  const number = requireInteger(value, argName);
-  assertU32(number, argName);
-  if (number === 0) {
-    throw refuse(`${argName} must not be 0; omit it ${hint}`);
-  }
-  return number;
-}
-
 /** An optional string field whose empty form would read as "not given": absent stays absent, `""` is refused. */
 function optionalName(argName: string, value: unknown, hint: string): string | undefined {
   if (isAbsent(value)) {
@@ -253,9 +223,13 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
 /** Render settings the native bounce reads. */
 function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> {
   const native: Record<string, unknown> = {};
-  const totalFrames = optionalNonZero(request.totalFrames, 'totalFrames', Number.MAX_SAFE_INTEGER);
-  const blockSize = optionalNonZero(request.blockSize, 'blockSize', C_INT_MAX);
-  const numChannels = optionalNonZero(request.numChannels, 'numChannels', C_INT_MAX);
+  const totalFrames = optionalPositiveInt(
+    'totalFrames',
+    request.totalFrames,
+    Number.MAX_SAFE_INTEGER,
+  );
+  const blockSize = optionalPositiveInt('blockSize', request.blockSize, C_INT_MAX);
+  const numChannels = optionalPositiveInt('numChannels', request.numChannels, C_INT_MAX);
   if (totalFrames !== undefined) {
     native.totalFrames = totalFrames;
   }

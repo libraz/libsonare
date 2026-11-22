@@ -231,6 +231,12 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
       expect(() => project.moveClip(clipId, 1, { trackId: 0 })).toThrow(
         new RangeError('Project.moveClip: trackId must not be 0; omit it to keep the track'),
       );
+      // Every other value outside a positive id is refused with the same interval.
+      for (const bad of [-1, 1.5, 2 ** 32]) {
+        expect(() => project.moveClip(clipId, 1, { trackId: bad })).toThrow(
+          new RangeError('Project.moveClip: trackId must be an integer in [1, 4294967295]'),
+        );
+      }
       project.moveClip(clipId, 1, { trackId: null as never });
       project.moveClip(clipId, 2, { trackId });
     });
@@ -264,6 +270,14 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
           'RealtimeEngine.setGraph: numChannels must not be 0; omit it for the default',
         ),
       );
+      // A non-finite count is not an integer, and says so with the interval it misses.
+      for (const bad of [Number.POSITIVE_INFINITY, Number.NaN]) {
+        expect(() => engine.setGraph(graph({ numChannels: bad }))).toThrow(
+          new RangeError(
+            'RealtimeEngine.setGraph: numChannels must be an integer in [1, 2147483647]',
+          ),
+        );
+      }
       engine.setGraph(graph({ numChannels: null }, undefined));
       expect(engine.graphNodeCount).toBe(2);
       expect(() => engine.setBuiltinInstrument(0, { polyphony: 0 })).toThrow(
