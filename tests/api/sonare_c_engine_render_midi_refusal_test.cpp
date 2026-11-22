@@ -300,7 +300,11 @@ TEST_CASE("engine freeze refuses each option by its member name", "[c_api][engin
   CHECK(refused([](auto& o) { o.num_channels = 0; }) ==
         "options.num_channels must be an integer in [1, 2]");
   CHECK(refused([](auto& o) { o.start_ppq = std::nan(""); }) ==
-        "options.start_ppq must be finite and at least 0");
+        "options.start_ppq must be finite and in [0, 1e12]");
+  CHECK(refused([](auto& o) { o.start_ppq = -1.0; }) ==
+        "options.start_ppq must be finite and in [0, 1e12]");
+  CHECK(refused([](auto& o) { o.start_ppq = 1e300; }) ==
+        "options.start_ppq must be finite and in [0, 1e12]");
   CHECK(refused([](auto& o) { o.gain = -1.0f; }) == "options.gain must be finite and at least 0");
   CHECK(refused([](auto& o) { o.total_frames = int64_t{1} << 40; }) ==
         "options.total_frames times options.num_channels exceeds the supported size");
@@ -586,7 +590,11 @@ TEST_CASE("engine MIDI clips refuse each member by name", "[c_api][engine_refusa
   CHECK(refused([](auto& c) { c.struct_size = 0; }) ==
         "clips[0].struct_size must be set by sonare_engine_midi_clip_schedule_init");
   CHECK(refused([](auto& c) { c.start_ppq = std::nan(""); }) ==
-        "clips[0].start_ppq must be finite");
+        "clips[0].start_ppq must be finite and in [0, 1e12]");
+  CHECK(refused([](auto& c) { c.start_ppq = -1.0; }) ==
+        "clips[0].start_ppq must be finite and in [0, 1e12]");
+  CHECK(refused([](auto& c) { c.start_ppq = 1e300; }) ==
+        "clips[0].start_ppq must be finite and in [0, 1e12]");
   CHECK(refused([](auto& c) { c.length_samples = 0; }) ==
         "clips[0].length_samples must be an integer of at least 1");
   CHECK(refused([](auto& c) { c.length_samples = -2; }) ==

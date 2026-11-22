@@ -828,7 +828,7 @@ TEST_CASE("project core entries refuse by the parameter the header spells", "[pr
   CHECK(last_refusal() == "payload must not be NULL when payload_len is not 0");
   CHECK(sonare_project_set_assist_sidecar(project, "m", 1, 0, -1.0, 1.0, payload, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "region_start_ppq must be finite and at least 0");
+  CHECK(last_refusal() == "region_start_ppq must be finite and in [0, 1e12]");
 
   sonare_project_destroy(project);
 }
@@ -872,7 +872,7 @@ TEST_CASE("project track edit entries refuse by the parameter the header spells"
 
   uint32_t marker_id = 0;
   CHECK(set_marker_named(project, 0, -1.0, "m", &marker_id) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "marker.ppq must be finite and at least 0");
+  CHECK(last_refusal() == "marker.ppq must be finite and in [0, 1e12]");
   CHECK(set_marker_named(project, 0xFFFFFFFFu, 1.0, "m", &marker_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "marker.id must be an integer in [0, 4294967294]");

@@ -1,6 +1,8 @@
 """Fail unless every named NumericDomain constant under src/ appears in a row partition.
 
-A constant only a binding reads is allowed through _UNROWED, with the reason beside it.
+A constant only a binding reads is allowed through _UNROWED, with the reason beside it. Every
+scalar quarter-note argument a C function takes (`ppq` or `*_ppq`, outputs aside) must also have a
+row naming one of the two PPQ domains, so a new position cannot arrive checked only for finiteness.
 """
 
 import re
@@ -8,6 +10,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools/parity"))
+
+from extractors import c_api
+
 ROWS = sorted((ROOT / "src" / "c_api").glob("numeric_domain_rows*.h"))
 EXCLUDED = ROOT / "src" / "util" / "parameter_checks.h"
 
@@ -27,6 +33,26 @@ _UNROWED: dict[str, str] = {
 }
 
 DECLARATION = re.compile(r"inline\s+constexpr\s+(?:[\w:]+::)?NumericDomain\s+(k\w+Domain)\b")
+ROW = re.compile(r'\{"(\w+)", "([^"]+)",\s*(\w+)')
+PPQ_DOMAINS = {"kPublicPpqDomain", "kPublicPpqLengthDomain"}
+
+
+def ppq_argument_gaps(rows_text: str) -> tuple[int, list[str]]:
+    """The scalar PPQ arguments of the C functions, and those without a PPQ-domain row."""
+    rows = {(entry, param): domain for entry, param, domain in ROW.findall(rows_text)}
+    arguments = [
+        (fn.raw_name.removeprefix("sonare_"), param.raw_name)
+        for fn in c_api.extract(ROOT).functions
+        for param in fn.params
+        if (param.raw_name == "ppq" or param.raw_name.endswith("_ppq"))
+        and not param.raw_name.startswith("out_")
+    ]
+    gaps = [
+        f"{entry} {param}: {rows.get((entry, param), 'no row')}"
+        for entry, param in arguments
+        if rows.get((entry, param)) not in PPQ_DOMAINS
+    ]
+    return len(arguments), gaps
 
 
 def main() -> int:
@@ -52,6 +78,18 @@ def main() -> int:
     if missing:
         print("named domains with no row in src/c_api/numeric_domain_rows*.h:", file=sys.stderr)
         for line in missing:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    ppq_count, ppq_gaps = ppq_argument_gaps(rows_text)
+    print(f"numeric-domain rows: scanned {ppq_count} scalar PPQ arguments")
+    if not ppq_count:
+        print(
+            "check_numeric_domain_rows: no PPQ arguments found; the scan is broken", file=sys.stderr
+        )
+        return 1
+    if ppq_gaps:
+        print("PPQ arguments without a kPublicPpq*Domain row:", file=sys.stderr)
+        for line in ppq_gaps:
             print(f"  {line}", file=sys.stderr)
         return 1
     return 0

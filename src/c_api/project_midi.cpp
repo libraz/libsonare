@@ -1,4 +1,5 @@
 #include "c_api/midi_input_domains.h"
+#include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
 #include "util/parameter_checks.h"
 
@@ -24,7 +25,7 @@ SonareError refuse_unknown_midi_clip() {
 // Refuses an event whose position is out of range or that is not a channel voice message.
 void check_midi_event_pod(const SonareMidiEventPod& event, const std::string& ppq_subject,
                           const std::string& word0_subject) {
-  check::in_range(event.ppq, 0.0, sonare::transport::kMaxPublicPpq, ppq_subject.c_str());
+  check::within(event.ppq, sonare_c_detail::kPublicPpqDomain, ppq_subject.c_str());
   const uint8_t mt = static_cast<uint8_t>((event.word0 >> 28u) & 0x0Fu);
   if (mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) &&
       mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
@@ -38,7 +39,7 @@ void check_u7(uint8_t value, const char* subject) {
 
 // Checks the fields every MIDI builder carries: the position, the group and the channel.
 void check_midi_head(double ppq, uint8_t group, uint8_t channel) {
-  check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
+  check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
   check::integer_within(group, sonare_c_detail::kMidiUmpGroupDomain, "group");
   check::integer_within(channel, sonare_c_detail::kMidiChannelDomain, "channel");
 }
@@ -954,7 +955,7 @@ SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t 
         check::integer_within(param_id, sonare_c_detail::kMidiTargetParamIdDomain, "param_id");
         check::finite_float(unit_value, "unit_value");
         check::integer_within(group, sonare_c_detail::kMidiUmpGroupDomain, "group");
-        check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
+        check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
       });
       err != SONARE_OK) {
     return err;

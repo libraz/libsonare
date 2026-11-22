@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, 
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _narrow_int
+from ._narrowing import _MAX_PUBLIC_PPQ, _narrow_int
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
@@ -645,6 +645,6 @@ def _validate_midi_event_ppq(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise _refuse_type(f"{label} must be a number")
     ppq = float(cast(SupportsFloat, value))
-    if not math.isfinite(ppq) or ppq < 0.0:
-        raise _refuse(f"{label} must be finite and at least 0")
+    if not (math.isfinite(ppq) and 0.0 <= ppq <= _MAX_PUBLIC_PPQ):
+        raise _refuse(f"{label} must be finite and in [0, 1e12]")
     return ppq

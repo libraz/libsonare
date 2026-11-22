@@ -316,6 +316,7 @@ void set_clip_field(C* clip, const std::string& field, double value) {
   if (field == "length_samples") clip->length_samples = as_i64(value);
   if (field == "fade_in_samples") clip->fade_in_samples = as_i64(value);
   if (field == "fade_out_samples") clip->fade_out_samples = as_i64(value);
+  if (field == "start_ppq") clip->start_ppq = value;
 }
 
 SonareEngineClip make_clip(const std::string& param, double value) {
@@ -440,6 +441,7 @@ SonareError probe_engine_freeze_offline(const std::string& param, double value) 
   if (is_param(param, "options.total_frames")) options.total_frames = as_i64(value);
   if (is_param(param, "options.block_size")) options.block_size = static_cast<int>(value);
   if (is_param(param, "options.num_channels")) options.num_channels = static_cast<int>(value);
+  if (is_param(param, "options.start_ppq")) options.start_ppq = value;
   SonareEngineFreezeResult out{};
   return sonare_engine_freeze_offline(engine.get(), &options, &out);
 }
@@ -465,6 +467,24 @@ SonareError probe_engine_prepare(const std::string& param, double value) {
                                                 telemetry_capacity, max_channels);
   sonare_engine_destroy(engine);
   return err;
+}
+
+SonareError probe_engine_seek_ppq(const std::string&, double value) {
+  PreparedEngine engine;
+  return sonare_engine_seek_ppq(engine.get(), value, 0);
+}
+
+SonareError probe_engine_sample_at_ppq(const std::string&, double value) {
+  PreparedEngine engine;
+  std::int64_t sample = 0;
+  return sonare_engine_sample_at_ppq(engine.get(), value, &sample);
+}
+
+SonareError probe_engine_set_loop(const std::string& param, double value) {
+  PreparedEngine engine;
+  const double start = is_param(param, "start_ppq") ? value : 0.0;
+  const double end = is_param(param, "end_ppq") ? value : 4.0;
+  return sonare_engine_set_loop(engine.get(), start, end, 0);
 }
 
 SonareError probe_engine_seek_sample(const std::string&, double value) {
@@ -498,7 +518,8 @@ SonareError probe_engine_set_time_signature(const std::string& param, double val
 
 SonareError probe_engine_set_tempo_segments(const std::string& param, double value) {
   PreparedEngine engine;
-  const SonareProjectTempoSegment segment{0.0, 120.0, 0.0};
+  SonareProjectTempoSegment segment{0.0, 120.0, 0.0};
+  if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
   const std::size_t count = is_param(param, "segment_count") ? as_size(value) : 1;
   return sonare_engine_set_tempo_segments(engine.get(), &segment, count);
 }
@@ -510,6 +531,7 @@ SonareError probe_engine_set_time_signature_segments(const std::string& param, d
   if (is_param(param, "segment_count")) count = as_size(value);
   if (is_param(param, "segments[].numerator")) segment.numerator = static_cast<int>(value);
   if (is_param(param, "segments[].denominator")) segment.denominator = static_cast<int>(value);
+  if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
   return sonare_engine_set_time_signature_segments(engine.get(), &segment, count);
 }
 
@@ -525,12 +547,20 @@ SonareError probe_engine_add_parameter(const std::string&, double value) {
   return sonare_engine_add_parameter(engine.get(), &info);
 }
 
-SonareError probe_engine_set_markers(const std::string&, double value) {
+SonareError probe_engine_set_markers(const std::string& param, double value) {
   PreparedEngine engine;
   SonareEngineMarker marker{};
-  marker.id = as_u32(value);
+  marker.id = 1;
+  if (is_param(param, "markers[].id")) marker.id = as_u32(value);
+  if (is_param(param, "markers[].ppq")) marker.ppq = value;
   std::strcpy(marker.name, "m");
   return sonare_engine_set_markers(engine.get(), &marker, 1);
+}
+
+SonareError probe_engine_set_automation_lane(const std::string&, double value) {
+  PreparedEngine engine;
+  const SonareAutomationPoint point{value, 0.0f, 0};
+  return sonare_engine_set_automation_lane(engine.get(), 1, &point, 1);
 }
 
 #if defined(SONARE_WITH_GRAPH)
@@ -596,6 +626,7 @@ SonareError probe_engine_set_midi_clips(const std::string& param, double value) 
   }
   if (field == "fade_in_samples") clip.fade_in_samples = as_i64(value);
   if (field == "fade_out_samples") clip.fade_out_samples = as_i64(value);
+  if (field == "start_ppq") clip.start_ppq = value;
   return sonare_engine_set_midi_clips(engine.get(), &clip, 1);
 }
 
@@ -900,12 +931,16 @@ const std::map<std::string, Probe>& probes() {
       {"engine_prime_offline_parameters", probe_engine_prime_offline_parameters},
       {"engine_push_midi_sysex", probe_engine_push_midi_sysex},
       {"engine_render_offline", probe_engine_render_offline},
+      {"engine_sample_at_ppq", probe_engine_sample_at_ppq},
+      {"engine_seek_ppq", probe_engine_seek_ppq},
       {"engine_seek_sample", probe_engine_seek_sample},
       {"engine_set_articulation", probe_engine_set_articulation},
+      {"engine_set_automation_lane", probe_engine_set_automation_lane},
       {"engine_set_capture_buffer", probe_engine_set_capture_buffer},
       {"engine_set_capture_punch", probe_engine_set_capture_punch},
       {"engine_set_clip_page_prefetch_frames", probe_engine_set_clip_page_prefetch_frames},
       {"engine_set_clips", probe_engine_set_clips},
+      {"engine_set_loop", probe_engine_set_loop},
       {"engine_set_markers", probe_engine_set_markers},
       {"engine_set_tempo_segments", probe_engine_set_tempo_segments},
       {"engine_set_time_signature", probe_engine_set_time_signature},

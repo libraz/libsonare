@@ -84,12 +84,25 @@ SonareInstrumentBinding callback_binding(CallbackState* state, int latency_sampl
   return binding;
 }
 
+// A clip at the public start bound under a tempo slow enough that its sample endpoint at 48 kHz
+// passes INT64_MAX: 1e12 quarters x 60 s / 1e-3 bpm x 48000 Hz is about 2.9e21 frames.
+SonareProject* make_far_midi_project(uint32_t destination_id, uint32_t* out_track,
+                                     uint32_t* out_clip) {
+  SonareProject* project = make_midi_project(1e12, destination_id, out_track, out_clip);
+  const SonareProjectTempoSegment slow{0.0, 1e-3, 0.0};
+  if (project != nullptr && sonare_project_set_tempo_segments(project, &slow, 1) != SONARE_OK) {
+    sonare_project_destroy(project);
+    return nullptr;
+  }
+  return project;
+}
+
 }  // namespace
 
 TEST_CASE("project bounce rejects an arrangement event endpoint overflow", "[project][overflow]") {
   uint32_t track = 0;
   uint32_t clip = 0;
-  SonareProject* project = make_midi_project(std::numeric_limits<double>::max(), 7, &track, &clip);
+  SonareProject* project = make_far_midi_project(7, &track, &clip);
   REQUIRE(project != nullptr);
 
   const SonareMidiEventPod event{0.0, 0x20903C40u, 0u};
@@ -102,8 +115,9 @@ TEST_CASE("project bounce rejects an arrangement event endpoint overflow", "[pro
   const SonareProjectBounceOptions options =
       bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels1 = 0;
+  // The event's frame passes INT64_MAX, so the arrangement has no representable end.
   REQUIRE(bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
-                                  &bounce_channels1) == SONARE_ERROR_INVALID_PARAMETER);
+                                  &bounce_channels1) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);
@@ -114,7 +128,7 @@ TEST_CASE("project bounce rejects arrangement plus instrument-tail overflow",
           "[project][overflow]") {
   uint32_t track = 0;
   uint32_t clip = 0;
-  SonareProject* project = make_midi_project(std::numeric_limits<double>::max(), 7, &track, &clip);
+  SonareProject* project = make_far_midi_project(7, &track, &clip);
   REQUIRE(project != nullptr);
 
   CallbackState state;

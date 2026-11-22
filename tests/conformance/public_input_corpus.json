@@ -43,6 +43,12 @@
         "markers": [{ "id": 23, "ppq": "inf", "name": "infinite" }]
       },
       {
+        "id": "ppq_above_bound",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [{ "id": 24, "ppq": 1e13, "name": "beyond" }]
+      },
+      {
         "id": "negative_id",
         "accepted": false,
         "c_representable": false,
@@ -319,9 +325,10 @@
       { "id": "ppq_accepted", "key": "ppq", "value": 0.5, "accepted": true },
       { "id": "ppq_wrong_type", "key": "ppq", "value": "0", "refused": "type", "predicate": "must be a number" },
       { "id": "ppq_boolean", "key": "ppq", "value": false, "refused": "type", "predicate": "must be a number" },
-      { "id": "ppq_negative", "key": "ppq", "value": -1, "refused": "range", "predicate": "must be finite and at least 0" },
-      { "id": "ppq_nan", "key": "ppq", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and at least 0" },
-      { "id": "ppq_infinite", "key": "ppq", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and at least 0" },
+      { "id": "ppq_negative", "key": "ppq", "value": -1, "refused": "range", "predicate": "must be finite and in [0, 1e12]" },
+      { "id": "ppq_nan", "key": "ppq", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [0, 1e12]" },
+      { "id": "ppq_infinite", "key": "ppq", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and in [0, 1e12]" },
+      { "id": "ppq_above_bound", "key": "ppq", "value": 1e13, "refused": "range", "predicate": "must be finite and in [0, 1e12]" },
       { "id": "group_wrong_type", "key": "group", "value": "0", "refused": "type", "predicate": "must be an integer" },
       { "id": "group_above_domain", "key": "group", "value": 16, "refused": "range", "predicate": "must be an integer in [0, 15]" },
       { "id": "channel_fraction", "key": "channel", "value": 0.5, "refused": "range", "predicate": "must be an integer in [0, 15]" },

@@ -365,7 +365,7 @@ TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
   double snapped = 0.0;
   REQUIRE(sonare_project_snap_to_grid(project, -1.0, 0.5, nullptr, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "ppq must be finite and at least 0");
+  CHECK(message() == "ppq must be finite and in [0, 1e12]");
   REQUIRE(sonare_project_snap_to_grid(project, 1.0, 2.0, nullptr, &snapped) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "strength must be finite and in [0, 1]");

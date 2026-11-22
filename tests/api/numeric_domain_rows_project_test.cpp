@@ -238,6 +238,7 @@ struct Project {
 
 /// Every argument a MIDI builder takes, at a value its checks accept.
 struct MidiArgs {
+  double ppq = 0.0;
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t note = 60;
@@ -253,6 +254,7 @@ struct MidiArgs {
   uint16_t bend = 0;
 
   void set(const std::string& param, double v) {
+    if (is_param(param, "ppq")) ppq = v;
     if (is_param(param, "group")) group = to_u8(v);
     if (is_param(param, "channel")) channel = to_u8(v);
     if (is_param(param, "note")) note = to_u8(v);
@@ -278,54 +280,55 @@ struct MidiArgs {
   }
 
 MIDI_BUILDER_PROBE(midi_note_on,
-                   sonare_midi_note_on(0.0, a.group, a.channel, a.note, a.velocity, &out))
+                   sonare_midi_note_on(a.ppq, a.group, a.channel, a.note, a.velocity, &out))
 MIDI_BUILDER_PROBE(midi_note_off,
-                   sonare_midi_note_off(0.0, a.group, a.channel, a.note, a.velocity, &out))
-MIDI_BUILDER_PROBE(midi_cc, sonare_midi_cc(0.0, a.group, a.channel, a.controller, a.value, &out))
+                   sonare_midi_note_off(a.ppq, a.group, a.channel, a.note, a.velocity, &out))
+MIDI_BUILDER_PROBE(midi_cc, sonare_midi_cc(a.ppq, a.group, a.channel, a.controller, a.value, &out))
 MIDI_BUILDER_PROBE(midi_poly_pressure,
-                   sonare_midi_poly_pressure(0.0, a.group, a.channel, a.note, a.pressure, &out))
-MIDI_BUILDER_PROBE(midi_program, sonare_midi_program(0.0, a.group, a.channel, a.program, &out))
+                   sonare_midi_poly_pressure(a.ppq, a.group, a.channel, a.note, a.pressure, &out))
+MIDI_BUILDER_PROBE(midi_program, sonare_midi_program(a.ppq, a.group, a.channel, a.program, &out))
 MIDI_BUILDER_PROBE(midi_channel_pressure,
-                   sonare_midi_channel_pressure(0.0, a.group, a.channel, a.pressure, &out))
-MIDI_BUILDER_PROBE(midi_pitch_bend, sonare_midi_pitch_bend(0.0, a.group, a.channel, a.bend, &out))
+                   sonare_midi_channel_pressure(a.ppq, a.group, a.channel, a.pressure, &out))
+MIDI_BUILDER_PROBE(midi_pitch_bend, sonare_midi_pitch_bend(a.ppq, a.group, a.channel, a.bend, &out))
 MIDI_BUILDER_PROBE(midi2_note_on,
-                   sonare_midi2_note_on(0.0, a.group, a.channel, a.note, 1000, 0, 0, &out))
+                   sonare_midi2_note_on(a.ppq, a.group, a.channel, a.note, 1000, 0, 0, &out))
 MIDI_BUILDER_PROBE(midi2_note_off,
-                   sonare_midi2_note_off(0.0, a.group, a.channel, a.note, 1000, &out))
-MIDI_BUILDER_PROBE(midi2_cc, sonare_midi2_cc(0.0, a.group, a.channel, a.controller, 0, &out))
+                   sonare_midi2_note_off(a.ppq, a.group, a.channel, a.note, 1000, &out))
+MIDI_BUILDER_PROBE(midi2_cc, sonare_midi2_cc(a.ppq, a.group, a.channel, a.controller, 0, &out))
 MIDI_BUILDER_PROBE(midi2_poly_pressure,
-                   sonare_midi2_poly_pressure(0.0, a.group, a.channel, a.note, 0, &out))
+                   sonare_midi2_poly_pressure(a.ppq, a.group, a.channel, a.note, 0, &out))
 MIDI_BUILDER_PROBE(midi2_channel_pressure,
-                   sonare_midi2_channel_pressure(0.0, a.group, a.channel, 0, &out))
-MIDI_BUILDER_PROBE(midi2_pitch_bend, sonare_midi2_pitch_bend(0.0, a.group, a.channel, 0, &out))
-MIDI_BUILDER_PROBE(midi2_program, sonare_midi2_program(0.0, a.group, a.channel, a.program, 1,
+                   sonare_midi2_channel_pressure(a.ppq, a.group, a.channel, 0, &out))
+MIDI_BUILDER_PROBE(midi2_pitch_bend, sonare_midi2_pitch_bend(a.ppq, a.group, a.channel, 0, &out))
+MIDI_BUILDER_PROBE(midi2_program, sonare_midi2_program(a.ppq, a.group, a.channel, a.program, 1,
                                                        a.bank_msb, a.bank_lsb, &out))
 MIDI_BUILDER_PROBE(midi2_registered_controller,
-                   sonare_midi2_registered_controller(0.0, a.group, a.channel, a.bank, a.index, 0,
+                   sonare_midi2_registered_controller(a.ppq, a.group, a.channel, a.bank, a.index, 0,
                                                       &out))
 MIDI_BUILDER_PROBE(midi2_assignable_controller,
-                   sonare_midi2_assignable_controller(0.0, a.group, a.channel, a.bank, a.index, 0,
+                   sonare_midi2_assignable_controller(a.ppq, a.group, a.channel, a.bank, a.index, 0,
                                                       &out))
 MIDI_BUILDER_PROBE(midi2_relative_registered_controller,
-                   sonare_midi2_relative_registered_controller(0.0, a.group, a.channel, a.bank,
+                   sonare_midi2_relative_registered_controller(a.ppq, a.group, a.channel, a.bank,
                                                                a.index, 0, &out))
 MIDI_BUILDER_PROBE(midi2_relative_assignable_controller,
-                   sonare_midi2_relative_assignable_controller(0.0, a.group, a.channel, a.bank,
+                   sonare_midi2_relative_assignable_controller(a.ppq, a.group, a.channel, a.bank,
                                                                a.index, 0, &out))
 MIDI_BUILDER_PROBE(midi2_registered_per_note_controller,
-                   sonare_midi2_registered_per_note_controller(0.0, a.group, a.channel, a.note,
+                   sonare_midi2_registered_per_note_controller(a.ppq, a.group, a.channel, a.note,
                                                                a.index, 0, &out))
 MIDI_BUILDER_PROBE(midi2_assignable_per_note_controller,
-                   sonare_midi2_assignable_per_note_controller(0.0, a.group, a.channel, a.note,
+                   sonare_midi2_assignable_per_note_controller(a.ppq, a.group, a.channel, a.note,
                                                                a.index, 0, &out))
 MIDI_BUILDER_PROBE(midi2_per_note_pitch_bend,
-                   sonare_midi2_per_note_pitch_bend(0.0, a.group, a.channel, a.note, 0, &out))
+                   sonare_midi2_per_note_pitch_bend(a.ppq, a.group, a.channel, a.note, 0, &out))
 MIDI_BUILDER_PROBE(midi2_per_note_management,
-                   sonare_midi2_per_note_management(0.0, a.group, a.channel, a.note, 0, 0, &out))
+                   sonare_midi2_per_note_management(a.ppq, a.group, a.channel, a.note, 0, 0, &out))
 
 #undef MIDI_BUILDER_PROBE
 
 SonareError probe_midi_bank_program(const std::string& param, double value) {
+  const double ppq = is_param(param, "ppq") ? value : 0.0;
   uint8_t group = 0;
   uint8_t channel = 0;
   int bank_msb = 0;
@@ -338,7 +341,7 @@ SonareError probe_midi_bank_program(const std::string& param, double value) {
   if (is_param(param, "program")) program = static_cast<int>(value);
   SonareMidiEventPod out[3] = {};
   size_t count = 0;
-  return sonare_midi_bank_program(0.0, group, channel, bank_msb, bank_lsb, program, out, 3, &count);
+  return sonare_midi_bank_program(ppq, group, channel, bank_msb, bank_lsb, program, out, 3, &count);
 }
 
 SonareMidiEventPod note_on_pod() {
@@ -347,19 +350,31 @@ SonareMidiEventPod note_on_pod() {
   return pod;
 }
 
+/// One note-on the event-list probes hand over; @p param sets its position to @p value.
+SonareMidiEventPod event_for(const std::string& param, double value) {
+  SonareMidiEventPod event = note_on_pod();
+  if (is_param(param, "events[].ppq") || is_param(param, "event.ppq")) event.ppq = value;
+  return event;
+}
+
+/// The event count a list probe passes: the probed count, one for a probed position, else none.
+size_t event_count_for(const std::string& param, double value) {
+  if (is_param(param, "count")) return to_count(value);
+  return is_param(param, "events[].ppq") ? 1 : 0;
+}
+
 SonareError probe_midi_route_events(const std::string& param, double value) {
-  const SonareMidiEventPod event = note_on_pod();
-  const size_t count = is_param(param, "count") ? to_count(value) : 0;
+  const SonareMidiEventPod event = event_for(param, value);
+  const size_t count = event_count_for(param, value);
   size_t out_count = 0;
   return sonare_midi_route_events(&event, count, nullptr, nullptr, 0, &out_count, nullptr, nullptr);
 }
 
 SonareError probe_midi_cc_learn(const std::string& param, double value) {
-  const SonareMidiEventPod event = note_on_pod();
-  size_t count = 0;
+  const SonareMidiEventPod event = event_for(param, value);
+  const size_t count = event_count_for(param, value);
   uint32_t param_id = 1;
   uint8_t min_movement = 1;
-  if (is_param(param, "count")) count = to_count(value);
   if (is_param(param, "param_id")) param_id = to_u32(value);
   if (is_param(param, "min_movement")) min_movement = to_u8(value);
   SonareMidiCcBinding binding{};
@@ -389,7 +404,7 @@ SonareMidiCcBinding binding_for(const std::string& param, double value) {
 
 SonareError probe_midi_cc_to_breakpoint(const std::string& param, double value) {
   const SonareMidiCcBinding binding = binding_for(param, value);
-  const SonareMidiEventPod event = note_on_pod();
+  const SonareMidiEventPod event = event_for(param, value);
   SonareAutomationPoint point{};
   return sonare_midi_cc_to_breakpoint(&binding, 1, &event, &point);
 }
@@ -400,15 +415,16 @@ SonareError probe_midi_param_to_cc(const std::string& param, double value) {
   uint8_t group = 0;
   if (is_param(param, "param_id")) param_id = to_u32(value);
   if (is_param(param, "group")) group = to_u8(value);
+  const double ppq = is_param(param, "ppq") ? value : 0.0;
   SonareMidiEventPod out{};
-  return sonare_midi_param_to_cc(&binding, 1, param_id, 0.5f, group, 0.0, &out);
+  return sonare_midi_param_to_cc(&binding, 1, param_id, 0.5f, group, ppq, &out);
 }
 
 SonareError probe_project_set_midi_events(const std::string& param, double value) {
   Project project;
   const uint32_t clip = project.add_midi_clip();
-  const SonareMidiEventPod event = note_on_pod();
-  const size_t count = is_param(param, "count") ? to_count(value) : 0;
+  const SonareMidiEventPod event = event_for(param, value);
+  const size_t count = event_count_for(param, value);
   return sonare_project_set_midi_events(project.handle, clip, &event, count);
 }
 
@@ -426,17 +442,31 @@ SonareError probe_project_set_program(const std::string& param, double value) {
 
 // ---- Project edits ----------------------------------------------------------------------
 
-SonareError probe_add_automation_lane(const std::string&, double value) {
+/// A lane desc every check accepts; @p param sets its target or its one breakpoint's position.
+SonareAutomationLaneDesc lane_for(const std::string& param, double value,
+                                  SonareAutomationPoint* point) {
+  SonareAutomationLaneDesc desc{};
+  desc.target_param_id = 1;
+  desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
+  if (is_param(param, "desc.target_param_id")) desc.target_param_id = to_u32(value);
+  if (is_param(param, "desc.points[].ppq")) {
+    *point = SonareAutomationPoint{value, 0.0f, 0};
+    desc.points = point;
+    desc.point_count = 1;
+  }
+  return desc;
+}
+
+SonareError probe_add_automation_lane(const std::string& param, double value) {
   Project project;
   const uint32_t track = project.add_audio_track();
-  SonareAutomationLaneDesc desc{};
-  desc.target_param_id = to_u32(value);
-  desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
+  SonareAutomationPoint point{};
+  const SonareAutomationLaneDesc desc = lane_for(param, value, &point);
   uint32_t out = 0;
   return sonare_project_add_automation_lane(project.handle, track, &desc, &out);
 }
 
-SonareError probe_edit_automation_lane(const std::string&, double value) {
+SonareError probe_edit_automation_lane(const std::string& param, double value) {
   Project project;
   const uint32_t track = project.add_audio_track();
   SonareAutomationLaneDesc existing{};
@@ -444,9 +474,8 @@ SonareError probe_edit_automation_lane(const std::string&, double value) {
   existing.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
   uint32_t out = 0;
   REQUIRE(sonare_project_add_automation_lane(project.handle, track, &existing, &out) == SONARE_OK);
-  SonareAutomationLaneDesc desc{};
-  desc.target_param_id = to_u32(value);
-  desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
+  SonareAutomationPoint point{};
+  const SonareAutomationLaneDesc desc = lane_for(param, value, &point);
   return sonare_project_edit_automation_lane(project.handle, track, 1, &desc);
 }
 
@@ -469,6 +498,9 @@ SonareError probe_add_clip(const std::string& param, double value) {
   if (is_param(param, "desc.audio_frames")) desc.audio_frames = to_i64(value);
   if (is_param(param, "desc.audio_channels")) desc.audio_channels = static_cast<int>(value);
   if (is_param(param, "desc.audio_sample_rate")) desc.audio_sample_rate = static_cast<int>(value);
+  if (is_param(param, "desc.start_ppq")) desc.start_ppq = value;
+  if (is_param(param, "desc.length_ppq")) desc.length_ppq = value;
+  if (is_param(param, "desc.source_offset_ppq")) desc.source_offset_ppq = value;
   uint32_t out = 0;
   return sonare_project_add_clip(project.handle, &desc, &out);
 }
@@ -485,6 +517,8 @@ SonareError probe_add_loop_recording_takes(const std::string& param, double valu
   if (is_param(param, "desc.audio_frames")) desc.audio_frames = to_i64(value);
   if (is_param(param, "desc.audio_channels")) desc.audio_channels = static_cast<int>(value);
   if (is_param(param, "desc.audio_sample_rate")) desc.audio_sample_rate = static_cast<int>(value);
+  if (is_param(param, "desc.start_ppq")) desc.start_ppq = value;
+  if (is_param(param, "desc.loop_length_ppq")) desc.loop_length_ppq = value;
   uint32_t clip = 0;
   size_t takes = 0;
   return sonare_project_add_loop_recording_takes(project.handle, &desc, &clip, &takes);
@@ -502,31 +536,41 @@ SonareError probe_set_source_audio(const std::string& param, double value) {
                                          sample_rate);
 }
 
-SonareError probe_annotate_chords(const std::string&, double value) {
+SonareError probe_annotate_chords(const std::string& param, double value) {
   Project project;
-  const SonareProjectChordSymbol chord{};
-  return sonare_project_annotate_chords(project.handle, &chord, to_count(value));
+  SonareProjectChordSymbol chord{};
+  chord.end_ppq = 1.0;
+  if (is_param(param, "chords[].start_ppq")) chord.start_ppq = value;
+  if (is_param(param, "chords[].end_ppq")) chord.end_ppq = value;
+  const size_t count = is_param(param, "count") ? to_count(value) : 1;
+  return sonare_project_annotate_chords(project.handle, &chord, count);
 }
 
-SonareError probe_annotate_keys(const std::string&, double value) {
+SonareError probe_annotate_keys(const std::string& param, double value) {
   Project project;
-  const SonareProjectKeySegment key{};
-  return sonare_project_annotate_keys(project.handle, &key, to_count(value));
+  SonareProjectKeySegment key{};
+  key.end_ppq = 1.0;
+  if (is_param(param, "keys[].start_ppq")) key.start_ppq = value;
+  if (is_param(param, "keys[].end_ppq")) key.end_ppq = value;
+  const size_t count = is_param(param, "count") ? to_count(value) : 1;
+  return sonare_project_annotate_keys(project.handle, &key, count);
 }
 
-SonareError probe_snap_to_grid(const std::string&, double value) {
+SonareError probe_snap_to_grid(const std::string& param, double value) {
   Project project;
   SonareProjectSnapToGridOptions options;
   sonare_project_snap_to_grid_options_init(&options);
-  options.division = static_cast<int>(value);
+  if (is_param(param, "division")) options.division = static_cast<int>(value);
+  const double ppq = is_param(param, "ppq") ? value : 0.0;
   double out = 0.0;
-  return sonare_project_snap_to_grid(project.handle, 0.0, 1.0, &options, &out);
+  return sonare_project_snap_to_grid(project.handle, ppq, 1.0, &options, &out);
 }
 
 SonareProjectMarker marker_for(const std::string& param, double value) {
   SonareProjectMarker marker{};
   marker.kind = SONARE_MARKER_KIND_MARKER;
   if (is_param(param, "marker.id")) marker.id = to_u32(value);
+  if (is_param(param, "marker.ppq")) marker.ppq = value;
   if (is_param(param, "marker.key_fifths")) {
     marker.kind = SONARE_MARKER_KIND_KEY_SIGNATURE;
     marker.key_fifths = static_cast<int8_t>(value);
@@ -548,7 +592,97 @@ SonareError probe_set_time_signatures(const std::string& param, double value) {
   segment.denominator = 4;
   if (is_param(param, "segments[].numerator")) segment.numerator = static_cast<int>(value);
   if (is_param(param, "segments[].denominator")) segment.denominator = static_cast<int>(value);
+  if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
   return sonare_project_set_time_signatures(project.handle, &segment, 1);
+}
+
+SonareError probe_set_tempo_segments(const std::string&, double value) {
+  Project project;
+  const SonareProjectTempoSegment segment{value, 120.0, 0.0};
+  return sonare_project_set_tempo_segments(project.handle, &segment, 1);
+}
+
+SonareError probe_set_assist_sidecar(const std::string& param, double value) {
+  Project project;
+  const double start = is_param(param, "region_start_ppq") ? value : 0.0;
+  const double end = is_param(param, "region_end_ppq") ? value : 1.0;
+  return sonare_project_set_assist_sidecar(project.handle, "probe", 1, 0, start, end, nullptr, 0);
+}
+
+SonareError probe_add_midi_clip(const std::string& param, double value) {
+  Project project;
+  const double start = is_param(param, "start_ppq") ? value : 0.0;
+  const double length = is_param(param, "length_ppq") ? value : 4.0;
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  return sonare_project_add_midi_clip(project.handle, start, length, &track, &clip);
+}
+
+SonareError probe_split_clip(const std::string&, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  uint32_t out = 0;
+  return sonare_project_split_clip(project.handle, clip, value, &out);
+}
+
+SonareError probe_trim_clip(const std::string& param, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  const double start = is_param(param, "new_start_ppq") ? value : 0.0;
+  const double length = is_param(param, "new_length_ppq") ? value : 2.0;
+  return sonare_project_trim_clip(project.handle, clip, start, length);
+}
+
+SonareError probe_move_clip(const std::string&, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  return sonare_project_move_clip(project.handle, clip, value, 0);
+}
+
+SonareError probe_duplicate_clip(const std::string&, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  uint32_t out = 0;
+  return sonare_project_duplicate_clip(project.handle, clip, value, &out);
+}
+
+SonareError probe_set_clip_loop(const std::string& param, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  const double length = is_param(param, "loop_length_ppq") ? value : 0.0;
+  const double crossfade = is_param(param, "loop_crossfade_ppq") ? value : 0.0;
+  return sonare_project_set_clip_loop(project.handle, clip, SONARE_LOOP_MODE_LOOP, length,
+                                      crossfade);
+}
+
+SonareError probe_set_clip_fade(const std::string& param, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  SonareProjectClipFade fade_in{};
+  SonareProjectClipFade fade_out{};
+  if (is_param(param, "fade_in.length_ppq")) fade_in.length_ppq = value;
+  if (is_param(param, "fade_out.length_ppq")) fade_out.length_ppq = value;
+  return sonare_project_set_clip_fade(project.handle, clip, &fade_in, &fade_out);
+}
+
+SonareError probe_set_clip_takes(const std::string&, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  SonareProjectClipTake take{};
+  take.id = 1;
+  take.source_offset_ppq = value;
+  return sonare_project_set_clip_takes(project.handle, clip, &take, 1, 1);
+}
+
+SonareError probe_set_clip_comp_segments(const std::string& param, double value) {
+  Project project;
+  const uint32_t clip = project.add_midi_clip();
+  SonareProjectClipCompSegment segment{};
+  segment.end_ppq = 1.0;
+  if (is_param(param, "segments[].start_ppq")) segment.start_ppq = value;
+  if (is_param(param, "segments[].end_ppq")) segment.end_ppq = value;
+  if (is_param(param, "segments[].crossfade_ppq")) segment.crossfade_ppq = value;
+  return sonare_project_set_clip_comp_segments(project.handle, clip, &segment, 1);
 }
 
 SonareError probe_set_warp_map(const std::string&, double value) {
@@ -641,6 +775,7 @@ SonareError probe_apply_vocal_edit(const std::string& param, double value) {
   desc.take_id = 0;
   desc.expected_source_sample_rate = 48000;
   desc.expected_source_sample_count = 1;
+  desc.expected_clip_length_ppq = 4.0;
   if (is_param(param, "desc.clip_id")) desc.clip_id = to_u32(value);
   if (is_param(param, "desc.take_id")) desc.take_id = to_u32(value);
   if (is_param(param, "desc.expected_source_sample_rate")) {
@@ -649,6 +784,8 @@ SonareError probe_apply_vocal_edit(const std::string& param, double value) {
   if (is_param(param, "desc.expected_source_sample_count")) {
     desc.expected_source_sample_count = to_count(value);
   }
+  if (is_param(param, "desc.expected_clip_length_ppq")) desc.expected_clip_length_ppq = value;
+  if (is_param(param, "desc.expected_source_offset_ppq")) desc.expected_source_offset_ppq = value;
   SonareProjectVocalEditApplyResult result;
   sonare_project_vocal_edit_apply_result_init(&result);
   return sonare_project_apply_vocal_edit(project.handle, &desc, &result);
@@ -780,18 +917,29 @@ const std::map<std::string, Probe>& probes() {
       {"project_add_automation_lane", probe_add_automation_lane},
       {"project_add_clip", probe_add_clip},
       {"project_add_loop_recording_takes", probe_add_loop_recording_takes},
+      {"project_add_midi_clip", probe_add_midi_clip},
       {"project_annotate_chords", probe_annotate_chords},
       {"project_annotate_keys", probe_annotate_keys},
       {"project_bounce", probe_bounce},
+      {"project_duplicate_clip", probe_duplicate_clip},
       {"project_edit_automation_lane", probe_edit_automation_lane},
       {"project_import_external_stems", probe_import_external_stems},
+      {"project_move_clip", probe_move_clip},
+      {"project_set_assist_sidecar", probe_set_assist_sidecar},
+      {"project_set_clip_comp_segments", probe_set_clip_comp_segments},
+      {"project_set_clip_fade", probe_set_clip_fade},
+      {"project_set_clip_loop", probe_set_clip_loop},
+      {"project_set_clip_takes", probe_set_clip_takes},
       {"project_set_marker", probe_set_marker},
       {"project_set_midi_events", probe_project_set_midi_events},
       {"project_set_program", probe_project_set_program},
       {"project_set_source_audio", probe_set_source_audio},
+      {"project_set_tempo_segments", probe_set_tempo_segments},
       {"project_set_time_signatures", probe_set_time_signatures},
       {"project_set_warp_map", probe_set_warp_map},
       {"project_snap_to_grid", probe_snap_to_grid},
+      {"project_split_clip", probe_split_clip},
+      {"project_trim_clip", probe_trim_clip},
 #if defined(SONARE_WITH_PITCH_EDITOR)
       {"project_apply_vocal_edit", probe_apply_vocal_edit},
       {"project_rehydrate_vocal_edits", probe_rehydrate_vocal_edits},
@@ -831,6 +979,11 @@ double inside_value(const NumericDomainRow& row) {
     if (param == "config.f0_max_hz") return 2000.0;
     if (param == "config.reference_hz") return 440.0;
     if (param == "config.velocity_floor_db") return -60.0;
+  }
+  // An annotation span must end after its start, which the probe holds at 0.
+  if (entry.rfind("project_annotate_", 0) == 0 && param.size() >= 7 &&
+      param.compare(param.size() - 7, 7, "end_ppq") == 0) {
+    return 1.0;
   }
   if (entry == "vocal_session_create") {
     return param == "options.frame_length_samples" ? 2048.0 : 512.0;

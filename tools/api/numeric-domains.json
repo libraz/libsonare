@@ -1234,6 +1234,17 @@
     },
     {
       "entry": "engine_freeze_offline",
+      "param": "options.start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_freeze_offline",
       "param": "options.total_frames",
       "kind": "integer",
       "lo": 1,
@@ -1365,6 +1376,28 @@
       "sentinel": null
     },
     {
+      "entry": "engine_sample_at_ppq",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_seek_ppq",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_seek_sample",
       "param": "timeline_sample",
       "kind": "integer",
@@ -1381,6 +1414,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_automation_lane",
+      "param": "points[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1563,6 +1607,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_clips",
+      "param": "clips[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_graph",
       "param": "spec.node_count",
       "kind": "integer",
@@ -1607,11 +1662,44 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_loop",
+      "param": "end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_loop",
+      "param": "start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_markers",
       "param": "markers[].id",
       "kind": "integer",
       "lo": 1,
       "hi": 4294967295,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_markers",
+      "param": "markers[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1739,6 +1827,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_midi_clips",
+      "param": "clips[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_sf2_instrument",
       "param": "config.clear_bank_rig",
       "kind": "integer",
@@ -1805,6 +1904,17 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_tempo_segments",
+      "param": "segments[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_time_signature",
       "param": "denominator",
       "kind": "integer",
@@ -1854,6 +1964,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_time_signature_segments",
+      "param": "segments[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -1975,6 +2096,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_upsert_clip",
+      "param": "clip.start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3312,6 +3444,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_assignable_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_assignable_per_note_controller",
       "param": "channel",
       "kind": "integer",
@@ -3339,6 +3482,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_assignable_per_note_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3378,11 +3532,11 @@
       "sentinel": null
     },
     {
-      "entry": "midi2_channel_pressure",
-      "param": "channel",
-      "kind": "integer",
+      "entry": "midi2_cc",
+      "param": "ppq",
+      "kind": "real",
       "lo": 0,
-      "hi": 15,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3390,10 +3544,32 @@
     },
     {
       "entry": "midi2_channel_pressure",
+      "param": "channel",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_channel_pressure",
       "param": "group",
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_channel_pressure",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3433,6 +3609,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_note_off",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_note_on",
       "param": "channel",
       "kind": "integer",
@@ -3460,6 +3647,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_note_on",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3499,6 +3697,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_per_note_management",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_per_note_pitch_bend",
       "param": "channel",
       "kind": "integer",
@@ -3526,6 +3735,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_per_note_pitch_bend",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3554,6 +3774,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_pitch_bend",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_poly_pressure",
       "param": "channel",
       "kind": "integer",
@@ -3581,6 +3812,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_poly_pressure",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3625,6 +3867,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_program",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3686,6 +3939,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_registered_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_registered_per_note_controller",
       "param": "channel",
       "kind": "integer",
@@ -3719,6 +3983,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_registered_per_note_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_relative_assignable_controller",
       "param": "bank",
       "kind": "integer",
@@ -3763,6 +4038,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi2_relative_assignable_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi2_relative_registered_controller",
       "param": "bank",
       "kind": "integer",
@@ -3801,6 +4087,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi2_relative_registered_controller",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3852,6 +4149,17 @@
     },
     {
       "entry": "midi_bank_program",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_bank_program",
       "param": "program",
       "kind": "integer",
       "lo": 0,
@@ -3889,6 +4197,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_cc",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3911,6 +4230,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 31250000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_cc_learn",
+      "param": "events[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -3961,6 +4291,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi_cc_to_breakpoint",
+      "param": "event.ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi_channel_pressure",
       "param": "channel",
       "kind": "integer",
@@ -3977,6 +4318,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_channel_pressure",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4028,6 +4380,17 @@
     },
     {
       "entry": "midi_note_off",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_note_off",
       "param": "velocity",
       "kind": "integer",
       "lo": 0,
@@ -4065,6 +4428,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_note_on",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4126,6 +4500,17 @@
       "sentinel": null
     },
     {
+      "entry": "midi_param_to_cc",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi_pitch_bend",
       "param": "bend",
       "kind": "integer",
@@ -4153,6 +4538,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 15,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_pitch_bend",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4193,6 +4589,17 @@
     },
     {
       "entry": "midi_poly_pressure",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_poly_pressure",
       "param": "pressure",
       "kind": "integer",
       "lo": 0,
@@ -4226,6 +4633,17 @@
     },
     {
       "entry": "midi_program",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_program",
       "param": "program",
       "kind": "integer",
       "lo": 0,
@@ -4241,6 +4659,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": 31250000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_route_events",
+      "param": "events[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4732,6 +5161,17 @@
     },
     {
       "entry": "project_add_automation_lane",
+      "param": "desc.points[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_automation_lane",
       "param": "desc.target_param_id",
       "kind": "integer",
       "lo": 1,
@@ -4775,6 +5215,39 @@
       "sentinel": null
     },
     {
+      "entry": "project_add_clip",
+      "param": "desc.length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_clip",
+      "param": "desc.source_offset_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_clip",
+      "param": "desc.start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_add_loop_recording_takes",
       "param": "desc.audio_channels",
       "kind": "integer",
@@ -4808,11 +5281,77 @@
       "sentinel": null
     },
     {
+      "entry": "project_add_loop_recording_takes",
+      "param": "desc.loop_length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_loop_recording_takes",
+      "param": "desc.start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_midi_clip",
+      "param": "length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_add_midi_clip",
+      "param": "start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_analyze_tempo",
       "param": "options.tempo_update_interval_beats",
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_annotate_chords",
+      "param": "chords[].end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_annotate_chords",
+      "param": "chords[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4841,11 +5380,55 @@
       "sentinel": null
     },
     {
+      "entry": "project_annotate_keys",
+      "param": "keys[].end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_annotate_keys",
+      "param": "keys[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_apply_vocal_edit",
       "param": "desc.clip_id",
       "kind": "integer",
       "lo": 1,
       "hi": 4294967294,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_apply_vocal_edit",
+      "param": "desc.expected_clip_length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_apply_vocal_edit",
+      "param": "desc.expected_source_offset_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5072,6 +5655,28 @@
       "sentinel": -1
     },
     {
+      "entry": "project_duplicate_clip",
+      "param": "new_start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_edit_automation_lane",
+      "param": "desc.points[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_edit_automation_lane",
       "param": "desc.target_param_id",
       "kind": "integer",
@@ -5099,6 +5704,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_move_clip",
+      "param": "new_start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5138,6 +5754,116 @@
       "sentinel": null
     },
     {
+      "entry": "project_set_assist_sidecar",
+      "param": "region_end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_assist_sidecar",
+      "param": "region_start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_comp_segments",
+      "param": "segments[].crossfade_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_comp_segments",
+      "param": "segments[].end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_comp_segments",
+      "param": "segments[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_fade",
+      "param": "fade_in.length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_fade",
+      "param": "fade_out.length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_loop",
+      "param": "loop_crossfade_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_loop",
+      "param": "loop_length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_clip_takes",
+      "param": "takes[].source_offset_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_set_marker",
       "param": "marker.id",
       "kind": "integer",
@@ -5160,11 +5886,33 @@
       "sentinel": null
     },
     {
+      "entry": "project_set_marker",
+      "param": "marker.ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_set_midi_events",
       "param": "count",
       "kind": "integer",
       "lo": 0,
       "hi": 31250000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_set_midi_events",
+      "param": "events[].ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5237,6 +5985,17 @@
       "sentinel": null
     },
     {
+      "entry": "project_set_tempo_segments",
+      "param": "segments[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_set_time_signatures",
       "param": "segments[].denominator",
       "kind": "integer",
@@ -5259,6 +6018,17 @@
       "sentinel": null
     },
     {
+      "entry": "project_set_time_signatures",
+      "param": "segments[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_set_warp_map",
       "param": "desc.id",
       "kind": "integer",
@@ -5275,6 +6045,28 @@
       "kind": "integer",
       "lo": 0,
       "hi": 1024,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_snap_to_grid",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_split_clip",
+      "param": "split_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5431,6 +6223,28 @@
       "hi": 0,
       "lo_included": true,
       "hi_included": false,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_trim_clip",
+      "param": "new_length_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": false,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_trim_clip",
+      "param": "new_start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
       "stricter": null,
       "sentinel": null
     },

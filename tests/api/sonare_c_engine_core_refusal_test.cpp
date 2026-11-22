@@ -272,7 +272,10 @@ TEST_CASE("engine automation lane and parameter refusals", "[c_api][engine_refus
   SonareAutomationPoint point{};
   point.ppq = kNaN;
   CHECK(sonare_engine_set_automation_lane(engine, 5, &point, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "points[0].ppq must be finite");
+  CHECK(last_message() == "points[0].ppq must be finite and in [0, 1e12]");
+  point.ppq = -1.0;
+  CHECK(sonare_engine_set_automation_lane(engine, 5, &point, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "points[0].ppq must be finite and in [0, 1e12]");
   point.ppq = 0.0;
   point.value = std::nanf("");
   CHECK(sonare_engine_set_automation_lane(engine, 5, &point, 1) == SONARE_ERROR_INVALID_PARAMETER);
@@ -317,7 +320,7 @@ TEST_CASE("engine marker refusals", "[c_api][engine_refusal]") {
   markers[1].id = 2;
   markers[1].ppq = -1.0;
   CHECK(sonare_engine_set_markers(engine, markers, 2) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == refused("markers[1].ppq", refusal::at_least_predicate(0.0)));
+  CHECK(last_message() == "markers[1].ppq must be finite and in [0, 1e12]");
 
   markers[1].ppq = 4.0;
   REQUIRE(sonare_engine_set_markers(engine, markers, 2) == SONARE_OK);

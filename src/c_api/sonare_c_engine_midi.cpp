@@ -21,6 +21,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
 #include "c_api/part_rig_json.h"
+#include "c_api/ppq_domains.h"
 #include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
@@ -257,7 +258,7 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
           require_struct_size(src.struct_size, sizeof(SonareEngineMidiClipSchedule),
                               "clips[" + std::to_string(i) + "]",
                               "sonare_engine_midi_clip_schedule_init");
-          util::check::finite(src.start_ppq, subject("start_ppq").c_str());
+          util::check::within(src.start_ppq, kPublicPpqDomain, subject("start_ppq").c_str());
           if (src.length_samples != SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED) {
             util::check::integer_within(src.length_samples, kEngineClipLengthDomain,
                                         subject("length_samples").c_str());

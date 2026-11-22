@@ -64,8 +64,8 @@ static_assert(sizeof(SonareProjectAssistSidecar) ==
 /// arrangement KeyMode ordinal (0 unknown, 1 major, 2 minor, 3 dorian,
 /// 4 phrygian, 5 lydian, 6 mixolydian, 7 locrian).
 typedef struct {
-  double start_ppq;   ///< Segment start in quarter notes; finite and non-negative.
-  double end_ppq;     ///< Segment end in quarter notes; must be after start_ppq.
+  double start_ppq;   ///< Segment start in quarter notes, in [0, 1e12].
+  double end_ppq;     ///< Segment end in quarter notes, in [0, 1e12] and after start_ppq.
   uint32_t tonic_pc;  ///< Tonic pitch class 0..11 (C = 0), or 255 for unknown.
   uint32_t mode;      ///< Key mode ordinal; see the list above.
 } SonareProjectKeySegment;
@@ -93,8 +93,8 @@ static_assert(sizeof(SonareProjectKeySegment) == 2u * sizeof(double) + 2u * size
 /// and copied. @ref sonare_chord_symbol_from_analysis fills the root, quality,
 /// extensions and slash bass from an analysis chord.
 typedef struct {
-  double start_ppq;           ///< Chord start in quarter notes; finite and non-negative.
-  double end_ppq;             ///< Chord end in quarter notes; must be after start_ppq.
+  double start_ppq;           ///< Chord start in quarter notes, in [0, 1e12].
+  double end_ppq;             ///< Chord end in quarter notes, in [0, 1e12] and after start_ppq.
   uint32_t root_pc;           ///< Root pitch class 0..11 (C = 0), or 255 for unknown.
   uint32_t quality;           ///< Chord quality ordinal 0..7; see the list above.
   const uint8_t* extensions;  ///< Extension scale degrees; copied; NULL only when count is 0.

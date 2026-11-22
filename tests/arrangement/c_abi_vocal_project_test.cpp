@@ -1131,6 +1131,7 @@ TEST_CASE("vocal project entries refuse an argument by its header name",
   valid.clip_id = 1;
   valid.expected_source_sample_rate = kSampleRate;
   valid.expected_source_sample_count = static_cast<size_t>(kSampleCount);
+  valid.expected_clip_length_ppq = 1.0;
   valid.rendered_mono = pcm.data();
   valid.rendered_sample_count = static_cast<size_t>(kSampleCount);
   valid.rendered_sample_rate = kSampleRate;

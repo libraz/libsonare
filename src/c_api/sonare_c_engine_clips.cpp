@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/ppq_domains.h"
 #include "engine/realtime_engine.h"
 #include "engine/tempo_sync.h"
 #include "sonare_c_engine_internal.h"
@@ -100,8 +101,7 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
                               subject("num_channels").c_str());
   util::check::integer_within(source_samples, kEngineClipSamplesDomain,
                               subject("num_samples").c_str());
-  util::check::in_range(clip.start_ppq, 0.0, transport::kMaxPublicPpq,
-                        subject("start_ppq").c_str());
+  util::check::within(clip.start_ppq, kPublicPpqDomain, subject("start_ppq").c_str());
   util::check::integer_in_range(clip.clip_offset_samples, 0, source_samples - 1,
                                 subject("clip_offset_samples").c_str());
   if (clip.length_samples != SONARE_ENGINE_CLIP_LENGTH_TO_END) {

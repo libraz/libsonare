@@ -392,27 +392,15 @@ TEST_CASE("project MIDI loop export is bounded and requires representable progre
     sonare_project_destroy(project);
   }
 
-  SECTION("a loop step below the double ULP fails instead of spinning") {
+  SECTION("a clip start past the public bound is refused") {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     uint32_t track = 0;
     uint32_t clip = 0;
     constexpr double kTwoTo53 = 9007199254740992.0;
-    REQUIRE(sonare_project_add_midi_clip(project, kTwoTo53, 4.0, &track, &clip) == SONARE_OK);
-    SonareMidiEventPod event{};
-    REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &event) == SONARE_OK);
-    REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
-    REQUIRE(sonare_project_set_clip_loop(project, clip, SONARE_LOOP_MODE_LOOP, 1.0, 0.0) ==
-            SONARE_OK);
-
-    uint8_t* bytes = nullptr;
-    size_t len = 0;
-    REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_ERROR_INVALID_FORMAT);
-    CHECK(bytes == nullptr);
-    CHECK(len == 0);
-    REQUIRE(sonare_project_export_clip_file(project, &bytes, &len) == SONARE_ERROR_INVALID_FORMAT);
-    CHECK(bytes == nullptr);
-    CHECK(len == 0);
+    REQUIRE(sonare_project_add_midi_clip(project, kTwoTo53, 4.0, &track, &clip) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "start_ppq must be finite and in [0, 1e12]");
     sonare_project_destroy(project);
   }
 

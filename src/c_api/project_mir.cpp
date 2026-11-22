@@ -1,3 +1,4 @@
+#include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "util/parameter_checks.h"
@@ -199,7 +200,7 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
     division = options->division;
   }
   if (const SonareError err = run_validation([&] {
-        check::at_least(ppq, 0.0, "ppq");
+        check::within(ppq, sonare_c_detail::kPublicPpqDomain, "ppq");
         check::in_range(strength, 0.0, 1.0, "strength");
         check::integer_within(division, kSnapDivisionDomain, "division");
       });
@@ -247,11 +248,11 @@ bool chord_quality_from_c(uint32_t value, arr::ChordQuality* out) noexcept {
   return ordinal_to_enum(value, 0, static_cast<int>(arr::ChordQuality::kSuspended), out);
 }
 
-// Refuses a span that does not start at a finite, non-negative position and end after it.
+// Refuses a span whose bounds are not timeline positions or that does not end after it starts.
 void check_ppq_span(double start, double end, const std::string& start_subject,
                     const std::string& end_subject) {
-  check::at_least(start, 0.0, start_subject.c_str());
-  check::finite(end, end_subject.c_str());
+  check::within(start, sonare_c_detail::kPublicPpqDomain, start_subject.c_str());
+  check::within(end, sonare_c_detail::kPublicPpqDomain, end_subject.c_str());
   if (!(end > start)) {
     check::refuse_relation({end_subject, start_subject}, "{0} must be greater than {1}");
   }

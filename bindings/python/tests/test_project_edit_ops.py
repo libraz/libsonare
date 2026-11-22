@@ -87,10 +87,14 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     )
     with pytest.raises(SonareValueError) as negative:
         p.set_clip_loop(clip, "loop", -1.0)
-    assert str(negative.value) == "Project.set_clip_loop: loop_length_ppq must be greater than 0"
+    assert str(negative.value) == (
+        "Project.set_clip_loop: loop_length_ppq must be finite and in (0, 1e12]"
+    )
     with pytest.raises(SonareValueError) as crossfade:
         p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)
-    assert str(crossfade.value) == "Project.set_clip_loop: loop_crossfade_ppq must be at least 0"
+    assert str(crossfade.value) == (
+        "Project.set_clip_loop: loop_crossfade_ppq must be finite and in [0, 1e12]"
+    )
     assert p.to_json() == before
 
 

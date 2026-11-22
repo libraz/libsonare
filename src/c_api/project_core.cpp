@@ -1,3 +1,4 @@
+#include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
 #include "c_api/project_timeline_internal.h"
 #include "util/parameter_checks.h"
@@ -761,8 +762,8 @@ SonareError sonare_project_set_assist_sidecar(SonareProject* project, const char
   if (const SonareError err = run_validation([&] {
         namespace check = sonare::util::check;
         check::non_empty(module_id, "module_id");
-        check::at_least(region_start_ppq, 0.0, "region_start_ppq");
-        check::at_least(region_end_ppq, 0.0, "region_end_ppq");
+        check::within(region_start_ppq, sonare_c_detail::kPublicPpqDomain, "region_start_ppq");
+        check::within(region_end_ppq, sonare_c_detail::kPublicPpqDomain, "region_end_ppq");
         check::integer_in_range(static_cast<long long>(payload_len), 0,
                                 static_cast<long long>(kMaxBufferSize), "payload_len");
       });

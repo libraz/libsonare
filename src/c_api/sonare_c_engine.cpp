@@ -11,6 +11,7 @@
 #include "automation/parameter.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
+#include "c_api/ppq_domains.h"
 #include "engine/realtime_engine.h"
 #include "rt/command.h"
 #include "sonare_c_engine_internal.h"
@@ -235,7 +236,7 @@ SonareError sonare_engine_seek_ppq(SonareEngine* engine, double ppq, int64_t ren
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err =
-          run_validation([&] { util::check::in_range(ppq, 0.0, transport::kMaxPublicPpq, "ppq"); });
+          run_validation([&] { util::check::within(ppq, kPublicPpqDomain, "ppq"); });
       err != SONARE_OK) {
     return err;
   }
@@ -332,8 +333,7 @@ SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
     const std::string prefix = "segments[" + std::to_string(i) + "].";
-    util::check::in_range(in.start_ppq, 0.0, transport::kMaxPublicPpq,
-                          (prefix + "start_ppq").c_str());
+    util::check::within(in.start_ppq, kPublicPpqDomain, (prefix + "start_ppq").c_str());
     util::check::in_interval(in.bpm, 0.0, false, transport::kMaxPublicTempoBpm, true,
                              (prefix + "bpm").c_str());
     util::check::in_range(in.end_bpm, 0.0, transport::kMaxPublicTempoBpm,
@@ -364,8 +364,7 @@ SonareError sonare_engine_set_time_signature_segments(
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTimeSignatureSegment& in = segments[i];
     const std::string prefix = "segments[" + std::to_string(i) + "].";
-    util::check::in_range(in.start_ppq, 0.0, transport::kMaxPublicPpq,
-                          (prefix + "start_ppq").c_str());
+    util::check::within(in.start_ppq, kPublicPpqDomain, (prefix + "start_ppq").c_str());
     util::check::integer_within(in.numerator, kEngineTimeSignatureNumeratorDomain,
                                 (prefix + "numerator").c_str());
     util::check::integer_within(in.denominator, kEngineTimeSignatureDenominatorDomain,
@@ -386,7 +385,7 @@ SonareError sonare_engine_sample_at_ppq(SonareEngine* engine, double ppq, int64_
   SONARE_C_ZERO_OUTS(out_sample);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err =
-          run_validation([&] { util::check::in_range(ppq, 0.0, transport::kMaxPublicPpq, "ppq"); });
+          run_validation([&] { util::check::within(ppq, kPublicPpqDomain, "ppq"); });
       err != SONARE_OK) {
     return err;
   }
@@ -537,7 +536,7 @@ SonareError sonare_engine_set_automation_lane(SonareEngine* engine, uint32_t par
     // lane drives. An out-of-range curve ordinal is rejected (not clamped) so
     // every surface reports the same error for the same invalid input.
     const std::string prefix = "points[" + std::to_string(i) + "].";
-    util::check::finite(points[i].ppq, (prefix + "ppq").c_str());
+    util::check::within(points[i].ppq, kPublicPpqDomain, (prefix + "ppq").c_str());
     util::check::finite_float(points[i].value, (prefix + "value").c_str());
     util::check::one_of(points[i].curve_to_next, std::array<int, 4>{0, 1, 2, 3},
                         (prefix + "curve_to_next").c_str());
@@ -603,7 +602,7 @@ SonareError sonare_engine_set_markers(SonareEngine* engine, const SonareEngineMa
     if (std::find(staged_ids.begin(), staged_ids.end(), markers[i].id) != staged_ids.end()) {
       util::check::refuse((prefix + "id").c_str(), "must be unique across markers");
     }
-    util::check::at_least(markers[i].ppq, 0.0, (prefix + "ppq").c_str());
+    util::check::within(markers[i].ppq, kPublicPpqDomain, (prefix + "ppq").c_str());
     staged_ids.push_back(markers[i].id);
     staged_strings.push_back(fixed_text(markers[i].name, sizeof(markers[i].name)));
     transport::Marker prepared_marker;

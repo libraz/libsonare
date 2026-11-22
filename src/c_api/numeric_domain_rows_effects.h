@@ -7,6 +7,7 @@
 #include "c_api/effects_config_domains.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/numeric_domain_row.h"
+#include "c_api/ppq_domains.h"
 #include "core/spectrum.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
@@ -48,6 +49,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_count_in_end_sample", "start_sample", kEngineCountInStartDomain, nullptr},
     {"engine_freeze_offline", "options.block_size", kEngineOfflineBlockDomain, nullptr},
     {"engine_freeze_offline", "options.num_channels", kEngineRenderChannelsDomain, nullptr},
+    {"engine_freeze_offline", "options.start_ppq", kPublicPpqDomain, nullptr},
     {"engine_freeze_offline", "options.total_frames", kEngineBounceFramesDomain, nullptr},
     {"engine_load_soundfont", "size", kEngineSoundFontSizeDomain, nullptr},
     {"engine_prepare", "command_capacity", kEngineCommandCapacityDomain, nullptr},
@@ -60,8 +62,11 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_render_offline", "block_size", kEngineRenderBlockSizeDomain, nullptr},
     {"engine_render_offline", "num_channels", kEngineRenderChannelsDomain, nullptr},
     {"engine_render_offline", "total_frames", kEngineRenderFramesDomain, nullptr},
+    {"engine_sample_at_ppq", "ppq", kPublicPpqDomain, nullptr},
+    {"engine_seek_ppq", "ppq", kPublicPpqDomain, nullptr},
     {"engine_seek_sample", "timeline_sample", kEngineTimelineSampleDomain, nullptr},
     {"engine_set_articulation", "channel", kEngineMidiChannelDomain, nullptr},
+    {"engine_set_automation_lane", "points[].ppq", kPublicPpqDomain, nullptr},
     {"engine_set_bus_strip_eq_band_json", "band_index", kEngineBandIndexDomain, nullptr},
     {"engine_set_capture_buffer", "buffer.capacity_frames", kEngineCaptureCapacityFramesDomain,
      nullptr},
@@ -73,11 +78,15 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_set_clips", "clips[].length_samples", kEngineClipLengthDomain, nullptr},
     {"engine_set_clips", "clips[].num_channels", kEngineClipChannelsDomain, nullptr},
     {"engine_set_clips", "clips[].num_samples", kEngineClipSamplesDomain, nullptr},
+    {"engine_set_clips", "clips[].start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_graph", "spec.node_count", kEngineGraphNodeCountDomain, nullptr},
     {"engine_set_graph", "spec.nodes[].num_ports", kEngineGraphNodePortsDomain, nullptr},
     {"engine_set_graph", "spec.num_channels", kEngineGraphChannelsDomain, nullptr},
     {"engine_set_graph", "spec.parameter_bindings[].param_id", kEngineParameterIdDomain, nullptr},
+    {"engine_set_loop", "end_ppq", kPublicPpqDomain, nullptr},
+    {"engine_set_loop", "start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_markers", "markers[].id", kEngineMarkerIdDomain, nullptr},
+    {"engine_set_markers", "markers[].ppq", kPublicPpqDomain, nullptr},
     {"engine_set_master_strip_eq_band_json", "band_index", kEngineBandIndexDomain, nullptr},
     {"engine_set_midi_clips", "clips[].events[].group", kEngineUmpGroupDomain, nullptr},
     {"engine_set_midi_clips", "clips[].fade_in_samples", kEngineClipFadeDomain, nullptr},
@@ -86,7 +95,9 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_set_midi_clips", "clips[].loop", kEngineMidiClipLoopDomain, nullptr},
     {"engine_set_midi_clips", "clips[].loop_length_samples", kEngineMidiClipLoopLengthDomain,
      nullptr},
+    {"engine_set_midi_clips", "clips[].start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_tempo_segments", "segment_count", kEngineSegmentCountDomain, nullptr},
+    {"engine_set_tempo_segments", "segments[].start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_time_signature", "denominator", kEngineTimeSignatureDenominatorDomain, nullptr},
     {"engine_set_time_signature", "numerator", kEngineTimeSignatureNumeratorDomain, nullptr},
     {"engine_set_time_signature_segments", "segment_count", kEngineSegmentCountDomain, nullptr},
@@ -94,6 +105,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
      kEngineTimeSignatureDenominatorDomain, nullptr},
     {"engine_set_time_signature_segments", "segments[].numerator",
      kEngineTimeSignatureNumeratorDomain, nullptr},
+    {"engine_set_time_signature_segments", "segments[].start_ppq", kPublicPpqDomain, nullptr},
     {"engine_set_track_buses", "buses[].bus_id", kEngineMixerIdDomain, nullptr},
     {"engine_set_track_lanes", "lane_count", kEngineLaneCountDomain, nullptr},
     {"engine_set_track_lanes", "lanes[].track_id", kEngineMixerIdDomain, nullptr},
@@ -106,6 +118,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_upsert_clip", "clip.length_samples", kEngineClipLengthDomain, nullptr},
     {"engine_upsert_clip", "clip.num_channels", kEngineClipChannelsDomain, nullptr},
     {"engine_upsert_clip", "clip.num_samples", kEngineClipSamplesDomain, nullptr},
+    {"engine_upsert_clip", "clip.start_ppq", kPublicPpqDomain, nullptr},
     {"extract_notes", "n_frames", kF0FrameCountDomain, nullptr},
     {"extract_percussive_events", "config.hpss_kernel_harmonic", kPercussiveHpssKernelDomain,
      nullptr},

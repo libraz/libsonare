@@ -40,7 +40,7 @@ from ._ffi_types_core import (
     SonareMeterTelemetryRecord,
     SonareScopeTelemetryRecord,
 )
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _MAX_PUBLIC_PPQ, _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _INT64_MAX,
@@ -126,8 +126,8 @@ class _EngineIoMixin:
             raise _refuse(f"punch needs exactly one of {', '.join(names)}")
         if ppq is not None:
             beats = _narrow_double(ppq, f"punch.{edge}_ppq")
-            if not beats >= 0.0:
-                raise _refuse(f"punch.{edge}_ppq must be at least 0")
+            if not 0.0 <= beats <= _MAX_PUBLIC_PPQ:
+                raise _refuse(f"punch.{edge}_ppq must be finite and in [0, 1e12]")
             # Beats map to samples through the tempo map, so no single scale applies.
             return self.sample_at_ppq(beats), _Respelling(f"punch.{edge}_ppq")
         bound = _resolve_sample_bound(

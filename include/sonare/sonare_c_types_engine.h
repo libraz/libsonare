@@ -480,7 +480,7 @@ typedef struct {
   /// Required, positive; at most the channel count the engine was prepared for. Default 0.
   int num_channels;
   uint32_t clip_id;  ///< Id given to the frozen clip. Default 0, so the caller must set it.
-  double start_ppq;  ///< Timeline position of the frozen clip in PPQ; finite, >= 0. Default 0.
+  double start_ppq;  ///< Timeline position of the frozen clip in PPQ, in [0, 1e12]. Default 0.
   float gain;        ///< Linear gain of the frozen clip; finite, >= 0. Default 1.
 } SonareEngineFreezeOptions;
 

@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "editing/vocal_edit/source_digest.h"
@@ -398,8 +399,10 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
                               "desc.expected_source_sample_rate");
         check::integer_within(desc->expected_source_sample_count, kVocalSourceSampleCountDomain,
                               "desc.expected_source_sample_count");
-        check::finite(desc->expected_clip_length_ppq, "desc.expected_clip_length_ppq");
-        check::finite(desc->expected_source_offset_ppq, "desc.expected_source_offset_ppq");
+        check::within(desc->expected_clip_length_ppq, sonare_c_detail::kPublicPpqLengthDomain,
+                      "desc.expected_clip_length_ppq");
+        check::within(desc->expected_source_offset_ppq, sonare_c_detail::kPublicPpqDomain,
+                      "desc.expected_source_offset_ppq");
         check::non_null(desc->rendered_mono, "desc.rendered_mono");
         if (desc->rendered_sample_count != desc->expected_source_sample_count) {
           check::refuse_relation(

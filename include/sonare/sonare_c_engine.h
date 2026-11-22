@@ -219,7 +219,7 @@ SonareError sonare_engine_set_tempo(SonareEngine* engine, double bpm);
 /// @brief Sets the time signature; @p numerator and @p denominator must be positive.
 SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator, int denominator);
 /// @brief Installs a tempo map from @p segment_count ramp segments (control
-///   thread only). Each segment needs a finite non-negative @c start_ppq and a
+///   thread only). Each segment needs a @c start_ppq in [0, 1e12] and a
 ///   @c bpm in (0, 100000]; a non-zero @c end_bpm ramps to a value in the same
 ///   range. Passing zero segments clears the map back to the single-tempo
 ///   value. Sample positions are derived internally. Of two segments at one @c start_ppq, the
@@ -228,7 +228,7 @@ SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
                                              const SonareProjectTempoSegment* segments,
                                              size_t segment_count);
 /// @brief Installs a time-signature map from @p segment_count segments (control
-///   thread only). Each segment needs a finite non-negative @c start_ppq and a
+///   thread only). Each segment needs a @c start_ppq in [0, 1e12] and a
 ///   positive @c numerator / @c denominator. Of two segments at one
 ///   @c start_ppq, the later-supplied one takes effect.
 SonareError sonare_engine_set_time_signature_segments(
@@ -1254,7 +1254,7 @@ typedef struct {
   uint32_t id;           ///< Stable clip id
   uint32_t track_id;     ///< Id of the source track; 0 is unset
   int64_t start_sample;  ///< Clip start on the render timeline, in samples
-  double start_ppq;      ///< Clip start in quarter notes; must be finite, informational
+  double start_ppq;      ///< Clip start in quarter notes, in [0, 1e12]; informational
   /// Clip length in samples; positive. Default @ref SONARE_ENGINE_MIDI_CLIP_OPEN_ENDED.
   int64_t length_samples;
   int loop;  ///< Non-zero loops the clip; negative is refused. Default 0

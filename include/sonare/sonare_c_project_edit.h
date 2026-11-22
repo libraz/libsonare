@@ -43,13 +43,13 @@ static_assert(sizeof(SonareProjectTrackDesc) == 2u * sizeof(void*),
 /// the clip is bound to it. MIDI events are supplied separately via
 /// @ref sonare_project_set_midi_events.
 ///
-/// All musical positions are PPQ (quarter notes). @p length_ppq must be > 0.
+/// All musical positions are PPQ (quarter notes) in [0, 1e12]; @p length_ppq must be > 0.
 typedef struct {
   uint32_t track_id;  ///< Id of the existing track that receives the clip.
   int is_midi;        ///< 0 = audio clip, non-zero = MIDI clip.
 
   double start_ppq;          ///< Clip start on the timeline in quarter notes.
-  double length_ppq;         ///< Clip length in quarter notes; must be > 0.
+  double length_ppq;         ///< Clip length in quarter notes, in (0, 1e12].
   double source_offset_ppq;  ///< Offset into the source in quarter notes.
   /// Linear playback gain; must be finite and >= 0. 0 = silent clip (passed through verbatim,
   /// no coercion to unity).
@@ -115,7 +115,7 @@ typedef struct {
   uint32_t track_id;               ///< Id of the existing track that receives the clip.
   uint32_t flags;                  ///< 0 or SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
   double start_ppq;                ///< Clip start on the timeline in quarter notes.
-  double loop_length_ppq;          ///< Length of one loop in quarter notes; must be > 0.
+  double loop_length_ppq;          ///< Length of one loop in quarter notes, in (0, 1e12].
   const float* audio_interleaved;  ///< Captured interleaved samples.
   int64_t audio_frames;            ///< Frames per channel in @p audio_interleaved.
   int audio_channels;              ///< Channel count of @p audio_interleaved.
@@ -300,7 +300,7 @@ typedef enum SONARE_ENUM_BASE {
 } SonareAutomationTargetKind;
 
 /// @brief One clip fade region for @ref sonare_project_set_clip_fade.
-///        @p length_ppq must be finite and >= 0 (0 = no fade). @p curve is a
+///        @p length_ppq must be in [0, 1e12] (0 = no fade). @p curve is a
 ///        @ref SonareProjectFadeCurve ordinal.
 typedef struct {
   double length_ppq;  ///< Fade length in quarter notes; 0 = no fade.
@@ -318,11 +318,11 @@ static_assert(sizeof(SonareProjectClipFade) == sizeof(double) + 2u * sizeof(uint
 ///
 /// @p id is clip-local and must be non-zero. @p source_id may be 0 to use the
 /// clip's current source, or an existing source id compatible with the clip's
-/// track kind. @p source_offset_ppq must be finite and >= 0. @p name is optional.
+/// track kind. @p source_offset_ppq must be in [0, 1e12]. @p name is optional.
 typedef struct {
   uint32_t id;               ///< Clip-local take id; non-zero.
   uint32_t source_id;        ///< Source id; 0 = the clip's current source.
-  double source_offset_ppq;  ///< Offset into the source in quarter notes; finite and >= 0.
+  double source_offset_ppq;  ///< Offset into the source in quarter notes, in [0, 1e12].
   const char* name;          ///< Optional NUL-terminated UTF-8 name; may be NULL.
 } SonareProjectClipTake;
 
@@ -434,7 +434,7 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
 
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
 ///        The track, source, and clip form one undo transaction. Returns the
-///        allocated track and clip ids. @p length_ppq must be > 0. The clip window
+///        allocated track and clip ids. @p length_ppq must be in (0, 1e12]. The clip window
 ///        is half-open, [0, @p length_ppq): an event at exactly @p length_ppq is
 ///        outside it, and a note still sounding at the clip end is closed with a
 ///        note-off there by export and validation.

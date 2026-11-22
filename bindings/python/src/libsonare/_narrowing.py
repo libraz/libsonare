@@ -208,6 +208,9 @@ def _narrow_double(value: object, name: str) -> float:
 _INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 
+# The C ABI's bound on every quarter-note position and length.
+_MAX_PUBLIC_PPQ = 1e12
+
 # The C ABI spells "not given" as -1 for the optional numeric parameters below.
 _C_ABSENT = -1
 

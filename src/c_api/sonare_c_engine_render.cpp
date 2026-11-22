@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/ppq_domains.h"
 #include "core/audio.h"
 #include "core/channel_layout.h"
 #include "core/resample.h"
@@ -408,9 +409,10 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
       err != SONARE_OK) {
     return err;
   }
-  if (!std::isfinite(options->start_ppq) || options->start_ppq < 0.0) {
-    return run_validation(
-        [&] { util::check::at_least(options->start_ppq, 0.0, "options.start_ppq"); });
+  if (const SonareError err = run_validation(
+          [&] { util::check::within(options->start_ppq, kPublicPpqDomain, "options.start_ppq"); });
+      err != SONARE_OK) {
+    return err;
   }
   if (!(std::isfinite(options->gain) && options->gain >= 0.0f)) {
     return run_validation([&] { util::check::at_least(options->gain, 0.0, "options.gain"); });

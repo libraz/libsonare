@@ -12,6 +12,7 @@ import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import SONARE_AUTOMATION_TARGET_UNCHANGED
+from ._narrowing import _MAX_PUBLIC_PPQ
 from ._project_mir import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
@@ -951,16 +952,16 @@ class _ProjectEditMixin:
     ) -> None:
         """Set a clip's fade-in and fade-out regions via an undoable edit.
 
-        Each fade length (PPQ) must be finite and at least 0 (0 = no fade); each curve
+        Each fade length (PPQ) must be finite and in [0, 1e12] (0 = no fade); each curve
         is a token (``"linear"`` / ``"equalPower"`` / ``"exponential"`` /
         ``"logarithmic"``).
         """
         fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
         fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
-        if fin < 0.0:
-            raise _refuse("fade_in_length_ppq must be at least 0")
-        if fout < 0.0:
-            raise _refuse("fade_out_length_ppq must be at least 0")
+        if not 0.0 <= fin <= _MAX_PUBLIC_PPQ:
+            raise _refuse("fade_in_length_ppq must be finite and in [0, 1e12]")
+        if not 0.0 <= fout <= _MAX_PUBLIC_PPQ:
+            raise _refuse("fade_out_length_ppq must be finite and in [0, 1e12]")
         c_in = SonareProjectClipFade(
             length_ppq=fin, curve=_fade_curve_value(fade_in_curve, "fade_in_curve")
         )
@@ -988,8 +989,8 @@ class _ProjectEditMixin:
 
         ``loop_mode`` is ``"off"`` or ``"loop"``. An omitted ``loop_length_ppq``
         loops the entire clip (the length is resolved from the clip's own
-        duration); a given one must be greater than 0. ``loop_crossfade_ppq`` is
-        an optional equal-power crossfade at the loop seam (PPQ, at least 0;
+        duration); a given one must be in (0, 1e12]. ``loop_crossfade_ppq`` is
+        an optional equal-power crossfade at the loop seam (PPQ, in [0, 1e12];
         0 = hard loop); the engine clamps it to the clip's pre-roll and half the
         loop.
         """
@@ -999,11 +1000,11 @@ class _ProjectEditMixin:
             length = _narrow_double(loop_length_ppq, "loop_length_ppq")
             if length == 0.0:
                 raise _refuse("loop_length_ppq must not be 0; omit it to loop the whole clip")
-            if length < 0.0:
-                raise _refuse("loop_length_ppq must be greater than 0")
+            if not 0.0 < length <= _MAX_PUBLIC_PPQ:
+                raise _refuse("loop_length_ppq must be finite and in (0, 1e12]")
         crossfade = _narrow_double(loop_crossfade_ppq, "loop_crossfade_ppq")
-        if crossfade < 0.0:
-            raise _refuse("loop_crossfade_ppq must be at least 0")
+        if not 0.0 <= crossfade <= _MAX_PUBLIC_PPQ:
+            raise _refuse("loop_crossfade_ppq must be finite and in [0, 1e12]")
         _check(
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(),

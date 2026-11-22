@@ -2217,12 +2217,12 @@ TEST_CASE("C-ABI clip edits name the parameter they refuse as \"<param> <predica
     CHECK(sonare_project_trim_clip(project, 0, 0.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(message() == "clip_id must not be 0");
     CHECK(sonare_project_trim_clip(project, clip, -1.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message() == "new_start_ppq must be finite and at least 0");
+    CHECK(message() == "new_start_ppq must be finite and in [0, 1e12]");
     CHECK(sonare_project_trim_clip(project, clip, 0.0, 0.0) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message() == "new_length_ppq must be finite and greater than 0");
+    CHECK(message() == "new_length_ppq must be finite and in (0, 1e12]");
     CHECK(sonare_project_split_clip(project, clip, std::nan(""), &new_clip) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message() == "split_ppq must be finite");
+    CHECK(message() == "split_ppq must be finite and in [0, 1e12]");
     CHECK(sonare_project_set_clip_gain(project, clip, -0.5f) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(message() == "gain must be finite and at least 0");
     CHECK(sonare_project_add_midi_clip(project, 0.0, 4.0, nullptr, nullptr) ==
@@ -2251,7 +2251,7 @@ TEST_CASE("C-ABI clip edits name the parameter they refuse as \"<param> <predica
     bad.length_ppq = -1.0;
     CHECK(sonare_project_set_clip_fade(project, clip, &bad, &good) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message() == "fade_in.length_ppq must be finite and at least 0");
+    CHECK(message() == "fade_in.length_ppq must be finite and in [0, 1e12]");
   }
 
   SECTION("ids that name nothing in the project") {

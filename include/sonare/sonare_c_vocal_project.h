@@ -32,10 +32,9 @@ typedef struct {
   uint32_t expected_source_sample_rate;  ///< Sample rate of the original, in [8000, 384000] Hz.
   size_t expected_source_sample_count;   ///< Length of the original in frames; must be positive.
   uint8_t expected_source_sha256[32];    ///< SHA-256 digest of the original PCM.
+  double expected_clip_length_ppq;       ///< Clip length in quarter notes, in (0, 1e12].
   double
-      expected_clip_length_ppq;  ///< Clip length in quarter notes; start position is not checked.
-  double
-      expected_source_offset_ppq;  ///< Source offset of the target take (clip offset for take 0).
+      expected_source_offset_ppq;  ///< Take source offset (clip offset for take 0), in [0, 1e12].
   const float* rendered_mono;      ///< Rendered mono PCM; must not be NULL.
   size_t rendered_sample_count;    ///< Frames in rendered_mono; must equal the original's count.
   uint32_t rendered_sample_rate;   ///< Sample rate in Hz; must equal the original's rate.

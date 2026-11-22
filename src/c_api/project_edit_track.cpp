@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "mixing/panner.h"
@@ -99,7 +100,8 @@ void automation_lane_from_values(uint32_t target_param_id, int32_t target_kind,
   breakpoints.reserve(point_count);
   for (size_t i = 0; i < point_count; ++i) {
     const SonareAutomationPoint& p = point_data[i];
-    check::at_least(p.ppq, 0.0, check::indexed_subject("desc.points", i, "ppq").c_str());
+    check::within(p.ppq, sonare_c_detail::kPublicPpqDomain,
+                  check::indexed_subject("desc.points", i, "ppq").c_str());
     check_lane_value(kind, target_param_id, p.value,
                      check::indexed_subject("desc.points", i, "value").c_str());
     sonare::automation::Breakpoint bp;
@@ -151,7 +153,7 @@ void check_assignable_entity_id(uint32_t id, const char* subject) {
 // Refuses a marker whose kind, position, id or key signature the project cannot store.
 void check_marker(const SonareProjectMarker* marker) {
   namespace check = sonare::util::check;
-  check::at_least(marker->ppq, 0.0, "marker.ppq");
+  check::within(marker->ppq, sonare_c_detail::kPublicPpqDomain, "marker.ppq");
   if (marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE) {
     check::refuse("marker.kind", sonare::util::refusal::kDeclaredValuePredicate);
   }
@@ -249,8 +251,7 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
     // sonare_project_snap_to_grid) then computed silently clamped, meaningless
     // sample positions from it.
     const std::string prefix = "segments[" + std::to_string(i) + "].";
-    check::in_range(in.start_ppq, 0.0, sonare::transport::kMaxPublicPpq,
-                    (prefix + "start_ppq").c_str());
+    check::within(in.start_ppq, sonare_c_detail::kPublicPpqDomain, (prefix + "start_ppq").c_str());
     check::in_interval(in.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm, true,
                        (prefix + "bpm").c_str());
     check::in_range(in.end_bpm, 0.0, sonare::transport::kMaxPublicTempoBpm,
@@ -301,8 +302,7 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
     // survives a round trip and only the compiler's own sort hides it at
     // playback time.
     const std::string prefix = "segments[" + std::to_string(i) + "].";
-    check::in_range(in.start_ppq, 0.0, sonare::transport::kMaxPublicPpq,
-                    (prefix + "start_ppq").c_str());
+    check::within(in.start_ppq, sonare_c_detail::kPublicPpqDomain, (prefix + "start_ppq").c_str());
     check::integer_within(in.numerator, kTimeSignatureNumeratorDomain,
                           (prefix + "numerator").c_str());
     check::integer_within(in.denominator, kTimeSignatureDenominatorDomain,

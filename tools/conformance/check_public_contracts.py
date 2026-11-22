@@ -66,6 +66,7 @@ def main() -> int:
         "negative_ppq",
         "nan_ppq",
         "infinite_ppq",
+        "ppq_above_bound",
         "negative_id",
         "fractional_id",
         "oversize_id",

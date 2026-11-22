@@ -4,6 +4,7 @@
 #include <string>
 
 #include "arrangement/vocal_edit_sidecar.h"
+#include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -418,7 +419,8 @@ SonareError refuse_subject(const char* subject, const std::string& predicate) {
 // name. The fade length must be finite and >= 0 and the curve ordinal in range.
 void clip_fade_from_desc(const char* arg, const SonareProjectClipFade* desc, arr::ClipFade* out) {
   const std::string name(arg);
-  util::check::at_least(desc->length_ppq, 0.0, (name + ".length_ppq").c_str());
+  util::check::within(desc->length_ppq, sonare_c_detail::kPublicPpqDomain,
+                      (name + ".length_ppq").c_str());
   util::check::one_of(desc->curve, std::array<int, 4>{0, 1, 2, 3}, (name + ".curve").c_str());
   out->curve = admitted_ordinal_to_enum<arr::FadeCurve>(desc->curve);
   out->length_ppq = desc->length_ppq;
@@ -437,8 +439,8 @@ void clip_takes_from_desc(const SonareProjectClipTake* takes, size_t take_count,
     if (take.id == 0) {
       util::check::refuse(util::check::indexed_subject("takes", i, "id").c_str(), "must not be 0");
     }
-    util::check::at_least(take.source_offset_ppq, 0.0,
-                          util::check::indexed_subject("takes", i, "source_offset_ppq").c_str());
+    util::check::within(take.source_offset_ppq, sonare_c_detail::kPublicPpqDomain,
+                        util::check::indexed_subject("takes", i, "source_offset_ppq").c_str());
     arr::ClipTake next;
     next.id = take.id;
     next.source_id = take.source_id;
@@ -461,13 +463,13 @@ void clip_comp_segments_from_desc(const SonareProjectClipCompSegment* segments,
     const SonareProjectClipCompSegment& segment = segments[i];
     const std::string start = util::check::indexed_subject("segments", i, "start_ppq");
     const std::string end = util::check::indexed_subject("segments", i, "end_ppq");
-    util::check::at_least(segment.start_ppq, 0.0, start.c_str());
-    util::check::greater_than(segment.end_ppq, 0.0, end.c_str());
+    util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain, start.c_str());
+    util::check::within(segment.end_ppq, sonare_c_detail::kPublicPpqLengthDomain, end.c_str());
     if (!(segment.end_ppq > segment.start_ppq)) {
       util::check::refuse_relation({end, start}, "{0} must be greater than {1}");
     }
-    util::check::at_least(segment.crossfade_ppq, 0.0,
-                          util::check::indexed_subject("segments", i, "crossfade_ppq").c_str());
+    util::check::within(segment.crossfade_ppq, sonare_c_detail::kPublicPpqDomain,
+                        util::check::indexed_subject("segments", i, "crossfade_ppq").c_str());
     // The bounds a crossfade has against its neighbours need the whole lane, so
     // they are the edit command's to check; this rejects only the value itself.
     out->push_back({segment.start_ppq, segment.end_ppq, segment.take_id, segment.crossfade_ppq});
@@ -508,9 +510,11 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   SONARE_C_TRY
   if (const SonareError err = run_validation([&] {
         check_nonzero_id(desc->track_id, "desc.track_id");
-        util::check::greater_than(desc->length_ppq, 0.0, "desc.length_ppq");
-        util::check::at_least(desc->start_ppq, 0.0, "desc.start_ppq");
-        util::check::at_least(desc->source_offset_ppq, 0.0, "desc.source_offset_ppq");
+        util::check::within(desc->length_ppq, sonare_c_detail::kPublicPpqLengthDomain,
+                            "desc.length_ppq");
+        util::check::within(desc->start_ppq, sonare_c_detail::kPublicPpqDomain, "desc.start_ppq");
+        util::check::within(desc->source_offset_ppq, sonare_c_detail::kPublicPpqDomain,
+                            "desc.source_offset_ppq");
         util::check::at_least(desc->gain, 0.0, "desc.gain");
       });
       err != SONARE_OK) {
@@ -703,8 +707,9 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
           util::check::refuse("desc.flags", "has unknown bits set");
         }
         check_nonzero_id(desc->track_id, "desc.track_id");
-        util::check::at_least(desc->start_ppq, 0.0, "desc.start_ppq");
-        util::check::greater_than(desc->loop_length_ppq, 0.0, "desc.loop_length_ppq");
+        util::check::within(desc->start_ppq, sonare_c_detail::kPublicPpqDomain, "desc.start_ppq");
+        util::check::within(desc->loop_length_ppq, sonare_c_detail::kPublicPpqLengthDomain,
+                            "desc.loop_length_ppq");
         util::check::non_null(desc->audio_interleaved, "desc.audio_interleaved");
         check_audio_payload({"desc.audio_interleaved", "desc.audio_frames", "desc.audio_channels",
                              "desc.audio_sample_rate"},
@@ -861,8 +866,8 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
   if (out_clip_id) *out_clip_id = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   if (const SonareError err = run_validation([&] {
-        util::check::at_least(start_ppq, 0.0, "start_ppq");
-        util::check::greater_than(length_ppq, 0.0, "length_ppq");
+        util::check::within(start_ppq, sonare_c_detail::kPublicPpqDomain, "start_ppq");
+        util::check::within(length_ppq, sonare_c_detail::kPublicPpqLengthDomain, "length_ppq");
       });
       err != SONARE_OK) {
     return err;
@@ -925,7 +930,7 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
   SONARE_C_TRY
   if (const SonareError err = run_validation([&] {
         check_nonzero_id(clip_id, "clip_id");
-        util::check::finite(split_ppq, "split_ppq");
+        util::check::within(split_ppq, sonare_c_detail::kPublicPpqDomain, "split_ppq");
       });
       err != SONARE_OK) {
     return err;
@@ -962,8 +967,9 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
   SONARE_C_TRY
   if (const SonareError err = run_validation([&] {
         check_nonzero_id(clip_id, "clip_id");
-        util::check::at_least(new_start_ppq, 0.0, "new_start_ppq");
-        util::check::greater_than(new_length_ppq, 0.0, "new_length_ppq");
+        util::check::within(new_start_ppq, sonare_c_detail::kPublicPpqDomain, "new_start_ppq");
+        util::check::within(new_length_ppq, sonare_c_detail::kPublicPpqLengthDomain,
+                            "new_length_ppq");
       });
       err != SONARE_OK) {
     return err;
@@ -992,7 +998,7 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
   SONARE_C_TRY
   if (const SonareError err = run_validation([&] {
         check_nonzero_id(clip_id, "clip_id");
-        util::check::at_least(new_start_ppq, 0.0, "new_start_ppq");
+        util::check::within(new_start_ppq, sonare_c_detail::kPublicPpqDomain, "new_start_ppq");
       });
       err != SONARE_OK) {
     return err;
@@ -1304,8 +1310,9 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
                             "loop_mode");
         // Under LOOP, a length of 0 means "loop the entire clip" (resolved from the
         // clip's own duration at compile time); any other mode also permits 0.
-        util::check::at_least(loop_length_ppq, 0.0, "loop_length_ppq");
-        util::check::at_least(loop_crossfade_ppq, 0.0, "loop_crossfade_ppq");
+        util::check::within(loop_length_ppq, sonare_c_detail::kPublicPpqDomain, "loop_length_ppq");
+        util::check::within(loop_crossfade_ppq, sonare_c_detail::kPublicPpqDomain,
+                            "loop_crossfade_ppq");
       });
       err != SONARE_OK) {
     return err;
@@ -1370,7 +1377,7 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
   SONARE_C_TRY
   if (const SonareError err = run_validation([&] {
         check_nonzero_id(clip_id, "clip_id");
-        util::check::at_least(new_start_ppq, 0.0, "new_start_ppq");
+        util::check::within(new_start_ppq, sonare_c_detail::kPublicPpqDomain, "new_start_ppq");
       });
       err != SONARE_OK) {
     return err;

@@ -811,6 +811,7 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
           desc.clip_id = 1;
           desc.expected_source_sample_rate = 48000;
           desc.expected_source_sample_count = 1;
+          desc.expected_clip_length_ppq = 4.0;
           desc.rendered_mono = rendered;
           desc.rendered_sample_count = 1;
           desc.rendered_sample_rate = 48000;
