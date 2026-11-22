@@ -761,7 +761,6 @@ inline constexpr std::string_view kTokens[] = {
     "project_set_max_history_bytes",
     "project_set_max_undo_depth",
     "project_set_midi_events",
-    "project_set_midi_fx",
     "project_set_mixer_scene_json",
     "project_set_overlap_policy",
     "project_set_part_rig",

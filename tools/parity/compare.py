@@ -403,8 +403,6 @@ _ALIAS_COVERAGE = {
     "engine_parameter_info_by_index": ("parameters",),
     # The fixed-point latency is read in (fractional) samples.
     "engine_graph_latency_samples_q8": ("graph_latency_samples",),
-    # Deprecated C alias of project_bake_midi_fx; the facades expose the bake only.
-    "project_set_midi_fx": ("bake_midi_fx",),
     # One strip family addressed by a strip reference: a track id or 'master'
     # selects the track or master strip, and buses keep a family of their own.
     # The `_json` / `_by_name` spellings take the object or the named parameter.

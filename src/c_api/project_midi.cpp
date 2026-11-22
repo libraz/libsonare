@@ -1389,9 +1389,3 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
                                                  clip_id, config_json, out_count);
 #endif
 }
-
-SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
-                                       const char* config_json) {
-  SONARE_C_API_ENTRY;
-  return sonare_project_bake_midi_fx(project, clip_id, config_json, nullptr, 0, nullptr);
-}

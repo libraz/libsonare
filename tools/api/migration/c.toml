@@ -1324,6 +1324,13 @@ rule = "c-free"
 
 [[entry]]
 kind = "function"
+old = "sonare_project_set_midi_fx"
+removed = "call sonare_project_bake_midi_fx(project, clip_id, config_json, NULL, 0, NULL)"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "function"
 old = "sonare_project_free_assist_sidecar"
 new = "sonare_free_project_assist_sidecar"
 domain = "project"

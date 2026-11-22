@@ -536,12 +536,6 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
                                                  const char* config_json, size_t* out_count);
 
-/// @brief Backward alias for @ref sonare_project_bake_midi_fx.
-/// @deprecated Use @ref sonare_project_bake_midi_fx for destructive clip edits,
-///             or RealtimeEngine MIDI-FX APIs for live non-destructive inserts.
-SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
-                                       const char* config_json);
-
 /// @brief Pre-flight check for hanging / unmatched notes in a MIDI clip.
 ///
 /// Builds the same source-offset / length / loop-expanded, half-open event view

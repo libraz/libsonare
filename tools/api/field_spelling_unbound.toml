@@ -306,7 +306,6 @@ python = 0
 "project_preview_midi_fx_count.config_json" = "folded into config"
 "project_set_clip_fade.curve" = "folded into fadeInCurve / fadeOutCurve; python: fade_in_curve / fade_out_curve"
 "project_set_clip_fade.length_ppq" = "folded into fadeInPpq / fadeOutPpq; python: fade_in_length_ppq / fade_out_length_ppq"
-"project_set_midi_fx.config_json" = "not exposed"
 "project_set_part_rig.inserts_json" = "folded into inserts"
 "project_set_source_audio.interleaved" = "folded into channels"
 "project_soundfont_manifest.max_entries" = "C-only plumbing: output buffer capacity"

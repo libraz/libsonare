@@ -1031,6 +1031,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareMidiEventPod.data0` | `SonareMidiEventPod.word0` |
 | `SonareMidiEventPod.data1` | `SonareMidiEventPod.word1` |
+| `sonare_project_set_midi_fx` | removed: call sonare_project_bake_midi_fx(project, clip_id, config_json, NULL, 0, NULL) |
 
 #### Versions and features come from *AbiVersion() and capabilities()
 

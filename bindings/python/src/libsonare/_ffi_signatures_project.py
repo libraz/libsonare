@@ -552,13 +552,6 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
     ]
 
-    lib.sonare_project_set_midi_fx.restype = ctypes.c_int32
-    lib.sonare_project_set_midi_fx.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_char_p,
-    ]
-
     lib.sonare_project_validate_midi_notes.restype = ctypes.c_int32
     lib.sonare_project_validate_midi_notes.argtypes = [
         ctypes.c_void_p,

@@ -1653,7 +1653,6 @@
 "project_set_max_history_bytes": {"domain": "project", "surfaces": ["c"]},
 "project_set_max_undo_depth": {"domain": "project", "surfaces": ["c"]},
 "project_set_midi_events": {"domain": "project", "surfaces": ["c"]},
-"project_set_midi_fx": {"domain": "project", "surfaces": ["c"]},
 "project_set_mixer_scene_json": {"domain": "project", "surfaces": ["c"]},
 "project_set_overlap_policy": {"domain": "project", "surfaces": ["c"]},
 "project_set_part_rig": {"domain": "project", "surfaces": ["c"]},
