@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -27,6 +29,10 @@ struct ClippingResult {
 /// Library default detection threshold: just below full scale, so the flattened
 /// runs a converter produces are reported while ordinary peaks are not.
 inline constexpr float kDefaultClippingThreshold = 0.999f;
+
+/// @brief The clip levels a caller may give, in dBFS; "not given" is NaN at the C ABI only.
+inline constexpr util::check::NumericDomain kClippingThresholdDbDomain =
+    util::check::real_domain(constants::kFloorDb, 0.0);
 /// Library default minimum run length: report every clipped run.
 inline constexpr size_t kDefaultClippingMinRegionSamples = 1;
 

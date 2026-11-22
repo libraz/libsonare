@@ -12,7 +12,7 @@ namespace sonare::metering {
 
 float clipping_threshold_from_db(float threshold_db) {
   if (std::isnan(threshold_db)) return kDefaultClippingThreshold;
-  util::check::in_interval(threshold_db, constants::kFloorDb, true, 0.0, true, "threshold_db");
+  util::check::within(threshold_db, kClippingThresholdDbDomain, "threshold_db");
   return db_to_linear(threshold_db);
 }
 

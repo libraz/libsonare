@@ -34,6 +34,10 @@ struct VqtConfig {
   CqtConfig to_cqt_config() const;
 };
 
+/// @brief The gamma a caller may give, in Hz; "not given" is absence, never a written value.
+inline constexpr util::check::NumericDomain kVqtGammaDomain =
+    util::check::real_domain_above(0.0, true);
+
 /// @brief Refuses an infinite gamma, which the automatic sentinel would otherwise absorb.
 /// @details A NaN or negative gamma stays the automatic spelling; -inf is not one of them.
 /// @throws SonareParameterRefusal(InvalidParameter) when @p gamma is infinite.
