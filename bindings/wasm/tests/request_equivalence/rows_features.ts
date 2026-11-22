@@ -70,7 +70,12 @@ export const ROWS: Row[] = [
     values: { values: SMALL, ref: 0.5, amin: 0.2, topDb: 5 },
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
-    oneOf: [{ fields: ['values'], error: 'TypeError: powerToDb: values must be a Float32Array' }],
+    oneOf: [
+      {
+        fields: ['values'],
+        error: 'TypeError: powerToDb: values must be a Float32Array or a Matrix2D',
+      },
+    ],
   },
   {
     name: 'amplitudeToDb',
@@ -81,7 +86,10 @@ export const ROWS: Row[] = [
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
     oneOf: [
-      { fields: ['values'], error: 'TypeError: amplitudeToDb: values must be a Float32Array' },
+      {
+        fields: ['values'],
+        error: 'TypeError: amplitudeToDb: values must be a Float32Array or a Matrix2D',
+      },
     ],
   },
   {
