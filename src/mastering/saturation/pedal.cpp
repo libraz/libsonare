@@ -346,7 +346,6 @@ std::vector<rt::ParamDescriptor> Pedal<Core>::parameter_descriptors() const {
 
 template <typename Core>
 void Pedal<Core>::validate_config(const Config& config) {
-  const std::string name = Core::kName;
   check::in_range(config.gain_db, 0.0, Core::kMaxGainDb, "gain_db");
   check::in_range(config.tone_hz, Core::kMinToneHz, Core::kMaxToneHz, "tone_hz");
   check::at_most(config.level_db, sonare::kMaxFiniteGainDb, "level_db");

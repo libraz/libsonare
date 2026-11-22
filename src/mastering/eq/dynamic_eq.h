@@ -159,7 +159,7 @@ class DynamicEq : public rt::ProcessorBase {
     return band_gates_[index].admit(bands_[index].enabled, [this, index] { reset_band(index); });
   }
   static float dynamic_gain_delta(const DynamicEqBand& band, float detector_db);
-  void rebuild(int num_samples = 0);
+  void rebuild();
   void apply_band_gain(size_t index, float gain_db);
   void validate_sidechain(int expected_samples) const;
 

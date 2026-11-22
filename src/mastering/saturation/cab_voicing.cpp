@@ -88,10 +88,9 @@ CabDesign design_cab_stage(CabModel cab_model, MicModel mic_model, float axis, f
   out.presence = rt::rbj_peak(rt::frequency_to_w0(cab.presence_hz, sample_rate), 1.0f, presence_db);
   // 4th-order Butterworth roll-off: the steep top-end cut is the single
   // strongest "cabinet" cue.
-  out.lp1 =
-      rt::rbj_lowpass(rt::frequency_to_w0(rolloff_hz, sample_rate), rt::butterworth_stage_q(4, 0));
-  out.lp2 =
-      rt::rbj_lowpass(rt::frequency_to_w0(rolloff_hz, sample_rate), rt::butterworth_stage_q(4, 1));
+  const float rolloff_w0 = rt::frequency_to_w0(rolloff_hz, sample_rate);
+  out.lp1 = rt::rbj_lowpass(rolloff_w0, rt::butterworth_stage_q(4, 0));
+  out.lp2 = rt::rbj_lowpass(rolloff_w0, rt::butterworth_stage_q(4, 1));
   return out;
 }
 

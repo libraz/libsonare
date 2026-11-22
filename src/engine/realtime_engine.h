@@ -512,12 +512,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
   int64_t sample_at_ppq(double ppq) const noexcept;
   double bpm_at_sample(int64_t sample) const noexcept {
-    const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
-    return (map ? map : &tempo_map_)->bpm_at_sample(sample);
+    return control_tempo_map()->bpm_at_sample(sample);
   }
   transport::TimeSignature time_signature_at_ppq(double ppq) const noexcept {
-    const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
-    return (map ? map : &tempo_map_)->time_signature_at_ppq(ppq);
+    return control_tempo_map()->time_signature_at_ppq(ppq);
   }
   /// Throws InvalidParameter when an enabled loop would be shorter than the record offset of an
   /// armed punch capture (see set_record_offset_samples).
@@ -1470,6 +1468,11 @@ class RealtimeEngine : private ClipPageRequestSink {
 
   transport::TempoMap tempo_map_{};
   rt::RtPublisher<transport::TempoMap> tempo_map_snapshot_{};
+  /// The control-thread tempo map: the published snapshot, else the engine's own map.
+  const transport::TempoMap* control_tempo_map() const noexcept {
+    const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
+    return map ? map : &tempo_map_;
+  }
   const transport::TempoMap* active_tempo_map_ = &tempo_map_;
   std::vector<transport::TempoSegment> control_tempo_segments_{};
   std::vector<transport::TimeSignatureSegment> control_time_signatures_{};

@@ -846,15 +846,20 @@ bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string
   return false;
 }
 
+// Throws FieldValueRefusal for a value no float can hold (non-finite or out of range).
+void require_float_representable(double v) {
+  float narrowed = 0.0f;
+  detail::assign_field(narrowed, v);
+  (void)narrowed;
+}
+
 void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key,
                                const std::string& canonical, double v, StageFlagsSet& flags) {
   // Every chain parameter is ultimately stored as float, int, bool, or enum.
   // Reject non-finite and non-float-representable values before bespoke parsing
   // can narrow them. Integer fields add a lazy checked conversion above.
   try {
-    float validated = 0.0f;
-    detail::assign_field(validated, v);
-    (void)validated;
+    require_float_representable(v);
     if (apply_repair_param(cfg, canonical, v, flags)) return;
     if (apply_eq_dynamics_param(cfg, canonical, v, flags)) return;
     if (apply_multiband_param(cfg, canonical, key, v, flags)) return;

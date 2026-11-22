@@ -33,6 +33,14 @@ uint32_t output_feature_flags(const StreamConfig& config) noexcept {
   return flags;
 }
 
+// Records @p count frames on @p buffer and reserves its storage for them.
+template <typename Buffer>
+void reserve_output_frames(Buffer& buffer, size_t count, const StreamConfig& config) {
+  buffer.n_frames = count;
+  buffer.reserve(count, config.compute_mel ? config.n_mels : 0, config.compute_chroma ? 12 : 0,
+                 output_feature_flags(config));
+}
+
 void copy_progressive_scalars(const ProgressiveEstimate& source, ProgressiveEstimate& target) {
   target.bpm = source.bpm;
   target.bpm_confidence = source.bpm_confidence;
@@ -72,9 +80,7 @@ void StreamAnalyzer::read_frames_quantized(size_t max_frames, Buffer& buffer,
   buffer.clear();
 
   size_t count = std::min(max_frames, available_frames());
-  buffer.n_frames = count;
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
-                 output_feature_flags(config_));
+  reserve_output_frames(buffer, count, config_);
 
   if (count == 0) {
     return;
@@ -325,9 +331,7 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
   buffer.clear();
 
   size_t count = std::min(max_frames, available_frames());
-  buffer.n_frames = count;
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
-                 output_feature_flags(config_));
+  reserve_output_frames(buffer, count, config_);
 
   if (count == 0) {
     return;

@@ -511,7 +511,7 @@ float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db
   return dynamic_compression_delta(detector_db, band.threshold_db, band.ratio, band.range_db);
 }
 
-void DynamicEq::rebuild(int /*num_samples*/) {
+void DynamicEq::rebuild() {
   // Non-process reconfiguration (set_band/set_parameter): a band that is already running keeps
   // its smoothed gain and is reprogrammed only if its filter shape moved; process() smooths to
   // the new target. A band with no prior state is seeded at its target now.

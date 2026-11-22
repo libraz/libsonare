@@ -365,7 +365,7 @@ std::shared_ptr<transport::TempoMap> RealtimeEngine::build_tempo_map(
 
 RealtimeEngine::CaptureLoop RealtimeEngine::current_capture_loop() const noexcept {
   const transport::TransportState transport = transport_.snapshot_control();
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
+  const transport::TempoMap* snapshot = control_tempo_map();
   CaptureLoop state;
   state.offset_samples = record_offset_samples_.load(std::memory_order_acquire);
   state.armed = capture_sink_.armed();
@@ -373,7 +373,7 @@ RealtimeEngine::CaptureLoop RealtimeEngine::current_capture_loop() const noexcep
   state.looping = transport.looping;
   state.loop_start_ppq = transport.loop_start_ppq;
   state.loop_end_ppq = transport.loop_end_ppq;
-  state.map = snapshot ? snapshot : &tempo_map_;
+  state.map = snapshot;
   return state;
 }
 
@@ -623,8 +623,7 @@ void RealtimeEngine::finish_offline_render() noexcept {
 
 transport::TransportState RealtimeEngine::transport_state_control() const noexcept {
   transport::TransportState state = transport_.snapshot_control();
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
-  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
+  const transport::TempoMap& map = *control_tempo_map();
   state.ppq_position = map.sample_to_ppq(state.sample_position);
   state.bpm = map.bpm_at_sample(state.sample_position);
   state.bar_start_ppq = map.bar_start_ppq(state.ppq_position);
@@ -681,8 +680,7 @@ void RealtimeEngine::set_time_signature_segments(
 }
 
 int64_t RealtimeEngine::sample_at_ppq(double ppq) const noexcept {
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
-  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
+  const transport::TempoMap& map = *control_tempo_map();
   return map.ppq_to_sample(ppq);
 }
 
@@ -763,29 +761,25 @@ void RealtimeEngine::set_metronome_config(MetronomeConfig config) noexcept {
 }
 
 int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) const noexcept {
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
-  return Metronome::count_in_end_sample(snapshot ? *snapshot : tempo_map_, start_sample, bars);
+  return Metronome::count_in_end_sample(*control_tempo_map(), start_sample, bars);
 }
 
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
-  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
-  clip_player_.set_clips(std::move(clips), map ? map : &tempo_map_);
+  clip_player_.set_clips(std::move(clips), control_tempo_map());
 #if defined(SONARE_WITH_ARRANGEMENT)
   maybe_unlock_applied_timeline_rate();
 #endif
 }
 
 void RealtimeEngine::upsert_clip(ClipSchedule clip) {
-  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
-  clip_player_.upsert_clip(std::move(clip), map ? map : &tempo_map_);
+  clip_player_.upsert_clip(std::move(clip), control_tempo_map());
 #if defined(SONARE_WITH_ARRANGEMENT)
   maybe_unlock_applied_timeline_rate();
 #endif
 }
 
 bool RealtimeEngine::remove_clip(uint32_t clip_id) {
-  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
-  if (!clip_player_.remove_clip(clip_id, map ? map : &tempo_map_)) return false;
+  if (!clip_player_.remove_clip(clip_id, control_tempo_map())) return false;
 #if defined(SONARE_WITH_ARRANGEMENT)
   maybe_unlock_applied_timeline_rate();
 #endif
