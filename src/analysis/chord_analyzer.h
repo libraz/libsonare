@@ -278,12 +278,11 @@ class ChordAnalyzer {
     float confidence;  ///< Correlation score
   };
 
-  /// @brief Rejects a non-finite or out-of-range configuration and selects the template set.
+  /// @brief Selects the template set for the validated configuration.
   void init_templates();
   void analyze_chords();
   void analyze_chords_beat_sync(const std::vector<float>& beat_times);
   void merge_short_segments();
-  int find_best_chord(const float* chroma) const;
   ChordMatch find_best_chord_with_confidence(const float* chroma,
                                              const std::array<float, 12>* bass = nullptr) const;
   ChordHmmObservation chord_observation(const float* chroma,

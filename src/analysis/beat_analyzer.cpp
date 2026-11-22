@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <functional>
 #include <limits>
-#include <numeric>
 #include <utility>
 
 #include "analysis/analysis_rate.h"
@@ -233,13 +231,6 @@ BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int
   track_beats();
 }
 
-float BeatAnalyzer::compute_transition_cost(int from_frame, int to_frame, float period) const {
-  // Cost for deviating from expected beat period
-  float interval = static_cast<float>(to_frame - from_frame);
-  float deviation = (interval - period) / period;
-  return config_.tightness * deviation * deviation;
-}
-
 float transition_cost_with_tightness(int from_frame, int to_frame, float period, float tightness) {
   const float interval = static_cast<float>(to_frame - from_frame);
   const float deviation = (interval - period) / period;
@@ -292,16 +283,11 @@ void BeatAnalyzer::track_beats() {
   std::vector<float> local_score = compute_local_score(onset_strength_);
 
   // Dynamic programming: find optimal beat sequence.
-  std::vector<float> cumulative_score(n_frames, -std::numeric_limits<float>::infinity());
-  std::vector<int> backpointer(n_frames, -1);
   std::vector<int> beat_frames_vec;
 
   // Initialize first beat candidates (within first expected beat period)
   int search_range = static_cast<int>(period * 1.5f);
   search_range = std::min(search_range, n_frames);
-  for (int i = 0; i < search_range; ++i) {
-    cumulative_score[i] = local_score[i];
-  }
 
   // Fill DP table
   std::vector<float> local_periods =
@@ -407,6 +393,12 @@ void BeatAnalyzer::track_beats() {
       state = previous_state;
     }
   } else {
+    std::vector<float> cumulative_score(n_frames, -std::numeric_limits<float>::infinity());
+    std::vector<int> backpointer(n_frames, -1);
+    for (int i = 0; i < search_range; ++i) {
+      cumulative_score[i] = local_score[i];
+    }
+
     for (int i = first_dp_frame; i < n_frames; ++i) {
       const int search_start = std::max(0, i - fixed_window_max);
       const int search_end = std::max(0, i - fixed_window_min);
@@ -417,7 +409,8 @@ void BeatAnalyzer::track_beats() {
       for (int j = search_start; j <= search_end; ++j) {
         if (cumulative_score[j] == -std::numeric_limits<float>::infinity()) continue;
 
-        const float transition_cost = compute_transition_cost(j, i, period);
+        const float transition_cost =
+            transition_cost_with_tightness(j, i, period, config_.tightness);
         const float score = cumulative_score[j] + local_score[i] - transition_cost;
 
         if (score > best_score) {

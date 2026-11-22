@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "analysis/analysis_rate.h"
 #include "feature/rhythm.h"
@@ -12,7 +11,13 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
+namespace {
+
+/// Tempo range treated as the common musical range when choosing between octaves.
+constexpr float kCommonBpmMin = 80.0f;
+constexpr float kCommonBpmMax = 180.0f;
+
+}  // namespace
 
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
                                                  float bpm_min, float bpm_max, float bin_width) {
@@ -90,8 +95,6 @@ BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_ca
                                   const BpmHistogramBin* evidence, size_t n_evidence) {
   /// @details Musical tempo preference: prefer BPMs in common range (80-180) over extremes.
   /// This helps avoid octave errors (e.g., detecting 60 instead of 120).
-  constexpr float kCommonBpmMin = 80.0f;
-  constexpr float kCommonBpmMax = 180.0f;
   constexpr float kAcceptableBpmMin = 60.0f;
   constexpr float kAcceptableBpmMax = 200.0f;
   const auto in_common_range = [&](float bpm) {
@@ -274,8 +277,8 @@ float three_peak_octave_correction(const std::vector<BpmCandidate>& candidates, 
       if (low <= 0.0f) continue;
       const float ratio = high / low;
       if (std::abs(ratio - 2.0f) / 2.0f <= tolerance) {
-        if (high >= 80.0f && high <= 180.0f) return high;
-        if (low >= 80.0f && low <= 180.0f) return low;
+        if (high >= kCommonBpmMin && high <= kCommonBpmMax) return high;
+        if (low >= kCommonBpmMin && low <= kCommonBpmMax) return low;
         return std::clamp(high, bpm_min, bpm_max);
       }
     }
@@ -571,12 +574,12 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     const bool octave_related = std::abs(correction_ratio - 0.5f) <= 0.04f ||
                                 std::abs(correction_ratio - 1.0f) <= 0.04f ||
                                 std::abs(correction_ratio - 2.0f) <= 0.08f;
-    const bool corrected_common = corrected >= 80.0f && corrected <= 180.0f;
-    const bool correction_downshifts_common =
-        corrected_common && correction_ratio < 0.75f && rep_bpm >= 80.0f && rep_bpm <= 180.0f;
+    const bool corrected_common = corrected >= kCommonBpmMin && corrected <= kCommonBpmMax;
+    const bool correction_downshifts_common = corrected_common && correction_ratio < 0.75f &&
+                                              rep_bpm >= kCommonBpmMin && rep_bpm <= kCommonBpmMax;
     bpm_ =
         (corrected_common && octave_related && !correction_downshifts_common) ? corrected : rep_bpm;
-    if (bpm_ < 80.0f && bpm_ > 0.0f && !top_bins.empty()) {
+    if (bpm_ < kCommonBpmMin && bpm_ > 0.0f && !top_bins.empty()) {
       const float strongest_peak = top_bins.front().bpm_center;
       // Only promote the strongest common-range bin when it is octave/harmonic
       // related to the detected tempo, matching the relationship gate used by the
@@ -587,7 +590,8 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
       const bool peak_octave_related = std::abs(peak_ratio - 0.5f) <= 0.04f ||
                                        std::abs(peak_ratio - 1.0f) <= 0.04f ||
                                        std::abs(peak_ratio - 2.0f) <= 0.08f;
-      if (strongest_peak >= 80.0f && strongest_peak <= 180.0f && peak_octave_related) {
+      if (strongest_peak >= kCommonBpmMin && strongest_peak <= kCommonBpmMax &&
+          peak_octave_related) {
         bpm_ = strongest_peak;
       }
     }

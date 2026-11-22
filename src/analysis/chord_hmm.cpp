@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 
+#include "analysis/key_profiles.h"
+
 namespace sonare {
 
 namespace {
@@ -13,16 +15,9 @@ int interval(PitchClass from, PitchClass to) {
 }
 
 bool is_diatonic_root(PitchClass root, PitchClass key_root, Mode mode) {
-  static constexpr int kMajorDegrees[] = {0, 2, 4, 5, 7, 9, 11};
-  static constexpr int kMinorDegrees[] = {0, 2, 3, 5, 7, 8, 10};
   const int degree = interval(key_root, root);
-  const int* degrees = mode == Mode::Minor ? kMinorDegrees : kMajorDegrees;
-  for (int i = 0; i < 7; ++i) {
-    if (degrees[i] == degree) {
-      return true;
-    }
-  }
-  return false;
+  const uint16_t mask = scale_mask_for_mode(mode == Mode::Minor ? Mode::Minor : Mode::Major);
+  return ((mask >> degree) & 1u) != 0;
 }
 
 /// @brief How strongly a transition behaves as a cadence.
@@ -206,6 +201,23 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
   std::vector<float> prev_scores;
   std::vector<float> curr_scores;
 
+  // transition_score is a pure function of the index pair, so each pair is scored once.
+  const size_t n_templates = templates.size();
+  std::vector<float> transition_cache(n_templates * n_templates, 0.0f);
+  std::vector<char> transition_cached(n_templates * n_templates, 0);
+  const auto cached_transition = [&](int from_idx, int to_idx) {
+    if (from_idx < 0 || to_idx < 0 || static_cast<size_t>(from_idx) >= n_templates ||
+        static_cast<size_t>(to_idx) >= n_templates) {
+      return transition_score(from_idx, to_idx, templates, config);
+    }
+    const size_t slot = static_cast<size_t>(from_idx) * n_templates + static_cast<size_t>(to_idx);
+    if (!transition_cached[slot]) {
+      transition_cache[slot] = transition_score(from_idx, to_idx, templates, config);
+      transition_cached[slot] = 1;
+    }
+    return transition_cache[slot];
+  };
+
   // The emission term is a template-correlation score scaled by emission_weight
   // (not a true log-probability); emission_weight is tuned to balance these
   // correlations against the log-domain transition scores accumulated below.
@@ -230,8 +242,7 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
 
       for (size_t prev = 0; prev < beams[t - 1].size(); ++prev) {
         const int prev_idx = beams[t - 1][prev].first;
-        const float score =
-            prev_scores[prev] + transition_score(prev_idx, curr_idx, templates, config) + emission;
+        const float score = prev_scores[prev] + cached_transition(prev_idx, curr_idx) + emission;
         if (score > curr_scores[curr]) {
           curr_scores[curr] = score;
           backtrack[t][curr] = static_cast<int>(prev);

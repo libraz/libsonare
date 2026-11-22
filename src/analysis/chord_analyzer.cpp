@@ -14,6 +14,7 @@
 #include "feature/pitch.h"
 #include "filters/iir.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/parameter_checks.h"
@@ -66,7 +67,7 @@ Chroma chord_chroma(const Audio& audio, const ChordChromaConfig& config) {
     }
   }
   const float loudest = *std::max_element(peaks.begin(), peaks.end());
-  const float floor = loudest * std::pow(10.0f, chord_constants::kChordChromaFloorDb / 20.0f);
+  const float floor = loudest * db_to_linear(chord_constants::kChordChromaFloorDb);
 
   // L-inf frame normalisation, an equal blend with the bass chroma, and silence below the floor.
   std::vector<float> features(static_cast<size_t>(12) * n_frames, 0.0f);
@@ -88,12 +89,6 @@ float ChordAnalyzer::analysis_end() const {
 }
 
 void ChordAnalyzer::init_templates() {
-  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
-                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
-                   config_.threshold <= 1.0f,
-               ErrorCode::InvalidParameter);
-
   if (config_.use_triads_only) {
     templates_ = generate_triad_templates();
   } else {
@@ -257,6 +252,21 @@ bool chord_contains_pitch_class(const ChordTemplate& chord, PitchClass pitch) {
   return chord.pattern[static_cast<int>(pitch)] > 0.0f || pitch == chord.root;
 }
 
+/// Maps a frame span in chroma's frame space onto bass's through absolute time when the rates
+/// differ, keeping at least a one-frame span.
+void map_span_to_bass_frames(const Chroma& chroma, const Chroma& bass, int& start_frame,
+                             int& end_frame) {
+  const double chroma_rate = chroma_frame_rate(chroma);
+  const double bass_rate = chroma_frame_rate(bass);
+  if (chroma_rate > 0.0 && bass_rate > 0.0 && chroma_rate != bass_rate) {
+    const int last = bass.n_frames();
+    const int mapped_start = rescale_frame(start_frame, chroma_rate, bass_rate, last);
+    const int mapped_end = rescale_frame(end_frame, chroma_rate, bass_rate, last);
+    start_frame = mapped_start;
+    end_frame = std::max(mapped_end, mapped_start + 1);
+  }
+}
+
 }  // namespace
 
 bool ChordAnalyzer::bass_energy(int start_frame, int end_frame, std::array<float, 12>& out) const {
@@ -268,15 +278,7 @@ bool ChordAnalyzer::bass_energy(int start_frame, int end_frame, std::array<float
   // at a different hop length or sample rate, so the span is mapped through
   // absolute time first; indexing it with harmonic frame numbers would read a
   // different part of the song.
-  const double chroma_rate = chroma_frame_rate(chroma_);
-  const double bass_rate = chroma_frame_rate(bass_chroma_);
-  if (chroma_rate > 0.0 && bass_rate > 0.0 && chroma_rate != bass_rate) {
-    const int last = bass_chroma_.n_frames();
-    const int mapped_start = rescale_frame(start_frame, chroma_rate, bass_rate, last);
-    const int mapped_end = rescale_frame(end_frame, chroma_rate, bass_rate, last);
-    start_frame = mapped_start;
-    end_frame = std::max(mapped_end, mapped_start + 1);
-  }
+  map_span_to_bass_frames(chroma_, bass_chroma_, start_frame, end_frame);
 
   start_frame = std::max(0, start_frame);
   end_frame = std::min(bass_chroma_.n_frames(), end_frame);
@@ -364,10 +366,6 @@ ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
   return result;
 }
 
-int ChordAnalyzer::find_best_chord(const float* chroma) const {
-  return find_best_chord_with_confidence(chroma).index;
-}
-
 ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma,
                                                      const std::array<float, 12>* bass) const {
   ChordHmmObservation observation;
@@ -419,16 +417,7 @@ PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_fra
   // indexing it with harmonic frame numbers would read a different part of the
   // song and turn every inversion decision into noise.
   if (has_bass_source) {
-    const double chroma_rate = chroma_frame_rate(chroma_);
-    const double bass_rate = chroma_frame_rate(source);
-    if (chroma_rate > 0.0 && bass_rate > 0.0 && chroma_rate != bass_rate) {
-      const int last = source.n_frames();
-      const int mapped_start = rescale_frame(start_frame, chroma_rate, bass_rate, last);
-      const int mapped_end = rescale_frame(end_frame, chroma_rate, bass_rate, last);
-      // Keep a one-frame span for segments shorter than a bass frame.
-      start_frame = mapped_start;
-      end_frame = std::max(mapped_end, mapped_start + 1);
-    }
+    map_span_to_bass_frames(chroma_, source, start_frame, end_frame);
   }
 
   start_frame = std::max(0, start_frame);

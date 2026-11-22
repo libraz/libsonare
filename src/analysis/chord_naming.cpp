@@ -11,81 +11,9 @@ std::string Chord::to_string() const {
     return "N.C.";
   }
   std::string name = pitch_class_to_string(root);
-  switch (quality) {
-    case ChordQuality::Major:
-      break;  // Major is implied
-    case ChordQuality::Minor:
-      name += "m";
-      break;
-    case ChordQuality::Diminished:
-      name += "dim";
-      break;
-    case ChordQuality::Augmented:
-      name += "aug";
-      break;
-    case ChordQuality::Dominant7:
-      name += "7";
-      break;
-    case ChordQuality::Major7:
-      name += "maj7";
-      break;
-    case ChordQuality::Minor7:
-      name += "m7";
-      break;
-    case ChordQuality::Sus2:
-      name += "sus2";
-      break;
-    case ChordQuality::Sus4:
-      name += "sus4";
-      break;
-    case ChordQuality::Unknown:
-      name += "?";
-      break;
-    case ChordQuality::Add9:
-      name += "add9";
-      break;
-    case ChordQuality::MinorAdd9:
-      name += "madd9";
-      break;
-    case ChordQuality::Dim7:
-      name += "dim7";
-      break;
-    case ChordQuality::HalfDim7:
-      name += "m7b5";
-      break;
-    case ChordQuality::Major9:
-      name += "maj9";
-      break;
-    case ChordQuality::Dominant9:
-      name += "9";
-      break;
-    case ChordQuality::Sus2Add4:
-      name += "sus2add4";
-      break;
-    case ChordQuality::Major6:
-      name += "6";
-      break;
-    case ChordQuality::Minor6:
-      name += "m6";
-      break;
-    case ChordQuality::MinorMajor7:
-      name += "mM7";
-      break;
-    case ChordQuality::Dominant7Sus4:
-      name += "7sus4";
-      break;
-    case ChordQuality::Dominant11:
-      name += "11";
-      break;
-    case ChordQuality::Dominant13:
-      name += "13";
-      break;
-    case ChordQuality::Dominant7b9:
-      name += "7b9";
-      break;
-    case ChordQuality::Dominant7s9:
-      name += "7#9";
-      break;
+  // Major is implied.
+  if (quality != ChordQuality::Major) {
+    name += chord_quality_to_string(quality);
   }
   if (bass != root) {
     name += "/";

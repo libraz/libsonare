@@ -158,7 +158,6 @@ class BeatAnalyzer {
 
  private:
   void track_beats();
-  float compute_transition_cost(int from_frame, int to_frame, float period) const;
 
   std::vector<Beat> beats_;
   std::vector<int> downbeat_indices_;

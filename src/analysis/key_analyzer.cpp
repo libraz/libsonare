@@ -318,6 +318,36 @@ Key detect_key(const Audio& audio, const KeyConfig& config) {
 
 namespace {
 
+/// @brief Semitones from pitch class @p from up to @p root, in [0, 11].
+int semitones_above(int root, int from) { return (root - from + 12) % 12; }
+
+/// A maximal stretch of one root and triad quality, with the confidence-weighted duration.
+struct ConfidenceRun {
+  PitchClass root;
+  ChordQuality quality;
+  double duration;
+  double confidence_mass;
+};
+
+/// @brief Whether @p key's root and mode appear among the scored @p candidates.
+bool key_was_scored(const std::vector<KeyCandidate>& candidates, const Key& key) {
+  for (const KeyCandidate& candidate : candidates) {
+    if (candidate.key.root == key.root && candidate.key.mode == key.mode) return true;
+  }
+  return false;
+}
+
+/// @brief Median run duration, the mean of the two middle values for an even count.
+double median_run_duration(const std::vector<ConfidenceRun>& runs) {
+  std::vector<double> run_durations;
+  run_durations.reserve(runs.size());
+  for (const ConfidenceRun& run : runs) run_durations.push_back(run.duration);
+  std::sort(run_durations.begin(), run_durations.end());
+  const size_t middle = run_durations.size() / 2;
+  return run_durations.size() % 2 == 0 ? 0.5 * (run_durations[middle - 1] + run_durations[middle])
+                                       : run_durations[middle];
+}
+
 /// @brief Reduce an extended/seventh chord quality to its underlying triad base.
 ///
 /// Diatonic scoring only models the three triad qualities (Major/Minor/Diminished),
@@ -351,7 +381,7 @@ ChordQuality reduce_to_triad(ChordQuality quality) {
 /// @return true if chord is diatonic
 bool is_diatonic_major(PitchClass chord_root, ChordQuality chord_quality, PitchClass key_root) {
   chord_quality = reduce_to_triad(chord_quality);
-  int interval = (static_cast<int>(chord_root) - static_cast<int>(key_root) + 12) % 12;
+  int interval = semitones_above(static_cast<int>(chord_root), static_cast<int>(key_root));
 
   // Diatonic chords in major key:
   // I (0, Major), ii (2, Minor), iii (4, Minor), IV (5, Major),
@@ -408,22 +438,9 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
   const Key& major = proposed.mode == Mode::Major ? proposed : chroma_key;
   if (static_cast<int>(major.root) != (static_cast<int>(minor.root) + 3) % 12) return false;
 
-  bool proposed_was_scored = false;
-  for (const KeyCandidate& candidate : chroma_candidates) {
-    if (candidate.key.root == proposed.root && candidate.key.mode == proposed.mode) {
-      proposed_was_scored = true;
-      break;
-    }
-  }
-  if (!proposed_was_scored) return false;
+  if (!key_was_scored(chroma_candidates, proposed)) return false;
 
-  struct HarmonicRun {
-    PitchClass root;
-    ChordQuality quality;
-    double duration;
-    double confidence_mass;
-  };
-  std::vector<HarmonicRun> runs;
+  std::vector<ConfidenceRun> runs;
   std::array<bool, 12> roots{};
   double total_duration = 0.0;
   double total_confidence_mass = 0.0;
@@ -453,24 +470,17 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
   const ChordQuality tonic_quality =
       proposed.mode == Mode::Minor ? ChordQuality::Minor : ChordQuality::Major;
 
-  std::vector<double> run_durations;
-  run_durations.reserve(runs.size());
-  for (const HarmonicRun& run : runs) run_durations.push_back(run.duration);
-  std::sort(run_durations.begin(), run_durations.end());
-  const size_t middle = run_durations.size() / 2;
-  const double median_duration = run_durations.size() % 2 == 0
-                                     ? 0.5 * (run_durations[middle - 1] + run_durations[middle])
-                                     : run_durations[middle];
+  const double median_duration = median_run_duration(runs);
   if (runs.front().duration < median_duration) return false;
 
-  const auto is_strong_run = [](const HarmonicRun& run) {
+  const auto is_strong_run = [](const ConfidenceRun& run) {
     return run.confidence_mass / run.duration >= kRelativeKeyMinTemplateConfidence;
   };
   const bool opening_tonic = runs.front().root == proposed.root &&
                              runs.front().quality == tonic_quality && is_strong_run(runs.front());
   double tonic_duration = 0.0;
   double tonic_confidence_mass = 0.0;
-  for (const HarmonicRun& run : runs) {
+  for (const ConfidenceRun& run : runs) {
     if (run.root == proposed.root && run.quality == tonic_quality) {
       tonic_duration += run.duration;
       tonic_confidence_mass += run.confidence_mass;
@@ -482,7 +492,7 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
   bool has_previous_reliable_run = false;
   PitchClass previous_reliable_root = PitchClass::C;
   ChordQuality previous_reliable_quality = ChordQuality::Unknown;
-  for (const HarmonicRun& run : runs) {
+  for (const ConfidenceRun& run : runs) {
     if (!is_strong_run(run)) continue;
     reliable_roots[static_cast<size_t>(run.root)] = true;
     if (has_previous_reliable_run && previous_reliable_root == run.root &&
@@ -517,8 +527,8 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
 
   int strong_v_i_runs = 0;
   for (size_t index = 0; index + 1 < runs.size(); ++index) {
-    const HarmonicRun& dominant = runs[index];
-    const HarmonicRun& tonic = runs[index + 1];
+    const ConfidenceRun& dominant = runs[index];
+    const ConfidenceRun& tonic = runs[index + 1];
     if (dominant.root == minor_v_root && dominant.quality == ChordQuality::Minor &&
         tonic.root == proposed.root && tonic.quality == ChordQuality::Minor &&
         is_strong_run(dominant) && is_strong_run(tonic)) {
@@ -582,7 +592,8 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
   std::array<HarmonicRun, 2> terminal_runs{};
   size_t harmonic_run_count = 0;
   const auto record_minor_v_i = [&](const HarmonicRun& dominant, const HarmonicRun& tonic) {
-    const int interval = (static_cast<int>(tonic.root) - static_cast<int>(dominant.root) + 12) % 12;
+    const int interval =
+        semitones_above(static_cast<int>(tonic.root), static_cast<int>(dominant.root));
     if (interval == 5 && dominant.quality == ChordQuality::Minor &&
         tonic.quality == ChordQuality::Minor) {
       minor_v_i_durations[static_cast<size_t>(tonic.root)] += dominant.duration;
@@ -616,7 +627,8 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
   if (harmonic_run_count == terminal_runs.size()) {
     const HarmonicRun& dominant = terminal_runs[0];
     const HarmonicRun& tonic = terminal_runs[1];
-    const int interval = (static_cast<int>(tonic.root) - static_cast<int>(dominant.root) + 12) % 12;
+    const int interval =
+        semitones_above(static_cast<int>(tonic.root), static_cast<int>(dominant.root));
     if (interval == 5 && dominant.quality == ChordQuality::Major) {
       if (tonic.quality == ChordQuality::Major) {
         cadence_tonic = tonic.root;
@@ -661,7 +673,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
           major_tonic_score += duration * 0.5f;
         }
         // Bonus for dominant chord
-        int interval = (static_cast<int>(chord.root) - key_idx + 12) % 12;
+        int interval = semitones_above(static_cast<int>(chord.root), key_idx);
         if (interval == 7 && triad == ChordQuality::Major) {
           major_tonic_score += duration * kDominantChordScoreWeight;
         }
@@ -710,7 +722,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
 
     for (const auto& chord : chords) {
       float duration = std::max(0.0f, chord.duration());
-      int interval = (static_cast<int>(chord.root) - static_cast<int>(minor_root) + 12) % 12;
+      int interval = semitones_above(static_cast<int>(chord.root), static_cast<int>(minor_root));
       ChordQuality triad = reduce_to_triad(chord.quality);
 
       bool is_diatonic_minor = false;
@@ -810,22 +822,9 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
     return false;
   }
 
-  bool proposed_was_scored = false;
-  for (const KeyCandidate& candidate : chroma_candidates) {
-    if (candidate.key.root == proposed.root && candidate.key.mode == proposed.mode) {
-      proposed_was_scored = true;
-      break;
-    }
-  }
-  if (!proposed_was_scored) return false;
+  if (!key_was_scored(chroma_candidates, proposed)) return false;
 
-  struct HarmonicRun {
-    PitchClass root;
-    ChordQuality quality;
-    double duration;
-    double confidence_mass;
-  };
-  std::vector<HarmonicRun> runs;
+  std::vector<ConfidenceRun> runs;
   for (const Chord& chord : all_chords) {
     const double duration = static_cast<double>(chord.duration());
     if (chord.quality == ChordQuality::Unknown || !std::isfinite(duration) || duration <= 0.0) {
@@ -843,17 +842,10 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
   }
   if (runs.empty()) return false;
 
-  const auto is_strong_run = [](const HarmonicRun& run) {
+  const auto is_strong_run = [](const ConfidenceRun& run) {
     return run.confidence_mass / run.duration >= kRelativeKeyMinTemplateConfidence;
   };
-  std::vector<double> run_durations;
-  run_durations.reserve(runs.size());
-  for (const HarmonicRun& run : runs) run_durations.push_back(run.duration);
-  std::sort(run_durations.begin(), run_durations.end());
-  const size_t middle = run_durations.size() / 2;
-  const double median_duration = run_durations.size() % 2 == 0
-                                     ? 0.5 * (run_durations[middle - 1] + run_durations[middle])
-                                     : run_durations[middle];
+  const double median_duration = median_run_duration(runs);
   const bool strong_opening =
       runs.front().root == proposed.root && runs.front().quality == ChordQuality::Major &&
       is_strong_run(runs.front()) && runs.front().duration >= median_duration;
@@ -861,7 +853,7 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
   double tonic_duration = 0.0;
   double tonic_confidence_mass = 0.0;
   std::array<bool, 12> reliable_roots{};
-  for (const HarmonicRun& run : runs) {
+  for (const ConfidenceRun& run : runs) {
     if (run.root == proposed.root && run.quality == ChordQuality::Major) {
       tonic_duration += run.duration;
       tonic_confidence_mass += run.confidence_mass;
@@ -878,8 +870,8 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
 
   int strong_cadences = 0;
   for (size_t index = 0; index + 1 < runs.size(); ++index) {
-    const HarmonicRun& dominant = runs[index];
-    const HarmonicRun& tonic = runs[index + 1];
+    const ConfidenceRun& dominant = runs[index];
+    const ConfidenceRun& tonic = runs[index + 1];
     if (dominant.root == chroma_key.root && dominant.quality == ChordQuality::Major &&
         tonic.root == proposed.root && tonic.quality == ChordQuality::Major &&
         is_strong_run(dominant) && is_strong_run(tonic)) {
@@ -891,7 +883,7 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
 
   double proposed_support = 0.0;
   double chroma_support = 0.0;
-  for (const HarmonicRun& run : runs) {
+  for (const ConfidenceRun& run : runs) {
     if (!is_strong_run(run)) continue;
     if (is_diatonic_major(run.root, run.quality, proposed.root)) proposed_support += run.duration;
     if (is_diatonic_major(run.root, run.quality, chroma_key.root)) chroma_support += run.duration;

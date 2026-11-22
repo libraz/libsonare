@@ -18,8 +18,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 /// An event is lone when no other event in the reference window reaches this fraction of it.
@@ -48,6 +46,28 @@ void normalize_feature(float* feature, int n) {
 /// section analysis layered on this detector applies to the same input, so the
 /// two entry points segment on one time grid.
 Audio boundary_analysis_audio(const Audio& audio) { return analysis_rate_audio(audio); }
+
+/// @brief Transposes a (n_coeff x n_frames) coefficient matrix into frame-major order.
+std::vector<float> flatten_mfcc(const std::vector<float>& mfcc, int n_mfcc, int n_frames) {
+  std::vector<float> flat(n_mfcc * n_frames);
+  for (int f = 0; f < n_frames; ++f) {
+    for (int c = 0; c < n_mfcc; ++c) {
+      flat[f * n_mfcc + c] = mfcc[c * n_frames + f];
+    }
+  }
+  return flat;
+}
+
+/// @brief Flattens a chromagram into frame-major order, n_chroma bins per frame.
+std::vector<float> flatten_chroma(const Chroma& chroma, int n_chroma, int n_frames) {
+  std::vector<float> flat(n_chroma * n_frames);
+  for (int f = 0; f < n_frames; ++f) {
+    for (int c = 0; c < n_chroma; ++c) {
+      flat[f * n_chroma + c] = chroma.at(c, f);
+    }
+  }
+  return flat;
+}
 
 /// @brief Stored half-bandwidth of the self-similarity band.
 /// @details The checkerboard kernel centred on frame c reads ssm(c + i, c + j)
@@ -119,13 +139,7 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
     auto mfcc = mel.mfcc(config_.n_mfcc);
     mfcc_frames = mel.n_frames();
 
-    // Flatten MFCC matrix
-    mfcc_features.resize(config_.n_mfcc * mfcc_frames);
-    for (int f = 0; f < mfcc_frames; ++f) {
-      for (int c = 0; c < config_.n_mfcc; ++c) {
-        mfcc_features[f * config_.n_mfcc + c] = mfcc[c * mfcc_frames + f];
-      }
-    }
+    mfcc_features = flatten_mfcc(mfcc, config_.n_mfcc, mfcc_frames);
   }
 
   // Extract chroma features
@@ -148,13 +162,7 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
                          " bins but the config expects " + std::to_string(config_.n_chroma));
     chroma_frames = chroma.n_frames();
 
-    // Flatten chroma matrix
-    chroma_features.resize(config_.n_chroma * chroma_frames);
-    for (int f = 0; f < chroma_frames; ++f) {
-      for (int c = 0; c < config_.n_chroma; ++c) {
-        chroma_features[f * config_.n_chroma + c] = chroma.at(c, f);
-      }
-    }
+    chroma_features = flatten_chroma(chroma, config_.n_chroma, chroma_frames);
   }
 
   combine_features(mfcc_features, mfcc_frames, chroma_features, chroma_frames);
@@ -209,13 +217,7 @@ void BoundaryDetector::compute_features() {
 
     mfcc_frames = mel.n_frames();
 
-    // Flatten MFCC matrix
-    mfcc_features.resize(config_.n_mfcc * mfcc_frames);
-    for (int f = 0; f < mfcc_frames; ++f) {
-      for (int c = 0; c < config_.n_mfcc; ++c) {
-        mfcc_features[f * config_.n_mfcc + c] = mfcc[c * mfcc_frames + f];
-      }
-    }
+    mfcc_features = flatten_mfcc(mfcc, config_.n_mfcc, mfcc_frames);
   }
 
   // Compute chroma features
@@ -234,13 +236,7 @@ void BoundaryDetector::compute_features() {
     Chroma chroma = Chroma::compute(audio_, chroma_config);
     chroma_frames = chroma.n_frames();
 
-    // Flatten chroma matrix
-    chroma_features.resize(config_.n_chroma * chroma_frames);
-    for (int f = 0; f < chroma_frames; ++f) {
-      for (int c = 0; c < config_.n_chroma; ++c) {
-        chroma_features[f * config_.n_chroma + c] = chroma.at(c, f);
-      }
-    }
+    chroma_features = flatten_chroma(chroma, config_.n_chroma, chroma_frames);
   }
 
   combine_features(mfcc_features, mfcc_frames, chroma_features, chroma_frames);

@@ -123,7 +123,6 @@ class MelodyAnalyzer {
   void compute_contour_features();
 
   MelodyContour contour_;
-  MelodyConfig config_;
   int sr_;
 };
 

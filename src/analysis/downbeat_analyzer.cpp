@@ -15,7 +15,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
 namespace {
 
 /// Upper edge of the low band whose energy marks a bar start, in Hz.

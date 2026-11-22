@@ -22,7 +22,7 @@ constexpr float kVibratoReversalCents = 10.0f;
 }  // namespace
 
 MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
-    : config_(config), sr_(audio.sample_rate()) {
+    : sr_(audio.sample_rate()) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // frame_length is samples at kAnalysisSampleRate; convert to the input rate.
