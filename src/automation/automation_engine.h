@@ -171,6 +171,20 @@ class AutomationEngine {
   // there). @p previous/@p next may each be null (no lane set adopted yet).
   void notify_lane_targets_released(const std::vector<AutomationLane>* previous,
                                     const std::vector<AutomationLane>* next) noexcept;
+  // Counts an apply that found no adopted lane set while lanes are registered.
+  void note_stale_lane_apply() noexcept {
+    if (lane_count_.load(std::memory_order_relaxed) > 0) {
+      stale_lane_apply_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+  // Sends one engine-namespace value through the router, counting a rejected target.
+  bool route_engine_param(uint32_t param_id, float value) noexcept {
+    const bool routed = engine_param_router_(engine_param_router_context_, param_id, value);
+    if (!routed) {
+      unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+    return routed;
+  }
   // True when @p param_id should route through the engine router. Uses the gate
   // predicate when installed, otherwise the (id & mask) == match fast path.
   bool routes_to_engine(uint32_t param_id) const noexcept {

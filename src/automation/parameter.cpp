@@ -2,8 +2,6 @@
 
 #include <algorithm>
 
-#include "util/insertion_sort.h"
-
 namespace sonare::automation {
 
 void ParameterRegistry::clear() { parameters_.clear(); }
@@ -15,24 +13,24 @@ bool ParameterRegistry::add(ParameterInfo info) {
   if (info.id == kInvalidParameterId) {
     return false;
   }
-  const auto found = std::find_if(parameters_.begin(), parameters_.end(),
-                                  [&](const ParameterInfo& item) { return item.id == info.id; });
-  if (found != parameters_.end()) {
+  // parameters_ stays sorted by id, so the insertion point is also the duplicate check.
+  const auto pos =
+      std::lower_bound(parameters_.begin(), parameters_.end(), info, parameter_info_id_before);
+  if (pos != parameters_.end() && pos->id == info.id) {
     return false;
   }
-  parameters_.push_back(info);
-  insertion_sort(parameters_.begin(), parameters_.end(), parameter_info_id_before);
+  parameters_.insert(pos, info);
   return true;
 }
 
 bool ParameterRegistry::parameter_info(uint32_t id, ParameterInfo* out) const noexcept {
-  for (const ParameterInfo& info : parameters_) {
-    if (info.id == id) {
-      if (out) *out = info;
-      return true;
-    }
-  }
-  return false;
+  ParameterInfo key{};
+  key.id = id;
+  const auto pos =
+      std::lower_bound(parameters_.begin(), parameters_.end(), key, parameter_info_id_before);
+  if (pos == parameters_.end() || pos->id != id) return false;
+  if (out) *out = *pos;
+  return true;
 }
 
 bool ParameterRegistry::parameter_info_by_index(size_t index, ParameterInfo* out) const noexcept {

@@ -46,7 +46,8 @@ struct Breakpoint {
 };
 
 inline bool valid_public_breakpoint(double ppq, float value, int curve_ordinal) noexcept {
-  return std::isfinite(ppq) && std::isfinite(value) && curve_ordinal >= 0 && curve_ordinal <= 3;
+  return std::isfinite(ppq) && std::isfinite(value) && curve_ordinal >= 0 &&
+         curve_ordinal <= static_cast<int>(CurveType::SCurve);
 }
 
 inline bool valid_public_breakpoint(const Breakpoint& point) noexcept {

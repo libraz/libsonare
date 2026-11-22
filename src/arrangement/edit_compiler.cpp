@@ -984,6 +984,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const int64_t start_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq);
       const int64_t end_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.end_ppq);
       const int64_t length_samples = std::max<int64_t>(0, end_sample - start_sample);
+      const int64_t part_onset_in_clip_samples =
+          std::max<int64_t>(0, start_sample - clip_start_sample);
       // Take base at clip start plus elapsed part onset; a legacy base is converted from PPQ first.
       int64_t clip_offset_samples = 0;
       if (part.source_offset_seconds.has_value()) {
@@ -1013,7 +1015,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // the map already ties to the source, so the read starts at the part's clip-timeline onset
       // exactly as the runtime warp modes do.
       if (compile_baked_tempo_sync || baked_warp_ref != 0) {
-        clip_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+        clip_offset_samples = part_onset_in_clip_samples;
       }
       const auto cache_key = std::make_pair(
           part.source_id, compile_baked_tempo_sync ? clip.warp_ref_id : baked_warp_ref);
@@ -1174,7 +1176,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       sched.loop_phase_samples = loop_phase_samples;
       sched.preserve_loop_period = preserve_loop_period;
       sched.loop_crossfade_samples = loop_crossfade_samples;
-      sched.fade_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+      sched.fade_reference_offset_samples = part_onset_in_clip_samples;
       sched.fade_reference_length_samples = clip_length_samples;
       // Converted through the tempo map from this part's own start, the way the
       // loop crossfade above is, so a fade keeps its musical length across a
@@ -1205,7 +1207,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       sched.warp_mode = baked_warp_ref == 0 && !compile_baked_tempo_sync
                             ? to_engine_warp_mode(clip.warp_mode)
                             : engine::WarpMode::kOff;
-      sched.warp_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+      sched.warp_reference_offset_samples = part_onset_in_clip_samples;
       if (sched.warp_mode != engine::WarpMode::kOff && rt_warp_map != nullptr &&
           rt_warp_map->anchors.size() >= 2) {
         auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();

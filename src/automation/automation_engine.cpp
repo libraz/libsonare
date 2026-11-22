@@ -162,9 +162,7 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
   // sub-blocks and violate the single-acquisition contract).
   const std::vector<AutomationLane>* lanes = lanes_.current();
   if (!lanes) {
-    if (lane_count_.load(std::memory_order_relaxed) > 0) {
-      stale_lane_apply_count_.fetch_add(1, std::memory_order_relaxed);
-    }
+    note_stale_lane_apply();
     return;
   }
   // Pinned for the whole loop, so every processor resolved below outlives its use.
@@ -183,9 +181,7 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
       if (!std::isfinite(value)) {
         continue;
       }
-      if (!engine_param_router_(engine_param_router_context_, param_id, value)) {
-        unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
-      }
+      route_engine_param(param_id, value);
       continue;
     }
     rt::ProcessorBase* processor = realtime_target(targets.get(), param_id);
@@ -209,11 +205,7 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   if (routes_to_engine(param_id)) {
     // Mirror apply(): engine-namespace ids go through the router, never the
     // bound-processor table. A rejected target surfaces like an unknown one.
-    const bool routed = engine_param_router_(engine_param_router_context_, param_id, value);
-    if (!routed) {
-      unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
-    }
-    return routed;
+    return route_engine_param(param_id, value);
   }
   const auto targets = targets_.read();
   rt::ProcessorBase* processor = realtime_target(targets.get(), param_id);
@@ -232,9 +224,7 @@ void AutomationEngine::collect_boundaries(double block_start_ppq, double block_e
   const double hi = std::max(block_start_ppq, block_end_ppq);
   const std::vector<AutomationLane>* lanes = lanes_.current();
   if (!lanes) {
-    if (lane_count_.load(std::memory_order_relaxed) > 0) {
-      stale_lane_apply_count_.fetch_add(1, std::memory_order_relaxed);
-    }
+    note_stale_lane_apply();
     return;
   }
   for (const AutomationLane& lane : *lanes) {

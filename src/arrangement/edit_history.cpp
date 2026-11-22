@@ -186,8 +186,18 @@ class MemberSnapshot {
   ProjectMemberMask mask_;
 };
 
-void swap_store_snapshot(MidiContentStore& store, MidiContentStore& snapshot) noexcept {
-  std::swap(store, snapshot);
+/// Undoes a failed or abandoned apply: rolls the command back, drops the reserved history slot
+/// from @p stack, and restores the project snapshot and (when cloned) the MIDI store.
+template <typename Stack>
+void discard_failed_edit(EditCommand* command, Project& project, MidiContentStore& store,
+                         Stack& stack, MemberSnapshot& before, bool clone_store,
+                         MidiContentStore& store_copy) {
+  rollback_command(command, project, store);
+  stack.pop_back();
+  before.restore(project);
+  if (clone_store) {
+    std::swap(store, store_copy);
+  }
 }
 
 }  // namespace
@@ -308,12 +318,8 @@ bool EditHistory::apply(EditCommandPtr command) {
       // Apply failed: leave the project untouched (apply() must not partially
       // mutate on its failure paths) and push nothing. A command can own an
       // external sidecar and change it before returning false.
-      rollback_command(command.get(), project_, midi_content_);
-      undo_stack_.pop_back();
-      before.restore(project_);
-      if (clone_store) {
-        swap_store_snapshot(midi_content_, store_copy);
-      }
+      discard_failed_edit(command.get(), project_, midi_content_, undo_stack_, before, clone_store,
+                          store_copy);
       return false;
     }
 
@@ -321,12 +327,8 @@ bool EditHistory::apply(EditCommandPtr command) {
     if (inverse == nullptr) {
       // No inverse means the command is not safely undoable; reject it without
       // leaving a sidecar ahead of the history.
-      rollback_command(command.get(), project_, midi_content_);
-      undo_stack_.pop_back();
-      before.restore(project_);
-      if (clone_store) {
-        swap_store_snapshot(midi_content_, store_copy);
-      }
+      discard_failed_edit(command.get(), project_, midi_content_, undo_stack_, before, clone_store,
+                          store_copy);
       return false;
     }
 
@@ -340,12 +342,8 @@ bool EditHistory::apply(EditCommandPtr command) {
     // In particular, invert() may throw std::bad_alloc after apply() has
     // transferred a sidecar.  The optional hook restores that external state
     // without allocating; value stores are then restored with noexcept swaps.
-    rollback_command(command.get(), project_, midi_content_);
-    undo_stack_.pop_back();
-    before.restore(project_);
-    if (clone_store) {
-      swap_store_snapshot(midi_content_, store_copy);
-    }
+    discard_failed_edit(command.get(), project_, midi_content_, undo_stack_, before, clone_store,
+                        store_copy);
     throw;
   }
 }
@@ -400,7 +398,7 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
   const auto restore_snapshots = [&]() noexcept {
     transaction_before.restore(project_);
     if (batch_mutates_store) {
-      swap_store_snapshot(midi_content_, transaction_store_before);
+      std::swap(midi_content_, transaction_store_before);
     }
   };
 
@@ -541,12 +539,8 @@ bool EditHistory::undo() {
   try {
     if (!entry.inverse->apply(project_, midi_content_)) {
       // Should not happen for a well-formed entry; restore and report failure.
-      rollback_command(entry.inverse.get(), project_, midi_content_);
-      redo_stack_.pop_back();
-      before.restore(project_);
-      if (clone_store) {
-        swap_store_snapshot(midi_content_, store_copy);
-      }
+      discard_failed_edit(entry.inverse.get(), project_, midi_content_, redo_stack_, before,
+                          clone_store, store_copy);
       return false;
     }
 
@@ -557,12 +551,8 @@ bool EditHistory::undo() {
     trim_after_undo();
     return true;
   } catch (...) {
-    rollback_command(entry.inverse.get(), project_, midi_content_);
-    redo_stack_.pop_back();
-    before.restore(project_);
-    if (clone_store) {
-      swap_store_snapshot(midi_content_, store_copy);
-    }
+    discard_failed_edit(entry.inverse.get(), project_, midi_content_, redo_stack_, before,
+                        clone_store, store_copy);
     throw;
   }
 }
@@ -589,12 +579,8 @@ bool EditHistory::redo() {
   Entry& pending = undo_stack_.back();
   try {
     if (!entry.forward->apply(project_, midi_content_)) {
-      rollback_command(entry.forward.get(), project_, midi_content_);
-      undo_stack_.pop_back();
-      before.restore(project_);
-      if (clone_store) {
-        swap_store_snapshot(midi_content_, store_copy);
-      }
+      discard_failed_edit(entry.forward.get(), project_, midi_content_, undo_stack_, before,
+                          clone_store, store_copy);
       return false;
     }
 
@@ -613,12 +599,8 @@ bool EditHistory::redo() {
     trim_after_redo();
     return true;
   } catch (...) {
-    rollback_command(entry.forward.get(), project_, midi_content_);
-    undo_stack_.pop_back();
-    before.restore(project_);
-    if (clone_store) {
-      swap_store_snapshot(midi_content_, store_copy);
-    }
+    discard_failed_edit(entry.forward.get(), project_, midi_content_, undo_stack_, before,
+                        clone_store, store_copy);
     throw;
   }
 }
@@ -627,9 +609,7 @@ void EditHistory::set_max_undo_depth(size_t depth) {
   max_undo_depth_ = std::max<size_t>(1, depth);
   // Evict immediately when shrinking below the current depth so the memory is
   // released now, not deferred to the next push_undo().
-  while (undo_stack_.size() > max_undo_depth_) {
-    undo_stack_.pop_front();
-  }
+  trim_undo_stack();
   trim_history_bytes();
 }
 

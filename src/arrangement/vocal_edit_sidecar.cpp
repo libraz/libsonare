@@ -109,6 +109,11 @@ size_t captured_bytes(const CapturedVocal& captured) noexcept {
   return retained::saturating_add(total, retained::dynamic_bytes(captured.out_of_scope_anchors));
 }
 
+/// A take with no source of its own plays the clip's source.
+SourceId take_source_or_clip(const EditClip& clip, const ClipTake& take) noexcept {
+  return take.source_id == 0 ? clip.source_id : take.source_id;
+}
+
 SourceId resolved_source(const EditClip& clip, TakeId take_id, bool* exists) noexcept {
   if (take_id == 0) {
     *exists = true;
@@ -117,7 +122,7 @@ SourceId resolved_source(const EditClip& clip, TakeId take_id, bool* exists) noe
   for (const ClipTake& take : clip.takes) {
     if (take.id != take_id) continue;
     *exists = true;
-    return take.source_id == 0 ? clip.source_id : take.source_id;
+    return take_source_or_clip(clip, take);
   }
   *exists = false;
   return 0;
@@ -278,9 +283,6 @@ AssistSidecar encode_envelope(Key key, const Envelope& envelope) {
   AssistSidecar sidecar;
   sidecar.module_id = make_key(key);
   sidecar.schema_version = kSchemaVersion;
-  sidecar.target_track_id = 0;
-  sidecar.region_start_ppq = 0.0;
-  sidecar.region_end_ppq = 0.0;
   sidecar.payload.reserve(kEnvelopeHeaderBytes + envelope.sve1.size());
   sidecar.payload.insert(sidecar.payload.end(), {'S', 'V', 'P', '1'});
   append_le<uint16_t>(&sidecar.payload, kEnvelopeVersion);
@@ -382,7 +384,7 @@ std::vector<SourceId> collect_orphaned_sources_after_removing_clips(
     };
     add_binding(clip.source_id);
     for (const ClipTake& take : clip.takes) {
-      add_binding(take.source_id == 0 ? clip.source_id : take.source_id);
+      add_binding(take_source_or_clip(clip, take));
     }
   }
 
