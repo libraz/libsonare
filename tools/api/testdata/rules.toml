@@ -46,9 +46,9 @@ title = "Title of library-owned-defaults"
 summary = "Summary of library-owned-defaults."
 
 [[rule]]
-slug = "non-finite-is-absent"
-title = "Title of non-finite-is-absent"
-summary = "Summary of non-finite-is-absent."
+slug = "silence-is-infinite"
+title = "Title of silence-is-infinite"
+summary = "Summary of silence-is-infinite."
 
 [[rule]]
 slug = "finite-or-refused"

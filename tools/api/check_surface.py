@@ -83,7 +83,7 @@ RULE_SLUGS = (
     "loudness-names",
     "absent-not-sentinel",
     "library-owned-defaults",
-    "non-finite-is-absent",
+    "silence-is-infinite",
     "finite-or-refused",
     "input-always-scanned",
     "token-case",

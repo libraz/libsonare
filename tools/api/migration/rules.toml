@@ -225,16 +225,25 @@ libsonare.hpss(samples, sample_rate=44100, n_fft=4096, hop_length=512)  # omitte
 '''
 
 [[rule]]
-slug = "non-finite-is-absent"
-title = "A measurement that could not be taken is absent"
-summary = "Values the C JSON output writes as `null` (loudness or true peak of silence) are an absent optional field in JavaScript and `None` in Python. They are never restored as `-Infinity` or `NaN`."
+slug = "silence-is-infinite"
+title = "Silence is an infinite level; a measurement that was not taken is absent"
+summary = "A level of silence (loudness, true peak, a band floor) is `-Infinity` in JavaScript and `float('-inf')` in Python, and an anti-phase width is `Infinity`; the C JSON output writes these as `null` and every facade restores the end `schemas/result-null-means.json` names for that path. A measurement the library did not take is an absent optional field in JavaScript and `None` in Python. `NaN` never reaches a record."
 [[rule.example]]
 surface = "wasm"
 before = '''
-if (strip.integratedLufs === null) { /* silent strip: no reading */ }
+if (strip.integratedLufs === null) { /* silent strip */ }
 '''
 after = '''
-if (strip.integratedLufs === undefined) { /* silent strip: no reading */ }
+if (strip.integratedLufs === -Infinity) { /* silent strip */ }
+if (strip.crestFactorDb === undefined) { /* not measured */ }
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+if profile.loudness.integrated_lufs is None:  # silent take
+'''
+after = '''
+if profile.loudness.integrated_lufs == float("-inf"):  # silent take
 '''
 
 [[rule]]

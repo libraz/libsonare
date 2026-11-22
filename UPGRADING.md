@@ -6117,7 +6117,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 
-#### A measurement that could not be taken is absent
+#### A number outside its domain is refused, never passed through
 
 | 1.x | 2.0.0 |
 |---|---|
@@ -11107,16 +11107,11 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SonareEngine.setTrackOutputBus` (`./worklet`) | setTrackOutputBus(target, busId: number \| null): null routes to the master, 0 is a RangeError |
 
-#### A measurement that could not be taken is absent
-
-| 1.x | 2.0.0 |
-|---|---|
-| `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
-
 #### A number outside its domain is refused, never passed through
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
@@ -13196,20 +13191,33 @@ Python, 2.0.0:
 libsonare.hpss(samples, sample_rate=44100, n_fft=4096, hop_length=512)  # omitted, the hop is n_fft // 4
 ```
 
-### A measurement that could not be taken is absent
+### Silence is an infinite level; a measurement that was not taken is absent
 
-Values the C JSON output writes as `null` (loudness or true peak of silence) are an absent optional field in JavaScript and `None` in Python. They are never restored as `-Infinity` or `NaN`.
+A level of silence (loudness, true peak, a band floor) is `-Infinity` in JavaScript and `float('-inf')` in Python, and an anti-phase width is `Infinity`; the C JSON output writes these as `null` and every facade restores the end `schemas/result-null-means.json` names for that path. A measurement the library did not take is an absent optional field in JavaScript and `None` in Python. `NaN` never reaches a record.
 
 WASM, 1.x:
 
 ```ts
-if (strip.integratedLufs === null) { /* silent strip: no reading */ }
+if (strip.integratedLufs === null) { /* silent strip */ }
 ```
 
 WASM, 2.0.0:
 
 ```ts
-if (strip.integratedLufs === undefined) { /* silent strip: no reading */ }
+if (strip.integratedLufs === -Infinity) { /* silent strip */ }
+if (strip.crestFactorDb === undefined) { /* not measured */ }
+```
+
+Python, 1.x:
+
+```python
+if profile.loudness.integrated_lufs is None:  # silent take
+```
+
+Python, 2.0.0:
+
+```python
+if profile.loudness.integrated_lufs == float("-inf"):  # silent take
 ```
 
 ### Every call scans its input for non-finite values

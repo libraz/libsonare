@@ -374,6 +374,10 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         "generated integer-domain table: tools/api/gen_integer_domains.py output, no public signatures",
         ("_integer_domains.py",),
     ),
+    (
+        "generated null-means table: tools/conformance/gen_null_means.py output, no public signatures",
+        ("_null_means.py",),
+    ),
 )
 
 

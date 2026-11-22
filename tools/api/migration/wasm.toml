@@ -15070,7 +15070,7 @@ kind = "field"
 old = "EngineBounceOptions.targetLufs"
 changed = "absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused"
 domain = "engine"
-rule = "non-finite-is-absent"
+rule = "finite-or-refused"
 test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults, refuses a zero rate and reads a zero target"
 
 [[entry]]

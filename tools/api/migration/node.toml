@@ -7860,7 +7860,7 @@ kind = "field"
 old = "EngineBounceOptions.targetLufs"
 changed = "absent is -14 LUFS; any finite value, 0 included, is a literal target; a non-finite value is a RangeError"
 domain = "engine"
-rule = "non-finite-is-absent"
+rule = "finite-or-refused"
 test = "bindings/node/tests/surface/engine.test.ts::reads targetLufs 0 as a literal target"
 
 [[entry]]
