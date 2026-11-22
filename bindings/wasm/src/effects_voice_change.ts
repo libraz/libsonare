@@ -21,19 +21,21 @@ export type FormantMode = 'relative' | 'absolute';
 export interface VoiceChangeOptions {
   /** Pitch shift in semitones (negative = down). Default 0. */
   pitchSemitones?: number;
-  /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
+  /**
+   * Formant scale factor (>1 brightens, <1 darkens), finite and in [0.55, 1.65] in either
+   * `formantMode`; a value outside throws a `RangeError` and is never clamped. Default 1.
+   */
   formantFactor?: number;
   /**
    * How `formantFactor` relates to the pitch shift. Default `'relative'`.
    *
    * - `'relative'`: `formantFactor` is the warp applied after the pitch shift, so the
-   *   formants end up at `formantFactor * 2^(pitchSemitones / 12)` of the input's. A factor
-   *   outside [0.55, 1.65] throws a `RangeError`; it is never clamped.
+   *   formants end up at `formantFactor * 2^(pitchSemitones / 12)` of the input's.
    * - `'absolute'`: `formantFactor` is the formant shift relative to the input (1 keeps
    *   the formants where they were); the warp applied is
-   *   `formantFactor / 2^(pitchSemitones / 12)`. A request whose warp falls outside
-   *   [0.55, 1.65] throws a `RangeError` naming the reachable `formantFactor` range for
-   *   the given `pitchSemitones`; it is never clamped.
+   *   `formantFactor / 2^(pitchSemitones / 12)`, which must also lie in [0.55, 1.65]. A
+   *   request where it does not throws a `RangeError` naming the `formantFactor` range
+   *   reachable at the given `pitchSemitones`; it is never clamped.
    */
   formantMode?: FormantMode;
 }
