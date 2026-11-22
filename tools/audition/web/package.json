@@ -2,7 +2,7 @@
   "name": "@libsonare/audition-web",
   "private": true,
   "type": "module",
-  "packageManager": "yarn@4.18.0",
+  "packageManager": "yarn@4.19.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
