@@ -18,7 +18,7 @@
 npm install @libraz/libsonare
 ```
 
-Runs in Chrome 93, Firefox 92 and Safari 15.4 or later, and in Node.js 22.12 or later.
+Runs in Chrome 93, Firefox 92 and Safari 16.4 or later, and in Node.js 22.12 or later.
 
 For BPM / key / chord detection, feature extraction and metering without the mastering, mixing or realtime-engine APIs, import the smaller analysis entry: `import { detectBpm, init } from '@libraz/libsonare/analysis'`.
 
