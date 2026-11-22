@@ -660,8 +660,7 @@ class SuffixUnreadableTest(_CopiedTree):
                     {
                         ANALYZER: (
                             "    name += chord_quality_to_string(quality);\n",
-                            "    name += chord_quality_to_string(quality);\n"
-                            "    name += chord_quality_to_string(quality);\n",
+                            "    name += chord_quality_to_string(quality);\n" * 2,
                         )
                     }
                 )
