@@ -423,7 +423,10 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
 
 /// @brief Imports an in-memory SMF byte buffer, adding one MIDI track + clip per
 ///        imported channel-voice track. @p out_first_clip_id (optional) receives
-///        the id of the first added clip. Unrecoverable malformed tracks return
+///        the id of the first added clip. The file's tempo map and meter map
+///        replace the project's: the span before its first Set Tempo plays at
+///        120 BPM, and a file with no Time Signature leaves the meter map empty.
+///        Unrecoverable malformed tracks return
 ///        SONARE_ERROR_INVALID_FORMAT without mutating the project; a recoverable
 ///        truncated prefix is installed and reported through the normal success
 ///        path. @ref sonare_last_error_message describes rejected truncation.
@@ -435,6 +438,8 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
                                       uint32_t* out_first_clip_id);
 
 /// @brief Exports the project's tempo map + MIDI clips to an SMF byte buffer.
+///        Time Signature events are the project's meter map as it stands; an
+///        empty map writes none.
 /// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
 /// @param out_len   Receives the byte length.
 /// @note Valid MIDI 1.0/2.0 channel-voice UMP words stored via
@@ -451,7 +456,9 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 ///        channel-voice messages (16-bit velocity, 32-bit CC, per-note /
 ///        registered controllers, bank-valid Program Change) without loss.
 ///        Adds one MIDI track + clip. @p out_first_clip_id (optional) receives
-///        the added clip id. Malformed input returns an error without crashing.
+///        the added clip id. The file's tempo map and meter map replace the
+///        project's, as @ref sonare_project_import_smf describes. Malformed
+///        input returns an error without crashing.
 ///        A valid MIDI Clip File can still be rejected when the projected
 ///        persistent Project JSON would exceed its aggregate resource budgets;
 ///        that rejection is also SONARE_ERROR_INVALID_FORMAT, because it is a
@@ -462,7 +469,8 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
 /// @brief Exports the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
 ///        byte buffer (single-clip container). MIDI 2.0-only events are written
 ///        WITHOUT loss — the reason to prefer this over @ref
-///        sonare_project_export_smf when MIDI 2.0 fidelity matters.
+///        sonare_project_export_smf when MIDI 2.0 fidelity matters. An empty
+///        meter map writes no Time Signature.
 /// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
 /// @param out_len   Receives the byte length.
 /// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the

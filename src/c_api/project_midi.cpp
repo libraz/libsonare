@@ -1105,8 +1105,7 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
   if (tempo.empty()) tempo.push_back({0.0, kDefaultBpm, 0.0});
-  std::vector<sonare::transport::TimeSignatureSegment> sigs = model.time_signatures();
-  if (sigs.empty()) sigs.push_back({0.0, {4, 4}});
+  const std::vector<sonare::transport::TimeSignatureSegment>& sigs = model.time_signatures();
 
   // The MIDI Clip File is a single-clip container: merge every MIDI clip's
   // events into one clip, positioned at each clip's project start.
@@ -1175,8 +1174,7 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
   if (tempo.empty()) tempo.push_back({0.0, kDefaultBpm, 0.0});
-  std::vector<sonare::transport::TimeSignatureSegment> sigs = model.time_signatures();
-  if (sigs.empty()) sigs.push_back({0.0, {4, 4}});
+  const std::vector<sonare::transport::TimeSignatureSegment>& sigs = model.time_signatures();
 
   std::vector<sonare::midi::MidiClip> clips;
   std::vector<std::string> names;

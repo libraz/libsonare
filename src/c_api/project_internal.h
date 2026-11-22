@@ -593,8 +593,9 @@ SonareError install_imported_midi(
   std::vector<arr::EditCommandPtr> commands;
   commands.reserve(2 + markers.size() + clips.size() * 4);
 
-  if (!tempos.empty()) commands.push_back(std::make_unique<arr::SetTempoSegment>(tempos));
-  if (!sigs.empty()) commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(sigs));
+  // The file's tempo and meter maps replace the project's; an empty meter map clears it.
+  commands.push_back(std::make_unique<arr::SetTempoSegment>(tempos));
+  commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(sigs));
   uint32_t next_marker_id = project->history.project().next_marker_id();
   for (const auto& marker : markers) {
     if (next_marker_id == std::numeric_limits<uint32_t>::max()) {
