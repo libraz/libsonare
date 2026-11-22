@@ -76,14 +76,14 @@ Before extracting monophonic notes, transcription checks for stable pitch estima
 [Vocadito v3](https://zenodo.org/records/5578807), by Bittner et al., provides solo singing and two independent note annotations under CC BY 4.0. Download its original `vocadito.zip` separately. The preparer verifies the published archive checksum and converts onset/pitch/duration CSV rows into onset/offset/pitch-Hz annotations without changing timings or audio.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/eval/prepare_vocadito.py \
+uv run --locked --project bindings/python python tools/eval/prepare_vocadito.py \
   --archive /path/to/vocadito.zip --output /path/to/vocadito-eval
 cmake -S . -B build-optional-fixtures -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
 cmake --build build-optional-fixtures --target sonare_tests -j2
 SONARE_MUSIC_FIXTURE_ROOT=/path/to/vocadito-eval \
-  rye run --pyproject bindings/python/pyproject.toml python tests/fixtures/run_optional_fixture_report.py \
+  uv run --locked --project bindings/python python tests/fixtures/run_optional_fixture_report.py \
   --suite music --sonare-tests build-optional-fixtures/bin/sonare_tests --output /path/to/report.json
-rye run --pyproject bindings/python/pyproject.toml python tools/eval/summarize_accuracy.py \
+uv run --locked --project bindings/python python tools/eval/summarize_accuracy.py \
   /path/to/report.json --require notes --markdown
 ```
 

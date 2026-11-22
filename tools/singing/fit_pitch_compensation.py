@@ -10,8 +10,8 @@ every cell on the SingingPhonation the engine renders, through the same code the
 drift test (tests/midi/singing_pitch_compensation_test.cpp) runs at the four
 corners. This script owns the grid, runs the sweep once, and writes the table.
 
-    rye run --pyproject bindings/python/pyproject.toml python tools/singing/fit_pitch_compensation.py
-    rye run --pyproject bindings/python/pyproject.toml python tools/singing/fit_pitch_compensation.py --check
+    uv run --locked --project bindings/python python tools/singing/fit_pitch_compensation.py
+    uv run --locked --project bindings/python python tools/singing/fit_pitch_compensation.py --check
 
 The sweep is deterministic, so a second run writes the same bytes.
 """

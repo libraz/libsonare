@@ -28,13 +28,13 @@ the run's; each run's tree and binary are copied from its ledger under
 ``recorded: false`` with the reason, because a dirty tree is invisible afterwards
 and an absent record must not be read as a clean one.
 
-Run from ``bindings/python`` so rye resolves numpy and libsonare::
+Run from ``bindings/python`` so uv resolves numpy and libsonare::
 
     SONARE_LIB_PATH=.../libsonare.dylib \\
-        rye run python ../../tools/mastering-eval/run.py \\
+        uv run --locked python ../../tools/mastering-eval/run.py \\
             --out ../../tools/mastering-eval/runs/w2-baseline-run.json \\
             --emit-baseline /tmp/shape.json
-    rye run python ../../tools/mastering-eval/write_baseline.py \\
+    uv run --locked python ../../tools/mastering-eval/write_baseline.py \\
         --shape /tmp/shape.json \\
         --ledger ../../tools/mastering-eval/runs/w2-baseline-run.json \\
         --non-vacuity ../../tools/mastering-eval/runs/nonvacuity.json

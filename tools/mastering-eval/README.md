@@ -6,12 +6,12 @@ One harness for the mastering chain (`src/mastering/`) and the restoration modul
 
 ```sh
 cd bindings/python
-rye run python ../../tools/mastering-eval/corpus.py                    # write the corpus
-rye run python ../../tools/mastering-eval/run.py                       # measure both families
-rye run python ../../tools/mastering-eval/run.py --family restoration  # narrow to one
+uv run --locked python ../../tools/mastering-eval/corpus.py                    # write the corpus
+uv run --locked python ../../tools/mastering-eval/run.py                       # measure both families
+uv run --locked python ../../tools/mastering-eval/run.py --family restoration  # narrow to one
 ```
 
-Both run from `bindings/python` so `rye` resolves numpy and `libsonare`. `run.py` imports the built Python binding, so a C-ABI change needs its dylib rebuilt first — point `SONARE_LIB_PATH` at the build you mean to measure, because the loader otherwise prefers `build/lib/libsonare.dylib` and will happily measure a stale one.
+Both run from `bindings/python` so `uv` resolves numpy and `libsonare`. `run.py` imports the built Python binding, so a C-ABI change needs its dylib rebuilt first — point `SONARE_LIB_PATH` at the build you mean to measure, because the loader otherwise prefers `build/lib/libsonare.dylib` and will happily measure a stale one.
 
 **What runs by default.** `run.py` with no arguments measures **both families** — 110 rows, 60 restoration and 50 chain. `corpus.py` with no arguments writes the **whole** corpus; there is no default subset of it. `--family` narrows a run; it is not there to keep the default cheap, because a default that leaves the chain unmeasured costs more than the seconds it saves.
 
@@ -267,7 +267,7 @@ No threshold is applied here. The numbers are on the row; what counts as too muc
 
 ## Dependencies
 
-The shipped Python wheel declares numpy and nothing else at runtime, and this harness does not get to grow that list. It also does not get a rye project of its own: the three that exist (`bindings/python`, `benchmarks`, `tests/librosa`) each have a different job, and hanging the harness's dependencies off one of them installs them for everyone working in that project instead.
+The shipped Python wheel declares numpy and nothing else at runtime, and this harness does not get to grow that list. It also does not get a uv project of its own: the three that exist (`bindings/python`, `benchmarks`, `tests/librosa`) each have a different job, and hanging the harness's dependencies off one of them installs them for everyone working in that project instead.
 
 So the harness is **numpy-only and carries its own implementations**, which is already the rule the other `tools/` harnesses follow. STOI in particular is Python-side only and is implemented in `metrics_repair` rather than taken from a package: the published implementation's only hard dependency is polyphase resampling, which is a windowed-sinc FIR. The obligation that comes with the choice is that a self-written STOI has to be checked against the reference implementation's published values before a number from it decides anything.
 

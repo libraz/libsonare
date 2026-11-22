@@ -36,11 +36,11 @@ the clean signal survived" -- but it does not change what the level-independence
 check asks, which is only that a fixed reference and a scaled output give the
 same number.
 
-Run from ``bindings/python`` so rye resolves numpy and libsonare, and point
+Run from ``bindings/python`` so uv resolves numpy and libsonare, and point
 ``SONARE_LIB_PATH`` at the build being measured::
 
     SONARE_LIB_PATH=.../build-mr-w2-shared/lib/libsonare.dylib \\
-        rye run python ../../tools/mastering-eval/nonvacuity.py
+        uv run --locked python ../../tools/mastering-eval/nonvacuity.py
 """
 
 from __future__ import annotations

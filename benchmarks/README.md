@@ -52,9 +52,9 @@ cmake -B build-bench -DCMAKE_BUILD_TYPE=Release \
                      -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF
 cmake --build build-bench -j
 
-# 2. set up the rye env and generate the test fixture
-rye sync --pyproject benchmarks/pyproject.toml
-rye run --pyproject benchmarks/pyproject.toml python benchmarks/generate_audio.py
+# 2. set up the uv env and generate the test fixture
+uv sync --locked --project benchmarks
+uv run --locked --project benchmarks python benchmarks/generate_audio.py
 
 # 3. run the C++ side
 ./build-bench/bin/sonare_bench \
@@ -62,7 +62,7 @@ rye run --pyproject benchmarks/pyproject.toml python benchmarks/generate_audio.p
     benchmarks/results_cpp.json
 
 # 4. time librosa and write the merged results.json
-rye run --pyproject benchmarks/pyproject.toml python benchmarks/run_bench.py
+uv run --locked --project benchmarks python benchmarks/run_bench.py
 ```
 
 `results.json` is the source of truth for the homepage `benchmarks.md`. Re-run
@@ -90,7 +90,7 @@ that drive the synthesis, so it cannot drift from the audio.
 
 ```bash
 # needs a CLI build (BUILD_CLI=ON)
-rye run --pyproject benchmarks/pyproject.toml python benchmarks/generate_audio.py
+uv run --locked --project benchmarks python benchmarks/generate_audio.py
 python3 benchmarks/measure_accuracy.py --cli build-release/bin/sonare
 ```
 
@@ -149,10 +149,9 @@ The script auto-detects `bpm-detector` on `PATH` and times it on the same
 fixture. To enable:
 
 ```bash
-rye run --pyproject benchmarks/pyproject.toml python -m ensurepip --upgrade
-rye run --pyproject benchmarks/pyproject.toml python -m pip install \
+uv pip install --python benchmarks/.venv \
     --no-deps -e ../bpm-detector
-rye run --pyproject benchmarks/pyproject.toml python -m pip install \
+uv pip install --python benchmarks/.venv \
     psutil tqdm colorama scikit-learn matplotlib seaborn pandas resampy
 ```
 

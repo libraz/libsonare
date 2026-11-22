@@ -37,9 +37,9 @@ make fixtures         # generates the K-weighting reference fixture; needed once
 make test-cxx         # the C++ suite on its own
 ```
 
-Eigen and Catch2 are resolved with `find_package` first and fetched only if the host has neither. `make test` also runs the calibration harness, which needs [rye](https://rye.astral.sh/).
+Eigen and Catch2 are resolved with `find_package` first and fetched only if the host has neither. `make test` also runs the calibration harness, which needs [uv](https://docs.astral.sh/uv/).
 
-**A binding** — additionally Node 22 with Corepack, and rye for Python:
+**A binding** — additionally Node 22.12 or newer and uv for Python. The repo pins Node 26 and Yarn through `mise`; without it, enable Corepack, which Node 25 and later no longer bundle (`npm install -g corepack`):
 
 ```bash
 cd bindings/node   && yarn install --immutable && yarn build && yarn test
@@ -60,7 +60,7 @@ You do not have to; CI and the maintainer run them. If you want to see what CI w
 
 ```bash
 make format        # applies formatting across every language present
-make ci-local      # formatting check and the drift gates; needs Node and rye
+make ci-local      # formatting check and the drift gates; needs Node and uv
 make parity        # cross-surface drift on its own, after the conformance gates
 ```
 
@@ -205,7 +205,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - The WASM test run refuses to start against a `dist/` older than its sources.
 - A TypeScript declaration emit only adds to `dist/`, so a deleted or renamed source leaves its `.d.ts` behind, and the npm tarball ships `dist/` whole. The package scripts clear it; a bare `tsc` does not, and nothing fails while the orphan is there.
 - A WASM build overwrites `bindings/wasm/dist/` wherever its build directory lives, and every surface's tests import it. Emscripten compiles its system libraries through a path relative to the build directory, so a worktree under `/tmp` fails to link for a reason unrelated to your change.
-- The drift gates need only `python3`. `make ci-local` and `make format` need Node and rye, because they reach the layout snapshot through rye and the binding linters through yarn.
+- The drift gates need only `python3`. `make ci-local` and `make format` need Node and uv, because they reach the layout snapshot through uv and the binding linters through yarn.
 - `make lint` type-checks both typed surfaces (`tsc` for Node, `mypy --strict` for Python). A Python stub is invisible to every other gate: ruff does not read it, no test imports it, and the module answers at runtime whatever the stub says.
 - `Installed package` is the only CI job that sees the library the way an external C++ consumer does. Every in-tree target links the whole set, so an archive missing a declared dependency still links in tree.
 

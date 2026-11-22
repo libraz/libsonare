@@ -67,7 +67,7 @@ that genuinely did not change reads. Above the floor the two cases are distingui
 are not, so a run over material with no content in a band says nothing about that band.
 
 Run the definition pins with
-``rye run python -m doctest ../../tools/mastering-eval/metrics_chain.py`` from ``bindings/python``.
+``uv run --locked python -m doctest ../../tools/mastering-eval/metrics_chain.py`` from ``bindings/python``.
 """
 
 from __future__ import annotations
