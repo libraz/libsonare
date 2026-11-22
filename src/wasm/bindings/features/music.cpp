@@ -147,7 +147,7 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
                         const val& hop_length_val, const val& min_section_sec_val,
                         const val& threshold_val) {
   SectionConfig config;
-  config.n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kSectionCountDomain);
+  config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
   config.hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kSectionCountDomain);
   config.min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
   // An absent threshold is the library default, not a value the facade restates.
@@ -194,9 +194,10 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
 
   BoundaryConfig config;
   if (!options.isUndefined() && !options.isNull()) {
-    config.n_fft =
-        optionalDomainValue<int>(objectProperty(options, "nFft"), "nFft", kBoundaryCountDomain)
-            .value_or(config.n_fft);
+    const val n_fft_val = objectProperty(options, "nFft");
+    if (!n_fft_val.isUndefined() && !n_fft_val.isNull()) {
+      config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
+    }
     config.hop_length = optionalDomainValue<int>(objectProperty(options, "hopLength"), "hopLength",
                                                  kBoundaryCountDomain)
                             .value_or(config.hop_length);

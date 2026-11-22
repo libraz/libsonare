@@ -97,7 +97,7 @@ describe('Node async API', () => {
       const rejection = analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 });
       await expect(rejection).rejects.toBeInstanceOf(RangeError);
       await expect(rejection).rejects.toThrow(
-        new RangeError('analyzeAsync: nFft must be an even integer in [2, 2147483647]'),
+        new RangeError('analyzeAsync: nFft must be an even integer in [2, 524288]'),
       );
     });
 

@@ -219,7 +219,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   it('rejects an odd nFft, which has no n_fft/2 + 1 bin layout', () => {
     expectConfigRefusal(
       () => analyze(samples, SR, { nFft: 2047 }),
-      'nFft must be an even integer in [2, 2147483647]',
+      'nFft must be an even integer in [2, 524288]',
     );
   });
 });

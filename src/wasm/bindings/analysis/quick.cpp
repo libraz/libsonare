@@ -391,8 +391,8 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
                                const val& high_pass_hz_val, val modes, const val& profile_type_val,
                                std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kKeyCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyHopLengthDomain);
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -417,8 +417,8 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
                              const val& high_pass_hz_val, val modes, const val& profile_type_val,
                              std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kKeyCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyHopLengthDomain);
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -542,8 +542,9 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
                      bool use_key_context, const val& key_root_val, const val& key_mode_val,
                      bool detect_inversions, const val& chroma_method_val, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kChordCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kChordCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length =
+      domainNumberFromVal<int>(hop_length_val, "hopLength", kChordHopLengthDomain);
   const int hmm_beam_width =
       domainNumberFromVal<int>(hmm_beam_width_val, "hmmBeamWidth", kChordBeamWidthDomain);
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
@@ -586,8 +587,9 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
   const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kChordCountDomain);
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kChordCountDomain);
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length =
+      domainNumberFromVal<int>(hop_length_val, "hopLength", kChordHopLengthDomain);
   const int hmm_beam_width =
       domainNumberFromVal<int>(hmm_beam_width_val, "hmmBeamWidth", kChordBeamWidthDomain);
   const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");

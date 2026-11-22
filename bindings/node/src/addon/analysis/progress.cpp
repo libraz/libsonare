@@ -50,8 +50,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   SonareSectionOptions options;
   sonare_section_options_init(&options);
-  if (!OptionalDomainArg(env, info, 2, "nFft", options.n_fft, sonare::kSectionCountDomain,
-                         &options.n_fft) ||
+  if (!OptionalIntArg(env, info, 2, "nFft", options.n_fft, &options.n_fft) ||
       !OptionalDomainArg(env, info, 3, "hopLength", options.hop_length, sonare::kSectionCountDomain,
                          &options.hop_length) ||
       !OptionalFiniteFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
@@ -109,7 +108,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   sonare_boundary_options_init(&options);
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object bag = info[2].As<Napi::Object>();
-    options.n_fft = DomainProperty<int>(bag, "nFft", options.n_fft, sonare::kBoundaryCountDomain);
+    options.n_fft = IntProperty(bag, "nFft", options.n_fft);
     options.hop_length =
         DomainProperty<int>(bag, "hopLength", options.hop_length, sonare::kBoundaryCountDomain);
     options.kernel_size =

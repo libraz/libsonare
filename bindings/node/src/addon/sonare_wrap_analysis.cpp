@@ -166,8 +166,8 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = DomainProperty<int>(options, "nFft", n_fft, sonare::kKeyCountDomain);
-    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyCountDomain);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyHopLengthDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
     chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
@@ -225,8 +225,8 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = DomainProperty<int>(options, "nFft", n_fft, sonare::kKeyCountDomain);
-    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyCountDomain);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyHopLengthDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
     chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
@@ -609,7 +609,7 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::BpmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kBpmCountDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
@@ -819,7 +819,7 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::RhythmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 5, "nFft", 2048, sonare::kBpmCountDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
@@ -933,7 +933,7 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   int n_mels{};
   int n_mfcc{};
   float window_sec{};
-  if (!OptionalDomainArg(env, info, 2, "nFft", 2048, sonare::kTimbreCountDomain, &n_fft) ||
+  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft) ||
       !OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kTimbreCountDomain, &hop_length) ||
       !OptionalDomainArg(env, info, 4, "nMels", 128, sonare::kTimbreCountDomain, &n_mels) ||
       !OptionalDomainArg(env, info, 5, "nMfcc", 13, sonare::kTimbreCountDomain, &n_mfcc) ||
@@ -1103,11 +1103,12 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 6, "nFft", 2048, sonare::kChordCountDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 6, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 7, "hopLength", 512, sonare::kChordCountDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 7, "hopLength", 512, sonare::kChordHopLengthDomain,
+                         &hop_length)) {
     return env.Undefined();
   }
   bool use_beat_sync{};
@@ -1208,11 +1209,12 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalDomainArg(env, info, 8, "nFft", 2048, sonare::kChordCountDomain, &n_fft)) {
+  if (!OptionalIntArg(env, info, 8, "nFft", 2048, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 9, "hopLength", 512, sonare::kChordCountDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 9, "hopLength", 512, sonare::kChordHopLengthDomain,
+                         &hop_length)) {
     return env.Undefined();
   }
   bool use_beat_sync{};
