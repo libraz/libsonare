@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectAutomationCurve, ProjectAutomationPoint } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,
+  automationPointValue,
   meterTapValue,
   panLawValue,
-  projectAutomationPointValue,
   resolveEnumOrdinal,
 } from '../src/value_coercion.js';
 
@@ -69,7 +69,7 @@ describe('enum ordinal coercion', () => {
       Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
     );
     const curve = (value: unknown) =>
-      projectAutomationPointValue(
+      automationPointValue(
         {
           ppq: 0,
           value: 1,
@@ -90,19 +90,19 @@ describe('enum ordinal coercion', () => {
   });
 
   it('resolves curveToNext and refuses the curve key by name', () => {
-    expect(projectAutomationPointValue({ ppq: 1, value: 0.5, curveToNext: 'sCurve' }, 0)).toEqual({
+    expect(automationPointValue({ ppq: 1, value: 0.5, curveToNext: 'sCurve' }, 0)).toEqual({
       ppq: 1,
       value: 0.5,
       curveToNext: 3,
     });
     // An omitted curve is Linear, matching the documented default.
-    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 }, 0)).toEqual({
+    expect(automationPointValue({ ppq: 1, value: 0.5 }, 0)).toEqual({
       ppq: 1,
       value: 0.5,
       curveToNext: 0,
     });
     expect(() =>
-      projectAutomationPointValue(
+      automationPointValue(
         {
           ppq: 1,
           value: 0.5,
