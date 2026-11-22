@@ -1573,6 +1573,12 @@ export interface WasmRealtimeEngine {
   setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
   setCaptureSource: (source: WasmEngineCaptureStatus['source'] | number) => void;
   setRecordOffsetSamples: (offsetSamples: number) => void;
+  setCaptureTiming: (
+    recordOffsetSamples: number,
+    punchStartSample: number,
+    punchEndSample: number,
+    punchEnabled: boolean,
+  ) => void;
   setInputMonitor: (enabled: boolean, gain: number) => void;
   resetCapture: () => void;
   captureStatus: () => WasmEngineCaptureStatus;

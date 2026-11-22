@@ -774,6 +774,26 @@ Napi::Value RealtimeEngineWrap::SetRecordOffsetSamples(const Napi::CallbackInfo&
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::SetCaptureTiming(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  int64_t offset_samples = 0;
+  int64_t start_sample = 0;
+  int64_t end_sample = 0;
+  bool enabled = false;
+  if (!OptionalInt64Arg(env, info, 0, "recordOffsetSamples", 0, &offset_samples) ||
+      !OptionalInt64Arg(env, info, 1, "punchStartSample", 0, &start_sample) ||
+      !OptionalInt64Arg(env, info, 2, "punchEndSample", 0, &end_sample) ||
+      !OptionalBoolArg(env, info, 3, "punchEnabled", false, &enabled)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_capture_timing(engine_, offset_samples, start_sample,
+                                                     end_sample, enabled ? 1 : 0));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::SetInputMonitor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

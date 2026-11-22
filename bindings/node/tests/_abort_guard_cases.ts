@@ -977,6 +977,15 @@ export const CASES: AbortGuardCase[] = [
     badArguments: [{ argument: 'offsetSamples', call: (e) => e.setRecordOffsetSamples('128') }],
   },
   {
+    name: 'RealtimeEngine.setCaptureTiming',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'recordOffsetSamples', call: (e) => e.setCaptureTiming('64', 0, BLOCK, true) },
+      { argument: 'punchStartSample', call: (e) => e.setCaptureTiming(64, '0', BLOCK, true) },
+      { argument: 'punchEnabled', call: (e) => e.setCaptureTiming(64, 0, BLOCK, 1) },
+    ],
+  },
+  {
     name: 'RealtimeEngine.setInputMonitor',
     missingRequired: [],
     badArguments: [

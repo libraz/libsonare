@@ -858,6 +858,7 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => e.armCapture(1));
         swallow(() => e.setCapturePunch('0', '128', 1));
         swallow(() => e.setRecordOffsetSamples('64'));
+        swallow(() => e.setCaptureTiming('64', '0', '128', 1));
         swallow(() => e.setInputMonitor(1, '0.5'));
         swallow(() => e.setCaptureBuffer('2', '1024'));
         // Transport, parameter and MIDI arguments. The MIDI rows use two

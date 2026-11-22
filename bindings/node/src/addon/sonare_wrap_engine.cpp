@@ -215,6 +215,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
                                                                 napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetRecordOffsetSamples>("setRecordOffsetSamples",
                                                                       napi_default_method),
+          InstanceMethod<&RealtimeEngineWrap::SetCaptureTiming>("setCaptureTiming",
+                                                                napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetInputMonitor>("setInputMonitor",
                                                                napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::ResetCapture>("resetCapture", napi_default_method),

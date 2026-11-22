@@ -2703,27 +2703,24 @@ export class RealtimeEngine {
       };
     }
     const native = this.native;
-    // Applied first: a window the engine refuses leaves the rest of the setup untouched.
-    if (punch === undefined) {
-      native.setCapturePunch(0, 1, false);
-    } else {
-      const { start, end } = punch;
-      withRespelled(punch.respelled, () => native.setCapturePunch(start, end, true));
-    }
     const current = this.captureBuffer;
-    if (
+    const resize =
       current === undefined ||
       current.numChannels !== numChannels ||
-      current.capacityFrames !== options.capacityFrames
-    ) {
-      if (current !== undefined && native.captureStatus().armed) {
-        throw invalidState('the capture buffer cannot change while capture is armed');
-      }
+      current.capacityFrames !== options.capacityFrames;
+    if (resize && current !== undefined && native.captureStatus().armed) {
+      throw invalidState('the capture buffer cannot change while capture is armed');
+    }
+    // The one step the engine can still refuse, applied whole or not at all, so a refused
+    // setup leaves the engine as it was.
+    withRespelled(punch?.respelled ?? {}, () =>
+      native.setCaptureTiming(offset, punch?.start ?? 0, punch?.end ?? 0, punch !== undefined),
+    );
+    if (resize) {
       native.setCaptureBuffer(numChannels, options.capacityFrames);
       this.captureBuffer = { numChannels, capacityFrames: options.capacityFrames };
     }
     native.setCaptureSource(source === CAPTURE_SOURCES.input ? 'input' : 'output');
-    native.setRecordOffsetSamples(offset);
     native.setInputMonitor(monitor.enabled, monitor.gain);
   }
 

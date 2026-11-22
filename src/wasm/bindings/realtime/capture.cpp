@@ -32,6 +32,19 @@ const char* captureSourceName(sonare::engine::CaptureSource source) {
   return source == sonare::engine::CaptureSource::kInput ? "input" : "output";
 }
 
+// An enabled empty window would read as "no punch" and record everything.
+void checkPunchWindow(int64_t start, int64_t end, bool enabled, const char* start_name,
+                      const char* end_name) {
+  sonare::util::check::integer_within(start, sonare_c_detail::kEngineCapturePunchStartDomain,
+                                      start_name);
+  if (end < start) {
+    sonare::util::check::refuse_relation({end_name, start_name}, "{0} must not be before {1}");
+  }
+  if (enabled && end == start) {
+    sonare::util::check::refuse_relation({end_name, start_name}, "{0} must not equal {1}");
+  }
+}
+
 }  // namespace
 
 void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
@@ -49,16 +62,7 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
 
 void RealtimeEngineWasm::armCapture(bool armed) { engine_.set_capture_armed(armed); }
 void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
-  sonare::util::check::integer_within(start_sample, sonare_c_detail::kEngineCapturePunchStartDomain,
-                                      "start_sample");
-  if (end_sample < start_sample) {
-    sonare::util::check::refuse_relation({"end_sample", "start_sample"},
-                                         "{0} must not be before {1}");
-  }
-  // An enabled empty window would read as "no punch" and record everything.
-  if (enabled && end_sample == start_sample) {
-    sonare::util::check::refuse_relation({"end_sample", "start_sample"}, "{0} must not equal {1}");
-  }
+  checkPunchWindow(start_sample, end_sample, enabled, "start_sample", "end_sample");
   engine_.set_capture_punch(start_sample, end_sample, enabled);
 }
 void RealtimeEngineWasm::setCaptureSource(val source) {
@@ -66,6 +70,14 @@ void RealtimeEngineWasm::setCaptureSource(val source) {
 }
 void RealtimeEngineWasm::setRecordOffsetSamples(int64_t offset_samples) {
   engine_.set_record_offset_samples(offset_samples);
+}
+// The C ABI's subjects, so a refusal reads as sonare_engine_set_capture_timing's does.
+void RealtimeEngineWasm::setCaptureTiming(int64_t record_offset_samples, int64_t punch_start_sample,
+                                          int64_t punch_end_sample, bool punch_enabled) {
+  checkPunchWindow(punch_start_sample, punch_end_sample, punch_enabled, "punch_start_sample",
+                   "punch_end_sample");
+  engine_.set_capture_timing(record_offset_samples, punch_start_sample, punch_end_sample,
+                             punch_enabled);
 }
 void RealtimeEngineWasm::setInputMonitor(bool enabled, const val& gain_val) {
   const float gain = checkedFloatFromVal(gain_val, "gain");
@@ -103,6 +115,7 @@ void registerRealtimeEngineCapture(class_<RealtimeEngineWasm>& cls) {
       .function("setCapturePunch", &RealtimeEngineWasm::setCapturePunch)
       .function("setCaptureSource", &RealtimeEngineWasm::setCaptureSource)
       .function("setRecordOffsetSamples", &RealtimeEngineWasm::setRecordOffsetSamples)
+      .function("setCaptureTiming", &RealtimeEngineWasm::setCaptureTiming)
       .function("setInputMonitor", &RealtimeEngineWasm::setInputMonitor)
       .function("resetCapture", &RealtimeEngineWasm::resetCapture)
       .function("captureStatus", &RealtimeEngineWasm::captureStatus)

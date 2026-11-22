@@ -238,6 +238,7 @@ inline constexpr std::string_view kTokens[] = {
     "engine_set_capture_buffer",
     "engine_set_capture_punch",
     "engine_set_capture_source",
+    "engine_set_capture_timing",
     "engine_set_clip_page_prefetch_frames",
     "engine_set_clips",
     "engine_set_controller_note_tracking",

@@ -1782,27 +1782,24 @@ export class RealtimeEngine {
     const punch = isAbsent(request.punch) ? undefined : this.resolvePunch(request.punch);
 
     const shape = this.captureShape;
-    if (
+    const resize =
       shape === undefined ||
       shape.numChannels !== numChannels ||
-      shape.capacityFrames !== capacityFrames
-    ) {
-      if (this.native.captureStatus().armed) {
-        throw invalidState(`the capture buffer cannot be resized while armed`);
-      }
+      shape.capacityFrames !== capacityFrames;
+    if (resize && this.native.captureStatus().armed) {
+      throw invalidState(`the capture buffer cannot be resized while armed`);
+    }
+    // The one step the engine can still refuse, applied whole or not at all, so a refused
+    // setup leaves the engine as it was.
+    withRespelled(punch?.respelled ?? {}, () =>
+      this.native.setCaptureTiming(offset, punch?.start ?? 0, punch?.end ?? 0, punch !== undefined),
+    );
+    if (resize) {
       this.native.setCaptureBuffer(numChannels, capacityFrames);
       this.captureShape = { numChannels, capacityFrames };
     }
     this.native.setCaptureSource(source);
-    this.native.setRecordOffsetSamples(offset);
     this.native.setInputMonitor(monitor.enabled, monitor.gain);
-    if (punch === undefined) {
-      this.native.setCapturePunch(0, 0, false);
-    } else {
-      withRespelled(punch.respelled, () =>
-        this.native.setCapturePunch(punch.start, punch.end, true),
-      );
-    }
   }
 
   private resolvePunch(punch: CapturePunch): {
@@ -1837,7 +1834,8 @@ export class RealtimeEngine {
         `punch.${sampleName}`,
         `punch.${secName}`,
         'non-negative',
-        sampleName,
+        // The name setCaptureTiming refuses the bound under.
+        `punch${edge === 'start' ? 'Start' : 'End'}Sample`,
       ) as SampleBound & { readonly value: number };
     };
     const start = bound('start');

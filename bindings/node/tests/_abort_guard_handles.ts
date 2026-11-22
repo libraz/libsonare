@@ -321,6 +321,12 @@ export interface NativeEngine {
   setCapturePunch(startSample: unknown, endSample: unknown, enabled?: unknown): void;
   setCaptureSource(source: unknown): void;
   setRecordOffsetSamples(offsetSamples: unknown): void;
+  setCaptureTiming(
+    recordOffsetSamples: unknown,
+    punchStartSample: unknown,
+    punchEndSample: unknown,
+    punchEnabled?: unknown,
+  ): void;
   setInputMonitor(enabled: unknown, gain?: unknown): void;
   captureStatus(): NativeCaptureStatus;
 }

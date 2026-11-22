@@ -118,6 +118,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetCapturePunch(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureSource(const Napi::CallbackInfo& info);
   Napi::Value SetRecordOffsetSamples(const Napi::CallbackInfo& info);
+  Napi::Value SetCaptureTiming(const Napi::CallbackInfo& info);
   Napi::Value SetInputMonitor(const Napi::CallbackInfo& info);
   Napi::Value ResetCapture(const Napi::CallbackInfo& info);
   Napi::Value CaptureStatus(const Napi::CallbackInfo& info);

@@ -372,6 +372,8 @@ class RealtimeEngineWasm {
   void setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled);
   void setCaptureSource(emscripten::val source);
   void setRecordOffsetSamples(int64_t offset_samples);
+  void setCaptureTiming(int64_t record_offset_samples, int64_t punch_start_sample,
+                        int64_t punch_end_sample, bool punch_enabled);
   void setInputMonitor(bool enabled, const emscripten::val& gain_val);
   void resetCapture();
   emscripten::val captureStatus() const;
