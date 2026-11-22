@@ -1,7 +1,7 @@
 """Which dimensions an instrument is judged on, how much of the grid a bound
 was set from, and what the floor under one records.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_bounds.py -q
 """
 

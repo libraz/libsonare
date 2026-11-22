@@ -8,7 +8,7 @@ unpadded measurement, `held_utc` now when it is within the bound, and outcome
 `kept` or `exceeded`; a hold drops `held_tree`, since the run's tree is not known here; a reading `profile_gate.unadjudicable` set aside changes nothing. Bound values, `set_*` and every other field are untouched,
 and a statistic the run did not measure is left as it was.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python tools/voicematch/gate_verify.py --runs <distance run dir> [--write]
 """
 

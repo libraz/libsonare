@@ -16,7 +16,7 @@ coverage instead of asserting exact parameter recovery.
 
 Run from the repository root, for example::
 
-    rye run --pyproject bindings/python/pyproject.toml python \
+    uv run --locked --project bindings/python python \
         tools/voicematch/family_recovery.py --family all --optimizer cmaes \
         --max-evals 24 --out family-recovery.json
 """

@@ -5,7 +5,7 @@ blob it does not recognise renders a default instrument at a normal level —
 so every step is checked here against bytes assembled by hand rather than
 against a plugin that has to be installed.
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python -m pytest tools/voicematch/test_vstpreset.py
 """
 

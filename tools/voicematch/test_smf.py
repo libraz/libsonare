@@ -6,7 +6,7 @@ anyone sees: every analysis window is derived from the score, so a file whose
 notes drifted is measured at the wrong instants and reads as an instrument with
 a slow attack.
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python -m pytest tools/voicematch/test_smf.py
 """
 

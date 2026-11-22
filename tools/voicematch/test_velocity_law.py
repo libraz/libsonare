@@ -1,6 +1,6 @@
 """The reference's level-to-velocity law: a source's mapping table or a per-note dynamic.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_velocity_law.py -q
 """
 

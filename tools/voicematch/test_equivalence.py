@@ -3,7 +3,7 @@
 No bank run: the re-extract comparison is exercised on synthetic profiles and the
 terms proof on a one-tone, one-hit signal set over two copied trees.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_equivalence.py -q
 """
 

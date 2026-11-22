@@ -1,6 +1,6 @@
 """A module kit's model is read on the window its reference rows were read on, or refused.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_kit_window.py -q
 """
 

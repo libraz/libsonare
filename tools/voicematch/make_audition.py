@@ -1,6 +1,6 @@
 """Render a voice of libsonare's own bank, and any reference it happens to have.
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python tools/voicematch/make_audition.py --program 40
 
 Writes `<take>/model.wav` and one WAV per reference timbre into a directory

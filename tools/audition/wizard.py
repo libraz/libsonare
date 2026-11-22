@@ -152,8 +152,8 @@ class Renderer:
     def command(self, voice: dict) -> list[str]:
         if self.runner is not None:
             base = list(self.runner)
-        elif shutil.which("rye"):
-            base = ["rye", "run", "--pyproject", str(PYPROJECT), "python"]
+        elif shutil.which("uv"):
+            base = ["uv", "run", "--locked", "--project", str(PYPROJECT.parent), "python"]
         else:
             base = [sys.executable]
         # Niced: a render shares the machine with whatever else is running.

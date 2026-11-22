@@ -1,7 +1,7 @@
 """A fit against several captures at once: the joint loss, its per-capture readings,
 the per-capture hold-out and guards, and how the capture list reaches the records.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_joint.py -q
 """
 

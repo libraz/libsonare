@@ -3,7 +3,7 @@
 Rows are synthetic instruments with known field values, so each test knows which
 reference a stand-in must be nearest.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_crossid.py -q
 """
 

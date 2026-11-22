@@ -9,7 +9,7 @@ differ, that a row-level mismatch is reported with its timbre/note/velocity
 rather than a bare index, and that a missing reference or cache is a distinct
 status rather than a silent skip.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_reextract_check.py -q
 """
 

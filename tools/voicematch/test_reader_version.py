@@ -1,6 +1,6 @@
 """A bound remembers the reader version it was set under, and a run may hold one untightened.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_reader_version.py -q
 """
 

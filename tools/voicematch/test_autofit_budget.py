@@ -1,6 +1,6 @@
 """A search budget below what the optimizer needs is refused, and a short run is labelled.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_budget.py -q
 """
 

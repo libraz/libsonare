@@ -1,6 +1,6 @@
 """Per-bound provenance in the gate file, the computed `_unbounded`, and the migration.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_gate_provenance.py -q
 """
 

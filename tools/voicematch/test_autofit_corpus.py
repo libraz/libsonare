@@ -1,7 +1,7 @@
 """The captured corpus as a probe: the room it carries, which oracle may
 carry one, the per-note analysis window and the hold-out check.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_corpus.py -q
 """
 

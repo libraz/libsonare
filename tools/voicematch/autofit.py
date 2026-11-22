@@ -4,9 +4,9 @@ Closes the voicematch tuning loop mechanically: set one or more of a voice's
 calibration constants, render the model and the reference ("oracle") from the
 same MIDI, score the timbre mismatch, and minimise it.
 
-Run from the repo root through the bindings' rye environment:
+Run from the repo root through the bindings' uv environment:
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python tools/voicematch/autofit.py --spec tools/voicematch/specs/piano.json \\
             --program 0 --pattern sustain --notes 48,60,72 --max-evals 200
 

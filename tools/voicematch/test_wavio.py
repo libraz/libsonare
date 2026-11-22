@@ -5,7 +5,7 @@ misread one does not fail loudly — it produces a plausible signal at the wrong
 scale, or with the byte order of a 24-bit sample scrambled, and the fit chases
 it. These build each format by hand and check what comes back.
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python -m pytest tools/voicematch/test_wavio.py
 """
 

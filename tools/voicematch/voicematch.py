@@ -2,9 +2,9 @@
 (physical models under tuning) and a reference GM synth, then report per-note
 timbre deltas.
 
-Run from the repo root through the bindings' rye environment:
+Run from the repo root through the bindings' uv environment:
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python tools/voicematch/voicematch.py compare --programs 40
 
 Outputs land under tools/voicematch/out/p<NNN>_<pattern>/ as model.wav,

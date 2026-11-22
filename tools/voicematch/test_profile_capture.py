@@ -3,7 +3,7 @@ program the model answers with, the rig and room answers, the product
 identity neither half may carry, which kind of instrument the slot holds,
 and the layout and families inside the grid.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_capture.py -q
 """
 

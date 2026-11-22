@@ -1,6 +1,6 @@
 """Tests for the sampled-velocity-layer count.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_velocity_layers.py -q
 """
 

@@ -12,7 +12,7 @@ writes a WAV, and prints objective per-file metrics:
   sustained midpoint.
 
 Usage (from repo root):
-  rye run --pyproject bindings/python/pyproject.toml \
+  uv run --locked --project bindings/python \
       python tools/voicematch/render_corpus.py [--out DIR] [--programs 0,40,56]
 
 A reference render per program can be added next to the model render with

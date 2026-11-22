@@ -2,7 +2,7 @@
 band, the attack's high end, the compare table and the fixed-resonance
 attribution.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_metrics.py -q
 """
 

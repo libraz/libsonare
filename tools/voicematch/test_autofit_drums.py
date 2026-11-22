@@ -1,6 +1,6 @@
 """The kit loss: the per-piece terms, the drum probe and its write-back.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_drums.py -q
 """
 

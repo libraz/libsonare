@@ -1,7 +1,7 @@
 """Which reference a voice can actually be compared against, and the
 tolerances an agreement is read against.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_reference.py -q
 """
 

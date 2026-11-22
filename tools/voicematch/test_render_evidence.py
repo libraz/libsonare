@@ -5,7 +5,7 @@ measurement and readiness readers here also read v1 entries, flagged
 historical, because a v1 reference may still be measured but never stands as a
 verified one.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_render_evidence.py -q
 """
 

@@ -1,6 +1,6 @@
 """Loss normalisation, and which ceiling a fit's residual is scored under.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_loss.py -q
 """
 

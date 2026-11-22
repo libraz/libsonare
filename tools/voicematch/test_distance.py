@@ -3,7 +3,7 @@
 Nothing here renders: a compare summary is written by hand, so each test knows
 the residual it should read back.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_distance.py -q
 """
 

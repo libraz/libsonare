@@ -4,10 +4,10 @@
 
 ## Fit a voice
 
-Run from the repository root through the rye environment; use `--help` for the complete current option set.
+Run from the repository root through the uv environment; use `--help` for the complete current option set.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/autofit.py \
+uv run --locked --project bindings/python python tools/voicematch/autofit.py \
     --spec auto --program 40 --pattern sustain --notes 48,60,72 \
     --optimizer cmaes --max-evals 200 --workers 8 \
     --validate-notes 55,67,79 --dry-run --out fit.json
@@ -114,7 +114,7 @@ Level balance needs at least two distinct note or velocity conditions with finit
 A patch is often reached by more than one capture: a base voice, a GS variation, a keyoff capture, a struct copy such as the ukulele on the nylon patch. Repeat `--corpus` to fit one set of values against all of them, so a gain on one is not bought blind at another's cost.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/autofit.py \
+uv run --locked --project bindings/python python tools/voicematch/autofit.py \
     --spec auto --program 24 --program-only --dry-run --out fit.json \
     --corpus <nylon dir> --corpus-timbre grand-227 --corpus-notes 36,60 --corpus-validate-notes 48,72 \
     --corpus <ukulele dir> --corpus-timbre '' --corpus-notes 40,64 --corpus-validate-notes 52,76

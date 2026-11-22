@@ -1,6 +1,6 @@
 """Tests for the gate verification pass: provenance moves, bounds never do.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_gate_verify.py -q
 """
 

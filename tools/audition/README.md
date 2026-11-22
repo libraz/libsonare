@@ -288,7 +288,7 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 `tools/voicematch/make_audition.py` writes a manifest of this shape: the same phrases rendered through libsonare and through a reference plugin, with one shared gain per take. What it renders is named as a GM program, a variation bank or a drum kit, and the library's own voice list is the index:
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python \
+uv run --locked --project bindings/python python \
     tools/voicematch/make_audition.py --program 6
 ```
 

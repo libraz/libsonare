@@ -1,7 +1,7 @@
 """The tree a fit renders through: write-back path translation, the build
 directory, what a render is allowed to have come from, and startup.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_tree.py -q
 """
 

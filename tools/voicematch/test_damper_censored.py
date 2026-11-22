@@ -1,6 +1,6 @@
 """The count of damper rows censored, printed beside `damper` and carried to the audit.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_damper_censored.py -q
 """
 

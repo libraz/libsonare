@@ -6,7 +6,7 @@ be compared at all, that the number handed to a bound is the median absolute
 row delta and not something else, and that a dimension two instruments cannot
 compare is separated from one they compare and disagree on.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_substitution.py -q
 """
 

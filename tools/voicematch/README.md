@@ -7,10 +7,10 @@
 Run commands from the repository root through the Python environment used by the bindings:
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/<script>.py --help
+uv run --locked --project bindings/python python tools/voicematch/<script>.py --help
 ```
 
-The command above is the invocation convention for the examples in these pages; each script's `--help` output is authoritative for its current options and defaults. `shape` is a package, so invoke it as `PYTHONPATH=tools/voicematch rye run --pyproject bindings/python/pyproject.toml python -m shape --help`.
+The command above is the invocation convention for the examples in these pages; each script's `--help` output is authoritative for its current options and defaults. `shape` is a package, so invoke it as `PYTHONPATH=tools/voicematch uv run --locked --project bindings/python python -m shape --help`.
 
 Configure and build the native library using the [Python binding instructions](../../bindings/python/README.md). The default GM oracle requires fluidsynth and a SoundFont; pass `--sf2 <path>` to use an installed SF2/SF3 file. Capture-time plugin requirements are in [Reference](docs/reference.md#sources).
 
@@ -20,7 +20,7 @@ For direct model comparisons, build the shared library after synth changes and p
 
 ```sh
 cmake --build build-python-shared --target sonare_shared -j8
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/voicematch.py compare --programs 40 --pattern sustain
+uv run --locked --project bindings/python python tools/voicematch/voicematch.py compare --programs 40 --pattern sustain
 ```
 
 The default library is `build-python-shared/lib/libsonare.dylib`. `autofit.py` creates an isolated tuning build under `build-autofit` unless `--build-dir` selects another directory. Captured audio, audition renders, datasets, and comparison output are untracked. `SONARE_VOICEMATCH_ROOT` moves capture, audition, and dataset storage; direct comparison output remains under `tools/voicematch/out/`.

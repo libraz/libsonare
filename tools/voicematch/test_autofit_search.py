@@ -1,7 +1,7 @@
 """The search space: which interval a knob is searched over, which stage it
 belongs to, the weights a spec carries, and when a run stops.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_search.py -q
 """
 

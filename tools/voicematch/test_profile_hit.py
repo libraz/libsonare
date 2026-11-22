@@ -1,7 +1,7 @@
 """How a struck note is measured: the band comparisons, the ring length, the
 attack floor, and where the onset is placed when the host sounded late.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_hit.py -q
 """
 

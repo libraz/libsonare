@@ -1,7 +1,7 @@
 """What the summary reads off a spectrum: tone against mechanism noise, the
 partial stack, and the velocity axis.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_reading.py -q
 """
 

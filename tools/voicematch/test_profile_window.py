@@ -1,6 +1,6 @@
 """The per-note window of a module one-shot capture, and what a row's end says it is.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_window.py -q
 """
 

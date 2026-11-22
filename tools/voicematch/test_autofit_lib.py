@@ -1,7 +1,7 @@
 """Fitting against a prebuilt library: nothing is built, a library that ignores
 overrides is refused, and a stale library is reported rather than trusted.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_lib.py -q
 """
 

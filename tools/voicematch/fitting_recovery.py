@@ -8,7 +8,7 @@ separate search failure from an objective that cannot see a defect.
 
 Run from the repository root, for example::
 
-    rye run --pyproject bindings/python/pyproject.toml python \
+    uv run --locked --project bindings/python python \
         tools/voicematch/fitting_recovery.py --optimizer cmaes --out recovery.json
 
 The JSON report is ``fitting-recovery/v1``.  It contains raw metric residuals,

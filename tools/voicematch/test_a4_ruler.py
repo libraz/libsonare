@@ -1,6 +1,6 @@
 """The A4 ruler a stretch reading is taken against, and the bounds that carry it.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_a4_ruler.py -q
 """
 

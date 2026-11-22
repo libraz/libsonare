@@ -2,7 +2,7 @@
 the readings inside that window may claim, the room the model is placed
 in, and the bank a variation selects.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_profile_render.py -q
 """
 

@@ -5,7 +5,7 @@ mark of which, and the default is a build directory nothing keeps current — so
 a whole bank-wide sweep can measure the previous generation of a voice with
 each reading looking entirely ordinary. These pin the one line that says so.
 
-    rye run --pyproject bindings/python/pyproject.toml \
+    uv run --locked --project bindings/python \
         python -m pytest tools/voicematch/test_render_model.py
 """
 

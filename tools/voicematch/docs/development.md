@@ -1,6 +1,6 @@
 # Development commands and module map
 
-The harness is maintained from the repository root. Use the rye invocation from the README and ask each script for `--help` before adding an option to a command; this page records command roles and invariants rather than copying parser tables.
+The harness is maintained from the repository root. Use the uv invocation from the README and ask each script for `--help` before adding an option to a command; this page records command roles and invariants rather than copying parser tables.
 
 ## Commands
 
@@ -22,9 +22,9 @@ The harness is maintained from the repository root. Use the rye invocation from 
 Examples:
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py --all --lib build-tuning/lib/libsonare.dylib
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/check_specs.py --lib build-tuning/lib/libsonare.dylib
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py --lib build-tuning/lib/libsonare.dylib --spec tools/voicematch/specs/piano.json
+uv run --locked --project bindings/python python tools/voicematch/status.py --all --lib build-tuning/lib/libsonare.dylib
+uv run --locked --project bindings/python python tools/voicematch/check_specs.py --lib build-tuning/lib/libsonare.dylib
+uv run --locked --project bindings/python python tools/voicematch/liveness.py --lib build-tuning/lib/libsonare.dylib --spec tools/voicematch/specs/piano.json
 ```
 
 A model render loads the library named in `SONARE_LIB_PATH` as given, with a warning on stderr when it is older than the core sources, since measuring an older build on purpose is a legitimate control. With no library named, the render uses `build-python-shared/lib/libsonare.dylib` and refuses to start when that file is missing (the binding would otherwise fall back to another in-tree build, such as the Debug `build/`) or older than the newest file under `src/` and `include/`. The staleness rule and its opt-out, `SONARE_ALLOW_STALE_LIB=1`, are the Python test session's.
@@ -32,9 +32,9 @@ A model render loads the library named in `SONARE_LIB_PATH` as given, with a war
 Synthetic recovery separates search and objective failures from physical-model claims. The fixtures use known parameters and production measurement paths; success does not prove that a C++ voice can reproduce an instrument.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/fitting_recovery.py --optimizer cmaes --max-evals 72 --out recovery.json
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/family_recovery.py --family all --optimizer cmaes --max-evals 24 --out family-recovery.json
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/percussion_component_recovery.py --family snare --optimizer cmaes --max-evals 64 --out components.json
+uv run --locked --project bindings/python python tools/voicematch/fitting_recovery.py --optimizer cmaes --max-evals 72 --out recovery.json
+uv run --locked --project bindings/python python tools/voicematch/family_recovery.py --family all --optimizer cmaes --max-evals 24 --out family-recovery.json
+uv run --locked --project bindings/python python tools/voicematch/percussion_component_recovery.py --family snare --optimizer cmaes --max-evals 64 --out components.json
 ```
 
 `percussion_component_recovery.py` checks controlled contact, rattle, hand-struck, cup, and withheld-velocity behavior in synthetic snare, metal, and kick families. `--without-evolution` removes the evolution terms for an objective comparison; either result remains a harness check, not a physical validation.
@@ -42,7 +42,7 @@ rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/percu
 The native component probe measures whether selected contact, wire, and shell overrides are observable in an existing tuning-enabled build:
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/percussion_component_probe.py --build-dir build-autofit --drum-note 38 --out native-components.json
+uv run --locked --project bindings/python python tools/voicematch/percussion_component_probe.py --build-dir build-autofit --drum-note 38 --out native-components.json
 ```
 
 It compares ablations against the same patch and records overrides, hashes, waveform changes, and term coverage. Waveform differences use per-render RMS-normalized mono audio, so they do not measure raw component amplitude. All unchanged controls leave override reach inconclusive; a changed control establishes observability and does not establish agreement with an independent instrument reference.
@@ -50,9 +50,9 @@ It compares ablations against the same patch and records overrides, hashes, wave
 The shape package uses `PYTHONPATH=tools/voicematch` and an explicit `BUILD_TUNING=ON` library. Produce `<tuning-dump>` by setting `SONARE_TUNING_DUMP=<path>` while rendering the selected patch with that same library; the file records consulted keys and compiled defaults.
 
 ```sh
-PYTHONPATH=tools/voicematch rye run --pyproject bindings/python/pyproject.toml python -m shape --help
-PYTHONPATH=tools/voicematch rye run --pyproject bindings/python/pyproject.toml python -m shape fit --capture <id> --corpus <capture-dir> --knobs <tuning-dump> --lib build-autofit/lib/libsonare.dylib --report shape-fit.json --out shape-overrides.json
-PYTHONPATH=tools/voicematch rye run --pyproject bindings/python/pyproject.toml python -m shape prune --capture <id> --corpus <capture-dir> --knobs <tuning-dump> --lib build-autofit/lib/libsonare.dylib --overrides shape-overrides.json --report shape-prune.json --out shape-selected.json
+PYTHONPATH=tools/voicematch uv run --locked --project bindings/python python -m shape --help
+PYTHONPATH=tools/voicematch uv run --locked --project bindings/python python -m shape fit --capture <id> --corpus <capture-dir> --knobs <tuning-dump> --lib build-autofit/lib/libsonare.dylib --report shape-fit.json --out shape-overrides.json
+PYTHONPATH=tools/voicematch uv run --locked --project bindings/python python -m shape prune --capture <id> --corpus <capture-dir> --knobs <tuning-dump> --lib build-autofit/lib/libsonare.dylib --overrides shape-overrides.json --report shape-prune.json --out shape-selected.json
 ```
 
 `shape fit` and `shape prune` keep fit selection separate from final validation; inspect their reports before using an override set in an audition. `shape probe`, `struck`, `attack`, `onset`, `purity`, `admittance`, and `takes` identify residual structure without changing `autofit.py`'s write-back objective.
@@ -79,7 +79,7 @@ Run focused checks after a relevant change and reserve native builds or renders 
 make spec-check
 make voice-status-check
 make voicematch-reextract-check
-rye run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch -q
+uv run --locked --project bindings/python python -m pytest tools/voicematch -q
 ```
 
 `spec-check` catches deleted or renamed keys and clamp ranges that collapse to a point. `voice-status-check` checks the generated bank status. `voicematch-reextract-check` checks committed profile extraction against available scratch corpora. The Python suite covers capture loading, note mapping, room and rig decisions, objective coverage, fit quality, write-back, shape validation, identity guards, and recovery reports; it does not require licensed captured audio for ordinary unit cases.
@@ -105,8 +105,8 @@ The catalogue's clamp probe covers every field exposed by the patch override lay
 `identity.py` checks raw render bytes between a base library and a head library with the new mechanism at its default, then requires a declared `--reach` override to change at least one selected render. `--isolate` checks that overrides addressed to one drum note do not alter neighboring notes and also rejects a vacuous string that changes nothing.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/identity.py --base /tmp/base/lib/libsonare.dylib --head build-tuning/lib/libsonare.dylib --programs 0,19,40,56,73 --drums 35,36,38,47 --reach 36:d036.percussion.plate_gain=1.0
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib --isolate d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0
+uv run --locked --project bindings/python python tools/voicematch/identity.py --base /tmp/base/lib/libsonare.dylib --head build-tuning/lib/libsonare.dylib --programs 0,19,40,56,73 --drums 35,36,38,47 --reach 36:d036.percussion.plate_gain=1.0
+uv run --locked --project bindings/python python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib --isolate d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0
 ```
 
 The reach half is required because a missing build flag, wrong loader path, unresolved key, or untaken branch can produce a perfect default identity table. Build the base and head libraries separately; loading both into one process is invalid because tuning overrides are read at library initialization.
@@ -116,7 +116,7 @@ The reach half is required because a missing build flag, wrong loader path, unre
 `dataset.py` generates uniform knob-vector to full `probe_rows` pairs for an amortized inverse. It samples each knob in its declared scale, includes the compiled-in default as a check point, round-trips values through the formatter, and records failed or silent renders with reasons instead of dropping them. The output belongs under the scratch root and does not become a reference profile or a bank gate.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/dataset.py --program 40 --pattern sustain --samples 1000 --build-dir build-tuning --out dataset.jsonl.gz
+uv run --locked --project bindings/python python tools/voicematch/dataset.py --program 40 --pattern sustain --samples 1000 --build-dir build-tuning --out dataset.jsonl.gz
 ```
 
 `autofit.py --lib <dylib>` (and `refit.py --lib`) fits against a prebuilt tuning library without configuring or building anything, so a run can proceed while another process owns the shared build; see [Fitting](fitting.md).

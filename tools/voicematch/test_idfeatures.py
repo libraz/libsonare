@@ -4,7 +4,7 @@ A recording is a gain and a linear filter, so every feature here is built to
 survive both. The tests apply exactly that to a synthetic row and require the
 features not to move, then change the instrument and require that they do.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_idfeatures.py -q
 """
 

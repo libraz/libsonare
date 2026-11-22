@@ -20,7 +20,7 @@ whatever it finds, on the same terms as `status.py`: a target that failed on
 "there is drift" could not be the thing a calibration round reads to decide
 whether it is safe to start.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python tools/voicematch/reextract_check.py
 """
 

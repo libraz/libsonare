@@ -1,6 +1,6 @@
 # Voicematch measurements
 
-The measurement contract is the data emitted by [`metrics.py`](../metrics.py), [`metrics_hit.py`](../metrics_hit.py), and [`metrics_texture.py`](../metrics_texture.py). Shape measurements use the mono normalized render; raw held-level fields are present only when a raw render is supplied. Run commands from the repository root with `rye run --pyproject bindings/python/pyproject.toml python ...`; use each command's `--help` for the complete option set.
+The measurement contract is the data emitted by [`metrics.py`](../metrics.py), [`metrics_hit.py`](../metrics_hit.py), and [`metrics_texture.py`](../metrics_texture.py). Shape measurements use the mono normalized render; raw held-level fields are present only when a raw render is supplied. Run commands from the repository root with `uv run --locked --project bindings/python python ...`; use each command's `--help` for the complete option set.
 
 ## Pitched measurements
 

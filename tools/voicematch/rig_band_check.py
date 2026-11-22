@@ -24,7 +24,7 @@ Local measurement, read-only, not gated. Exits 1 when a program misses either
 bound or the control is not beaten, 0 otherwise.
 
     SONARE_LIB_PATH=build-tuning/lib/libsonare.<dylib|so> \\
-        rye run --pyproject bindings/python/pyproject.toml \\
+        uv run --locked --project bindings/python \\
         python tools/voicematch/rig_band_check.py
 """
 

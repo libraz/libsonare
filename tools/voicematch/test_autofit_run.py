@@ -1,7 +1,7 @@
 """What a fit actually ran against: that a probe reached the code, the tree
 state it compiled, and the measurements it kept across runs.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_autofit_run.py -q
 """
 

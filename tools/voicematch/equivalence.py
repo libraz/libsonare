@@ -18,7 +18,7 @@ pass:
     tree's `loss.probe_rows` and reduced by `loss.score_terms`, gives the same
     terms dict, key for key and value for value.
 
-    rye run --pyproject bindings/python/pyproject.toml python \\
+    uv run --locked --project bindings/python python \\
         tools/voicematch/equivalence.py prove <commit-a> <commit-b> [--record]
 """
 

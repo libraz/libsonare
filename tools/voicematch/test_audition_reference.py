@@ -6,7 +6,7 @@ the standard kit's page played the sampled library's kit while the fit and the
 gates were reading the module. These guard the fix: no reordering happens, and
 a module capture's reference is played at the FONT's own address.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_audition_reference.py -q
 """
 

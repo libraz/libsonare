@@ -1,6 +1,6 @@
 """layer_report lists the captures with no declared class and the voices with no on-layer capture.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_layer_report.py -q
 """
 

@@ -1,6 +1,6 @@
 """The window a statistic was read on, stored in the reference row and in the gate, and checked.
 
-    rye run --pyproject bindings/python/pyproject.toml \\
+    uv run --locked --project bindings/python \\
         python -m pytest tools/voicematch/test_window_storage.py -q
 """
 
