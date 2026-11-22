@@ -68,11 +68,7 @@ inline void setChainLevelsAndStages(emscripten::val& out, const Result& result) 
   out.set("inputLufs", result.input_lufs);
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
-  emscripten::val stages = emscripten::val::array();
-  for (const auto& stage : result.stages) {
-    stages.call<void>("push", stage);
-  }
-  out.set("stages", stages);
+  out.set("stages", stringVectorToVal(result.stages));
   setChainMetrics(out, result);
 }
 

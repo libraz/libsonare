@@ -258,9 +258,7 @@ val refusal_object(const sonare::SonareParameterRefusal& refusal) {
   val out = val::object();
   out.set("code", static_cast<int>(parts.code));
   out.set("form", parts.form);
-  val subjects = val::array();
-  for (const std::string& subject : parts.subjects) subjects.call<void>("push", subject);
-  out.set("subjects", subjects);
+  out.set("subjects", stringVectorToVal(parts.subjects));
   out.set("predicate", parts.predicate);
   out.set("renamedTo", parts.renamed_to);
   out.set("expected", parts.expected);

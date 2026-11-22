@@ -139,13 +139,7 @@ class PlaybackRendererWasm {
                                                 frames) != SONARE_OK) {
       throwRejectedBlock(in_channels, frames);
     }
-    val out = val::array();
-    for (int ch = 0; ch < out_channels_; ++ch) {
-      const float* plane = out_planes_[static_cast<size_t>(ch)].data();
-      out.call<void>("push", val::global("Float32Array")
-                                 .new_(val(typed_memory_view(static_cast<size_t>(frames), plane))));
-    }
-    return out;
+    return planesToVal(frames);
   }
 
   val processSilence(const val& frames_val) {
@@ -159,13 +153,7 @@ class PlaybackRendererWasm {
           ErrorCode::InvalidParameter,
           "the renderer rejected a silent block of " + std::to_string(frames) + " frames");
     }
-    val out = val::array();
-    for (int ch = 0; ch < out_channels_; ++ch) {
-      const float* plane = out_planes_[static_cast<size_t>(ch)].data();
-      out.call<void>("push", val::global("Float32Array")
-                                 .new_(val(typed_memory_view(static_cast<size_t>(frames), plane))));
-    }
-    return out;
+    return planesToVal(frames);
   }
 
   val processInterleaved(const val& samples, const val& in_channels_val) {
@@ -305,6 +293,15 @@ class PlaybackRendererWasm {
   }
 
  private:
+  val planesToVal(int frames) const {
+    val out = val::array();
+    for (int ch = 0; ch < out_channels_; ++ch) {
+      out.call<void>("push", vectorToFloat32Array(out_planes_[static_cast<size_t>(ch)].data(),
+                                                  static_cast<size_t>(frames)));
+    }
+    return out;
+  }
+
   struct RendererDeleter {
     void operator()(SonarePlaybackRenderer* renderer) const {
       sonare_playback_renderer_destroy(renderer);
@@ -378,9 +375,8 @@ val renderPlayback(val samples, val channels_val, val sample_rate_val,
       hrtfHandleFromVal(hrtf), &rendered, &out_frames, &out_channels));
   std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
   val out = val::object();
-  out.set("samples", val::global("Float32Array")
-                         .new_(val(typed_memory_view(out_frames * static_cast<size_t>(out_channels),
-                                                     owned.get()))));
+  out.set("samples",
+          vectorToFloat32Array(owned.get(), out_frames * static_cast<size_t>(out_channels)));
   out.set("channels", out_channels);
   return out;
 }

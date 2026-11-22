@@ -314,13 +314,7 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
       editing::pitch_editor::auto_tune(audio, named, config);
   val out = val::object();
   out.set("samples", vectorToFloat32Array(result.audio.data(), result.audio.size()));
-  val key = val::object();
-  key.set("root", static_cast<int>(result.key.root));
-  key.set("mode", static_cast<int>(result.key.mode));
-  key.set("confidence", result.key.confidence);
-  key.set("name", result.key.to_string());
-  key.set("shortName", result.key.to_short_string());
-  out.set("key", key);
+  out.set("key", keyToVal(result.key));
   return out;
 }
 

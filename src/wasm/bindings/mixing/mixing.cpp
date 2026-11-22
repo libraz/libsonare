@@ -88,13 +88,7 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
 }
 
 // Warnings captured when this mixer was built from scene JSON; empty when all consumed.
-val MixerWasm::sceneWarnings() const {
-  val out = val::array();
-  for (const std::string& warning : scene_warnings_) {
-    out.call<void>("push", warning);
-  }
-  return out;
-}
+val MixerWasm::sceneWarnings() const { return stringVectorToVal(scene_warnings_); }
 
 std::string MixerWasm::presetJson(std::string name) {
   char* json = nullptr;

@@ -173,13 +173,7 @@ val js_detect_key_candidates_default(val samples, const val& sample_rate) {
   val out = val::array();
   for (const auto& cand : candidates) {
     val entry = val::object();
-    val key = val::object();
-    key.set("root", static_cast<int>(cand.key.root));
-    key.set("mode", static_cast<int>(cand.key.mode));
-    key.set("confidence", cand.key.confidence);
-    key.set("name", cand.key.to_string());
-    key.set("shortName", cand.key.to_short_string());
-    entry.set("key", key);
+    entry.set("key", keyToVal(cand.key));
     entry.set("correlation", cand.correlation);
     out.call<void>("push", entry);
   }

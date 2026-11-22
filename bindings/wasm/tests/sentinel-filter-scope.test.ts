@@ -386,10 +386,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'src/wasm/bindings/project/project_bounce.cpp:total',
     'A count the C ABI reported through an out-parameter, sizing the second call that fills it.',
   ],
-  [
-    'src/wasm/bindings/realtime/capture.cpp:count',
-    'The number of captured frames the engine reported, bounding the copy back into JS.',
-  ],
 ]);
 
 /** Both registers, which together must answer every site the scan finds. */

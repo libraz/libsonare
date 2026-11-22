@@ -25,6 +25,17 @@
 
 namespace {
 
+/// Appends a chord's roman numeral and harmonic function relative to the given key.
+void pushRomanAndFunction(val& roman, val& functions, const Chord& chord, int key_root,
+                          int key_mode) {
+  roman.call<void>("push",
+                   ChordAnalyzer::chord_to_roman_numeral(chord, static_cast<PitchClass>(key_root),
+                                                         static_cast<Mode>(key_mode)));
+  functions.call<void>("push",
+                       ChordAnalyzer::chord_function(chord, static_cast<PitchClass>(key_root),
+                                                     static_cast<Mode>(key_mode)));
+}
+
 std::vector<Mode> modesFromVal(val modes) {
   std::vector<Mode> out;
   if (modes.isUndefined() || modes.isNull()) {
@@ -167,13 +178,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("bpmCandidates", bpmCandidates);
 
   // Key
-  val key = val::object();
-  key.set("root", static_cast<int>(result.key.root));
-  key.set("mode", static_cast<int>(result.key.mode));
-  key.set("confidence", result.key.confidence);
-  key.set("name", result.key.to_string());
-  key.set("shortName", result.key.to_short_string());
-  out.set("key", key);
+  out.set("key", keyToVal(result.key));
 
   // Time signature
   out.set("timeSignature", timeSignatureToVal(result.time_signature));
@@ -322,13 +327,7 @@ val js_detect_key(val samples, const val& sample_rate_val) {
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate);
 
-  val result = val::object();
-  result.set("root", static_cast<int>(key.root));
-  result.set("mode", static_cast<int>(key.mode));
-  result.set("confidence", key.confidence);
-  result.set("name", key.to_string());
-  result.set("shortName", key.to_short_string());
-  return result;
+  return keyToVal(key);
 }
 
 namespace {
@@ -384,12 +383,19 @@ KeyConfig makeKeyConfig(int n_fft, int hop_length, bool use_hpss, bool loudness_
   return config;
 }
 
-}  // namespace
+struct KeyDetectionInput {
+  Audio audio;
+  KeyConfig config;
+  int sample_rate;
+};
 
-val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
-                               const val& hop_length_val, bool use_hpss, bool loudness_weighted,
-                               const val& high_pass_hz_val, val modes, const val& profile_type_val,
-                               std::string genre_hint, const val& tuning_val) {
+/// Reads the shared key-detection arguments in their documented order and loads the audio.
+KeyDetectionInput loadKeyDetectionInput(val samples, const val& sample_rate_val,
+                                        const val& n_fft_val, const val& hop_length_val,
+                                        bool use_hpss, bool loudness_weighted,
+                                        const val& high_pass_hz_val, val modes,
+                                        const val& profile_type_val, const std::string& genre_hint,
+                                        const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyHopLengthDomain);
@@ -399,15 +405,23 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
   config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
-  float tuning_used = 0.0f;
-  Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config, &tuning_used);
+  return {std::move(audio), std::move(config), sample_rate};
+}
 
-  val result = val::object();
-  result.set("root", static_cast<int>(key.root));
-  result.set("mode", static_cast<int>(key.mode));
-  result.set("confidence", key.confidence);
-  result.set("name", key.to_string());
-  result.set("shortName", key.to_short_string());
+}  // namespace
+
+val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
+                               const val& hop_length_val, bool use_hpss, bool loudness_weighted,
+                               const val& high_pass_hz_val, val modes, const val& profile_type_val,
+                               std::string genre_hint, const val& tuning_val) {
+  KeyDetectionInput in = loadKeyDetectionInput(samples, sample_rate_val, n_fft_val, hop_length_val,
+                                               use_hpss, loudness_weighted, high_pass_hz_val, modes,
+                                               profile_type_val, genre_hint, tuning_val);
+  float tuning_used = 0.0f;
+  Key key =
+      quick::detect_key(in.audio.data(), in.audio.size(), in.sample_rate, in.config, &tuning_used);
+
+  val result = keyToVal(key);
   result.set("tuningCents", tuning_used * sonare::constants::kCentsPerSemitone);
   return result;
 }
@@ -416,27 +430,15 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
                              const val& hop_length_val, bool use_hpss, bool loudness_weighted,
                              const val& high_pass_hz_val, val modes, const val& profile_type_val,
                              std::string genre_hint, const val& tuning_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kKeyHopLengthDomain);
-  const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
-  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
-  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
-  KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
-                                   modes, profile_type, genre_hint);
-  config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
+  KeyDetectionInput in = loadKeyDetectionInput(samples, sample_rate_val, n_fft_val, hop_length_val,
+                                               use_hpss, loudness_weighted, high_pass_hz_val, modes,
+                                               profile_type_val, genre_hint, tuning_val);
   const auto candidates =
-      quick::detect_key_candidates(audio.data(), audio.size(), sample_rate, config);
+      quick::detect_key_candidates(in.audio.data(), in.audio.size(), in.sample_rate, in.config);
   val out = val::array();
   for (size_t i = 0; i < candidates.size(); ++i) {
     val candidate = val::object();
-    val key = val::object();
-    key.set("root", static_cast<int>(candidates[i].key.root));
-    key.set("mode", static_cast<int>(candidates[i].key.mode));
-    key.set("confidence", candidates[i].key.confidence);
-    key.set("name", candidates[i].key.to_string());
-    key.set("shortName", candidates[i].key.to_short_string());
-    candidate.set("key", key);
+    candidate.set("key", keyToVal(candidates[i].key));
     candidate.set("correlation", candidates[i].correlation);
     out.call<void>("push", candidate);
   }
@@ -615,12 +617,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   val roman = val::array();
   val functions = val::array();
   for (const Chord& chord : analyzer.chords()) {
-    roman.call<void>("push",
-                     ChordAnalyzer::chord_to_roman_numeral(chord, static_cast<PitchClass>(key_root),
-                                                           static_cast<Mode>(key_mode)));
-    functions.call<void>("push",
-                         ChordAnalyzer::chord_function(chord, static_cast<PitchClass>(key_root),
-                                                       static_cast<Mode>(key_mode)));
+    pushRomanAndFunction(roman, functions, chord, key_root, key_mode);
   }
   val out = val::object();
   out.set("chords", chordsToVal(analyzer.chords()));
@@ -817,12 +814,7 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
 }
 
 val js_analysis_result_schema_paths() {
-  val out = val::array();
-  const auto& paths = sonare::analysis_result_schema_paths();
-  for (size_t i = 0; i < paths.size(); ++i) {
-    out.call<void>("push", paths[i]);
-  }
-  return out;
+  return stringVectorToVal(sonare::analysis_result_schema_paths());
 }
 
 val js_analysis_result_schema_fixture() {
@@ -882,12 +874,7 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
     chord.root = static_cast<PitchClass>(root);
     chord.quality = static_cast<ChordQuality>(quality);
     chord.bass = chord.root;
-    roman.call<void>("push",
-                     ChordAnalyzer::chord_to_roman_numeral(chord, static_cast<PitchClass>(key_root),
-                                                           static_cast<Mode>(key_mode)));
-    functions.call<void>("push",
-                         ChordAnalyzer::chord_function(chord, static_cast<PitchClass>(key_root),
-                                                       static_cast<Mode>(key_mode)));
+    pushRomanAndFunction(roman, functions, chord, key_root, key_mode);
   }
   val out = val::object();
   out.set("roman", roman);

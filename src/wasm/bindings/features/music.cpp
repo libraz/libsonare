@@ -22,6 +22,20 @@
 // Features - Chroma
 // ============================================================================
 
+namespace {
+
+/// Mean energy per pitch class as a plain JS Array.
+val meanEnergyToVal(const Chroma& chroma) {
+  const auto mean = chroma.mean_energy();
+  val mean_arr = val::array();
+  for (size_t i = 0; i < mean.size(); ++i) {
+    mean_arr.call<void>("push", mean[i]);
+  }
+  return mean_arr;
+}
+
+}  // namespace
+
 val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& hop_length) {
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -41,12 +55,7 @@ val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& 
   out.set("features", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
 
   // Mean energy per pitch class
-  auto mean = chroma.mean_energy();
-  val mean_arr = val::array();
-  for (int i = 0; i < 12; ++i) {
-    mean_arr.call<void>("push", mean[i]);
-  }
-  out.set("meanEnergy", mean_arr);
+  out.set("meanEnergy", meanEnergyToVal(chroma));
 
   return out;
 }
@@ -60,12 +69,7 @@ val chromaToVal(const Chroma& chroma) {
 
   out.set("features", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
 
-  auto mean = chroma.mean_energy();
-  val mean_arr = val::array();
-  for (int i = 0; i < 12; ++i) {
-    mean_arr.call<void>("push", mean[static_cast<size_t>(i)]);
-  }
-  out.set("meanEnergy", mean_arr);
+  out.set("meanEnergy", meanEnergyToVal(chroma));
   return out;
 }
 

@@ -482,10 +482,7 @@ class RealtimeVoiceChangerWrapper {
     const float* carrier_ptr = load_carrier(carrier, length);
     require_processed(
         changer_.process_block(mono_input_.data(), carrier_ptr, mono_output_.data(), length));
-    val output = val::global("Float32Array").new_(length);
-    val view = val(typed_memory_view(static_cast<size_t>(length), mono_output_.data()));
-    output.call<void>("set", view);
-    return output;
+    return vectorToFloat32Array(mono_output_.data(), static_cast<size_t>(length));
   }
 
   void process_mono_into(val samples, const val& carrier, val output) {

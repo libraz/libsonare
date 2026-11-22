@@ -54,6 +54,21 @@ QuantizeConfig quantizeConfigFromVal(const val& config) {
   return qconfig;
 }
 
+/// @brief Builds a chord entry; barIndex, when given, is set first.
+val chordEntryToVal(int root, int quality, float start_time, float confidence,
+                    const int* bar_index = nullptr) {
+  val c = val::object();
+  if (bar_index != nullptr) {
+    c.set("barIndex", *bar_index);
+  }
+  c.set("root", root);
+  c.set("quality", quality);
+  c.set("startSec", start_time);
+  c.set("confidence", confidence);
+  c.set("name", chord_symbol(root, quality));
+  return c;
+}
+
 /// @brief Whether a constructor field was given; an absent one keeps the StreamConfig default.
 bool given(const val& value) { return !value.isUndefined() && !value.isNull(); }
 
@@ -286,12 +301,7 @@ class StreamAnalyzerWrapper {
     // Chord progression (time-based)
     val chordProgression = val::array();
     for (const auto& chord : s.estimate.chord_progression) {
-      val c = val::object();
-      c.set("root", chord.root);
-      c.set("quality", chord.quality);
-      c.set("startSec", chord.start_time);
-      c.set("confidence", chord.confidence);
-      c.set("name", chord_symbol(chord.root, chord.quality));
+      val c = chordEntryToVal(chord.root, chord.quality, chord.start_time, chord.confidence);
       chordProgression.call<void>("push", c);
     }
     estimate.set("chordProgression", chordProgression);
@@ -299,13 +309,8 @@ class StreamAnalyzerWrapper {
     // Bar-synchronized chord progression (requires stable BPM)
     val barChordProgression = val::array();
     for (const auto& chord : s.estimate.bar_chord_progression) {
-      val c = val::object();
-      c.set("barIndex", chord.bar_index);
-      c.set("root", chord.root);
-      c.set("quality", chord.quality);
-      c.set("startSec", chord.start_time);
-      c.set("confidence", chord.confidence);
-      c.set("name", chord_symbol(chord.root, chord.quality));
+      val c = chordEntryToVal(chord.root, chord.quality, chord.start_time, chord.confidence,
+                              &chord.bar_index);
       barChordProgression.call<void>("push", c);
     }
     estimate.set("barChordProgression", barChordProgression);
@@ -315,13 +320,8 @@ class StreamAnalyzerWrapper {
     // Voted chord pattern (computed from repetitions)
     val votedPattern = val::array();
     for (const auto& chord : s.estimate.voted_pattern) {
-      val c = val::object();
-      c.set("barIndex", chord.bar_index);
-      c.set("root", chord.root);
-      c.set("quality", chord.quality);
-      c.set("startSec", chord.start_time);
-      c.set("confidence", chord.confidence);
-      c.set("name", chord_symbol(chord.root, chord.quality));
+      val c = chordEntryToVal(chord.root, chord.quality, chord.start_time, chord.confidence,
+                              &chord.bar_index);
       votedPattern.call<void>("push", c);
     }
     estimate.set("votedPattern", votedPattern);

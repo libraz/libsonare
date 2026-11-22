@@ -122,13 +122,7 @@ class StreamingMasteringChainWrapper {
   int latencySamples() const { return chain_.latency_samples(); }
   int maxBlockSize() const { return chain_.max_block_size(); }
 
-  val stageNames() const {
-    val out = val::array();
-    for (const auto& name : chain_.stage_names()) {
-      out.call<void>("push", name);
-    }
-    return out;
-  }
+  val stageNames() const { return stringVectorToVal(chain_.stage_names()); }
 
   // double rather than the uint32_t the chain reports: embind marshals an
   // unsigned to a JS number anyway, and saying so here keeps the saturated

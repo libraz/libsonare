@@ -42,6 +42,16 @@ val stringVectorToVal(const std::vector<std::string>& names) {
   return out;
 }
 
+val keyToVal(const sonare::Key& key) {
+  val out = val::object();
+  out.set("root", static_cast<int>(key.root));
+  out.set("mode", static_cast<int>(key.mode));
+  out.set("confidence", key.confidence);
+  out.set("name", key.to_string());
+  out.set("shortName", key.to_short_string());
+  return out;
+}
+
 val vectorToFloat32Array(const float* data, size_t n) {
   val result = val::global("Float32Array").new_(n);
   if (n == 0) return result;

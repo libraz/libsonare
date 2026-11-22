@@ -462,9 +462,7 @@ val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
   }
   val channels = val::array();
   for (const auto& channel : clip_storage_[index]->channels) {
-    val copied = val::global("Float32Array").new_(channel.size());
-    copied.call<void>("set", val(typed_memory_view(channel.size(), channel.data())));
-    channels.call<void>("push", copied);
+    channels.call<void>("push", vectorToFloat32Array(channel.data(), channel.size()));
   }
   return channels;
 }

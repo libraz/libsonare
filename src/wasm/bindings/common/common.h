@@ -7,6 +7,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -142,6 +143,9 @@ using namespace sonare;
 /// @details One owner for a loop nine binding entry points had written out for
 ///          themselves; each copy carried its own inlined embind push sequence.
 val stringVectorToVal(const std::vector<std::string>& names);
+/// @brief A detected key as the `{ root, mode, confidence, name, shortName }` object every key
+/// result carries.
+val keyToVal(const sonare::Key& key);
 /// @brief Copies @p n elements starting at @p data into a fresh JS
 ///        Float32Array/Int32Array/Uint8Array via one bulk memcpy.
 /// @details The pointer+length overload is the one every call site that
@@ -636,23 +640,13 @@ int requireMatchedLength(const val& a, const val& b, const char* subject,
 /// @throws WasmArgumentError when @p value is outside
 /// [@p min, @p max].
 void requireOrdinalInRange(int value, int min, int max, const char* subject);
-/// @brief Reads a REQUIRED field of exactly type T: throws a WasmArgumentError
-/// naming @p subject and @p key if the field is absent, null, or not the
-/// expected JS type (a non-bool T additionally requires a finite number).
-/// Unlike floatProperty/intProperty/boolProperty (which take a default for an
-/// absent field), this never substitutes a value for a missing or
-/// malformed field. Use for POD-shaped inputs where every field is mandatory
-/// (e.g. the AudioWorklet's flat voice-changer config), so a partial object
-/// is rejected instead of zero-filled — a missing boolean silently read as
-/// `false` has turned off a safety-critical DSP stage (the ISP limiter) in
-/// the past.
-/// @brief The numeric half of @ref requireProperty, shared by every arithmetic
-///        instantiation so the validation is compiled once rather than per type.
 /// @brief Returns @p object[@p key], refusing it by name when absent or when its
 ///        JS `typeof` is not @p js_type (@p article_type is the noun the message uses).
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type);
 
+/// @brief The numeric half of @ref requireProperty, shared by every arithmetic
+///        instantiation so the validation is compiled once rather than per type.
 inline double requireNumberProperty(const val& object, const char* key, const char* subject) {
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
   const double number = value.as<double>();
@@ -686,6 +680,16 @@ inline bool requireBoolProperty(const val& object, const char* key, const char* 
   return requireTypedProperty(object, key, subject, "boolean", "a boolean").as<bool>();
 }
 
+/// @brief Reads a REQUIRED field of exactly type T: throws a WasmArgumentError
+/// naming @p subject and @p key if the field is absent, null, or not the
+/// expected JS type (a non-bool T additionally requires a finite number).
+/// Unlike floatProperty/intProperty/boolProperty (which take a default for an
+/// absent field), this never substitutes a value for a missing or
+/// malformed field. Use for POD-shaped inputs where every field is mandatory
+/// (e.g. the AudioWorklet's flat voice-changer config), so a partial object
+/// is rejected instead of zero-filled — a missing boolean silently read as
+/// `false` has turned off a safety-critical DSP stage (the ISP limiter) in
+/// the past.
 template <typename T>
 T requireProperty(const val& object, const char* key, const char* subject) {
   if constexpr (std::is_same_v<T, bool>) {

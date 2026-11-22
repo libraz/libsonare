@@ -41,12 +41,7 @@ val js_mastering_insert_names() {
 // keys are reported via Mixer.sceneWarnings(). Empty array for an unknown name.
 val js_mastering_insert_param_names(std::string name) {
   wasmRefuseEmbeddedNul(name, "name");
-  val out = val::array();
-  auto names = mastering::api::insert_param_names(name);
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
+  return stringVectorToVal(mastering::api::insert_param_names(name));
 }
 
 // Parameter descriptors for every key an insert processor's construction
@@ -219,11 +214,7 @@ val js_mastering_preset_names() { return stringVectorToVal(mastering::api::prese
 val js_mastering_platform_names() {
   // Read from the shared delivery-target table, so the names a caller can pass
   // as `targetPlatform` are the names the assistant actually accepts.
-  val out = val::array();
-  for (const std::string& name : mastering::assistant::platform_names()) {
-    out.call<void>("push", name);
-  }
-  return out;
+  return stringVectorToVal(mastering::assistant::platform_names());
 }
 
 // A preset's chain config (absent: the chain defaults) with the overrides document applied.
