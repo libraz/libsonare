@@ -35,9 +35,9 @@ export function resolveProcessorParams(
 /**
  * Checks each value of an insert's `params` against the `type` its descriptor
  * declares and returns the document the insert is built from. A `string` key
- * takes a string, an `array` key a list of finite numbers; every other key
- * takes a finite number or boolean, or an enum name resolved as
- * {@link resolveProcessorParams} does. A wrong type is a `TypeError`, a
+ * takes a string, an `array` key a list of finite numbers, and an `enum` key's
+ * token passes through for the core to resolve against the key's choices; every
+ * other key takes a finite number or boolean. A wrong type is a `TypeError`, a
  * non-finite number a `RangeError`. A key the processor does not declare is
  * left to the core, which refuses it by name.
  */
@@ -67,6 +67,8 @@ export function resolveInsertParams(
         assertFiniteScalar(item, `params.${key}[]`);
       }
       out[key] = [...(value as number[])];
+    } else if (kind === 'enum' && typeof value === 'string') {
+      out[key] = value;
     } else if (typeof value === 'string' || typeof value === 'boolean') {
       scalars[key] = value;
     } else if (typeof value === 'number') {
