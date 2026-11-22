@@ -1974,6 +1974,24 @@ class DomainRule(unittest.TestCase):
             errors, ["cli-native command no-such-command: not in the CLI command domain table"]
         )
 
+    def test_a_package_extra_is_core_whatever_its_manifest_is_called(self):
+        """The basename `pyproject.toml` would otherwise classify every extra as project."""
+        import inventory
+
+        with tempfile.TemporaryDirectory() as d:
+            manifest = Path(d) / "bindings/python/pyproject.toml"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["a"]\n'
+            )
+            recs = inventory._python_extras(Path(d))
+        _, errors = inventory.assign_domains(recs)
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            [(r["kind"], r["name"], r["line"], r["domain"]) for r in recs],
+            [("extra", "dev", 4, "core")],
+        )
+
 
 class NamePatterns(unittest.TestCase):
     def test_name_patterns_outrank_the_declaring_file(self):
@@ -2199,6 +2217,10 @@ class UpgradeNotes(unittest.TestCase):
         e = {"old": "getBpm", "entry": "./analysis"}
         self.assertEqual(upgrade_notes._old("wasm", e), "`getBpm` (`./analysis`)")
         self.assertEqual(upgrade_notes._old("wasm", {"old": "getBpm", "entry": "."}), "`getBpm`")
+
+    def test_an_extra_row_names_the_install_spelling(self):
+        e = {"kind": "extra", "old": "dev"}
+        self.assertEqual(upgrade_notes._old("python", e), "`libsonare[dev]`")
 
     def test_removed_row_says_what_replaces_it(self):
         self.assertEqual(upgrade_notes._target({"removed": "call x"}), "removed: call x")

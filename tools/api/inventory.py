@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import types
 from pathlib import Path
 
@@ -51,6 +52,7 @@ KINDS = (
     "export",
     "command",
     "flag",
+    "extra",
 )
 PY_PACKAGE = "bindings/python/src/libsonare"
 PY_PUBLIC_SUBMODULES = (
@@ -674,8 +676,24 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                         token=t,
                     )
                 )
+    out += _python_extras(root)
     meta = {"python_all": sorted(py_all), "python_unresolved": unresolved}
     return out, {"python": pkg.files}, meta
+
+
+def _python_extras(root: Path) -> list[dict]:
+    """The package's optional-dependency extras, each one a name `pip install libsonare[x]` takes."""
+    rel = "bindings/python/pyproject.toml"
+    text = (root / rel).read_text(encoding="utf-8")
+    extras = tomllib.loads(text).get("project", {}).get("optional-dependencies", {})
+    out = []
+    for name in sorted(extras):
+        m = re.search(rf"^{re.escape(name)}\s*=", text, flags=re.MULTILINE)
+        line = _line_of(text, m.start()) if m else 0
+        # Packaging, not a module: the manifest's basename would read as the project domain.
+        out.append(_record("python", "extra", name, rel, line, False))
+        out[-1].update(domain="core", domain_path="override")
+    return out
 
 
 def _param_dicts(params, optional: bool = False) -> list[dict]:
@@ -1855,7 +1873,7 @@ def assign_domains(records: list[dict]) -> tuple[collections.Counter, list[str]]
     """
     errors: list[str] = []
     for r in records:
-        if r["owner"]:
+        if r["owner"] or r.get("domain"):
             continue
         try:
             d, p = domains.classify(r["surface"], r["name"], r["file"])

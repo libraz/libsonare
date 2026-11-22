@@ -64,6 +64,7 @@ KINDS = (
     "export",
     "command",
     "flag",
+    "extra",
 )
 WASM_ENTRIES = (".", "./analysis", "./worklet", "./worker", "./vocal-edit-worker")
 RULE_SLUGS = (

@@ -5,7 +5,7 @@
 # tools/api/upgrade_notes.py renders UPGRADING.md from these files and rules.toml.
 #
 # Keys:
-#   kind     function | method | class | type | field | option | value | export | flag | command
+#   kind     function | method | class | type | field | option | value | export | flag | command | extra
 #   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
 #   removed  what a caller writes instead, one line (old must be absent); true only
@@ -38,6 +38,7 @@
 #   export    any other top-level exported name (constant, C macro, re-export)
 #   command   CLI subcommand name
 #   flag      command --flag
+#   extra     python only: an optional-dependency extra of the package (libsonare[dev])
 #
 # A member whose name stays but whose kind moves (a method that becomes a getter) is a
 # method entry with changed + test, not old/new.

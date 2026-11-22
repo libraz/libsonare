@@ -17539,6 +17539,7 @@ python	export	MAX_TRACK_LANES				engine
 python	export	PART_RIG_ALL_PARTS				project	
 python	export	PART_RIG_MODES				project	
 python	export	__version__				core	
+python	extra	dev				core	
 python	field	AcousticResult.c50		AcousticResult	c50	effects	
 python	field	AcousticResult.c50_bands		AcousticResult	c50_bands	effects	
 python	field	AcousticResult.c80		AcousticResult	c80	effects	

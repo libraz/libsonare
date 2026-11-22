@@ -45,7 +45,8 @@ def _target(e: dict) -> str:
 
 
 def _old(surface: str, e: dict) -> str:
-    text = f"`{_cell(e['old'])}`"
+    name = f"libsonare[{e['old']}]" if e.get("kind") == "extra" else e["old"]
+    text = f"`{_cell(name)}`"
     if surface == "cli" and e.get("frontend"):
         text += f" ({e['frontend']} CLI only)"
     if surface == "wasm" and e.get("entry", ".") != ".":

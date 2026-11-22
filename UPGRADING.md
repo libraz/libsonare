@@ -1285,6 +1285,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.from_buffer(data)` | `Audio.from_buffer(samples)` |
 | `Audio.mastering_process(processor_name)` | `Audio.mastering_apply_processor(processor)` |
 | `Audio.pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
+| `libsonare[dev]` | removed: the development tools are dependency groups; contributors run `uv sync` in bindings/python |
 
 ### Python: Analysis and features
 
